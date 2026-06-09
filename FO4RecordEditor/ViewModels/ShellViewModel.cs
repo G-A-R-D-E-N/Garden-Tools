@@ -30,20 +30,36 @@ public sealed class ShellViewModel
     public PluginToolExecutor ToolExecutor { get; }
     public AnthropicAgent? Agent { get; private set; }
 
+    // In-process MCP server exposing the plugin tools to the Claude Code CLI, so it gets
+    // the same live-plugin tool-use as the Anthropic agent.
+    public PluginMcpServer McpServer { get; }
+
     public ShellViewModel()
     {
         Settings.Load();
-        Chat = new ChatService(AiProviderFactory.Create(Settings.Current));
-        Context = new AIContextBuilder(Graph);
         ToolExecutor = new PluginToolExecutor(() => GameEnvironment);
+        McpServer = new PluginMcpServer(ToolExecutor);
+        McpServer.Start();
+        Context = new AIContextBuilder(Graph);
+        Chat = new ChatService(CreateProvider());
         BuildAgent();
-        Log.Log(LogCategory.App, LogLevel.Info, "FO4RecordEditor started.");
+        Log.Log(LogCategory.App, LogLevel.Info,
+            $"FO4RecordEditor started. Plugin MCP server: {(McpServer.IsRunning ? McpServer.Url : "unavailable")}");
     }
 
     public void RebuildProvider()
     {
-        Chat.SetProvider(AiProviderFactory.Create(Settings.Current));
+        Chat.SetProvider(CreateProvider());
         BuildAgent();
+    }
+
+    private IAIProvider CreateProvider()
+    {
+        var s = Settings.Current;
+        if (s.AiProvider == "claudecode")
+            return new ClaudeCodeProvider(s.ClaudeCodePath,
+                McpServer.IsRunning ? McpServer.Url : null, McpServer.ServerName);
+        return AiProviderFactory.Create(s);
     }
 
     private void BuildAgent()

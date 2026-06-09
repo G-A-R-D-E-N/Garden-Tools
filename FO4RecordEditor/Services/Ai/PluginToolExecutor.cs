@@ -13,31 +13,26 @@ public sealed class PluginToolExecutor
 
     public PluginToolExecutor(Func<object?> envProvider) => _envProvider = envProvider;
 
-    /// <summary>The tool schemas advertised to the model (Anthropic tool format).</summary>
-    public static object[] ToolDefinitions() =>
+    public sealed record ToolSpec(string Name, string Description, object Schema);
+
+    // Single source of truth for the tools; projected into Anthropic (input_schema) and
+    // MCP (inputSchema) formats so the API path and the Claude Code / MCP path stay in sync.
+    private static readonly ToolSpec[] _specs =
     [
-        new
-        {
-            name = "list_plugins",
-            description = "List every loaded plugin (ESP/ESM/ESL) the user has open. Call this first to discover what data is available.",
-            input_schema = new { type = "object", properties = new { }, required = Array.Empty<string>() }
-        },
-        new
-        {
-            name = "list_record_types",
-            description = "List the record-type signatures (e.g. WEAP, ARMO, COBJ, NPC_, LVLI) present in a given plugin.",
-            input_schema = new
+        new("list_plugins",
+            "List every loaded plugin (ESP/ESM/ESL) the user has open. Call this first to discover what data is available.",
+            new { type = "object", properties = new { }, required = Array.Empty<string>() }),
+        new("list_record_types",
+            "List the record-type signatures (e.g. WEAP, ARMO, COBJ, NPC_, LVLI) present in a given plugin.",
+            new
             {
                 type = "object",
                 properties = new { plugin = new { type = "string", description = "Plugin file name, e.g. 'MyMod.esp'." } },
                 required = new[] { "plugin" }
-            }
-        },
-        new
-        {
-            name = "list_records",
-            description = "List records of a specific type in a plugin (EditorID + FormKey). Use to browse a group.",
-            input_schema = new
+            }),
+        new("list_records",
+            "List records of a specific type in a plugin (EditorID + FormKey). Use to browse a group.",
+            new
             {
                 type = "object",
                 properties = new
@@ -47,13 +42,10 @@ public sealed class PluginToolExecutor
                     limit = new { type = "integer", description = "Max records to return (default 100)." }
                 },
                 required = new[] { "plugin", "type" }
-            }
-        },
-        new
-        {
-            name = "search_records",
-            description = "Search a plugin for records whose EditorID or FormKey contains the query text. Returns EditorID, type and FormKey.",
-            input_schema = new
+            }),
+        new("search_records",
+            "Search a plugin for records whose EditorID or FormKey contains the query text. Returns EditorID, type and FormKey.",
+            new
             {
                 type = "object",
                 properties = new
@@ -63,13 +55,10 @@ public sealed class PluginToolExecutor
                     limit = new { type = "integer", description = "Max matches (default 50)." }
                 },
                 required = new[] { "plugin", "query" }
-            }
-        },
-        new
-        {
-            name = "get_record",
-            description = "Get the full field dump of a single record by FormKey ('001234:Plugin.esp') or EditorID, within a plugin.",
-            input_schema = new
+            }),
+        new("get_record",
+            "Get the full field dump of a single record by FormKey ('001234:Plugin.esp') or EditorID, within a plugin.",
+            new
             {
                 type = "object",
                 properties = new
@@ -78,9 +67,16 @@ public sealed class PluginToolExecutor
                     id = new { type = "string", description = "FormKey or EditorID of the record." }
                 },
                 required = new[] { "plugin", "id" }
-            }
-        },
+            }),
     ];
+
+    /// <summary>Anthropic Messages API tool format (input_schema).</summary>
+    public static object[] ToolDefinitions() =>
+        _specs.Select(t => (object)new { name = t.Name, description = t.Description, input_schema = t.Schema }).ToArray();
+
+    /// <summary>MCP tool format (inputSchema) for the Claude Code MCP server.</summary>
+    public static object[] McpToolDefinitions() =>
+        _specs.Select(t => (object)new { name = t.Name, description = t.Description, inputSchema = t.Schema }).ToArray();
 
     public string Execute(string toolName, string inputJson)
     {

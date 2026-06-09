@@ -14,17 +14,31 @@ namespace FO4RecordEditor.Services;
 public sealed class ClaudeCodeProvider : IAIProvider
 {
     private readonly string _exePath;
+    private readonly string? _mcpUrl;
+    private readonly string _mcpServerName;
 
     public string Name => "Claude Code";
 
-    public ClaudeCodeProvider(string exePath = "claude")
-        => _exePath = string.IsNullOrWhiteSpace(exePath) ? "claude" : exePath;
+    public ClaudeCodeProvider(string exePath = "claude", string? mcpUrl = null, string mcpServerName = "fo4editor")
+    {
+        _exePath = string.IsNullOrWhiteSpace(exePath) ? "claude" : exePath;
+        _mcpUrl = mcpUrl;
+        _mcpServerName = mcpServerName;
+    }
 
     public async IAsyncEnumerable<string> StreamAsync(
         IReadOnlyList<ChatMessage> messages,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var prompt = new StringBuilder();
+        if (_mcpUrl != null)
+        {
+            prompt.AppendLine(
+                $"You have MCP tools to read the user's loaded Bethesda plugins: " +
+                $"mcp__{_mcpServerName}__list_plugins, list_record_types, list_records, " +
+                $"search_records, and get_record. Use them to ground every answer in the actual " +
+                $"record data. Call list_plugins first if you don't know what is loaded.\n");
+        }
         foreach (var m in messages)
         {
             switch (m.Role)
@@ -52,6 +66,16 @@ public sealed class ClaudeCodeProvider : IAIProvider
         psi.ArgumentList.Add("-p");                       // print (non-interactive) mode
         psi.ArgumentList.Add("--output-format");
         psi.ArgumentList.Add("text");
+
+        // Register the in-process plugin MCP server so Claude Code can read live plugin data.
+        if (_mcpUrl != null)
+        {
+            var cfg = $"{{\"mcpServers\":{{\"{_mcpServerName}\":{{\"type\":\"http\",\"url\":\"{_mcpUrl}\"}}}}}}";
+            psi.ArgumentList.Add("--mcp-config");
+            psi.ArgumentList.Add(cfg);
+            psi.ArgumentList.Add("--allowedTools");
+            psi.ArgumentList.Add($"mcp__{_mcpServerName}");   // auto-approve this server's tools in -p mode
+        }
 
         Process? proc = null;
         string? startError = null;
