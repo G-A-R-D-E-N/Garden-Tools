@@ -24,12 +24,21 @@ public sealed class ChatService
         _history.Add(new ChatMessage(ChatRole.User, userMessage));
 
         var full = new System.Text.StringBuilder();
-        await foreach (var token in _provider.StreamAsync(outgoing, ct))
+        try
         {
-            full.Append(token);
-            onToken(token);
+            await foreach (var token in _provider.StreamAsync(outgoing, ct))
+            {
+                full.Append(token);
+                onToken(token);
+            }
         }
-        _history.Add(new ChatMessage(ChatRole.Assistant, full.ToString()));
+        finally
+        {
+            // Always commit an assistant turn (even on cancel/throw with partial text)
+            // so the user/assistant role alternation the Messages API requires is preserved.
+            // Cancellation is the normal "stop generating" path, not an edge case.
+            _history.Add(new ChatMessage(ChatRole.Assistant, full.ToString()));
+        }
         return full.ToString();
     }
 }

@@ -14,13 +14,39 @@ public sealed class AIContextBuilder
         "keywords, leveled lists, OMODs, conditions (CTDA), and crafting (COBJ). When asked to " +
         "modify records, respond with a concrete change plan the user can approve. Be concise.";
 
+    // Cap on field lines emitted per record so a wide record (e.g. a leveled list with
+    // hundreds of entries) cannot balloon the prompt. Depth is already capped at 3.
+    private const int MaxFieldLines = 200;
+
     public string BuildForRecord(RecordEntry rec)
     {
         var sb = new StringBuilder();
         sb.AppendLine(SystemPreamble);
         sb.AppendLine();
+        AppendRecordContext(sb, rec);
+        return sb.ToString();
+    }
+
+    public string BuildForQuestion(string question, RecordEntry? selected)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(SystemPreamble);   // preamble emitted exactly once
+        if (selected != null)
+        {
+            sb.AppendLine();
+            AppendRecordContext(sb, selected);
+        }
+        sb.AppendLine($"\n## Graph summary: {_graph.RecordCount} records, {_graph.ReferenceCount} references.");
+        return sb.ToString();
+    }
+
+    // Writes the record header, fields, neighborhood, and inbound warning WITHOUT the
+    // preamble, so callers control how many times the preamble appears.
+    private void AppendRecordContext(StringBuilder sb, RecordEntry rec)
+    {
         sb.AppendLine($"## Selected record: {rec.EditorID} ({rec.Type}) [{rec.FormKey}] in {rec.SourcePlugin}");
-        AppendFields(sb, rec.Node, 0, maxDepth: 3);
+        int lines = 0;
+        AppendFields(sb, rec.Node, 0, maxDepth: 3, ref lines);
 
         var hood = _graph.GetNeighborhood(rec.FormKey).Where(e => e.FormKey != rec.FormKey).ToList();
         if (hood.Count > 0)
@@ -34,31 +60,18 @@ public sealed class AIContextBuilder
         var inbound = _graph.GetReferencesTo(rec.FormKey);
         if (inbound.Count > 0)
             sb.AppendLine($"\n## {inbound.Count} record(s) reference this one (deleting it would break them).");
-
-        return sb.ToString();
     }
 
-    public string BuildForQuestion(string question, RecordEntry? selected)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine(SystemPreamble);
-        if (selected != null)
-        {
-            sb.AppendLine();
-            sb.AppendLine(BuildForRecord(selected));
-        }
-        sb.AppendLine($"\n## Graph summary: {_graph.RecordCount} records, {_graph.ReferenceCount} references.");
-        return sb.ToString();
-    }
-
-    private static void AppendFields(StringBuilder sb, RecordNode node, int depth, int maxDepth)
+    private static void AppendFields(StringBuilder sb, RecordNode node, int depth, int maxDepth, ref int lines)
     {
         if (depth > maxDepth) return;
         foreach (var c in node.Children)
         {
+            if (lines >= MaxFieldLines) { sb.AppendLine("  ... (fields truncated)"); return; }
+            lines++;
             var indent = new string(' ', depth * 2);
             if (c.IsLeaf) sb.AppendLine($"{indent}{c.Key}: {c.Value}");
-            else { sb.AppendLine($"{indent}{c.Key}:"); AppendFields(sb, c, depth + 1, maxDepth); }
+            else { sb.AppendLine($"{indent}{c.Key}:"); AppendFields(sb, c, depth + 1, maxDepth, ref lines); }
         }
     }
 }
