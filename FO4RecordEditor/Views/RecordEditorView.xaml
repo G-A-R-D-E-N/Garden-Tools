@@ -1,0 +1,22 @@
+<UserControl x:Class="FO4RecordEditor.Views.RecordEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="#1E1E1E">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ItemsControl x:Name="FieldList">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Grid Background="#252526" Margin="0,1">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="260"/><ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding IndentedKey}" Foreground="#9CDCFE"
+                       FontFamily="Consolas" FontSize="12" Padding="4,2"/>
+            <TextBox Grid.Column="1" Text="{Binding Value, UpdateSourceTrigger=LostFocus}"
+                     Background="Transparent" BorderThickness="0" Foreground="#CE9178"
+                     FontFamily="Consolas" FontSize="12" Padding="4,2" IsReadOnly="{Binding IsCompound}"/>
+          </Grid>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </ScrollViewer>
+</UserControl>
