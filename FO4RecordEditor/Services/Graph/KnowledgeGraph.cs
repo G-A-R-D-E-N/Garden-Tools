@@ -30,8 +30,10 @@ public sealed class KnowledgeGraph
             if (fk == null || node.IsLeaf) continue;
             var type = node.GetValue("Type") ?? "";
             var eid = node.GetValue("EditorID") ?? "";
-            var entry = new RecordEntry(fk, eid, type, plugin, node,
-                IsWinningOverride: !_byFormKey.ContainsKey(fk));
+            // The entry being indexed always supersedes any prior one for this FormKey
+            // (load-order semantics: last indexed wins), so it is the winning override.
+            // GetByFormKey returns this entry; GetConflicts preserves order (last = winner).
+            var entry = new RecordEntry(fk, eid, type, plugin, node, IsWinningOverride: true);
 
             Add(_overrides, fk, entry);
             _byFormKey[fk] = entry;

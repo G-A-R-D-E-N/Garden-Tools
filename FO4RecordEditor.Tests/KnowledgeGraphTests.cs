@@ -59,7 +59,9 @@ public class KnowledgeGraphTests
             GraphTestBuilder.Record("WEAP", "000800:Master.esm", "Gun", ("Damage", "99"))));
         g.GetConflicts().Should().ContainSingle()
             .Which.FormKey.Should().Be("000800:Master.esm");
-        g.GetByFormKey("000800:Master.esm")!.SourcePlugin.Should().Be("B.esp");
+        var winner = g.GetByFormKey("000800:Master.esm")!;
+        winner.SourcePlugin.Should().Be("B.esp");
+        winner.IsWinningOverride.Should().BeTrue();   // winner reports the flag correctly
     }
 
     [Fact]
