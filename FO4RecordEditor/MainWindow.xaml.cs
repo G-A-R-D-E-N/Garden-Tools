@@ -62,8 +62,32 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private void ShowCompare_Click(object s, RoutedEventArgs e) => BottomTabs.SelectedIndex = 2;
     private void ShowSettings_Click(object s, RoutedEventArgs e) => new Views.SettingsDialog(_shell) { Owner = this }.ShowDialog();
 
-    private void OpenRecordTab(Models.RecordNode record)
+    private async void OpenRecordTab(Models.RecordNode record)
     {
+        // Populate the record's fields OFF the UI thread (NPC_ and similar records are huge
+        // and froze the UI when walked synchronously). Build detached, then attach here.
+        if (record.GetValue("_HasData") == "False")
+        {
+            SetStatus($"Loading {record.Key}...");
+            var env = _shell.GameEnvironment;
+            var plugin = record.Parent?.Parent?.Key ?? "";
+            var fkStr = record.GetValue("FormKey") ?? "";
+            try
+            {
+                var fields = await Task.Run(() =>
+                    Services.MutagenLoader.BuildPopulatedFields(fkStr, env, plugin));
+
+                var flag = record.GetChild("_HasData");
+                if (flag != null) record.Children.Remove(flag);
+                foreach (var child in fields) { child.Parent = record; record.Children.Add(child); }
+            }
+            catch (Exception ex)
+            {
+                _shell.Log.Log(Models.LogCategory.App, Models.LogLevel.Error, "Record load failed", ex.Message);
+            }
+            SetStatus("Ready");
+        }
+
         var tab = _shell.OpenRecord(record);
         var ti = new TabItem { Header = tab.Title, Content = new Views.RecordEditorView(tab) };
         CenterTabs.Items.Add(ti);

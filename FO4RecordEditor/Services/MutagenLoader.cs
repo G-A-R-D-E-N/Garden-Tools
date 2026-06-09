@@ -210,6 +210,26 @@ public static class MutagenLoader
             WalkObject(rec, node, 0, 4, modName);
     }
 
+    // Build a record's field subtree on a DETACHED node (safe to run on a background
+    // thread because nothing is bound to it yet). The caller attaches the returned
+    // children to the real, tree-bound record node on the UI thread. This keeps large
+    // records (NPC_, etc.) from freezing the UI during the reflection walk.
+    public static List<RecordNode> BuildPopulatedFields(string formKeyStr, object? envObj, string modName)
+    {
+        var temp = new RecordNode { Key = "temp" };
+        if (!FormKey.TryFactory(formKeyStr, out var formKey)) return [];
+        if (string.IsNullOrEmpty(modName)) modName = formKey.ModKey.FileName.String;
+
+        var mod = ResolveMod(modName, envObj);
+        if (mod == null) return [];
+
+        var idx = GetModIndex(mod, modName);
+        if (idx.ByFormKey.TryGetValue(formKey, out var rec))
+            WalkObject(rec, temp, 0, 4, modName);
+
+        return temp.Children.ToList();
+    }
+
     // ============================================================================
     //  Public query API for the AI tool executor (read all loaded plugin data).
     //  Each call is scoped to one plugin and served from the cached per-mod index,
@@ -313,9 +333,17 @@ public static class MutagenLoader
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, PropertyInfo[]> _propCache = new();
 
+    // Hard cap on nodes produced per record walk. Large records (NPC_ with packages,
+    // factions, items, AI data, leveled entries) can otherwise expand into tens of
+    // thousands of nodes and freeze the populate. Reset at each top-level (depth 0) walk.
+    [ThreadStatic] private static int _walkNodeCount;
+    private const int MaxWalkNodes = 5000;
+
     private static void WalkObject(object obj, RecordNode parent, int depth, int maxDepth, string pluginName = "")
     {
+        if (depth == 0) _walkNodeCount = 0;
         if (depth > maxDepth) return;
+        if (_walkNodeCount >= MaxWalkNodes) return;
         if (obj == null!) return;
 
         var type = obj.GetType();
@@ -348,11 +376,14 @@ public static class MutagenLoader
                 // Skip another RecordNode ancestor type (Mutagen link etc.)
                 if (val is Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter) continue;
 
+                if (_walkNodeCount >= MaxWalkNodes) break;
+
                 var child = parent.GetChild(prop.Name);
                 if (child == null)
                 {
                     child = new RecordNode { Key = prop.Name, Parent = parent };
                     parent.Children.Add(child);
+                    _walkNodeCount++;
                 }
 
                 if (_leafTypes.Contains(valType) || valType.IsEnum)
@@ -373,12 +404,14 @@ public static class MutagenLoader
                     foreach (var item in enumerable)
                     {
                         if (item == null) continue;
+                        if (_walkNodeCount >= MaxWalkNodes) break;
                         var entryKey = $"[{i}]";
                         var entry = child.GetChild(entryKey);
                         if (entry == null)
                         {
                             entry = new RecordNode { Key = entryKey, Parent = child };
                             child.Children.Add(entry);
+                            _walkNodeCount++;
                         }
                         entry.Values[pluginName] = BuildSummary(item);
                         WalkObject(item, entry, depth + 1, maxDepth, pluginName);

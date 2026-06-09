@@ -6,31 +6,52 @@
   </UserControl.Resources>
   <DataGrid x:Name="FieldList" AutoGenerateColumns="False" HeadersVisibility="Column"
             CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None"
-            RowHeight="26" AlternationCount="2" AlternatingRowBackground="#202020"
+            RowHeight="26" AlternationCount="2" AlternatingRowBackground="#1B1B1B"
             Background="#1E1E1E" Foreground="#D4D4D4" RowBackground="#1E1E1E"
-            BorderBrush="#3C3C3C" BorderThickness="1"
+            BorderBrush="#2A2A2A" BorderThickness="0"
             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+    <DataGrid.RowStyle>
+      <Style TargetType="DataGridRow">
+        <Setter Property="Background" Value="Transparent"/>
+        <Style.Triggers>
+          <Trigger Property="IsMouseOver" Value="True">
+            <Setter Property="Background" Value="#2A2D2E"/>
+          </Trigger>
+        </Style.Triggers>
+      </Style>
+    </DataGrid.RowStyle>
     <DataGrid.Columns>
-      <DataGridTemplateColumn Header="Property" Width="300" IsReadOnly="True">
+      <DataGridTemplateColumn Header="Property" Width="320" IsReadOnly="True">
         <DataGridTemplateColumn.CellTemplate>
           <DataTemplate>
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="{Binding Spacer}" FontFamily="Consolas" FontSize="12" />
-              <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                            Visibility="{Binding HasChildren, Converter={StaticResource BoolToVis}}"
-                            Width="16" Height="16" Margin="0,0,4,0" Background="Transparent" Foreground="#000000" BorderThickness="0" FontFamily="Consolas">
-                <ToggleButton.Style>
-                  <Style TargetType="ToggleButton">
-                    <Setter Property="Content" Value="+" />
-                    <Style.Triggers>
-                      <Trigger Property="IsChecked" Value="True">
-                        <Setter Property="Content" Value="-" />
-                      </Trigger>
-                    </Style.Triggers>
-                  </Style>
-                </ToggleButton.Style>
-              </ToggleButton>
-              <TextBlock Text="{Binding Node.Key}" Foreground="#000080" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Spacer}" FontFamily="Consolas" FontSize="12"/>
+              <!-- Fixed 20px chevron slot so leaf rows align with expandable rows -->
+              <Border Width="20" HorizontalAlignment="Left">
+                <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              Visibility="{Binding HasChildren, Converter={StaticResource BoolToVis}}"
+                              Width="16" Height="16" Cursor="Hand" HorizontalAlignment="Center">
+                  <ToggleButton.Template>
+                    <ControlTemplate TargetType="ToggleButton">
+                      <Border Background="Transparent">
+                        <TextBlock x:Name="Glyph" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                   Foreground="#9DA5B4" FontSize="9"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                          <Setter TargetName="Glyph" Property="Text" Value="&#xE70D;"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter TargetName="Glyph" Property="Foreground" Value="#FFFFFF"/>
+                        </Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </ToggleButton.Template>
+                </ToggleButton>
+              </Border>
+              <TextBlock Text="{Binding Node.Key}" Foreground="#9CDCFE"
+                         FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
             </StackPanel>
           </DataTemplate>
         </DataGridTemplateColumn.CellTemplate>
