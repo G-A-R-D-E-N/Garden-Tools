@@ -28,6 +28,11 @@ public sealed class DiffEngine
         return rows;
     }
 
+    public static (int added, int removed, int modified) Summary(IReadOnlyList<DiffRow> rows) =>
+        (rows.Count(r => r.Kind == DiffKind.Added),
+         rows.Count(r => r.Kind == DiffKind.Removed),
+         rows.Count(r => r.Kind == DiffKind.Modified));
+
     private static Dictionary<string, string> Flatten(RecordNode root)
     {
         var dict = new Dictionary<string, string>();
