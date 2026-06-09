@@ -5,7 +5,7 @@ using FO4RecordEditor.ViewModels;
 
 namespace FO4RecordEditor;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly ShellViewModel _shell = new();
     private Views.ChatPanel _chatPanel = null!;

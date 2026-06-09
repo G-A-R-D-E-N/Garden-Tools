@@ -1,68 +1,96 @@
-<Window x:Class="FO4RecordEditor.MainWindow"
+<ui:FluentWindow x:Class="FO4RecordEditor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="FO4 Record Editor — AI" Height="960" Width="1600"
-        Background="#1E1E1E" Foreground="#D4D4D4" WindowState="Maximized"
+        WindowState="Maximized"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        WindowCornerPreference="Round"
+        Foreground="#D4D4D4"
         KeyDown="Window_KeyDown"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="5"/>
-      <RowDefinition Height="200" x:Name="BottomRow"/>
-      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>   <!-- title bar -->
+      <RowDefinition Height="*"/>      <!-- app body -->
     </Grid.RowDefinitions>
 
-    <Grid Grid.Row="0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="48"/>                <!-- activity bar -->
-        <ColumnDefinition Width="320" x:Name="SideCol"/>
-        <ColumnDefinition Width="5"/>
-        <ColumnDefinition Width="*"/>                 <!-- center -->
-        <ColumnDefinition Width="5"/>
-        <ColumnDefinition Width="420" x:Name="AiCol"/>
-      </Grid.ColumnDefinitions>
+    <ui:TitleBar Grid.Row="0" Title="FO4 Record Editor — AI" Height="36">
+      <ui:TitleBar.Icon>
+        <ui:SymbolIcon Symbol="Database24"/>
+      </ui:TitleBar.Icon>
+    </ui:TitleBar>
 
-      <!-- Activity bar -->
-      <StackPanel Grid.Column="0" Background="#2D2D30">
-        <Button x:Name="BtnExplorer" Content="📁" ToolTip="Explorer" Click="ShowExplorer_Click" Style="{StaticResource ActivityBtn}"/>
-        <Button x:Name="BtnSearch"   Content="🔍" ToolTip="Search"   Click="ShowSearch_Click"   Style="{StaticResource ActivityBtn}"/>
-        <Button x:Name="BtnErrors"   Content="⚠"  ToolTip="Errors"   Click="ShowErrors_Click"   Style="{StaticResource ActivityBtn}"/>
-        <Button x:Name="BtnCompare"  Content="⇄"  ToolTip="Compare"  Click="ShowCompare_Click"  Style="{StaticResource ActivityBtn}"/>
-        <Button x:Name="BtnSettings" Content="⚙"  ToolTip="Settings" Click="ShowSettings_Click" Style="{StaticResource ActivityBtn}" Margin="0,10,0,0"/>
-      </StackPanel>
+    <Grid Grid.Row="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="5"/>
+        <RowDefinition Height="200" x:Name="BottomRow"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
 
-      <!-- Side panel host (content swapped in code-behind) -->
-      <ContentControl Grid.Column="1" x:Name="SidePanelHost" Background="#252526"/>
-      <GridSplitter Grid.Column="2" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+      <Grid Grid.Row="0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="48"/>                <!-- activity bar -->
+          <ColumnDefinition Width="320" x:Name="SideCol"/>
+          <ColumnDefinition Width="5"/>
+          <ColumnDefinition Width="*"/>                 <!-- center -->
+          <ColumnDefinition Width="5"/>
+          <ColumnDefinition Width="420" x:Name="AiCol"/>
+        </Grid.ColumnDefinitions>
 
-      <!-- Center: tabbed record editor -->
-      <TabControl Grid.Column="3" x:Name="CenterTabs" Background="#1E1E1E" BorderThickness="0"/>
+        <!-- Activity bar -->
+        <StackPanel Grid.Column="0" Background="#2D2D30">
+          <Button x:Name="BtnExplorer" ToolTip="Explorer" Click="ShowExplorer_Click" Style="{StaticResource ActivityBtn}">
+            <ui:SymbolIcon Symbol="Folder24" FontSize="20"/>
+          </Button>
+          <Button x:Name="BtnSearch" ToolTip="Search" Click="ShowSearch_Click" Style="{StaticResource ActivityBtn}">
+            <ui:SymbolIcon Symbol="Search24" FontSize="20"/>
+          </Button>
+          <Button x:Name="BtnErrors" ToolTip="Errors" Click="ShowErrors_Click" Style="{StaticResource ActivityBtn}">
+            <ui:SymbolIcon Symbol="Warning24" FontSize="20"/>
+          </Button>
+          <Button x:Name="BtnCompare" ToolTip="Compare" Click="ShowCompare_Click" Style="{StaticResource ActivityBtn}">
+            <ui:SymbolIcon Symbol="ArrowSwap24" FontSize="20"/>
+          </Button>
+          <Button x:Name="BtnSettings" ToolTip="Settings" Click="ShowSettings_Click" Style="{StaticResource ActivityBtn}" Margin="0,10,0,0">
+            <ui:SymbolIcon Symbol="Settings24" FontSize="20"/>
+          </Button>
+        </StackPanel>
 
-      <GridSplitter Grid.Column="4" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+        <!-- Side panel host (content swapped in code-behind) -->
+        <ContentControl Grid.Column="1" x:Name="SidePanelHost" Background="#252526"/>
+        <GridSplitter Grid.Column="2" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
 
-      <!-- AI panel host -->
-      <ContentControl Grid.Column="5" x:Name="AiPanelHost" Background="#202020"/>
+        <!-- Center: tabbed record editor -->
+        <TabControl Grid.Column="3" x:Name="CenterTabs" Background="#1E1E1E" BorderThickness="0"/>
+
+        <GridSplitter Grid.Column="4" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+
+        <!-- AI panel host -->
+        <ContentControl Grid.Column="5" x:Name="AiPanelHost" Background="#202020"/>
+      </Grid>
+
+      <GridSplitter Grid.Row="1" Height="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+
+      <!-- Bottom tabs -->
+      <TabControl Grid.Row="2" x:Name="BottomTabs" Background="#181818" BorderThickness="0"/>
+
+      <!-- Status bar -->
+      <Border Grid.Row="3" Background="#007ACC" Padding="8,2" Height="24">
+        <Grid>
+          <TextBlock x:Name="StatusLabel" Foreground="White" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" Text="Ready"/>
+          <ProgressBar x:Name="GlobalProgressBar" HorizontalAlignment="Right" Width="200" Height="14" Margin="0,0,10,0"
+                       Visibility="Collapsed" Minimum="0" Maximum="100" IsIndeterminate="False"
+                       Foreground="#FF00FF00" Background="#FF333333"/>
+        </Grid>
+      </Border>
     </Grid>
 
-    <GridSplitter Grid.Row="1" Height="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
-
-    <!-- Bottom tabs -->
-    <TabControl Grid.Row="2" x:Name="BottomTabs" Background="#181818" BorderThickness="0"/>
-
-    <!-- Status bar -->
-    <Border Grid.Row="3" Background="#007ACC" Padding="8,2" Height="24">
-      <Grid>
-        <TextBlock x:Name="StatusLabel" Foreground="White" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" Text="Ready"/>
-        <ProgressBar x:Name="GlobalProgressBar" HorizontalAlignment="Right" Width="200" Height="14" Margin="0,0,10,0" 
-                     Visibility="Collapsed" Minimum="0" Maximum="100" IsIndeterminate="False"
-                     Foreground="#FF00FF00" Background="#FF333333"/>
-      </Grid>
-    </Border>
-
     <!-- Command palette overlay -->
-    <Border x:Name="PaletteOverlay" Grid.RowSpan="4" Background="#88000000" Visibility="Collapsed">
+    <Border x:Name="PaletteOverlay" Grid.RowSpan="2" Background="#88000000" Visibility="Collapsed">
       <ContentControl x:Name="PaletteHost" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,80,0,0"/>
     </Border>
   </Grid>
-</Window>
+</ui:FluentWindow>
