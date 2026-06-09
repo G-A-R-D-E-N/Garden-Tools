@@ -21,6 +21,10 @@ public static class MutagenLoader
         "Registration", "IsCompressed", "IsDeleted", "FormVersion",
         "VersionControl", "StaticRegistration", "ProtocolDefinition",
         "CustomData", "BinaryWriteTranslator", "RecordType", "ContainedFormLinks",
+        // Framework metadata noise -- not useful for editing, already covered by the
+        // FormKey/EditorID/Type header rows.
+        "Fallout4MajorRecordFlags", "MajorRecordFlags", "MajorRecordFlagsRaw",
+        "Version2", "MajorFlags", "IsNull", "FormVersion2",
     };
 
     private static readonly HashSet<Type> _leafTypes = new()

@@ -79,7 +79,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
                 var flag = record.GetChild("_HasData");
                 if (flag != null) record.Children.Remove(flag);
-                foreach (var child in fields) { child.Parent = record; record.Children.Add(child); }
+                foreach (var child in fields)
+                {
+                    // Skip walked duplicates of the FormKey/EditorID/Type header rows.
+                    if (record.GetChild(child.Key) != null) continue;
+                    child.Parent = record;
+                    record.Children.Add(child);
+                }
             }
             catch (Exception ex)
             {
@@ -89,10 +95,43 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var tab = _shell.OpenRecord(record);
-        var ti = new TabItem { Header = tab.Title, Content = new Views.RecordEditorView(tab) };
+        var ti = new TabItem { Content = new Views.RecordEditorView(tab) };
+        ti.Header = BuildClosableHeader(tab.Title, ti, tab);
         CenterTabs.Items.Add(ti);
         CenterTabs.SelectedItem = ti;
         UpdateStatus();
+    }
+
+    // Tab header with a close (x) button that removes the tab and its view-model.
+    private object BuildClosableHeader(string title, TabItem ti, RecordTabViewModel tab)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = title,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        var close = new Button
+        {
+            Content = "✕",   // x
+            Width = 18,
+            Height = 18,
+            Padding = new Thickness(0),
+            FontSize = 10,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Close tab",
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = System.Windows.Media.Brushes.Gray
+        };
+        close.Click += (_, _) =>
+        {
+            CenterTabs.Items.Remove(ti);
+            _shell.OpenTabs.Remove(tab);
+        };
+        panel.Children.Add(close);
+        return panel;
     }
 
     private void UpdateStatus() =>
