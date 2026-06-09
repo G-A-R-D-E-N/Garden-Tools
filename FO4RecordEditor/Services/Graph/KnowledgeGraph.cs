@@ -14,6 +14,7 @@ public sealed class KnowledgeGraph
     private readonly Dictionary<string, List<RecordEntry>> _byEditorId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<RecordEntry>> _byType = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<Reference>> _inbound = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<Reference>> _outbound = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<RecordEntry>> _overrides = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Reference> _allRefs = new();
 
@@ -67,6 +68,7 @@ public sealed class KnowledgeGraph
             var reference = new Reference(fromFk, v, leaf.Key, kind);
             _allRefs.Add(reference);
             Add(_inbound, v, reference);
+            Add(_outbound, fromFk, reference);
         }
     }
 
@@ -93,7 +95,7 @@ public sealed class KnowledgeGraph
         _inbound.TryGetValue(fk, out var l) ? l : Array.Empty<Reference>();
 
     public IReadOnlyList<Reference> GetReferencesFrom(string fk) =>
-        _allRefs.Where(r => r.FromFormKey.Equals(fk, StringComparison.OrdinalIgnoreCase)).ToList();
+        _outbound.TryGetValue(fk, out var l) ? l : Array.Empty<Reference>();
 
     public IReadOnlyList<Conflict> GetConflicts() =>
         _overrides.Where(kv => kv.Value.Count > 1)
@@ -126,7 +128,7 @@ public sealed class KnowledgeGraph
     public void Clear()
     {
         _byFormKey.Clear(); _byEditorId.Clear(); _byType.Clear();
-        _inbound.Clear(); _allRefs.Clear(); _overrides.Clear();
+        _inbound.Clear(); _outbound.Clear(); _allRefs.Clear(); _overrides.Clear();
     }
 
     private static void Add<T>(Dictionary<string, List<T>> dict, string key, T val)
