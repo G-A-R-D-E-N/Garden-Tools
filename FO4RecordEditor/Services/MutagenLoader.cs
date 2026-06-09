@@ -210,6 +210,100 @@ public static class MutagenLoader
             WalkObject(rec, node, 0, 4, modName);
     }
 
+    // ============================================================================
+    //  Public query API for the AI tool executor (read all loaded plugin data).
+    //  Each call is scoped to one plugin and served from the cached per-mod index,
+    //  so the AI can drill into a full load order without ever indexing everything.
+    // ============================================================================
+
+    public static IReadOnlyList<string> QueryLoadedPlugins(object? envObj)
+    {
+        var names = new List<string>();
+        if (envObj != null)
+        {
+            dynamic env = envObj;
+            foreach (var l in ((IEnumerable)env.LoadOrder.ListedOrder).Cast<dynamic>())
+                if (l.Mod != null) names.Add((string)l.ModKey.FileName.String);
+        }
+        foreach (var k in LooseMods.Keys)
+            if (!names.Contains(k, StringComparer.OrdinalIgnoreCase)) names.Add(k);
+        return names;
+    }
+
+    public static IReadOnlyList<string> QueryRecordTypes(object? envObj, string plugin)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return [];
+        return GetModIndex(mod, plugin).BySig.Keys.OrderBy(x => x).ToList();
+    }
+
+    public static IReadOnlyList<(string formKey, string editorId)> QueryRecordsOfType(
+        object? envObj, string plugin, string sig, int limit = 100)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return [];
+        var idx = GetModIndex(mod, plugin);
+        if (!idx.BySig.TryGetValue(sig, out var recs)) return [];
+        return recs.Take(limit).Select(r => (r.FormKey.ToString(), r.EditorID ?? "")).ToList();
+    }
+
+    public static IReadOnlyList<(string formKey, string editorId, string type)> QuerySearch(
+        object? envObj, string plugin, string query, int limit = 50)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return [];
+        var idx = GetModIndex(mod, plugin);
+        var hits = new List<(string, string, string)>();
+        foreach (var kv in idx.BySig)
+            foreach (var r in kv.Value)
+            {
+                var eid = r.EditorID ?? "";
+                if (eid.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase))
+                {
+                    hits.Add((r.FormKey.ToString(), eid, kv.Key));
+                    if (hits.Count >= limit) return hits;
+                }
+            }
+        return hits;
+    }
+
+    public static string QueryRecordFields(object? envObj, string plugin, string formKeyOrEditorId)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return "(plugin not loaded)";
+        var idx = GetModIndex(mod, plugin);
+
+        Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? rec = null;
+        if (FormKey.TryFactory(formKeyOrEditorId, out var fk) && idx.ByFormKey.TryGetValue(fk, out var byFk))
+            rec = byFk;
+        else
+            rec = idx.BySig.Values.SelectMany(v => v)
+                     .FirstOrDefault(r => string.Equals(r.EditorID, formKeyOrEditorId, StringComparison.OrdinalIgnoreCase));
+
+        if (rec == null) return "(record not found)";
+
+        var temp = new RecordNode { Key = rec.EditorID ?? rec.FormKey.ToString() };
+        AddLeafInit(temp, "FormKey", rec.FormKey.ToString());
+        AddLeafInit(temp, "EditorID", rec.EditorID ?? "");
+        AddLeafInit(temp, "Type", rec.Registration.Name);
+        WalkObject(rec, temp, 0, 4, plugin);
+
+        var sb = new System.Text.StringBuilder();
+        FlattenToText(temp, 0, sb);
+        return sb.ToString();
+    }
+
+    private static void FlattenToText(RecordNode node, int depth, System.Text.StringBuilder sb)
+    {
+        foreach (var c in node.Children)
+        {
+            var indent = new string(' ', depth * 2);
+            if (c.IsLeaf) sb.AppendLine($"{indent}{c.Key}: {c.Value}");
+            else { sb.AppendLine($"{indent}{c.Key}:"); FlattenToText(c, depth + 1, sb); }
+        }
+    }
+
     // ---- reflection walker ----------------------------------------------
 
     [ThreadStatic]

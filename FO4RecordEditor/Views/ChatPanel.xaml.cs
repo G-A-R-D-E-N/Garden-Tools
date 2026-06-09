@@ -107,13 +107,37 @@ public partial class ChatPanel : UserControl
             var ctx = _shell.Context.BuildForQuestion(text, selected);
             _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Prompt sent", text);
 
-            await _shell.Chat.SendAsync(text, ctx, token =>
-                Dispatcher.BeginInvoke(() => { 
-                    reply.Text += token; 
-                    aiMsg.Text += token;
-                    Scroll.ScrollToEnd(); 
-                }));
-            
+            if (_shell.Agent != null)
+            {
+                // Agentic path: the AI can call tools to read any loaded plugin's data.
+                var sys = ctx + "\n\n## Tools\nYou have tools to read the user's loaded plugins "
+                    + "(list_plugins, list_record_types, list_records, search_records, get_record). "
+                    + "Use them to ground every answer in the actual record data. Call list_plugins first "
+                    + "if you don't yet know what is loaded.";
+                await _shell.Agent.RunAsync(text, sys,
+                    onText: chunk => Dispatcher.BeginInvoke(() =>
+                    {
+                        reply.Text += chunk;
+                        aiMsg.Text += chunk;
+                        Scroll.ScrollToEnd();
+                    }),
+                    onToolStatus: status => Dispatcher.BeginInvoke(() =>
+                    {
+                        reply.Text += $"\n🔧 {status}\n";
+                        Scroll.ScrollToEnd();
+                    }));
+            }
+            else
+            {
+                await _shell.Chat.SendAsync(text, ctx, token =>
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        reply.Text += token;
+                        aiMsg.Text += token;
+                        Scroll.ScrollToEnd();
+                    }));
+            }
+
             _historyService.Save(_currentSession);
             _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Reply received", reply.Text);
         }

@@ -25,15 +25,34 @@ public sealed class ShellViewModel
 
     public object? GameEnvironment { get; set; }
 
+    // Agentic tool-use client: lets the AI read all loaded plugin data on demand.
+    // Null unless the Anthropic provider is selected with an API key.
+    public PluginToolExecutor ToolExecutor { get; }
+    public AnthropicAgent? Agent { get; private set; }
+
     public ShellViewModel()
     {
         Settings.Load();
         Chat = new ChatService(AiProviderFactory.Create(Settings.Current));
         Context = new AIContextBuilder(Graph);
+        ToolExecutor = new PluginToolExecutor(() => GameEnvironment);
+        BuildAgent();
         Log.Log(LogCategory.App, LogLevel.Info, "FO4RecordEditor started.");
     }
 
-    public void RebuildProvider() => Chat.SetProvider(AiProviderFactory.Create(Settings.Current));
+    public void RebuildProvider()
+    {
+        Chat.SetProvider(AiProviderFactory.Create(Settings.Current));
+        BuildAgent();
+    }
+
+    private void BuildAgent()
+    {
+        var s = Settings.Current;
+        Agent = (s.AiProvider == "anthropic" && !string.IsNullOrWhiteSpace(s.AnthropicApiKey))
+            ? new AnthropicAgent(s.AnthropicApiKey, s.Model, ToolExecutor)
+            : null;
+    }
 
     private bool _isLoadingEsp;
     public async Task LoadEspAsync(string path, IProgress<(string message, double? percent)>? progress = null)
