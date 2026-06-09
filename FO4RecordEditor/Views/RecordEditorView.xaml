@@ -1,22 +1,40 @@
 <UserControl x:Class="FO4RecordEditor.Views.RecordEditorView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="#1E1E1E">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <ItemsControl x:Name="FieldList">
-      <ItemsControl.ItemTemplate>
-        <DataTemplate>
-          <Grid Background="#252526" Margin="0,1">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="260"/><ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding IndentedKey}" Foreground="#9CDCFE"
-                       FontFamily="Consolas" FontSize="12" Padding="4,2"/>
-            <TextBox Grid.Column="1" Text="{Binding Value, UpdateSourceTrigger=LostFocus}"
-                     Background="Transparent" BorderThickness="0" Foreground="#CE9178"
-                     FontFamily="Consolas" FontSize="12" Padding="4,2" IsReadOnly="{Binding IsCompound}"/>
-          </Grid>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
-  </ScrollViewer>
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+  </UserControl.Resources>
+  <DataGrid x:Name="FieldList" AutoGenerateColumns="False" HeadersVisibility="Column"
+            CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None"
+            RowHeight="26" AlternationCount="2" AlternatingRowBackground="#202020"
+            Background="#1E1E1E" Foreground="#D4D4D4" RowBackground="#1E1E1E"
+            BorderBrush="#3C3C3C" BorderThickness="1"
+            VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+    <DataGrid.Columns>
+      <DataGridTemplateColumn Header="Property" Width="300" IsReadOnly="True">
+        <DataGridTemplateColumn.CellTemplate>
+          <DataTemplate>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding Spacer}" FontFamily="Consolas" FontSize="12" />
+              <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            Visibility="{Binding HasChildren, Converter={StaticResource BoolToVis}}"
+                            Width="16" Height="16" Margin="0,0,4,0" Background="Transparent" Foreground="#000000" BorderThickness="0" FontFamily="Consolas">
+                <ToggleButton.Style>
+                  <Style TargetType="ToggleButton">
+                    <Setter Property="Content" Value="+" />
+                    <Style.Triggers>
+                      <Trigger Property="IsChecked" Value="True">
+                        <Setter Property="Content" Value="-" />
+                      </Trigger>
+                    </Style.Triggers>
+                  </Style>
+                </ToggleButton.Style>
+              </ToggleButton>
+              <TextBlock Text="{Binding Node.Key}" Foreground="#000080" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+            </StackPanel>
+          </DataTemplate>
+        </DataGridTemplateColumn.CellTemplate>
+      </DataGridTemplateColumn>
+    </DataGrid.Columns>
+  </DataGrid>
 </UserControl>

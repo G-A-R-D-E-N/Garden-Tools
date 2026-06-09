@@ -48,21 +48,28 @@ public sealed class KnowledgeGraph
     {
         await Task.Run(() =>
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             foreach (var p in plugins)
             {
                 progress?.Report($"Indexing {p.Key}...");
                 Index(p);
             }
+            sw.Stop();
+            System.Diagnostics.Debug.WriteLine($"[PERF] KnowledgeGraph Indexing took {sw.ElapsedMilliseconds}ms");
             progress?.Report($"Indexed {RecordCount} records, {ReferenceCount} references.");
         });
     }
 
     private void IndexReferences(RecordNode record, string fromFk)
     {
-        foreach (var leaf in record.Descendants().Where(n => n.IsLeaf))
+        var descendants = record.Descendants().ToList();
+        foreach (var leaf in descendants)
         {
+            if (!leaf.IsLeaf) continue;
             var v = leaf.Value;
-            if (string.IsNullOrEmpty(v) || !FormKeyRe.IsMatch(v)) continue;
+            // Quick check: FormKeys usually have ':' and end in .esl/esp/esm
+            if (string.IsNullOrEmpty(v) || v.Length < 10 || !v.Contains(':')) continue;
+            if (!FormKeyRe.IsMatch(v)) continue;
             if (v.Equals(fromFk, StringComparison.OrdinalIgnoreCase)) continue;
             var kind = ClassifyKind(leaf.Key);
             var reference = new Reference(fromFk, v, leaf.Key, kind);

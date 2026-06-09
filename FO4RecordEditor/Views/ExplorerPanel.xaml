@@ -9,14 +9,16 @@
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
     <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#2D2D30">
-      <Button Content="Open ESP" Click="OpenEsp_Click" Margin="4,3" Padding="8,3"/>
-      <Button Content="Scan" Click="Scan_Click" Margin="0,3" Padding="8,3"/>
+      <Button Content="Open ESP" Click="OpenEsp_Click" Style="{StaticResource ActivityBtn}" Width="60" Height="24" FontSize="11"/>
+      <Button Content="Load Env" Click="LoadEnv_Click" Style="{StaticResource ActivityBtn}" Width="60" Height="24" FontSize="11"/>
+      <Button Content="Scan" Click="Scan_Click" Style="{StaticResource ActivityBtn}" Width="40" Height="24" FontSize="11"/>
     </StackPanel>
-    <TextBox Grid.Row="1" x:Name="SearchBox" Background="#1E1E1E" Foreground="#D4D4D4"
-             BorderBrush="#555" Margin="4,3" Padding="4,3" TextChanged="Search_TextChanged"/>
+    <TextBox Grid.Row="1" x:Name="SearchBox" Background="#1E1E1E" Foreground="#D4D4D4" BorderThickness="0,1,0,1" BorderBrush="#3F3F46" Padding="4" TextChanged="Search_TextChanged"/>
     <TreeView Grid.Row="2" x:Name="Tree" Background="#252526" BorderThickness="0"
               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-              MouseDoubleClick="Tree_DoubleClick" ContextMenuOpening="Tree_ContextMenuOpening">
+              MouseDoubleClick="Tree_DoubleClick" ContextMenuOpening="Tree_ContextMenuOpening"
+              SelectedItemChanged="Tree_SelectedItemChanged"
+              TreeViewItem.Expanded="Tree_Expanded">
       <TreeView.ItemTemplate>
         <HierarchicalDataTemplate ItemsSource="{Binding Children}">
           <TextBlock Text="{Binding Key}" FontFamily="Consolas" FontSize="12"/>

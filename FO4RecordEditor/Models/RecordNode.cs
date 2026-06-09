@@ -6,7 +6,6 @@ namespace FO4RecordEditor.Models;
 
 public class RecordNode : INotifyPropertyChanged
 {
-    private string _value = "";
     private bool _isDirty;
     private bool _isExpanded;
     private bool _isSelected;
@@ -16,13 +15,17 @@ public class RecordNode : INotifyPropertyChanged
     public RecordNode? Parent { get; set; }
     public ObservableCollection<RecordNode> Children { get; } = [];
 
+    public Dictionary<string, string> Values { get; } = new();
+
     public string Value
     {
-        get => _value;
+        get => Values.Values.LastOrDefault() ?? "";
         set
         {
-            if (_value == value) return;
-            _value = value;
+            if (Values.Count == 0) Values[""] = value;
+            else if (Values.Values.LastOrDefault() == value) return;
+            else Values[Values.Keys.Last()] = value;
+
             MarkDirty();
             Notify();
             Notify(nameof(DisplayValue));
@@ -68,8 +71,19 @@ public class RecordNode : INotifyPropertyChanged
         return true;
     }
 
-    public IEnumerable<RecordNode> Descendants() =>
-        Children.Concat(Children.SelectMany(c => c.Descendants()));
+    public IEnumerable<RecordNode> Descendants()
+    {
+        var stack = new Stack<RecordNode>(Children.Reverse());
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            yield return current;
+            foreach (var child in current.Children.Reverse())
+            {
+                stack.Push(child);
+            }
+        }
+    }
 
     public IEnumerable<RecordNode> SelfAndDescendants() =>
         Enumerable.Repeat(this, 1).Concat(Descendants());
@@ -84,10 +98,11 @@ public class RecordNode : INotifyPropertyChanged
             if (part.EndsWith(']'))
             {
                 var bracket = part.IndexOf('[');
+                if (bracket == -1) return null;
                 var name = part[..bracket];
-                var idx = int.Parse(part[(bracket + 1)..^1]);
+                if (!int.TryParse(part[(bracket + 1)..^1], out var idx)) return null;
                 cur = string.IsNullOrEmpty(name) ? cur : cur.GetChild(name);
-                if (cur == null || idx >= cur.Children.Count) return null;
+                if (cur == null || idx < 0 || idx >= cur.Children.Count) return null;
                 cur = cur.Children[idx];
             }
             else

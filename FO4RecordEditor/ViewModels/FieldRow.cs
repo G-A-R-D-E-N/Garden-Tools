@@ -7,37 +7,57 @@ namespace FO4RecordEditor.ViewModels;
 /// <summary>Flat row shown in the right-panel field editor for a selected record.</summary>
 public class FieldRow : INotifyPropertyChanged
 {
-    private readonly RecordNode _node;
+    public RecordNode Node { get; }
+    public FieldRow? ParentRow { get; }
     public int Depth { get; }
     private readonly Action<RecordNode, string>? _editAction;
 
-    public FieldRow(RecordNode node, int depth, Action<RecordNode, string>? editAction = null)
+    private bool _isExpanded = true;
+    public bool IsExpanded 
+    { 
+        get => _isExpanded; 
+        set 
+        { 
+            _isExpanded = value; 
+            Notify(); 
+            // In a real TreeListView, changing this fires an event so the view model refreshes the filter
+            ExpandedChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+    public event EventHandler? ExpandedChanged;
+
+    public FieldRow(RecordNode node, int depth, FieldRow? parentRow, Action<RecordNode, string>? editAction = null)
     {
-        _node = node;
+        Node = node;
+        ParentRow = parentRow;
         Depth = depth;
         _editAction = editAction;
+        // Auto-collapse deep nodes (depth >= 1 usually means Arrays or Conditions)
+        if (depth > 0) _isExpanded = false;
+        
         PropertyChangedEventManager.AddHandler(node, OnNodePropertyChanged, "");
     }
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         Notify(nameof(Value));
-        Notify(nameof(IndentedKey));
+        Notify(nameof(Spacer));
     }
 
-    public string IndentedKey => new string(' ', Depth * 2) + _node.Key;
-    public string FullPath    => BuildPath(_node);
-    public bool   IsCompound  => !_node.IsLeaf;
+    public string Spacer => new string(' ', Depth * 4);
+    public string FullPath    => BuildPath(Node);
+    public bool   IsCompound  => !Node.IsLeaf;
+    public bool   HasChildren => Node.Children.Count > 0;
 
     public string Value
     {
-        get => _node.Value;
+        get => Node.Value;
         set 
         {
             if (_editAction != null)
-                _editAction(_node, value);
+                _editAction(Node, value);
             else
-                _node.Value = value;
+                Node.Value = value;
         }
     }
 

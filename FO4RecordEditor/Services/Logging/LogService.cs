@@ -8,6 +8,10 @@ public sealed class LogService
     public ObservableCollection<LogEntry> Entries { get; } = [];
     public event Action<LogEntry>? EntryAdded;
 
+    // Synchronous and host-agnostic. Cross-thread safety for the WPF DataGrid binding is
+    // provided by BindingOperations.EnableCollectionSynchronization(Entries, ...) set up in
+    // MainWindow -- do NOT marshal through Application.Current.Dispatcher here (it is null in
+    // tests and during early startup, and async marshaling makes Filter/Export miss entries).
     public void Log(LogCategory cat, LogLevel level, string message, string? detail = null)
     {
         var entry = new LogEntry(DateTime.Now, level, cat, message, detail);

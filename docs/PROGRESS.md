@@ -54,6 +54,14 @@ Plan: [docs/superpowers/plans/2026-06-09-ai-plugin-ide.md](superpowers/plans/202
 - Code-quality fixes applied: async-void crash in ChatPanel handled, ShellViewModel re-entrancy guarded, Dispatcher marshaled asynchronously, RecordEditorView TextBox now pushes changes to Undo stack, ExplorerPanel cached to prevent memory leaks, and weak event manager used in FieldRow.
 - Build: 0 errors. App launches cleanly. 19/19 tests still pass.
 
+### M7 — UI Parity, Loader Fixes, and AI Polishing  ✅ implemented
+- **UI FO4Edit Parity**: Overhauled the `RecordEditorView` DataGrid to use a light theme with dynamic column highlighting (Light Yellow for base plugins, Light Green for winning overrides). Added summary fields for array types so nested collections are readable without expanding them.
+- **Loader Fixes**: Improved loose plugin loading by skipping the heavy indexing phase (lazy loading). Fixed the zero-records reporting bug by extracting the true count directly from the Mutagen plugin header. Fixed an issue where sub-records of loose plugins would fail to populate by replacing dynamic `RecordSelection` with strongly typed `EnumerateMajorRecords` iteration.
+- **AI Local History**: Implemented `ChatHistoryService` and `ChatSession` models to persist conversations across application restarts. Added a top bar UI to `ChatPanel` with a dropdown to select past threads and a `+ New` button.
+- **AI Context Enhancements**: Fixed an issue where the AI would receive `_HasData: False` for lazy-loaded records. The system now intercepts the query, synchronously calls `MutagenLoader.PopulateNode`, and injects the full data block into the AI context without requiring user interaction.
+- **AI UI Enhancements**: Corrected the `Markdig.Wpf` dark-theme styling. Injected custom resource overrides for `Styles.CodeStyleKey` (inline) and `Styles.CodeBlockStyleKey` (multiline) so code blocks sent by the AI feature proper contrast (dark grey background, light blue/grey text).
+- **Settings Fixes**: Updated the default Anthropic API model to the valid `claude-3-7-sonnet-20250219`.
+
 ---
 
 ## STILL REQUIRED

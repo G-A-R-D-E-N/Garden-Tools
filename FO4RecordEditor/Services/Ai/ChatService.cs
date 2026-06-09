@@ -11,6 +11,12 @@ public sealed class ChatService
     public void SetProvider(IAIProvider provider) => _provider = provider;
     public IReadOnlyList<ChatMessage> History => _history;
     public void Reset() => _history.Clear();
+    
+    public void LoadHistory(IEnumerable<ChatMessage> history)
+    {
+        _history.Clear();
+        _history.AddRange(history);
+    }
 
     public async Task<string> SendAsync(
         string userMessage, string? systemContext,

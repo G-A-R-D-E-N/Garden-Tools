@@ -60,6 +60,7 @@ public partial class MainWindow : Window
     }
     private void ShowErrors_Click(object s, RoutedEventArgs e) => BottomTabs.SelectedIndex = 1;
     private void ShowCompare_Click(object s, RoutedEventArgs e) => BottomTabs.SelectedIndex = 2;
+    private void ShowSettings_Click(object s, RoutedEventArgs e) => new Views.SettingsDialog(_shell) { Owner = this }.ShowDialog();
 
     private void OpenRecordTab(Models.RecordNode record)
     {
@@ -73,12 +74,35 @@ public partial class MainWindow : Window
     private void UpdateStatus() =>
         StatusLabel.Text = $"{_shell.Graph.RecordCount:N0} records | {_shell.Graph.ReferenceCount:N0} refs | {_shell.Errors.Count} errors";
 
+    public void SetStatus(string text)
+    {
+        Dispatcher.BeginInvoke(() => StatusLabel.Text = text);
+    }
+
+    public void SetProgress(double value)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (value < 0)
+            {
+                GlobalProgressBar.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                GlobalProgressBar.Visibility = Visibility.Visible;
+                GlobalProgressBar.IsIndeterminate = value == 0;
+                GlobalProgressBar.Value = value;
+            }
+        });
+    }
+
     private void RegisterCommands()
     {
         var c = _shell.Commands;
         c.Register("open.esp", "Open ESP", "File", () => ShowExplorer_Click(this, null!));
         c.Register("scan.errors", "Run Error Scan", "Errors", async () => await _shell.RunErrorScanAsync());
         c.Register("settings", "Open Settings", "App", () => new Views.SettingsDialog(_shell) { Owner = this }.ShowDialog());
+        c.Register("save", "Save Plugin", "File", () => _shell.SaveSelectedPlugin());
         c.Register("undo", "Undo", "Edit", () => _shell.Undo.Undo());
         c.Register("redo", "Redo", "Edit", () => _shell.Undo.Redo());
     }
@@ -91,6 +115,8 @@ public partial class MainWindow : Window
             { _shell.Undo.Undo(); e.Handled = true; }
         else if (e.Key == Key.Y && Keyboard.Modifiers == ModifierKeys.Control)
             { _shell.Undo.Redo(); e.Handled = true; }
+        else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+            { _shell.SaveSelectedPlugin(); e.Handled = true; }
         else if (e.Key == Key.Escape)
             PaletteOverlay.Visibility = Visibility.Collapsed;
     }
