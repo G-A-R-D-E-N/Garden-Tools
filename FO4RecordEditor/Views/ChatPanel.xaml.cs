@@ -45,14 +45,14 @@ public partial class ChatPanel : UserControl
         var reply = new ChatBubble { Text = "", IsUser = false };
         Bubbles.Add(reply);
 
-        var selected = GetSelectedRecordEntry();
-        var ctx = _shell.Context.BuildForQuestion(text, selected);
-        _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Prompt sent", text);
-
         try
         {
+            var selected = GetSelectedRecordEntry();
+            var ctx = _shell.Context.BuildForQuestion(text, selected);
+            _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Prompt sent", text);
+
             await _shell.Chat.SendAsync(text, ctx, token =>
-                Dispatcher.Invoke(() => { reply.Text += token; Scroll.ScrollToEnd(); }));
+                Dispatcher.BeginInvoke(() => { reply.Text += token; Scroll.ScrollToEnd(); }));
             _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Reply received", reply.Text);
         }
         catch (Exception ex)

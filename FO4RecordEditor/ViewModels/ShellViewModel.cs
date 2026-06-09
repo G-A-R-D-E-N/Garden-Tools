@@ -32,24 +32,44 @@ public sealed class ShellViewModel
 
     public void RebuildProvider() => Chat.SetProvider(AiProviderFactory.Create(Settings.Current));
 
+    private bool _isLoadingEsp;
     public async Task LoadEspAsync(string path)
     {
-        Log.Log(LogCategory.App, LogLevel.Info, $"Loading {System.IO.Path.GetFileName(path)}...");
-        var node = await Task.Run(() => MutagenLoader.LoadEsp(path));
-        Plugins.Add(node);
-        await Graph.IndexAsync(new[] { node },
-            new Progress<string>(m => Log.Log(LogCategory.Plugin, LogLevel.Debug, m)));
-        Log.Log(LogCategory.App, LogLevel.Info,
-            $"Loaded {node.Key}: {Graph.RecordCount} records, {Graph.ReferenceCount} refs.");
+        if (_isLoadingEsp) return;
+        _isLoadingEsp = true;
+        try
+        {
+            Log.Log(LogCategory.App, LogLevel.Info, $"Loading {System.IO.Path.GetFileName(path)}...");
+            var node = await Task.Run(() => MutagenLoader.LoadEsp(path));
+            Plugins.Add(node);
+            await Graph.IndexAsync(new[] { node },
+                new Progress<string>(m => Log.Log(LogCategory.Plugin, LogLevel.Debug, m)));
+            Log.Log(LogCategory.App, LogLevel.Info,
+                $"Loaded {node.Key}: {Graph.RecordCount} records, {Graph.ReferenceCount} refs.");
+        }
+        finally
+        {
+            _isLoadingEsp = false;
+        }
     }
 
+    private bool _isScanning;
     public async Task RunErrorScanAsync()
     {
-        Log.Log(LogCategory.Error, LogLevel.Info, "Running error scan...");
-        var found = await Scanner.ScanAsync(Graph);
-        Errors.Clear();
-        foreach (var e in found) Errors.Add(e);
-        Log.Log(LogCategory.Error, LogLevel.Info, $"Scan complete: {found.Count} issue(s).");
+        if (_isScanning) return;
+        _isScanning = true;
+        try
+        {
+            Log.Log(LogCategory.Error, LogLevel.Info, "Running error scan...");
+            var found = await Scanner.ScanAsync(Graph);
+            Errors.Clear();
+            foreach (var e in found) Errors.Add(e);
+            Log.Log(LogCategory.Error, LogLevel.Info, $"Scan complete: {found.Count} issue(s).");
+        }
+        finally
+        {
+            _isScanning = false;
+        }
     }
 
     public RecordTabViewModel OpenRecord(RecordNode record)

@@ -9,6 +9,7 @@ public partial class MainWindow : Window
 {
     private readonly ShellViewModel _shell = new();
     private Views.ChatPanel _chatPanel = null!;
+    private Views.ExplorerPanel _explorerPanel = null!;
 
     // Lock objects for cross-thread access to bound collections (integration fix #3).
     private readonly object _logLock = new();
@@ -28,6 +29,8 @@ public partial class MainWindow : Window
 
         _chatPanel = new Views.ChatPanel(_shell);
         AiPanelHost.Content = _chatPanel;
+        
+        _explorerPanel = new Views.ExplorerPanel(_shell, OpenRecordTab, _chatPanel.SubmitExternal);
 
         ShowExplorer_Click(this, null!);            // default side panel
         BuildBottomTabs();
@@ -45,10 +48,16 @@ public partial class MainWindow : Window
             { Header = "Compare", Content = new Views.ComparePanel(_shell) });
     }
 
-    private void ShowExplorer_Click(object s, RoutedEventArgs e) =>
-        SidePanelHost.Content = new Views.ExplorerPanel(_shell, OpenRecordTab, _chatPanel.SubmitExternal);
-    private void ShowSearch_Click(object s, RoutedEventArgs e) =>
-        SidePanelHost.Content = new Views.ExplorerPanel(_shell, OpenRecordTab, _chatPanel.SubmitExternal) { StartInSearch = true };
+    private void ShowExplorer_Click(object s, RoutedEventArgs e)
+    {
+        _explorerPanel.StartInSearch = false;
+        SidePanelHost.Content = _explorerPanel;
+    }
+    private void ShowSearch_Click(object s, RoutedEventArgs e)
+    {
+        _explorerPanel.StartInSearch = true;
+        SidePanelHost.Content = _explorerPanel;
+    }
     private void ShowErrors_Click(object s, RoutedEventArgs e) => BottomTabs.SelectedIndex = 1;
     private void ShowCompare_Click(object s, RoutedEventArgs e) => BottomTabs.SelectedIndex = 2;
 

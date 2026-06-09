@@ -17,7 +17,7 @@ public sealed class RecordTabViewModel
     }
 
     public IReadOnlyList<FieldRow> Fields =>
-        Record.Children.Select(c => new FieldRow(c, 0)).ToList();
+        Record.Children.Select(c => new FieldRow(c, 0, EditField)).ToList();
 
     /// <summary>Edit a leaf through the undo stack so it is reversible.</summary>
     public void EditField(RecordNode leaf, string newValue)
