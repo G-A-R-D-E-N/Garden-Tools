@@ -60,6 +60,11 @@ public sealed class ClaudeCodeProvider : IAIProvider
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = Path.GetTempPath(),
+            // claude emits UTF-8; without this the OEM code page mangles characters
+            // like the em dash into "ΓÇö".
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+            StandardInputEncoding = Encoding.UTF8,
         };
         psi.ArgumentList.Add("/c");
         psi.ArgumentList.Add(_exePath);                   // "claude" or a full path

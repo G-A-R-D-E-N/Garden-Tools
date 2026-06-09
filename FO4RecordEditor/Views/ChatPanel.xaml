@@ -16,7 +16,11 @@
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Text="AI ASSISTANT" Foreground="#888" FontFamily="Consolas" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
         <ComboBox Grid.Column="1" x:Name="ChatSelector" Margin="10,0" Background="#1E1E1E" Foreground="#E0E0E0" BorderBrush="#555" DisplayMemberPath="Name" SelectionChanged="ChatSelector_SelectionChanged" />
-        <Button Grid.Column="2" Content="+ New" Click="NewChat_Click" Padding="8,2" Background="#007ACC" Foreground="White" BorderThickness="0" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal">
+          <Button Content="Rename" Click="RenameChat_Click" Padding="6,2" Margin="0,0,4,0" ToolTip="Rename this chat"/>
+          <Button Content="Delete" Click="DeleteChat_Click" Padding="6,2" Margin="0,0,4,0" ToolTip="Delete this chat"/>
+          <Button Content="+ New" Click="NewChat_Click" Padding="8,2" Background="#007ACC" Foreground="White" BorderThickness="0"/>
+        </StackPanel>
       </Grid>
     </Border>
     <ScrollViewer Grid.Row="1" x:Name="Scroll" VerticalScrollBarVisibility="Auto" Padding="6">

@@ -31,7 +31,36 @@ public partial class ChatPanel : UserControl
 
     private void Input_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control) { Send_Click(sender, e); e.Handled = true; }
+        // Enter sends; Shift+Enter inserts a newline.
+        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+        {
+            e.Handled = true;
+            Send_Click(sender, e);
+        }
+    }
+
+    private void RenameChat_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (_currentSession == null) return;
+        var name = Microsoft.VisualBasic.Interaction.InputBox("New chat name:", "Rename Chat", _currentSession.Name);
+        if (string.IsNullOrWhiteSpace(name)) return;
+        _currentSession.Name = name;
+        ChatSelector.Items.Refresh();
+        _historyService.Save(_currentSession);
+    }
+
+    private void DeleteChat_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (_currentSession == null) return;
+        var r = System.Windows.MessageBox.Show($"Delete chat '{_currentSession.Name}'?", "Delete Chat",
+            System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+        if (r != System.Windows.MessageBoxResult.Yes) return;
+
+        var toDelete = _currentSession;
+        _historyService.Delete(toDelete.Id);
+        Sessions.Remove(toDelete);
+        if (Sessions.Count > 0) ChatSelector.SelectedItem = Sessions[0];
+        else NewChat_Click(this, new System.Windows.RoutedEventArgs());
     }
 
     private void Send_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -88,20 +117,51 @@ public partial class ChatPanel : UserControl
         
         var aiMsg = new SessionMessage { IsUser = false, Text = "" };
         _currentSession.Messages.Add(aiMsg);
-        var reply = new ChatBubble { Text = "", IsUser = false };
+
+        // Working indicator until the first real token arrives.
+        var providerLabel = _shell.Settings.Current.AiProvider switch
+        {
+            "claudecode" => "Claude Code",
+            "ollama"     => "Ollama",
+            _            => "Claude"
+        };
+        var reply = new ChatBubble { Text = $"_{providerLabel} is thinking…_", IsUser = false };
         Bubbles.Add(reply);
+        Scroll.ScrollToEnd();
 
         _historyService.Save(_currentSession);
+
+        bool started = false;
+        void Append(string chunk)
+        {
+            if (!started) { started = true; reply.Text = ""; aiMsg.Text = ""; }
+            reply.Text += chunk;
+            aiMsg.Text += chunk;
+            Scroll.ScrollToEnd();
+        }
+        void Status(string s) => reply.Text = $"_{s}_";
 
         try
         {
             var selected = GetSelectedNode();
-            
-            // Auto-populate lazy-loaded records so the AI gets the full context
+
+            // Populate the selected record OFF the UI thread (big records would freeze it).
             if (selected != null && selected.GetValue("_HasData") == "False")
             {
-                var pluginName = selected.Parent?.Parent?.Key ?? "";
-                FO4RecordEditor.Services.MutagenLoader.PopulateNode(selected, _shell.GameEnvironment, pluginName);
+                Dispatcher.Invoke(() => Status($"{providerLabel} is reading {selected.Key}…"));
+                var env = _shell.GameEnvironment;
+                var plugin = selected.Parent?.Parent?.Key ?? "";
+                var fkStr = selected.GetValue("FormKey") ?? "";
+                var fields = await Task.Run(() =>
+                    FO4RecordEditor.Services.MutagenLoader.BuildPopulatedFields(fkStr, env, plugin));
+                var flag = selected.GetChild("_HasData");
+                if (flag != null) selected.Children.Remove(flag);
+                foreach (var c in fields)
+                {
+                    if (selected.GetChild(c.Key) != null) continue;
+                    c.Parent = selected;
+                    selected.Children.Add(c);
+                }
             }
 
             var ctx = _shell.Context.BuildForQuestion(text, selected);
@@ -115,29 +175,20 @@ public partial class ChatPanel : UserControl
                     + "Use them to ground every answer in the actual record data. Call list_plugins first "
                     + "if you don't yet know what is loaded.";
                 await _shell.Agent.RunAsync(text, sys,
-                    onText: chunk => Dispatcher.BeginInvoke(() =>
-                    {
-                        reply.Text += chunk;
-                        aiMsg.Text += chunk;
-                        Scroll.ScrollToEnd();
-                    }),
+                    onText: chunk => Dispatcher.BeginInvoke(() => Append(chunk)),
                     onToolStatus: status => Dispatcher.BeginInvoke(() =>
                     {
-                        reply.Text += $"\n🔧 {status}\n";
-                        Scroll.ScrollToEnd();
+                        if (!started) Status($"Using {status}…");
+                        else Append($"\n🔧 {status}\n");
                     }));
             }
             else
             {
-                await _shell.Chat.SendAsync(text, ctx, token =>
-                    Dispatcher.BeginInvoke(() =>
-                    {
-                        reply.Text += token;
-                        aiMsg.Text += token;
-                        Scroll.ScrollToEnd();
-                    }));
+                await _shell.Chat.SendAsync(text, ctx,
+                    token => Dispatcher.BeginInvoke(() => Append(token)));
             }
 
+            if (!started) Dispatcher.Invoke(() => reply.Text = "_(no response)_");
             _historyService.Save(_currentSession);
             _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Reply received", reply.Text);
         }
