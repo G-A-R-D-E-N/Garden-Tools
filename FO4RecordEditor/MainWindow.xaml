@@ -1,305 +1,61 @@
 <Window x:Class="FO4RecordEditor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FO4 Record Editor" Height="900" Width="1400"
-        Background="#1E1E1E" Foreground="#D4D4D4"
-        WindowState="Maximized"
+        Title="FO4 Record Editor — AI" Height="960" Width="1600"
+        Background="#1E1E1E" Foreground="#D4D4D4" WindowState="Maximized"
         KeyDown="Window_KeyDown">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="5"/>
+      <RowDefinition Height="200" x:Name="BottomRow"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
 
-    <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolVis"/>
+    <Grid Grid.Row="0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="48"/>                <!-- activity bar -->
+        <ColumnDefinition Width="320" x:Name="SideCol"/>
+        <ColumnDefinition Width="5"/>
+        <ColumnDefinition Width="*"/>                 <!-- center -->
+        <ColumnDefinition Width="5"/>
+        <ColumnDefinition Width="420" x:Name="AiCol"/>
+      </Grid.ColumnDefinitions>
 
-        <Style TargetType="TreeViewItem">
-            <Setter Property="Foreground"    Value="#D4D4D4"/>
-            <Setter Property="Background"    Value="Transparent"/>
-            <Setter Property="Padding"       Value="2,1"/>
-            <Setter Property="FontFamily"    Value="Consolas"/>
-            <Setter Property="FontSize"      Value="12"/>
-            <Setter Property="IsExpanded"    Value="{Binding IsExpanded, Mode=TwoWay}"/>
-            <Setter Property="IsSelected"    Value="{Binding IsSelected, Mode=TwoWay}"/>
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#007ACC"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
+      <!-- Activity bar -->
+      <StackPanel Grid.Column="0" Background="#2D2D30">
+        <Button x:Name="BtnExplorer" Content="📁" ToolTip="Explorer" Click="ShowExplorer_Click" Style="{StaticResource ActivityBtn}"/>
+        <Button x:Name="BtnSearch"   Content="🔍" ToolTip="Search"   Click="ShowSearch_Click"   Style="{StaticResource ActivityBtn}"/>
+        <Button x:Name="BtnErrors"   Content="⚠"  ToolTip="Errors"   Click="ShowErrors_Click"   Style="{StaticResource ActivityBtn}"/>
+        <Button x:Name="BtnCompare"  Content="⇄"  ToolTip="Compare"  Click="ShowCompare_Click"  Style="{StaticResource ActivityBtn}"/>
+      </StackPanel>
 
-        <Style TargetType="Button" x:Key="ToolBtn">
-            <Setter Property="Background"      Value="#3C3C3C"/>
-            <Setter Property="Foreground"      Value="#D4D4D4"/>
-            <Setter Property="BorderBrush"     Value="#555"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding"         Value="10,4"/>
-            <Setter Property="Margin"          Value="2,0"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="FontFamily"      Value="Consolas"/>
-            <Setter Property="FontSize"        Value="12"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#007ACC"/>
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Opacity" Value="0.4"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
+      <!-- Side panel host (content swapped in code-behind) -->
+      <ContentControl Grid.Column="1" x:Name="SidePanelHost" Background="#252526"/>
+      <GridSplitter Grid.Column="2" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
 
-        <Style TargetType="TextBox" x:Key="CodeBox">
-            <Setter Property="Background"                Value="#1E1E1E"/>
-            <Setter Property="Foreground"                Value="#D4D4D4"/>
-            <Setter Property="BorderBrush"               Value="#3C3C3C"/>
-            <Setter Property="CaretBrush"                Value="#D4D4D4"/>
-            <Setter Property="FontFamily"                Value="Consolas"/>
-            <Setter Property="FontSize"                  Value="13"/>
-            <Setter Property="AcceptsReturn"             Value="True"/>
-            <Setter Property="AcceptsTab"                Value="True"/>
-            <Setter Property="VerticalScrollBarVisibility"   Value="Auto"/>
-            <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
-            <Setter Property="Padding"                   Value="6"/>
-        </Style>
-    </Window.Resources>
+      <!-- Center: tabbed record editor -->
+      <TabControl Grid.Column="3" x:Name="CenterTabs" Background="#1E1E1E" BorderThickness="0"/>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition x:Name="ScriptRow" Height="0" MinHeight="0"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+      <GridSplitter Grid.Column="4" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
 
-        <!-- TOOLBAR -->
-        <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
-            <WrapPanel Margin="4,3">
-                <Button Style="{StaticResource ToolBtn}" Click="OpenEsp_Click"
-                        Background="#1A3A5C" ToolTip="Open ESP/ESM/ESL directly (no Spriggit needed)">Open ESP</Button>
-                <Separator Background="#555" Width="1" Margin="4,2"/>
-                <Button Style="{StaticResource ToolBtn}" Click="OpenFolder_Click" ToolTip="Open Spriggit serialized folder (Ctrl+O)">Open Folder</Button>
-                <Button Style="{StaticResource ToolBtn}" Click="OpenFile_Click">Open YAML</Button>
-                <Separator Background="#555" Width="1" Margin="6,2"/>
-                <Button Style="{StaticResource ToolBtn}" Click="SaveAll_Click"
-                        x:Name="SaveAllBtn" ToolTip="Ctrl+S" IsEnabled="False">Save All</Button>
-                <Button Style="{StaticResource ToolBtn}" Click="CloseAll_Click">Close All</Button>
-                <Separator Background="#555" Width="1" Margin="6,2"/>
-                <Button Style="{StaticResource ToolBtn}" Click="Compile_Click"
-                        Background="#1B4F1B" ToolTip="Run Spriggit create-plugin">Compile to ESP</Button>
-                <Separator Background="#555" Width="1" Margin="6,2"/>
-                <Button Style="{StaticResource ToolBtn}" Click="ExpandAll_Click">Expand All</Button>
-                <Button Style="{StaticResource ToolBtn}" Click="CollapseAll_Click">Collapse All</Button>
-            </WrapPanel>
-        </Border>
-
-        <!-- SEARCH BAR -->
-        <Grid Grid.Row="1" Background="#252526">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="280"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="  Search: " Foreground="#858585" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
-            <TextBox Grid.Column="1" x:Name="SearchBox" Background="#1E1E1E" Foreground="#D4D4D4"
-                     BorderBrush="#555" BorderThickness="1" Padding="4,3" Margin="0,3"
-                     FontFamily="Consolas" FontSize="12" TextChanged="SearchBox_TextChanged"
-                     ToolTip="Search records (Ctrl+F)"/>
-            <TextBlock Grid.Column="2" x:Name="SearchCountLabel" Foreground="#858585"
-                       FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" Margin="6,0"/>
-            <Button Grid.Column="3" Style="{StaticResource ToolBtn}" Click="ClearSearch_Click"
-                    Padding="6,3" Margin="2,2">Clear</Button>
-        </Grid>
-
-        <!-- MAIN CONTENT: tree | splitter | editor -->
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="120"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Left: record tree -->
-            <Grid Grid.Column="0" Background="#252526">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                <Border Grid.Row="0" Background="#2D2D30" Padding="8,4"
-                        BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
-                    <TextBlock Text="RECORD TREE" Foreground="#555" FontSize="10"
-                               FontFamily="Consolas" FontWeight="Bold"/>
-                </Border>
-                <TreeView Grid.Row="1" x:Name="RecordTree" Background="#252526" BorderThickness="0"
-                          SelectedItemChanged="RecordTree_SelectedItemChanged"
-                          VirtualizingPanel.IsVirtualizing="True"
-                          VirtualizingPanel.VirtualizationMode="Recycling"
-                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                    <TreeView.ItemTemplate>
-                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontFamily="Consolas" FontSize="12">
-                                    <TextBlock.Text>
-                                        <MultiBinding StringFormat="{}{0}{1}">
-                                            <Binding Path="Key"/>
-                                            <Binding Path="DirtyIndicator"/>
-                                        </MultiBinding>
-                                    </TextBlock.Text>
-                                </TextBlock>
-                                <TextBlock Text="  " FontFamily="Consolas" FontSize="12"/>
-                                <TextBlock Text="{Binding DisplayValue}" Foreground="#666"
-                                           FontFamily="Consolas" FontSize="11"
-                                           Visibility="{Binding IsLeaf, Converter={StaticResource BoolVis}}"/>
-                            </StackPanel>
-                        </HierarchicalDataTemplate>
-                    </TreeView.ItemTemplate>
-                </TreeView>
-            </Grid>
-
-            <GridSplitter Grid.Column="1" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
-
-            <!-- Right: record field editor -->
-            <Grid Grid.Column="2" Background="#1E1E1E">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <Border Grid.Row="0" Background="#2D2D30" Padding="8,4"
-                        BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <Button x:Name="NavBackBtn" Style="{StaticResource ToolBtn}"
-                                    Click="NavBack_Click" Padding="8,2" Margin="0,0,6,0"
-                                    Visibility="Collapsed" ToolTip="Back (Backspace)">&#8592;</Button>
-                            <TextBlock x:Name="BreadcrumbLabel" Text="Select a record in the tree"
-                                       Foreground="#555" FontSize="11" FontFamily="Consolas" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <Button Grid.Column="1" x:Name="SaveFileBtn" Style="{StaticResource ToolBtn}"
-                                Click="SaveFile_Click" Visibility="Collapsed" Background="#1B4F1B">Save File</Button>
-                    </Grid>
-                </Border>
-
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                    <ItemsControl x:Name="FieldList" Background="#1E1E1E" Padding="0,2"
-                                  MouseDoubleClick="FieldList_MouseDoubleClick">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="0,1" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1">
-                                    <Grid Background="#252526">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="260" MinWidth="80"/>
-                                            <ColumnDefinition Width="4"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding IndentedKey}"
-                                                   Foreground="#9CDCFE" FontFamily="Consolas" FontSize="12"
-                                                   VerticalAlignment="Center" Padding="4,2"
-                                                   ToolTip="{Binding FullPath}"/>
-                                        <TextBox Grid.Column="2"
-                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
-                                                 Background="Transparent" BorderThickness="0"
-                                                 Foreground="#CE9178" FontFamily="Consolas" FontSize="12"
-                                                 Padding="4,2" VerticalAlignment="Center"
-                                                 IsReadOnly="{Binding IsCompound}"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </Grid>
-        </Grid>
-
-        <!-- SCRIPT PANEL TOGGLE (clickable header bar) -->
-        <Border Grid.Row="3" Background="#252526" BorderBrush="#3C3C3C" BorderThickness="0,1,0,0"
-                Cursor="Hand" MouseLeftButtonDown="ScriptToggle_Click" Padding="8,4">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="C# SCRIPT ENGINE" Foreground="#555"
-                           FontSize="10" FontFamily="Consolas" FontWeight="Bold" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Foreground="#444" FontSize="10" FontFamily="Consolas"
-                           VerticalAlignment="Center" Margin="8,0"
-                           Text="Use Ctx.All, Ctx.RecordsOfType(&quot;COBJ&quot;), Ctx.WithKey(), Log() -- Ctrl+` to toggle"/>
-                <TextBlock Grid.Column="2" x:Name="ScriptToggleLabel" Text="[show]"
-                           Foreground="#007ACC" FontSize="10" FontFamily="Consolas" VerticalAlignment="Center"/>
-            </Grid>
-        </Border>
-
-        <!-- SCRIPT PANEL -->
-        <Grid Grid.Row="4" x:Name="ScriptPanel" Background="#1E1E1E">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="420" MinWidth="200"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Code editor -->
-            <Grid Grid.Column="0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <TextBox Grid.Row="0" x:Name="ScriptEditor" Style="{StaticResource CodeBox}"
-                         KeyDown="ScriptEditor_KeyDown"/>
-                <Border Grid.Row="1" Background="#2D2D30" Padding="4,3">
-                    <WrapPanel>
-                        <Button Style="{StaticResource ToolBtn}" Click="RunScript_Click"
-                                Background="#1B4F1B" Padding="14,4">Run  (Ctrl+Enter)</Button>
-                        <Button Style="{StaticResource ToolBtn}" Click="ClearScript_Click">Clear</Button>
-                        <Button Style="{StaticResource ToolBtn}" Click="LoadScriptTemplate_Click">Templates</Button>
-                        <Button Style="{StaticResource ToolBtn}" Click="SaveScript_Click">Save</Button>
-                        <Button Style="{StaticResource ToolBtn}" Click="LoadScript_Click">Load</Button>
-                        <TextBlock x:Name="ScriptStatusLabel" Foreground="#858585" FontFamily="Consolas"
-                                   FontSize="11" VerticalAlignment="Center" Margin="10,0"/>
-                    </WrapPanel>
-                </Border>
-            </Grid>
-
-            <GridSplitter Grid.Column="1" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
-
-            <!-- Output -->
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                <Border Grid.Row="0" Background="#2D2D30" Padding="8,3">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Output" Foreground="#555" FontSize="10"
-                                   FontFamily="Consolas" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <Button Style="{StaticResource ToolBtn}" Click="ClearOutput_Click"
-                                Padding="6,1" Margin="8,0" FontSize="10">Clear</Button>
-                    </StackPanel>
-                </Border>
-                <TextBox Grid.Row="1" x:Name="ScriptOutput" Style="{StaticResource CodeBox}"
-                         IsReadOnly="True" Background="#0D0D0D" TextWrapping="Wrap"/>
-            </Grid>
-        </Grid>
-
-        <!-- STATUS BAR -->
-        <Border Grid.Row="5" Background="#007ACC" Padding="8,2">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="StatusLabel" Grid.Column="0" Text="Ready"
-                           Foreground="White" FontFamily="Consolas" FontSize="11"/>
-                <TextBlock x:Name="RecordCountLabel" Grid.Column="1"
-                           Foreground="White" FontFamily="Consolas" FontSize="11" Margin="16,0"/>
-                <TextBlock x:Name="DirtyLabel" Grid.Column="2" Text=""
-                           Foreground="#FFE082" FontFamily="Consolas" FontSize="11" Margin="8,0"/>
-            </Grid>
-        </Border>
+      <!-- AI panel host -->
+      <ContentControl Grid.Column="5" x:Name="AiPanelHost" Background="#202020"/>
     </Grid>
+
+    <GridSplitter Grid.Row="1" Height="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+
+    <!-- Bottom tabs -->
+    <TabControl Grid.Row="2" x:Name="BottomTabs" Background="#181818" BorderThickness="0"/>
+
+    <!-- Status bar -->
+    <Border Grid.Row="3" Background="#007ACC" Padding="8,2">
+      <TextBlock x:Name="StatusLabel" Foreground="White" FontFamily="Consolas" FontSize="11" Text="Ready"/>
+    </Border>
+
+    <!-- Command palette overlay -->
+    <Border x:Name="PaletteOverlay" Grid.RowSpan="4" Background="#88000000" Visibility="Collapsed">
+      <ContentControl x:Name="PaletteHost" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,80,0,0"/>
+    </Border>
+  </Grid>
 </Window>
