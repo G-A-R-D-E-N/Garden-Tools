@@ -1,14 +1,49 @@
 <Window x:Class="FO4RecordEditor.Views.SettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings" Height="280" Width="520" Background="#1E1E1E" Foreground="#D4D4D4">
-  <StackPanel Margin="16">
-    <TextBlock Text="Anthropic API Key" Margin="0,4"/>
-    <PasswordBox x:Name="ApiKeyBox" Background="#252526" Foreground="#D4D4D4"/>
-    <TextBlock Text="Provider (anthropic | ollama)" Margin="0,8,0,4"/>
-    <TextBox x:Name="ProviderBox" Background="#252526" Foreground="#D4D4D4"/>
-    <TextBlock Text="Model" Margin="0,8,0,4"/>
-    <TextBox x:Name="ModelBox" Background="#252526" Foreground="#D4D4D4"/>
-    <Button Content="Save" Click="Save_Click" Margin="0,16,0,0" Padding="16,6" HorizontalAlignment="Right"/>
+        Title="Settings" Height="420" Width="540" Background="#1E1E1E" Foreground="#D4D4D4"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="20">
+    <TextBlock Text="AI Provider" FontWeight="SemiBold" Margin="0,0,0,4"/>
+    <ComboBox x:Name="ProviderBox" SelectionChanged="ProviderBox_SelectionChanged">
+      <ComboBoxItem Content="Anthropic API" Tag="anthropic"/>
+      <ComboBoxItem Content="Claude Code (local CLI — no API key)" Tag="claudecode"/>
+      <ComboBoxItem Content="Ollama (local)" Tag="ollama"/>
+    </ComboBox>
+
+    <!-- Anthropic API settings -->
+    <StackPanel x:Name="AnthropicPanel">
+      <TextBlock Text="Anthropic API Key" Margin="0,14,0,4"/>
+      <PasswordBox x:Name="ApiKeyBox" Background="#252526" Foreground="#D4D4D4"/>
+      <TextBlock Text="Model" Margin="0,10,0,4"/>
+      <TextBox x:Name="ModelBox" Background="#252526" Foreground="#D4D4D4"/>
+      <TextBlock Text="Full tool-use (the AI reads your loaded plugins) is available on this provider."
+                 Foreground="#7FB37F" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+    </StackPanel>
+
+    <!-- Claude Code settings -->
+    <StackPanel x:Name="ClaudeCodePanel" Visibility="Collapsed">
+      <TextBlock Text="Claude Code CLI path" Margin="0,14,0,4"/>
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBox x:Name="ClaudeCodePathBox" Grid.Column="0" Background="#252526" Foreground="#D4D4D4"/>
+        <Button x:Name="TestClaudeBtn" Grid.Column="1" Content="Test" Click="TestClaude_Click" Margin="6,0,0,0" Padding="12,2"/>
+      </Grid>
+      <TextBlock x:Name="ClaudeStatus" Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                 Text="Uses your Claude Code sign-in — no API key needed. Leave as 'claude' if it is on your PATH."/>
+    </StackPanel>
+
+    <!-- Ollama settings -->
+    <StackPanel x:Name="OllamaPanel" Visibility="Collapsed">
+      <TextBlock Text="Ollama URL" Margin="0,14,0,4"/>
+      <TextBox x:Name="OllamaUrlBox" Background="#252526" Foreground="#D4D4D4"/>
+      <TextBlock Text="Ollama Model" Margin="0,10,0,4"/>
+      <TextBox x:Name="OllamaModelBox" Background="#252526" Foreground="#D4D4D4"/>
+    </StackPanel>
+
+    <Button Content="Save" Click="Save_Click" Margin="0,20,0,0" Padding="20,6" HorizontalAlignment="Right"/>
   </StackPanel>
 </Window>

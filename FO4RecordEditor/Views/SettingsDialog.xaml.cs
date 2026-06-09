@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
 using FO4RecordEditor.ViewModels;
 
 namespace FO4RecordEditor.Views;
@@ -11,16 +13,81 @@ public partial class SettingsDialog : Window
     {
         InitializeComponent();
         _shell = shell;
-        ApiKeyBox.Password = shell.Settings.Current.AnthropicApiKey;
-        ProviderBox.Text = shell.Settings.Current.AiProvider;
-        ModelBox.Text = shell.Settings.Current.Model;
+        var s = shell.Settings.Current;
+
+        ApiKeyBox.Password = s.AnthropicApiKey;
+        ModelBox.Text = s.Model;
+        ClaudeCodePathBox.Text = s.ClaudeCodePath;
+        OllamaUrlBox.Text = s.OllamaUrl;
+        OllamaModelBox.Text = s.OllamaModel;
+
+        SelectProvider(s.AiProvider);
+        UpdatePanels();
+    }
+
+    private void SelectProvider(string provider)
+    {
+        foreach (ComboBoxItem item in ProviderBox.Items)
+        {
+            if ((string)item.Tag == provider) { ProviderBox.SelectedItem = item; return; }
+        }
+        ProviderBox.SelectedIndex = 0;
+    }
+
+    private string CurrentProvider =>
+        ProviderBox.SelectedItem is ComboBoxItem item ? (string)item.Tag : "anthropic";
+
+    private void ProviderBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdatePanels();
+
+    private void UpdatePanels()
+    {
+        if (AnthropicPanel == null) return;   // during init before all elements exist
+        var p = CurrentProvider;
+        AnthropicPanel.Visibility  = p == "anthropic"  ? Visibility.Visible : Visibility.Collapsed;
+        ClaudeCodePanel.Visibility = p == "claudecode" ? Visibility.Visible : Visibility.Collapsed;
+        OllamaPanel.Visibility     = p == "ollama"     ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void TestClaude_Click(object sender, RoutedEventArgs e)
+    {
+        ClaudeStatus.Text = "Testing...";
+        var path = string.IsNullOrWhiteSpace(ClaudeCodePathBox.Text) ? "claude" : ClaudeCodePathBox.Text;
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("/c");
+            psi.ArgumentList.Add(path);
+            psi.ArgumentList.Add("--version");
+            var proc = Process.Start(psi)!;
+            var output = await proc.StandardOutput.ReadToEndAsync();
+            await proc.WaitForExitAsync();
+            ClaudeStatus.Text = proc.ExitCode == 0
+                ? $"✓ Found: {output.Trim()}"
+                : "✗ `claude` ran but returned an error.";
+        }
+        catch (System.Exception ex)
+        {
+            ClaudeStatus.Text = $"✗ Not found: {ex.Message}. Install the Claude Code CLI or set the full path.";
+        }
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        _shell.Settings.Current.AnthropicApiKey = ApiKeyBox.Password;
-        _shell.Settings.Current.AiProvider = ProviderBox.Text;
-        _shell.Settings.Current.Model = ModelBox.Text;
+        var s = _shell.Settings.Current;
+        s.AiProvider = CurrentProvider;
+        s.AnthropicApiKey = ApiKeyBox.Password;
+        s.Model = ModelBox.Text;
+        s.ClaudeCodePath = ClaudeCodePathBox.Text;
+        s.OllamaUrl = OllamaUrlBox.Text;
+        s.OllamaModel = OllamaModelBox.Text;
+
         _shell.Settings.Save();
         _shell.RebuildProvider();
         DialogResult = true;
