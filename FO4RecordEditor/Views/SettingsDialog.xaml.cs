@@ -43,6 +43,7 @@ public partial class SettingsDialog : Window
     {
         if (AnthropicPanel == null) return;   // during init before all elements exist
         var p = CurrentProvider;
+        ModelPanel.Visibility      = p == "ollama"     ? Visibility.Collapsed : Visibility.Visible;
         AnthropicPanel.Visibility  = p == "anthropic"  ? Visibility.Visible : Visibility.Collapsed;
         ClaudeCodePanel.Visibility = p == "claudecode" ? Visibility.Visible : Visibility.Collapsed;
         OllamaPanel.Visibility     = p == "ollama"     ? Visibility.Visible : Visibility.Collapsed;

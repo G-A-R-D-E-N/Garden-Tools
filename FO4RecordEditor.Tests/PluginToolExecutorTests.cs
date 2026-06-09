@@ -29,8 +29,10 @@ public class PluginToolExecutorTests
         // plugin not loaded -> friendly message, but arg parsing must not throw
         exec.Execute("list_record_types", "{\"plugin\":\"Missing.esp\"}")
             .Should().Contain("not loaded");
+        // With nothing loaded, get_record now returns a diagnostic listing what IS loaded
+        // (instead of a terse "plugin not loaded") so the AI can self-correct.
         exec.Execute("get_record", "{\"plugin\":\"Missing.esp\",\"id\":\"001234:Missing.esp\"}")
-            .Should().Be("(plugin not loaded)");
+            .Should().Contain("not found").And.Contain("Loaded plugins: none");
     }
 
     [Fact]

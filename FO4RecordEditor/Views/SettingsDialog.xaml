@@ -11,14 +11,28 @@
       <ComboBoxItem Content="Ollama (local)" Tag="ollama"/>
     </ComboBox>
 
+    <!-- Model (used by Anthropic API + Claude Code) -->
+    <StackPanel x:Name="ModelPanel">
+      <TextBlock Text="Model" FontWeight="SemiBold" Margin="0,14,0,4"/>
+      <ComboBox x:Name="ModelBox" IsEditable="True">
+        <ComboBoxItem Content="claude-opus-4-8"/>
+        <ComboBoxItem Content="claude-sonnet-4-6"/>
+        <ComboBoxItem Content="claude-haiku-4-5-20251001"/>
+        <ComboBoxItem Content="claude-3-7-sonnet-20250219"/>
+        <ComboBoxItem Content="opus"/>
+        <ComboBoxItem Content="sonnet"/>
+        <ComboBoxItem Content="haiku"/>
+      </ComboBox>
+      <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                 Text="Anthropic: use a full model id. Claude Code: 'opus' / 'sonnet' / 'haiku' or a full id."/>
+    </StackPanel>
+
     <!-- Anthropic API settings -->
     <StackPanel x:Name="AnthropicPanel">
       <TextBlock Text="Anthropic API Key" Margin="0,14,0,4"/>
       <PasswordBox x:Name="ApiKeyBox" Background="#252526" Foreground="#D4D4D4"/>
-      <TextBlock Text="Model" Margin="0,10,0,4"/>
-      <TextBox x:Name="ModelBox" Background="#252526" Foreground="#D4D4D4"/>
       <TextBlock Text="Full tool-use (the AI reads your loaded plugins) is available on this provider."
-                 Foreground="#7FB37F" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                 Foreground="#7FB37F" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
     </StackPanel>
 
     <!-- Claude Code settings -->

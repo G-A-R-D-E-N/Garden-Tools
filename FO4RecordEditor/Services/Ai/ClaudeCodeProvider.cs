@@ -16,14 +16,17 @@ public sealed class ClaudeCodeProvider : IAIProvider
     private readonly string _exePath;
     private readonly string? _mcpUrl;
     private readonly string _mcpServerName;
+    private readonly string? _model;
 
     public string Name => "Claude Code";
 
-    public ClaudeCodeProvider(string exePath = "claude", string? mcpUrl = null, string mcpServerName = "fo4editor")
+    public ClaudeCodeProvider(string exePath = "claude", string? mcpUrl = null,
+        string mcpServerName = "fo4editor", string? model = null)
     {
         _exePath = string.IsNullOrWhiteSpace(exePath) ? "claude" : exePath;
         _mcpUrl = mcpUrl;
         _mcpServerName = mcpServerName;
+        _model = string.IsNullOrWhiteSpace(model) ? null : model;
     }
 
     public async IAsyncEnumerable<string> StreamAsync(
@@ -71,6 +74,11 @@ public sealed class ClaudeCodeProvider : IAIProvider
         psi.ArgumentList.Add("-p");                       // print (non-interactive) mode
         psi.ArgumentList.Add("--output-format");
         psi.ArgumentList.Add("text");
+        if (_model != null)
+        {
+            psi.ArgumentList.Add("--model");
+            psi.ArgumentList.Add(_model);
+        }
 
         // Register the in-process plugin MCP server so Claude Code can read live plugin data.
         if (_mcpUrl != null)

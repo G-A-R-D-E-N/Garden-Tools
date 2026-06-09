@@ -56,11 +56,25 @@ public static class MutagenLoader
             dynamic env = envObj;
             foreach (var l in ((IEnumerable)env.LoadOrder.ListedOrder).Cast<dynamic>())
             {
-                if (l.ModKey.FileName.String == modName && l.Mod != null)
+                if (l.Mod != null &&
+                    string.Equals((string)l.ModKey.FileName.String, modName, StringComparison.OrdinalIgnoreCase))
                     return l.Mod;
             }
         }
         return LooseMods.TryGetValue(modName, out var loose) ? loose : null;
+    }
+
+    // Every loaded mod (env load order + loose-opened ESPs) as (name, mod).
+    private static IEnumerable<(string name, object mod)> AllLoadedMods(object? envObj)
+    {
+        if (envObj != null)
+        {
+            dynamic env = envObj;
+            foreach (var l in ((IEnumerable)env.LoadOrder.ListedOrder).Cast<dynamic>())
+                if (l.Mod != null) yield return ((string)l.ModKey.FileName.String, (object)l.Mod);
+        }
+        foreach (var kv in LooseMods)
+            yield return (kv.Key, kv.Value);
     }
 
     // Enumerate a mod exactly once, bucketing records by signature and FormKey. Cached per mod.
@@ -294,28 +308,48 @@ public static class MutagenLoader
 
     public static string QueryRecordFields(object? envObj, string plugin, string formKeyOrEditorId)
     {
-        var mod = ResolveMod(plugin, envObj);
-        if (mod == null) return "(plugin not loaded)";
-        var idx = GetModIndex(mod, plugin);
+        // Build a bounded candidate list: the named plugin first, then loose-opened ESPs and
+        // any plugin whose index is already built (avoids re-indexing a whole load order).
+        var candidates = new List<(string name, object mod)>();
+        var named = ResolveMod(plugin, envObj);
+        if (named != null) candidates.Add((plugin, named));
+        foreach (var m in AllLoadedMods(envObj))
+        {
+            bool alreadyNamed = candidates.Any(c => string.Equals(c.name, m.name, StringComparison.OrdinalIgnoreCase));
+            if (alreadyNamed) continue;
+            if (LooseMods.ContainsKey(m.name) || _modIndexCache.ContainsKey(m.name))
+                candidates.Add(m);
+        }
 
-        Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? rec = null;
-        if (FormKey.TryFactory(formKeyOrEditorId, out var fk) && idx.ByFormKey.TryGetValue(fk, out var byFk))
-            rec = byFk;
-        else
-            rec = idx.BySig.Values.SelectMany(v => v)
-                     .FirstOrDefault(r => string.Equals(r.EditorID, formKeyOrEditorId, StringComparison.OrdinalIgnoreCase));
+        FormKey.TryFactory(formKeyOrEditorId, out var fk);
 
-        if (rec == null) return "(record not found)";
+        foreach (var (name, mod) in candidates)
+        {
+            var idx = GetModIndex(mod, name);
+            Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? rec = null;
+            if (!fk.IsNull && idx.ByFormKey.TryGetValue(fk, out var byFk))
+                rec = byFk;
+            else
+                rec = idx.BySig.Values.SelectMany(v => v)
+                         .FirstOrDefault(r => string.Equals(r.EditorID, formKeyOrEditorId, StringComparison.OrdinalIgnoreCase));
+            if (rec == null) continue;
 
-        var temp = new RecordNode { Key = rec.EditorID ?? rec.FormKey.ToString() };
-        AddLeafInit(temp, "FormKey", rec.FormKey.ToString());
-        AddLeafInit(temp, "EditorID", rec.EditorID ?? "");
-        AddLeafInit(temp, "Type", rec.Registration.Name);
-        WalkObject(rec, temp, 0, 4, plugin);
+            var temp = new RecordNode { Key = rec.EditorID ?? rec.FormKey.ToString() };
+            AddLeafInit(temp, "FormKey", rec.FormKey.ToString());
+            AddLeafInit(temp, "EditorID", rec.EditorID ?? "");
+            AddLeafInit(temp, "Type", rec.Registration.Name);
+            AddLeafInit(temp, "SourcePlugin", name);
+            WalkObject(rec, temp, 0, 4, name);
 
-        var sb = new System.Text.StringBuilder();
-        FlattenToText(temp, 0, sb);
-        return sb.ToString();
+            var sb2 = new System.Text.StringBuilder();
+            FlattenToText(temp, 0, sb2);
+            return sb2.ToString();
+        }
+
+        var loaded = string.Join(", ", AllLoadedMods(envObj).Select(m => m.name));
+        return $"(record '{formKeyOrEditorId}' not found in '{plugin}'. " +
+               $"Loaded plugins: {(string.IsNullOrEmpty(loaded) ? "none" : loaded)}. " +
+               $"Try search_records first, or use the exact plugin name from list_plugins.)";
     }
 
     private static void FlattenToText(RecordNode node, int depth, System.Text.StringBuilder sb)

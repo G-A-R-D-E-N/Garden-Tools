@@ -58,7 +58,7 @@ public sealed class ShellViewModel
         var s = Settings.Current;
         if (s.AiProvider == "claudecode")
             return new ClaudeCodeProvider(s.ClaudeCodePath,
-                McpServer.IsRunning ? McpServer.Url : null, McpServer.ServerName);
+                McpServer.IsRunning ? McpServer.Url : null, McpServer.ServerName, s.Model);
         return AiProviderFactory.Create(s);
     }
 
