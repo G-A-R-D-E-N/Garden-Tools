@@ -45,4 +45,21 @@ public class ErrorScannerTests
         var errors = new ErrorScanner().Scan(g);
         errors.Should().NotContain(e => e.Category == ErrorCategory.BrokenReference);
     }
+
+    [Fact]
+    public void Scan_FlagsLeveledListEntryWithNoReference()
+    {
+        var ll = GraphTestBuilder.Record("LVLI", "002000:Test.esp", "MyList");
+        var entries = new RecordNode { Key = "Entries", Parent = ll };
+        var e0 = new RecordNode { Key = "[0]", Parent = entries };
+        GraphTestBuilder.AddLeaf(e0, "Reference", "");
+        GraphTestBuilder.AddLeaf(e0, "Count", "1");
+        entries.Children.Add(e0);
+        ll.Children.Add(entries);
+
+        var g = new KnowledgeGraph();
+        g.Index(GraphTestBuilder.Plugin("Test.esp", ll));
+        var errors = new ErrorScanner().Scan(g);
+        errors.Should().Contain(e => e.Category == ErrorCategory.InvalidLeveledList);
+    }
 }
