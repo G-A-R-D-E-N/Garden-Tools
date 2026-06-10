@@ -250,6 +250,7 @@ public static class MutagenLoader
             AddLeafInit(recNode, "EditorID", editorId);
             AddLeafInit(recNode, "Type", sig);
             AddLeafInit(recNode, "_HasData", "False");
+            recNode.ConflictStatus = ConflictState.GetStatus(modName, rec.FormKey);
             result.Add(recNode);
         }
         return result;

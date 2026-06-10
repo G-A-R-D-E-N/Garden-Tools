@@ -262,7 +262,24 @@ public partial class ExplorerPanel : UserControl
         var conflicts = await FO4RecordEditor.Services.ConflictScanner.ScanAsync(env, progress);
         main?.SetStatus($"Found {conflicts.Count} conflict(s).");
 
+        // Colour the ESP tree (winner = orange, loser = red), like xEdit.
+        FO4RecordEditor.Services.ConflictState.Set(conflicts);
+        RecolorConflicts();
+
         var view = new ConflictView(conflicts, _submitToChat) { Owner = main };
         view.Show();
+    }
+
+    // Apply the latest conflict scan colours to every loaded record node.
+    private void RecolorConflicts()
+    {
+        foreach (var root in _shell.Plugins)
+            foreach (var n in root.SelfAndDescendants())
+            {
+                if (!n.IsRecordNode) continue;
+                var plugin = n.Parent?.Parent?.Key ?? "";
+                var fk = n.GetValue("FormKey") ?? "";
+                n.ConflictStatus = FO4RecordEditor.Services.ConflictState.GetStatus(plugin, fk);
+            }
     }
 }

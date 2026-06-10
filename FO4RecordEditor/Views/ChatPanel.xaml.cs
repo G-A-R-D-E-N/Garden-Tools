@@ -141,6 +141,12 @@ public partial class ChatPanel : UserControl
         }
         void Status(string s) => reply.Text = $"_{s}_";
 
+        // Cancellation: a 4-minute hard timeout plus the Stop button, so a stuck model
+        // (no response, a hung tool call, etc.) never freezes the chat forever.
+        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMinutes(4));
+        _cts = cts;
+        SetSending(true);
+
         try
         {
             var selected = GetSelectedNode();
@@ -180,17 +186,26 @@ public partial class ChatPanel : UserControl
                     {
                         if (!started) Status($"Using {status}…");
                         else Append($"\n🔧 {status}\n");
-                    }));
+                    }),
+                    ct: cts.Token);
             }
             else
             {
                 await _shell.Chat.SendAsync(text, ctx,
-                    token => Dispatcher.BeginInvoke(() => Append(token)));
+                    token => Dispatcher.BeginInvoke(() => Append(token)), cts.Token);
             }
 
             if (!started) Dispatcher.Invoke(() => reply.Text = "_(no response)_");
             _historyService.Save(_currentSession);
             _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Reply received", reply.Text);
+        }
+        catch (OperationCanceledException)
+        {
+            var note = started ? "\n\n_[stopped]_" : "_[stopped — the AI took too long or was cancelled]_";
+            reply.Text += note;
+            aiMsg.Text = reply.Text;
+            _historyService.Save(_currentSession);
+            _shell.Log.Log(LogCategory.AI, LogLevel.Warning, "AI call cancelled/timed out", text);
         }
         catch (Exception ex)
         {
@@ -199,7 +214,23 @@ public partial class ChatPanel : UserControl
             _historyService.Save(_currentSession);
             _shell.Log.Log(LogCategory.AI, LogLevel.Error, "AI call failed", ex.Message);
         }
+        finally
+        {
+            SetSending(false);
+            if (ReferenceEquals(_cts, cts)) _cts = null;
+            cts.Dispose();
+        }
     }
+
+    private System.Threading.CancellationTokenSource? _cts;
+
+    private void SetSending(bool sending)
+    {
+        SendBtn.Visibility = sending ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+        StopBtn.Visibility = sending ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+    }
+
+    private void Stop_Click(object sender, System.Windows.RoutedEventArgs e) => _cts?.Cancel();
 
     private RecordNode? GetSelectedNode()
     {

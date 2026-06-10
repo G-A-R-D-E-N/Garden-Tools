@@ -109,6 +109,9 @@ public sealed class ClaudeCodeProvider : IAIProvider
             yield break;
         }
 
+        // Kill the CLI if the request is cancelled / times out, so it doesn't linger.
+        using var killReg = ct.Register(() => { try { proc.Kill(entireProcessTree: true); } catch { } });
+
         using (proc)
         {
             // Feed the prompt via stdin, then close so the CLI starts generating.

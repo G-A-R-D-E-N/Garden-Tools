@@ -23,6 +23,13 @@ public class RecordNode : INotifyPropertyChanged
 
     public IEnumerable<RecordNode> TreeChildren => IsRecordNode ? System.Array.Empty<RecordNode>() : Children;
 
+    private ConflictStatus _conflict;
+    public ConflictStatus ConflictStatus
+    {
+        get => _conflict;
+        set { if (_conflict == value) return; _conflict = value; Notify(); }
+    }
+
     public string Value
     {
         get => Values.Values.LastOrDefault() ?? "";

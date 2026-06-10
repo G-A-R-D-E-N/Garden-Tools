@@ -55,7 +55,9 @@
       <TextBox Grid.Column="0" x:Name="Input" Background="#1E1E1E" Foreground="#D4D4D4"
                BorderBrush="#555" Margin="4" Padding="6" AcceptsReturn="True" MinHeight="40"
                KeyDown="Input_KeyDown"/>
-      <Button Grid.Column="1" Content="Send" Click="Send_Click" Margin="0,4,4,4" Padding="12,4"/>
+      <Button Grid.Column="1" x:Name="SendBtn" Content="Send" Click="Send_Click" Margin="0,4,4,4" Padding="12,4"/>
+      <Button Grid.Column="1" x:Name="StopBtn" Content="Stop" Click="Stop_Click" Margin="0,4,4,4" Padding="12,4"
+              Background="#8A1E1E" Foreground="White" Visibility="Collapsed"/>
     </Grid>
   </Grid>
 </UserControl>
