@@ -169,6 +169,65 @@ public static class WriteService
         return mod;
     }
 
+    public static string AddListItem(string plugin, string recordId, string field, string value, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var openMsg);
+        if (mod == null) return openMsg;
+
+        var rec = FindMutableRecord(mod, recordId);
+        if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+
+        var prop = rec.GetType().GetProperty(field,
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (prop == null) return $"No field '{field}' on {rec.GetType().Name}.";
+
+        // The list may be null on a freshly created record -- initialise it.
+        var listObj = prop.CanRead ? prop.GetValue(rec) : null;
+        if (listObj == null)
+        {
+            if (!prop.CanWrite) return $"Field '{field}' is an uninitialised list and can't be created.";
+            var listType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            try { listObj = System.Activator.CreateInstance(listType); } catch { listObj = null; }
+            if (listObj == null) return $"Could not initialise list '{field}'.";
+            prop.SetValue(rec, listObj);
+        }
+        if (listObj is not System.Collections.IList list)
+            return $"Field '{field}' is not a list.";
+
+        // Find the FormLink target type of the list elements (e.g. IKeywordGetter).
+        var elemType = prop.PropertyType.IsGenericType ? prop.PropertyType.GetGenericArguments().FirstOrDefault() : null;
+        Type? linkTarget = null;
+        if (elemType != null && elemType.IsGenericType)
+        {
+            var gtd = elemType.GetGenericTypeDefinition();
+            if (gtd == typeof(IFormLink<>) || gtd == typeof(IFormLinkGetter<>) ||
+                gtd == typeof(IFormLinkNullable<>) || gtd == typeof(IFormLinkNullableGetter<>))
+                linkTarget = elemType.GetGenericArguments()[0];
+        }
+        if (linkTarget == null)
+            return $"Field '{field}' is a list of {elemType?.Name ?? "?"}; add_list_item supports FormLink lists " +
+                   $"(e.g. Keywords, FormList Items) for now.";
+
+        if (!FormKey.TryFactory(value, out var fk))
+        {
+            fk = MutagenLoader.ResolveEditorIdToFormKey(env, value);
+            if (fk.IsNull) return $"'{value}' is not a FormKey and no loaded record has that EditorID.";
+        }
+
+        try
+        {
+            var link = System.Activator.CreateInstance(typeof(FormLink<>).MakeGenericType(linkTarget), fk);
+            list.Add(link);
+            MutagenLoader.InvalidateModIndex(plugin);
+            NotifyChanged(plugin);
+            return $"Added {value} to {field} on {recordId} in {plugin} (now {list.Count} item(s)).";
+        }
+        catch (Exception ex)
+        {
+            return $"Could not add to {field}: {ex.Message}";
+        }
+    }
+
     public static string SavePlugin(string plugin, string? path)
     {
         var mod = GetMutable(plugin);

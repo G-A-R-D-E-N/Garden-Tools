@@ -38,8 +38,8 @@ public class PluginToolExecutorTests
     [Fact]
     public void ToolDefinitions_ExposesReadAndWriteTools()
     {
-        // 5 read tools + 5 write tools (open/create_plugin/create_record/set_field/save_plugin).
-        PluginToolExecutor.ToolDefinitions().Should().HaveCount(10);
-        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(10);
+        // 5 read tools + 6 write tools (open/create_plugin/create_record/set_field/add_list_item/save_plugin).
+        PluginToolExecutor.ToolDefinitions().Should().HaveCount(11);
+        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(11);
     }
 }

@@ -20,7 +20,7 @@
               SelectedItemChanged="Tree_SelectedItemChanged"
               TreeViewItem.Expanded="Tree_Expanded">
       <TreeView.ItemTemplate>
-        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+        <HierarchicalDataTemplate ItemsSource="{Binding TreeChildren}">
           <TextBlock Text="{Binding Key}" FontFamily="Consolas" FontSize="12"/>
         </HierarchicalDataTemplate>
       </TreeView.ItemTemplate>

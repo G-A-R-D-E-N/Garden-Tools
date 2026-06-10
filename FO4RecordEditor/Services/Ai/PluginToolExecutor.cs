@@ -118,6 +118,21 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "record", "field", "value" }
             }),
+        new("add_list_item",
+            "Append an item to a list field (e.g. add a keyword to a record's 'Keywords', or a FormLink to a " +
+            "FormList's 'Items'). Pass a FormKey ('001234:Plugin.esp') or an EditorID of a loaded record.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    field = new { type = "string", description = "List field, e.g. 'Keywords' or 'Items'." },
+                    value = new { type = "string", description = "FormKey or EditorID to add." }
+                },
+                required = new[] { "plugin", "record", "field", "value" }
+            }),
         new("save_plugin",
             "Write a plugin to disk. By default OVERWRITES the original file the plugin was opened from (in-place edit); " +
             "newly created plugins go to the configured Output folder. Pass 'path' to choose a specific location.",
@@ -184,6 +199,8 @@ public sealed class PluginToolExecutor
                 return WriteService.CreateRecord(Str("plugin"), Str("type"), Str("editorId"), env);
             case "set_field":
                 return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
+            case "add_list_item":
+                return WriteService.AddListItem(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
             case "save_plugin":
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
 

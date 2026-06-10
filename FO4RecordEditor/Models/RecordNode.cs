@@ -17,6 +17,12 @@ public class RecordNode : INotifyPropertyChanged
 
     public Dictionary<string, string> Values { get; } = new();
 
+    // True for a record row in the Explorer tree. Records are shown as leaves there (their
+    // fields live in the center property grid), so the tree binds TreeChildren, not Children.
+    public bool IsRecordNode { get; set; }
+
+    public IEnumerable<RecordNode> TreeChildren => IsRecordNode ? System.Array.Empty<RecordNode>() : Children;
+
     public string Value
     {
         get => Values.Values.LastOrDefault() ?? "";

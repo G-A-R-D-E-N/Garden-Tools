@@ -64,6 +64,36 @@ public class WriteServiceTests
     }
 
     [Fact]
+    public void AddListItem_AppendsKeywordToRecord()
+    {
+        var plugin = $"ListTest_{Guid.NewGuid():N}.esp";
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("create_plugin", $"{{\"name\":\"{plugin}\"}}");
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"KYWD\",\"editorId\":\"List_Kw\"}}");
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"WEAP\",\"editorId\":\"List_Gun\"}}");
+
+        var kwDump = exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"List_Kw\"}}");
+        var kwKey = kwDump.Split('\n').First(l => l.TrimStart().StartsWith("FormKey:")).Split(':', 2)[1].Trim();
+
+        var result = exec.Execute("add_list_item",
+            $"{{\"plugin\":\"{plugin}\",\"record\":\"List_Gun\",\"field\":\"Keywords\",\"value\":\"{kwKey}\"}}");
+        result.Should().Contain("Added").And.Contain("Keywords");
+
+        // Verify the actual data: save and reload, check the weapon's Keywords via Mutagen.
+        var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), plugin);
+        exec.Execute("save_plugin",
+            $"{{\"plugin\":\"{plugin}\",\"path\":\"{outPath.Replace("\\", "\\\\")}\"}}");
+
+        using var reload = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+            Mutagen.Bethesda.Plugins.ModPath.FromPath(outPath), Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        var gun = reload.Weapons.First(w => w.EditorID == "List_Gun");
+        gun.Keywords.Should().NotBeNull();
+        gun.Keywords!.Select(k => k.FormKey.ID).Should().Contain(0x800u);
+
+        try { System.IO.File.Delete(outPath); } catch { }
+    }
+
+    [Fact]
     public void CreateRecord_UnsupportedType_ReturnsHelpfulMessage()
     {
         var exec = new PluginToolExecutor(() => null);

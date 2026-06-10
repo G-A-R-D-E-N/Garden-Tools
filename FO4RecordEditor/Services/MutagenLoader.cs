@@ -227,6 +227,7 @@ public static class MutagenLoader
             {
                 Key = !string.IsNullOrEmpty(editorId) ? editorId : rec.FormKey.ToString(),
                 Parent = groupNode,
+                IsRecordNode = true,   // a leaf in the tree; fields show in the center grid
             };
             AddLeafInit(recNode, "FormKey", rec.FormKey.ToString());
             AddLeafInit(recNode, "EditorID", editorId);
