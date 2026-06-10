@@ -67,27 +67,41 @@ public sealed class ShellViewModel
         return AiProviderFactory.Create(s);
     }
 
-    // Add or refresh an AI-authored plugin in the Explorer tree (marshaled to the UI thread
-    // because write tools run on the agent / MCP-server thread).
+    // Add or refresh an AI-authored plugin in the Explorer tree. Eagerly loads the record
+    // groups (off the UI thread) and swaps them in, so the node shows real content instead
+    // of getting stuck on a lazy "Loading..." placeholder that only resolves on manual expand.
     private void OnWritePluginChanged(string name)
     {
         var app = System.Windows.Application.Current;
         if (app == null) return;
-        app.Dispatcher.Invoke(() =>
+        var env = GameEnvironment;
+
+        _ = Task.Run(() =>
         {
-            var existing = Plugins.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
+            try
             {
-                // Reset to a fresh lazy node so newly added records appear on re-expand.
-                existing.Children.Clear();
-                foreach (var c in MutagenLoader.MakeLazyNode(name, existing.FilePath).Children)
+                // Find or create the tree node on the UI thread.
+                RecordNode node = null!;
+                app.Dispatcher.Invoke(() =>
                 {
-                    c.Parent = existing;
-                    existing.Children.Add(c);
-                }
-                return;
+                    node = Plugins.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase))!;
+                    if (node == null) { node = new RecordNode { Key = name }; Plugins.Add(node); }
+                });
+
+                // Load the groups (reads the live editable mod) off the UI thread.
+                var groups = MutagenLoader.GetGroups(name, env, node, null);
+
+                app.Dispatcher.Invoke(() =>
+                {
+                    node.Children.Clear();
+                    foreach (var g in groups) { g.Parent = node; node.Children.Add(g); }
+                    node.IsExpanded = true;   // reveal the refreshed content
+                });
             }
-            Plugins.Add(MutagenLoader.MakeLazyNode(name));
+            catch (Exception ex)
+            {
+                Log.Log(LogCategory.App, LogLevel.Error, "Tree refresh failed", ex.Message);
+            }
         });
     }
 
