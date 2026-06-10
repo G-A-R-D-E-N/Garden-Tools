@@ -39,6 +39,11 @@ public static class MutagenLoader
     // Tracks file paths for loose-opened ESPs so OpenPlugin can reload them as mutable.
     public static readonly Dictionary<string, string> LooseModPaths = new(StringComparer.OrdinalIgnoreCase);
 
+    // Plugins the AI has opened for editing (mutable). These take priority over the env /
+    // loose read-only copies for ALL reads, so edits are immediately visible in the tree and
+    // to get_record (hot loading). WriteService registers entries here.
+    public static readonly Dictionary<string, object> EditableMods = new(StringComparer.OrdinalIgnoreCase);
+
     // ---- per-mod record index (built once, reused for every group/record load) ----
     // Without this, every group expansion re-enumerated the ENTIRE mod (O(allRecords)
     // per group), which hangs on large masters like Fallout4.esm.
@@ -51,9 +56,12 @@ public static class MutagenLoader
 
     private static readonly Dictionary<string, ModIndex> _modIndexCache = new(StringComparer.OrdinalIgnoreCase);
 
-    // Resolve a mod object by file name from the environment load order, or the loose-mod cache.
+    // Resolve a mod by file name. Editable (mutable) copies win so the AI's in-progress
+    // edits are what everything reads (hot loading), then the env load order, then loose ESPs.
     private static object? ResolveMod(string modName, object? envObj)
     {
+        if (EditableMods.TryGetValue(modName, out var editable)) return editable;
+
         if (envObj != null)
         {
             dynamic env = envObj;
@@ -67,17 +75,25 @@ public static class MutagenLoader
         return LooseMods.TryGetValue(modName, out var loose) ? loose : null;
     }
 
-    // Every loaded mod (env load order + loose-opened ESPs) as (name, mod).
+    // Every loaded mod (editable copies win over env/loose), de-duplicated by name.
     private static IEnumerable<(string name, object mod)> AllLoadedMods(object? envObj)
     {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in EditableMods)
+            if (seen.Add(kv.Key)) yield return (kv.Key, kv.Value);
+
         if (envObj != null)
         {
             dynamic env = envObj;
             foreach (var l in ((IEnumerable)env.LoadOrder.ListedOrder).Cast<dynamic>())
-                if (l.Mod != null) yield return ((string)l.ModKey.FileName.String, (object)l.Mod);
+            {
+                if (l.Mod == null) continue;
+                var name = (string)l.ModKey.FileName.String;
+                if (seen.Add(name)) yield return (name, (object)l.Mod);
+            }
         }
         foreach (var kv in LooseMods)
-            yield return (kv.Key, kv.Value);
+            if (seen.Add(kv.Key)) yield return (kv.Key, kv.Value);
     }
 
     // Enumerate a mod exactly once, bucketing records by signature and FormKey. Cached per mod.

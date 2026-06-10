@@ -18,6 +18,8 @@ namespace FO4RecordEditor.Services;
 public static class WriteService
 {
     private static readonly Dictionary<string, IFallout4Mod> _mutable = new(StringComparer.OrdinalIgnoreCase);
+    // Original on-disk path of an opened plugin, so save_plugin can overwrite it in place.
+    private static readonly Dictionary<string, string> _sourcePath = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>User-configured output folder (from Settings). Blank => &lt;app&gt;/Output.</summary>
     public static string? OutputFolderOverride { get; set; }
@@ -33,7 +35,8 @@ public static class WriteService
     private static void Register(string name, IFallout4Mod mod)
     {
         _mutable[name] = mod;
-        MutagenLoader.LooseMods[name] = mod;     // make it readable by the read tools
+        MutagenLoader.EditableMods[name] = mod;  // prioritized for ALL reads (hot loading)
+        MutagenLoader.LooseMods[name] = mod;      // so list_plugins / the tree still see it
         MutagenLoader.InvalidateModIndex(name);
     }
 
@@ -50,6 +53,7 @@ public static class WriteService
         {
             var mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(filePath), Fallout4Release.Fallout4);
             Register(plugin, mod);
+            _sourcePath[plugin] = filePath;     // save_plugin overwrites the original by default
             NotifyChanged(plugin);
             var count = mod.EnumerateMajorRecords().Count();
             return $"Opened '{plugin}' for editing ({count} records). Use create_record, set_field, and save_plugin.";
@@ -170,7 +174,11 @@ public static class WriteService
         var mod = GetMutable(plugin);
         if (mod == null) return $"Plugin '{plugin}' is not open for editing.";
 
-        path ??= Path.Combine(DefaultOutputDir, plugin);
+        // Default: overwrite the original file the plugin was opened from (modify in place).
+        // Newly created plugins (no source) fall back to the configured Output folder.
+        if (string.IsNullOrWhiteSpace(path))
+            path = _sourcePath.TryGetValue(plugin, out var sp) ? sp : Path.Combine(DefaultOutputDir, plugin);
+
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -179,6 +187,7 @@ public static class WriteService
                 // Build the master list from the records' FormLinks (self-contained, no load order needed).
                 MastersListContent = MastersListContentOption.Iterate
             });
+            NotifyChanged(plugin);
             return $"Saved {plugin} to {path}.";
         }
         catch (Exception ex)

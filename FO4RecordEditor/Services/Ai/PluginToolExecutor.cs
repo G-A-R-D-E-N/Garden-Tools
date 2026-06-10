@@ -119,7 +119,8 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "record", "field", "value" }
             }),
         new("save_plugin",
-            "Write a plugin to disk (defaults to the editor's Output folder). Call this to persist created records.",
+            "Write a plugin to disk. By default OVERWRITES the original file the plugin was opened from (in-place edit); " +
+            "newly created plugins go to the configured Output folder. Pass 'path' to choose a specific location.",
             new
             {
                 type = "object",
