@@ -153,6 +153,23 @@ public static class MutagenLoader
         return root;
     }
 
+    // Build the game environment and list its plugins WITHOUT creating tree nodes, so the
+    // caller can let the user choose which plugins to load.
+    public static (object env, List<string> plugins) BuildEnvironment(
+        IProgress<(string message, double? percent)>? progress = null)
+    {
+        progress?.Report(("Initializing Game Environment...", 0));
+        _modIndexCache.Clear();
+        var env = GameEnvironment.Typical.Builder<IFallout4Mod, IFallout4ModGetter>(GameRelease.Fallout4).Build();
+
+        var plugins = new List<string>();
+        foreach (var l in env.LoadOrder.ListedOrder)
+            if (l.Mod != null) plugins.Add(l.ModKey.FileName.String);
+
+        progress?.Report(($"Found {plugins.Count} plugins.", null));
+        return (env, plugins);
+    }
+
     public static (RecordNode root, object env) LoadEnvironment(IProgress<(string message, double? percent)>? progress = null)
     {
         progress?.Report(("Initializing Game Environment...", 0));

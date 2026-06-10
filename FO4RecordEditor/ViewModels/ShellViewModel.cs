@@ -137,29 +137,23 @@ public sealed class ShellViewModel
         }
     }
 
-    public async Task LoadEnvironmentAsync(IProgress<(string message, double? percent)>? progress = null)
+    // Build the environment and return its plugin list; the caller picks which to load.
+    public async Task<List<string>> LoadEnvironmentAsync(IProgress<(string message, double? percent)>? progress = null)
     {
-        if (_isLoadingEsp) return;
+        if (_isLoadingEsp) return new();
         _isLoadingEsp = true;
         try
         {
-            Log.Log(LogCategory.App, LogLevel.Info, "Loading Load Order Environment...");
-            var result = await Task.Run(() => MutagenLoader.LoadEnvironment(progress));
-            
-            Plugins.Clear();
-            Graph.Clear();
-            Plugins.Add(result.root);
-            GameEnvironment = result.env;
-            
-            Log.Log(LogCategory.App, LogLevel.Info, "Indexing full environment (this may take a moment)...");
-            await Graph.IndexAsync(new[] { result.root },
-                new Progress<string>(m => Log.Log(LogCategory.Plugin, LogLevel.Debug, m)));
-            Log.Log(LogCategory.App, LogLevel.Info,
-                $"Loaded Environment: {Graph.RecordCount} records, {Graph.ReferenceCount} refs.");
+            Log.Log(LogCategory.App, LogLevel.Info, "Building Load Order environment...");
+            var (env, plugins) = await Task.Run(() => MutagenLoader.BuildEnvironment(progress));
+            GameEnvironment = env;
+            Log.Log(LogCategory.App, LogLevel.Info, $"Environment ready: {plugins.Count} plugins.");
+            return plugins;
         }
         catch (Exception ex)
         {
             Log.Log(LogCategory.App, LogLevel.Error, $"Environment load failed: {ex.Message}");
+            return new();
         }
         finally
         {

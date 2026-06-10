@@ -57,8 +57,23 @@ public partial class ExplorerPanel : UserControl
             }
         });
 
-        await _shell.LoadEnvironmentAsync(progress);
+        var plugins = await _shell.LoadEnvironmentAsync(progress);
         if (main != null) main.SetProgress(-1);
+        if (plugins.Count == 0)
+        {
+            MessageBox.Show("No plugins found, or the game environment could not be built. " +
+                "Make sure Fallout 4 is detected (run via MO2 to see your modlist).");
+            return;
+        }
+
+        var dlg = new PluginSelectDialog(plugins) { Owner = main };
+        if (dlg.ShowDialog() != true) return;
+
+        // Fresh env load: clear the tree, then add a lazy node per selected plugin.
+        _shell.Plugins.Clear();
+        foreach (var name in dlg.SelectedPlugins)
+            _shell.Plugins.Add(FO4RecordEditor.Services.MutagenLoader.MakeLazyNode(name));
+        main?.SetStatus($"Loaded {dlg.SelectedPlugins.Count} plugin(s).");
     }
 
     private async void Scan_Click(object sender, RoutedEventArgs e) => await _shell.RunErrorScanAsync();
