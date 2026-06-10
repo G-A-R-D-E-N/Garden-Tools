@@ -426,6 +426,85 @@ public static class MutagenLoader
     private static string CheckLabel(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter r) =>
         $"{(string.IsNullOrEmpty(r.EditorID) ? r.FormKey.ToString() : r.EditorID)} [{r.FormKey}] ({r.Registration.Name})";
 
+    // Deep error scan using the load-order link cache: references that resolve to NOTHING
+    // anywhere in the load order are dangling and will crash the game.
+    public static string ScanErrorsDeep(object? envObj, string plugin)
+    {
+        if (envObj == null) return "Deep error scan needs the loaded game environment. Use 'Load Env' first.";
+        if (ResolveMod(plugin, envObj) is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod)
+            return $"(plugin '{plugin}' is not loaded)";
+
+        var cache = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
+        int dangling = 0, deleted = 0, count = 0;
+        var samples = new List<string>();
+        foreach (var rec in mod.EnumerateMajorRecords())
+        {
+            count++;
+            if (rec.IsDeleted) { deleted++; if (samples.Count < 60) samples.Add($"DELETED  {CheckLabel(rec)}"); }
+            foreach (var link in rec.EnumerateFormLinks())
+            {
+                if (link.FormKey.IsNull) continue;
+                if (!cache.TryResolveIdentifier(link.FormKey, out _))
+                {
+                    dangling++;
+                    if (samples.Count < 60) samples.Add($"DANGLING REF (crash risk)  {CheckLabel(rec)} -> {link.FormKey}");
+                }
+            }
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Error scan of {plugin}: {count} records, {deleted} deleted, {dangling} unresolved reference(s).");
+        if (deleted + dangling == 0) { sb.AppendLine("No crash-causing issues found."); return sb.ToString(); }
+        sb.AppendLine("Issues:");
+        foreach (var s in samples) sb.AppendLine("  " + s);
+        if (deleted + dangling > samples.Count) sb.AppendLine($"  ... and {deleted + dangling - samples.Count} more");
+        return sb.ToString();
+    }
+
+    // Conflict scan: records in this plugin that other loaded plugins also define/override.
+    public static string ScanConflicts(object? envObj, string plugin)
+    {
+        if (envObj == null) return "Conflict scan needs the loaded game environment. Use 'Load Env' first.";
+        dynamic env = envObj;
+
+        // One pass over the load order: FormKey -> plugins that touch it.
+        var owners = new Dictionary<FormKey, List<string>>();
+        foreach (var l in (IEnumerable)env.LoadOrder.ListedOrder)
+        {
+            dynamic ld = l;
+            if (ld.Mod == null) continue;
+            string pname = ld.ModKey.FileName.String;
+            if (ld.Mod is Mutagen.Bethesda.Fallout4.IFallout4ModGetter m)
+                foreach (var rec in m.EnumerateMajorRecords())
+                {
+                    if (!owners.TryGetValue(rec.FormKey, out var lst)) { lst = new(); owners[rec.FormKey] = lst; }
+                    if (!lst.Contains(pname)) lst.Add(pname);
+                }
+        }
+
+        if (ResolveMod(plugin, envObj) is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod)
+            return $"(plugin '{plugin}' is not loaded)";
+
+        int conflicts = 0;
+        var samples = new List<string>();
+        foreach (var rec in mod.EnumerateMajorRecords())
+        {
+            if (owners.TryGetValue(rec.FormKey, out var lst) && lst.Count > 1)
+            {
+                conflicts++;
+                if (samples.Count < 60) samples.Add($"{CheckLabel(rec)}  <- {string.Join(", ", lst)}");
+            }
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Conflict scan of {plugin}: {conflicts} record(s) also touched by other plugins.");
+        if (conflicts == 0) { sb.AppendLine("No conflicts with other loaded plugins."); return sb.ToString(); }
+        sb.AppendLine("Conflicts:");
+        foreach (var s in samples) sb.AppendLine("  " + s);
+        if (conflicts > samples.Count) sb.AppendLine($"  ... and {conflicts - samples.Count} more");
+        return sb.ToString();
+    }
+
     // Resolve an EditorID to a FormKey across loaded plugins (bounded to loose + already
     // indexed, so a full load order isn't re-enumerated). Used for setting FormLink fields.
     public static FormKey ResolveEditorIdToFormKey(object? envObj, string editorId)

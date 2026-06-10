@@ -9,9 +9,10 @@
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
     <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#2D2D30">
-      <Button Content="Open ESP" Click="OpenEsp_Click" Style="{StaticResource ActivityBtn}" Width="60" Height="24" FontSize="11"/>
-      <Button Content="Load Env" Click="LoadEnv_Click" Style="{StaticResource ActivityBtn}" Width="60" Height="24" FontSize="11"/>
-      <Button Content="Scan" Click="Scan_Click" Style="{StaticResource ActivityBtn}" Width="40" Height="24" FontSize="11"/>
+      <Button Content="Open ESP" Click="OpenEsp_Click" Style="{StaticResource ActivityBtn}" Width="56" Height="24" FontSize="11"/>
+      <Button Content="Load Env" Click="LoadEnv_Click" Style="{StaticResource ActivityBtn}" Width="56" Height="24" FontSize="11"/>
+      <Button Content="Errors" Click="ScanErrorsBtn_Click" Style="{StaticResource ActivityBtn}" Width="48" Height="24" FontSize="11" ToolTip="Scan selected plugin for crash-causing errors"/>
+      <Button Content="Conflicts" Click="ScanConflictsBtn_Click" Style="{StaticResource ActivityBtn}" Width="56" Height="24" FontSize="11" ToolTip="Scan selected plugin for conflicts"/>
     </StackPanel>
     <TextBox Grid.Row="1" x:Name="SearchBox" Background="#1E1E1E" Foreground="#D4D4D4" BorderThickness="0,1,0,1" BorderBrush="#3F3F46" Padding="4" TextChanged="Search_TextChanged"/>
     <TreeView Grid.Row="2" x:Name="Tree" Background="#252526" BorderThickness="0"
