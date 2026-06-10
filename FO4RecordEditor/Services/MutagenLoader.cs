@@ -290,19 +290,7 @@ public static class MutagenLoader
         var fkStr = node.GetValue("FormKey");
         if (fkStr == null || !FormKey.TryFactory(fkStr, out var fk)) return new();
 
-        var versions = new List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>();
-        if (envObj != null)
-        {
-            dynamic env = envObj;
-            foreach (var l in (IEnumerable)env.LoadOrder.ListedOrder)
-            {
-                dynamic ld = l;
-                if (ld.Mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
-                string name = (string)ld.ModKey.FileName.String;
-                if (GetModIndex(mod, name).ByFormKey.TryGetValue(fk, out var rec))
-                    versions.Add((name, rec));
-            }
-        }
+        var versions = GetRecordContexts(envObj, fk);
 
         if (versions.Count == 0)
         {
@@ -347,25 +335,36 @@ public static class MutagenLoader
     public static Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? GetRecordVersion(
         object? envObj, string plugin, FormKey fk)
     {
-        var mod = ResolveMod(plugin, envObj);
-        if (mod == null) return null;
-        return GetModIndex(mod, plugin).ByFormKey.TryGetValue(fk, out var r) ? r : null;
+        foreach (var (p, rec) in GetRecordContexts(envObj, fk))
+            if (string.Equals(p, plugin, StringComparison.OrdinalIgnoreCase)) return rec;
+        return null;
     }
 
     /// <summary>Plugins (in load order) that carry a version of the given FormKey.</summary>
-    public static List<string> GetConflictingPlugins(object? envObj, FormKey fk)
+    public static List<string> GetConflictingPlugins(object? envObj, FormKey fk) =>
+        GetRecordContexts(envObj, fk).Select(c => c.plugin).ToList();
+
+    /// <summary>
+    /// Every version of a record across the load order, in load order (last = winner). Uses the
+    /// environment's link cache (already built, efficient, handles cells/worldspace children) so we
+    /// never have to fully index the masters just to find one record's overrides.
+    /// </summary>
+    public static List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>
+        GetRecordContexts(object? envObj, FormKey fk)
     {
-        var list = new List<string>();
-        if (envObj == null) return list;
-        dynamic env = envObj;
-        foreach (var l in (IEnumerable)env.LoadOrder.ListedOrder)
+        var ordered = new List<(string, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter)>();
+        if (envObj == null) return ordered;
+        try
         {
-            dynamic ld = l;
-            if (ld.Mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
-            string name = (string)ld.ModKey.FileName.String;
-            if (GetModIndex(mod, name).ByFormKey.ContainsKey(fk)) list.Add(name);
+            var lc = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
+            // ResolveAllSimpleContexts returns winning-first; reverse to load order.
+            var contexts = lc.ResolveAllSimpleContexts(fk).ToList();
+            contexts.Reverse();
+            foreach (var ctx in contexts)
+                ordered.Add((ctx.ModKey.FileName.String, ctx.Record));
         }
-        return list;
+        catch { }
+        return ordered;
     }
 
     /// <summary>
@@ -375,17 +374,8 @@ public static class MutagenLoader
     public static ConflictMatrix? BuildConflictMatrix(object? envObj, string formKeyStr)
     {
         if (envObj == null || !FormKey.TryFactory(formKeyStr, out var fk)) return null;
-        dynamic env = envObj;
 
-        var versions = new List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>();
-        foreach (var l in (IEnumerable)env.LoadOrder.ListedOrder)
-        {
-            dynamic ld = l;
-            if (ld.Mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
-            string name = (string)ld.ModKey.FileName.String;
-            if (GetModIndex(mod, name).ByFormKey.TryGetValue(fk, out var rec))
-                versions.Add((name, rec));
-        }
+        var versions = GetRecordContexts(envObj, fk);
         if (versions.Count == 0) return null;
 
         var root = new RecordNode { Key = "root" };

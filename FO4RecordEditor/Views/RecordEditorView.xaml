@@ -6,7 +6,20 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     <views:ConflictCellBrush x:Key="CellBrush"/>
   </UserControl.Resources>
-  <DataGrid x:Name="FieldList" AutoGenerateColumns="False" HeadersVisibility="Column"
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0" x:Name="Banner" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,0,0,1" Padding="10,6">
+      <StackPanel Orientation="Vertical">
+        <TextBlock x:Name="BannerTitle" FontFamily="Consolas" FontSize="12" Foreground="#D4D4D4"/>
+        <TextBlock x:Name="BannerStatus" FontFamily="Consolas" FontSize="12" Margin="0,2,0,0"/>
+      </StackPanel>
+    </Border>
+
+    <DataGrid Grid.Row="1" x:Name="FieldList" AutoGenerateColumns="False" HeadersVisibility="Column"
             CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None"
             RowHeight="26" AlternationCount="2" AlternatingRowBackground="#1B1B1B"
             Background="#1E1E1E" Foreground="#D4D4D4" RowBackground="#1E1E1E"
@@ -62,5 +75,6 @@
         </DataGridTemplateColumn.CellTemplate>
       </DataGridTemplateColumn>
     </DataGrid.Columns>
-  </DataGrid>
+    </DataGrid>
+  </Grid>
 </UserControl>

@@ -22,6 +22,8 @@ public partial class RecordEditorView : UserControl
         bool conflict = plugins.Count > 1;
         if (plugins.Count == 0) plugins.Add("");   // legacy fallback -> binds Node.Value
 
+        BuildBanner(tab, plugins, conflict);
+
         var cellBrush = (IValueConverter)Resources["CellBrush"];
 
         for (int i = 0; i < plugins.Count; i++)
@@ -82,6 +84,31 @@ public partial class RecordEditorView : UserControl
         }
 
         FieldList.ItemsSource = tab.FieldsView;
+    }
+
+    private void BuildBanner(RecordTabViewModel tab, List<string> plugins, bool conflict)
+    {
+        var fk = tab.Record.GetValue("FormKey") ?? "";
+        var eid = tab.Record.GetValue("EditorID") ?? "";
+        var type = tab.Record.GetValue("Type") ?? "";
+        BannerTitle.Text = $"{(string.IsNullOrEmpty(eid) ? "(no EditorID)" : eid)}   {fk}   {type}";
+
+        if (!conflict)
+        {
+            var only = plugins.FirstOrDefault(p => !string.IsNullOrEmpty(p));
+            BannerStatus.Text = string.IsNullOrEmpty(only)
+                ? "No conflict."
+                : $"No conflict — defined only in {only}.";
+            BannerStatus.Foreground = HeaderMid;
+            return;
+        }
+
+        int diffs = tab.AllFields.Count(f => f.Differs);
+        var winner = plugins[^1];
+        BannerStatus.Text = diffs > 0
+            ? $"Conflict — {plugins.Count} plugins: {string.Join(" > ", plugins)}   |   winner: {winner}   |   {diffs} field(s) differ"
+            : $"Override (no conflict) — {plugins.Count} plugins: {string.Join(" > ", plugins)}   |   identical content";
+        BannerStatus.Foreground = diffs > 0 ? HeaderWinner : Brush("#7FB37F");
     }
 
     private static Brush Brush(string hex)

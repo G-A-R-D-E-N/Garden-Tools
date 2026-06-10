@@ -55,10 +55,15 @@ public sealed class RecordTabViewModel
         return true;
     }
 
+    // Identity/metadata children shown in the banner, not as editable field rows.
+    private static readonly HashSet<string> _meta = new(StringComparer.OrdinalIgnoreCase)
+        { "FormKey", "EditorID", "Type", "_HasData" };
+
     private IEnumerable<FieldRow> Flatten(RecordNode node, int depth, FieldRow? parentRow)
     {
         foreach (var c in node.Children)
         {
+            if (depth == 0 && _meta.Contains(c.Key)) continue;
             var row = new FieldRow(c, depth, parentRow, EditField);
             yield return row;
             foreach (var desc in Flatten(c, depth + 1, row))
