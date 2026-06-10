@@ -126,6 +126,17 @@ public static class MutagenLoader
         return root;
     }
 
+    // Build a lazy Explorer tree node (root + "_NeedsGroups" dummy) for a plugin that is
+    // already registered in LooseMods (e.g. one the AI created/opened for editing).
+    public static RecordNode MakeLazyNode(string pluginName, string? filePath = null)
+    {
+        var root = new RecordNode { Key = pluginName, FilePath = filePath };
+        var dummy = new RecordNode { Key = "Loading...", Parent = root };
+        AddLeafInit(dummy, "_NeedsGroups", pluginName);
+        root.Children.Add(dummy);
+        return root;
+    }
+
     public static (RecordNode root, object env) LoadEnvironment(IProgress<(string message, double? percent)>? progress = null)
     {
         progress?.Report(("Initializing Game Environment...", 0));

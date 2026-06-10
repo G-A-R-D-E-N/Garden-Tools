@@ -45,6 +45,25 @@ public class WriteServiceTests
     }
 
     [Fact]
+    public void CreateRecord_InEsl_AssignsFormIdWithinLightRange()
+    {
+        var plugin = $"EslTest_{Guid.NewGuid():N}.esl";   // light plugin
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("create_plugin", $"{{\"name\":\"{plugin}\"}}");
+
+        var result = exec.Execute("create_record",
+            $"{{\"plugin\":\"{plugin}\",\"type\":\"BOOK\",\"editorId\":\"EslHolotape\"}}");
+        result.Should().Contain("Created BOOK");
+
+        // FormKey in the message must be within the ESL object range 0x000800-0x000FFF.
+        var dump = exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"EslHolotape\"}}");
+        var formKey = dump.Split('\n').First(l => l.TrimStart().StartsWith("FormKey:")).Split(':', 2)[1].Trim();
+        var idHex = formKey.Split(':')[0];
+        var id = Convert.ToUInt32(idHex, 16);
+        id.Should().BeInRange(0x800u, 0xFFFu);
+    }
+
+    [Fact]
     public void CreateRecord_UnsupportedType_ReturnsHelpfulMessage()
     {
         var exec = new PluginToolExecutor(() => null);

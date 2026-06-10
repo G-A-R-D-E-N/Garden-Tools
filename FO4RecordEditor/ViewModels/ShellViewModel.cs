@@ -43,6 +43,9 @@ public sealed class ShellViewModel
         Context = new AIContextBuilder(Graph);
         Chat = new ChatService(CreateProvider());
         BuildAgent();
+
+        // When the AI creates/opens/edits a plugin, show or refresh it in the Explorer tree.
+        WriteService.PluginChanged += OnWritePluginChanged;
         Log.Log(LogCategory.App, LogLevel.Info,
             $"FO4RecordEditor started. Plugin MCP server: {(McpServer.IsRunning ? McpServer.Url : "unavailable")}");
     }
@@ -60,6 +63,30 @@ public sealed class ShellViewModel
             return new ClaudeCodeProvider(s.ClaudeCodePath,
                 McpServer.IsRunning ? McpServer.Url : null, McpServer.ServerName, s.Model);
         return AiProviderFactory.Create(s);
+    }
+
+    // Add or refresh an AI-authored plugin in the Explorer tree (marshaled to the UI thread
+    // because write tools run on the agent / MCP-server thread).
+    private void OnWritePluginChanged(string name)
+    {
+        var app = System.Windows.Application.Current;
+        if (app == null) return;
+        app.Dispatcher.Invoke(() =>
+        {
+            var existing = Plugins.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                // Reset to a fresh lazy node so newly added records appear on re-expand.
+                existing.Children.Clear();
+                foreach (var c in MutagenLoader.MakeLazyNode(name, existing.FilePath).Children)
+                {
+                    c.Parent = existing;
+                    existing.Children.Add(c);
+                }
+                return;
+            }
+            Plugins.Add(MutagenLoader.MakeLazyNode(name));
+        });
     }
 
     private void BuildAgent()

@@ -45,6 +45,7 @@ public static class WriteService
         {
             var mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(filePath), Fallout4Release.Fallout4);
             Register(plugin, mod);
+            NotifyChanged(plugin);
             var count = mod.EnumerateMajorRecords().Count();
             return $"Opened '{plugin}' for editing ({count} records). Use create_record, set_field, and save_plugin.";
         }
@@ -98,8 +99,14 @@ public static class WriteService
 
         var mod = new Fallout4Mod(ModKey.FromNameAndExtension(name), Fallout4Release.Fallout4);
         Register(name, mod);
+        NotifyChanged(name);
         return $"Created new plugin '{name}'. Add records with create_record, then call save_plugin to write it.";
     }
+
+    /// <summary>Raised (with the plugin file name) when a plugin is created/opened/modified,
+    /// so the UI can show or refresh it in the Explorer tree.</summary>
+    public static event Action<string>? PluginChanged;
+    private static void NotifyChanged(string name) => PluginChanged?.Invoke(name);
 
     public static string CreateRecord(string plugin, string sig, string editorId, object? env)
     {
@@ -107,11 +114,17 @@ public static class WriteService
         if (mod == null) return openMsg;
         if (string.IsNullOrWhiteSpace(editorId)) return "Provide an editorId for the new record.";
 
-        var rec = AddNewBySig(mod, sig, editorId);
+        var fk = NextFreeFormKey(mod);
+        if (fk == null)
+            return $"'{plugin}' is a light plugin (ESL) and its FormID range (0x800-0xFFF) is full. " +
+                   $"Save it as a .esp (FormID restriction lifted) to add more records.";
+
+        var rec = AddNewBySig(mod, sig, editorId, fk.Value);
         if (rec == null)
             return $"Record type '{sig}' is not supported for creation yet. Supported: " + SupportedTypes;
 
         MutagenLoader.InvalidateModIndex(plugin);
+        NotifyChanged(plugin);
         return $"Created {sig} '{editorId}' [{rec.FormKey}] in {plugin}. Set fields with set_field, then save_plugin.";
     }
 
@@ -126,6 +139,7 @@ public static class WriteService
         if (TrySet(rec, field, value, env, out var msg))
         {
             MutagenLoader.InvalidateModIndex(plugin);
+            NotifyChanged(plugin);
             return $"Set {field} = '{value}' on {recordId} in {plugin}.";
         }
         return msg;
@@ -174,28 +188,57 @@ public static class WriteService
         "BOOK/HOLOTAPE, TERM, WEAP, ARMO, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, " +
         "FLST, MGEF, PERK, NPC_, QUST, MESG.";
 
-    private static IFallout4MajorRecord? AddNewBySig(IFallout4Mod mod, string sig, string editorId) =>
-        sig.ToUpperInvariant() switch
+    // True if the plugin must keep FormIDs in the ESL light range (0x800-0xFFF).
+    private static bool IsEsl(IFallout4Mod mod)
+    {
+        if (mod.ModKey.FileName.String.EndsWith(".esl", StringComparison.OrdinalIgnoreCase)) return true;
+        try
         {
-            "BOOK" or "HOLOTAPE"  => mod.Books.AddNew(editorId),
-            "TERM"                => mod.Terminals.AddNew(editorId),
-            "WEAP"                => mod.Weapons.AddNew(editorId),
-            "ARMO"                => mod.Armors.AddNew(editorId),
-            "MISC"                => mod.MiscItems.AddNew(editorId),
-            "COBJ"                => mod.ConstructibleObjects.AddNew(editorId),
-            "KYWD"                => mod.Keywords.AddNew(editorId),
-            "AMMO"                => mod.Ammunitions.AddNew(editorId),
-            "ALCH"                => mod.Ingestibles.AddNew(editorId),
-            "ACTI"                => mod.Activators.AddNew(editorId),
-            "CONT"                => mod.Containers.AddNew(editorId),
-            "FLST"                => mod.FormLists.AddNew(editorId),
-            "MGEF"                => mod.MagicEffects.AddNew(editorId),
-            "PERK"                => mod.Perks.AddNew(editorId),
-            "NPC_"                => mod.Npcs.AddNew(editorId),
-            "QUST"                => mod.Quests.AddNew(editorId),
-            "MESG"                => mod.Messages.AddNew(editorId),
-            _                     => null
-        };
+            var flags = mod.ModHeader.Flags.ToString();
+            return flags.Contains("Light", StringComparison.OrdinalIgnoreCase) ||
+                   flags.Contains("Small", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    // Lowest free object FormID >= 0x800, capped at 0xFFF for ESL plugins.
+    private static FormKey? NextFreeFormKey(IFallout4Mod mod)
+    {
+        uint end = IsEsl(mod) ? 0xFFFu : 0xFFFFFFu;
+        var used = new HashSet<uint>(mod.EnumerateMajorRecords().Select(r => r.FormKey.ID));
+        for (uint id = 0x800; id <= end; id++)
+            if (!used.Contains(id)) return new FormKey(mod.ModKey, id);
+        return null;   // ESL range exhausted
+    }
+
+    // Construct a record of the given type with an explicit (ESL-safe) FormKey and add it.
+    // We allocate the FormKey ourselves rather than via AddNew(), which otherwise inherits
+    // the plugin's header NextObjectID and can hand out IDs outside the ESL range.
+    private static IFallout4MajorRecord? AddNewBySig(IFallout4Mod mod, string sig, string editorId, FormKey fk)
+    {
+        var r = Fallout4Release.Fallout4;
+        switch (sig.ToUpperInvariant())
+        {
+            case "BOOK": case "HOLOTAPE": { var x = new Book(fk, r) { EditorID = editorId };               mod.Books.Add(x);                return x; }
+            case "TERM":                  { var x = new Terminal(fk, r) { EditorID = editorId };           mod.Terminals.Add(x);            return x; }
+            case "WEAP":                  { var x = new Weapon(fk, r) { EditorID = editorId };             mod.Weapons.Add(x);              return x; }
+            case "ARMO":                  { var x = new Armor(fk, r) { EditorID = editorId };              mod.Armors.Add(x);               return x; }
+            case "MISC":                  { var x = new MiscItem(fk, r) { EditorID = editorId };           mod.MiscItems.Add(x);            return x; }
+            case "COBJ":                  { var x = new ConstructibleObject(fk, r) { EditorID = editorId };mod.ConstructibleObjects.Add(x); return x; }
+            case "KYWD":                  { var x = new Keyword(fk, r) { EditorID = editorId };            mod.Keywords.Add(x);             return x; }
+            case "AMMO":                  { var x = new Ammunition(fk, r) { EditorID = editorId };         mod.Ammunitions.Add(x);          return x; }
+            case "ALCH":                  { var x = new Ingestible(fk, r) { EditorID = editorId };         mod.Ingestibles.Add(x);          return x; }
+            case "ACTI":                  { var x = new Mutagen.Bethesda.Fallout4.Activator(fk, r) { EditorID = editorId }; mod.Activators.Add(x);    return x; }
+            case "CONT":                  { var x = new Container(fk, r) { EditorID = editorId };          mod.Containers.Add(x);           return x; }
+            case "FLST":                  { var x = new FormList(fk, r) { EditorID = editorId };           mod.FormLists.Add(x);            return x; }
+            case "MGEF":                  { var x = new MagicEffect(fk, r) { EditorID = editorId };        mod.MagicEffects.Add(x);         return x; }
+            case "PERK":                  { var x = new Perk(fk, r) { EditorID = editorId };               mod.Perks.Add(x);                return x; }
+            case "NPC_":                  { var x = new Npc(fk, r) { EditorID = editorId };                mod.Npcs.Add(x);                 return x; }
+            case "QUST":                  { var x = new Quest(fk, r) { EditorID = editorId };              mod.Quests.Add(x);               return x; }
+            case "MESG":                  { var x = new Message(fk, r) { EditorID = editorId };            mod.Messages.Add(x);             return x; }
+            default:                      return null;
+        }
+    }
 
     private static IFallout4MajorRecord? FindMutableRecord(IFallout4Mod mod, string id)
     {
