@@ -434,6 +434,84 @@ public static class WriteService
         }
     }
 
+    /// <summary>
+    /// Resolve a conflict by copying the chosen plugin's version of a record into a patch plugin
+    /// as an override. The patch plugin (loading last) then wins the conflict. The patch is opened
+    /// or created automatically and held in memory until SavePlugin is called.
+    /// </summary>
+    public static string ResolveConflict(object? env, string formKeyStr, string winningPlugin, string patchPlugin)
+    {
+        if (!FormKey.TryFactory(formKeyStr, out var fk)) return "Invalid FormKey.";
+        if (string.IsNullOrWhiteSpace(patchPlugin)) return "Choose a patch plugin to write the resolution into.";
+
+        var src = MutagenLoader.GetRecordVersion(env, winningPlugin, fk);
+        if (src == null) return $"Could not find {fk} in '{winningPlugin}'.";
+
+        // Ensure the patch plugin is open and mutable: open it if it exists on disk, else create it.
+        if (GetMutable(patchPlugin) == null)
+        {
+            if (MutagenLoader.LooseModPaths.ContainsKey(patchPlugin) || FindPluginPath(patchPlugin, env) != null)
+                OpenPlugin(patchPlugin, env);
+            else
+                CreatePlugin(patchPlugin);
+        }
+        var patch = GetMutable(patchPlugin);
+        if (patch == null) return $"Could not open or create patch plugin '{patchPlugin}'.";
+
+        if (src is not IMajorRecordGetter getter)
+            return $"{fk} is not an overridable record.";
+
+        try
+        {
+            if (!AddOverride(patch, getter))
+                return $"This record type ({getter.Registration.Name}) cannot be overridden yet.";
+            MutagenLoader.InvalidateModIndex(patchPlugin);
+            NotifyChanged(patchPlugin);
+            return $"Copied {winningPlugin}'s version of {fk} into {patchPlugin} as an override. " +
+                   $"Ensure {patchPlugin} loads after the conflicting plugins, then save it.";
+        }
+        catch (Exception ex)
+        {
+            return $"Resolve failed: {ex.Message}";
+        }
+    }
+
+    // Mutagen 0.53.1 exposes GetOrAddAsOverride only on IGroup<T> (the group mixin), not on the
+    // mod. Find the mod's typed group whose element matches the record and invoke the mixin via
+    // reflection so this works for any record type without a per-signature switch.
+    private static readonly MethodInfo? _groupOverrideMixin = typeof(GetOrAddAsOverrideMixIns)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .FirstOrDefault(m => m.Name == "GetOrAddAsOverride"
+            && m.IsGenericMethodDefinition
+            && m.GetGenericArguments().Length == 2
+            && m.GetParameters().Length == 2);
+
+    private static bool AddOverride(IFallout4Mod mod, IMajorRecordGetter getter)
+    {
+        if (_groupOverrideMixin == null) return false;
+        var setterType = getter.Registration.SetterType;
+        var getterType = getter.Registration.GetterType;
+
+        foreach (var prop in mod.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var pt = prop.PropertyType;
+            if (!pt.IsGenericType) continue;
+            var args = pt.GetGenericArguments();
+            if (args.Length != 1 || args[0] != setterType) continue;
+
+            var group = prop.GetValue(mod);
+            if (group == null) continue;
+
+            _groupOverrideMixin.MakeGenericMethod(setterType, getterType)
+                .Invoke(null, new[] { group, getter });
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Plugins currently open for editing (candidates for a conflict patch target).</summary>
+    public static IReadOnlyList<string> EditablePlugins() => _mutable.Keys.ToList();
+
     // ---- helpers --------------------------------------------------------
 
     private const string SupportedTypes =

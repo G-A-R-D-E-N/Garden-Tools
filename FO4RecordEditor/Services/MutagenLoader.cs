@@ -299,6 +299,93 @@ public static class MutagenLoader
     }
 
     // ============================================================================
+    //  Conflict field matrix — xEdit-style per-plugin/per-field view of one record.
+    // ============================================================================
+
+    /// <summary>The override version of a record carried by a specific plugin (or null).</summary>
+    public static Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? GetRecordVersion(
+        object? envObj, string plugin, FormKey fk)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return null;
+        return GetModIndex(mod, plugin).ByFormKey.TryGetValue(fk, out var r) ? r : null;
+    }
+
+    /// <summary>Plugins (in load order) that carry a version of the given FormKey.</summary>
+    public static List<string> GetConflictingPlugins(object? envObj, FormKey fk)
+    {
+        var list = new List<string>();
+        if (envObj == null) return list;
+        dynamic env = envObj;
+        foreach (var l in (IEnumerable)env.LoadOrder.ListedOrder)
+        {
+            dynamic ld = l;
+            if (ld.Mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
+            string name = (string)ld.ModKey.FileName.String;
+            if (GetModIndex(mod, name).ByFormKey.ContainsKey(fk)) list.Add(name);
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Build the field-level conflict matrix for one record: walk every plugin's version into a
+    /// shared node tree (each leaf accumulates a value per plugin) then flatten to rows.
+    /// </summary>
+    public static ConflictMatrix? BuildConflictMatrix(object? envObj, string formKeyStr)
+    {
+        if (envObj == null || !FormKey.TryFactory(formKeyStr, out var fk)) return null;
+        dynamic env = envObj;
+
+        var versions = new List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>();
+        foreach (var l in (IEnumerable)env.LoadOrder.ListedOrder)
+        {
+            dynamic ld = l;
+            if (ld.Mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
+            string name = (string)ld.ModKey.FileName.String;
+            if (GetModIndex(mod, name).ByFormKey.TryGetValue(fk, out var rec))
+                versions.Add((name, rec));
+        }
+        if (versions.Count == 0) return null;
+
+        var root = new RecordNode { Key = "root" };
+        foreach (var (plugin, rec) in versions)
+            WalkObject(rec, root, 0, 6, plugin);
+
+        var plugins = versions.Select(v => v.plugin).ToList();
+        var rows = new List<ConflictFieldRow>();
+        FlattenConflictRows(root, "", plugins, rows);
+
+        var last = versions[^1];
+        return new ConflictMatrix
+        {
+            FormKey = fk.ToString(),
+            EditorID = last.rec.EditorID ?? "",
+            Type = last.rec.Registration.Name,
+            Plugins = plugins,
+            Winner = last.plugin,
+            Rows = rows,
+        };
+    }
+
+    private static void FlattenConflictRows(RecordNode node, string path, List<string> plugins, List<ConflictFieldRow> rows)
+    {
+        foreach (var child in node.Children)
+        {
+            string sep = child.Key.StartsWith("[") ? "" : (path.Length == 0 ? "" : ".");
+            string p = path + sep + child.Key;
+            if (child.Values.Count > 0)
+            {
+                var vals = plugins.Select(pl => child.Values.TryGetValue(pl, out var v) ? v : "").ToList();
+                var present = vals.Where(v => v.Length > 0).ToList();
+                bool anyMissing = present.Count < plugins.Count;
+                bool differs = present.Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
+                rows.Add(new ConflictFieldRow { Field = p, Values = vals, Differs = differs });
+            }
+            FlattenConflictRows(child, p, plugins, rows);
+        }
+    }
+
+    // ============================================================================
     //  Public query API for the AI tool executor (read all loaded plugin data).
     //  Each call is scoped to one plugin and served from the cached per-mod index,
     //  so the AI can drill into a full load order without ever indexing everything.

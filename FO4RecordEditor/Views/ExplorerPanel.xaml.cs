@@ -281,7 +281,8 @@ public partial class ExplorerPanel : UserControl
 
             // Reuse a single window instead of stacking new ones.
             if (_conflictWindow != null) { try { _conflictWindow.Close(); } catch { } }
-            _conflictWindow = new ConflictView(conflicts, _submitToChat) { Owner = main };
+            _conflictWindow = new ConflictView(conflicts, env, _submitToChat,
+                s => { SearchBox.Text = s; SearchBox.Focus(); }) { Owner = main };
             _conflictWindow.Closed += (_, _) => _conflictWindow = null;
             _conflictWindow.Show();
         }
