@@ -181,7 +181,7 @@ public partial class ExplorerPanel : UserControl
     {
         var menu = new ContextMenu();
         AddItem(menu, "Check for Errors (crash refs)", () => RunScan(plugin, "errors"));
-        AddItem(menu, "Scan for Conflicts", () => RunScan(plugin, "conflicts"));
+        AddItem(menu, "Conflict Checker (all plugins)", RunConflictScan);
         menu.Items.Add(new Separator());
         AddItem(menu, "Clean (undelete + disable)", () => RunMaintain(plugin, "clean"));
         AddItem(menu, "Compact to ESL", () => RunMaintain(plugin, "compact"));
@@ -244,10 +244,25 @@ public partial class ExplorerPanel : UserControl
         RunScan(p, "errors");
     }
 
-    private void ScanConflictsBtn_Click(object sender, RoutedEventArgs e)
+    private void ScanConflictsBtn_Click(object sender, RoutedEventArgs e) => RunConflictScan();
+
+    // Whole-load-order conflict scan -> modern Conflict Checker grid.
+    private async void RunConflictScan()
     {
-        var p = SelectedPlugin();
-        if (p == null) { MessageBox.Show("Select a plugin in the tree first."); return; }
-        RunScan(p, "conflicts");
+        var main = Window.GetWindow(this) as MainWindow;
+        var env = _shell.GameEnvironment;
+        if (env == null)
+        {
+            MessageBox.Show("Build the environment first with 'Load Env' (run via MO2 to see your modlist).");
+            return;
+        }
+
+        main?.SetStatus("Scanning all plugins for conflicts...");
+        var progress = new Action<string>(m => Dispatcher.BeginInvoke(() => main?.SetStatus(m)));
+        var conflicts = await FO4RecordEditor.Services.ConflictScanner.ScanAsync(env, progress);
+        main?.SetStatus($"Found {conflicts.Count} conflict(s).");
+
+        var view = new ConflictView(conflicts, _submitToChat) { Owner = main };
+        view.Show();
     }
 }
