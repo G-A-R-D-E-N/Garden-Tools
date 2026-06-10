@@ -164,6 +164,15 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "record", "script", "name", "value" }
             }),
+        new("clean_plugin",
+            "Clean a plugin xEdit-style: undelete deleted records and mark them initially disabled (UDR), " +
+            "which removes hard deletes that cause crashes. Call save_plugin afterwards.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string" } },
+                required = new[] { "plugin" }
+            }),
         new("save_plugin",
             "Write a plugin to disk. By default OVERWRITES the original file the plugin was opened from (in-place edit); " +
             "newly created plugins go to the configured Output folder. Pass 'path' to choose a specific location.",
@@ -237,6 +246,8 @@ public sealed class PluginToolExecutor
             case "set_script_property":
                 return WriteService.SetScriptProperty(Str("plugin"), Str("record"), Str("script"), Str("name"), Str("value"),
                     root.TryGetProperty("type", out var stv) ? stv.GetString() : null, env);
+            case "clean_plugin":
+                return WriteService.CleanPlugin(Str("plugin"), env);
             case "save_plugin":
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
 

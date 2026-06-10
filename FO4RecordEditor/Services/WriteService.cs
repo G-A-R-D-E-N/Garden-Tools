@@ -228,6 +228,36 @@ public static class WriteService
         }
     }
 
+    // ---- cleaning (xEdit-style UDR) ----------------------------------------------------
+
+    // FO4 "Initially Disabled" major-record flag.
+    private const int InitiallyDisabledFlag = 0x0000_0800;
+
+    public static string CleanPlugin(string plugin, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+
+        int undeleted = 0, skipped = 0;
+        foreach (var recG in mod.EnumerateMajorRecords().ToList())
+        {
+            if (!recG.IsDeleted) continue;
+            if (recG is IFallout4MajorRecord rec)
+            {
+                // Undelete and Disable Reference: clear the deleted flag, mark initially
+                // disabled so the engine treats it as a hidden ref instead of a hard delete.
+                rec.IsDeleted = false;
+                try { rec.MajorRecordFlagsRaw |= InitiallyDisabledFlag; } catch { }
+                undeleted++;
+            }
+            else skipped++;
+        }
+
+        if (undeleted > 0) { MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin); }
+        return $"Cleaned {plugin}: undeleted + disabled {undeleted} record(s)" +
+               (skipped > 0 ? $"; {skipped} deleted record(s) could not be processed" : "") +
+               ". Call save_plugin to persist.";
+    }
+
     // ---- VMAD scripts (e.g. wire a holotape to its terminal program) -------------------
 
     public static string AttachScript(string plugin, string recordId, string scriptName, object? env)

@@ -130,6 +130,27 @@ public class WriteServiceTests
     }
 
     [Fact]
+    public void CleanPlugin_UndeletesAndDisablesDeletedRecords()
+    {
+        var plugin = $"CleanTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        WriteService.CreateRecord(plugin, "MISC", "Clean_Widget", null);
+
+        // Mark the record deleted, then clean.
+        var mod = WriteService.GetMutable(plugin)!;
+        var rec = (Mutagen.Bethesda.Fallout4.IFallout4MajorRecord)mod.EnumerateMajorRecords()
+            .First(r => r.EditorID == "Clean_Widget");
+        rec.IsDeleted = true;
+
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("clean_plugin", $"{{\"plugin\":\"{plugin}\"}}")
+            .Should().Contain("undeleted + disabled 1");
+
+        var after = mod.EnumerateMajorRecords().First(r => r.EditorID == "Clean_Widget");
+        after.IsDeleted.Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateRecord_UnsupportedType_ReturnsHelpfulMessage()
     {
         var exec = new PluginToolExecutor(() => null);
