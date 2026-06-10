@@ -384,6 +384,48 @@ public static class MutagenLoader
                $"Try search_records first, or use the exact plugin name from list_plugins.)";
     }
 
+    // xEdit-style error check over a loaded plugin: deleted records + references to masters
+    // the plugin doesn't declare (a genuine "missing master" / broken-ref class).
+    public static string CheckPlugin(object? envObj, string plugin)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return $"(plugin '{plugin}' is not loaded)";
+        if (mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4) return "(not a Fallout 4 plugin)";
+
+        var declared = new HashSet<ModKey> { f4.ModKey };
+        foreach (var m in f4.MasterReferences) declared.Add(m.Master);
+
+        int count = 0, deleted = 0, broken = 0;
+        var samples = new List<string>();
+        foreach (var rec in f4.EnumerateMajorRecords())
+        {
+            count++;
+            if (rec.IsDeleted)
+            {
+                deleted++;
+                if (samples.Count < 50) samples.Add($"DELETED  {CheckLabel(rec)}");
+            }
+            foreach (var link in rec.EnumerateFormLinks())
+            {
+                if (link.FormKey.IsNull) continue;
+                if (declared.Contains(link.FormKey.ModKey)) continue;
+                broken++;
+                if (samples.Count < 50) samples.Add($"REF TO UNDECLARED MASTER  {CheckLabel(rec)} -> {link.FormKey}");
+            }
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Checked {plugin}: {count} records, {deleted} deleted, {broken} reference(s) to undeclared masters.");
+        if (deleted + broken == 0) { sb.AppendLine("No issues found."); return sb.ToString(); }
+        sb.AppendLine("Issues:");
+        foreach (var s in samples) sb.AppendLine("  " + s);
+        if (deleted + broken > samples.Count) sb.AppendLine($"  ... and {deleted + broken - samples.Count} more");
+        return sb.ToString();
+    }
+
+    private static string CheckLabel(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter r) =>
+        $"{(string.IsNullOrEmpty(r.EditorID) ? r.FormKey.ToString() : r.EditorID)} [{r.FormKey}] ({r.Registration.Name})";
+
     // Resolve an EditorID to a FormKey across loaded plugins (bounded to loose + already
     // indexed, so a full load order isn't re-enumerated). Used for setting FormLink fields.
     public static FormKey ResolveEditorIdToFormKey(object? envObj, string editorId)

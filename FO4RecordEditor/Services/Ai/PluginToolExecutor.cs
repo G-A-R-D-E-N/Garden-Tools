@@ -164,6 +164,15 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "record", "script", "name", "value" }
             }),
+        new("check_plugin",
+            "Run an error check over a plugin (xEdit-style): lists deleted records and references to masters " +
+            "the plugin doesn't declare. Read-only.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string" } },
+                required = new[] { "plugin" }
+            }),
         new("clean_plugin",
             "Clean a plugin xEdit-style: undelete deleted records and mark them initially disabled (UDR), " +
             "which removes hard deletes that cause crashes. Call save_plugin afterwards.",
@@ -246,6 +255,8 @@ public sealed class PluginToolExecutor
             case "set_script_property":
                 return WriteService.SetScriptProperty(Str("plugin"), Str("record"), Str("script"), Str("name"), Str("value"),
                     root.TryGetProperty("type", out var stv) ? stv.GetString() : null, env);
+            case "check_plugin":
+                return MutagenLoader.CheckPlugin(env, Str("plugin"));
             case "clean_plugin":
                 return WriteService.CleanPlugin(Str("plugin"), env);
             case "save_plugin":

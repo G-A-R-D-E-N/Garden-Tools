@@ -38,8 +38,8 @@ public class PluginToolExecutorTests
     [Fact]
     public void ToolDefinitions_ExposesReadAndWriteTools()
     {
-        // 5 read tools + 9 write tools.
-        PluginToolExecutor.ToolDefinitions().Should().HaveCount(14);
-        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(14);
+        // 6 read tools (incl. check_plugin) + 9 write tools.
+        PluginToolExecutor.ToolDefinitions().Should().HaveCount(15);
+        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(15);
     }
 }
