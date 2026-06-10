@@ -23,45 +23,71 @@ public static class ConflictScanner
     public static List<ConflictEntry> Scan(object env, Action<string>? progress = null)
     {
         dynamic e = env;
-
-        var plugins = new Dictionary<FormKey, List<string>>();
-        var winner = new Dictionary<FormKey, (string eid, string type)>();
-
+        var order = new List<(string name, Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod)>();
         foreach (var l in (IEnumerable)e.LoadOrder.ListedOrder)
         {
             dynamic ld = l;
-            if (ld.Mod == null) continue;
-            string pname = ld.ModKey.FileName.String;
-            if (ld.Mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter m) continue;
+            if (ld.Mod is Mutagen.Bethesda.Fallout4.IFallout4ModGetter m)
+                order.Add(((string)ld.ModKey.FileName.String, m));
+        }
 
-            progress?.Invoke($"Scanning {pname}...");
-            int c = 0;
-            foreach (var rec in m.EnumerateMajorRecords())
+        // Pass 1 (cheap): which FormKeys are touched by 2+ distinct plugins?
+        var firstPlugin = new Dictionary<FormKey, string>();
+        var multi = new HashSet<FormKey>();
+        foreach (var (name, mod) in order)
+        {
+            progress?.Invoke($"Scanning {name}...");
+            foreach (var rec in mod.EnumerateMajorRecords())
             {
-                var fk = rec.FormKey;
-                if (!plugins.TryGetValue(fk, out var lst)) { lst = new(); plugins[fk] = lst; }
-                if (lst.Count == 0 || !string.Equals(lst[^1], pname, StringComparison.OrdinalIgnoreCase))
-                    lst.Add(pname);
-                winner[fk] = (rec.EditorID ?? "", rec.Registration.Name);   // last in load order wins
-                if (++c % 25000 == 0) progress?.Invoke($"{pname}: {c} records...");
+                if (!firstPlugin.TryGetValue(rec.FormKey, out var fp)) firstPlugin[rec.FormKey] = name;
+                else if (!string.Equals(fp, name, StringComparison.OrdinalIgnoreCase)) multi.Add(rec.FormKey);
             }
         }
 
-        progress?.Invoke("Building conflict list...");
-        var result = new List<ConflictEntry>();
-        foreach (var kv in plugins)
+        // Pass 2: collect only the override records for those FormKeys (bounded to candidates).
+        var recs = new Dictionary<FormKey, List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>>();
+        foreach (var (name, mod) in order)
         {
-            if (kv.Value.Count < 2) continue;
-            var (eid, type) = winner[kv.Key];
-            bool involvesMod = kv.Value.Any(p => !VanillaMasters.Contains(p));
-            result.Add(new ConflictEntry(kv.Key.ToString(), eid, type, kv.Value, kv.Value[^1], involvesMod));
+            progress?.Invoke($"Comparing overrides in {name}...");
+            foreach (var rec in mod.EnumerateMajorRecords())
+            {
+                if (!multi.Contains(rec.FormKey)) continue;
+                if (!recs.TryGetValue(rec.FormKey, out var lst)) { lst = new(); recs[rec.FormKey] = lst; }
+                lst.Add((name, rec));
+            }
         }
 
-        // Mod-involving conflicts first (the ones the user actually cares about), then by type.
+        progress?.Invoke("Determining real conflicts...");
+        var result = new List<ConflictEntry>();
+        foreach (var kv in recs)
+        {
+            var entries = kv.Value;
+            // Only the versions that DIFFER in content are real conflicts; identical
+            // overrides (the benign Cell/NavMesh noise) are dropped, exactly like xEdit.
+            var first = entries[0].rec;
+            bool differs = entries.Any(en => !RecordsEqual(en.rec, first));
+            if (!differs) continue;
+
+            var plugins = entries.Select(en => en.plugin).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (plugins.Count < 2) continue;
+
+            var win = entries[^1];
+            bool involvesMod = plugins.Any(p => !VanillaMasters.Contains(p));
+            result.Add(new ConflictEntry(kv.Key.ToString(), win.rec.EditorID ?? "",
+                win.rec.Registration.Name, plugins, win.plugin, involvesMod));
+        }
+
         return result
             .OrderByDescending(c => c.InvolvesMod)
             .ThenBy(c => c.Type, StringComparer.Ordinal)
             .ThenBy(c => c.EditorID, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static bool RecordsEqual(
+        Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter a,
+        Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter b)
+    {
+        try { return a.Equals(b); } catch { return false; }
     }
 }
