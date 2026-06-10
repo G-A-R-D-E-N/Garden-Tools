@@ -133,6 +133,37 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "record", "field", "value" }
             }),
+        new("attach_script",
+            "Attach a Papyrus script to a record (creates the script adapter if needed). Then configure it with " +
+            "set_script_property. This is how a holotape links to its terminal program in FO4.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    script = new { type = "string", description = "Script name, e.g. 'DefaultHolotapeProgram'." }
+                },
+                required = new[] { "plugin", "record", "script" }
+            }),
+        new("set_script_property",
+            "Set a property on a record's attached script. 'type' is 'object' (a FormLink -- pass a FormKey or EditorID, " +
+            "e.g. the terminal), 'int', 'float', 'bool', or 'string'. Omit type to infer it.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string" },
+                    script = new { type = "string" },
+                    name = new { type = "string", description = "Property name on the script." },
+                    value = new { type = "string" },
+                    type = new { type = "string", description = "object | int | float | bool | string (optional)." }
+                },
+                required = new[] { "plugin", "record", "script", "name", "value" }
+            }),
         new("save_plugin",
             "Write a plugin to disk. By default OVERWRITES the original file the plugin was opened from (in-place edit); " +
             "newly created plugins go to the configured Output folder. Pass 'path' to choose a specific location.",
@@ -201,6 +232,11 @@ public sealed class PluginToolExecutor
                 return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
             case "add_list_item":
                 return WriteService.AddListItem(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
+            case "attach_script":
+                return WriteService.AttachScript(Str("plugin"), Str("record"), Str("script"), env);
+            case "set_script_property":
+                return WriteService.SetScriptProperty(Str("plugin"), Str("record"), Str("script"), Str("name"), Str("value"),
+                    root.TryGetProperty("type", out var stv) ? stv.GetString() : null, env);
             case "save_plugin":
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
 

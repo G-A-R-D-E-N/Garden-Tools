@@ -228,6 +228,105 @@ public static class WriteService
         }
     }
 
+    // ---- VMAD scripts (e.g. wire a holotape to its terminal program) -------------------
+
+    public static string AttachScript(string plugin, string recordId, string scriptName, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+
+        var vmad = GetOrCreateVmad(rec, out var vmadMsg); if (vmad == null) return vmadMsg;
+        var scripts = (System.Collections.IList)vmad.GetType().GetProperty("Scripts")!.GetValue(vmad)!;
+        foreach (var s in scripts)
+            if (string.Equals((string?)s!.GetType().GetProperty("Name")!.GetValue(s), scriptName, StringComparison.OrdinalIgnoreCase))
+                return $"Script '{scriptName}' is already attached to {recordId}.";
+
+        scripts.Add(new ScriptEntry { Name = scriptName });
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"Attached script '{scriptName}' to {recordId} in {plugin}. Configure it with set_script_property.";
+    }
+
+    public static string SetScriptProperty(string plugin, string recordId, string scriptName,
+        string propName, string value, string? type, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+
+        var vmad = rec.GetType().GetProperty("VirtualMachineAdapter")?.GetValue(rec);
+        if (vmad == null) return $"{recordId} has no scripts. Call attach_script first.";
+        var scripts = (System.Collections.IList)vmad.GetType().GetProperty("Scripts")!.GetValue(vmad)!;
+
+        object? script = null;
+        foreach (var s in scripts)
+            if (string.Equals((string?)s!.GetType().GetProperty("Name")!.GetValue(s), scriptName, StringComparison.OrdinalIgnoreCase))
+            { script = s; break; }
+        if (script == null) return $"Script '{scriptName}' is not attached to {recordId}. Call attach_script first.";
+
+        var props = (System.Collections.IList)script.GetType().GetProperty("Properties")!.GetValue(script)!;
+        for (int i = props.Count - 1; i >= 0; i--)
+            if (string.Equals((string?)props[i]!.GetType().GetProperty("Name")!.GetValue(props[i]), propName, StringComparison.OrdinalIgnoreCase))
+                props.RemoveAt(i);
+
+        var kind = (type ?? InferScriptKind(value, env)).ToLowerInvariant();
+        object scriptProp;
+        try
+        {
+            switch (kind)
+            {
+                case "object": case "form": case "formlink":
+                {
+                    if (!FormKey.TryFactory(value, out var fk))
+                    {
+                        fk = MutagenLoader.ResolveEditorIdToFormKey(env, value);
+                        if (fk.IsNull) return $"'{value}' is not a FormKey and no loaded record has that EditorID.";
+                    }
+                    var op = new ScriptObjectProperty { Name = propName };
+                    var link = op.GetType().GetProperty("Object")!.GetValue(op)!;
+                    link.GetType().GetMethod("SetTo", new[] { typeof(FormKey) })!.Invoke(link, new object[] { fk });
+                    scriptProp = op;
+                    break;
+                }
+                case "int":    scriptProp = new ScriptIntProperty    { Name = propName, Data = int.Parse(value) };   break;
+                case "float":  scriptProp = new ScriptFloatProperty  { Name = propName, Data = float.Parse(value) }; break;
+                case "bool":   scriptProp = new ScriptBoolProperty   { Name = propName, Data = bool.Parse(value) };  break;
+                default:       scriptProp = new ScriptStringProperty { Name = propName, Data = value };              break;
+            }
+        }
+        catch (Exception ex) { return $"Could not set script property: {ex.Message}"; }
+
+        props.Add(scriptProp);
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"Set script property '{propName}' = '{value}' ({kind}) on script '{scriptName}' of {recordId}.";
+    }
+
+    private static object? GetOrCreateVmad(object rec, out string msg)
+    {
+        msg = "";
+        var prop = rec.GetType().GetProperty("VirtualMachineAdapter");
+        if (prop == null) { msg = $"{rec.GetType().Name} does not support scripts."; return null; }
+        var vmad = prop.GetValue(rec);
+        if (vmad == null)
+        {
+            var vt = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            try { vmad = System.Activator.CreateInstance(vt); } catch { vmad = null; }
+            if (vmad == null) { msg = "Could not initialise the script adapter."; return null; }
+            vt.GetProperty("Version")?.SetValue(vmad, (short)6);    // FO4 VMAD version/format
+            vt.GetProperty("ObjectFormat")?.SetValue(vmad, (ushort)2);
+            prop.SetValue(rec, vmad);
+        }
+        return vmad;
+    }
+
+    private static string InferScriptKind(string value, object? env)
+    {
+        if (FormKey.TryFactory(value, out _)) return "object";
+        if (!MutagenLoader.ResolveEditorIdToFormKey(env, value).IsNull) return "object";
+        if (bool.TryParse(value, out _)) return "bool";
+        if (int.TryParse(value, out _)) return "int";
+        if (float.TryParse(value, out _)) return "float";
+        return "string";
+    }
+
     public static string SavePlugin(string plugin, string? path)
     {
         var mod = GetMutable(plugin);

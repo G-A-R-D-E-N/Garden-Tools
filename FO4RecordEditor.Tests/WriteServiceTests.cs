@@ -94,6 +94,42 @@ public class WriteServiceTests
     }
 
     [Fact]
+    public void AttachScript_AndSetObjectProperty_WiresHolotapeToTerminal()
+    {
+        var plugin = $"VmadTest_{Guid.NewGuid():N}.esp";
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("create_plugin", $"{{\"name\":\"{plugin}\"}}");
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"BOOK\",\"editorId\":\"VmadTape\"}}");
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"TERM\",\"editorId\":\"VmadTerminal\"}}");
+
+        exec.Execute("attach_script",
+            $"{{\"plugin\":\"{plugin}\",\"record\":\"VmadTape\",\"script\":\"MyHolotapeProgram\"}}")
+            .Should().Contain("Attached script");
+
+        var termDump = exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"VmadTerminal\"}}");
+        var termKey = termDump.Split('\n').First(l => l.TrimStart().StartsWith("FormKey:")).Split(':', 2)[1].Trim();
+
+        exec.Execute("set_script_property",
+            $"{{\"plugin\":\"{plugin}\",\"record\":\"VmadTape\",\"script\":\"MyHolotapeProgram\",\"name\":\"Terminal\",\"value\":\"{termKey}\",\"type\":\"object\"}}")
+            .Should().Contain("Set script property");
+
+        // Save + reload, verify the script + object property persisted via Mutagen.
+        var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), plugin);
+        exec.Execute("save_plugin", $"{{\"plugin\":\"{plugin}\",\"path\":\"{outPath.Replace("\\", "\\\\")}\"}}");
+
+        using var reload = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+            Mutagen.Bethesda.Plugins.ModPath.FromPath(outPath), Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        var tape = reload.Books.First(b => b.EditorID == "VmadTape");
+        tape.VirtualMachineAdapter.Should().NotBeNull();
+        var script = tape.VirtualMachineAdapter!.Scripts.First(s => s.Name == "MyHolotapeProgram");
+        var objProp = script.Properties.OfType<Mutagen.Bethesda.Fallout4.IScriptObjectPropertyGetter>()
+            .First(p => p.Name == "Terminal");
+        objProp.Object.FormKey.ID.Should().Be(0x801u);   // the terminal (second record)
+
+        try { System.IO.File.Delete(outPath); } catch { }
+    }
+
+    [Fact]
     public void CreateRecord_UnsupportedType_ReturnsHelpfulMessage()
     {
         var exec = new PluginToolExecutor(() => null);
