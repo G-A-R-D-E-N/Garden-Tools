@@ -8,58 +8,86 @@ namespace FO4RecordEditor.Views;
 
 public partial class RecordEditorView : UserControl
 {
+    private static readonly Brush HeaderMaster = Brush("#B69CFF");  // first / master
+    private static readonly Brush HeaderWinner = Brush("#FFB86B");  // last / winner
+    private static readonly Brush HeaderMid    = Brush("#D4D4D4");
+
     public RecordEditorView(RecordTabViewModel tab)
     {
         InitializeComponent();
-        
-        // Dynamically create columns for each plugin override
-        var keys = tab.Record.Values.Keys.Where(k => !string.IsNullOrEmpty(k)).ToList();
-        
-        // If there are no overrides, fallback to "Value" (which binds to the default Value)
-        if (keys.Count == 0)
-        {
-            keys.Add("");
-        }
 
-        int i = 0;
-        foreach (var pluginName in keys)
-        {
-            var header = string.IsNullOrEmpty(pluginName) ? "Value" : pluginName;
-            var bindingPath = string.IsNullOrEmpty(pluginName) ? "Node.Value" : $"Node.Values[{pluginName}]";
+        // One column per plugin that touches the record (xEdit-style). Single plugin = one
+        // editable "Value" column; multiple plugins = read-only conflict columns, coloured per cell.
+        var plugins = tab.Plugins?.Where(p => !string.IsNullOrEmpty(p)).ToList() ?? new();
+        bool conflict = plugins.Count > 1;
+        if (plugins.Count == 0) plugins.Add("");   // legacy fallback -> binds Node.Value
 
-            // Base plugin = #2D2D24, Winning Override = #24352B
-            string bgBrush = (i == keys.Count - 1 && keys.Count > 1) ? "#24352B" : (keys.Count > 1 ? "#2D2D24" : "Transparent");
+        var cellBrush = (IValueConverter)Resources["CellBrush"];
+
+        for (int i = 0; i < plugins.Count; i++)
+        {
+            var plugin = plugins[i];
+            bool isWinner = i == plugins.Count - 1;
+            var header = new TextBlock
+            {
+                Text = string.IsNullOrEmpty(plugin) ? "Value" : plugin,
+                FontFamily = new FontFamily("Consolas"),
+                FontWeight = isWinner && conflict ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = !conflict ? HeaderMid : isWinner ? HeaderWinner : i == 0 ? HeaderMaster : HeaderMid,
+            };
 
             var col = new DataGridTemplateColumn
             {
                 Header = header,
-                Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+                Width = new DataGridLength(1, DataGridLengthUnitType.Star),
             };
 
-            // Build a FrameworkElementFactory for a TextBox that fills the cell and sets the background
-            var textFactory = new FrameworkElementFactory(typeof(TextBox));
-            textFactory.SetBinding(TextBox.TextProperty, new Binding(bindingPath) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
-            textFactory.SetValue(TextBox.BackgroundProperty, new BrushConverter().ConvertFromString(bgBrush));
-            textFactory.SetValue(TextBox.ForegroundProperty, Brushes.WhiteSmoke);
-            textFactory.SetValue(TextBox.BorderThicknessProperty, new Thickness(0));
-            textFactory.SetValue(TextBox.PaddingProperty, new Thickness(4, 2, 4, 2));
-            textFactory.SetValue(TextBox.FontFamilyProperty, new FontFamily("Consolas"));
-            textFactory.SetBinding(TextBox.IsReadOnlyProperty, new Binding("IsCompound"));
+            var bindingPath = string.IsNullOrEmpty(plugin) ? "Node.Value" : $"Node.Values[{plugin}]";
+            var text = new FrameworkElementFactory(typeof(TextBox));
+            text.SetBinding(TextBox.TextProperty, new Binding(bindingPath)
+            {
+                Mode = conflict ? BindingMode.OneWay : BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+            });
+            // Per-cell xEdit colour: bind the row itself, pass the column index as parameter.
+            if (conflict)
+                text.SetBinding(TextBox.BackgroundProperty, new Binding
+                {
+                    Converter = cellBrush,
+                    ConverterParameter = i.ToString(),
+                });
+            else
+                text.SetValue(TextBox.BackgroundProperty, Brushes.Transparent);
 
-            col.CellTemplate = new DataTemplate { VisualTree = textFactory };
-            
-            // Assign a basic style to remove the DataGridCell default padding/selection artifacts
+            text.SetValue(TextBox.ForegroundProperty, Brushes.WhiteSmoke);
+            text.SetValue(TextBox.BorderThicknessProperty, new Thickness(0));
+            text.SetValue(TextBox.PaddingProperty, new Thickness(4, 2, 4, 2));
+            text.SetValue(TextBox.FontFamilyProperty, new FontFamily("Consolas"));
+            // Read-only for compound (header) rows always, and for every column in conflict view.
+            if (conflict)
+                text.SetValue(TextBox.IsReadOnlyProperty, true);
+            else
+                text.SetBinding(TextBox.IsReadOnlyProperty, new Binding("IsCompound"));
+
+            col.CellTemplate = new DataTemplate { VisualTree = text };
+
             var cellStyle = new Style(typeof(DataGridCell));
             cellStyle.Setters.Add(new Setter(DataGridCell.PaddingProperty, new Thickness(0)));
             cellStyle.Setters.Add(new Setter(DataGridCell.BorderThicknessProperty, new Thickness(0)));
-            cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, new BrushConverter().ConvertFromString(bgBrush)));
+            cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, Brushes.Transparent));
             cellStyle.Setters.Add(new Setter(DataGridCell.ForegroundProperty, Brushes.WhiteSmoke));
             col.CellStyle = cellStyle;
 
             FieldList.Columns.Add(col);
-            i++;
         }
 
         FieldList.ItemsSource = tab.FieldsView;
+    }
+
+    private static Brush Brush(string hex)
+    {
+        var b = (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
+        b.Freeze();
+        return b;
     }
 }

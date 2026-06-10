@@ -14,6 +14,9 @@ public sealed class RecordTabViewModel
     public IReadOnlyList<FieldRow> AllFields { get; }
     public System.ComponentModel.ICollectionView FieldsView { get; }
 
+    /// <summary>Plugins that touch this record, in load order (last = winner). One entry = no conflict.</summary>
+    public IReadOnlyList<string> Plugins { get; }
+
     public RecordTabViewModel(RecordNode record, UndoStack undo, object? env = null)
     {
         Record = record;
@@ -21,14 +24,14 @@ public sealed class RecordTabViewModel
         _env = env;
 
         if (Record.GetValue("_HasData") == "False")
-        {
-            var pluginName = Record.Parent?.Parent?.Key ?? "";
-            FO4RecordEditor.Services.MutagenLoader.PopulateNode(Record, _env, pluginName);
-        }
+            Plugins = FO4RecordEditor.Services.MutagenLoader.PopulateNodeAllVersions(Record, _env);
+        else
+            Plugins = new[] { Record.Parent?.Parent?.Key ?? "" };
 
         Title = record.GetValue("EditorID") ?? record.Key;
-        
+
         AllFields = Flatten(Record, 0, null).ToList();
+        foreach (var row in AllFields) row.Plugins = Plugins;
         
         // Setup TreeListView filtering
         FieldsView = System.Windows.Data.CollectionViewSource.GetDefaultView(AllFields);

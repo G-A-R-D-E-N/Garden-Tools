@@ -278,6 +278,47 @@ public static class MutagenLoader
             WalkObject(rec, node, 0, 4, modName);
     }
 
+    // Populate a record node with EVERY plugin's version of the record (xEdit-style),
+    // so each field leaf accumulates a value per plugin (Values[pluginName]). Returns the
+    // plugins that touch the record in load order (last = current winner). Falls back to the
+    // single listed plugin when no environment / only one version exists.
+    public static List<string> PopulateNodeAllVersions(RecordNode node, object? envObj)
+    {
+        var flag = node.GetChild("_HasData");
+        if (flag != null) node.Children.Remove(flag);
+
+        var fkStr = node.GetValue("FormKey");
+        if (fkStr == null || !FormKey.TryFactory(fkStr, out var fk)) return new();
+
+        var versions = new List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>();
+        if (envObj != null)
+        {
+            dynamic env = envObj;
+            foreach (var l in (IEnumerable)env.LoadOrder.ListedOrder)
+            {
+                dynamic ld = l;
+                if (ld.Mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
+                string name = (string)ld.ModKey.FileName.String;
+                if (GetModIndex(mod, name).ByFormKey.TryGetValue(fk, out var rec))
+                    versions.Add((name, rec));
+            }
+        }
+
+        if (versions.Count == 0)
+        {
+            // No load order (e.g. a loosely opened ESP): keep the legacy single-plugin walk.
+            var modName = node.Parent?.Parent?.Key ?? fk.ModKey.FileName.String;
+            var mod = ResolveMod(modName, envObj);
+            if (mod != null && GetModIndex(mod, modName).ByFormKey.TryGetValue(fk, out var rec))
+                WalkObject(rec, node, 0, 4, modName);
+            return new List<string> { modName };
+        }
+
+        foreach (var (plugin, rec) in versions)
+            WalkObject(rec, node, 0, 4, plugin);
+        return versions.Select(v => v.plugin).ToList();
+    }
+
     // Build a record's field subtree on a DETACHED node (safe to run on a background
     // thread because nothing is bound to it yet). The caller attaches the returned
     // children to the real, tree-bound record node on the UI thread. This keeps large

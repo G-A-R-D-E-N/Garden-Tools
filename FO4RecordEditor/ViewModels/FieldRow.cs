@@ -49,6 +49,25 @@ public class FieldRow : INotifyPropertyChanged
     public bool   IsCompound  => !Node.IsLeaf;
     public bool   HasChildren => Node.Children.Count > 0;
 
+    // ---- conflict (xEdit-style) ----------------------------------------------
+    // Plugins that touch the owning record, in load order. One entry = no conflict context.
+    public IReadOnlyList<string> Plugins { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>This field's value in a specific plugin's version ("" if not set there).</summary>
+    public string ValueFor(string plugin) => Node.Values.TryGetValue(plugin, out var v) ? v : "";
+
+    /// <summary>True when this leaf's value is not the same across all plugins (a real conflict).</summary>
+    public bool Differs
+    {
+        get
+        {
+            if (Plugins.Count < 2 || !Node.IsLeaf) return false;
+            var present = Plugins.Select(ValueFor).Where(s => s.Length > 0).ToList();
+            if (present.Count == 0) return false;
+            return present.Distinct().Count() > 1 || present.Count < Plugins.Count;
+        }
+    }
+
     public string Value
     {
         get => Node.Value;
