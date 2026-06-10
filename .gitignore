@@ -2,3 +2,6 @@ bin/
 obj/
 *.user
 .vs/
+
+# Third-party xEdit source (not part of this project)
+TES5Edit-dev-4.1.6/
