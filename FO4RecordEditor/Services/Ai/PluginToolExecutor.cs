@@ -173,6 +173,15 @@ public sealed class PluginToolExecutor
                 properties = new { plugin = new { type = "string" } },
                 required = new[] { "plugin" }
             }),
+        new("compact_to_esl",
+            "Renumber a plugin's records into the ESL range (0x800-0xFFF) and fix all references, so a too-big " +
+            "plugin can become a light master. In memory until you save_plugin (save with a .esl path).",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string" } },
+                required = new[] { "plugin" }
+            }),
         new("clean_plugin",
             "Clean a plugin xEdit-style: undelete deleted records and mark them initially disabled (UDR), " +
             "which removes hard deletes that cause crashes. Call save_plugin afterwards.",
@@ -257,6 +266,8 @@ public sealed class PluginToolExecutor
                     root.TryGetProperty("type", out var stv) ? stv.GetString() : null, env);
             case "check_plugin":
                 return MutagenLoader.CheckPlugin(env, Str("plugin"));
+            case "compact_to_esl":
+                return WriteService.CompactToEsl(Str("plugin"), env);
             case "clean_plugin":
                 return WriteService.CleanPlugin(Str("plugin"), env);
             case "save_plugin":

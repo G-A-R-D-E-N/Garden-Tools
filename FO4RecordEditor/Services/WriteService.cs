@@ -228,6 +228,56 @@ public static class WriteService
         }
     }
 
+    // ---- FormID compaction to ESL range -----------------------------------------------
+
+    public static string CompactToEsl(string plugin, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+
+        // Native records whose object IDs fall outside the ESL range 0x800-0xFFF.
+        var native = mod.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == mod.ModKey).ToList();
+        var inRange = new HashSet<uint>(native.Select(r => r.FormKey.ID).Where(id => id is >= 0x800 and <= 0xFFF));
+
+        var remap = new Dictionary<FormKey, FormKey>();
+        uint next = 0x800;
+        foreach (var r in native.Where(r => r.FormKey.ID > 0xFFF).OrderBy(r => r.FormKey.ID))
+        {
+            while (inRange.Contains(next)) next++;
+            if (next > 0xFFF)
+                return $"Cannot compact '{plugin}': it has more than {0xFFF - 0x800 + 1} records, which won't fit the ESL range.";
+            remap[r.FormKey] = new FormKey(mod.ModKey, next);
+            inRange.Add(next);
+            next++;
+        }
+
+        if (remap.Count == 0)
+            return $"'{plugin}' is already ESL-compatible (all native FormIDs within 0x800-0xFFF).";
+
+        // Re-key each out-of-range record (duplicate into its group with the new FormKey,
+        // then remove the old), iterating the mod's top-level groups generically.
+        foreach (var groupProp in mod.GetType().GetProperties()
+                     .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType)))
+        {
+            if (groupProp.GetValue(mod) is not Mutagen.Bethesda.Plugins.Records.IGroup group) continue;
+            var toRekey = ((System.Collections.IEnumerable)group).Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>()
+                .Where(r => remap.ContainsKey(r.FormKey)).ToList();
+            var removeM = group.GetType().GetMethod("Remove", new[] { typeof(FormKey) });
+            foreach (var rg in toRekey)
+            {
+                group.DuplicateInAsNewUntypedRecord((Mutagen.Bethesda.Plugins.Records.IMajorRecord)rg, remap[rg.FormKey]);
+                removeM?.Invoke(group, new object[] { rg.FormKey });
+            }
+        }
+
+        // Repoint every reference in the plugin to the new FormKeys.
+        mod.RemapLinks(remap);
+
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"Compacted {plugin}: remapped {remap.Count} record(s) into the ESL range (0x800-0xFFF) and fixed " +
+               $"all references. Now save_plugin to a path ending in .esl (and the plugin can be a light master). " +
+               $"This is in memory until you save.";
+    }
+
     // ---- cleaning (xEdit-style UDR) ----------------------------------------------------
 
     // FO4 "Initially Disabled" major-record flag.

@@ -151,6 +151,41 @@ public class WriteServiceTests
     }
 
     [Fact]
+    public void CompactToEsl_ReNumbersRecords_AndFixesReferences()
+    {
+        var plugin = $"CompactTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
+
+        // Two records with HIGH (non-ESL) FormIDs, the weapon referencing the keyword.
+        var kw = new Mutagen.Bethesda.Fallout4.Keyword(new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x5000), rel) { EditorID = "Hi_Kw" };
+        mod.Keywords.Add(kw);
+        var gun = new Mutagen.Bethesda.Fallout4.Weapon(new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x5001), rel) { EditorID = "Hi_Gun" };
+        gun.Keywords = new() { new Mutagen.Bethesda.Plugins.FormLink<Mutagen.Bethesda.Fallout4.IKeywordGetter>(kw.FormKey) };
+        mod.Weapons.Add(gun);
+
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("compact_to_esl", $"{{\"plugin\":\"{plugin}\"}}")
+            .Should().Contain("remapped 2");
+
+        // Save + reload, verify IDs are in range AND the reference was repointed.
+        var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), plugin);
+        exec.Execute("save_plugin", $"{{\"plugin\":\"{plugin}\",\"path\":\"{outPath.Replace("\\", "\\\\")}\"}}");
+
+        using var reload = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+            Mutagen.Bethesda.Plugins.ModPath.FromPath(outPath), rel);
+        var rkw = reload.Keywords.First(k => k.EditorID == "Hi_Kw");
+        var rgun = reload.Weapons.First(w => w.EditorID == "Hi_Gun");
+        rkw.FormKey.ID.Should().BeInRange(0x800u, 0xFFFu);
+        rgun.FormKey.ID.Should().BeInRange(0x800u, 0xFFFu);
+        // the weapon's keyword link must now point at the keyword's NEW id
+        rgun.Keywords!.Select(k => k.FormKey).Should().Contain(rkw.FormKey);
+
+        try { System.IO.File.Delete(outPath); } catch { }
+    }
+
+    [Fact]
     public void CreateRecord_UnsupportedType_ReturnsHelpfulMessage()
     {
         var exec = new PluginToolExecutor(() => null);
