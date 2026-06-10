@@ -70,6 +70,15 @@ public sealed class PluginToolExecutor
             }),
 
         // ---- write tools (author plugins) ----
+        new("open_plugin",
+            "Open an existing loaded plugin for editing so records can be added or modified. " +
+            "Required before using create_record or set_field on a plugin that was loaded from the game environment rather than created with create_plugin.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string", description = "Plugin file name, e.g. 'MyMod.esp'." } },
+                required = new[] { "plugin" }
+            }),
         new("create_plugin",
             "Create a brand-new, empty plugin (ESP) the AI can author. Changes stay in memory until save_plugin.",
             new
@@ -79,8 +88,8 @@ public sealed class PluginToolExecutor
                 required = new[] { "name" }
             }),
         new("create_record",
-            "Add a new record of a given type to a plugin opened with create_plugin. Returns the new FormKey. " +
-            "Supported types: BOOK/HOLOTAPE, TERM, WEAP, ARMO, MISC, COBJ, KYWD, NOTE, AMMO, ALCH, ACTI, CONT, FLST, MGEF, PERK, NPC_, QUST, MESG.",
+            "Add a new record of a given type to a plugin. Existing loaded plugins are opened for editing automatically. Returns the new FormKey. " +
+            "Supported types: BOOK/HOLOTAPE, TERM, WEAP, ARMO, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, FLST, MGEF, PERK, NPC_, QUST, MESG.",
             new
             {
                 type = "object",
@@ -93,7 +102,8 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "type", "editorId" }
             }),
         new("set_field",
-            "Set a scalar/text field on a record (e.g. Name, Value, Weight, Description). FormLinks and nested structures are not yet settable.",
+            "Set a field on a record. Supports scalar/text fields (Name, Value, Weight, Description) AND FormLink references " +
+            "(pass a FormKey like '001234:Plugin.esp', or an EditorID of a loaded record). Existing plugins are opened automatically.",
             new
             {
                 type = "object",
@@ -163,12 +173,14 @@ public sealed class PluginToolExecutor
                 return MutagenLoader.QueryRecordFields(env, Str("plugin"), Str("id"));
 
             // ---- write tools ----
+            case "open_plugin":
+                return WriteService.OpenPlugin(Str("plugin"), env);
             case "create_plugin":
                 return WriteService.CreatePlugin(Str("name"));
             case "create_record":
-                return WriteService.CreateRecord(Str("plugin"), Str("type"), Str("editorId"));
+                return WriteService.CreateRecord(Str("plugin"), Str("type"), Str("editorId"), env);
             case "set_field":
-                return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"));
+                return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
             case "save_plugin":
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
 

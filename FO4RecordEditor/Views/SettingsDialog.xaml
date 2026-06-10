@@ -18,7 +18,14 @@
         <ComboBoxItem Content="claude-opus-4-8"/>
         <ComboBoxItem Content="claude-sonnet-4-6"/>
         <ComboBoxItem Content="claude-haiku-4-5-20251001"/>
+        <ComboBoxItem Content="claude-opus-4-1-20250805"/>
+        <ComboBoxItem Content="claude-opus-4-20250514"/>
+        <ComboBoxItem Content="claude-sonnet-4-20250514"/>
         <ComboBoxItem Content="claude-3-7-sonnet-20250219"/>
+        <ComboBoxItem Content="claude-3-5-sonnet-20241022"/>
+        <ComboBoxItem Content="claude-3-5-haiku-20241022"/>
+        <ComboBoxItem Content="claude-3-opus-20240229"/>
+        <ComboBoxItem Content="claude-3-haiku-20240307"/>
         <ComboBoxItem Content="opus"/>
         <ComboBoxItem Content="sonnet"/>
         <ComboBoxItem Content="haiku"/>

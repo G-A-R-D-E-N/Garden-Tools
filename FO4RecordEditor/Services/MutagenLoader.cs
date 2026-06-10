@@ -36,6 +36,9 @@ public static class MutagenLoader
 
     public static readonly Dictionary<string, object> LooseMods = new(StringComparer.OrdinalIgnoreCase);
 
+    // Tracks file paths for loose-opened ESPs so OpenPlugin can reload them as mutable.
+    public static readonly Dictionary<string, string> LooseModPaths = new(StringComparer.OrdinalIgnoreCase);
+
     // ---- per-mod record index (built once, reused for every group/record load) ----
     // Without this, every group expansion re-enumerated the ENTIRE mod (O(allRecords)
     // per group), which hangs on large masters like Fallout4.esm.
@@ -109,9 +112,10 @@ public static class MutagenLoader
 
         var modPath = ModPath.FromPath(espPath);
         var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        
+
         // Store the loose mod so it can be queried by GetGroups and PopulateNode
         LooseMods[fileName] = mod;
+        LooseModPaths[fileName] = espPath;
         InvalidateModIndex(fileName);   // drop any stale index from a prior load of this file
 
         var dummy = new RecordNode { Key = "Loading...", Parent = root };
@@ -350,6 +354,21 @@ public static class MutagenLoader
         return $"(record '{formKeyOrEditorId}' not found in '{plugin}'. " +
                $"Loaded plugins: {(string.IsNullOrEmpty(loaded) ? "none" : loaded)}. " +
                $"Try search_records first, or use the exact plugin name from list_plugins.)";
+    }
+
+    // Resolve an EditorID to a FormKey across loaded plugins (bounded to loose + already
+    // indexed, so a full load order isn't re-enumerated). Used for setting FormLink fields.
+    public static FormKey ResolveEditorIdToFormKey(object? envObj, string editorId)
+    {
+        foreach (var (name, mod) in AllLoadedMods(envObj))
+        {
+            if (!LooseMods.ContainsKey(name) && !_modIndexCache.ContainsKey(name)) continue;
+            var idx = GetModIndex(mod, name);
+            var rec = idx.BySig.Values.SelectMany(v => v)
+                .FirstOrDefault(r => string.Equals(r.EditorID, editorId, StringComparison.OrdinalIgnoreCase));
+            if (rec != null) return rec.FormKey;
+        }
+        return FormKey.Null;
     }
 
     private static void FlattenToText(RecordNode node, int depth, System.Text.StringBuilder sb)

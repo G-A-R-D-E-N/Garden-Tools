@@ -52,4 +52,31 @@ public class WriteServiceTests
         exec.Execute("create_record", "{\"plugin\":\"UnsupTest.esp\",\"type\":\"ZZZZ\",\"editorId\":\"x\"}")
             .Should().Contain("not supported");
     }
+
+    [Fact]
+    public void SetField_FormLink_ByFormKey_WiresRecordsTogether()
+    {
+        var plugin = $"LinkTest_{Guid.NewGuid():N}.esp";
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("create_plugin", $"{{\"name\":\"{plugin}\"}}");
+
+        // A misc item to be the crafted output...
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"MISC\",\"editorId\":\"Link_Widget\"}}");
+        // ...and a constructible object whose CreatedObject FormLink points at it.
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"COBJ\",\"editorId\":\"Link_Recipe\"}}");
+
+        // Find the widget's FormKey from its dump.
+        var widgetDump = exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"Link_Widget\"}}");
+        var formKey = widgetDump.Split('\n')
+            .First(l => l.TrimStart().StartsWith("FormKey:")).Split(':', 2)[1].Trim();
+
+        // Set the FormLink field by FormKey.
+        var setResult = exec.Execute("set_field",
+            $"{{\"plugin\":\"{plugin}\",\"record\":\"Link_Recipe\",\"field\":\"CreatedObject\",\"value\":\"{formKey}\"}}");
+        setResult.Should().Contain("Set CreatedObject");
+
+        // Confirm the link now resolves to the widget's FormKey in the recipe dump.
+        var recipeDump = exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"Link_Recipe\"}}");
+        recipeDump.Should().Contain(formKey);
+    }
 }
