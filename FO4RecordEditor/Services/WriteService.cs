@@ -19,8 +19,13 @@ public static class WriteService
 {
     private static readonly Dictionary<string, IFallout4Mod> _mutable = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>User-configured output folder (from Settings). Blank => &lt;app&gt;/Output.</summary>
+    public static string? OutputFolderOverride { get; set; }
+
     public static string DefaultOutputDir =>
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
+        !string.IsNullOrWhiteSpace(OutputFolderOverride)
+            ? OutputFolderOverride!
+            : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
 
     public static IFallout4Mod? GetMutable(string name) =>
         _mutable.TryGetValue(name, out var m) ? m : null;
@@ -251,6 +256,40 @@ public static class WriteService
     }
 
     private static bool TrySet(object rec, string field, string value, object? env, out string msg)
+    {
+        // Convenience: "Model" / "nif" on a record sets the mesh path (Model.File).
+        if (string.Equals(field, "Model", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(field, "nif", StringComparison.OrdinalIgnoreCase))
+            field = "Model.File";
+
+        // Dotted path -> navigate into nested objects (e.g. "Model.File"), creating
+        // missing intermediate objects (like a null Model) where possible.
+        if (field.Contains('.'))
+        {
+            var parts = field.Split('.');
+            object cur = rec;
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                var p = cur.GetType().GetProperty(parts[i],
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (p == null) { msg = $"No field '{parts[i]}' on {cur.GetType().Name}."; return false; }
+                var next = p.CanRead ? p.GetValue(cur) : null;
+                if (next == null)
+                {
+                    var pt = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+                    try { next = System.Activator.CreateInstance(pt); } catch { next = null; }
+                    if (next == null || !p.CanWrite) { msg = $"Can't initialise '{parts[i]}'."; return false; }
+                    p.SetValue(cur, next);
+                }
+                cur = next;
+            }
+            return SetLeaf(cur, parts[^1], value, env, out msg);
+        }
+
+        return SetLeaf(rec, field, value, env, out msg);
+    }
+
+    private static bool SetLeaf(object rec, string field, string value, object? env, out string msg)
     {
         msg = "";
         var prop = rec.GetType().GetProperty(field,

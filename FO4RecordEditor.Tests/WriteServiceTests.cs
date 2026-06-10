@@ -73,6 +73,23 @@ public class WriteServiceTests
     }
 
     [Fact]
+    public void SetField_Model_SetsNifPath()
+    {
+        var plugin = $"ModelTest_{Guid.NewGuid():N}.esp";
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("create_plugin", $"{{\"name\":\"{plugin}\"}}");
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"MISC\",\"editorId\":\"ModelWidget\"}}");
+
+        var nif = "SetDressing\\\\Radio\\\\Radio1.nif";
+        exec.Execute("set_field",
+            $"{{\"plugin\":\"{plugin}\",\"record\":\"ModelWidget\",\"field\":\"Model\",\"value\":\"{nif}\"}}")
+            .Should().Contain("Set Model");
+
+        var dump = exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"ModelWidget\"}}");
+        dump.Should().Contain("Radio1.nif");
+    }
+
+    [Fact]
     public void SetField_FormLink_ByFormKey_WiresRecordsTogether()
     {
         var plugin = $"LinkTest_{Guid.NewGuid():N}.esp";

@@ -10,6 +10,7 @@ public sealed class AppSettings
     public string ClaudeCodePath { get; set; } = "claude";  // CLI on PATH, or full path
     public string LastFolder { get; set; } = "";
     public string SpriggitExePath { get; set; } = "";
+    public string OutputFolder { get; set; } = "";   // where save_plugin writes (blank = <app>/Output)
     public double SidePanelWidth { get; set; } = 320;
     public double AiPanelWidth { get; set; } = 420;
     public double BottomPanelHeight { get; set; } = 200;

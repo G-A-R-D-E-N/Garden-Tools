@@ -20,6 +20,9 @@ public partial class SettingsDialog : Window
         ClaudeCodePathBox.Text = s.ClaudeCodePath;
         OllamaUrlBox.Text = s.OllamaUrl;
         OllamaModelBox.Text = s.OllamaModel;
+        OutputFolderBox.Text = string.IsNullOrWhiteSpace(s.OutputFolder)
+            ? FO4RecordEditor.Services.WriteService.DefaultOutputDir   // show the effective default
+            : s.OutputFolder;
 
         SelectProvider(s.AiProvider);
         UpdatePanels();
@@ -79,6 +82,13 @@ public partial class SettingsDialog : Window
         }
     }
 
+    private void BrowseOutput_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Choose output folder for AI-authored plugins" };
+        if (!string.IsNullOrWhiteSpace(OutputFolderBox.Text)) dlg.InitialDirectory = OutputFolderBox.Text;
+        if (dlg.ShowDialog() == true) OutputFolderBox.Text = dlg.FolderName;
+    }
+
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         var s = _shell.Settings.Current;
@@ -88,6 +98,7 @@ public partial class SettingsDialog : Window
         s.ClaudeCodePath = ClaudeCodePathBox.Text;
         s.OllamaUrl = OllamaUrlBox.Text;
         s.OllamaModel = OllamaModelBox.Text;
+        s.OutputFolder = OutputFolderBox.Text;
 
         _shell.Settings.Save();
         _shell.RebuildProvider();

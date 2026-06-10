@@ -65,6 +65,19 @@
       <TextBox x:Name="OllamaModelBox" Background="#252526" Foreground="#D4D4D4"/>
     </StackPanel>
 
+    <!-- Output folder (where the AI's save_plugin writes) -->
+    <TextBlock Text="Output Folder (AI-authored plugins)" FontWeight="SemiBold" Margin="0,16,0,4"/>
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <TextBox x:Name="OutputFolderBox" Grid.Column="0" Background="#252526" Foreground="#D4D4D4"/>
+      <Button x:Name="BrowseOutputBtn" Grid.Column="1" Content="Browse" Click="BrowseOutput_Click" Margin="6,0,0,0" Padding="12,2"/>
+    </Grid>
+    <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+               Text="Where save_plugin writes. Leave blank to use the app's Output folder."/>
+
     <Button Content="Save" Click="Save_Click" Margin="0,20,0,0" Padding="20,6" HorizontalAlignment="Right"/>
   </StackPanel>
 </Window>

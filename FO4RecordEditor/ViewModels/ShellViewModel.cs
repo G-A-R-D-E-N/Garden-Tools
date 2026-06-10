@@ -46,6 +46,7 @@ public sealed class ShellViewModel
 
         // When the AI creates/opens/edits a plugin, show or refresh it in the Explorer tree.
         WriteService.PluginChanged += OnWritePluginChanged;
+        WriteService.OutputFolderOverride = Settings.Current.OutputFolder;
         Log.Log(LogCategory.App, LogLevel.Info,
             $"FO4RecordEditor started. Plugin MCP server: {(McpServer.IsRunning ? McpServer.Url : "unavailable")}");
     }
@@ -54,6 +55,7 @@ public sealed class ShellViewModel
     {
         Chat.SetProvider(CreateProvider());
         BuildAgent();
+        WriteService.OutputFolderOverride = Settings.Current.OutputFolder;
     }
 
     private IAIProvider CreateProvider()
