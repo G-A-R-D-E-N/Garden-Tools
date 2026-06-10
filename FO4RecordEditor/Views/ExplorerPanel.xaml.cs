@@ -246,6 +246,11 @@ public partial class ExplorerPanel : UserControl
 
     private void ScanConflictsBtn_Click(object sender, RoutedEventArgs e) => RunConflictScan();
 
+    // Shared across all ExplorerPanel instances so re-clicking (or right-click + toolbar)
+    // can't launch a second scan or a second window.
+    private static bool _conflictScanRunning;
+    private static ConflictView? _conflictWindow;
+
     // Whole-load-order conflict scan -> modern Conflict Checker grid.
     private async void RunConflictScan()
     {
@@ -256,30 +261,53 @@ public partial class ExplorerPanel : UserControl
             MessageBox.Show("Build the environment first with 'Load Env' (run via MO2 to see your modlist).");
             return;
         }
+        if (_conflictScanRunning)
+        {
+            main?.SetStatus("Conflict scan already running...");
+            return;
+        }
 
-        main?.SetStatus("Scanning all plugins for conflicts...");
-        var progress = new Action<string>(m => Dispatcher.BeginInvoke(() => main?.SetStatus(m)));
-        var conflicts = await FO4RecordEditor.Services.ConflictScanner.ScanAsync(env, progress);
-        main?.SetStatus($"Found {conflicts.Count} conflict(s).");
+        _conflictScanRunning = true;
+        try
+        {
+            main?.SetStatus("Scanning all plugins for conflicts...");
+            var progress = new Action<string>(m => Dispatcher.BeginInvoke(() => main?.SetStatus(m)));
+            var conflicts = await FO4RecordEditor.Services.ConflictScanner.ScanAsync(env, progress);
+            main?.SetStatus($"Found {conflicts.Count} conflict(s). Expand a plugin to see the colours.");
 
-        // Colour the ESP tree (winner = orange, loser = red), like xEdit.
-        FO4RecordEditor.Services.ConflictState.Set(conflicts);
-        RecolorConflicts();
+            // Colour the ESP tree (winner = orange, loser = red), like xEdit.
+            FO4RecordEditor.Services.ConflictState.Set(conflicts);
+            RecolorConflicts();
 
-        var view = new ConflictView(conflicts, _submitToChat) { Owner = main };
-        view.Show();
+            // Reuse a single window instead of stacking new ones.
+            if (_conflictWindow != null) { try { _conflictWindow.Close(); } catch { } }
+            _conflictWindow = new ConflictView(conflicts, _submitToChat) { Owner = main };
+            _conflictWindow.Closed += (_, _) => _conflictWindow = null;
+            _conflictWindow.Show();
+        }
+        finally
+        {
+            _conflictScanRunning = false;
+        }
     }
 
-    // Apply the latest conflict scan colours to every loaded record node.
+    // Apply the latest conflict scan colours: plugin nodes (always visible) and any
+    // loaded record nodes. Newly-expanded records are coloured by GetRecords.
     private void RecolorConflicts()
     {
         foreach (var root in _shell.Plugins)
             foreach (var n in root.SelfAndDescendants())
             {
-                if (!n.IsRecordNode) continue;
-                var plugin = n.Parent?.Parent?.Key ?? "";
-                var fk = n.GetValue("FormKey") ?? "";
-                n.ConflictStatus = FO4RecordEditor.Services.ConflictState.GetStatus(plugin, fk);
+                if (n.IsRecordNode)
+                {
+                    var plugin = n.Parent?.Parent?.Key ?? "";
+                    var fk = n.GetValue("FormKey") ?? "";
+                    n.ConflictStatus = FO4RecordEditor.Services.ConflictState.GetStatus(plugin, fk);
+                }
+                else if (IsPluginNode(n))
+                {
+                    n.ConflictStatus = FO4RecordEditor.Services.ConflictState.GetPluginStatus(n.Key);
+                }
             }
     }
 }
