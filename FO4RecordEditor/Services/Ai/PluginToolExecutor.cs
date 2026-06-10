@@ -68,6 +68,56 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "id" }
             }),
+
+        // ---- write tools (author plugins) ----
+        new("create_plugin",
+            "Create a brand-new, empty plugin (ESP) the AI can author. Changes stay in memory until save_plugin.",
+            new
+            {
+                type = "object",
+                properties = new { name = new { type = "string", description = "Plugin file name, e.g. 'MyMod.esp'." } },
+                required = new[] { "name" }
+            }),
+        new("create_record",
+            "Add a new record of a given type to a plugin opened with create_plugin. Returns the new FormKey. " +
+            "Supported types: BOOK/HOLOTAPE, TERM, WEAP, ARMO, MISC, COBJ, KYWD, NOTE, AMMO, ALCH, ACTI, CONT, FLST, MGEF, PERK, NPC_, QUST, MESG.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    type = new { type = "string", description = "Record signature, e.g. 'BOOK' for a holotape." },
+                    editorId = new { type = "string" }
+                },
+                required = new[] { "plugin", "type", "editorId" }
+            }),
+        new("set_field",
+            "Set a scalar/text field on a record (e.g. Name, Value, Weight, Description). FormLinks and nested structures are not yet settable.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    field = new { type = "string", description = "Property name, e.g. 'Name'." },
+                    value = new { type = "string" }
+                },
+                required = new[] { "plugin", "record", "field", "value" }
+            }),
+        new("save_plugin",
+            "Write a plugin to disk (defaults to the editor's Output folder). Call this to persist created records.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    path = new { type = "string", description = "Optional full output path; defaults to <app>/Output/<plugin>." }
+                },
+                required = new[] { "plugin" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -111,6 +161,17 @@ public sealed class PluginToolExecutor
             }
             case "get_record":
                 return MutagenLoader.QueryRecordFields(env, Str("plugin"), Str("id"));
+
+            // ---- write tools ----
+            case "create_plugin":
+                return WriteService.CreatePlugin(Str("name"));
+            case "create_record":
+                return WriteService.CreateRecord(Str("plugin"), Str("type"), Str("editorId"));
+            case "set_field":
+                return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"));
+            case "save_plugin":
+                return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
+
             default:
                 return $"Unknown tool: {toolName}";
         }

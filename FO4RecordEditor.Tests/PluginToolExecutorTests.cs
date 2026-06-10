@@ -36,9 +36,10 @@ public class PluginToolExecutorTests
     }
 
     [Fact]
-    public void ToolDefinitions_ExposesTheFiveTools()
+    public void ToolDefinitions_ExposesReadAndWriteTools()
     {
-        var defs = PluginToolExecutor.ToolDefinitions();
-        defs.Should().HaveCount(5);
+        // 5 read tools + 4 write tools.
+        PluginToolExecutor.ToolDefinitions().Should().HaveCount(9);
+        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(9);
     }
 }
