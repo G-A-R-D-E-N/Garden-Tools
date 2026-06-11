@@ -22,24 +22,22 @@ public sealed class ChatService
     public int TurnCount => _history.Count;
 
     /// <summary>
-    /// Summarize the conversation so far and REPLACE the stored history with that single summary,
-    /// so subsequent turns send far fewer tokens. Returns the summary text (empty if nothing to do).
+    /// Summarize a block of conversation text via the active provider WITHOUT mutating history.
+    /// Used by /compact, which summarizes only the OLDER messages and keeps the recent ones verbatim;
+    /// the caller rebuilds history afterwards. Returns the summary (empty if the provider gave nothing).
     /// </summary>
-    public async Task<string> CompactAsync(string instruction, CancellationToken ct = default)
+    public async Task<string> SummarizeTextAsync(string transcript, string instruction, CancellationToken ct = default)
     {
-        if (_history.Count == 0) return "";
+        if (string.IsNullOrWhiteSpace(transcript)) return "";
 
-        var outgoing = new List<ChatMessage>(_history) { new(ChatRole.User, instruction) };
+        var outgoing = new List<ChatMessage>
+        {
+            new(ChatRole.User, instruction + "\n\n---- CONVERSATION TO SUMMARIZE ----\n" + transcript)
+        };
         var sb = new System.Text.StringBuilder();
         await foreach (var token in _provider.StreamAsync(outgoing, ct))
             sb.Append(token);
-
-        var summary = sb.ToString().Trim();
-        if (summary.Length == 0) return "";
-
-        _history.Clear();
-        _history.Add(new ChatMessage(ChatRole.Assistant, "[Summary of our earlier conversation]\n" + summary));
-        return summary;
+        return sb.ToString().Trim();
     }
 
     public async Task<string> SendAsync(

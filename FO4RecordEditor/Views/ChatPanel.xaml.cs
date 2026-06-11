@@ -386,36 +386,55 @@ public partial class ChatPanel : UserControl
         AddInfoBubble(sb.ToString());
     }
 
+    // How many of the most recent messages /compact keeps verbatim (the rest are summarized).
+    private const int CompactKeepRecent = 6;
+
     private async System.Threading.Tasks.Task CompactConversation()
     {
+        // Split into older (to summarize) and recent (kept verbatim). Only the OLD text is compacted,
+        // so the newest, most relevant detail stays intact.
+        var msgs = _currentSession.Messages.Where(m => !string.IsNullOrWhiteSpace(m.Text)).ToList();
+        if (msgs.Count <= CompactKeepRecent + 1)
+        {
+            AddInfoBubble($"_Only {msgs.Count} message(s) — nothing old enough to compact yet (keeps the last {CompactKeepRecent})._");
+            return;
+        }
+
+        var older = msgs.Take(msgs.Count - CompactKeepRecent).ToList();
+        var recent = msgs.Skip(msgs.Count - CompactKeepRecent).ToList();
+        var transcript = string.Join("\n\n", older.Select(m => (m.IsUser ? "User: " : "Assistant: ") + m.Text));
+
         var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMinutes(10));
         _cts = cts;
         SetSending(true);
-        SetStatusBase("Compacting conversation…");
+        SetStatusBase($"Compacting {older.Count} older message(s)…");
         try
         {
-            string summary;
-            if (_shell.Agent != null)
-            {
-                summary = await _shell.Agent.SummarizeAsync(CompactInstruction, cts.Token);
-                _shell.Agent.LoadSummary(summary);
-            }
-            else
-            {
-                summary = await _shell.Chat.CompactAsync(CompactInstruction, cts.Token);
-            }
+            var summary = await _shell.Chat.SummarizeTextAsync(transcript, CompactInstruction, cts.Token);
+            if (string.IsNullOrWhiteSpace(summary)) { AddInfoBubble("_Compact produced no summary — conversation left unchanged._"); return; }
 
-            if (string.IsNullOrWhiteSpace(summary)) { AddInfoBubble("_Nothing to compact yet._"); return; }
-
-            // Replace the transcript + saved history with the single summary turn.
-            Bubbles.Clear();
-            _currentSession.Messages.Clear();
-            _currentSession.Messages.Add(new SessionMessage { IsUser = false, Text = summary });
-            Bubbles.Add(new ChatBubble
+            // Rebuild: [summary] + the recent messages kept verbatim.
+            var summaryMsg = new SessionMessage
             {
                 IsUser = false,
-                Text = "🗜️ **Conversation compacted** — earlier turns replaced with this summary to save context and cost.\n\n" + summary
-            });
+                Text = $"🗜️ **Earlier conversation compacted** ({older.Count} messages summarized; last {recent.Count} kept):\n\n" + summary
+            };
+            _currentSession.Messages.Clear();
+            _currentSession.Messages.Add(summaryMsg);
+            foreach (var m in recent) _currentSession.Messages.Add(m);
+
+            Bubbles.Clear();
+            foreach (var m in _currentSession.Messages)
+                Bubbles.Add(new ChatBubble { IsUser = m.IsUser, Text = m.Text });
+
+            // Keep both AI histories in sync with the compacted transcript.
+            var rebuilt = _currentSession.Messages
+                .Select(m => new FO4RecordEditor.Models.ChatMessage(
+                    m.IsUser ? FO4RecordEditor.Models.ChatRole.User : FO4RecordEditor.Models.ChatRole.Assistant, m.Text))
+                .ToList();
+            _shell.Chat.LoadHistory(rebuilt);
+            _shell.Agent?.LoadHistory(_currentSession.Messages.Select(m => (m.IsUser, m.Text)).ToList());
+
             _historyService.Save(_currentSession);
             Scroll.ScrollToEnd();
         }
