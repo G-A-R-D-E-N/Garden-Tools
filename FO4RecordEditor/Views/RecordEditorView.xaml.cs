@@ -141,23 +141,36 @@ public partial class RecordEditorView : UserControl
         }
 
         _conflictRows = matrix.Rows;
-        ApplyConflictFilter();
 
         int diffs = 0;
         foreach (var r in matrix.Rows) if (r.Differs) diffs++;
+        _diffCount = diffs;
         ConflictSummary.Text = matrix.Plugins.Count > 1
-            ? $"{matrix.EditorID} [{matrix.FormKey}] {matrix.Type}   |   {matrix.Plugins.Count} plugins   |   winner: {matrix.Winner}   |   {diffs} field(s) differ"
+            ? $"{matrix.EditorID} [{matrix.FormKey}] {matrix.Type}   |   {matrix.Plugins.Count} plugins   |   winner: {matrix.Winner}   |   {matrix.Rows.Count} fields, {diffs} differ"
             : $"No conflict — defined only in {matrix.Winner}.";
+        if (diffs == 0 && matrix.Rows.Count > 0)
+            ConflictSummary.Text += "   (identical override — showing all fields)";
+        else if (matrix.Rows.Count == 0)
+            ConflictSummary.Text += "   (no expandable fields for this record type)";
+
+        ApplyConflictFilter();
     }
+
+    private int _diffCount;
 
     private void DiffOnly_Changed(object sender, RoutedEventArgs e) => ApplyConflictFilter();
 
     private void ApplyConflictFilter()
     {
         if (ConflictGrid == null) return;
-        ConflictGrid.ItemsSource = DiffOnly.IsChecked == true
-            ? _conflictRows.Where(r => r.Differs).ToList()
-            : _conflictRows;
+
+        // "Only differing fields" filters to conflicts -- but if NOTHING differs (a benign /
+        // identical override), filtering to nothing leaves a blank page. In that case fall back
+        // to showing every field so the record is never invisible.
+        if (DiffOnly.IsChecked == true && _diffCount > 0)
+            ConflictGrid.ItemsSource = _conflictRows.Where(r => r.Differs).ToList();
+        else
+            ConflictGrid.ItemsSource = _conflictRows;
     }
 
     private void SaveToPatch_Click(object sender, RoutedEventArgs e)
