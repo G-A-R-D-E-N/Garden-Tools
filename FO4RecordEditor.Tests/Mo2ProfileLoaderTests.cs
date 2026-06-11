@@ -53,6 +53,27 @@ public class Mo2ProfileLoaderTests
     }
 
     [Fact]
+    public void LoadsImplicitBaseMasters()
+    {
+        if (!Available) return;
+        var info = Mo2ProfileLoader.ReadInstanceInfo(Instance);
+        var (_, plugins) = Mo2ProfileLoader.Load(Instance, info.Profile, info.GameDataFolder);
+
+        // FO4 force-loads these even though they're absent from plugins.txt; the loader must
+        // include them or the base game is missing from the link cache.
+        plugins.Should().Contain("Fallout4.esm");
+
+        var cache = MutagenLoader.LinkCache!;
+        // A purely-vanilla record (a game setting from Fallout4.esm) must now resolve.
+        cache.PriorityOrder
+            .SelectMany(m => m.EnumerateMajorRecords())
+            .OfType<Mutagen.Bethesda.Fallout4.IGameSettingGetter>()
+            .Should().Contain(g => g.FormKey.ModKey.FileName.String
+                .Equals("Fallout4.esm", System.StringComparison.OrdinalIgnoreCase),
+                "base-game records are present once Fallout4.esm is loaded");
+    }
+
+    [Fact]
     public void FormatsComponentFormLinkWithName()
     {
         if (!Available) return;

@@ -88,6 +88,18 @@ public static class Mo2ProfileLoader
             .Where(l => l.Length > 0)
             .ToList();
 
+        // Fallout 4 force-loads the base masters (Fallout4.esm + the official DLCs) -- they are
+        // NOT written to plugins.txt. Without them the link cache is missing the entire base game:
+        // vanilla records don't appear and FormLinks into them never resolve to names. Prepend the
+        // implicit listings (in canonical order) that aren't already present; missing DLCs are
+        // simply skipped later when their file isn't found on disk.
+        var present = new HashSet<string>(loadOrder, StringComparer.OrdinalIgnoreCase);
+        var implicitMasters = Mutagen.Bethesda.Plugins.Implicits.Get(GameRelease.Fallout4).Listings
+            .Select(m => m.FileName.String)
+            .Where(m => !present.Contains(m))
+            .ToList();
+        loadOrder = implicitMasters.Concat(loadOrder).ToList();
+
         // Enabled mods in priority order (modlist.txt top = highest). '+' enabled, '-' disabled,
         // separators end with '_separator', '*' markers are unmanaged (game Data) -- skip those.
         var modsHighToLow = File.Exists(modlistTxt)

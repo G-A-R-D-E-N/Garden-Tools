@@ -771,6 +771,14 @@ public static class MutagenLoader
             return;
         }
 
+        // Identity structs are single values, not sub-trees -- otherwise a record's FormKey
+        // explodes into FormKey.ID / FormKey.ModKey.FileName.String / ... noise rows.
+        if (obj is FormKey || obj is ModKey)
+        {
+            if (parent.IsLeaf) parent.Values[pluginName] = obj.ToString() ?? "";
+            return;
+        }
+
         // Never descend into CLR/reflection metadata. Record any such value as a single string.
         if (obj is Type || obj is System.Reflection.MemberInfo || obj is System.Reflection.Assembly
             || obj is System.Reflection.Module || obj is System.Reflection.ParameterInfo
