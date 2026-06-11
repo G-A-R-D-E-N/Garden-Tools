@@ -155,7 +155,17 @@ public partial class ChatPanel : UserControl
         void Append(string chunk)
         {
             cts.CancelAfter(idle);   // reset the idle window on activity
-            if (!started) { started = true; reply.Text = ""; aiMsg.Text = ""; SetStatusBase($"{providerLabel} is writing…"); }
+            if (!started) { started = true; reply.Text = ""; aiMsg.Text = ""; }
+            // Reflect what the streamed chunk represents in the activity strip.
+            const string wrench = "🔧", thought = "💭", arrow = "↳";
+            if (chunk.Contains(wrench))
+            {
+                var s = chunk.Trim();
+                var i = s.IndexOf(wrench, StringComparison.Ordinal);
+                SetStatusBase($"{providerLabel} is working — {s[(i + wrench.Length)..].Trim()}");
+            }
+            else if (chunk.Contains(thought)) SetStatusBase($"{providerLabel} is thinking…");
+            else if (!chunk.Contains(arrow)) SetStatusBase($"{providerLabel} is writing…");
             reply.Text += chunk;
             aiMsg.Text += chunk;
             Scroll.ScrollToEnd();

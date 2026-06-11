@@ -140,10 +140,10 @@ public sealed class ClaudeCodeProvider : IAIProvider
     }
 
     /// <summary>
-    /// Translate one NDJSON line from `claude -p --output-format stream-json` into chunks to show:
-    /// assistant text as-is, tool calls as a "🔧 name" status line. Skips the init/result envelope
-    /// (the result event just repeats text already streamed) and surfaces errors. Unparseable lines
-    /// are passed through verbatim so CLI warnings aren't swallowed.
+    /// Translate one NDJSON line from `claude -p --output-format stream-json` into chunks to show
+    /// what Claude is doing: assistant text as-is, reasoning as a "💭" line, each tool call with its
+    /// arguments ("🔧 get_record(plugin=…, id=…)"), and tool results truncated ("↳ …"). Skips the
+    /// init/result envelope and surfaces errors. Unparseable lines pass through verbatim.
     /// </summary>
     internal static IEnumerable<string> ParseStreamLine(string line)
     {
@@ -163,11 +163,8 @@ public sealed class ClaudeCodeProvider : IAIProvider
             switch (typeEl.GetString())
             {
                 case "assistant":
-                    if (root.TryGetProperty("message", out var msg) &&
-                        msg.TryGetProperty("content", out var content) &&
-                        content.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var block in content.EnumerateArray())
+                    if (TryContent(root, out var aContent))
+                        foreach (var block in aContent.EnumerateArray())
                         {
                             var bt = block.TryGetProperty("type", out var b) ? b.GetString() : null;
                             if (bt == "text" && block.TryGetProperty("text", out var t))
@@ -175,12 +172,30 @@ public sealed class ClaudeCodeProvider : IAIProvider
                                 var s = t.GetString();
                                 if (!string.IsNullOrEmpty(s)) yield return s;
                             }
+                            else if (bt == "thinking" && block.TryGetProperty("thinking", out var th))
+                            {
+                                var s = th.GetString();
+                                if (!string.IsNullOrWhiteSpace(s))
+                                    yield return $"\n_💭 {Truncate(OneLine(s!), 200)}_\n";
+                            }
                             else if (bt == "tool_use" && block.TryGetProperty("name", out var n))
                             {
-                                yield return $"\n🔧 {n.GetString()}\n";
+                                var args = block.TryGetProperty("input", out var inp) ? FormatArgs(inp) : "";
+                                yield return $"\n🔧 {ShortToolName(n.GetString())}({args})\n";
                             }
                         }
-                    }
+                    break;
+
+                case "user":   // tool results come back as a user turn
+                    if (TryContent(root, out var uContent))
+                        foreach (var block in uContent.EnumerateArray())
+                        {
+                            if ((block.TryGetProperty("type", out var b) ? b.GetString() : null) != "tool_result")
+                                continue;
+                            var text = ExtractResultText(block);
+                            if (!string.IsNullOrWhiteSpace(text))
+                                yield return $"↳ {Truncate(OneLine(text), 160)}\n";
+                        }
                     break;
 
                 case "result":
@@ -191,4 +206,46 @@ public sealed class ClaudeCodeProvider : IAIProvider
             }
         }
     }
+
+    private static bool TryContent(JsonElement root, out JsonElement content)
+    {
+        content = default;
+        return root.TryGetProperty("message", out var m) &&
+               m.TryGetProperty("content", out content) &&
+               content.ValueKind == JsonValueKind.Array;
+    }
+
+    // "mcp__fo4editor__get_record" -> "get_record"
+    private static string ShortToolName(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return "tool";
+        var i = name.LastIndexOf("__", StringComparison.Ordinal);
+        return i >= 0 ? name[(i + 2)..] : name;
+    }
+
+    // {"plugin":"X.esp","id":"abc"} -> "plugin=X.esp, id=abc"
+    private static string FormatArgs(JsonElement input)
+    {
+        if (input.ValueKind != JsonValueKind.Object) return "";
+        var parts = new List<string>();
+        foreach (var p in input.EnumerateObject())
+        {
+            var v = p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString() ?? "" : p.Value.ToString();
+            parts.Add($"{p.Name}={Truncate(OneLine(v), 60)}");
+        }
+        return string.Join(", ", parts);
+    }
+
+    private static string ExtractResultText(JsonElement toolResult)
+    {
+        if (!toolResult.TryGetProperty("content", out var c)) return "";
+        if (c.ValueKind == JsonValueKind.String) return c.GetString() ?? "";
+        if (c.ValueKind == JsonValueKind.Array)
+            foreach (var part in c.EnumerateArray())
+                if (part.TryGetProperty("text", out var t)) return t.GetString() ?? "";
+        return "";
+    }
+
+    private static string OneLine(string s) => s.Replace("\r", " ").Replace("\n", " ").Trim();
+    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 }
