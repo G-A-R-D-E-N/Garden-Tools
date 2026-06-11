@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using FO4RecordEditor.Models;
 
 namespace FO4RecordEditor.Services;
@@ -72,8 +73,12 @@ public sealed class ClaudeCodeProvider : IAIProvider
         psi.ArgumentList.Add("/c");
         psi.ArgumentList.Add(_exePath);                   // "claude" or a full path
         psi.ArgumentList.Add("-p");                       // print (non-interactive) mode
+        // Stream JSON events instead of buffering the whole answer to the end. In text mode the
+        // CLI emits nothing until it finishes, so a long run looks frozen ("thinking… 600s"); with
+        // stream-json we surface each tool call and text chunk live (and keep the idle timer fed).
         psi.ArgumentList.Add("--output-format");
-        psi.ArgumentList.Add("text");
+        psi.ArgumentList.Add("stream-json");
+        psi.ArgumentList.Add("--verbose");                // required with stream-json in -p mode
         if (_model != null)
         {
             psi.ArgumentList.Add("--model");
@@ -120,7 +125,8 @@ public sealed class ClaudeCodeProvider : IAIProvider
 
             string? line;
             while ((line = await proc.StandardOutput.ReadLineAsync(ct)) != null)
-                yield return line + "\n";
+                foreach (var chunk in ParseStreamLine(line))
+                    yield return chunk;
 
             await proc.WaitForExitAsync(ct);
 
@@ -129,6 +135,59 @@ public sealed class ClaudeCodeProvider : IAIProvider
                 var err = await proc.StandardError.ReadToEndAsync(ct);
                 if (!string.IsNullOrWhiteSpace(err))
                     yield return $"\n[Claude Code error] {err.Trim()}";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Translate one NDJSON line from `claude -p --output-format stream-json` into chunks to show:
+    /// assistant text as-is, tool calls as a "🔧 name" status line. Skips the init/result envelope
+    /// (the result event just repeats text already streamed) and surfaces errors. Unparseable lines
+    /// are passed through verbatim so CLI warnings aren't swallowed.
+    /// </summary>
+    internal static IEnumerable<string> ParseStreamLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) yield break;
+
+        JsonDocument? doc = null;
+        try { doc = JsonDocument.Parse(line); }
+        catch { /* not JSON -- pass it through below */ }
+        if (doc == null) { yield return line + "\n"; yield break; }
+
+        using (doc)
+        {
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("type", out var typeEl)) yield break;
+
+            switch (typeEl.GetString())
+            {
+                case "assistant":
+                    if (root.TryGetProperty("message", out var msg) &&
+                        msg.TryGetProperty("content", out var content) &&
+                        content.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var block in content.EnumerateArray())
+                        {
+                            var bt = block.TryGetProperty("type", out var b) ? b.GetString() : null;
+                            if (bt == "text" && block.TryGetProperty("text", out var t))
+                            {
+                                var s = t.GetString();
+                                if (!string.IsNullOrEmpty(s)) yield return s;
+                            }
+                            else if (bt == "tool_use" && block.TryGetProperty("name", out var n))
+                            {
+                                yield return $"\n🔧 {n.GetString()}\n";
+                            }
+                        }
+                    }
+                    break;
+
+                case "result":
+                    if (root.TryGetProperty("is_error", out var e) && e.GetBoolean() &&
+                        root.TryGetProperty("result", out var r))
+                        yield return $"\n[Claude Code error] {r.GetString()}";
+                    break;
             }
         }
     }
