@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -606,6 +607,196 @@ public static class WriteService
             }
         }
         return SetLeaf(cur, segments[^1], value, env, out msg);
+    }
+
+    // ---- copy as override / delete / list editing / COBJ structs -----------------------
+
+    /// <summary>
+    /// Copy a record (identified by FormKey or EditorID) from the chosen source plugin into a patch
+    /// plugin as an override — the xEdit "Copy as Override Into" operation. The patch is opened or
+    /// created automatically. After this, edit the override with set_field/set_components/etc.
+    /// </summary>
+    public static string CopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin)
+    {
+        if (!ResolveFk(env, id, out var fk))
+            return $"'{id}' is not a FormKey and no loaded record has that EditorID.";
+        return ResolveConflict(env, fk.ToString(), sourcePlugin, patchPlugin);
+    }
+
+    /// <summary>Remove a record entirely from a plugin (xEdit "Remove"). Use for deleting a stub
+    /// record the editor created incompletely, or dropping an unwanted override from a patch.</summary>
+    public static string DeleteRecord(string plugin, string recordId, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var fk = rec.FormKey;
+
+        foreach (var groupProp in mod.GetType().GetProperties()
+                     .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType)))
+        {
+            if (groupProp.GetValue(mod) is not Mutagen.Bethesda.Plugins.Records.IGroup group) continue;
+            var contains = ((System.Collections.IEnumerable)group)
+                .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>().Any(r => r.FormKey == fk);
+            if (!contains) continue;
+            group.GetType().GetMethod("Remove", new[] { typeof(FormKey) })?.Invoke(group, new object[] { fk });
+            MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+            return $"Removed {rec.EditorID} [{fk}] from {plugin}. Call save_plugin to persist.";
+        }
+        return $"Could not locate the group holding {fk} in {plugin}.";
+    }
+
+    /// <summary>Remove a FormLink entry (by FormKey or EditorID) from a list field — e.g. drop an
+    /// item from a FormList's 'Items' or a keyword from 'Categories'/'Keywords'.</summary>
+    public static string RemoveListItem(string plugin, string recordId, string field, string value, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+
+        var prop = rec.GetType().GetProperty(field, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (prop?.GetValue(rec) is not System.Collections.IList list) return $"Field '{field}' is not a list on {rec.GetType().Name}.";
+        if (!ResolveFk(env, value, out var fk)) return $"'{value}' is not a FormKey and no loaded record has that EditorID.";
+
+        int removed = 0;
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            var item = list[i];
+            var fkProp = item?.GetType().GetProperty("FormKey");
+            if (fkProp?.GetValue(item) is FormKey ifk && ifk == fk) { list.RemoveAt(i); removed++; }
+        }
+        if (removed == 0) return $"No entry matching {value} found in {field} ({list.Count} item(s)).";
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"Removed {removed} entr(y/ies) matching {value} from {field} on {recordId} (now {list.Count}). save_plugin to persist.";
+    }
+
+    /// <summary>Replace a COBJ's component list. componentsJson is an array of
+    /// {"component":"FormKeyOrEditorId","count":N}. Components are the materials the recipe consumes.</summary>
+    public static string SetComponents(string plugin, string recordId, string componentsJson, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        if (rec is not ConstructibleObject cobj)
+            return $"set_components only applies to COBJ records; {recordId} is {rec.GetType().Name}.";
+
+        var list = new Noggog.ExtendedList<ConstructibleObjectComponent>();
+        var failures = new List<string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(componentsJson) ? "[]" : componentsJson);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var comp = el.TryGetProperty("component", out var c) ? c.GetString() ?? "" : "";
+                uint count = el.TryGetProperty("count", out var ct) && ct.TryGetUInt32(out var n) ? n : 1u;
+                if (!ResolveFk(env, comp, out var fk)) { failures.Add($"{comp}: unresolved"); continue; }
+                var item = new ConstructibleObjectComponent { Count = count };
+                item.Component.SetTo(fk);
+                list.Add(item);
+            }
+        }
+        catch (Exception ex) { return $"Could not parse components JSON: {ex.Message}. Expected [{{\"component\":\"01FAA5:Fallout4.esm\",\"count\":1}}]."; }
+
+        cobj.Components = list;
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        var msg = $"Set {list.Count} component(s) on {recordId} in {plugin}.";
+        if (failures.Count > 0) msg += $" Skipped {failures.Count}: {string.Join("; ", failures)}.";
+        return msg + " save_plugin to persist.";
+    }
+
+    /// <summary>Replace a COBJ's condition list. conditionsJson is an array of
+    /// {"function","param1","param2","operator","value","compareGlobal","runOn","reference"}.
+    /// function = e.g. GetGlobalValue/GetBaseValue/GetItemCount/HasKeyword/GetStageDone;
+    /// param1/param2 = a FormKey/EditorID (record param) or an integer; operator = == != &gt; &gt;= &lt; &lt;=;
+    /// value = the float compared against (omit when compareGlobal is set);
+    /// compareGlobal = optional global FormKey to compare against instead of a constant;
+    /// runOn = Subject/Target/Reference/...; reference = the ref FormKey when runOn=Reference (e.g. PlayerRef).</summary>
+    public static string SetConditions(string plugin, string recordId, string conditionsJson, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+
+        var condProp = rec.GetType().GetProperty("Conditions");
+        if (condProp?.GetValue(rec) is not System.Collections.IList condList)
+            return $"{rec.GetType().Name} has no editable Conditions list.";
+
+        var built = new List<Condition>();
+        var failures = new List<string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(conditionsJson) ? "[]" : conditionsJson);
+            int idx = 0;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                idx++;
+                var fnName = el.TryGetProperty("function", out var f) ? f.GetString() ?? "" : "";
+                if (!Enum.TryParse<Condition.Function>(fnName, ignoreCase: true, out var fn))
+                { failures.Add($"#{idx}: unknown function '{fnName}'"); continue; }
+
+                var data = new FunctionConditionData { Function = fn };
+                if (el.TryGetProperty("runOn", out var ro) && ro.GetString() is { } roStr &&
+                    Enum.TryParse<Condition.RunOnType>(roStr, ignoreCase: true, out var roType))
+                    data.RunOnType = roType;
+                if (el.TryGetProperty("reference", out var rf) && rf.GetString() is { } rfStr &&
+                    ResolveFk(env, rfStr, out var rfFk))
+                    data.Reference.SetTo(rfFk);
+                ApplyParam(el, "param1", env, fk => data.ParameterOneRecord.SetTo(fk), n => data.ParameterOneNumber = n);
+                ApplyParam(el, "param2", env, fk => data.ParameterTwoRecord.SetTo(fk), n => data.ParameterTwoNumber = n);
+
+                var op = ParseOperator(el.TryGetProperty("operator", out var o) ? o.GetString() : null);
+
+                if (el.TryGetProperty("compareGlobal", out var cg) && cg.GetString() is { } cgStr && ResolveFk(env, cgStr, out var cgFk))
+                {
+                    var cond = new ConditionGlobal { CompareOperator = op, Data = data };
+                    cond.ComparisonValue.SetTo(cgFk);
+                    built.Add(cond);
+                }
+                else
+                {
+                    float val = el.TryGetProperty("value", out var v) && v.TryGetSingle(out var fv) ? fv : 1f;
+                    built.Add(new ConditionFloat { CompareOperator = op, ComparisonValue = val, Data = data });
+                }
+            }
+        }
+        catch (Exception ex) { return $"Could not parse conditions JSON: {ex.Message}."; }
+
+        condList.Clear();
+        foreach (var c in built) condList.Add(c);
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        var msg = $"Set {built.Count} condition(s) on {recordId} in {plugin}.";
+        if (failures.Count > 0) msg += $" Skipped {failures.Count}: {string.Join("; ", failures)}.";
+        return msg + " save_plugin to persist.";
+    }
+
+    // A condition parameter is either a record (FormKey/EditorID) or an integer.
+    private static void ApplyParam(JsonElement el, string key, object? env, Action<FormKey> setRecord, Action<int> setNumber)
+    {
+        if (!el.TryGetProperty(key, out var p)) return;
+        if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var n)) { setNumber(n); return; }
+        if (p.ValueKind == JsonValueKind.String && p.GetString() is { Length: > 0 } s)
+        {
+            if (int.TryParse(s, out var ni)) setNumber(ni);
+            else if (ResolveFk(env, s, out var fk)) setRecord(fk);
+        }
+    }
+
+    private static CompareOperator ParseOperator(string? op) => (op ?? "==").Trim() switch
+    {
+        "==" or "=" or "EqualTo" => CompareOperator.EqualTo,
+        "!=" or "<>" or "NotEqualTo" => CompareOperator.NotEqualTo,
+        ">" or "GreaterThan" => CompareOperator.GreaterThan,
+        ">=" or "GreaterThanOrEqualTo" => CompareOperator.GreaterThanOrEqualTo,
+        "<" or "LessThan" => CompareOperator.LessThan,
+        "<=" or "LessThanOrEqualTo" => CompareOperator.LessThanOrEqualTo,
+        _ => CompareOperator.EqualTo,
+    };
+
+    // Resolve a FormKey ('001234:Plugin.esp') or an EditorID to a FormKey via the load-order link
+    // cache (global) with a fallback to the per-mod index.
+    private static bool ResolveFk(object? env, string value, out FormKey fk)
+    {
+        if (FormKey.TryFactory(value, out fk)) return true;
+        var cache = MutagenLoader.LinkCache;
+        if (cache != null && cache.TryResolve(value, out var rec)) { fk = rec.FormKey; return true; }
+        fk = MutagenLoader.ResolveEditorIdToFormKey(env, value);
+        return !fk.IsNull;
     }
 
     // ---- helpers --------------------------------------------------------

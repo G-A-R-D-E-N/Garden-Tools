@@ -39,12 +39,16 @@ public class PluginToolExecutorTests
     public void ToolDefinitions_ExposesReadAndWriteTools()
     {
         // 9 read/diagnose tools (incl. get_conflicts, get_winning_record, search_robco_configs)
-        // + 10 write tools (incl. compact_to_esl).
-        PluginToolExecutor.ToolDefinitions().Should().HaveCount(19);
-        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(19);
+        // + 15 write tools (incl. copy_as_override, delete_record, remove_list_item, set_components, set_conditions).
+        PluginToolExecutor.ToolDefinitions().Should().HaveCount(24);
+        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(24);
 
         var names = PluginToolExecutor.ToolDefinitions()
             .Select(t => (string)t.GetType().GetProperty("name")!.GetValue(t)!).ToList();
-        names.Should().Contain(new[] { "get_conflicts", "get_winning_record", "search_robco_configs" });
+        names.Should().Contain(new[]
+        {
+            "get_conflicts", "get_winning_record", "search_robco_configs",
+            "copy_as_override", "delete_record", "remove_list_item", "set_components", "set_conditions",
+        });
     }
 }

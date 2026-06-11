@@ -69,7 +69,27 @@
       <TextBox Grid.Column="0" x:Name="Input" Background="#1E1E1E" Foreground="#D4D4D4"
                BorderBrush="#555" Margin="4" Padding="6" AcceptsReturn="True" MinHeight="40" MaxHeight="160"
                VerticalScrollBarVisibility="Auto" TextWrapping="Wrap"
-               KeyDown="Input_KeyDown"/>
+               ToolTip="Type a message, or a slash command (/help lists them: /compact, /clear, /cost, /model, /retry, /stop)."
+               TextChanged="Input_TextChanged" KeyDown="Input_KeyDown"/>
+
+      <!-- Slash-command autocomplete: opens when the line starts with '/'. -->
+      <Popup x:Name="CommandPopup" PlacementTarget="{Binding ElementName=Input}" Placement="Top"
+             Width="{Binding ActualWidth, ElementName=Input}" StaysOpen="False" AllowsTransparency="True">
+        <Border Background="#252526" BorderBrush="#3F3F46" BorderThickness="1" CornerRadius="4" Padding="2" Margin="4,0">
+          <ListBox x:Name="CommandList" Background="Transparent" BorderThickness="0" Foreground="#E0E0E0"
+                   MaxHeight="240" PreviewMouseLeftButtonUp="CommandList_Click">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Orientation="Horizontal" Margin="2">
+                  <TextBlock Text="{Binding Name}" Foreground="#9CDCFE" FontFamily="Consolas" FontSize="12" Width="96"/>
+                  <TextBlock Text="{Binding Help}" Foreground="#A0A0A0" FontSize="12" VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
+      </Popup>
       <Button Grid.Column="1" x:Name="SendBtn" Content="Send" Click="Send_Click" Margin="0,4,4,4" Padding="12,4"/>
       <Button Grid.Column="1" x:Name="StopBtn" Content="Stop" Click="Stop_Click" Margin="0,4,4,4" Padding="12,4"
               Background="#8A1E1E" Foreground="White" Visibility="Collapsed"/>

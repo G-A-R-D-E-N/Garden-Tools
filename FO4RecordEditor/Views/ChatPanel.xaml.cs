@@ -29,6 +29,7 @@ public partial class ChatPanel : UserControl
             ElapsedText.Text = $"{(DateTime.Now - _sendStart).TotalSeconds:0}s";
         Messages.ItemsSource = Bubbles;
         ChatSelector.ItemsSource = Sessions;
+        CommandList.ItemsSource = CommandSuggestions;
         
         var loaded = _historyService.LoadAll();
         foreach (var s in loaded) Sessions.Add(s);
@@ -37,14 +38,66 @@ public partial class ChatPanel : UserControl
         else NewChat_Click(this, new System.Windows.RoutedEventArgs());
     }
 
+    public sealed record CommandSuggestion(string Name, string Help);
+    public ObservableCollection<CommandSuggestion> CommandSuggestions { get; } = [];
+
+    // Show/filter the slash-command menu as the user types. It opens only while the line is a bare
+    // command token ('/' with no space yet); once they type a space (args) or normal text, it hides.
+    private void Input_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var t = Input.Text;
+        if (t.StartsWith('/') && !t.Contains(' '))
+        {
+            CommandSuggestions.Clear();
+            foreach (var (name, args, help) in _commands)
+                if (name.StartsWith(t, StringComparison.OrdinalIgnoreCase))
+                    CommandSuggestions.Add(new CommandSuggestion(
+                        string.IsNullOrEmpty(args) ? name : $"{name} {args}", help));
+
+            if (CommandSuggestions.Count > 0)
+            {
+                CommandPopup.IsOpen = true;
+                CommandList.SelectedIndex = 0;
+            }
+            else CommandPopup.IsOpen = false;
+        }
+        else CommandPopup.IsOpen = false;
+    }
+
     private void Input_KeyDown(object sender, KeyEventArgs e)
     {
+        // While the command menu is open, the arrow/Enter/Tab/Escape keys drive it instead of the textbox.
+        if (CommandPopup.IsOpen && CommandSuggestions.Count > 0)
+        {
+            switch (e.Key)
+            {
+                case Key.Down: CommandList.SelectedIndex = Math.Min(CommandList.SelectedIndex + 1, CommandSuggestions.Count - 1); e.Handled = true; return;
+                case Key.Up:   CommandList.SelectedIndex = Math.Max(CommandList.SelectedIndex - 1, 0); e.Handled = true; return;
+                case Key.Escape: CommandPopup.IsOpen = false; e.Handled = true; return;
+                case Key.Enter:
+                case Key.Tab:  AcceptSelectedCommand(); e.Handled = true; return;
+            }
+        }
+
         // Enter sends; Shift+Enter inserts a newline.
         if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
         {
             e.Handled = true;
             Send_Click(sender, e);
         }
+    }
+
+    private void CommandList_Click(object sender, MouseButtonEventArgs e) => AcceptSelectedCommand();
+
+    // Fill the input with the chosen command name (+ trailing space for args) and close the menu.
+    private void AcceptSelectedCommand()
+    {
+        if (CommandList.SelectedItem is not CommandSuggestion sel) return;
+        var name = sel.Name.Split(' ', 2)[0];   // drop the "[id]" args hint
+        Input.Text = name + " ";
+        Input.CaretIndex = Input.Text.Length;
+        CommandPopup.IsOpen = false;
+        Input.Focus();
     }
 
     private void RenameChat_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -110,8 +163,27 @@ public partial class ChatPanel : UserControl
         SendPrompt(prompt);
     }
 
+    // Slash commands handled by the app (the Claude Code CLI runs in stateless print mode, so
+    // built-in session commands like /compact aren't available there — we implement them here).
+    private static readonly (string Name, string Args, string Help)[] _commands =
+    [
+        ("/help",    "",        "List these commands."),
+        ("/compact", "",        "Summarize the conversation and replace it, to cut context size and cost."),
+        ("/clear",   "",        "Start a fresh conversation (alias: /new, /reset)."),
+        ("/cost",    "",        "Show this conversation's size and a rough token estimate (alias: /usage)."),
+        ("/model",   "[id]",    "Show the current model, or switch it (e.g. /model claude-opus-4-8)."),
+        ("/retry",   "",        "Resend your last message."),
+        ("/stop",    "",        "Stop the current response."),
+    ];
+
     private async void SendPrompt(string text)
     {
+        if (text.StartsWith('/'))
+        {
+            await HandleSlashCommand(text);
+            return;
+        }
+
         if (_currentSession.Messages.Count == 0 && text.Length > 2)
         {
             _currentSession.Name = text.Length > 30 ? text.Substring(0, 30) + "..." : text;
@@ -219,7 +291,15 @@ public partial class ChatPanel : UserControl
                     + "If no plugin record explains a behaviour, the cause is usually a RobCo Patcher "
                     + "config (F4SE INI files that patch records at runtime, invisible to the plugin "
                     + "tools). Call search_robco_configs with the FormID / EditorID / component name. "
-                    + "Frameworks like FallenWorld are largely config-driven this way.";
+                    + "Frameworks like FallenWorld are largely config-driven this way.\n\n"
+                    + "## Authoring fixes (do it yourself — never tell the user to open FO4Edit)\n"
+                    + "You can finish a plugin end to end. To fix a broken record from another mod: "
+                    + "copy_as_override(source_plugin, id, patch_plugin) forwards it into a patch, then edit "
+                    + "the override with set_field (scalars/FormLinks), set_components (a COBJ's materials — "
+                    + "JSON array of {component,count}), set_conditions (a COBJ's availability — JSON array of "
+                    + "{function,param1,operator,value,runOn,reference}), add_list_item/remove_list_item "
+                    + "(FormList entries), and delete_record (remove a stub). Finish with save_plugin and tell "
+                    + "the user to load the patch after the conflicting plugins.";
                 await _shell.Agent.RunAsync(text, sys,
                     onText: chunk => Dispatcher.BeginInvoke(() => Append(chunk)),
                     onToolStatus: status => Dispatcher.BeginInvoke(() =>
@@ -263,6 +343,127 @@ public partial class ChatPanel : UserControl
             if (ReferenceEquals(_cts, cts)) _cts = null;
             cts.Dispose();
         }
+    }
+
+    private const string CompactInstruction =
+        "Summarize our conversation so far into a compact brief. Preserve every decision made, all " +
+        "plugin and record names, EditorIDs and FormKeys, files created or edited, and any open or " +
+        "pending tasks. Drop pleasantries and redundant detail. Output only the summary.";
+
+    private async System.Threading.Tasks.Task HandleSlashCommand(string text)
+    {
+        var parts = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        var cmd = parts[0].ToLowerInvariant();
+        var arg = parts.Length > 1 ? parts[1].Trim() : "";
+        switch (cmd)
+        {
+            case "/help": case "/?": case "/commands": ShowCommandsHelp(); break;
+            case "/compact":                           await CompactConversation(); break;
+            case "/clear": case "/new": case "/reset":  ClearConversation(); break;
+            case "/cost": case "/usage": case "/tokens": ShowUsage(); break;
+            case "/model":                              SetOrShowModel(arg); break;
+            case "/retry":                              RetryLast(); break;
+            case "/stop":                               _cts?.Cancel(); AddInfoBubble("_Stopped._"); break;
+            default:
+                AddInfoBubble($"Unknown command `{cmd}`. Type `/help` for the list.");
+                break;
+        }
+    }
+
+    // A non-user note shown in the transcript (UI only — not sent to the AI or persisted).
+    private void AddInfoBubble(string markdown)
+    {
+        Bubbles.Add(new ChatBubble { IsUser = false, Text = markdown });
+        Scroll.ScrollToEnd();
+    }
+
+    private void ShowCommandsHelp()
+    {
+        var sb = new System.Text.StringBuilder("**Slash commands**\n\n");
+        foreach (var (name, args, help) in _commands)
+            sb.Append("- `").Append(name).Append(string.IsNullOrEmpty(args) ? "" : " " + args)
+              .Append("` — ").Append(help).Append('\n');
+        AddInfoBubble(sb.ToString());
+    }
+
+    private async System.Threading.Tasks.Task CompactConversation()
+    {
+        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMinutes(10));
+        _cts = cts;
+        SetSending(true);
+        SetStatusBase("Compacting conversation…");
+        try
+        {
+            string summary;
+            if (_shell.Agent != null)
+            {
+                summary = await _shell.Agent.SummarizeAsync(CompactInstruction, cts.Token);
+                _shell.Agent.LoadSummary(summary);
+            }
+            else
+            {
+                summary = await _shell.Chat.CompactAsync(CompactInstruction, cts.Token);
+            }
+
+            if (string.IsNullOrWhiteSpace(summary)) { AddInfoBubble("_Nothing to compact yet._"); return; }
+
+            // Replace the transcript + saved history with the single summary turn.
+            Bubbles.Clear();
+            _currentSession.Messages.Clear();
+            _currentSession.Messages.Add(new SessionMessage { IsUser = false, Text = summary });
+            Bubbles.Add(new ChatBubble
+            {
+                IsUser = false,
+                Text = "🗜️ **Conversation compacted** — earlier turns replaced with this summary to save context and cost.\n\n" + summary
+            });
+            _historyService.Save(_currentSession);
+            Scroll.ScrollToEnd();
+        }
+        catch (OperationCanceledException) { AddInfoBubble("_Compact cancelled._"); }
+        catch (Exception ex) { AddInfoBubble($"[compact error] {ex.Message}"); }
+        finally
+        {
+            SetSending(false);
+            if (ReferenceEquals(_cts, cts)) _cts = null;
+            cts.Dispose();
+        }
+    }
+
+    private void ClearConversation()
+    {
+        _shell.Agent?.Reset();
+        _shell.Chat.Reset();
+        NewChat_Click(this, new System.Windows.RoutedEventArgs());
+        AddInfoBubble("_Started a fresh conversation._");
+    }
+
+    private void ShowUsage()
+    {
+        int turns = _currentSession.Messages.Count;
+        int chars = _currentSession.Messages.Sum(m => m.Text?.Length ?? 0);
+        AddInfoBubble(
+            $"**Conversation size:** {turns} message(s), ~{chars:N0} characters (≈{chars / 4:N0} tokens re-sent each turn).\n\n" +
+            "This whole history is sent on every message, so cost grows as it gets longer. Run `/compact` to shrink it.");
+    }
+
+    private void SetOrShowModel(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg))
+        {
+            AddInfoBubble($"Current model: `{_shell.Settings.Current.Model}`. Switch with `/model <id>` (e.g. `/model claude-opus-4-8`).");
+            return;
+        }
+        _shell.Settings.Current.Model = arg;
+        _shell.Settings.Save();
+        _shell.RebuildProvider();
+        AddInfoBubble($"Model set to `{arg}`.");
+    }
+
+    private void RetryLast()
+    {
+        var lastUser = _currentSession.Messages.LastOrDefault(m => m.IsUser);
+        if (lastUser == null || string.IsNullOrWhiteSpace(lastUser.Text)) { AddInfoBubble("_Nothing to retry._"); return; }
+        SendPrompt(lastUser.Text);
     }
 
     private System.Threading.CancellationTokenSource? _cts;

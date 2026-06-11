@@ -36,6 +36,27 @@ public sealed class AnthropicAgent
 
     public void Reset() => _history.Clear();
 
+    /// <summary>Replace the agent's working history with a single summary turn (for /compact),
+    /// so later questions keep the gist as context while sending far fewer tokens.</summary>
+    public void LoadSummary(string summary)
+    {
+        _history.Clear();
+        if (string.IsNullOrWhiteSpace(summary)) return;
+        _history.Add(new { role = "user", content = "Here is a summary of our earlier conversation. Use it as context for what follows." });
+        _history.Add(new { role = "assistant", content = summary });
+    }
+
+    /// <summary>Ask the model to summarize the conversation so far (used by /compact). This appends
+    /// the request to history, so the caller should follow with LoadSummary to reset it. Returns
+    /// empty if there is nothing to summarize.</summary>
+    public async Task<string> SummarizeAsync(string instruction, CancellationToken ct = default)
+    {
+        if (_history.Count == 0) return "";
+        var sb = new StringBuilder();
+        await RunAsync(instruction, systemContext: null, onText: t => sb.Append(t), ct: ct);
+        return sb.ToString().Trim();
+    }
+
     /// <param name="onText">Invoked with each text chunk the model emits.</param>
     /// <param name="onToolStatus">Invoked when the model calls a tool (for a UI status line).</param>
     public async Task<string> RunAsync(

@@ -246,6 +246,82 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin" }
             }),
+        new("copy_as_override",
+            "Copy a record from one plugin into a patch plugin as an OVERRIDE (xEdit 'Copy as Override Into'). " +
+            "The patch is opened/created automatically; afterwards edit the override with set_field, set_components, " +
+            "set_conditions, add_list_item, or remove_list_item. Make the patch load LAST so it wins.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_plugin = new { type = "string", description = "Plugin to copy the record FROM (the version you want)." },
+                    id = new { type = "string", description = "FormKey ('00008E:MAIM.esp') or EditorID of the record." },
+                    patch_plugin = new { type = "string", description = "Patch plugin to copy the override INTO, e.g. 'FallenWorld_CraftingFixes.esp'." }
+                },
+                required = new[] { "source_plugin", "id", "patch_plugin" }
+            }),
+        new("delete_record",
+            "Remove a record entirely from a plugin (xEdit 'Remove') — e.g. delete an incomplete stub record, " +
+            "or drop an unwanted override from a patch.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    id = new { type = "string", description = "FormKey or EditorID of the record to remove." }
+                },
+                required = new[] { "plugin", "id" }
+            }),
+        new("remove_list_item",
+            "Remove a FormLink entry (by FormKey or EditorID) from a list field — e.g. drop an item from a " +
+            "FormList's 'Items', or a keyword from 'Categories'/'Keywords'.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    field = new { type = "string", description = "List field, e.g. 'Items'." },
+                    value = new { type = "string", description = "FormKey or EditorID to remove." }
+                },
+                required = new[] { "plugin", "record", "field", "value" }
+            }),
+        new("set_components",
+            "Replace a COBJ (crafting recipe) record's component list — the materials it consumes. Pass a JSON " +
+            "array of {\"component\":\"FormKeyOrEditorId\",\"count\":N}. Example: " +
+            "[{\"component\":\"01FAA5:Fallout4.esm\",\"count\":1},{\"component\":\"1223C7:Fallout4.esm\",\"count\":3}].",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the COBJ." },
+                    components = new { type = "string", description = "JSON array of {component, count}." }
+                },
+                required = new[] { "plugin", "record", "components" }
+            }),
+        new("set_conditions",
+            "Replace a COBJ's condition list (when a recipe is available). Pass a JSON array of condition objects: " +
+            "{\"function\":\"GetGlobalValue\",\"param1\":\"000126:MAIM.esp\",\"operator\":\"==\",\"value\":0,\"runOn\":\"Subject\"}. " +
+            "function = GetGlobalValue/GetBaseValue/GetItemCount/HasKeyword/GetStageDone/...; param1/param2 = a FormKey/EditorID " +
+            "(record arg, e.g. the global or actor-value form) or an integer; operator = == != > >= < <=; value = the constant " +
+            "compared against; compareGlobal = optional global FormKey to compare against instead of a constant; runOn = " +
+            "Subject/Target/Reference; reference = the ref FormKey when runOn=Reference (e.g. '000014:Fallout4.esm' for PlayerRef).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the COBJ." },
+                    conditions = new { type = "string", description = "JSON array of condition objects." }
+                },
+                required = new[] { "plugin", "record", "conditions" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -335,6 +411,16 @@ public sealed class PluginToolExecutor
                 return WriteService.CleanPlugin(Str("plugin"), env);
             case "save_plugin":
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
+            case "copy_as_override":
+                return WriteService.CopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"));
+            case "delete_record":
+                return WriteService.DeleteRecord(Str("plugin"), Str("id"), env);
+            case "remove_list_item":
+                return WriteService.RemoveListItem(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
+            case "set_components":
+                return WriteService.SetComponents(Str("plugin"), Str("record"), Str("components"), env);
+            case "set_conditions":
+                return WriteService.SetConditions(Str("plugin"), Str("record"), Str("conditions"), env);
 
             default:
                 return $"Unknown tool: {toolName}";

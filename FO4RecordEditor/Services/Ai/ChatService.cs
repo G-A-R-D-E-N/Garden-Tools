@@ -18,6 +18,30 @@ public sealed class ChatService
         _history.AddRange(history);
     }
 
+    /// <summary>Number of stored turns (user + assistant messages).</summary>
+    public int TurnCount => _history.Count;
+
+    /// <summary>
+    /// Summarize the conversation so far and REPLACE the stored history with that single summary,
+    /// so subsequent turns send far fewer tokens. Returns the summary text (empty if nothing to do).
+    /// </summary>
+    public async Task<string> CompactAsync(string instruction, CancellationToken ct = default)
+    {
+        if (_history.Count == 0) return "";
+
+        var outgoing = new List<ChatMessage>(_history) { new(ChatRole.User, instruction) };
+        var sb = new System.Text.StringBuilder();
+        await foreach (var token in _provider.StreamAsync(outgoing, ct))
+            sb.Append(token);
+
+        var summary = sb.ToString().Trim();
+        if (summary.Length == 0) return "";
+
+        _history.Clear();
+        _history.Add(new ChatMessage(ChatRole.Assistant, "[Summary of our earlier conversation]\n" + summary));
+        return summary;
+    }
+
     public async Task<string> SendAsync(
         string userMessage, string? systemContext,
         Action<string> onToken, CancellationToken ct = default)

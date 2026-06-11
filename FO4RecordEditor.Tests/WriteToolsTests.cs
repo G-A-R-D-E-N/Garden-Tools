@@ -1,0 +1,73 @@
+using System.IO;
+using FluentAssertions;
+using FO4RecordEditor.Services;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using Xunit;
+
+namespace FO4RecordEditor.Tests;
+
+// Exercises the COBJ authoring tools end to end (no game environment needed): build a recipe,
+// set its components + conditions from JSON, save it, reload from disk, and verify the binary
+// round-trips what we set. This proves the AI can finish a crafting fix without FO4Edit.
+public class WriteToolsTests
+{
+    [Fact]
+    public void SetComponentsAndConditions_RoundTripThroughBinary()
+    {
+        var name = $"WriteToolsTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(name);
+        WriteService.CreateRecord(name, "COBJ", "FWTest_CO_Bandage", env: null);
+
+        var components = """
+            [{"component":"01FAA5:Fallout4.esm","count":1},
+             {"component":"1223C7:Fallout4.esm","count":3}]
+            """;
+        WriteService.SetComponents(name, "FWTest_CO_Bandage", components, env: null)
+            .Should().Contain("Set 2 component(s)");
+
+        var conditions = """
+            [{"function":"GetGlobalValue","param1":"000126:MAIM.esp","operator":"==","value":0,"runOn":"Subject"},
+             {"function":"GetBaseValue","param1":"000164:S7System.esp","operator":">=","value":25,"runOn":"Reference","reference":"000014:Fallout4.esm"}]
+            """;
+        WriteService.SetConditions(name, "FWTest_CO_Bandage", conditions, env: null)
+            .Should().Contain("Set 2 condition(s)");
+
+        var path = Path.Combine(Path.GetTempPath(), name);
+        WriteService.SavePlugin(name, path).Should().Contain("Saved");
+
+        try
+        {
+            var mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(path), Fallout4Release.Fallout4);
+            var cobj = mod.ConstructibleObjects.Single();
+
+            cobj.Components!.Should().HaveCount(2);
+            cobj.Components![0].Component.FormKey.Should().Be(FormKey.Factory("01FAA5:Fallout4.esm"));
+            cobj.Components![0].Count.Should().Be(1u);
+            cobj.Components![1].Count.Should().Be(3u);
+
+            cobj.Conditions.Should().HaveCount(2);
+            var first = (ConditionFloat)cobj.Conditions[0];
+            first.CompareOperator.Should().Be(CompareOperator.EqualTo);
+            first.ComparisonValue.Should().Be(0f);
+            ((FunctionConditionData)first.Data).Function.Should().Be(Condition.Function.GetGlobalValue);
+
+            var second = (ConditionFloat)cobj.Conditions[1];
+            second.CompareOperator.Should().Be(CompareOperator.GreaterThanOrEqualTo);
+            second.ComparisonValue.Should().Be(25f);
+            ((FunctionConditionData)second.Data).RunOnType.Should().Be(Condition.RunOnType.Reference);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
+    public void DeleteRecord_RemovesTheStub()
+    {
+        var name = $"WriteToolsDel_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(name);
+        WriteService.CreateRecord(name, "COBJ", "FWTest_Stub", env: null);
+        WriteService.DeleteRecord(name, "FWTest_Stub", env: null).Should().Contain("Removed");
+        WriteService.GetMutable(name)!.ConstructibleObjects.Should().BeEmpty();
+    }
+}

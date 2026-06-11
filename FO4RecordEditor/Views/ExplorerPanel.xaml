@@ -21,6 +21,7 @@
     </StackPanel>
     <TextBox Grid.Row="1" x:Name="SearchBox" Background="#1E1E1E" Foreground="#D4D4D4" BorderThickness="0,1,0,1" BorderBrush="#3F3F46" Padding="4" TextChanged="Search_TextChanged"/>
     <TreeView Grid.Row="2" x:Name="Tree" Background="#252526" BorderThickness="0"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
               MouseDoubleClick="Tree_DoubleClick" ContextMenuOpening="Tree_ContextMenuOpening"
               SelectedItemChanged="Tree_SelectedItemChanged"

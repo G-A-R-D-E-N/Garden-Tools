@@ -52,7 +52,15 @@ public sealed class ClaudeCodeProvider : IAIProvider
                 $"recipe, leveled list, or weapon stat that no plugin sets), the cause is usually a " +
                 $"RobCo Patcher config. Call search_robco_configs with the FormID/EditorID/component " +
                 $"name -- those INI files patch records at runtime and are invisible to the plugin " +
-                $"tools. Frameworks like FallenWorld are largely config-driven this way.\n");
+                $"tools. Frameworks like FallenWorld are largely config-driven this way.\n\n" +
+                $"AUTHORING FIXES: you can FINISH a plugin fully -- never tell the user to open " +
+                $"FO4Edit/xEdit manually. To fix a broken record from another mod, call copy_as_override " +
+                $"(source_plugin, id, patch_plugin) to forward it into a patch, then edit the override: " +
+                $"set_field for scalars/FormLinks, set_components for a COBJ's materials (JSON array of " +
+                $"{{component,count}}), set_conditions for a COBJ's availability conditions (JSON array of " +
+                $"{{function,param1,operator,value,runOn,reference}}), add_list_item/remove_list_item for " +
+                $"FormList entries, and delete_record to remove a stub. Finish with save_plugin, and tell " +
+                $"the user to load the patch after the conflicting plugins.\n");
         }
         foreach (var m in messages)
         {
