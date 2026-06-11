@@ -15,7 +15,7 @@ public class ClaudeCodeMcpE2E
     private readonly ITestOutputHelper _out;
     public ClaudeCodeMcpE2E(ITestOutputHelper o) => _out = o;
 
-    [Fact(Skip = "Real Claude Code CLI call (needs sign-in, consumes quota). Remove Skip to run manually. Verified passing 2026-06-09.")]
+    [Fact(Skip = "Real Claude Code CLI call (needs sign-in, consumes quota). Remove Skip to run manually. Verified passing 2026-06-10 (14s, MCP transport OK).")]
     public async Task ClaudeCode_CallsMcpTool_AgainstLiveServer()
     {
         var exec = new PluginToolExecutor(() => null);   // executor returns "No plugins loaded."

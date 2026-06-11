@@ -3,7 +3,9 @@ namespace FO4RecordEditor.Services;
 public sealed class AppSettings
 {
     public string AnthropicApiKey { get; set; } = "";
-    public string Model { get; set; } = "claude-3-7-sonnet-20250219";
+    // Default to a current model. claude-3-7-sonnet was retired (Feb 2026) and 404s on the API /
+    // is rejected by the CLI. A full id works for both the Anthropic API and the Claude Code CLI.
+    public string Model { get; set; } = "claude-opus-4-8";
     public string AiProvider { get; set; } = "anthropic";   // anthropic | claudecode | ollama
     public string OllamaUrl { get; set; } = "http://localhost:11434";
     public string OllamaModel { get; set; } = "llama3.1";

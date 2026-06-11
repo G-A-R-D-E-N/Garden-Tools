@@ -15,7 +15,7 @@ public sealed class AnthropicProvider : IAIProvider
 
     public string Name => "Anthropic";
 
-    public AnthropicProvider(string apiKey, string model = "claude-3-7-sonnet-20250219")
+    public AnthropicProvider(string apiKey, string model = "claude-opus-4-8")
     {
         _apiKey = apiKey;
         _model = model;
