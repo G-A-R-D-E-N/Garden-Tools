@@ -18,6 +18,16 @@ dotnet publish FO4RecordEditor\FO4RecordEditor.csproj ^
   -p:PublishSingleFile=false ^
   -p:DebugType=none
 
+if errorlevel 1 (
+  echo.
+  echo ============================================================
+  echo BUILD FAILED -- the exe was NOT produced. Scroll up for the error.
+  echo   A common cause: a running FO4RecordEditor.exe locking the output.
+  echo   Close it ^(or: taskkill /IM FO4RecordEditor.exe /F^) and re-run.
+  echo ============================================================
+  exit /b 1
+)
+
 echo.
 echo ============================================================
 echo Published to folder (needs .NET 9 Desktop Runtime installed):
