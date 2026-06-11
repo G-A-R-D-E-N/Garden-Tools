@@ -754,9 +754,20 @@ public static class MutagenLoader
         // Categories). Without this, walking the item recurses into its CLR internals
         // (FormKey, then .Type -> System.Type -> Assembly -> the whole framework graph),
         // which produced hundreds of bogus "Type.Assembly.Defined..." rows.
-        if (obj is Mutagen.Bethesda.Plugins.IFormLinkIdentifier topLink)
+        // IMPORTANT: a record (IMajorRecordGetter) also implements IFormLinkIdentifier, so it must
+        // be EXCLUDED here -- otherwise the record being walked is treated as a leaf and yields no
+        // fields at all. Only a real form-link *reference* (not a record) is a leaf.
+        if (obj is not Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter
+            && obj is Mutagen.Bethesda.Plugins.IFormLinkIdentifier topLink)
         {
             if (parent.IsLeaf) parent.Values[pluginName] = FormatFormLink(topLink);
+            return;
+        }
+
+        // TranslatedString (GMST values, FULL names, etc.) -> show its text, not its internals.
+        if (obj is Mutagen.Bethesda.Strings.ITranslatedStringGetter ts)
+        {
+            if (parent.IsLeaf) parent.Values[pluginName] = ts.String ?? ts.ToString() ?? "";
             return;
         }
 

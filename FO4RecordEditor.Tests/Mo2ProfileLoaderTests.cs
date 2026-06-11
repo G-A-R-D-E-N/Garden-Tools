@@ -117,8 +117,9 @@ public class Mo2ProfileLoaderTests
 
         var matrix = MutagenLoader.BuildConflictMatrix(env, cobj.FormKey.ToString());
         matrix.Should().NotBeNull();
+        matrix!.Rows.Should().NotBeEmpty("a COBJ expands to fields (so this can't pass vacuously)");
 
-        foreach (var row in matrix!.Rows)
+        foreach (var row in matrix.Rows)
         {
             row.Field.Should().NotContainAny(".Assembly", "Reflection", "DeclaringMethod", "GUID");
             foreach (var v in row.Values)
