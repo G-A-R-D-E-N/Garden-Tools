@@ -10,8 +10,13 @@ namespace FO4RecordEditor.Services;
 public sealed class PluginToolExecutor
 {
     private readonly Func<object?> _envProvider;
+    private readonly Func<string?>? _mo2PathProvider;
 
-    public PluginToolExecutor(Func<object?> envProvider) => _envProvider = envProvider;
+    public PluginToolExecutor(Func<object?> envProvider, Func<string?>? mo2PathProvider = null)
+    {
+        _envProvider = envProvider;
+        _mo2PathProvider = mo2PathProvider;
+    }
 
     public sealed record ToolSpec(string Name, string Description, object Schema);
 
@@ -67,6 +72,43 @@ public sealed class PluginToolExecutor
                     id = new { type = "string", description = "FormKey or EditorID of the record." }
                 },
                 required = new[] { "plugin", "id" }
+            }),
+        new("get_conflicts",
+            "Show EVERY plugin that overrides a record, in load order, and which one WINS. The winner " +
+            "is the plugin loaded LAST -- it is what the game actually uses, NOT the first override you " +
+            "find. Always call this before blaming a plugin for a conflict. Accepts a FormKey " +
+            "('054C84:Fallout4.esm') or an EditorID.",
+            new
+            {
+                type = "object",
+                properties = new { id = new { type = "string", description = "FormKey or EditorID of the record." } },
+                required = new[] { "id" }
+            }),
+        new("get_winning_record",
+            "Get the EFFECTIVE (winning) version of a record -- the field values the game actually uses " +
+            "after all overrides are applied -- plus which plugin won. Use this instead of get_record when " +
+            "you care about the real in-game result. Accepts a FormKey or an EditorID.",
+            new
+            {
+                type = "object",
+                properties = new { id = new { type = "string", description = "FormKey or EditorID of the record." } },
+                required = new[] { "id" }
+            }),
+        new("search_robco_configs",
+            "Search RobCo Patcher config files (F4SE\\Plugins\\RobCo_Patcher\\**\\*.ini) for text. These " +
+            "INI files patch records at RUNTIME (scrap recipes, leveled lists, weapons, components, etc.) " +
+            "and are NOT in any plugin -- so if a behaviour can't be explained by the plugin records, a " +
+            "RobCo patch is the usual cause. Search by FormID ('054C83'), EditorID, or a component/keyword " +
+            "name. Returns the mod + matching config lines.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Text to find, e.g. a FormID, EditorID, or component name." },
+                    limit = new { type = "integer", description = "Max matching lines (default 60)." }
+                },
+                required = new[] { "query" }
             }),
 
         // ---- write tools (author plugins) ----
@@ -262,6 +304,12 @@ public sealed class PluginToolExecutor
             }
             case "get_record":
                 return MutagenLoader.QueryRecordFields(env, Str("plugin"), Str("id"));
+            case "get_conflicts":
+                return GetConflicts(env, Str("id"));
+            case "get_winning_record":
+                return GetWinningRecord(env, Str("id"));
+            case "search_robco_configs":
+                return SearchRobcoConfigs(_mo2PathProvider?.Invoke(), Str("query"), Int("limit", 60));
 
             // ---- write tools ----
             case "open_plugin":
@@ -291,5 +339,103 @@ public sealed class PluginToolExecutor
             default:
                 return $"Unknown tool: {toolName}";
         }
+    }
+
+    // Resolve a FormKey ('001234:Plugin.esp') or an EditorID to a FormKey, using the load order's
+    // link cache (resolves both, globally) with a fallback to the per-mod index.
+    private static Mutagen.Bethesda.Plugins.FormKey ResolveToFk(object? env, string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return Mutagen.Bethesda.Plugins.FormKey.Null;
+        if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(id, out var fk)) return fk;
+        var cache = MutagenLoader.LinkCache;
+        if (cache != null && cache.TryResolve(id, out var rec)) return rec.FormKey;
+        return MutagenLoader.ResolveEditorIdToFormKey(env, id);
+    }
+
+    private static string GetConflicts(object? env, string id)
+    {
+        var fk = ResolveToFk(env, id);
+        if (fk.IsNull)
+            return $"Could not resolve '{id}'. Pass a FormKey like '054C84:Fallout4.esm' or an exact EditorID.";
+
+        var matrix = MutagenLoader.BuildConflictMatrix(env, fk.ToString());
+        if (matrix == null || matrix.Plugins.Count == 0) return $"No record found for {fk}.";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{matrix.EditorID} [{matrix.FormKey}] {matrix.Type}");
+        if (matrix.Plugins.Count == 1)
+        {
+            sb.AppendLine($"Defined only in {matrix.Plugins[0]} -- no override conflict.");
+        }
+        else
+        {
+            int diffs = matrix.Rows.Count(r => r.Differs);
+            sb.AppendLine($"Overridden by {matrix.Plugins.Count} plugins (load order -- the LAST one wins):");
+            for (int i = 0; i < matrix.Plugins.Count; i++)
+                sb.AppendLine($"  {i + 1}. {matrix.Plugins[i]}"
+                    + (i == matrix.Plugins.Count - 1 ? "   <-- WINNER (what the game uses)" : ""));
+            sb.AppendLine($"{diffs} field(s) differ across versions. Call get_winning_record for the effective values.");
+        }
+        return sb.ToString();
+    }
+
+    private static string GetWinningRecord(object? env, string id)
+    {
+        var fk = ResolveToFk(env, id);
+        if (fk.IsNull)
+            return $"Could not resolve '{id}'. Pass a FormKey or an exact EditorID.";
+
+        var contexts = MutagenLoader.GetRecordContexts(env, fk);
+        if (contexts.Count == 0) return $"No record found for {fk}.";
+
+        var winner = contexts[^1].plugin;   // load order, last = winner
+        var dump = MutagenLoader.QueryRecordFields(env, winner, fk.ToString());
+        return $"Winning plugin: {winner}  (of {contexts.Count} version(s) in the load order)\n{dump}";
+    }
+
+    private static string SearchRobcoConfigs(string? instancePath, string query, int limit)
+    {
+        if (string.IsNullOrWhiteSpace(instancePath) || !System.IO.Directory.Exists(instancePath))
+            return "MO2 instance unknown -- load the modlist with 'Open MO2' first.";
+        if (string.IsNullOrWhiteSpace(query)) return "Provide a query (a FormID, EditorID, or name).";
+
+        // Collect each mod's (and overwrite's) RobCo_Patcher root, then scan its .ini files.
+        var roots = new List<string>();
+        var modsDir = System.IO.Path.Combine(instancePath, "mods");
+        if (System.IO.Directory.Exists(modsDir))
+            foreach (var mod in System.IO.Directory.EnumerateDirectories(modsDir))
+            {
+                var rc = System.IO.Path.Combine(mod, "F4SE", "Plugins", "RobCo_Patcher");
+                if (System.IO.Directory.Exists(rc)) roots.Add(rc);
+            }
+        var ow = System.IO.Path.Combine(instancePath, "overwrite", "F4SE", "Plugins", "RobCo_Patcher");
+        if (System.IO.Directory.Exists(ow)) roots.Add(ow);
+
+        var hits = new List<string>();
+        foreach (var root in roots)
+        {
+            foreach (var ini in System.IO.Directory.EnumerateFiles(root, "*.ini", System.IO.SearchOption.AllDirectories))
+            {
+                string[] lines;
+                try { lines = System.IO.File.ReadAllLines(ini); } catch { continue; }
+                var rel = ini.Length > modsDir.Length && ini.StartsWith(modsDir, StringComparison.OrdinalIgnoreCase)
+                    ? ini[(modsDir.Length + 1)..] : System.IO.Path.GetFileName(ini);
+                foreach (var line in lines)
+                {
+                    var l = line.Trim();
+                    if (l.Length == 0 || l.StartsWith(';') || l.StartsWith('#')) continue;
+                    if (l.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    {
+                        hits.Add($"{rel}\n    {l}");
+                        if (hits.Count >= limit) goto done;
+                    }
+                }
+            }
+        }
+    done:
+        if (roots.Count == 0) return "No RobCo Patcher config folders found under this MO2 instance.";
+        return hits.Count == 0
+            ? $"No RobCo Patcher config lines match '{query}'. (Searched {roots.Count} mod patcher folder(s).)"
+            : $"RobCo Patcher matches for '{query}' ({hits.Count}):\n" + string.Join("\n", hits);
     }
 }

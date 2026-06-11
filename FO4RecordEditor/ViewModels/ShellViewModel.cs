@@ -37,7 +37,7 @@ public sealed class ShellViewModel
     public ShellViewModel()
     {
         Settings.Load();
-        ToolExecutor = new PluginToolExecutor(() => GameEnvironment);
+        ToolExecutor = new PluginToolExecutor(() => GameEnvironment, () => Settings.Current.Mo2InstancePath);
         McpServer = new PluginMcpServer(ToolExecutor);
         McpServer.Start();
         Context = new AIContextBuilder(Graph);

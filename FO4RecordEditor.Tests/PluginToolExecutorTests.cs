@@ -38,8 +38,13 @@ public class PluginToolExecutorTests
     [Fact]
     public void ToolDefinitions_ExposesReadAndWriteTools()
     {
-        // 6 read tools (incl. check_plugin) + 10 write tools (incl. compact_to_esl).
-        PluginToolExecutor.ToolDefinitions().Should().HaveCount(16);
-        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(16);
+        // 9 read/diagnose tools (incl. get_conflicts, get_winning_record, search_robco_configs)
+        // + 10 write tools (incl. compact_to_esl).
+        PluginToolExecutor.ToolDefinitions().Should().HaveCount(19);
+        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(19);
+
+        var names = PluginToolExecutor.ToolDefinitions()
+            .Select(t => (string)t.GetType().GetProperty("name")!.GetValue(t)!).ToList();
+        names.Should().Contain(new[] { "get_conflicts", "get_winning_record", "search_robco_configs" });
     }
 }

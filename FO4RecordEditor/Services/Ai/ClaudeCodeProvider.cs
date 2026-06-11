@@ -40,8 +40,19 @@ public sealed class ClaudeCodeProvider : IAIProvider
             prompt.AppendLine(
                 $"You have MCP tools to read the user's loaded Bethesda plugins: " +
                 $"mcp__{_mcpServerName}__list_plugins, list_record_types, list_records, " +
-                $"search_records, and get_record. Use them to ground every answer in the actual " +
-                $"record data. Call list_plugins first if you don't know what is loaded.\n");
+                $"search_records, get_record, get_conflicts, get_winning_record. Use them to ground " +
+                $"every answer in the actual record data. Call list_plugins first if you don't know " +
+                $"what is loaded.\n\n" +
+                $"CONFLICTS: many plugins override the same record; only the one loaded LAST wins and " +
+                $"is what the game uses. Never blame a plugin from a single get_record or the first " +
+                $"override you find. To diagnose any override-driven behaviour, call get_conflicts on " +
+                $"the record to see the full chain and the WINNER, then get_winning_record for the " +
+                $"effective values, and attribute the behaviour to the winning plugin.\n\n" +
+                $"RUNTIME PATCHES: if the plugin records cannot explain a behaviour (e.g. a scrap " +
+                $"recipe, leveled list, or weapon stat that no plugin sets), the cause is usually a " +
+                $"RobCo Patcher config. Call search_robco_configs with the FormID/EditorID/component " +
+                $"name -- those INI files patch records at runtime and are invisible to the plugin " +
+                $"tools. Frameworks like FallenWorld are largely config-driven this way.\n");
         }
         foreach (var m in messages)
         {

@@ -205,9 +205,21 @@ public partial class ChatPanel : UserControl
             {
                 // Agentic path: the AI can call tools to read any loaded plugin's data.
                 var sys = ctx + "\n\n## Tools\nYou have tools to read the user's loaded plugins "
-                    + "(list_plugins, list_record_types, list_records, search_records, get_record). "
-                    + "Use them to ground every answer in the actual record data. Call list_plugins first "
-                    + "if you don't yet know what is loaded.";
+                    + "(list_plugins, list_record_types, list_records, search_records, get_record, "
+                    + "get_conflicts, get_winning_record). Use them to ground every answer in the actual "
+                    + "record data. Call list_plugins first if you don't yet know what is loaded.\n\n"
+                    + "## Conflicts (read this before diagnosing any override)\n"
+                    + "Many plugins override the same record; only the one loaded LAST wins and is what "
+                    + "the game actually uses. NEVER conclude a plugin causes a behaviour from a single "
+                    + "get_record or the first override you find. To diagnose an effect (e.g. a scrap "
+                    + "recipe, a leveled list, a COBJ), call get_conflicts on the record to see the full "
+                    + "override chain and the WINNER, then get_winning_record for the effective values. "
+                    + "Attribute the behaviour to the winning plugin, not an earlier overridden one.\n\n"
+                    + "## Runtime patches (RobCo Patcher)\n"
+                    + "If no plugin record explains a behaviour, the cause is usually a RobCo Patcher "
+                    + "config (F4SE INI files that patch records at runtime, invisible to the plugin "
+                    + "tools). Call search_robco_configs with the FormID / EditorID / component name. "
+                    + "Frameworks like FallenWorld are largely config-driven this way.";
                 await _shell.Agent.RunAsync(text, sys,
                     onText: chunk => Dispatcher.BeginInvoke(() => Append(chunk)),
                     onToolStatus: status => Dispatcher.BeginInvoke(() =>
