@@ -40,10 +40,21 @@ public sealed class AnthropicAgent
     /// <param name="onToolStatus">Invoked when the model calls a tool (for a UI status line).</param>
     public async Task<string> RunAsync(
         string userMessage, string? systemContext,
-        Action<string> onText, Action<string>? onToolStatus = null, CancellationToken ct = default)
+        Action<string> onText, Action<string>? onToolStatus = null, CancellationToken ct = default,
+        Action<string>? onUsage = null)
     {
         _history.Add(new { role = "user", content = userMessage });
         var finalText = new StringBuilder();
+
+        // Prompt-cache the stable prefix (tools + system). Within one question the tool loop
+        // re-sends this prefix up to 8x, and across questions the tool block is identical — cached
+        // tokens cost ~0.1x, which is the main lever for cutting API spend.
+        var systemBlocks = string.IsNullOrWhiteSpace(systemContext) ? null : new object[]
+        {
+            new { type = "text", text = systemContext, cache_control = new { type = "ephemeral" } }
+        };
+
+        long totalIn = 0, totalCacheRead = 0, totalCacheWrite = 0, totalOut = 0;
 
         for (int iteration = 0; iteration < MaxToolIterations; iteration++)
         {
@@ -51,8 +62,8 @@ public sealed class AnthropicAgent
             {
                 model = _model,
                 max_tokens = 4096,
-                system = string.IsNullOrWhiteSpace(systemContext) ? null : systemContext,
-                tools = PluginToolExecutor.ToolDefinitions(),
+                system = systemBlocks,
+                tools = PluginToolExecutor.ToolDefinitionsCached(),
                 messages = _history,
             };
 
@@ -67,6 +78,15 @@ public sealed class AnthropicAgent
                 var errText = $"[AI error] {msg}";
                 onText(errText);
                 return errText;
+            }
+
+            if (rootEl.TryGetProperty("usage", out var usageEl))
+            {
+                long U(string k) => usageEl.TryGetProperty(k, out var v) && v.TryGetInt64(out var n) ? n : 0;
+                totalIn += U("input_tokens");
+                totalCacheRead += U("cache_read_input_tokens");
+                totalCacheWrite += U("cache_creation_input_tokens");
+                totalOut += U("output_tokens");
             }
 
             var contentArr = rootEl.GetProperty("content");
@@ -107,6 +127,14 @@ public sealed class AnthropicAgent
                 continue; // model wants to act on the tool results
             }
             break; // final answer produced
+        }
+
+        // Report token usage so the user can see cost (and that caching is working): cached input
+        // tokens bill at ~0.1x, so a high "cached" share means most of the prefix was reused.
+        if (onUsage != null && (totalIn + totalCacheRead + totalCacheWrite + totalOut) > 0)
+        {
+            long billedIn = totalIn + totalCacheWrite;
+            onUsage($"Tokens — in {billedIn:N0} (+{totalCacheRead:N0} cached @0.1x), out {totalOut:N0}");
         }
 
         return finalText.ToString();

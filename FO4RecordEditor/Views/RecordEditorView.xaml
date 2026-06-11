@@ -6,75 +6,133 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     <views:ConflictCellBrush x:Key="CellBrush"/>
   </UserControl.Resources>
-  <Grid>
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-    </Grid.RowDefinitions>
 
-    <Border Grid.Row="0" x:Name="Banner" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,0,0,1" Padding="10,6">
-      <StackPanel Orientation="Vertical">
-        <TextBlock x:Name="BannerTitle" FontFamily="Consolas" FontSize="12" Foreground="#D4D4D4"/>
-        <TextBlock x:Name="BannerStatus" FontFamily="Consolas" FontSize="12" Margin="0,2,0,0"/>
-      </StackPanel>
-    </Border>
+  <TabControl x:Name="ViewTabs" Background="#1E1E1E" BorderThickness="0"
+              SelectionChanged="ViewTabs_SelectionChanged">
 
-    <DataGrid Grid.Row="1" x:Name="FieldList" AutoGenerateColumns="False" HeadersVisibility="Column"
-            CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None"
-            RowHeight="26" AlternationCount="2" AlternatingRowBackground="#1B1B1B"
-            Background="#1E1E1E" Foreground="#D4D4D4" RowBackground="#1E1E1E"
-            BorderBrush="#2A2A2A" BorderThickness="0"
-            VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
-    <DataGrid.RowStyle>
-      <Style TargetType="DataGridRow">
-        <Setter Property="Background" Value="Transparent"/>
-        <Style.Triggers>
-          <DataTrigger Binding="{Binding Differs}" Value="True">
-            <Setter Property="Background" Value="#2A1E1E"/>
-          </DataTrigger>
-          <Trigger Property="IsMouseOver" Value="True">
-            <Setter Property="Background" Value="#2A2D2E"/>
-          </Trigger>
-        </Style.Triggers>
-      </Style>
-    </DataGrid.RowStyle>
-    <DataGrid.Columns>
-      <DataGridTemplateColumn Header="Property" Width="320" IsReadOnly="True">
-        <DataGridTemplateColumn.CellTemplate>
-          <DataTemplate>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-              <TextBlock Text="{Binding Spacer}" FontFamily="Consolas" FontSize="12"/>
-              <!-- Fixed 20px chevron slot so leaf rows align with expandable rows -->
-              <Border Width="20" HorizontalAlignment="Left">
-                <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                              Visibility="{Binding HasChildren, Converter={StaticResource BoolToVis}}"
-                              Width="16" Height="16" Cursor="Hand" HorizontalAlignment="Center">
-                  <ToggleButton.Template>
-                    <ControlTemplate TargetType="ToggleButton">
-                      <Border Background="Transparent">
-                        <TextBlock x:Name="Glyph" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
-                                   Foreground="#9DA5B4" FontSize="9"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                      </Border>
-                      <ControlTemplate.Triggers>
-                        <Trigger Property="IsChecked" Value="True">
-                          <Setter TargetName="Glyph" Property="Text" Value="&#xE70D;"/>
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                          <Setter TargetName="Glyph" Property="Foreground" Value="#FFFFFF"/>
-                        </Trigger>
-                      </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                  </ToggleButton.Template>
-                </ToggleButton>
-              </Border>
-              <TextBlock Text="{Binding Node.Key}" Foreground="#9CDCFE"
-                         FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+    <!-- ===================== RECORD (editable matrix + patch bar) ===================== -->
+    <TabItem Header="Record">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" x:Name="Banner" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,0,0,1" Padding="10,6">
+          <StackPanel Orientation="Vertical">
+            <TextBlock x:Name="BannerTitle" FontFamily="Consolas" FontSize="12" Foreground="#D4D4D4"/>
+            <TextBlock x:Name="BannerStatus" FontFamily="Consolas" FontSize="12" Margin="0,2,0,0"/>
+          </StackPanel>
+        </Border>
+
+        <DataGrid Grid.Row="1" x:Name="FieldList" AutoGenerateColumns="False" HeadersVisibility="Column"
+                CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None"
+                RowHeight="26" AlternationCount="2" AlternatingRowBackground="#1B1B1B"
+                Background="#1E1E1E" Foreground="#D4D4D4" RowBackground="#1E1E1E"
+                BorderBrush="#2A2A2A" BorderThickness="0"
+                VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+        <DataGrid.RowStyle>
+          <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding Differs}" Value="True">
+                <Setter Property="Background" Value="#2A1E1E"/>
+              </DataTrigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#2A2D2E"/>
+              </Trigger>
+            </Style.Triggers>
+          </Style>
+        </DataGrid.RowStyle>
+        <DataGrid.Columns>
+          <DataGridTemplateColumn Header="Property" Width="320" IsReadOnly="True">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Spacer}" FontFamily="Consolas" FontSize="12"/>
+                  <!-- Fixed 20px chevron slot so leaf rows align with expandable rows -->
+                  <Border Width="20" HorizontalAlignment="Left">
+                    <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  Visibility="{Binding HasChildren, Converter={StaticResource BoolToVis}}"
+                                  Width="16" Height="16" Cursor="Hand" HorizontalAlignment="Center">
+                      <ToggleButton.Template>
+                        <ControlTemplate TargetType="ToggleButton">
+                          <Border Background="Transparent">
+                            <TextBlock x:Name="Glyph" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                       Foreground="#9DA5B4" FontSize="9"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                          </Border>
+                          <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                              <Setter TargetName="Glyph" Property="Text" Value="&#xE70D;"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                              <Setter TargetName="Glyph" Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                          </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                      </ToggleButton.Template>
+                    </ToggleButton>
+                  </Border>
+                  <TextBlock Text="{Binding Node.Key}" Foreground="#9CDCFE"
+                             FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                </StackPanel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+        </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Edit -> patch bar: forward this record into a patch plugin and write the grid edits onto it. -->
+        <Border Grid.Row="2" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,1,0,0" Padding="10,6">
+          <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Patch plugin:" VerticalAlignment="Center" Foreground="#888" Margin="0,0,6,0"/>
+              <TextBox x:Name="PatchName" Width="220" Text="FallenWorldFixes.esp"
+                       Background="#1E1E1E" Foreground="#D4D4D4" BorderBrush="#555" Padding="4"
+                       VerticalContentAlignment="Center"/>
+              <Button Content="Save edits to patch" Click="SaveToPatch_Click" Padding="14,4" Margin="10,0,0,0"
+                      Background="#2E7D32" Foreground="White"/>
+              <TextBlock Text="Edit a value above (winner column), then save. The patch must load after the conflicting plugins."
+                         Foreground="#777" FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap"/>
             </StackPanel>
-          </DataTemplate>
-        </DataGridTemplateColumn.CellTemplate>
-      </DataGridTemplateColumn>
-    </DataGrid.Columns>
-    </DataGrid>
-  </Grid>
+            <TextBlock x:Name="PatchStatus" Foreground="#7FB37F" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </TabItem>
+
+    <!-- ===================== CONFLICTS (xEdit-style matrix) ===================== -->
+    <TabItem Header="Conflicts" x:Name="ConflictsTab">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#252526" Margin="0" Height="34" VerticalAlignment="Center">
+          <CheckBox x:Name="DiffOnly" Content="Only differing fields" IsChecked="True" Foreground="#D4D4D4"
+                    VerticalAlignment="Center" Margin="10,0,0,0" Checked="DiffOnly_Changed" Unchecked="DiffOnly_Changed"/>
+          <Border Background="#3A2A2A" Margin="16,0,0,0" Padding="6,1" VerticalAlignment="Center"><TextBlock Text="differs" Foreground="#E06060"/></Border>
+          <TextBlock x:Name="ConflictSummary" Foreground="#888" Margin="16,0,0,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="11"/>
+        </StackPanel>
+        <DataGrid Grid.Row="1" x:Name="ConflictGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserAddRows="False" GridLinesVisibility="All" HeadersVisibility="Column"
+                  Background="#181818" Foreground="#D4D4D4" RowBackground="#1E1E1E"
+                  BorderBrush="#3F3F46" FontFamily="Consolas" FontSize="12" ColumnWidth="*"
+                  EnableRowVirtualization="True">
+          <DataGrid.RowStyle>
+            <Style TargetType="DataGridRow">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Differs}" Value="True">
+                  <Setter Property="Background" Value="#3A2424"/>
+                  <Setter Property="Foreground" Value="#F0B0B0"/>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </DataGrid.RowStyle>
+        </DataGrid>
+      </Grid>
+    </TabItem>
+  </TabControl>
 </UserControl>

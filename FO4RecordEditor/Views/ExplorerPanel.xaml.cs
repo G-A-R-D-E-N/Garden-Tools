@@ -76,6 +76,53 @@ public partial class ExplorerPanel : UserControl
         main?.SetStatus($"Loaded {dlg.SelectedPlugins.Count} plugin(s).");
     }
 
+    private async void OpenMo2_Click(object sender, RoutedEventArgs e)
+    {
+        var main = Window.GetWindow(this) as MainWindow;
+
+        var dlg = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Select your Mod Organizer 2 instance folder (the one containing 'mods' and 'profiles')",
+        };
+        var last = _shell.Settings.Current.Mo2InstancePath;
+        if (!string.IsNullOrWhiteSpace(last) && System.IO.Directory.Exists(last)) dlg.InitialDirectory = last;
+        if (dlg.ShowDialog() != true) return;
+
+        var instance = dlg.FolderName;
+        if (!System.IO.Directory.Exists(System.IO.Path.Combine(instance, "profiles")))
+        {
+            MessageBox.Show("That folder doesn't look like an MO2 instance — it has no 'profiles' subfolder. " +
+                "Pick the instance folder that contains 'mods', 'profiles', and 'ModOrganizer.ini'.");
+            return;
+        }
+
+        var progress = new Progress<(string message, double? percent)>(p =>
+        {
+            if (main != null)
+            {
+                main.SetStatus(p.message);
+                if (p.percent.HasValue) main.SetProgress(p.percent.Value); else main.SetProgress(-1);
+            }
+        });
+
+        var plugins = await _shell.LoadMo2ProfileAsync(instance, progress);
+        if (main != null) main.SetProgress(-1);
+        if (plugins.Count == 0)
+        {
+            MessageBox.Show("No plugins loaded from that MO2 profile. Check that the profile's plugins.txt exists " +
+                "and the game Data folder is set in ModOrganizer.ini.");
+            return;
+        }
+
+        var pick = new PluginSelectDialog(plugins) { Owner = main };
+        if (pick.ShowDialog() != true) return;
+
+        _shell.Plugins.Clear();
+        foreach (var name in pick.SelectedPlugins)
+            _shell.Plugins.Add(FO4RecordEditor.Services.MutagenLoader.MakeLazyNode(name));
+        main?.SetStatus($"Loaded {pick.SelectedPlugins.Count} plugin(s) from MO2.");
+    }
+
     private async void Scan_Click(object sender, RoutedEventArgs e) => await _shell.RunErrorScanAsync();
 
     private void Tree_DoubleClick(object sender, MouseButtonEventArgs e)

@@ -15,10 +15,18 @@ public partial class ChatPanel : UserControl
     private ChatSession _currentSession = null!;
     private readonly FO4RecordEditor.Services.ChatHistoryService _historyService = new();
 
+    // Live activity feedback for the status strip (spinner + state + elapsed).
+    private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
+    private DateTime _sendStart;
+
     public ChatPanel(ShellViewModel shell)
     {
         InitializeComponent();
         _shell = shell;
+        _statusTimer = new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMilliseconds(500) };
+        _statusTimer.Tick += (_, _) =>
+            ElapsedText.Text = $"{(DateTime.Now - _sendStart).TotalSeconds:0}s";
         Messages.ItemsSource = Bubbles;
         ChatSelector.ItemsSource = Sessions;
         
@@ -131,21 +139,31 @@ public partial class ChatPanel : UserControl
 
         _historyService.Save(_currentSession);
 
+        // Idle timeout: cancel only after a stretch of NO activity (no streamed text, no tool
+        // calls). Long agentic runs -- e.g. scanning a big modlist through Claude Code + MCP --
+        // can take far longer than any fixed cap, so a flat timeout wrongly killed them. As long
+        // as output or tool activity keeps arriving, the run continues; the Stop button and this
+        // idle window still guarantee a truly stuck model never freezes the chat forever.
+        // Claude Code's text mode can run silently for several minutes on a big task (it streams
+        // only the final answer), so keep the idle window generous. The Stop button and the live
+        // activity strip (spinner + elapsed timer) cover a genuinely stuck run.
+        var idle = TimeSpan.FromMinutes(15);
+        var cts = new System.Threading.CancellationTokenSource(idle);
+        _cts = cts;
+
         bool started = false;
         void Append(string chunk)
         {
-            if (!started) { started = true; reply.Text = ""; aiMsg.Text = ""; }
+            cts.CancelAfter(idle);   // reset the idle window on activity
+            if (!started) { started = true; reply.Text = ""; aiMsg.Text = ""; SetStatusBase($"{providerLabel} is writing…"); }
             reply.Text += chunk;
             aiMsg.Text += chunk;
             Scroll.ScrollToEnd();
         }
-        void Status(string s) => reply.Text = $"_{s}_";
+        void Status(string s) { cts.CancelAfter(idle); reply.Text = $"_{s}_"; SetStatusBase(s); }
 
-        // Cancellation: a 4-minute hard timeout plus the Stop button, so a stuck model
-        // (no response, a hung tool call, etc.) never freezes the chat forever.
-        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMinutes(4));
-        _cts = cts;
         SetSending(true);
+        SetStatusBase($"{providerLabel} is thinking…");
 
         try
         {
@@ -184,10 +202,13 @@ public partial class ChatPanel : UserControl
                     onText: chunk => Dispatcher.BeginInvoke(() => Append(chunk)),
                     onToolStatus: status => Dispatcher.BeginInvoke(() =>
                     {
+                        SetStatusBase($"{providerLabel} is working — {status}");
                         if (!started) Status($"Using {status}…");
                         else Append($"\n🔧 {status}\n");
                     }),
-                    ct: cts.Token);
+                    ct: cts.Token,
+                    onUsage: usage => Dispatcher.BeginInvoke(() =>
+                        _shell.Log.Log(LogCategory.AI, LogLevel.Info, usage)));
             }
             else
             {
@@ -228,7 +249,22 @@ public partial class ChatPanel : UserControl
     {
         SendBtn.Visibility = sending ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
         StopBtn.Visibility = sending ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
+        StatusStrip.Visibility = sending ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        if (sending)
+        {
+            _sendStart = DateTime.Now;
+            ElapsedText.Text = "0s";
+            _statusTimer.Start();
+        }
+        else
+        {
+            _statusTimer.Stop();
+        }
     }
+
+    /// <summary>Set the activity-strip headline (e.g. "Claude is thinking…", "… is working — get_record").</summary>
+    private void SetStatusBase(string text) => StatusText.Text = text;
 
     private void Stop_Click(object sender, System.Windows.RoutedEventArgs e) => _cts?.Cancel();
 

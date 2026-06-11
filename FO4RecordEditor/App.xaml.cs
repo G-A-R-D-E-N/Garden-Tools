@@ -1,14 +1,50 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Wpf.Ui.Appearance;
 
 namespace FO4RecordEditor;
 
 public partial class App : Application
 {
+    // Startup trace + crash log land next to the exe, with an AppData fallback if that folder
+    // is read-only (e.g. under an MO2 mod folder). The first writable location wins.
+    private static readonly string[] LogCandidates =
+    {
+        Path.Combine(AppContext.BaseDirectory, "FO4RecordEditor.startup.log"),
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "FO4RecordEditor", "startup.log"),
+    };
+
+    private static string? _logPath;
+
+    static App()
+    {
+        // Earliest possible hook: catches exceptions thrown while App.xaml resources load
+        // (InitializeComponent), which happens before OnStartup runs.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            LogCrash("AppDomain", e.ExceptionObject as Exception);
+        Trace("=== FO4RecordEditor launching ===");
+        Trace($"BaseDirectory: {AppContext.BaseDirectory}");
+        Trace($"WorkingDirectory: {Environment.CurrentDirectory}");
+    }
+
+    public App()
+    {
+        Trace("App() constructed");
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        Trace("OnStartup begin");
+        DispatcherUnhandledException += (_, ev) => { LogCrash("Dispatcher", ev.Exception); ev.Handled = true; };
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException +=
+            (_, ev) => { LogCrash("UnobservedTask", ev.Exception); ev.SetObserved(); };
+
         base.OnStartup(e);
+        Trace("base.OnStartup done");
 
         // Fluent dark theme + keep the project's teal accent (instead of the system accent).
         ApplicationThemeManager.Apply(
@@ -18,5 +54,38 @@ public partial class App : Application
         ApplicationAccentColorManager.Apply(
             Color.FromRgb(0x00, 0xA8, 0xA8),   // teal accent
             ApplicationTheme.Dark);
+        Trace("theme applied -- startup OK");
+    }
+
+    /// <summary>Appends a timestamped breadcrumb to the startup log (best-effort, never throws).</summary>
+    internal static void Trace(string message)
+    {
+        var line = $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}";
+        if (_logPath != null) { try { File.AppendAllText(_logPath, line); } catch { } return; }
+
+        foreach (var path in LogCandidates)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.AppendAllText(path, line);
+                _logPath = path;
+                return;
+            }
+            catch { /* try next candidate */ }
+        }
+    }
+
+    private static void LogCrash(string source, Exception? ex)
+    {
+        Trace($"!!! Unhandled {source} exception:{Environment.NewLine}{ex}{Environment.NewLine}{new string('-', 80)}");
+        try
+        {
+            MessageBox.Show(
+                $"FO4RecordEditor hit an unhandled error.\n\n{ex?.Message}\n\n" +
+                $"Details written to:\n{_logPath ?? "(could not write log)"}",
+                "FO4RecordEditor — Crash", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch { /* UI may be gone; the log is the source of truth */ }
     }
 }

@@ -23,6 +23,7 @@ public partial class SettingsDialog : Window
         OutputFolderBox.Text = string.IsNullOrWhiteSpace(s.OutputFolder)
             ? FO4RecordEditor.Services.WriteService.DefaultOutputDir   // show the effective default
             : s.OutputFolder;
+        DataFolderBox.Text = s.DataFolder;
 
         SelectProvider(s.AiProvider);
         UpdatePanels();
@@ -89,6 +90,13 @@ public partial class SettingsDialog : Window
         if (dlg.ShowDialog() == true) OutputFolderBox.Text = dlg.FolderName;
     }
 
+    private void BrowseData_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Choose the game Data folder to load plugins from" };
+        if (!string.IsNullOrWhiteSpace(DataFolderBox.Text)) dlg.InitialDirectory = DataFolderBox.Text;
+        if (dlg.ShowDialog() == true) DataFolderBox.Text = dlg.FolderName;
+    }
+
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         var s = _shell.Settings.Current;
@@ -99,6 +107,7 @@ public partial class SettingsDialog : Window
         s.OllamaUrl = OllamaUrlBox.Text;
         s.OllamaModel = OllamaModelBox.Text;
         s.OutputFolder = OutputFolderBox.Text;
+        s.DataFolder = DataFolderBox.Text.Trim();
 
         _shell.Settings.Save();
         _shell.RebuildProvider();

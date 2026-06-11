@@ -210,6 +210,21 @@ public sealed class PluginToolExecutor
     public static object[] ToolDefinitions() =>
         _specs.Select(t => (object)new { name = t.Name, description = t.Description, input_schema = t.Schema }).ToArray();
 
+    /// <summary>
+    /// Tool definitions with a prompt-cache breakpoint on the LAST tool. Tools render before the
+    /// system prompt and never change, so this caches the whole tool prefix across every request —
+    /// the cached tokens then cost ~0.1x. cache_control is null (dropped by WhenWritingNull) on the
+    /// others.
+    /// </summary>
+    public static object[] ToolDefinitionsCached() =>
+        _specs.Select((t, i) => (object)new
+        {
+            name = t.Name,
+            description = t.Description,
+            input_schema = t.Schema,
+            cache_control = i == _specs.Length - 1 ? new { type = "ephemeral" } : null,
+        }).ToArray();
+
     /// <summary>MCP tool format (inputSchema) for the Claude Code MCP server.</summary>
     public static object[] McpToolDefinitions() =>
         _specs.Select(t => (object)new { name = t.Name, description = t.Description, inputSchema = t.Schema }).ToArray();

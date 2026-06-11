@@ -17,6 +17,26 @@ public sealed class RecordTabViewModel
     /// <summary>Plugins that touch this record, in load order (last = winner). One entry = no conflict.</summary>
     public IReadOnlyList<string> Plugins { get; }
 
+    /// <summary>The plugin whose version is currently winning -- the one a patch forwards + edits.</summary>
+    public string SourcePlugin =>
+        Plugins.Count > 0 ? Plugins[^1] : (Record.Parent?.Parent?.Key ?? "");
+
+    /// <summary>Forward this record into <paramref name="patchPlugin"/> and write the grid edits onto it.</summary>
+    public string SaveToPatch(string patchPlugin) =>
+        FO4RecordEditor.Services.WriteService.SaveRecordEditsToPatch(_env, Record, SourcePlugin, patchPlugin);
+
+    /// <summary>True when more than one plugin overrides this record (a real conflict set).</summary>
+    public bool HasConflicts => Plugins.Count(p => !string.IsNullOrEmpty(p)) > 1;
+
+    /// <summary>The xEdit-style conflict matrix for this record (null if it has no FormKey/env).</summary>
+    public Models.ConflictMatrix? BuildConflicts()
+    {
+        var fk = Record.GetValue("FormKey");
+        return string.IsNullOrEmpty(fk)
+            ? null
+            : FO4RecordEditor.Services.MutagenLoader.BuildConflictMatrix(_env, fk);
+    }
+
     public RecordTabViewModel(RecordNode record, UndoStack undo, object? env = null)
     {
         Record = record;

@@ -44,6 +44,51 @@ public static class MutagenLoader
     // to get_record (hot loading). WriteService registers entries here.
     public static readonly Dictionary<string, object> EditableMods = new(StringComparer.OrdinalIgnoreCase);
 
+    // Link cache for the currently loaded environment. Set when an env is built (env load /
+    // MO2 profile). Used to resolve FormLinks to human-readable names (EditorID + FULL name)
+    // in the field walker, so the UI shows `c_Gears "Gear" [...]` instead of a bare FormID.
+    public static Mutagen.Bethesda.Plugins.Cache.ILinkCache? LinkCache;
+
+    // Cache of the per-type "Name" property (FULL) used to label resolved FormLinks.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, PropertyInfo?> _nameProp = new();
+
+    /// <summary>
+    /// Render a FormLink as xEdit-style `EditorID "FullName" [FormID:File]`, resolving the
+    /// target through the load order's link cache. Falls back to the raw FormKey when the
+    /// target can't be resolved (no env loaded, or a dangling/unmastered reference).
+    /// </summary>
+    internal static string FormatFormLink(Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli)
+    {
+        var fk = fli.FormKey;
+        if (fk.IsNull) return "Null";
+        var fkStr = fk.ToString();
+
+        var cache = LinkCache;
+        if (cache == null) return fkStr;
+        try
+        {
+            if (!cache.TryResolve(fk, out var rec)) return fkStr;
+
+            var eid = rec.EditorID ?? "";
+            string name = rec is Mutagen.Bethesda.Plugins.Aspects.INamedGetter named ? named.Name ?? "" : "";
+            if (name.Length == 0)
+            {
+                var np = _nameProp.GetOrAdd(rec.GetType(), t => t.GetProperty("Name"));
+                if (np != null) name = np.GetValue(rec)?.ToString() ?? "";
+            }
+
+            var label = (eid, name) switch
+            {
+                ("", "") => "",
+                (_, "")  => eid,
+                ("", _)  => $"\"{name}\"",
+                _        => $"{eid} \"{name}\"",
+            };
+            return label.Length > 0 ? $"{label} [{fkStr}]" : fkStr;
+        }
+        catch { return fkStr; }
+    }
+
     // ---- per-mod record index (built once, reused for every group/record load) ----
     // Without this, every group expansion re-enumerated the ENTIRE mod (O(allRecords)
     // per group), which hangs on large masters like Fallout4.esm.
@@ -156,11 +201,19 @@ public static class MutagenLoader
     // Build the game environment and list its plugins WITHOUT creating tree nodes, so the
     // caller can let the user choose which plugins to load.
     public static (object env, List<string> plugins) BuildEnvironment(
-        IProgress<(string message, double? percent)>? progress = null)
+        IProgress<(string message, double? percent)>? progress = null,
+        string? dataFolderOverride = null)
     {
         progress?.Report(("Initializing Game Environment...", 0));
         _modIndexCache.Clear();
-        var env = GameEnvironment.Typical.Builder<IFallout4Mod, IFallout4ModGetter>(GameRelease.Fallout4).Build();
+        var builder = GameEnvironment.Typical.Builder<IFallout4Mod, IFallout4ModGetter>(GameRelease.Fallout4);
+        if (!string.IsNullOrWhiteSpace(dataFolderOverride))
+        {
+            progress?.Report(($"Using data folder: {dataFolderOverride}", null));
+            builder = builder.WithTargetDataFolder(new Noggog.DirectoryPath(dataFolderOverride));
+        }
+        var env = builder.Build();
+        LinkCache = env.LinkCache;
 
         var plugins = new List<string>();
         foreach (var l in env.LoadOrder.ListedOrder)
@@ -697,6 +750,25 @@ public static class MutagenLoader
             return;
         }
 
+        // A FormLink is a LEAF wherever it appears -- including as a list item (e.g. COBJ
+        // Categories). Without this, walking the item recurses into its CLR internals
+        // (FormKey, then .Type -> System.Type -> Assembly -> the whole framework graph),
+        // which produced hundreds of bogus "Type.Assembly.Defined..." rows.
+        if (obj is Mutagen.Bethesda.Plugins.IFormLinkIdentifier topLink)
+        {
+            if (parent.IsLeaf) parent.Values[pluginName] = FormatFormLink(topLink);
+            return;
+        }
+
+        // Never descend into CLR/reflection metadata. Record any such value as a single string.
+        if (obj is Type || obj is System.Reflection.MemberInfo || obj is System.Reflection.Assembly
+            || obj is System.Reflection.Module || obj is System.Reflection.ParameterInfo
+            || (type.Namespace ?? "").StartsWith("System.Reflection", StringComparison.Ordinal))
+        {
+            if (parent.IsLeaf) parent.Values[pluginName] = obj.ToString() ?? "";
+            return;
+        }
+
         // Cycle guard
         if (!Visiting.Add(obj)) return;
         try
@@ -738,7 +810,7 @@ public static class MutagenLoader
                 }
                 else if (val is Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli)
                 {
-                    child.Values[pluginName] = fli.FormKey.ToString();
+                    child.Values[pluginName] = FormatFormLink(fli);
                 }
                 else if (val is IEnumerable enumerable and not string)
                 {

@@ -144,8 +144,12 @@ public sealed class ShellViewModel
         _isLoadingEsp = true;
         try
         {
-            Log.Log(LogCategory.App, LogLevel.Info, "Building Load Order environment...");
-            var (env, plugins) = await Task.Run(() => MutagenLoader.BuildEnvironment(progress));
+            var dataFolder = Settings.Current.DataFolder;
+            Log.Log(LogCategory.App, LogLevel.Info,
+                string.IsNullOrWhiteSpace(dataFolder)
+                    ? "Building Load Order environment (auto-detect / MO2 VFS)..."
+                    : $"Building Load Order environment from data folder: {dataFolder}");
+            var (env, plugins) = await Task.Run(() => MutagenLoader.BuildEnvironment(progress, dataFolder));
             GameEnvironment = env;
             Log.Log(LogCategory.App, LogLevel.Info, $"Environment ready: {plugins.Count} plugins.");
             return plugins;
@@ -153,6 +157,37 @@ public sealed class ShellViewModel
         catch (Exception ex)
         {
             Log.Log(LogCategory.App, LogLevel.Error, $"Environment load failed: {ex.Message}");
+            return new();
+        }
+        finally
+        {
+            _isLoadingEsp = false;
+        }
+    }
+
+    // Load a Mod Organizer 2 modlist by reading its profile from disk (the editor can't run
+    // inside MO2's usvfs). Returns the ordered plugin list; the caller picks which to load.
+    public async Task<List<string>> LoadMo2ProfileAsync(
+        string instancePath, IProgress<(string message, double? percent)>? progress = null)
+    {
+        if (_isLoadingEsp) return new();
+        _isLoadingEsp = true;
+        try
+        {
+            var info = Mo2ProfileLoader.ReadInstanceInfo(instancePath);
+            Log.Log(LogCategory.App, LogLevel.Info,
+                $"Loading MO2 profile '{info.Profile}' from {instancePath} (data: {info.GameDataFolder})...");
+            var (env, plugins) = await Task.Run(() =>
+                Mo2ProfileLoader.Load(instancePath, info.Profile, info.GameDataFolder, progress));
+            GameEnvironment = env;
+            Settings.Current.Mo2InstancePath = instancePath;
+            Settings.Save();
+            Log.Log(LogCategory.App, LogLevel.Info, $"MO2 environment ready: {plugins.Count} plugins.");
+            return plugins;
+        }
+        catch (Exception ex)
+        {
+            Log.Log(LogCategory.App, LogLevel.Error, $"MO2 profile load failed: {ex.Message}");
             return new();
         }
         finally

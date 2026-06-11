@@ -489,7 +489,10 @@ public static class WriteService
     private static bool AddOverride(IFallout4Mod mod, IMajorRecordGetter getter)
     {
         if (_groupOverrideMixin == null) return false;
-        var setterType = getter.Registration.SetterType;
+        // Match the mod's typed group by the record's GETTER type: the group's generic argument
+        // is the CONCRETE record class (e.g. ConstructibleObject), which implements the getter
+        // interface (IConstructibleObjectGetter). Registration.SetterType is the *interface*, so
+        // comparing against it never matched the concrete group arg -- that was the bug.
         var getterType = getter.Registration.GetterType;
 
         foreach (var prop in mod.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
@@ -497,20 +500,113 @@ public static class WriteService
             var pt = prop.PropertyType;
             if (!pt.IsGenericType) continue;
             var args = pt.GetGenericArguments();
-            if (args.Length != 1 || args[0] != setterType) continue;
+            if (args.Length != 1) continue;
+            var groupMajor = args[0];                              // concrete record class
+            if (!getterType.IsAssignableFrom(groupMajor)) continue;
 
             var group = prop.GetValue(mod);
-            if (group == null) continue;
+            if (group is not Mutagen.Bethesda.Plugins.Records.IGroup) continue;
 
-            _groupOverrideMixin.MakeGenericMethod(setterType, getterType)
-                .Invoke(null, new[] { group, getter });
-            return true;
+            try
+            {
+                _groupOverrideMixin.MakeGenericMethod(groupMajor, getterType)
+                    .Invoke(null, new[] { group, getter });
+                return true;
+            }
+            catch { /* try another candidate group */ }
         }
         return false;
     }
 
     /// <summary>Plugins currently open for editing (candidates for a conflict patch target).</summary>
     public static IReadOnlyList<string> EditablePlugins() => _mutable.Keys.ToList();
+
+    /// <summary>
+    /// Persist the in-grid edits of one record into a patch plugin: forward the record's current
+    /// (winning) version into the patch as an override, apply every edited field from the display
+    /// tree onto that override, and write the patch to disk. Returns a human-readable result.
+    /// </summary>
+    public static string SaveRecordEditsToPatch(
+        object? env, Models.RecordNode record, string sourcePlugin, string patchPlugin)
+    {
+        var fkStr = record.GetValue("FormKey");
+        if (fkStr == null || !FormKey.TryFactory(fkStr, out var fk))
+            return "This record has no FormKey to patch.";
+        if (string.IsNullOrWhiteSpace(patchPlugin)) return "Enter a patch plugin name.";
+        if (!patchPlugin.EndsWith(".esp", StringComparison.OrdinalIgnoreCase) &&
+            !patchPlugin.EndsWith(".esm", StringComparison.OrdinalIgnoreCase) &&
+            !patchPlugin.EndsWith(".esl", StringComparison.OrdinalIgnoreCase))
+            patchPlugin += ".esp";
+
+        var dirtyLeaves = record.Descendants().Where(n => n.IsDirty && n.IsLeaf).ToList();
+        if (dirtyLeaves.Count == 0) return "No field edits to save — change a value first.";
+
+        // 1. Forward the winning version into the patch as a mutable override.
+        var forward = ResolveConflict(env, fkStr, sourcePlugin, patchPlugin);
+        var patch = GetMutable(patchPlugin);
+        if (patch == null) return forward;   // ResolveConflict already explained the failure
+
+        var rec = FindMutableRecord(patch, fkStr);
+        if (rec == null) return $"Could not locate {fk} in the patch after forwarding it. ({forward})";
+
+        // 2. Apply each edited field onto the override by its tree path.
+        int applied = 0; var failures = new List<string>();
+        foreach (var leaf in dirtyLeaves)
+        {
+            var segments = PathSegments(record, leaf);
+            if (segments.Count == 0) continue;
+            if (SetFieldByPath(rec, segments, leaf.Value, env, out var err)) applied++;
+            else failures.Add($"{string.Join(".", segments)}: {err}");
+        }
+
+        // 3. Write the patch (Output folder by default).
+        MutagenLoader.InvalidateModIndex(patchPlugin);
+        var save = SavePlugin(patchPlugin, null);
+        record.ClearDirty();
+
+        var msg = $"Applied {applied} edit(s) to {patchPlugin} and saved. {save} " +
+                  $"Enable {patchPlugin} AFTER the conflicting plugins so it wins.";
+        if (failures.Count > 0)
+            msg += $"\n{failures.Count} field(s) could not be applied: {string.Join("; ", failures.Take(5))}";
+        return msg;
+    }
+
+    // The display-tree path from the record root down to a leaf, e.g. ["Components","[0]","Count"].
+    private static List<string> PathSegments(Models.RecordNode root, Models.RecordNode leaf)
+    {
+        var segs = new List<string>();
+        for (var n = leaf; n != null && !ReferenceEquals(n, root); n = n.Parent)
+            segs.Add(n.Key);
+        segs.Reverse();
+        return segs;
+    }
+
+    // Navigate property names and list indices ("[i]") to the leaf's owner, then set it.
+    // Mirrors SetLeaf's scalar/FormLink handling, but reaches into lists (components, etc.).
+    private static bool SetFieldByPath(object rec, List<string> segments, string value, object? env, out string msg)
+    {
+        msg = "";
+        object cur = rec;
+        for (int i = 0; i < segments.Count - 1; i++)
+        {
+            var seg = segments[i];
+            if (seg.Length > 2 && seg[0] == '[' && seg[^1] == ']' && int.TryParse(seg[1..^1], out var idx))
+            {
+                if (cur is not System.Collections.IList list) { msg = $"'{segments[i - 1]}' is not an indexable list."; return false; }
+                if (idx < 0 || idx >= list.Count) { msg = $"index {idx} out of range ({list.Count})."; return false; }
+                cur = list[idx]!;
+            }
+            else
+            {
+                var p = cur.GetType().GetProperty(seg, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (p == null) { msg = $"no field '{seg}' on {cur.GetType().Name}."; return false; }
+                var next = p.CanRead ? p.GetValue(cur) : null;
+                if (next == null) { msg = $"'{seg}' is null and can't be edited."; return false; }
+                cur = next;
+            }
+        }
+        return SetLeaf(cur, segments[^1], value, env, out msg);
+    }
 
     // ---- helpers --------------------------------------------------------
 

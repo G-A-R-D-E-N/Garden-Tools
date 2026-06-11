@@ -15,6 +15,7 @@
     <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#2D2D30">
       <Button Content="Open ESP" Click="OpenEsp_Click" Style="{StaticResource ActivityBtn}" Width="56" Height="24" FontSize="11"/>
       <Button Content="Load Env" Click="LoadEnv_Click" Style="{StaticResource ActivityBtn}" Width="56" Height="24" FontSize="11"/>
+      <Button Content="Open MO2" Click="OpenMo2_Click" Style="{StaticResource ActivityBtn}" Width="64" Height="24" FontSize="11" ToolTip="Load a Mod Organizer 2 modlist directly from its profile (no MO2 needed)"/>
       <Button Content="Errors" Click="ScanErrorsBtn_Click" Style="{StaticResource ActivityBtn}" Width="48" Height="24" FontSize="11" ToolTip="Scan selected plugin for crash-causing errors"/>
       <Button Content="Conflicts" Click="ScanConflictsBtn_Click" Style="{StaticResource ActivityBtn}" Width="56" Height="24" FontSize="11" ToolTip="Scan selected plugin for conflicts"/>
     </StackPanel>

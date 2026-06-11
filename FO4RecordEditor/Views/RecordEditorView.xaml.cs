@@ -12,9 +12,12 @@ public partial class RecordEditorView : UserControl
     private static readonly Brush HeaderWinner = Brush("#FFB86B");  // last / winner
     private static readonly Brush HeaderMid    = Brush("#D4D4D4");
 
+    private readonly RecordTabViewModel _tab;
+
     public RecordEditorView(RecordTabViewModel tab)
     {
         InitializeComponent();
+        _tab = tab;
 
         // One column per plugin that touches the record (xEdit-style). Single plugin = one
         // editable "Value" column; multiple plugins = read-only conflict columns, coloured per cell.
@@ -44,11 +47,15 @@ public partial class RecordEditorView : UserControl
                 Width = new DataGridLength(1, DataGridLengthUnitType.Star),
             };
 
-            var bindingPath = string.IsNullOrEmpty(plugin) ? "Node.Value" : $"Node.Values[{plugin}]";
+            // The winner column is the editable one (its value == Node.Value), so edits there
+            // flow into the dirty-tracked tree and can be written to a patch. Other conflict
+            // columns are read-only reference views of each plugin's version.
+            bool editable = !conflict || isWinner;
+            var bindingPath = (editable) ? "Node.Value" : $"Node.Values[{plugin}]";
             var text = new FrameworkElementFactory(typeof(TextBox));
             text.SetBinding(TextBox.TextProperty, new Binding(bindingPath)
             {
-                Mode = conflict ? BindingMode.OneWay : BindingMode.TwoWay,
+                Mode = editable ? BindingMode.TwoWay : BindingMode.OneWay,
                 UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
             });
             // Per-cell xEdit colour: bind the row itself, pass the column index as parameter.
@@ -65,8 +72,8 @@ public partial class RecordEditorView : UserControl
             text.SetValue(TextBox.BorderThicknessProperty, new Thickness(0));
             text.SetValue(TextBox.PaddingProperty, new Thickness(4, 2, 4, 2));
             text.SetValue(TextBox.FontFamilyProperty, new FontFamily("Consolas"));
-            // Read-only for compound (header) rows always, and for every column in conflict view.
-            if (conflict)
+            // Compound (header) rows are never editable; non-winner conflict columns are read-only.
+            if (!editable)
                 text.SetValue(TextBox.IsReadOnlyProperty, true);
             else
                 text.SetBinding(TextBox.IsReadOnlyProperty, new Binding("IsCompound"));
@@ -84,6 +91,89 @@ public partial class RecordEditorView : UserControl
         }
 
         FieldList.ItemsSource = tab.FieldsView;
+
+        // Conflicted records open straight to the Conflicts tab (xEdit-style); otherwise the
+        // tab still exists but shows "no conflict". The matrix is built lazily on first view.
+        if (tab.HasConflicts) ViewTabs.SelectedItem = ConflictsTab;
+    }
+
+    private bool _conflictsBuilt;
+    private System.Collections.Generic.IReadOnlyList<Models.ConflictFieldRow> _conflictRows =
+        System.Array.Empty<Models.ConflictFieldRow>();
+
+    private void ViewTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (e.OriginalSource != ViewTabs) return;   // ignore inner-grid selection bubbling
+        if (ReferenceEquals(ViewTabs.SelectedItem, ConflictsTab)) BuildConflictsOnce();
+    }
+
+    private void BuildConflictsOnce()
+    {
+        if (_conflictsBuilt) return;
+        _conflictsBuilt = true;
+
+        var matrix = _tab.BuildConflicts();
+        if (matrix == null)
+        {
+            ConflictSummary.Text = "No conflict data for this record.";
+            return;
+        }
+
+        // Field column + one column per plugin, bound to Values[i] so any number of conflicting
+        // plugins (5, 10, …) render — not just a fixed few. Plugin columns get a sensible min
+        // width and horizontally scroll when they don't all fit.
+        ConflictGrid.Columns.Add(new DataGridTextColumn
+        {
+            Header = "Field",
+            Binding = new System.Windows.Data.Binding(nameof(Models.ConflictFieldRow.Field)),
+            Width = 260,
+        });
+        for (int i = 0; i < matrix.Plugins.Count; i++)
+        {
+            bool isWinner = i == matrix.Plugins.Count - 1;
+            ConflictGrid.Columns.Add(new DataGridTextColumn
+            {
+                Header = matrix.Plugins[i] + (isWinner && matrix.Plugins.Count > 1 ? "  ◀ winner" : ""),
+                Binding = new System.Windows.Data.Binding($"Values[{i}]"),
+                Width = new DataGridLength(220),
+                MinWidth = 140,
+            });
+        }
+
+        _conflictRows = matrix.Rows;
+        ApplyConflictFilter();
+
+        int diffs = 0;
+        foreach (var r in matrix.Rows) if (r.Differs) diffs++;
+        ConflictSummary.Text = matrix.Plugins.Count > 1
+            ? $"{matrix.EditorID} [{matrix.FormKey}] {matrix.Type}   |   {matrix.Plugins.Count} plugins   |   winner: {matrix.Winner}   |   {diffs} field(s) differ"
+            : $"No conflict — defined only in {matrix.Winner}.";
+    }
+
+    private void DiffOnly_Changed(object sender, RoutedEventArgs e) => ApplyConflictFilter();
+
+    private void ApplyConflictFilter()
+    {
+        if (ConflictGrid == null) return;
+        ConflictGrid.ItemsSource = DiffOnly.IsChecked == true
+            ? _conflictRows.Where(r => r.Differs).ToList()
+            : _conflictRows;
+    }
+
+    private void SaveToPatch_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var result = _tab.SaveToPatch(PatchName.Text.Trim());
+            PatchStatus.Text = result;
+            PatchStatus.Foreground = result.Contains("could not", StringComparison.OrdinalIgnoreCase)
+                ? Brush("#E0B060") : Brush("#7FB37F");
+        }
+        catch (System.Exception ex)
+        {
+            PatchStatus.Text = $"Save failed: {ex.Message}";
+            PatchStatus.Foreground = Brush("#E06060");
+        }
     }
 
     private void BuildBanner(RecordTabViewModel tab, List<string> plugins, bool conflict)
