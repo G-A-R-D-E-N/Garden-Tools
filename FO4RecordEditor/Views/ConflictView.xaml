@@ -1,12 +1,14 @@
 <Window x:Class="FO4RecordEditor.Views.ConflictView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:FO4RecordEditor.Views"
         Title="Conflict Resolver" Height="820" Width="1320"
         Background="#1E1E1E" Foreground="#D4D4D4" WindowStartupLocation="CenterOwner">
   <Window.Resources>
+    <views:ConflictCellBrush x:Key="CellBrush"/>
     <Style x:Key="Dark" TargetType="ComboBox">
       <Setter Property="Background" Value="#252526"/>
-      <Setter Property="Foreground" Value="#1E1E1E"/>
+      <Setter Property="Foreground" Value="#CCCCCC"/>
       <Setter Property="MinWidth" Value="150"/>
     </Style>
   </Window.Resources>
@@ -41,8 +43,8 @@
 
       <DataGrid Grid.Row="2" x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True"
                 CanUserAddRows="False" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
-                Background="#181818" Foreground="#D4D4D4" RowBackground="#1E1E1E" AlternatingRowBackground="#1B1B1B"
-                BorderBrush="#3F3F46" FontFamily="Consolas" FontSize="12" SelectionMode="Single"
+                Background="#1E1E1E" Foreground="#CCCCCC" RowBackground="#1E1E1E" AlternatingRowBackground="#1E1E1E"
+                BorderBrush="#2B2B2B" FontFamily="Consolas" FontSize="12" SelectionMode="Single"
                 SelectionChanged="Grid_SelectionChanged">
         <DataGrid.ContextMenu>
           <ContextMenu>
@@ -61,7 +63,7 @@
       </DataGrid>
     </Grid>
 
-    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#2D2D30"/>
+    <GridSplitter Grid.Column="1" Width="2" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#2B2B2B"/>
 
     <!-- ============ RIGHT: field-level detail + resolution ============ -->
     <Grid Grid.Column="2" Margin="6,0,0,0">
@@ -83,23 +85,22 @@
       <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,6">
         <CheckBox x:Name="DiffOnly" Content="Only differing fields" IsChecked="True" Foreground="#D4D4D4"
                   VerticalAlignment="Center" Checked="DiffOnly_Changed" Unchecked="DiffOnly_Changed"/>
-        <Border Background="#3A2A2A" Margin="16,0,0,0" Padding="6,1"><TextBlock Text="differs" Foreground="#E06060"/></Border>
-        <Border Background="#1E1E1E" Margin="6,0,0,0" Padding="6,1"><TextBlock Text="identical" Foreground="#7FB37F"/></Border>
+        <Border Background="#4A2626" Margin="16,0,0,0" Padding="6,1"><TextBlock Text="differs" Foreground="#F44747"/></Border>
+        <Border Background="#1E1E1E" Margin="6,0,0,0" Padding="6,1"><TextBlock Text="identical" Foreground="#89D185"/></Border>
         <TextBlock x:Name="FieldCount" VerticalAlignment="Center" Foreground="#888" Margin="16,0,0,0"/>
       </StackPanel>
 
       <!-- the xEdit-style matrix: Field column + one column per plugin (built in code) -->
       <DataGrid Grid.Row="2" x:Name="FieldGrid" AutoGenerateColumns="False" IsReadOnly="True"
                 CanUserAddRows="False" GridLinesVisibility="All" HeadersVisibility="Column"
-                Background="#181818" Foreground="#D4D4D4" RowBackground="#1E1E1E"
-                BorderBrush="#3F3F46" FontFamily="Consolas" FontSize="12"
+                Background="#1E1E1E" Foreground="#CCCCCC" RowBackground="#1E1E1E"
+                BorderBrush="#2B2B2B" FontFamily="Consolas" FontSize="12"
                 ColumnWidth="*" EnableRowVirtualization="True">
         <DataGrid.RowStyle>
           <Style TargetType="DataGridRow">
             <Style.Triggers>
               <DataTrigger Binding="{Binding Differs}" Value="True">
-                <Setter Property="Background" Value="#3A2424"/>
-                <Setter Property="Foreground" Value="#F0B0B0"/>
+                <Setter Property="Foreground" Value="#F44747"/>
               </DataTrigger>
             </Style.Triggers>
           </Style>

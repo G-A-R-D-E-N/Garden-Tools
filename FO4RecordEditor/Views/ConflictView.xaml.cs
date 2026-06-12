@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Media;
 using FO4RecordEditor.Models;
 using FO4RecordEditor.Services;
 
@@ -90,22 +91,47 @@ public partial class ConflictView : Window
             return;
         }
 
-        // Field column + one column per plugin (xEdit-style, columns vary per record).
-        FieldGrid.Columns.Add(new DataGridTextColumn
+        var cellBrush = (IValueConverter)Resources["CellBrush"];
+
+        var fieldText = new FrameworkElementFactory(typeof(TextBlock));
+        fieldText.SetBinding(TextBlock.TextProperty, new Binding(nameof(ConflictFieldRow.DisplayLabel)));
+        fieldText.SetBinding(TextBlock.MarginProperty, new Binding(nameof(ConflictFieldRow.Spacer)));
+        fieldText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+        fieldText.SetValue(TextBlock.PaddingProperty, new Thickness(6, 4, 6, 4));
+        FieldGrid.Columns.Add(new DataGridTemplateColumn
         {
             Header = "Field",
-            Binding = new Binding(nameof(ConflictFieldRow.Field)),
+            CellTemplate = new DataTemplate { VisualTree = fieldText },
             Width = new DataGridLength(2, DataGridLengthUnitType.Star),
         });
+
         int cols = Math.Min(_matrix.Plugins.Count, MaxPluginColumns);
         for (int i = 0; i < cols; i++)
         {
-            FieldGrid.Columns.Add(new DataGridTextColumn
+            var text = new FrameworkElementFactory(typeof(TextBlock));
+            text.SetBinding(TextBlock.TextProperty, new Binding($"V{i}"));
+            text.SetBinding(TextBlock.BackgroundProperty, new Binding
+            {
+                Converter = cellBrush,
+                ConverterParameter = i.ToString(),
+            });
+            text.SetValue(TextBlock.PaddingProperty, new Thickness(6, 4, 6, 4));
+
+            var col = new DataGridTemplateColumn
             {
                 Header = _matrix.Plugins[i],
-                Binding = new Binding($"V{i}"),
+                CellTemplate = new DataTemplate { VisualTree = text },
                 Width = new DataGridLength(3, DataGridLengthUnitType.Star),
-            });
+            };
+
+            var cellStyle = new Style(typeof(DataGridCell));
+            cellStyle.Setters.Add(new Setter(DataGridCell.PaddingProperty, new Thickness(0)));
+            cellStyle.Setters.Add(new Setter(DataGridCell.BorderThicknessProperty, new Thickness(0)));
+            cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, Brushes.Transparent));
+            cellStyle.Setters.Add(new Setter(DataGridCell.ForegroundProperty, Brushes.WhiteSmoke));
+            col.CellStyle = cellStyle;
+
+            FieldGrid.Columns.Add(col);
         }
 
         // Winner choices = the plugins that touch this record (default to current winner).

@@ -145,10 +145,11 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "type", "editorId" }
             }),
         new("set_field",
-            "Set a field on a record. Supports scalar/text fields (Name, Value, Weight, Description), FormLink references " +
-            "(pass a FormKey like '001234:Plugin.esp' or an EditorID of a loaded record), the mesh path " +
-            "(field 'Model' or 'nif' -> sets Model.File), and nested fields via dotted paths (e.g. 'Model.File'). " +
-            "Existing plugins are opened automatically.",
+            "Set a field on a record. Supports scalar/text fields (Name, Value, Weight, Description), booleans " +
+            "(pass 'true'/'false' to check/UNCHECK a flag), enums (pass the value name), FormLink references " +
+            "(a FormKey like '001234:Plugin.esp' or an EditorID), the mesh path ('Model'/'nif' -> Model.File), " +
+            "and NESTED/INDEXED paths: dotted ('Model.File') and array indices ('Effects[0].RunImmediately', " +
+            "'Components[0].Count', 'Conditions[1].Data.RunOnType'). Existing plugins are opened automatically.",
             new
             {
                 type = "object",

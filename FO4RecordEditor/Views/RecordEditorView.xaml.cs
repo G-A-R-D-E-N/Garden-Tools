@@ -123,27 +123,52 @@ public partial class RecordEditorView : UserControl
         // Field column + one column per plugin, bound to Values[i] so any number of conflicting
         // plugins (5, 10, …) render — not just a fixed few. Plugin columns get a sensible min
         // width and horizontally scroll when they don't all fit.
-        ConflictGrid.Columns.Add(new DataGridTextColumn
+        var cellBrush = (IValueConverter)Resources["CellBrush"];
+
+        var fieldText = new FrameworkElementFactory(typeof(TextBlock));
+        // Fall back to flat field name if we can't get a display label (e.g. from older code)
+        fieldText.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(Models.ConflictFieldRow.DisplayLabel))
+        {
+            FallbackValue = "Field", // Or we can just bind to DisplayLabel directly, MutagenLoader sets it
+        });
+        fieldText.SetBinding(TextBlock.MarginProperty, new System.Windows.Data.Binding(nameof(Models.ConflictFieldRow.Spacer)));
+        fieldText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+        fieldText.SetValue(TextBlock.PaddingProperty, new Thickness(6, 4, 6, 4));
+        ConflictGrid.Columns.Add(new DataGridTemplateColumn
         {
             Header = "Field",
-            // Friendly labels for top-level field names (e.g. "MarkerColor" -> "Marker Color");
-            // dotted/indexed paths pass through unchanged.
-            Binding = new System.Windows.Data.Binding(nameof(Models.ConflictFieldRow.Field))
-            {
-                Converter = new FriendlyNameConverter(),
-            },
+            CellTemplate = new DataTemplate { VisualTree = fieldText },
             Width = 260,
         });
+
         for (int i = 0; i < matrix.Plugins.Count; i++)
         {
             bool isWinner = i == matrix.Plugins.Count - 1;
-            ConflictGrid.Columns.Add(new DataGridTextColumn
+            var text = new FrameworkElementFactory(typeof(TextBlock));
+            text.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding($"Values[{i}]"));
+            text.SetBinding(TextBlock.BackgroundProperty, new System.Windows.Data.Binding
+            {
+                Converter = cellBrush,
+                ConverterParameter = i.ToString(),
+            });
+            text.SetValue(TextBlock.PaddingProperty, new Thickness(6, 4, 6, 4));
+
+            var col = new DataGridTemplateColumn
             {
                 Header = matrix.Plugins[i] + (isWinner && matrix.Plugins.Count > 1 ? "  ◀ winner" : ""),
-                Binding = new System.Windows.Data.Binding($"Values[{i}]"),
+                CellTemplate = new DataTemplate { VisualTree = text },
                 Width = new DataGridLength(220),
                 MinWidth = 140,
-            });
+            };
+
+            var cellStyle = new Style(typeof(DataGridCell));
+            cellStyle.Setters.Add(new Setter(DataGridCell.PaddingProperty, new Thickness(0)));
+            cellStyle.Setters.Add(new Setter(DataGridCell.BorderThicknessProperty, new Thickness(0)));
+            cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, Brushes.Transparent));
+            cellStyle.Setters.Add(new Setter(DataGridCell.ForegroundProperty, Brushes.WhiteSmoke));
+            col.CellStyle = cellStyle;
+
+            ConflictGrid.Columns.Add(col);
         }
 
         _conflictRows = matrix.Rows;

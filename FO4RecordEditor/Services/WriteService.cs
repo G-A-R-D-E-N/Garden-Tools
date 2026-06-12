@@ -998,31 +998,75 @@ public static class WriteService
             string.Equals(field, "nif", StringComparison.OrdinalIgnoreCase))
             field = "Model.File";
 
-        // Dotted path -> navigate into nested objects (e.g. "Model.File"), creating
-        // missing intermediate objects (like a null Model) where possible.
-        if (field.Contains('.'))
+        // Navigate a dotted/indexed path -- properties ("Model.File") AND list indices
+        // ("Effects[0].Data.RunImmediately", "Components[0].Count") -- creating missing
+        // intermediate objects where possible, then set the final leaf.
+        var segments = SplitFieldPath(field);
+        if (segments.Count == 0) { msg = "Empty field path."; return false; }
+
+        object cur = rec;
+        for (int i = 0; i < segments.Count - 1; i++)
         {
-            var parts = field.Split('.');
-            object cur = rec;
-            for (int i = 0; i < parts.Length - 1; i++)
+            var seg = segments[i];
+            if (TryIndex(seg, out var idx))
             {
-                var p = cur.GetType().GetProperty(parts[i],
-                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-                if (p == null) { msg = $"No field '{parts[i]}' on {cur.GetType().Name}."; return false; }
+                if (cur is not System.Collections.IList list)
+                { msg = $"'{(i > 0 ? segments[i - 1] : "value")}' is not an indexable list."; return false; }
+                if (idx < 0 || idx >= list.Count)
+                { msg = $"index {idx} is out of range (the list has {list.Count} item(s))."; return false; }
+                cur = list[idx]!;
+            }
+            else
+            {
+                var p = cur.GetType().GetProperty(seg, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (p == null) { msg = $"No field '{seg}' on {cur.GetType().Name}."; return false; }
                 var next = p.CanRead ? p.GetValue(cur) : null;
                 if (next == null)
                 {
                     var pt = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
                     try { next = System.Activator.CreateInstance(pt); } catch { next = null; }
-                    if (next == null || !p.CanWrite) { msg = $"Can't initialise '{parts[i]}'."; return false; }
+                    if (next == null || !p.CanWrite) { msg = $"Can't initialise '{seg}'."; return false; }
                     p.SetValue(cur, next);
                 }
                 cur = next;
             }
-            return SetLeaf(cur, parts[^1], value, env, out msg);
         }
 
-        return SetLeaf(rec, field, value, env, out msg);
+        var last = segments[^1];
+        if (TryIndex(last, out _))
+        {
+            msg = $"Address a field INSIDE the list element, e.g. '{field}.<Field>' -- setting a whole element by index isn't supported.";
+            return false;
+        }
+        return SetLeaf(cur, last, value, env, out msg);
+    }
+
+    // "[3]" -> 3. Returns false for property names.
+    private static bool TryIndex(string seg, out int idx)
+    {
+        idx = -1;
+        return seg.Length >= 3 && seg[0] == '[' && seg[^1] == ']' && int.TryParse(seg[1..^1], out idx);
+    }
+
+    // "Effects[0].Data.RunImmediately" -> ["Effects","[0]","Data","RunImmediately"].
+    private static List<string> SplitFieldPath(string field)
+    {
+        var segs = new List<string>();
+        foreach (var part in field.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int b = part.IndexOf('[');
+            if (b < 0) { segs.Add(part); continue; }
+            if (b > 0) segs.Add(part[..b]);            // the property name before the first '['
+            int j = b;
+            while (j < part.Length && part[j] == '[')   // one or more [n] indexers
+            {
+                int close = part.IndexOf(']', j);
+                if (close < 0) break;
+                segs.Add(part[j..(close + 1)]);
+                j = close + 1;
+            }
+        }
+        return segs;
     }
 
     private static bool SetLeaf(object rec, string field, string value, object? env, out string msg)

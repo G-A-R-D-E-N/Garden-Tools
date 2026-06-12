@@ -477,7 +477,13 @@ public static class MutagenLoader
 
         var plugins = versions.Select(v => v.plugin).ToList();
         var rows = new List<ConflictFieldRow>();
-        FlattenConflictRows(root, "", plugins, rows);
+        FlattenConflictRows(root, "", 0, plugins, rows);
+
+        var identityKeys = new[] { "EditorID", "TitleString", "FormKey", "Type", "_HasData" };
+        var orderedRows = rows.OrderBy(r => {
+            int idx = Array.IndexOf(identityKeys, r.Field);
+            return idx == -1 ? 999 : idx;
+        }).ToList();
 
         var last = versions[^1];
         return new ConflictMatrix
@@ -487,11 +493,11 @@ public static class MutagenLoader
             Type = last.rec.Registration.Name,
             Plugins = plugins,
             Winner = last.plugin,
-            Rows = rows,
+            Rows = orderedRows,
         };
     }
 
-    private static void FlattenConflictRows(RecordNode node, string path, List<string> plugins, List<ConflictFieldRow> rows)
+    private static void FlattenConflictRows(RecordNode node, string path, int depth, List<string> plugins, List<ConflictFieldRow> rows)
     {
         foreach (var child in node.Children)
         {
@@ -503,11 +509,11 @@ public static class MutagenLoader
                 var present = vals.Where(v => v.Length > 0).ToList();
                 bool anyMissing = present.Count < plugins.Count;
                 bool differs = present.Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
-                rows.Add(new ConflictFieldRow { Field = p, Values = vals, Differs = differs });
+                rows.Add(new ConflictFieldRow { Field = p, DisplayLabel = child.Key, Level = depth, Values = vals, Differs = differs });
             }
             // Summary nodes (conditions/components) show their one readable row and stop, so the
             // conflict grid is clean instead of dumping every ParameterOne*/Count/Component sub-row.
-            if (!child.IsSummary) FlattenConflictRows(child, p, plugins, rows);
+            if (!child.IsSummary) FlattenConflictRows(child, p, depth + 1, plugins, rows);
         }
     }
 

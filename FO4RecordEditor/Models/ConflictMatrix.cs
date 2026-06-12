@@ -21,6 +21,10 @@ public sealed class ConflictMatrix
 public sealed class ConflictFieldRow
 {
     public required string Field { get; init; }
+    public required string DisplayLabel { get; init; }
+    public required int Level { get; init; }
+    public System.Windows.Thickness Spacer => new System.Windows.Thickness(Level * 16, 0, 0, 0);
+
     /// <summary>Value per plugin, parallel to <see cref="ConflictMatrix.Plugins"/>. "" = not set.</summary>
     public required IReadOnlyList<string> Values { get; init; }
     public required bool Differs { get; init; }

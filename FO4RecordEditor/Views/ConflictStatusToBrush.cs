@@ -8,9 +8,9 @@ namespace FO4RecordEditor.Views;
 /// <summary>Colours tree text by conflict status: winner = orange, loser = red, else default.</summary>
 public sealed class ConflictStatusToBrush : IValueConverter
 {
-    private static readonly Brush Default = new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4));
-    private static readonly Brush Winner  = new SolidColorBrush(Color.FromRgb(0xE0, 0xA8, 0x5A));
-    private static readonly Brush Loser   = new SolidColorBrush(Color.FromRgb(0xE0, 0x60, 0x60));
+    private static readonly Brush Default = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC));
+    private static readonly Brush Winner  = new SolidColorBrush(Color.FromRgb(0xD7, 0xBA, 0x7D));
+    private static readonly Brush Loser   = new SolidColorBrush(Color.FromRgb(0xF4, 0x47, 0x47));
 
     static ConflictStatusToBrush()
     {

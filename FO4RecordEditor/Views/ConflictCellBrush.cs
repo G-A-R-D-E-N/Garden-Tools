@@ -24,27 +24,43 @@ public sealed class ConflictCellBrush : IValueConverter
     }
 
     private static readonly Brush Transparent = Brushes.Transparent;
-    private static readonly Brush Empty   = B("#181818");  // field not defined in this plugin
-    private static readonly Brush Green   = B("#1F3A24");  // identical across plugins
-    private static readonly Brush Yellow  = B("#3D3A18");  // override / addition, no conflict
-    private static readonly Brush Orange  = B("#4A3618");  // conflict winner
-    private static readonly Brush Purple  = B("#2E2340");  // master / earliest
-    private static readonly Brush Red     = B("#3E2020");  // conflict loser
+    private static readonly Brush Empty   = B("#1e1e1e");  // field not defined in this plugin
+    private static readonly Brush Green   = B("#234b23");  // identical across plugins
+    private static readonly Brush Yellow  = B("#5c5321");  // override / addition, no conflict
+    private static readonly Brush Orange  = B("#7b4b1a");  // conflict winner
+    private static readonly Brush Purple  = B("#412a63");  // master / earliest
+    private static readonly Brush Red     = B("#662222");  // conflict loser
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is not FieldRow row || !int.TryParse(parameter?.ToString(), out var i))
+        if (!int.TryParse(parameter?.ToString(), out var i))
             return Transparent;
 
-        var plugins = row.Plugins;
-        if (plugins.Count < 2 || i >= plugins.Count) return Transparent;
-        if (!row.Node.IsLeaf) return Transparent;   // compound headers: no fill
+        int totalPlugins;
+        List<string> vals;
 
-        var vals = plugins.Select(row.ValueFor).ToList();
+        if (value is FieldRow row)
+        {
+            totalPlugins = row.Plugins.Count;
+            if (totalPlugins < 2 || i >= totalPlugins) return Transparent;
+            if (!row.Node.IsLeaf) return Transparent;   // compound headers: no fill
+            vals = row.Plugins.Select(row.ValueFor).ToList();
+        }
+        else if (value is Models.ConflictFieldRow conflictRow)
+        {
+            totalPlugins = conflictRow.Values.Count;
+            if (totalPlugins < 2 || i >= totalPlugins) return Transparent;
+            vals = conflictRow.Values.ToList();
+        }
+        else
+        {
+            return Transparent;
+        }
+
         var present = vals.Where(s => s.Length > 0).ToList();
         if (present.Count == 0) return Transparent;
 
-        bool differs = present.Distinct().Count() > 1 || present.Count < plugins.Count;
+        bool differs = present.Distinct().Count() > 1 || present.Count < totalPlugins;
         var me = vals[i];
 
         if (!differs) return Green;          // every plugin agrees

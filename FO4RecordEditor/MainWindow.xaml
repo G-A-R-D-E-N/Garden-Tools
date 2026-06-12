@@ -41,7 +41,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Activity bar -->
-        <StackPanel Grid.Column="0" Background="#2D2D30">
+        <StackPanel Grid.Column="0" Background="#333333">
           <Button x:Name="BtnExplorer" ToolTip="Explorer" Click="ShowExplorer_Click" Style="{StaticResource ActivityBtn}">
             <ui:SymbolIcon Symbol="Folder24" FontSize="20"/>
           </Button>
@@ -61,27 +61,27 @@
 
         <!-- Side panel host (content swapped in code-behind) -->
         <ContentControl Grid.Column="1" x:Name="SidePanelHost" Background="#252526"/>
-        <GridSplitter Grid.Column="2" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+        <GridSplitter Grid.Column="2" Width="2" Background="#2B2B2B" HorizontalAlignment="Stretch"/>
 
         <!-- Center: tabbed record editor -->
         <TabControl Grid.Column="3" x:Name="CenterTabs" Background="#1E1E1E" BorderThickness="0"/>
 
-        <GridSplitter Grid.Column="4" Width="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+        <GridSplitter Grid.Column="4" Width="2" Background="#2B2B2B" HorizontalAlignment="Stretch"/>
 
         <!-- AI panel host -->
         <ContentControl Grid.Column="5" x:Name="AiPanelHost" Background="#202020"/>
       </Grid>
 
-      <GridSplitter Grid.Row="1" Height="5" Background="#3C3C3C" HorizontalAlignment="Stretch"/>
+      <GridSplitter Grid.Row="1" Height="2" Background="#2B2B2B" HorizontalAlignment="Stretch"/>
 
       <!-- Bottom tabs -->
       <TabControl Grid.Row="2" x:Name="BottomTabs" Background="#181818" BorderThickness="0"/>
 
       <!-- Status bar -->
-      <Border Grid.Row="3" Background="#007ACC" Padding="8,2" Height="24">
+      <Border Grid.Row="3" Background="#007ACC" Padding="10,0" Height="22">
         <Grid>
           <TextBlock x:Name="StatusLabel" Foreground="White" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" Text="Ready"/>
-          <ProgressBar x:Name="GlobalProgressBar" HorizontalAlignment="Right" Width="200" Height="14" Margin="0,0,10,0"
+          <ProgressBar x:Name="GlobalProgressBar" HorizontalAlignment="Right" Width="150" Height="10" Margin="0,0,10,0"
                        Visibility="Collapsed" Minimum="0" Maximum="100" IsIndeterminate="False"
                        Foreground="#FF00FF00" Background="#FF333333"/>
         </Grid>

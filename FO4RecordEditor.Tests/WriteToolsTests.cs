@@ -89,6 +89,28 @@ public class WriteToolsTests
     }
 
     [Fact]
+    public void SetField_SupportsArrayIndexPaths()
+    {
+        var name = $"WriteToolsIdx_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(name);
+        WriteService.CreateRecord(name, "COBJ", "FWTest_Idx", env: null);
+        WriteService.SetComponents(name, "FWTest_Idx",
+            """[{"component":"01FAA5:Fallout4.esm","count":1}]""", env: null);
+
+        // Index into the component list and set a nested scalar + FormLink (e.g. the shape of
+        // Effects[0].RunImmediately the AI couldn't reach before).
+        WriteService.SetField(name, "FWTest_Idx", "Components[0].Count", "9", env: null).Should().Contain("Set");
+        WriteService.SetField(name, "FWTest_Idx", "Components[0].Component", "1223C7:Fallout4.esm", env: null).Should().Contain("Set");
+
+        var cobj = WriteService.GetMutable(name)!.ConstructibleObjects.Single();
+        cobj.Components![0].Count.Should().Be(9u);
+        cobj.Components![0].Component.FormKey.Should().Be(FormKey.Factory("1223C7:Fallout4.esm"));
+
+        // Out-of-range index returns a friendly error instead of throwing.
+        WriteService.SetField(name, "FWTest_Idx", "Components[5].Count", "1", env: null).Should().Contain("out of range");
+    }
+
+    [Fact]
     public void DeleteRecord_RemovesTheStub()
     {
         var name = $"WriteToolsDel_{Guid.NewGuid():N}.esp";

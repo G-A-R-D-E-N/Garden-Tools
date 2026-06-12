@@ -28,10 +28,11 @@
         </Border>
 
         <DataGrid Grid.Row="1" x:Name="FieldList" AutoGenerateColumns="False" HeadersVisibility="Column"
-                CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None"
-                RowHeight="26" AlternationCount="2" AlternatingRowBackground="#1B1B1B"
-                Background="#1E1E1E" Foreground="#D4D4D4" RowBackground="#1E1E1E"
-                BorderBrush="#2A2A2A" BorderThickness="0"
+                CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="All"
+                RowHeight="26" AlternationCount="2" AlternatingRowBackground="#1E1E1E"
+                Background="#1E1E1E" Foreground="#CCCCCC" RowBackground="#1E1E1E"
+                BorderBrush="#2B2B2B" BorderThickness="0"
+                HorizontalGridLinesBrush="#2B2B2B" VerticalGridLinesBrush="#2B2B2B"
                 PreviewMouseRightButtonDown="FieldGrid_RightDown"
                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
         <DataGrid.ContextMenu>
@@ -46,7 +47,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Style.Triggers>
               <DataTrigger Binding="{Binding Differs}" Value="True">
-                <Setter Property="Background" Value="#2A1E1E"/>
+                <Setter Property="Background" Value="#4A2626"/>
               </DataTrigger>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="#2A2D2E"/>
@@ -120,15 +121,16 @@
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#252526" Margin="0" Height="34" VerticalAlignment="Center">
-          <CheckBox x:Name="DiffOnly" Content="Only differing fields" IsChecked="True" Foreground="#D4D4D4"
+          <CheckBox x:Name="DiffOnly" Content="Only differing fields" IsChecked="True" Foreground="#CCCCCC"
                     VerticalAlignment="Center" Margin="10,0,0,0" Checked="DiffOnly_Changed" Unchecked="DiffOnly_Changed"/>
-          <Border Background="#3A2A2A" Margin="16,0,0,0" Padding="6,1" VerticalAlignment="Center"><TextBlock Text="differs" Foreground="#E06060"/></Border>
+          <Border Background="#4A2626" Margin="16,0,0,0" Padding="6,1" VerticalAlignment="Center"><TextBlock Text="differs" Foreground="#F44747"/></Border>
           <TextBlock x:Name="ConflictSummary" Foreground="#888" Margin="16,0,0,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="11"/>
         </StackPanel>
         <DataGrid Grid.Row="1" x:Name="ConflictGrid" AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserAddRows="False" GridLinesVisibility="All" HeadersVisibility="Column"
-                  Background="#181818" Foreground="#D4D4D4" RowBackground="#1E1E1E"
-                  BorderBrush="#3F3F46" FontFamily="Consolas" FontSize="12" ColumnWidth="*"
+                  Background="#1E1E1E" Foreground="#CCCCCC" RowBackground="#1E1E1E"
+                  BorderBrush="#2B2B2B" FontFamily="Consolas" FontSize="12" ColumnWidth="*"
+                  HorizontalGridLinesBrush="#2B2B2B" VerticalGridLinesBrush="#2B2B2B"
                   EnableRowVirtualization="True"
                   PreviewMouseRightButtonDown="ConflictGrid_RightDown">
           <DataGrid.ContextMenu>
@@ -146,8 +148,7 @@
             <Style TargetType="DataGridRow">
               <Style.Triggers>
                 <DataTrigger Binding="{Binding Differs}" Value="True">
-                  <Setter Property="Background" Value="#3A2424"/>
-                  <Setter Property="Foreground" Value="#F0B0B0"/>
+                  <Setter Property="Foreground" Value="#F44747"/>
                 </DataTrigger>
               </Style.Triggers>
             </Style>
