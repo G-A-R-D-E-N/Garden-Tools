@@ -125,7 +125,12 @@ public partial class RecordEditorView : UserControl
         ConflictGrid.Columns.Add(new DataGridTextColumn
         {
             Header = "Field",
-            Binding = new System.Windows.Data.Binding(nameof(Models.ConflictFieldRow.Field)),
+            // Friendly labels for top-level field names (e.g. "MarkerColor" -> "Marker Color");
+            // dotted/indexed paths pass through unchanged.
+            Binding = new System.Windows.Data.Binding(nameof(Models.ConflictFieldRow.Field))
+            {
+                Converter = new FriendlyNameConverter(),
+            },
             Width = 260,
         });
         for (int i = 0; i < matrix.Plugins.Count; i++)
