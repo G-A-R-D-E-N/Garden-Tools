@@ -13,6 +13,12 @@ REM   usvfs handles, and a plain folder has nothing to self-extract.
 REM
 REM In MO2, add the FO4RecordEditor.exe inside the publish folder as an executable.
 
+REM Also refresh the plain Release build output (bin\Release\net9.0-windows\FO4RecordEditor.exe).
+REM Some launch points use that exe directly; publish only writes the win-x64 subfolder, so without
+REM this the plain exe goes stale and "relaunching" runs old code.
+dotnet build FO4RecordEditor\FO4RecordEditor.csproj -c Release -p:DebugType=none
+if errorlevel 1 ( echo BUILD FAILED. & exit /b 1 )
+
 dotnet publish FO4RecordEditor\FO4RecordEditor.csproj ^
   -c Release -r win-x64 --self-contained false ^
   -p:PublishSingleFile=false ^
