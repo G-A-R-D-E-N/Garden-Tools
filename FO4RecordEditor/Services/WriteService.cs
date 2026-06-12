@@ -41,27 +41,38 @@ public static class WriteService
         MutagenLoader.InvalidateModIndex(name);
     }
 
+    // Accept a bare file name ("Patch.esp") OR a full path ("D:\mods\X\Patch.esp"). Returns the file
+    // name used as the registry key / ModKey, plus the explicit on-disk path when one was supplied.
+    private static (string name, string? explicitPath) NormalizePlugin(string plugin)
+    {
+        if (string.IsNullOrWhiteSpace(plugin)) return (plugin, null);
+        if ((plugin.Contains('\\') || plugin.Contains('/')) && Path.IsPathRooted(plugin))
+            return (Path.GetFileName(plugin), plugin);
+        return (plugin, null);
+    }
+
     public static string OpenPlugin(string plugin, object? env)
     {
         if (string.IsNullOrWhiteSpace(plugin)) return "Provide a plugin name.";
-        if (_mutable.ContainsKey(plugin)) return $"'{plugin}' is already open for editing.";
+        var (name, explicitPath) = NormalizePlugin(plugin);
+        if (_mutable.ContainsKey(name)) return $"'{name}' is already open for editing.";
 
-        string? filePath = FindPluginPath(plugin, env);
+        string? filePath = explicitPath ?? FindPluginPath(name, env);
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
-            return $"Could not locate '{plugin}' on disk. Ensure the game environment is loaded or open the file via File > Open.";
+            return $"Could not locate '{name}' on disk. Pass a full path (e.g. 'D:\\...\\{name}'), load the game environment, or open the file via File > Open.";
 
         try
         {
             var mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(filePath), Fallout4Release.Fallout4);
-            Register(plugin, mod);
-            _sourcePath[plugin] = filePath;     // save_plugin overwrites the original by default
-            NotifyChanged(plugin);
+            Register(name, mod);
+            _sourcePath[name] = filePath;     // save_plugin overwrites the original by default
+            NotifyChanged(name);
             var count = mod.EnumerateMajorRecords().Count();
-            return $"Opened '{plugin}' for editing ({count} records). Use create_record, set_field, and save_plugin.";
+            return $"Opened '{name}' for editing ({count} records). Use create_record, set_field, and save_plugin.";
         }
         catch (Exception ex)
         {
-            return $"Failed to open '{plugin}' for editing: {ex.Message}";
+            return $"Failed to open '{name}' for editing: {ex.Message}";
         }
     }
 
@@ -102,15 +113,18 @@ public static class WriteService
     public static string CreatePlugin(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "Provide a plugin name, e.g. 'MyMod.esp'.";
-        if (!name.EndsWith(".esp", StringComparison.OrdinalIgnoreCase) &&
-            !name.EndsWith(".esm", StringComparison.OrdinalIgnoreCase) &&
-            !name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase))
-            name += ".esp";
+        // A full path is allowed -- use its file name as the ModKey and remember the path to save to.
+        var (fileName, explicitPath) = NormalizePlugin(name);
+        if (!fileName.EndsWith(".esp", StringComparison.OrdinalIgnoreCase) &&
+            !fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase) &&
+            !fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase))
+            fileName += ".esp";
 
-        var mod = new Fallout4Mod(ModKey.FromNameAndExtension(name), Fallout4Release.Fallout4);
-        Register(name, mod);
-        NotifyChanged(name);
-        return $"Created new plugin '{name}'. Add records with create_record, then call save_plugin to write it.";
+        var mod = new Fallout4Mod(ModKey.FromNameAndExtension(fileName), Fallout4Release.Fallout4);
+        Register(fileName, mod);
+        if (explicitPath != null) _sourcePath[fileName] = explicitPath;   // save_plugin writes here
+        NotifyChanged(fileName);
+        return $"Created new plugin '{fileName}'. Add records with create_record, then call save_plugin to write it.";
     }
 
     /// <summary>Raised (with the plugin file name) when a plugin is created/opened/modified,
@@ -161,11 +175,12 @@ public static class WriteService
     private static IFallout4Mod? EnsureOpen(string plugin, object? env, out string msg)
     {
         msg = "";
-        var mod = GetMutable(plugin);
+        var (name, _) = NormalizePlugin(plugin);
+        var mod = GetMutable(name);
         if (mod != null) return mod;
 
-        var openResult = OpenPlugin(plugin, env);   // loads it mutable + registers, or explains why not
-        mod = GetMutable(plugin);
+        var openResult = OpenPlugin(plugin, env);   // normalizes + loads mutable, or explains why not
+        mod = GetMutable(name);
         if (mod == null) msg = openResult;
         return mod;
     }
@@ -410,28 +425,51 @@ public static class WriteService
 
     public static string SavePlugin(string plugin, string? path)
     {
-        var mod = GetMutable(plugin);
-        if (mod == null) return $"Plugin '{plugin}' is not open for editing.";
+        var (name, explicitPath) = NormalizePlugin(plugin);
+        var mod = GetMutable(name);
+        if (mod == null) return $"Plugin '{name}' is not open for editing.";
 
         // Default: overwrite the original file the plugin was opened from (modify in place).
         // Newly created plugins (no source) fall back to the configured Output folder.
         if (string.IsNullOrWhiteSpace(path))
-            path = _sourcePath.TryGetValue(plugin, out var sp) ? sp : Path.Combine(DefaultOutputDir, plugin);
+            path = explicitPath ?? (_sourcePath.TryGetValue(name, out var sp) ? sp : Path.Combine(DefaultOutputDir, name));
+
+        var prms = new BinaryWriteParameters
+        {
+            // Build the master list from the records' FormLinks (self-contained, no load order needed).
+            MastersListContent = MastersListContentOption.Iterate,
+            // We write to a temp file whose name (Plugin.esp.xxxx.tmp) is not a valid ModKey; the mod
+            // already carries the correct ModKey, so skip Mutagen's filename<->ModKey check.
+            ModKey = ModKeyOption.NoCheck,
+        };
+        try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); } catch { }
+
+        // Write to a temp file first, then swap it in. A direct in-place write fails when the file is
+        // memory-mapped -- every plugin loaded via 'Open MO2' is an overlay the editor itself locks,
+        // so we never write straight over the live file.
+        var tmp = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+        try { mod.WriteToBinary(tmp, prms); }
+        catch (Exception ex) { try { File.Delete(tmp); } catch { } return $"Save failed while writing: {ex.Message}"; }
 
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            mod.WriteToBinary(path, new BinaryWriteParameters
-            {
-                // Build the master list from the records' FormLinks (self-contained, no load order needed).
-                MastersListContent = MastersListContentOption.Iterate
-            });
-            NotifyChanged(plugin);
-            return $"Saved {plugin} to {path}.";
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
+            NotifyChanged(name);
+            return $"Saved {name} to {path}.";
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return $"Save failed: {ex.Message}";
+            // The target is locked. This is almost always THIS editor's own overlay from 'Open MO2'
+            // (not MO2 and not xEdit). Keep the freshly-written copy beside it so no work is lost.
+            var sideways = path + ".new";
+            try { if (File.Exists(sideways)) File.Delete(sideways); File.Move(tmp, sideways); }
+            catch { sideways = tmp; }
+            return $"Wrote {name} to '{sideways}', but could NOT overwrite '{path}'. That file is locked by " +
+                   $"THIS editor: every plugin loaded via 'Open MO2' is memory-mapped, so the editor holds it " +
+                   $"open (closing MO2 will NOT help). To apply it: close this editor and rename " +
+                   $"'{Path.GetFileName(sideways)}' to '{Path.GetFileName(path)}', or save the patch under a " +
+                   $"NEW plugin name that isn't in the loaded list.";
         }
     }
 
@@ -448,16 +486,19 @@ public static class WriteService
         var src = MutagenLoader.GetRecordVersion(env, winningPlugin, fk);
         if (src == null) return $"Could not find {fk} in '{winningPlugin}'.";
 
-        // Ensure the patch plugin is open and mutable: open it if it exists on disk, else create it.
-        if (GetMutable(patchPlugin) == null)
+        // The patch may be given as a bare name or a full path. Ensure it's open and mutable:
+        // open it if it already exists on disk (so we extend it), else create it new.
+        var (patchName, patchPath) = NormalizePlugin(patchPlugin);
+        if (GetMutable(patchName) == null)
         {
-            if (MutagenLoader.LooseModPaths.ContainsKey(patchPlugin) || FindPluginPath(patchPlugin, env) != null)
-                OpenPlugin(patchPlugin, env);
-            else
-                CreatePlugin(patchPlugin);
+            bool existsOnDisk = (patchPath != null && File.Exists(patchPath))
+                || MutagenLoader.LooseModPaths.ContainsKey(patchName)
+                || FindPluginPath(patchName, env) != null;
+            if (existsOnDisk) OpenPlugin(patchPlugin, env);
+            else CreatePlugin(patchPlugin);
         }
-        var patch = GetMutable(patchPlugin);
-        if (patch == null) return $"Could not open or create patch plugin '{patchPlugin}'.";
+        var patch = GetMutable(patchName);
+        if (patch == null) return $"Could not open or create patch plugin '{patchName}'.";
 
         if (src is not IMajorRecordGetter getter)
             return $"{fk} is not an overridable record.";
@@ -466,10 +507,10 @@ public static class WriteService
         {
             if (!AddOverride(patch, getter))
                 return $"This record type ({getter.Registration.Name}) cannot be overridden yet.";
-            MutagenLoader.InvalidateModIndex(patchPlugin);
-            NotifyChanged(patchPlugin);
-            return $"Copied {winningPlugin}'s version of {fk} into {patchPlugin} as an override. " +
-                   $"Ensure {patchPlugin} loads after the conflicting plugins, then save it.";
+            MutagenLoader.InvalidateModIndex(patchName);
+            NotifyChanged(patchName);
+            return $"Copied {winningPlugin}'s version of {fk} into {patchName} as an override. " +
+                   $"Ensure {patchName} loads after the conflicting plugins, then save it.";
         }
         catch (Exception ex)
         {

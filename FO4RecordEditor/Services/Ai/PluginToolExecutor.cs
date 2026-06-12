@@ -113,12 +113,13 @@ public sealed class PluginToolExecutor
 
         // ---- write tools (author plugins) ----
         new("open_plugin",
-            "Open an existing loaded plugin for editing so records can be added or modified. " +
-            "Required before using create_record or set_field on a plugin that was loaded from the game environment rather than created with create_plugin.",
+            "Open an existing plugin for editing so records can be added or modified. The 'plugin' arg " +
+            "accepts a bare file name ('MyMod.esp') OR a full path ('D:\\\\...\\\\MyMod.esp'). Required before " +
+            "create_record/set_field on a plugin loaded from the game environment rather than created with create_plugin.",
             new
             {
                 type = "object",
-                properties = new { plugin = new { type = "string", description = "Plugin file name, e.g. 'MyMod.esp'." } },
+                properties = new { plugin = new { type = "string", description = "Plugin file name or full path, e.g. 'MyMod.esp' or 'D:\\\\mods\\\\X\\\\MyMod.esp'." } },
                 required = new[] { "plugin" }
             }),
         new("create_plugin",
@@ -234,8 +235,12 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin" }
             }),
         new("save_plugin",
-            "Write a plugin to disk. By default OVERWRITES the original file the plugin was opened from (in-place edit); " +
-            "newly created plugins go to the configured Output folder. Pass 'path' to choose a specific location.",
+            "Write a plugin to disk. By default OVERWRITES the file it was opened from (or the full path it was " +
+            "created with); newly created plugins go to the Output folder. Pass 'path' to choose a location. " +
+            "NOTE: a plugin currently loaded via 'Open MO2' is memory-mapped and LOCKED by this editor, so it " +
+            "can't be overwritten in place -- save_plugin then writes a '<name>.new' file beside it and says so. " +
+            "If that happens, DO NOT tell the user to close MO2 (it's the editor's own lock); instead save under a " +
+            "NEW plugin name not in the load order, or tell them to close the editor and rename the .new file.",
             new
             {
                 type = "object",
