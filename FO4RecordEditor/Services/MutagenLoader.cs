@@ -890,10 +890,24 @@ public static class MutagenLoader
                     }
                     else
                     {
+                        var items = new List<object>();
+                        foreach (var it in enumerable) if (it != null) items.Add(it);
+
+                        // A list of pure FormLinks (Keywords, Categories, FormList Items, ...) is an
+                        // unordered SET: the game ignores order. Sort by FormKey so a reordered-but-
+                        // identical list doesn't light up as a fake conflict (this is what xEdit's
+                        // "(sorted)" subrecords do). Ordered data (Conditions/Components, whose items
+                        // are structs, not FormLinks) is left in place.
+                        if (items.Count > 1 && items.All(x =>
+                                x is Mutagen.Bethesda.Plugins.IFormLinkIdentifier
+                                && x is not Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter))
+                            items.Sort((a, b) => string.CompareOrdinal(
+                                ((Mutagen.Bethesda.Plugins.IFormLinkIdentifier)a).FormKey.ToString(),
+                                ((Mutagen.Bethesda.Plugins.IFormLinkIdentifier)b).FormKey.ToString()));
+
                         int i = 0;
-                        foreach (var item in enumerable)
+                        foreach (var item in items)
                         {
-                            if (item == null) continue;
                             if (_walkNodeCount >= MaxWalkNodes) break;
                             var entryKey = $"[{i}]";
                             var entry = child.GetChild(entryKey);
