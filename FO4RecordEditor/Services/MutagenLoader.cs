@@ -875,6 +875,12 @@ public static class MutagenLoader
                 {
                     child.Values[pluginName] = FormatFormLink(fli);
                 }
+                // A TranslatedString (Description, FULL name, ...) is IEnumerable over its localized
+                // strings, so without this it would explode into [0].Key/[0].Value rows. Show its text.
+                else if (val is Mutagen.Bethesda.Strings.ITranslatedStringGetter tstr)
+                {
+                    child.Values[pluginName] = tstr.String ?? tstr.ToString() ?? "";
+                }
                 else if (val is IEnumerable enumerable and not string)
                 {
                     // Whole-collection collapse first (e.g. a byte blob like Model.Data -> "N bytes").

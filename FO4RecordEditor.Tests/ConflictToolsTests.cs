@@ -17,6 +17,37 @@ public class ConflictToolsTests
         return new PluginToolExecutor(() => captured, () => Instance);
     }
 
+    // Exercises the REAL conflict-matrix path (binary-overlay records from the load order's link
+    // cache), which the get_record unit test never touches. Proves components/conditions collapse
+    // to one readable row in the conflict grid instead of exploding into .Component/.Data.* rows.
+    [Fact]
+    public void BuildConflictMatrix_CollapsesComponentsAndConditions()
+    {
+        if (!Available) return;
+        MakeExecutor(out var env);
+        var cache = MutagenLoader.LinkCache!;
+
+        // A COBJ that has components AND conditions (so both renderers are exercised).
+        var cobj = cache.PriorityOrder
+            .SelectMany(m => m.EnumerateMajorRecords())
+            .OfType<Mutagen.Bethesda.Fallout4.IConstructibleObjectGetter>()
+            .FirstOrDefault(c => c.Components is { Count: > 0 } && c.Conditions is { Count: > 0 });
+        if (cobj == null) return;
+
+        var matrix = MutagenLoader.BuildConflictMatrix(env, cobj.FormKey.ToString());
+        matrix.Should().NotBeNull();
+        var fields = matrix!.Rows.Select(r => r.Field).ToList();
+
+        // There IS a one-line component/condition row...
+        fields.Should().Contain(f => f.StartsWith("Components["));
+        fields.Should().Contain(f => f.StartsWith("Conditions["));
+        // ...but NOT the exploded reflection sub-rows under them.
+        fields.Should().NotContain(f => f.StartsWith("Components[") && f.Contains("]."));
+        fields.Should().NotContain(f => f.StartsWith("Conditions[") && f.Contains("]."));
+        // A TranslatedString (Description) shows its text on one row, not [0].Key/[0].Value.
+        fields.Should().NotContain(f => f.StartsWith("Description["));
+    }
+
     [Fact]
     public void GetConflicts_ShowsTheOverrideChainAndWinner()
     {
