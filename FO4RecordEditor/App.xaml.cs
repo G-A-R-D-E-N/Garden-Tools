@@ -55,6 +55,10 @@ public partial class App : Application
             Color.FromRgb(0x00, 0xA8, 0xA8),   // teal accent
             ApplicationTheme.Dark);
         Trace("theme applied -- startup OK");
+
+        Services.Rendering.ElementRenderer.Init(
+            Services.MutagenLoader.FormatFormLink,
+            Services.MutagenLoader.FormatCondition);
     }
 
     /// <summary>Appends a timestamped breadcrumb to the startup log (best-effort, never throws).</summary>

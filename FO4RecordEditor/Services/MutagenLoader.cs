@@ -929,7 +929,7 @@ public static class MutagenLoader
         return false;
     }
 
-    private static string FormatCondition(Mutagen.Bethesda.Fallout4.IConditionGetter cond)
+    internal static string FormatCondition(Mutagen.Bethesda.Fallout4.IConditionGetter cond)
     {
         var op = cond.CompareOperator switch
         {
