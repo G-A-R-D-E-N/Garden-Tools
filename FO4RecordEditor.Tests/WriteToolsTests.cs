@@ -71,6 +71,7 @@ public class WriteToolsTests
             """[{"component":"01FAA5:Fallout4.esm","count":3}]""", env: null);
         WriteService.SetConditions(name, "FWTest_Readable",
             """[{"function":"GetGlobalValue","param1":"000126:MAIM.esp","operator":"==","value":0}]""", env: null);
+        WriteService.SetField(name, "FWTest_Readable", "Description", "Filled with essentials.", env: null);
 
         // The field dump used by get_record must show one readable line per condition/component,
         // not a dozen reflection sub-rows (xEdit-beating + far fewer tokens for the AI).
@@ -81,6 +82,10 @@ public class WriteToolsTests
         dump.Should().NotContain("ParameterOneNumber");    // no raw struct sub-rows
         dump.Should().NotContain("RunOnType");
         dump.Should().NotContain(".Data[10]");
+        // A TranslatedString (Description) must show its text on one line, not explode into
+        // Description[0].Key / Description[0].Value localization rows.
+        dump.Should().Contain("Filled with essentials.");
+        dump.Should().NotContain("Description[0]");
     }
 
     [Fact]
