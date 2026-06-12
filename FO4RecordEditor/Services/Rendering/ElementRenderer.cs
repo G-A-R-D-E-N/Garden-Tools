@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Drawing;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -38,6 +39,20 @@ public static class ElementRenderer
                 return true;
         }
         text = "";
+        return false;
+    }
+
+    public static bool TryRenderByteBlob(object collection, out string text)
+    {
+        text = "";
+        if (collection is byte[] ba) { text = $"{ba.Length} bytes"; return true; }
+        if (collection is Noggog.MemorySlice<byte> ms) { text = $"{ms.Length} bytes"; return true; }
+        if (collection is IEnumerable e and not string)
+        {
+            int count = 0; bool allBytes = true;
+            foreach (var x in e) { if (x is not byte) { allBytes = false; break; } count++; }
+            if (allBytes && count > 0) { text = $"{count} bytes"; return true; }
+        }
         return false;
     }
 }

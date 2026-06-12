@@ -29,4 +29,13 @@ public class ElementRendererTests
     {
         ElementRenderer.TryRenderLine(new object(), out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void Summarizes_byte_sequences_as_count()
+    {
+        ElementRenderer.TryRenderByteBlob(new byte[] { 1, 2, 3, 4 }, out var text).Should().BeTrue();
+        text.Should().Be("4 bytes");
+
+        ElementRenderer.TryRenderByteBlob(new[] { "a", "b" }, out _).Should().BeFalse();
+    }
 }
