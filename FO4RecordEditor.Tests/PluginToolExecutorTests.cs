@@ -28,6 +28,9 @@ public class PluginToolExecutorTests
     [Fact]
     public void Execute_ParsesArgs_WithoutThrowing()
     {
+        // Reset process-global registries so other tests' created plugins don't leak in.
+        FO4RecordEditor.Services.MutagenLoader.LooseMods.Clear();
+        FO4RecordEditor.Services.MutagenLoader.EditableMods.Clear();
         var exec = new PluginToolExecutor(() => null);
         // plugin not loaded -> friendly message, but arg parsing must not throw
         exec.Execute("list_record_types", "{\"plugin\":\"Missing.esp\"}")

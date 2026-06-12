@@ -92,9 +92,10 @@ public partial class RecordEditorView : UserControl
 
         FieldList.ItemsSource = tab.FieldsView;
 
-        // Conflicted records open straight to the Conflicts tab (xEdit-style); otherwise the
-        // tab still exists but shows "no conflict". The matrix is built lazily on first view.
-        if (tab.HasConflicts) ViewTabs.SelectedItem = ConflictsTab;
+        // Default to the hierarchical Record view (xEdit-style: indented, expandable, one column
+        // per plugin, conflict-coloured) rather than the flat Conflicts grid. The flat Conflicts
+        // tab stays available for a quick differing-fields scan.
+        ViewTabs.SelectedIndex = 0;
     }
 
     private bool _conflictsBuilt;

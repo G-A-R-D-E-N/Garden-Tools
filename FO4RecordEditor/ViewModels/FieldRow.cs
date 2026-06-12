@@ -49,6 +49,26 @@ public class FieldRow : INotifyPropertyChanged
     public bool   IsCompound  => !Node.IsLeaf;
     public bool   HasChildren => Node.Children.Count > 0;
 
+    // xEdit-style label: a list item reads as the singular element name ("Component", "Condition")
+    // instead of "[0]"; every other field gets its friendly label ("Editor ID", "Marker Color").
+    public string DisplayLabel
+    {
+        get
+        {
+            var key = Node.Key;
+            if (key.Length > 1 && key[0] == '[' && ParentRow != null)
+                return Singular(ParentRow.Node.Key);
+            return FO4RecordEditor.Services.Rendering.FriendlyNames.Label(key);
+        }
+    }
+
+    private static string Singular(string plural)
+    {
+        if (plural.EndsWith("ies", System.StringComparison.Ordinal)) return plural[..^3] + "y";
+        if (plural.Length > 1 && plural.EndsWith("s", System.StringComparison.Ordinal)) return plural[..^1];
+        return plural;
+    }
+
     // ---- conflict (xEdit-style) ----------------------------------------------
     // Plugins that touch the owning record, in load order. One entry = no conflict context.
     public IReadOnlyList<string> Plugins { get; set; } = System.Array.Empty<string>();
@@ -61,7 +81,9 @@ public class FieldRow : INotifyPropertyChanged
     {
         get
         {
-            if (Plugins.Count < 2 || !Node.IsLeaf) return false;
+            // A summary node (a condition/component shown as one line) keeps children but should
+            // still colour as a conflict when its one-line value differs across plugins.
+            if (Plugins.Count < 2 || (!Node.IsLeaf && !Node.IsSummary)) return false;
             var present = Plugins.Select(ValueFor).Where(s => s.Length > 0).ToList();
             if (present.Count == 0) return false;
             return present.Distinct().Count() > 1 || present.Count < Plugins.Count;

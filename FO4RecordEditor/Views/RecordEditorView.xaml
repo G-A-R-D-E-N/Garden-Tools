@@ -84,7 +84,7 @@
                       </ToggleButton.Template>
                     </ToggleButton>
                   </Border>
-                  <TextBlock Text="{Binding Node.Key, Converter={StaticResource Friendly}}" Foreground="#9CDCFE"
+                  <TextBlock Text="{Binding DisplayLabel}" Foreground="#9CDCFE"
                              FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
               </DataTemplate>
