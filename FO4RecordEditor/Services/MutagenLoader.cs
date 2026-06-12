@@ -873,30 +873,35 @@ public static class MutagenLoader
                 }
                 else if (val is IEnumerable enumerable and not string)
                 {
-                    int i = 0;
-                    foreach (var item in enumerable)
+                    // Whole-collection collapse first (e.g. a byte blob like Model.Data -> "N bytes").
+                    if (Services.Rendering.ElementRenderer.TryRenderByteBlob(enumerable, out var blob))
                     {
-                        if (item == null) continue;
-                        if (_walkNodeCount >= MaxWalkNodes) break;
-                        var entryKey = $"[{i}]";
-                        var entry = child.GetChild(entryKey);
-                        if (entry == null)
+                        child.Values[pluginName] = blob;
+                    }
+                    else
+                    {
+                        int i = 0;
+                        foreach (var item in enumerable)
                         {
-                            entry = new RecordNode { Key = entryKey, Parent = child };
-                            child.Children.Add(entry);
-                            _walkNodeCount++;
+                            if (item == null) continue;
+                            if (_walkNodeCount >= MaxWalkNodes) break;
+                            var entryKey = $"[{i}]";
+                            var entry = child.GetChild(entryKey);
+                            if (entry == null)
+                            {
+                                entry = new RecordNode { Key = entryKey, Parent = child };
+                                child.Children.Add(entry);
+                                _walkNodeCount++;
+                            }
+                            if (Services.Rendering.ElementRenderer.TryRenderLine(item, out var friendly))
+                                entry.Values[pluginName] = friendly;
+                            else
+                            {
+                                entry.Values[pluginName] = BuildSummary(item);
+                                WalkObject(item, entry, depth + 1, maxDepth, pluginName);
+                            }
+                            i++;
                         }
-                        // Conditions and COBJ components render as ONE human-readable line
-                        // (e.g. "GetGlobalValue(MAIMLiteInstalled) == 0" / "Adhesive x1") instead of a
-                        // dozen reflection sub-rows -- clearer than xEdit and far fewer tokens for the AI.
-                        if (TryFriendlyLine(item, out var friendly))
-                            entry.Values[pluginName] = friendly;
-                        else
-                        {
-                            entry.Values[pluginName] = BuildSummary(item);
-                            WalkObject(item, entry, depth + 1, maxDepth, pluginName);
-                        }
-                        i++;
                     }
                 }
                 else
@@ -909,24 +914,6 @@ public static class MutagenLoader
         {
             Visiting.Remove(obj);
         }
-    }
-
-    // Collapse a Condition or COBJ component into one readable line (xEdit-beating, token-cheap).
-    // Returns false for anything else so the normal walk still applies.
-    private static bool TryFriendlyLine(object item, out string text)
-    {
-        text = "";
-        switch (item)
-        {
-            case Mutagen.Bethesda.Fallout4.IConstructibleObjectComponentGetter comp:
-                text = $"{FormatFormLink(comp.Component)} x{comp.Count}";
-                return true;
-
-            case Mutagen.Bethesda.Fallout4.IConditionGetter cond:
-                text = FormatCondition(cond);
-                return true;
-        }
-        return false;
     }
 
     internal static string FormatCondition(Mutagen.Bethesda.Fallout4.IConditionGetter cond)

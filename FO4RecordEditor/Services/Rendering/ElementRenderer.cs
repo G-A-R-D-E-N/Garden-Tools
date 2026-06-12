@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Drawing;
+using FO4RecordEditor.Services;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
@@ -13,8 +14,8 @@ namespace FO4RecordEditor.Services.Rendering;
 /// </summary>
 public static class ElementRenderer
 {
-    private static Func<IFormLinkIdentifier, string> _formatFormLink = fli => fli.FormKey.ToString();
-    private static Func<IConditionGetter, string> _formatCondition = c => c.GetType().Name;
+    private static Func<IFormLinkIdentifier, string> _formatFormLink = MutagenLoader.FormatFormLink;
+    private static Func<IConditionGetter, string> _formatCondition = MutagenLoader.FormatCondition;
 
     public static void Init(
         Func<IFormLinkIdentifier, string> formatFormLink,

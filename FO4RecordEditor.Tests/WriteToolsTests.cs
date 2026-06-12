@@ -80,6 +80,7 @@ public class WriteToolsTests
         dump.Should().Contain("GetGlobalValue(").And.Contain("== 0");  // readable condition line
         dump.Should().NotContain("ParameterOneNumber");    // no raw struct sub-rows
         dump.Should().NotContain("RunOnType");
+        dump.Should().NotContain(".Data[10]");
     }
 
     [Fact]
