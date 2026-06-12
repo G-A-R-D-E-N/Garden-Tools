@@ -232,7 +232,36 @@ public partial class ExplorerPanel : UserControl
         menu.Items.Add(new Separator());
         AddItem(menu, "Clean (undelete + disable)", () => RunMaintain(plugin, "clean"));
         AddItem(menu, "Compact to ESL", () => RunMaintain(plugin, "compact"));
+        menu.Items.Add(new Separator());
+        AddItem(menu, "Revert this plugin's overrides → patch…", () => RunRevert(plugin));
         return menu;
+    }
+
+    // Batch-revert every record this plugin overrides into a patch (preview, then apply on confirm).
+    private async void RunRevert(string badPlugin)
+    {
+        var main = Window.GetWindow(this) as MainWindow;
+        var env = _shell.GameEnvironment;
+        if (env == null) { MessageBox.Show("Load the environment first ('Open MO2' / 'Load Env')."); return; }
+
+        var patch = Microsoft.VisualBasic.Interaction.InputBox(
+            $"Revert every record that '{badPlugin}' currently overrides back to the prior version, written into which patch plugin?",
+            "Revert overrides", "FallenWorld_CraftingFixes.esp");
+        if (string.IsNullOrWhiteSpace(patch)) return;
+
+        main?.SetStatus($"Previewing reverts from {badPlugin}...");
+        var preview = await Task.Run(() =>
+            FO4RecordEditor.Services.WriteService.RevertOverridesFrom(env, badPlugin, patch, null, null, apply: false, limit: 200));
+        ResultsDialog.Show(main, "Revert overrides — preview", preview);
+
+        var r = MessageBox.Show($"Apply these reverts into {patch}?", "Apply reverts",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (r != MessageBoxResult.Yes) { main?.SetStatus("Ready"); return; }
+
+        var applied = await Task.Run(() =>
+            FO4RecordEditor.Services.WriteService.RevertOverridesFrom(env, badPlugin, patch, null, null, apply: true, limit: 200));
+        main?.SetStatus("Reverts applied.");
+        ResultsDialog.Show(main, "Revert overrides — applied", applied);
     }
 
     private static void AddItem(ContextMenu menu, string header, Action action)

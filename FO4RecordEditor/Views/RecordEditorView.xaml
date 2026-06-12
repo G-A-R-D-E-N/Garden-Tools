@@ -31,7 +31,15 @@
                 RowHeight="26" AlternationCount="2" AlternatingRowBackground="#1B1B1B"
                 Background="#1E1E1E" Foreground="#D4D4D4" RowBackground="#1E1E1E"
                 BorderBrush="#2A2A2A" BorderThickness="0"
+                PreviewMouseRightButtonDown="FieldGrid_RightDown"
                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+        <DataGrid.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Copy value" Click="FieldCopyValue_Click"/>
+            <MenuItem Header="Copy field name" Click="FieldCopyName_Click"/>
+            <MenuItem Header="Copy record FormKey" Click="FieldCopyFormKey_Click"/>
+          </ContextMenu>
+        </DataGrid.ContextMenu>
         <DataGrid.RowStyle>
           <Style TargetType="DataGridRow">
             <Setter Property="Background" Value="Transparent"/>

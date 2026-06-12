@@ -62,6 +62,27 @@ public class WriteToolsTests
     }
 
     [Fact]
+    public void GetRecord_RendersConditionsAndComponentsAsReadableLines()
+    {
+        var name = $"WriteToolsRead_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(name);
+        WriteService.CreateRecord(name, "COBJ", "FWTest_Readable", env: null);
+        WriteService.SetComponents(name, "FWTest_Readable",
+            """[{"component":"01FAA5:Fallout4.esm","count":3}]""", env: null);
+        WriteService.SetConditions(name, "FWTest_Readable",
+            """[{"function":"GetGlobalValue","param1":"000126:MAIM.esp","operator":"==","value":0}]""", env: null);
+
+        // The field dump used by get_record must show one readable line per condition/component,
+        // not a dozen reflection sub-rows (xEdit-beating + far fewer tokens for the AI).
+        var dump = MutagenLoader.QueryRecordFields(null, name, "FWTest_Readable");
+
+        dump.Should().Contain("x3");                       // component "<adhesive> x3"
+        dump.Should().Contain("GetGlobalValue(").And.Contain("== 0");  // readable condition line
+        dump.Should().NotContain("ParameterOneNumber");    // no raw struct sub-rows
+        dump.Should().NotContain("RunOnType");
+    }
+
+    [Fact]
     public void DeleteRecord_RemovesTheStub()
     {
         var name = $"WriteToolsDel_{Guid.NewGuid():N}.esp";

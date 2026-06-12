@@ -174,12 +174,30 @@ public partial class RecordEditorView : UserControl
     }
 
     // Right-click selects the row under the cursor so the context menu acts on it.
-    private void ConflictGrid_RightDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private static void SelectRowUnderCursor(DataGrid grid, System.Windows.Input.MouseButtonEventArgs e)
     {
         var dep = e.OriginalSource as DependencyObject;
         while (dep != null && dep is not DataGridRow) dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
-        if (dep is DataGridRow row) { row.IsSelected = true; ConflictGrid.SelectedItem = row.Item; }
+        if (dep is DataGridRow row) { row.IsSelected = true; grid.SelectedItem = row.Item; }
     }
+
+    private void ConflictGrid_RightDown(object sender, System.Windows.Input.MouseButtonEventArgs e) =>
+        SelectRowUnderCursor(ConflictGrid, e);
+
+    private void FieldGrid_RightDown(object sender, System.Windows.Input.MouseButtonEventArgs e) =>
+        SelectRowUnderCursor(FieldList, e);
+
+    private void FieldCopyValue_Click(object sender, RoutedEventArgs e)
+    {
+        if (FieldList.SelectedItem is FieldRow row) TrySetClipboard(row.Node.Value);
+    }
+
+    private void FieldCopyName_Click(object sender, RoutedEventArgs e)
+    {
+        if (FieldList.SelectedItem is FieldRow row) TrySetClipboard(row.Node.Key);
+    }
+
+    private void FieldCopyFormKey_Click(object sender, RoutedEventArgs e) => TrySetClipboard(_tab.FormKey);
 
     private void ConflictCopyValue_Click(object sender, RoutedEventArgs e)
     {

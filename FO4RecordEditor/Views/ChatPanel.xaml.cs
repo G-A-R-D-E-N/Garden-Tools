@@ -321,6 +321,8 @@ public partial class ChatPanel : UserControl
             if (!started) Dispatcher.Invoke(() => reply.Text = "_(no response)_");
             _historyService.Save(_currentSession);
             _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Reply received", reply.Text);
+
+            await MaybeAutoCompact();   // keep the re-sent history from growing without bound
         }
         catch (OperationCanceledException)
         {
@@ -388,6 +390,17 @@ public partial class ChatPanel : UserControl
 
     // How many of the most recent messages /compact keeps verbatim (the rest are summarized).
     private const int CompactKeepRecent = 6;
+    // The whole transcript is re-sent on every turn, so its size is the main cost driver. When it
+    // grows past this, auto-compact the older messages so usage stops climbing turn over turn.
+    private const int AutoCompactBudgetChars = 80_000;
+
+    private async System.Threading.Tasks.Task MaybeAutoCompact()
+    {
+        var chars = _currentSession.Messages.Sum(m => m.Text?.Length ?? 0);
+        if (chars < AutoCompactBudgetChars || _currentSession.Messages.Count <= CompactKeepRecent + 1) return;
+        AddInfoBubble("_Conversation got large — auto-compacting older messages to save usage…_");
+        await CompactConversation();
+    }
 
     private async System.Threading.Tasks.Task CompactConversation()
     {

@@ -886,8 +886,16 @@ public static class MutagenLoader
                             child.Children.Add(entry);
                             _walkNodeCount++;
                         }
-                        entry.Values[pluginName] = BuildSummary(item);
-                        WalkObject(item, entry, depth + 1, maxDepth, pluginName);
+                        // Conditions and COBJ components render as ONE human-readable line
+                        // (e.g. "GetGlobalValue(MAIMLiteInstalled) == 0" / "Adhesive x1") instead of a
+                        // dozen reflection sub-rows -- clearer than xEdit and far fewer tokens for the AI.
+                        if (TryFriendlyLine(item, out var friendly))
+                            entry.Values[pluginName] = friendly;
+                        else
+                        {
+                            entry.Values[pluginName] = BuildSummary(item);
+                            WalkObject(item, entry, depth + 1, maxDepth, pluginName);
+                        }
                         i++;
                     }
                 }
@@ -901,6 +909,67 @@ public static class MutagenLoader
         {
             Visiting.Remove(obj);
         }
+    }
+
+    // Collapse a Condition or COBJ component into one readable line (xEdit-beating, token-cheap).
+    // Returns false for anything else so the normal walk still applies.
+    private static bool TryFriendlyLine(object item, out string text)
+    {
+        text = "";
+        switch (item)
+        {
+            case Mutagen.Bethesda.Fallout4.IConstructibleObjectComponentGetter comp:
+                text = $"{FormatFormLink(comp.Component)} x{comp.Count}";
+                return true;
+
+            case Mutagen.Bethesda.Fallout4.IConditionGetter cond:
+                text = FormatCondition(cond);
+                return true;
+        }
+        return false;
+    }
+
+    private static string FormatCondition(Mutagen.Bethesda.Fallout4.IConditionGetter cond)
+    {
+        var op = cond.CompareOperator switch
+        {
+            Mutagen.Bethesda.Fallout4.CompareOperator.EqualTo => "==",
+            Mutagen.Bethesda.Fallout4.CompareOperator.NotEqualTo => "!=",
+            Mutagen.Bethesda.Fallout4.CompareOperator.GreaterThan => ">",
+            Mutagen.Bethesda.Fallout4.CompareOperator.GreaterThanOrEqualTo => ">=",
+            Mutagen.Bethesda.Fallout4.CompareOperator.LessThan => "<",
+            Mutagen.Bethesda.Fallout4.CompareOperator.LessThanOrEqualTo => "<=",
+            _ => cond.CompareOperator.ToString(),
+        };
+
+        // Right-hand side: a constant (ConditionFloat) or a global var (ConditionGlobal).
+        string rhs = cond switch
+        {
+            Mutagen.Bethesda.Fallout4.IConditionGlobalGetter g => FormatFormLink(g.ComparisonValue),
+            Mutagen.Bethesda.Fallout4.IConditionFloatGetter f => f.ComparisonValue.ToString("0.###"),
+            _ => "?",
+        };
+
+        var data = cond.Data;
+        string fn = data is Mutagen.Bethesda.Fallout4.IFunctionConditionDataGetter fc
+            ? fc.Function.ToString() : data.GetType().Name;
+
+        var args = new List<string>();
+        if (data is Mutagen.Bethesda.Fallout4.IFunctionConditionDataGetter fcd)
+        {
+            if (!fcd.ParameterOneRecord.FormKey.IsNull) args.Add(FormatFormLink(fcd.ParameterOneRecord));
+            else if (fcd.ParameterOneNumber != 0) args.Add(fcd.ParameterOneNumber.ToString());
+            if (!fcd.ParameterTwoRecord.FormKey.IsNull) args.Add(FormatFormLink(fcd.ParameterTwoRecord));
+            else if (fcd.ParameterTwoNumber != 0) args.Add(fcd.ParameterTwoNumber.ToString());
+        }
+
+        var line = $"{fn}({string.Join(", ", args)}) {op} {rhs}";
+        if (data.RunOnType != Mutagen.Bethesda.Fallout4.Condition.RunOnType.Subject)
+        {
+            line += $" on {data.RunOnType}";
+            if (!data.Reference.FormKey.IsNull) line += $" {FormatFormLink(data.Reference)}";
+        }
+        return line;
     }
 
     private static string BuildSummary(object item)
