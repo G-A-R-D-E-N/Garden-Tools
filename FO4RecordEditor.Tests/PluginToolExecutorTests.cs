@@ -11,6 +11,9 @@ public class PluginToolExecutorTests
     [Fact]
     public void ListPlugins_NoneLoaded_ReturnsFriendlyMessage()
     {
+        // Reset process-global registries so other tests' created plugins don't leak in.
+        FO4RecordEditor.Services.MutagenLoader.LooseMods.Clear();
+        FO4RecordEditor.Services.MutagenLoader.EditableMods.Clear();
         var exec = new PluginToolExecutor(() => null);
         exec.Execute("list_plugins", "{}").Should().Be("No plugins loaded.");
     }

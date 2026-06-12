@@ -505,7 +505,9 @@ public static class MutagenLoader
                 bool differs = present.Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
                 rows.Add(new ConflictFieldRow { Field = p, Values = vals, Differs = differs });
             }
-            FlattenConflictRows(child, p, plugins, rows);
+            // Summary nodes (conditions/components) show their one readable row and stop, so the
+            // conflict grid is clean instead of dumping every ParameterOne*/Count/Component sub-row.
+            if (!child.IsSummary) FlattenConflictRows(child, p, plugins, rows);
         }
     }
 
@@ -754,7 +756,9 @@ public static class MutagenLoader
         foreach (var c in node.Children)
         {
             var indent = new string(' ', depth * 2);
-            if (c.IsLeaf) sb.AppendLine($"{indent}{c.Key}: {c.Value}");
+            // Summary nodes (conditions/components) print their one readable line and stop, so the
+            // dump shows "GetGlobalValue(...) == 0" not a dozen ParameterOne*/RunOnType sub-rows.
+            if (c.IsLeaf || c.IsSummary) sb.AppendLine($"{indent}{c.Key}: {c.Value}");
             else { sb.AppendLine($"{indent}{c.Key}:"); FlattenToText(c, depth + 1, sb); }
         }
     }
@@ -894,15 +898,26 @@ public static class MutagenLoader
                                 _walkNodeCount++;
                             }
                             if (Services.Rendering.ElementRenderer.TryRenderLine(item, out var friendly))
+                            {
+                                // One readable line for display; keep the child fields so they stay
+                                // editable in the Record tree (e.g. a component's Count).
                                 entry.Values[pluginName] = friendly;
+                                entry.IsSummary = true;
+                            }
                             else
                             {
                                 entry.Values[pluginName] = BuildSummary(item);
-                                WalkObject(item, entry, depth + 1, maxDepth, pluginName);
                             }
+                            WalkObject(item, entry, depth + 1, maxDepth, pluginName);
                             i++;
                         }
                     }
+                }
+                // A renderable property value (e.g. an Activator's MarkerColor) collapses to one line
+                // (#CC4C33) instead of expanding into R/G/B/A/IsKnownColor/... reflection rows.
+                else if (Services.Rendering.ElementRenderer.TryRenderLine(val, out var friendlyVal))
+                {
+                    child.Values[pluginName] = friendlyVal;
                 }
                 else
                 {

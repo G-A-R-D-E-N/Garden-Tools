@@ -64,7 +64,14 @@ public class RecordNode : INotifyPropertyChanged
     }
 
     public bool IsLeaf => Children.Count == 0;
-    public string DisplayValue => IsLeaf ? Value : $"({Children.Count} items)";
+
+    // A node that has a complete one-line summary (e.g. a condition "GetGlobalValue(...) == 0" or a
+    // component "Adhesive x3") AND keeps its sub-fields as children for editing. Flattened views
+    // (conflict grid, get_record) show the summary line and stop; the Record tree still expands the
+    // children so individual fields stay editable.
+    public bool IsSummary { get; set; }
+
+    public string DisplayValue => (IsLeaf || IsSummary) ? Value : $"({Children.Count} items)";
     public string DirtyIndicator => AnyDirty ? " *" : "";
 
     public bool AnyDirty => _isDirty || Children.Any(c => c.AnyDirty);

@@ -15,6 +15,11 @@ public class PluginMcpServerTests
     [Fact]
     public async Task Mcp_Initialize_ToolsList_And_Call_Work()
     {
+        // Reset the process-global mod registries so other tests' created plugins don't leak into
+        // the "No plugins loaded" assertion below.
+        MutagenLoader.LooseMods.Clear();
+        MutagenLoader.EditableMods.Clear();
+
         var exec = new PluginToolExecutor(() => null);   // no plugins loaded
         using var server = new PluginMcpServer(exec);
         server.Start();
