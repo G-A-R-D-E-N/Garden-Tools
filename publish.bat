@@ -28,10 +28,17 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM Deploy the fresh build into the MO2 Tools folder the editor is actually launched from,
+REM so re-publishing always updates the running launch point (not just the bin\ output).
+set "DEPLOY=D:\Games\ModlistDownloads\Tools\FO4Editor"
+if exist "%DEPLOY%\" (
+  echo Deploying to MO2 Tools folder: %DEPLOY%
+  robocopy "FO4RecordEditor\bin\Release\net9.0-windows\win-x64\publish" "%DEPLOY%" /MIR /NJH /NJS /NDL /NC /NS /NP >nul
+)
+
 echo.
 echo ============================================================
 echo Published to folder (needs .NET 9 Desktop Runtime installed):
 echo   FO4RecordEditor\bin\Release\net9.0-windows\win-x64\publish\
-echo Add this exe to MO2:
-echo   FO4RecordEditor\bin\Release\net9.0-windows\win-x64\publish\FO4RecordEditor.exe
+echo Launch the editor from MO2 (Tools\FO4Editor\FO4RecordEditor.exe) -- it was updated above.
 echo ============================================================
