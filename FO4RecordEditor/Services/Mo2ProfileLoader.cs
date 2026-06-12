@@ -21,6 +21,10 @@ namespace FO4RecordEditor.Services;
 /// </summary>
 public static class Mo2ProfileLoader
 {
+    // Plugins at or below this size are read fully into memory (unlocked, editable in place);
+    // larger ones load as memory-mapped overlays. Patches are tiny; masters are 10s-100s of MB.
+    private const long FullReadMaxBytes = 16 * 1024 * 1024;   // 16 MB
+
     /// <summary>Minimal env shape the rest of the app accesses via dynamic.</summary>
     public sealed class Mo2GameEnvironment
     {
@@ -137,7 +141,10 @@ public static class Mo2ProfileLoader
             Index(Path.Combine(modsDir, modsHighToLow[i]));
         Index(Path.Combine(instancePath, "overwrite"));
 
-        // Load each plugin (in load order) as a binary overlay from its resolved path.
+        // Load each plugin (in load order). Patch-sized plugins are read FULLY into memory so they
+        // are not memory-mapped -- the file stays unlocked, so the AI/editor can save edits straight
+        // back over it. Big masters (Fallout4.esm, DLCs, large mods) stay as lazy binary overlays
+        // (fast, low memory); you don't edit those in place anyway.
         var listings = new List<IModListingGetter<IFallout4ModGetter>>();
         var loaded = new List<string>();
         var missing = new List<string>();
@@ -151,7 +158,13 @@ public static class Mo2ProfileLoader
             try
             {
                 var modKey = ModKey.FromNameAndExtension(name);
-                var mod = Fallout4Mod.CreateFromBinaryOverlay(ModPath.FromPath(path), Fallout4Release.Fallout4);
+                long size = 0;
+                try { size = new FileInfo(path).Length; } catch { }
+
+                IFallout4ModGetter mod = size > 0 && size <= FullReadMaxBytes
+                    ? Fallout4Mod.CreateFromBinary(ModPath.FromPath(path), Fallout4Release.Fallout4)      // unlocked, editable
+                    : Fallout4Mod.CreateFromBinaryOverlay(ModPath.FromPath(path), Fallout4Release.Fallout4); // mmap, fast
+
                 listings.Add(new ModListing<IFallout4ModGetter>(modKey, mod, enabled: true, ghostSuffix: string.Empty));
                 loaded.Add(name);
             }
