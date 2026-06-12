@@ -322,6 +322,27 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "record", "conditions" }
             }),
+        new("revert_overrides",
+            "BATCH-fix a mod that injected the same bad edit across many records (e.g. a corrupted recipe " +
+            "template). For every record where 'bad_plugin' is currently the WINNER, this restores the " +
+            "version loaded just before it, forwarded into a patch plugin — in ONE call, no per-record loop. " +
+            "Defaults to a DRY RUN that lists what it would do; pass apply=true to write them. Optionally " +
+            "filter by 'signature' (e.g. COBJ) and/or 'contains_component' (a FormKey/EditorID like the " +
+            "hubflower) to target exactly the corrupted records.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    bad_plugin = new { type = "string", description = "The plugin whose overrides to undo, e.g. 'FallenWorldCrafting_Compat.esp'." },
+                    patch_plugin = new { type = "string", description = "Patch to write the reverts into, e.g. 'FallenWorld_CraftingFixes.esp'." },
+                    signature = new { type = "string", description = "Optional record type filter, e.g. 'COBJ'." },
+                    contains_component = new { type = "string", description = "Optional: only revert COBJs whose winning version uses this component (FormKey/EditorID)." },
+                    apply = new { type = "boolean", description = "false (default) = dry-run preview; true = write the reverts." },
+                    limit = new { type = "integer", description = "Max records to list in the dry-run preview (default 50)." }
+                },
+                required = new[] { "bad_plugin", "patch_plugin" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -347,7 +368,20 @@ public sealed class PluginToolExecutor
     public static object[] McpToolDefinitions() =>
         _specs.Select(t => (object)new { name = t.Name, description = t.Description, inputSchema = t.Schema }).ToArray();
 
+    // Hard ceiling on any single tool result. A full record dump or a big conflict matrix can be
+    // tens of KB; returning that to the model is slow and trips Claude Code's "output too large".
+    private const int MaxResultChars = 8000;
+
     public string Execute(string toolName, string inputJson)
+    {
+        var raw = ExecuteInner(toolName, inputJson);
+        if (raw.Length <= MaxResultChars) return raw;
+        return raw[..MaxResultChars] +
+               $"\n\n…[truncated {raw.Length - MaxResultChars:N0} more chars. Narrow the request — e.g. ask for a " +
+               "specific field, use a higher 'limit' sparingly, or use revert_overrides for bulk fixes instead of reading each record.]";
+    }
+
+    private string ExecuteInner(string toolName, string inputJson)
     {
         var env = _envProvider();
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(inputJson) ? "{}" : inputJson);
@@ -355,6 +389,7 @@ public sealed class PluginToolExecutor
 
         string Str(string k) => root.TryGetProperty(k, out var v) ? v.GetString() ?? "" : "";
         int Int(string k, int def) => root.TryGetProperty(k, out var v) && v.TryGetInt32(out var i) ? i : def;
+        bool Bool(string k) => root.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.True;
 
         switch (toolName)
         {
@@ -421,6 +456,11 @@ public sealed class PluginToolExecutor
                 return WriteService.SetComponents(Str("plugin"), Str("record"), Str("components"), env);
             case "set_conditions":
                 return WriteService.SetConditions(Str("plugin"), Str("record"), Str("conditions"), env);
+            case "revert_overrides":
+                return WriteService.RevertOverridesFrom(env, Str("bad_plugin"), Str("patch_plugin"),
+                    root.TryGetProperty("signature", out var sg) ? sg.GetString() : null,
+                    root.TryGetProperty("contains_component", out var cc) ? cc.GetString() : null,
+                    Bool("apply"), Int("limit", 50));
 
             default:
                 return $"Unknown tool: {toolName}";

@@ -799,6 +799,89 @@ public static class WriteService
         return !fk.IsNull;
     }
 
+    // ---- batch revert (undo a plugin's bad overrides across the whole load order) -------
+
+    /// <summary>
+    /// Revert records that <paramref name="badPlugin"/> currently WINS (it's the last override) back
+    /// to the version loaded just before it, by forwarding that prior version into a patch plugin.
+    /// This undoes a mod that mass-injected the same bad edit (e.g. a corrupted recipe template) across
+    /// many records. Defaults to a DRY RUN that lists what it would do; pass apply=true to write them.
+    /// Optionally filter to one signature (e.g. "COBJ") and/or to records whose winning version uses a
+    /// specific component FormKey (e.g. the hubflower), to target exactly the corrupted set.
+    /// </summary>
+    public static string RevertOverridesFrom(object? env, string badPlugin, string patchPlugin,
+        string? sig, string? containsComponent, bool apply, int limit)
+    {
+        if (string.IsNullOrWhiteSpace(badPlugin)) return "Provide the plugin whose overrides to revert.";
+        FormKey? compFk = null;
+        if (!string.IsNullOrWhiteSpace(containsComponent))
+        {
+            if (!ResolveFk(env, containsComponent, out var cfk))
+                return $"'{containsComponent}' is not a FormKey/EditorID of a loaded record.";
+            compFk = cfk;
+        }
+
+        var overrides = MutagenLoader.EnumerateOverrides(env, badPlugin, sig);
+        if (overrides.Count == 0)
+            return $"'{badPlugin}' carries no override records{(sig != null ? $" of type {sig}" : "")} (or it isn't loaded).";
+
+        IFallout4Mod? patch = null;
+        if (apply)
+        {
+            if (string.IsNullOrWhiteSpace(patchPlugin)) return "Provide a patch plugin to write the reverts into.";
+            if (GetMutable(patchPlugin) == null)
+            {
+                if (MutagenLoader.LooseModPaths.ContainsKey(patchPlugin) || FindPluginPath(patchPlugin, env) != null)
+                    OpenPlugin(patchPlugin, env);
+                else CreatePlugin(patchPlugin);
+            }
+            patch = GetMutable(patchPlugin);
+            if (patch == null) return $"Could not open or create patch plugin '{patchPlugin}'.";
+        }
+
+        var preview = new List<string>();
+        int reverted = 0, skipped = 0, noPrior = 0;
+        foreach (var (fk, eid, rsig) in overrides)
+        {
+            var ctxs = MutagenLoader.GetRecordContexts(env, fk);
+            if (ctxs.Count < 2) { noPrior++; continue; }
+            // Only act where badPlugin is what the game currently uses (the winner).
+            if (!string.Equals(ctxs[^1].plugin, badPlugin, StringComparison.OrdinalIgnoreCase)) { skipped++; continue; }
+            if (compFk != null && !MutagenLoader.CobjUsesComponent(ctxs[^1].rec, compFk.Value)) { skipped++; continue; }
+
+            var prior = ctxs[^2];   // the version badPlugin overrode
+            if (apply)
+            {
+                if (prior.rec is IMajorRecordGetter g && AddOverride(patch!, g)) reverted++;
+                else skipped++;
+            }
+            else
+            {
+                reverted++;
+                if (preview.Count < limit)
+                    preview.Add($"{eid} [{fk}] ({rsig}) -> restore {prior.plugin}'s version");
+            }
+        }
+
+        if (apply)
+        {
+            MutagenLoader.InvalidateModIndex(patchPlugin); NotifyChanged(patchPlugin);
+            var save = SavePlugin(patchPlugin, null);
+            return $"Reverted {reverted} record(s) that {badPlugin} was overriding, into {patchPlugin}. " +
+                   $"{(skipped > 0 ? skipped + " skipped (not the winner / filtered out). " : "")}{save} " +
+                   $"Load {patchPlugin} AFTER {badPlugin} so the reverts win.";
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"DRY RUN — {reverted} record(s) where {badPlugin} is the winner would be reverted to the prior version" +
+                      $"{(compFk != null ? $" (filtered to ones using {containsComponent})" : "")}.");
+        if (skipped > 0) sb.AppendLine($"({skipped} of {badPlugin}'s overrides skipped — a later plugin already wins, or filtered out.)");
+        foreach (var line in preview) sb.AppendLine("  " + line);
+        if (reverted > preview.Count) sb.AppendLine($"  …and {reverted - preview.Count} more.");
+        sb.AppendLine($"Run revert_overrides again with apply=true to write these into '{patchPlugin}'.");
+        return sb.ToString();
+    }
+
     // ---- helpers --------------------------------------------------------
 
     private const string SupportedTypes =

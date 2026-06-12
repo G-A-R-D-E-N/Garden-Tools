@@ -397,6 +397,46 @@ public static class MutagenLoader
     public static List<string> GetConflictingPlugins(object? envObj, FormKey fk) =>
         GetRecordContexts(envObj, fk).Select(c => c.plugin).ToList();
 
+    // 4-letter signature -> Mutagen record class name, for filtering EnumerateOverrides by type.
+    private static readonly Dictionary<string, string> _sigToClass = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["COBJ"] = "ConstructibleObject", ["WEAP"] = "Weapon", ["ARMO"] = "Armor", ["ALCH"] = "Ingestible",
+        ["MISC"] = "MiscItem", ["FLST"] = "FormList", ["LVLI"] = "LeveledItem", ["AMMO"] = "Ammunition",
+    };
+
+    /// <summary>
+    /// Every record a plugin carries as an OVERRIDE (the FormKey belongs to another mod), optionally
+    /// filtered to one signature (e.g. "COBJ"). Used to batch-revert a plugin's edits.
+    /// </summary>
+    public static List<(FormKey fk, string editorId, string sig)> EnumerateOverrides(
+        object? envObj, string plugin, string? sig = null)
+    {
+        var result = new List<(FormKey, string, string)>();
+        if (ResolveMod(plugin, envObj) is not Mutagen.Bethesda.Plugins.Records.IModGetter mod) return result;
+
+        string? wantClass = sig == null ? null
+            : (_sigToClass.TryGetValue(sig, out var c) ? c : sig);
+
+        foreach (var rec in mod.EnumerateMajorRecords())
+        {
+            if (rec.FormKey.ModKey == mod.ModKey) continue;   // its own new record, not an override
+            var rsig = rec.Registration.Name;
+            if (wantClass != null && !string.Equals(rsig, wantClass, StringComparison.OrdinalIgnoreCase)) continue;
+            result.Add((rec.FormKey, rec.EditorID ?? "", rsig));
+        }
+        return result;
+    }
+
+    /// <summary>True if a COBJ getter's Components reference the given component FormKey (used to
+    /// target exactly the records carrying a specific bad ingredient like hubflower).</summary>
+    public static bool CobjUsesComponent(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec, FormKey component)
+    {
+        if (rec is not Mutagen.Bethesda.Fallout4.IConstructibleObjectGetter cobj || cobj.Components == null) return false;
+        foreach (var c in cobj.Components)
+            if (c.Component.FormKey == component) return true;
+        return false;
+    }
+
     /// <summary>
     /// Every version of a record across the load order, in load order (last = winner). Uses the
     /// environment's link cache (already built, efficient, handles cells/worldspace children) so we

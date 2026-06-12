@@ -173,6 +173,57 @@ public partial class RecordEditorView : UserControl
             ConflictGrid.ItemsSource = _conflictRows;
     }
 
+    // Right-click selects the row under the cursor so the context menu acts on it.
+    private void ConflictGrid_RightDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        var dep = e.OriginalSource as DependencyObject;
+        while (dep != null && dep is not DataGridRow) dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
+        if (dep is DataGridRow row) { row.IsSelected = true; ConflictGrid.SelectedItem = row.Item; }
+    }
+
+    private void ConflictCopyValue_Click(object sender, RoutedEventArgs e)
+    {
+        if (ConflictGrid.SelectedItem is not Models.ConflictFieldRow row) return;
+        // Copy the winning (last) column's value; fall back to the field path if empty.
+        var val = row.Values.Count > 0 ? row.Values[^1] : "";
+        TrySetClipboard(string.IsNullOrEmpty(val) ? row.Field : val);
+    }
+
+    private void ConflictCopyField_Click(object sender, RoutedEventArgs e)
+    {
+        if (ConflictGrid.SelectedItem is Models.ConflictFieldRow row) TrySetClipboard(row.Field);
+    }
+
+    private void ConflictForwardWinner_Click(object sender, RoutedEventArgs e)
+    {
+        var patch = string.IsNullOrWhiteSpace(PatchName.Text) ? "FallenWorldFixes.esp" : PatchName.Text.Trim();
+        ShowConflictStatus(_tab.ForwardWinnerToPatch(patch));
+    }
+
+    private void ConflictRemoveOverride_Click(object sender, RoutedEventArgs e)
+    {
+        var winner = _tab.SourcePlugin;
+        var r = MessageBox.Show(
+            $"Remove {winner}'s override of this record and save {winner} in place?\n\n" +
+            "This edits the plugin file on disk; the next plugin down then wins.",
+            "Remove override", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (r != MessageBoxResult.Yes) return;
+        ShowConflictStatus(_tab.RemoveWinnerOverrideAndSave());
+    }
+
+    private void ShowConflictStatus(string msg)
+    {
+        ConflictSummary.Text = msg;
+        ConflictSummary.Foreground = msg.Contains("could not", StringComparison.OrdinalIgnoreCase)
+            ? Brush("#E0B060") : Brush("#7FB37F");
+    }
+
+    private static void TrySetClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try { Clipboard.SetText(text); } catch { /* clipboard busy */ }
+    }
+
     private void SaveToPatch_Click(object sender, RoutedEventArgs e)
     {
         try

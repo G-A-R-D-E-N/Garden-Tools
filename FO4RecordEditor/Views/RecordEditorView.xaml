@@ -120,7 +120,19 @@
                   CanUserAddRows="False" GridLinesVisibility="All" HeadersVisibility="Column"
                   Background="#181818" Foreground="#D4D4D4" RowBackground="#1E1E1E"
                   BorderBrush="#3F3F46" FontFamily="Consolas" FontSize="12" ColumnWidth="*"
-                  EnableRowVirtualization="True">
+                  EnableRowVirtualization="True"
+                  PreviewMouseRightButtonDown="ConflictGrid_RightDown">
+          <DataGrid.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="Copy value" Click="ConflictCopyValue_Click"/>
+              <MenuItem Header="Copy field path" Click="ConflictCopyField_Click"/>
+              <Separator/>
+              <MenuItem Header="Forward winner into patch…" Click="ConflictForwardWinner_Click"
+                        ToolTip="Copy the winning version of this record into the patch plugin as an override."/>
+              <MenuItem Header="Remove this record's override from the winner…" Click="ConflictRemoveOverride_Click"
+                        ToolTip="Delete the winning plugin's override of this record (xEdit 'Remove'). The next plugin down then wins."/>
+            </ContextMenu>
+          </DataGrid.ContextMenu>
           <DataGrid.RowStyle>
             <Style TargetType="DataGridRow">
               <Style.Triggers>

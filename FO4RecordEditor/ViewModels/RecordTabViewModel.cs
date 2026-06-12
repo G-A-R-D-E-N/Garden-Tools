@@ -25,6 +25,21 @@ public sealed class RecordTabViewModel
     public string SaveToPatch(string patchPlugin) =>
         FO4RecordEditor.Services.WriteService.SaveRecordEditsToPatch(_env, Record, SourcePlugin, patchPlugin);
 
+    public string FormKey => Record.GetValue("FormKey") ?? "";
+
+    /// <summary>Copy the winning version into a patch as an override (no field edits required).</summary>
+    public string ForwardWinnerToPatch(string patchPlugin) =>
+        FO4RecordEditor.Services.WriteService.CopyAsOverride(_env, SourcePlugin, FormKey, patchPlugin);
+
+    /// <summary>Delete the winning plugin's override of this record and save that plugin in place
+    /// (xEdit "Remove" — the next plugin down then wins).</summary>
+    public string RemoveWinnerOverrideAndSave()
+    {
+        var del = FO4RecordEditor.Services.WriteService.DeleteRecord(SourcePlugin, FormKey, _env);
+        if (!del.StartsWith("Removed", System.StringComparison.OrdinalIgnoreCase)) return del;
+        return del + " " + FO4RecordEditor.Services.WriteService.SavePlugin(SourcePlugin, null);
+    }
+
     /// <summary>True when more than one plugin overrides this record (a real conflict set).</summary>
     public bool HasConflicts => Plugins.Count(p => !string.IsNullOrEmpty(p)) > 1;
 
