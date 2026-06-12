@@ -78,7 +78,11 @@ public partial class RecordEditorView : UserControl
             else
                 text.SetBinding(TextBox.IsReadOnlyProperty, new Binding("IsCompound"));
 
-            col.CellTemplate = new DataTemplate { VisualTree = text };
+            // The editable (winner / single-plugin) column uses the rich cell template so bool
+            // fields show a checkbox and enum fields a dropdown; reference columns keep the textbox.
+            col.CellTemplate = editable
+                ? (DataTemplate)Resources["EditableValueCell"]
+                : new DataTemplate { VisualTree = text };
 
             var cellStyle = new Style(typeof(DataGridCell));
             cellStyle.Setters.Add(new Setter(DataGridCell.PaddingProperty, new Thickness(0)));

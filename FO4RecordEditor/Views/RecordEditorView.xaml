@@ -6,6 +6,28 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     <views:ConflictCellBrush x:Key="CellBrush"/>
     <views:FriendlyNameConverter x:Key="Friendly"/>
+    <views:EditKindToVisibility x:Key="EditKindVis"/>
+    <views:BoolStringConverter x:Key="BoolStr"/>
+
+    <!-- Editable winner-column cell: a textbox by default, a checkbox for bool fields, and a
+         dropdown for enum fields (xEdit-style). Only the matching control is visible. -->
+    <DataTemplate x:Key="EditableValueCell">
+      <Grid>
+        <TextBox Text="{Binding Node.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 IsReadOnly="{Binding IsCompound}"
+                 Background="Transparent" Foreground="WhiteSmoke" BorderThickness="0" Padding="4,2"
+                 FontFamily="Consolas" VerticalContentAlignment="Center"
+                 Visibility="{Binding Node.EditKind, Converter={StaticResource EditKindVis}, ConverterParameter=Text}"/>
+        <ComboBox ItemsSource="{Binding Node.EnumOptions}"
+                  SelectedItem="{Binding Node.Value, Mode=TwoWay}"
+                  Background="#2D2D30" Foreground="#111" BorderThickness="0" Padding="2,0" Margin="2,1"
+                  FontFamily="Consolas" FontSize="12"
+                  Visibility="{Binding Node.EditKind, Converter={StaticResource EditKindVis}, ConverterParameter=Enum}"/>
+        <CheckBox IsChecked="{Binding Node.Value, Mode=TwoWay, Converter={StaticResource BoolStr}}"
+                  VerticalAlignment="Center" HorizontalAlignment="Left" Margin="6,0"
+                  Visibility="{Binding Node.EditKind, Converter={StaticResource EditKindVis}, ConverterParameter=Bool}"/>
+      </Grid>
+    </DataTemplate>
   </UserControl.Resources>
 
   <TabControl x:Name="ViewTabs" Background="#1E1E1E" BorderThickness="0"

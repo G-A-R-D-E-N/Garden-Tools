@@ -872,6 +872,13 @@ public static class MutagenLoader
                 if (_leafTypes.Contains(valType) || valType.IsEnum)
                 {
                     child.Values[pluginName] = val.ToString()!;
+                    // Editor hint: bool -> checkbox, enum -> dropdown of its names (xEdit-style).
+                    if (valType == typeof(bool)) child.EditKind = Models.FieldEditKind.Bool;
+                    else if (valType.IsEnum && child.EnumOptions == null)
+                    {
+                        child.EditKind = Models.FieldEditKind.Enum;
+                        child.EnumOptions = Enum.GetNames(valType);
+                    }
                 }
                 else if (val is string s)
                 {

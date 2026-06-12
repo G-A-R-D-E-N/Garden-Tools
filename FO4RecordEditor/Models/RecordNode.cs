@@ -4,6 +4,9 @@ using System.Runtime.CompilerServices;
 
 namespace FO4RecordEditor.Models;
 
+/// <summary>How the value cell should be edited: a free textbox, a checkbox (bool), or a dropdown (enum).</summary>
+public enum FieldEditKind { Text, Bool, Enum }
+
 public class RecordNode : INotifyPropertyChanged
 {
     private bool _isDirty;
@@ -16,6 +19,11 @@ public class RecordNode : INotifyPropertyChanged
     public ObservableCollection<RecordNode> Children { get; } = [];
 
     public Dictionary<string, string> Values { get; } = new();
+
+    // Editor hint for the value cell: a bool field renders as a checkbox, an enum as a dropdown
+    // (xEdit-style), everything else as a textbox. Set by the walker from the field's CLR type.
+    public FieldEditKind EditKind { get; set; } = FieldEditKind.Text;
+    public string[]? EnumOptions { get; set; }
 
     // True for a record row in the Explorer tree. Records are shown as leaves there (their
     // fields live in the center property grid), so the tree binds TreeChildren, not Children.
