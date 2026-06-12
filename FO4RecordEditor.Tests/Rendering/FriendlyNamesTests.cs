@@ -15,4 +15,12 @@ public class FriendlyNamesTests
         FriendlyNames.Label("SomeUnmappedField").Should().Be("SomeUnmappedField");
         FriendlyNames.Label("[0]").Should().Be("[0]");
     }
+
+    [Fact]
+    public void LabelPath_relabels_plain_names_but_leaves_paths_and_indices_intact()
+    {
+        FriendlyNames.LabelPath("MarkerColor").Should().Be("Marker Color");
+        FriendlyNames.LabelPath("Components[0].Component").Should().Be("Components[0].Component");
+        FriendlyNames.LabelPath("[0]").Should().Be("[0]");
+    }
 }

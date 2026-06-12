@@ -5,6 +5,7 @@
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     <views:ConflictCellBrush x:Key="CellBrush"/>
+    <views:FriendlyNameConverter x:Key="Friendly"/>
   </UserControl.Resources>
 
   <TabControl x:Name="ViewTabs" Background="#1E1E1E" BorderThickness="0"
@@ -83,7 +84,7 @@
                       </ToggleButton.Template>
                     </ToggleButton>
                   </Border>
-                  <TextBlock Text="{Binding Node.Key}" Foreground="#9CDCFE"
+                  <TextBlock Text="{Binding Node.Key, Converter={StaticResource Friendly}}" Foreground="#9CDCFE"
                              FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
               </DataTemplate>

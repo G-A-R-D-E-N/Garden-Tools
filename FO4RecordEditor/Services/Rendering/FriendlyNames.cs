@@ -19,4 +19,12 @@ public static class FriendlyNames
 
     public static string Label(string raw) =>
         _map.TryGetValue(raw, out var v) ? v : raw;
+
+    /// <summary>Relabel only a plain property name; leave dotted paths and list indices
+    /// ("Components[0].Component", "[0]") structurally intact so edit paths still resolve.</summary>
+    public static string LabelPath(string path)
+    {
+        if (path.Contains('.') || path.Contains('[')) return path;
+        return Label(path);
+    }
 }
