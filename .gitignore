@@ -5,3 +5,6 @@ obj/
 
 # Third-party xEdit source (not part of this project)
 TES5Edit-dev-4.1.6/
+
+web/node_modules/
+web/dist/
