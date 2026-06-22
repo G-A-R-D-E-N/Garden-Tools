@@ -77,14 +77,21 @@ public partial class App : Application
     /// <summary>
     /// Build the env lazily (on first tool use) and serve plugin tools over stdio until stdin
     /// closes, then exit. Lazy so startup is instant and a missing game install doesn't stop the
-    /// server — the failing tool just reports it. Optional `--data &lt;folder&gt;` overrides the
-    /// data folder the Mutagen environment loads from.
+    /// server — the failing tool just reports it.
+    /// <para>
+    /// Source of the load order, in order of precedence:
+    /// <list type="bullet">
+    /// <item><c>--mo2 &lt;instancePath&gt;</c> — reconstruct an MO2 modlist (profile plugins.txt +
+    /// mods/overwrite) so modlist plugins like FallenWorldCrafting.esp are visible/editable.</item>
+    /// <item><c>--data &lt;folder&gt;</c> — a plain Data folder override for the vanilla builder.</item>
+    /// <item>neither — the default Fallout 4 install (vanilla + DLC + CC only).</item>
+    /// </list>
+    /// </para>
     /// </summary>
     private static void RunMcpHeadless(string[] args)
     {
-        string? dataOverride = null;
-        for (int i = 0; i < args.Length - 1; i++)
-            if (args[i] == "--data") { dataOverride = args[i + 1]; break; }
+        string? dataOverride = ArgValue(args, "--data");
+        string? mo2Instance = ArgValue(args, "--mo2");
 
         object? env = null;
         bool tried = false;
@@ -93,16 +100,36 @@ public partial class App : Application
             if (!tried)
             {
                 tried = true;
-                try { env = Services.MutagenLoader.BuildEnvironment(null, dataOverride).env; }
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(mo2Instance))
+                    {
+                        var info = Services.Mo2ProfileLoader.ReadInstanceInfo(mo2Instance);
+                        env = Services.Mo2ProfileLoader.Load(info.InstancePath, info.Profile, info.GameDataFolder).env;
+                        Trace($"--mcp MO2 env loaded: instance={info.InstancePath} profile={info.Profile}");
+                    }
+                    else
+                    {
+                        env = Services.MutagenLoader.BuildEnvironment(null, dataOverride).env;
+                    }
+                }
                 catch (Exception ex) { Trace($"--mcp env build failed: {ex.Message}"); }
             }
             return env;
         };
 
-        var executor = new Services.PluginToolExecutor(envProvider);
+        var executor = new Services.PluginToolExecutor(envProvider, () => mo2Instance);
         try { Services.StdioMcpServer.Run(executor); }
         catch (Exception ex) { Trace($"--mcp loop ended with error: {ex.Message}"); }
         Environment.Exit(0);
+    }
+
+    /// <summary>Returns the value following <paramref name="name"/> in the arg list, or null.</summary>
+    private static string? ArgValue(string[] args, string name)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i] == name) return args[i + 1];
+        return null;
     }
 
     /// <summary>Appends a timestamped breadcrumb to the startup log (best-effort, never throws).</summary>
