@@ -74,10 +74,12 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "id" }
             }),
         new("get_conflicts",
-            "Show EVERY plugin that overrides a record, in load order, and which one WINS. The winner " +
-            "is the plugin loaded LAST -- it is what the game actually uses, NOT the first override you " +
-            "find. Always call this before blaming a plugin for a conflict. Accepts a FormKey " +
-            "('054C84:Fallout4.esm') or an EditorID.",
+            "Show EVERY plugin that overrides a record in load order, which one WINS, and a " +
+            "PER-FIELD diff table showing each plugin's value for every field that differs. " +
+            "Severity tags: [OVERRIDE] = 2 distinct values; [CONFLICT] = 3+ distinct; [CRITICAL] = " +
+            "winner value is empty/null while another plugin had a real value. " +
+            "The LAST plugin is ALWAYS the winner -- it is what the game actually uses. " +
+            "Call this BEFORE deciding what to patch. Accepts FormKey ('054C84:Fallout4.esm') or EditorID.",
             new
             {
                 type = "object",
@@ -290,6 +292,16 @@ public sealed class PluginToolExecutor
             {
                 type = "object",
                 properties = new { plugin = new { type = "string" } },
+                required = new[] { "plugin" }
+            }),
+        new("backup_plugin",
+            "Copy the plugin's original on-disk file to a timestamped .bak file beside it BEFORE making any edits. " +
+            "ALWAYS call this before the first write to any existing plugin in a session. Safe to call multiple times — " +
+            "each call produces a distinct backup (e.g. MyMod.esp.20250623_142031.bak).",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string", description = "Plugin file name, e.g. 'MyMod.esp'." } },
                 required = new[] { "plugin" }
             }),
         new("save_plugin",
@@ -535,7 +547,7 @@ public sealed class PluginToolExecutor
         var field  = Str("field");
 
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
-            "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or
+            "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
             "create_record" or "delete_record" or "copy_as_override" or "clean_plugin" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides";
@@ -546,6 +558,7 @@ public sealed class PluginToolExecutor
         string summary = toolName switch
         {
             "open_plugin"         => $"open {plugin}",
+            "backup_plugin"       => $"backup {plugin}",
             "save_plugin"         => $"save {plugin}",
             "set_field"           => $"{ShortId(record)}.{field} = {val}",
             "set_conditions"      => $"{ShortId(record)}: conditions rebuilt",
@@ -648,6 +661,8 @@ public sealed class PluginToolExecutor
                 return WriteService.RenumberFormId(Str("plugin"), Str("record"), Str("new_id"), env);
             case "clean_plugin":
                 return WriteService.CleanPlugin(Str("plugin"), env);
+            case "backup_plugin":
+                return WriteService.BackupPlugin(Str("plugin"));
             case "save_plugin":
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
             case "copy_as_override":
@@ -708,22 +723,49 @@ public sealed class PluginToolExecutor
         if (matrix == null || matrix.Plugins.Count == 0) return $"No record found for {fk}.";
 
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"{matrix.EditorID} [{matrix.FormKey}] {matrix.Type}");
+        sb.AppendLine($"{matrix.EditorID} [{matrix.FormKey}] {matrix.Type}  |  record-level: {matrix.Level.ToUpperInvariant()}");
+
         if (matrix.Plugins.Count == 1)
         {
             sb.AppendLine($"Defined only in {matrix.Plugins[0]} -- no override conflict.");
+            return sb.ToString();
         }
-        else
+
+        sb.AppendLine($"Override chain ({matrix.Plugins.Count} plugins, load order -- LAST WINS):");
+        for (int i = 0; i < matrix.Plugins.Count; i++)
+            sb.AppendLine($"  {i + 1}. {matrix.Plugins[i]}"
+                + (i == matrix.Plugins.Count - 1 ? "  <-- WINNER (what the game uses)" : ""));
+
+        var diffRows = matrix.Rows.Where(r => r.Differs).ToList();
+        sb.AppendLine($"\n{diffRows.Count} field(s) differ:");
+
+        if (diffRows.Count > 0)
         {
-            int diffs = matrix.Rows.Count(r => r.Differs);
-            sb.AppendLine($"Overridden by {matrix.Plugins.Count} plugins (load order -- the LAST one wins):");
-            for (int i = 0; i < matrix.Plugins.Count; i++)
-                sb.AppendLine($"  {i + 1}. {matrix.Plugins[i]}"
-                    + (i == matrix.Plugins.Count - 1 ? "   <-- WINNER (what the game uses)" : ""));
-            sb.AppendLine($"{diffs} field(s) differ across versions. Call get_winning_record for the effective values.");
+            const int FW = 36, VW = 22;
+            sb.Append("  " + "Field".PadRight(FW));
+            foreach (var p in matrix.Plugins) sb.Append(" | " + Trunc(p, VW).PadRight(VW));
+            sb.AppendLine();
+            sb.AppendLine("  " + new string('-', FW + matrix.Plugins.Count * (VW + 3)));
+
+            int shown = 0;
+            foreach (var row in diffRows)
+            {
+                if (shown >= 60) { sb.AppendLine($"  ... {diffRows.Count - 60} more rows omitted."); break; }
+                var sev = $"[{row.Severity.ToUpperInvariant()}]";
+                sb.Append($"  {(sev + " " + row.Field).PadRight(FW)}");
+                for (int ci = 0; ci < matrix.Plugins.Count; ci++)
+                    sb.Append(" | " + Trunc(ci < row.Values.Count ? row.Values[ci] : "", VW).PadRight(VW));
+                sb.AppendLine();
+                shown++;
+            }
         }
+
+        sb.AppendLine("\nUse get_winning_record(id) for the complete effective field dump.");
         return sb.ToString();
     }
+
+    private static string Trunc(string? s, int max) =>
+        string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..(max - 3)] + "...";
 
     private static string ScanConflicts(object? env, bool modOnly, string? typeFilter, int limit)
     {
