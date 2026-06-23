@@ -1339,6 +1339,100 @@ public static class WriteService
         return false;
     }
 
+    // ---- support for the in-app C# script runner (PatchScriptHost / run_script) -------------
+
+    /// <summary>Forward a getter into the named patch plugin as a mutable override and hand the
+    /// override back. The patch is opened (if it exists on disk) or created on first use. Used by
+    /// PatchScriptHost so scripts can do per-record edits without a per-record open/find round-trip.</summary>
+    public static IFallout4MajorRecord? OverrideForScript(string patchPlugin, object? env, IMajorRecordGetter getter)
+    {
+        var (patchName, patchPath) = NormalizePlugin(patchPlugin);
+        if (GetMutable(patchName) == null)
+        {
+            bool existsOnDisk = (patchPath != null && File.Exists(patchPath))
+                || MutagenLoader.LooseModPaths.ContainsKey(patchName)
+                || FindPluginPath(patchName, env) != null;
+            if (existsOnDisk) OpenPlugin(patchPlugin, env);
+            else CreatePlugin(patchPlugin);
+        }
+        var patch = GetMutable(patchName);
+        return patch == null ? null : AddOverrideReturning(patch, getter);
+    }
+
+    /// <summary>Invalidate + notify + write the script's patch plugin to disk (apply mode).</summary>
+    public static string SaveScriptPatch(string patchPlugin)
+    {
+        var (name, _) = NormalizePlugin(patchPlugin);
+        MutagenLoader.InvalidateModIndex(name);
+        NotifyChanged(name);
+        return SavePlugin(name, null);
+    }
+
+    /// <summary>Drop a patch plugin from the in-memory editable set without saving (dry-run cleanup),
+    /// so a preview run leaves no half-built overrides behind.</summary>
+    public static void DiscardScriptPatch(string patchPlugin)
+    {
+        var (name, _) = NormalizePlugin(patchPlugin);
+        _mutable.Remove(name);
+        _sourcePath.Remove(name);
+        MutagenLoader.EditableMods.TryRemove(name, out _);
+        MutagenLoader.LooseMods.TryRemove(name, out _);
+        MutagenLoader.InvalidateModIndex(name);
+        NotifyChanged(name);
+    }
+
+    /// <summary>Public wrapper over TrySet so scripts can set scalar/nested fields on an override.</summary>
+    public static bool TrySetField(object rec, string field, string value, object? env, out string msg) =>
+        TrySet(rec, field, value, env, out msg);
+
+    /// <summary>Build a single FO4 Condition from plain typed args (the non-JSON path used by the
+    /// script host). Shares the same function/operator/param/flag semantics as set_conditions.</summary>
+    public static Condition? BuildConditionTyped(
+        object? env, string function, string? param1, string? param2,
+        string? op, float value, string? runOn, string? reference,
+        string? compareGlobal, string? flags, out string err)
+    {
+        err = "";
+        if (!Enum.TryParse<Condition.Function>(function, ignoreCase: true, out var fn))
+        { err = $"unknown function '{function}'"; return null; }
+
+        var data = new FunctionConditionData { Function = fn };
+        if (!string.IsNullOrWhiteSpace(runOn) && Enum.TryParse<Condition.RunOnType>(runOn, true, out var roType))
+            data.RunOnType = roType;
+        if (!string.IsNullOrWhiteSpace(reference) && ResolveFk(env, reference!, out var rfFk))
+            data.Reference.SetTo(rfFk);
+        ApplyParamStr(param1, env, fk => data.ParameterOneRecord.SetTo(fk), n => data.ParameterOneNumber = n);
+        ApplyParamStr(param2, env, fk => data.ParameterTwoRecord.SetTo(fk), n => data.ParameterTwoNumber = n);
+
+        var cop = ParseOperator(op);
+        Condition.Flag condFlags = default;
+        if (!string.IsNullOrWhiteSpace(flags))
+            foreach (var part in flags!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (Enum.TryParse<Condition.Flag>(part, true, out var fl)) condFlags |= fl;
+
+        if (!string.IsNullOrWhiteSpace(compareGlobal) && ResolveFk(env, compareGlobal!, out var cgFk))
+        {
+            var cond = new ConditionGlobal { CompareOperator = cop, Data = data };
+            cond.ComparisonValue.SetTo(cgFk);
+            if (condFlags != default) cond.Flags = condFlags;
+            return cond;
+        }
+        else
+        {
+            var cond = new ConditionFloat { CompareOperator = cop, ComparisonValue = value, Data = data };
+            if (condFlags != default) cond.Flags = condFlags;
+            return cond;
+        }
+    }
+
+    // A string condition parameter is either an integer or a record (FormKey/EditorID).
+    private static void ApplyParamStr(string? s, object? env, Action<FormKey> setRecord, Action<int> setNumber)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return;
+        if (int.TryParse(s, out var ni)) setNumber(ni);
+        else if (ResolveFk(env, s!, out var fk)) setRecord(fk);
+    }
+
     // Check if a record matches a simple field filter. filterValue is a case-insensitive
     // substring check against the string representation of the field value (FormLinks are
     // formatted as "EditorID [FormID:Plugin]" so matching EditorID or FormKey both work).

@@ -465,6 +465,37 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "source_plugin", "patch_plugin", "type", "operations" }
             }),
+        new("run_script",
+            "Run a C# script you author to make PER-RECORD edits across many records in ONE call — for " +
+            "changes batch_patch_records can't express because each record needs different values " +
+            "(e.g. per-recipe component swaps, conditional condition edits). The script gets a 'host' " +
+            "object; the tool compiles + runs it against the loaded records and writes overrides into " +
+            "patch_plugin. ALWAYS dry_run=true first (runs against a throwaway patch, reports counts + " +
+            "your Log lines, writes nothing), then dry_run=false to apply.\n" +
+            "host API:\n" +
+            "  Discovery (getters): host.Cobjs(\"Mod.esp\"); host.Records(\"Weapon\",\"Mod.esp\").\n" +
+            "  Override: var c = host.Cobj(g); (COBJ) or host.Override(g) (any) -> mutable override in the patch.\n" +
+            "  Components: host.HasComponent(g,\"Steel\"); host.AddComponent(c,\"Steel\",5); " +
+            "host.RemoveComponent(c,\"Aluminum\"); host.SetCount(c,\"Screw\",3); " +
+            "host.Swap(c,\"HubFlower\",\"Carrot\") (keeps count); host.ClearComponents(c).\n" +
+            "  Conditions: host.AddCondition(c,\"HasPerk\",param1:\"Gun Nut\",op:\">=\",value:1); " +
+            "host.RemoveConditions(c,\"HasPerk\",param1:\"Gun Nut\"); host.ClearConditions(c).\n" +
+            "  Fields: host.Set(c,\"Priority\",\"5\"). Util: host.Resolve(\"EditorID\"); host.Log(msg).\n" +
+            "Components/conditions take a FormKey ('01FAA5:Fallout4.esm') or EditorID. Loop over discovery, " +
+            "branch on each record's own data, override only the ones you change. Example: " +
+            "foreach (var g in host.Cobjs(\"Mod.esp\")) { if (host.HasComponent(g,\"HubFlower\")) " +
+            "{ var c = host.Cobj(g); host.Swap(c,\"HubFlower\",\"Carrot\"); } } host.Log($\"done {host.Applied}\");",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    script       = new { type = "string", description = "C# script body using the 'host' API. No class/Main wrapper; top-level statements." },
+                    patch_plugin = new { type = "string", description = "Patch plugin to write overrides into, e.g. 'FW_CraftingFixes.esp'." },
+                    dry_run      = new { type = "boolean", description = "true (default) = preview only (throwaway patch, nothing saved); false = apply + save." }
+                },
+                required = new[] { "script", "patch_plugin" }
+            }),
         new("reload_plugin",
             "Evict a plugin from the editor session and re-open it fresh from disk. Fixes stale " +
             "in-memory state that causes check_plugin to report false-positive 'undeclared master' errors " +
@@ -596,7 +627,8 @@ public sealed class PluginToolExecutor
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
             "create_record" or "delete_record" or "copy_as_override" or "clean_plugin" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
-            "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records";
+            "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
+            "run_script";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
@@ -628,6 +660,7 @@ public sealed class PluginToolExecutor
             "get_winning_record"  => $"winning record {ShortId(Str("id"))}",
             "revert_overrides"    => $"revert {Str("bad_plugin")} -> {Str("patch_plugin")}",
             "batch_patch_records" => $"batch patch {Str("type")} in {Str("source_plugin")} -> {Str("patch_plugin")}",
+            "run_script"          => $"run script -> {Str("patch_plugin")}",
             "scan_conflicts"      => "scan all conflicts",
             _                     => toolName.Replace('_', ' '),
         };
@@ -738,6 +771,9 @@ public sealed class PluginToolExecutor
                     root.TryGetProperty("filter_value",  out var fv) ? fv.GetString() : null,
                     !root.TryGetProperty("dry_run", out var dr2) || dr2.ValueKind != JsonValueKind.False,
                     Int("limit", 5000));
+            case "run_script":
+                return PatchScriptRunner.Run(Str("script"), env, Str("patch_plugin"),
+                    !root.TryGetProperty("dry_run", out var drs) || drs.ValueKind != JsonValueKind.False);
             case "reload_plugin":
                 return WriteService.ReloadPlugin(Str("plugin"), env);
             case "strip_masters_clean":

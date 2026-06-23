@@ -23,10 +23,12 @@ public static class AiGuidance
         "single most expensive mistake. Use list_records_summary to read ALL records of a type in " +
         "ONE call (it shows key fields per record: FormLinks, component counts, stats). " +
         "Then call get_record ONLY on specific records that need a complete field dump.\n"
-        + "- NEVER loop copy_as_override + set_field over many records. Use batch_patch_records to " +
-        "apply the SAME change to hundreds or thousands of records in ONE call. Always dry_run=true " +
-        "first to confirm the filter and record count, then dry_run=false to write. If it reports " +
-        "ABORTED (no operation succeeded), your field name or value format is wrong — fix it, don't retry blindly.\n"
+        + "- NEVER loop copy_as_override + set_field over many records. For the SAME change across many " +
+        "records use batch_patch_records (ONE call). For DIFFERENT edits per record (e.g. per-recipe " +
+        "component swaps, conditional condition edits) use run_script — you author a C# script over a " +
+        "'host' API and the tool runs it. Both default dry_run=true: preview first, then dry_run=false. " +
+        "If batch_patch_records reports ABORTED (no operation succeeded), your field name or value format " +
+        "is wrong — fix it, don't retry blindly.\n"
         + "- list_records_summary and get_conflicts self-limit to a token budget and tell you how many " +
         "rows they OMITTED. When they truncate, do NOT just raise 'limit' (that burns more tokens) — " +
         "add a filter, search_records for the specific records, or get_record one at a time.\n"
@@ -52,7 +54,29 @@ public static class AiGuidance
         + "scan_conflicts, get_referenced_by, get_problems, search_robco_configs.\n"
         + "Write: open_plugin, backup_plugin, create_plugin, create_record, delete_record, "
         + "copy_as_override, set_field, set_components, set_conditions, add_list_item, "
-        + "remove_list_item, clean_plugin, save_plugin, revert_overrides, batch_patch_records.\n\n"
+        + "remove_list_item, clean_plugin, save_plugin, revert_overrides, batch_patch_records, run_script.\n\n"
+
+        // ── PER-RECORD SCRIPTING ───────────────────────────────────────────────────────────────────────
+        + "## run_script — per-record bulk edits (when batch_patch_records can't)\n"
+        + "batch_patch_records applies the SAME operation to every matched record. When each record needs "
+        + "a DIFFERENT edit (per-recipe component swaps, conditions that depend on the record's own data), "
+        + "author a C# script and run it with run_script. The tool compiles + runs it in-app against the "
+        + "loaded records and writes overrides into a patch — no xEdit/Pascal round-trip.\n"
+        + "Pattern: loop discovery getters, branch on each record's data, override ONLY the ones you change.\n"
+        + "  foreach (var g in host.Cobjs(\"Mod.esp\")) {\n"
+        + "    if (host.HasComponent(g, \"HubFlower\")) {\n"
+        + "      var c = host.Cobj(g);                  // forward into the patch as a mutable override\n"
+        + "      host.Swap(c, \"HubFlower\", \"Carrot\");   // keep count\n"
+        + "      host.AddCondition(c, \"HasPerk\", param1:\"Gun Nut\", op:\">=\", value:1);\n"
+        + "    }\n"
+        + "  }\n"
+        + "  host.Log($\"changed {host.Applied} recipe(s)\");\n"
+        + "host API: Cobjs/Records (discover), Cobj/Override (forward to patch), AddComponent/RemoveComponent/"
+        + "SetCount/Swap/ClearComponents, AddCondition/RemoveConditions/ClearConditions, Set (scalar/nested "
+        + "field), Resolve, Log. Components/conditions accept a FormKey or EditorID.\n"
+        + "ALWAYS dry_run=true first (runs against a throwaway patch, reports Applied/Edits counts + your Log "
+        + "lines, writes nothing), read the result, THEN dry_run=false to apply and save. Keep the script "
+        + "self-contained — top-level statements, no class/Main wrapper.\n\n"
 
         // ── FO4 PLUGIN SYSTEM ────────────────────────────────────────────────────────────────────────
         + "## FO4 plugin system — how conflicts actually work\n"
