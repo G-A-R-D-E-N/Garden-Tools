@@ -482,6 +482,11 @@ public sealed class PluginToolExecutor
     // tens of KB; returning that to the model is slow and trips Claude Code's "output too large".
     private const int MaxResultChars = 8000;
 
+    /// <summary>Raised on the calling thread after every tool call, whether read or write.
+    /// The GUI subscribes to drive its live PIE-mode feed and auto-refresh the open record.</summary>
+    public record McpToolEvent(string Tool, string Plugin, string Record, string Field, string Summary, bool IsWrite);
+    public static event Action<McpToolEvent>? ToolCompleted;
+
     public string Execute(string toolName, string inputJson)
     {
         DebugLog.Write("INFO", "AI-Tool", $"call {toolName}",
@@ -497,11 +502,63 @@ public sealed class PluginToolExecutor
             throw;   // the agent surfaces "Tool error: ..."; the full stack is now in the debug log
         }
         DebugLog.Write("DEBUG", "AI-Tool", $"done {toolName} -> {raw.Length} chars");
+        try { ToolCompleted?.Invoke(ExtractEvent(toolName, inputJson)); } catch { }
         if (raw.Length <= MaxResultChars) return raw;
         return raw[..MaxResultChars] +
                $"\n\n…[truncated {raw.Length - MaxResultChars:N0} more chars. Narrow the request — e.g. ask for a " +
                "specific field, use a higher 'limit' sparingly, or use revert_overrides for bulk fixes instead of reading each record.]";
     }
+
+    private static McpToolEvent ExtractEvent(string toolName, string inputJson)
+    {
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(inputJson) ? "{}" : inputJson);
+        var root = doc.RootElement;
+        string Str(string k) => root.TryGetProperty(k, out var v) ? v.GetString() ?? "" : "";
+
+        var plugin = Str("plugin");
+        var record = Str("record") is { Length: > 0 } r ? r : Str("id");
+        var field  = Str("field");
+
+        bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
+            "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or
+            "create_record" or "delete_record" or "copy_as_override" or "clean_plugin" or
+            "compact_to_esl" or "reload_plugin" or "strip_masters_clean" or
+            "attach_script" or "set_script_property" or "revert_overrides";
+
+        var val = Str("value");
+        if (val.Length > 40) val = val[..37] + "...";
+
+        string summary = toolName switch
+        {
+            "open_plugin"         => $"open {plugin}",
+            "save_plugin"         => $"save {plugin}",
+            "set_field"           => $"{ShortId(record)}.{field} = {val}",
+            "set_conditions"      => $"{ShortId(record)}: conditions rebuilt",
+            "set_components"      => $"{ShortId(record)}: components set",
+            "add_list_item"       => $"{ShortId(record)}.{field} += {Str("value")}",
+            "remove_list_item"    => $"{ShortId(record)}.{field} -= {Str("value")}",
+            "create_record"       => $"create {Str("type")} '{Str("editorId")}' in {plugin}",
+            "delete_record"       => $"delete {ShortId(record)} from {plugin}",
+            "copy_as_override"    => $"{ShortId(Str("id"))} -> {Str("patch_plugin")}",
+            "reload_plugin"       => $"reload {plugin}",
+            "strip_masters_clean" => $"strip masters: {System.IO.Path.GetFileName(Str("source_path"))}",
+            "check_plugin"        => $"check {plugin}",
+            "clean_plugin"        => $"clean UDRs in {plugin}",
+            "compact_to_esl"      => $"compact {plugin} to ESL",
+            "get_record"          => $"read {ShortId(Str("id"))} in {plugin}",
+            "list_records"        => $"list {Str("type")} in {plugin}",
+            "search_records"      => $"search '{Str("query")}' in {plugin}",
+            "get_conflicts"       => $"conflicts for {ShortId(Str("id"))}",
+            "get_winning_record"  => $"winning record {ShortId(Str("id"))}",
+            "revert_overrides"    => $"revert {Str("bad_plugin")} -> {Str("patch_plugin")}",
+            "scan_conflicts"      => "scan all conflicts",
+            _                     => toolName.Replace('_', ' '),
+        };
+
+        return new McpToolEvent(toolName, plugin, record, field, summary, isWrite);
+    }
+
+    private static string ShortId(string id) => id.Length <= 32 ? id : id[..29] + "...";
 
     private string ExecuteInner(string toolName, string inputJson)
     {
