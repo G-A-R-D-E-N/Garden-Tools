@@ -308,7 +308,7 @@ public static class WriteService
     /// <summary>
     /// Change one record's FormID within its plugin (xEdit "Change FormID") and repoint every
     /// reference to it that lives in the SAME plugin. References in OTHER plugins are not rewritten
-    /// (that needs a patch); the message flags how many exist so the caller / AI can fix them.
+    /// (that needs a patch); the message notes they may exist so the caller / AI can fix them.
     /// In memory until save_plugin. newIdHex is the 6-digit object id, e.g. "000F99" or "0xF99".
     /// </summary>
     public static string RenumberFormId(string plugin, string recordId, string newIdHex, object? env)
