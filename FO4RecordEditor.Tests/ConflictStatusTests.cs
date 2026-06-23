@@ -71,4 +71,31 @@ public class ConflictStatusTests
         MutagenLoader.CanonValue("1.0").Should().Be(MutagenLoader.CanonValue("1.000000"));
         MutagenLoader.CanonValue("abc").Should().Be("abc");
     }
+
+    [Fact]
+    public void CanonValue_treats_scientific_notation_as_equal_to_plain()
+    {
+        MutagenLoader.CanonValue("1e5").Should().Be(MutagenLoader.CanonValue("100000"));
+    }
+
+    [Fact]
+    public void CanonValue_keeps_genuinely_different_numbers_distinct()
+    {
+        MutagenLoader.CanonValue("10").Should().NotBe(MutagenLoader.CanonValue("20"));
+    }
+
+    [Fact]
+    public void CanonValue_does_not_parse_formkey_as_number()
+    {
+        // FormKeys contain a colon + filename, so they must never collapse via numeric canonicalization.
+        MutagenLoader.CanonValue("001234:Base.esp").Should().Be("001234:Base.esp");
+    }
+
+    [Fact]
+    public void Override_with_third_agreeing_with_winner_is_override_not_conflict()
+    {
+        // ["10","20","20"] is two distinct values -> override severity (only 2 plugins truly disagree).
+        var (_, severity) = MutagenLoader.ClassifyRow(new[] { "10", "20", "20" }, "Text");
+        severity.Should().Be("override");
+    }
 }

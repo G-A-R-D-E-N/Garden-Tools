@@ -651,7 +651,10 @@ public static class MutagenLoader
                 var vals = plugins.Select(pl => child.Values.TryGetValue(pl, out var v) ? v : "").ToList();
                 var present = vals.Where(v => v.Length > 0).ToList();
                 bool anyMissing = present.Count < plugins.Count;
-                bool differs = present.Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
+                // Differ check uses the SAME semantic canonicalization as ClassifyRow/Severity, so a
+                // float-formatting difference ("1.0" vs "1.000000") is not flagged as a change here while
+                // Severity calls it "none". Keeping the two in sync avoids a contradictory row.
+                bool differs = present.Select(CanonValue).Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
                 var editKindString = child.EditKind.ToString();
                 var (statuses, severity) = ClassifyRow(vals, editKindString);
                 rows.Add(new ConflictFieldRow
