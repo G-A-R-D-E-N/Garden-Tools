@@ -90,6 +90,64 @@ body {
   background: var(--text-muted);
 }
 
+/* ── Light theme ── All conflict cells use solid backgrounds on white so they pop. ── */
+[data-theme="light"] {
+  --bg-primary: #f6f8fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f2f5;
+  --bg-hover: #e8eaed;
+  --border-color: #d0d7de;
+  --border-strong: #afb8c1;
+  --text-primary: #1f2328;
+  --text-secondary: #636c76;
+  --text-muted: #9198a1;
+  --text-highlight: #cf222e;
+  --text-identical: #1a7f37;
+  --conflict-purple: #ddd6fe;
+  --conflict-red: #fecaca;
+  --conflict-yellow: #fde68a;
+  --conflict-orange: #fed7aa;
+  --conflict-green: #bbf7d0;
+  --conflict-empty: #f6f8fa;
+  --accent-color: #1a7f37;
+  --accent-hover: #2ea043;
+  --accent-dim: #116329;
+  --accent-success: #1a7f37;
+  --accent-info: #0550ae;
+  --status-base: #1a7f37;
+  --status-changed: #cf222e;
+  --status-warning: #b45309;
+  --status-ok: #1a7f37;
+  --status-info: #0550ae;
+  --chip-1: #15803d; --chip-2: #7c3aed; --chip-3: #1d4ed8;
+  --chip-4: #b45309; --chip-5: #0f766e; --chip-6: #be185d;
+  --chip-7: #c2410c; --chip-8: #0e7490;
+  --shadow-panel: 0 2px 8px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+  color-scheme: light;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Light mode — solid conflict cell colors for maximum readability on white. */
+[data-theme="light"] .rv-c-master    { background: #ede9fe; color: #5b21b6; }
+[data-theme="light"] .rv-c-win       { background: #fef9c3; box-shadow: inset 2px 0 0 #b45309; color: #713f12; font-weight: 600; }
+[data-theme="light"] .rv-c-lose      { background: #fee2e2; color: #991b1b; }
+[data-theme="light"] .rv-c-override  { background: #dcfce7; color: #166534; }
+[data-theme="light"] .rv-c-only      { background: #f0f2f5; color: var(--text-primary); }
+[data-theme="light"] .rv-c-identical { color: #9198a1; background: transparent; }
+[data-theme="light"] .rv-c-notdefined,
+[data-theme="light"] .rv-c-none      { color: #c8cdd5; background: transparent; }
+[data-theme="light"] .rv-win-icon    { color: #b45309; }
+
+/* Light mode — table surfaces */
+[data-theme="light"] .rv-grid th           { background: var(--bg-tertiary); color: var(--text-secondary); }
+[data-theme="light"] .rv-sticky            { background: var(--bg-secondary); }
+[data-theme="light"] thead .rv-sticky      { background: var(--bg-tertiary); }
+[data-theme="light"] .rv-grid td           { border-bottom: 1px solid #e8eaed; border-right: 1px solid #e8eaed; }
+[data-theme="light"] .rv-diff td           { background: rgba(180,83,9,0.03); }
+[data-theme="light"] .rv-grid tr:hover td  { background: rgba(0,0,0,0.025); }
+[data-theme="light"] .rv-diff .rv-prop-col { box-shadow: inset 2px 0 0 rgba(180,83,9,0.4); }
+
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
 }

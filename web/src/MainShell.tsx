@@ -21,6 +21,7 @@ import TopBar, { type ShellTab } from './Shell/TopBar';
 import DetailRail from './Shell/DetailRail';
 import StatusBar from './Shell/StatusBar';
 import type { ConflictMatrix, SearchHit, ConflictEntry } from './backend';
+import type { RecordTab } from './RecordView';
 
 interface RecordNode {
   Key: string;
@@ -88,6 +89,16 @@ export default function MainShell() {
   const [shellTab, setShellTab] = useState<ShellTab>('home');
   const [railVisible, setRailVisible] = useState(true);
   const [chatVisible, setChatVisible] = useState(true);
+
+  // Theme: dark by default; persisted in localStorage.
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light');
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+
+  // Record-level tab (Record View / Conflicts / References / History / Dependencies).
+  const [recordTab, setRecordTab] = useState<RecordTab>('grid');
   const [plugins, setPlugins] = useState<RecordNode[]>([]);
   const [backend, setBackend] = useState<any>(null);
   const [errorStr, setErrorStr] = useState<string>("");
@@ -367,10 +378,10 @@ export default function MainShell() {
   const reloadMatrixRef = useRef(reloadMatrix);
   reloadMatrixRef.current = reloadMatrix;
 
-  // Opening any record switches the top-bar tab to the Record Viewer.
+  // Opening any record switches to the Record Viewer and resets the inner tab.
   useEffect(() => {
-    if (openRecord) setShellTab('record');
-  }, [openRecord]);
+    if (openRecord) { setShellTab('record'); setRecordTab('grid'); }
+  }, [openRecord?.matrix?.FormKey]);
 
   // Command-bar search for the top bar: reuse the existing SearchRecords bridge.
   const commandSearch = useCallback(async (q: string): Promise<SearchHit[]> => {
@@ -397,6 +408,8 @@ export default function MainShell() {
         railVisible={railVisible}
         onToggleChat={() => setChatVisible(v => !v)}
         chatVisible={chatVisible}
+        isDark={isDark}
+        onToggleTheme={() => setIsDark(v => !v)}
         onSearch={commandSearch}
         onOpenHit={openHit}
       />
@@ -551,7 +564,14 @@ export default function MainShell() {
                   <p>Loading record...</p>
                 </div>
               ) : openRecord ? (
-                <RecordView matrix={openRecord.matrix} plugin={openRecord.plugin} onReload={reloadMatrix} onOpenRecord={openByFormKey} />
+                <RecordView
+                  matrix={openRecord.matrix}
+                  plugin={openRecord.plugin}
+                  onReload={reloadMatrix}
+                  onOpenRecord={openByFormKey}
+                  activeTab={recordTab}
+                  onTabChange={setRecordTab}
+                />
               ) : (
                 <div className="welcome-screen glass-panel">
                   <Database size={64} color="var(--border-color)" />
@@ -584,7 +604,12 @@ export default function MainShell() {
       </div>
 
       {/* RIGHT pane: detail rail (Phase 5 fills this in) */}
-      {railVisible && <DetailRail matrix={openRecord?.matrix ?? null} />}
+      {railVisible && (
+        <DetailRail
+          matrix={openRecord?.matrix ?? null}
+          onOpenConflictsTab={() => { setRecordTab('conflicts'); setShellTab('record'); }}
+        />
+      )}
 
       {/* AI Panel - Claude (always mounted so the live session survives a toggle; hidden via CSS) */}
       <div className="shell-chat" style={{ display: chatVisible ? undefined : 'none' }}>

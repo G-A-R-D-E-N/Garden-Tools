@@ -5,10 +5,11 @@ import './DetailRail.css';
 
 interface DetailRailProps {
   matrix: ConflictMatrix | null;
+  onOpenConflictsTab?: () => void;
 }
 
 // Phase 1 placeholder detail rail. Phase 5 fills in donut/quick-actions/contained-in.
-export default function DetailRail({ matrix }: DetailRailProps) {
+export default function DetailRail({ matrix, onOpenConflictsTab }: DetailRailProps) {
   return (
     <aside className="detail-rail">
       <div className="rail-section">
@@ -31,7 +32,7 @@ export default function DetailRail({ matrix }: DetailRailProps) {
           OverriddenBy per conflict-group card instead of this single rail rollup.
           Plugins[0] is the base master, so slice(1) is everything overriding it. */}
       {matrix && matrix.Plugins.length > 1 && (
-        <OverriddenBy plugins={matrix.Plugins.slice(1)} />
+        <OverriddenBy plugins={matrix.Plugins.slice(1)} onExpand={onOpenConflictsTab} />
       )}
     </aside>
   );

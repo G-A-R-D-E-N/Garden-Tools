@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Folder, ChevronRight, ChevronDown, Filter, EyeOff, Pencil, Copy, Save, Trash2,
-  Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown,
+  Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network,
 } from 'lucide-react';
 import type { ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem } from './backend';
 import RecordPicker from './RecordPicker';
@@ -9,13 +9,10 @@ import './RecordView.css';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
-// An array element ("[0]") or a summarized condition/component collapses its sub-fields by default;
-// named container fields (Conditions, Components, Model) stay expanded so their entries show.
+export type RecordTab = 'grid' | 'conflicts' | 'references' | 'history' | 'dependencies';
+
 const defaultExpanded = (r: ConflictFieldRow) => !(r.IsSummary || r.DisplayLabel.startsWith('['));
 
-// xEdit-style per-cell conflict status. The backend now emits real status per cell (see resolveStatus);
-// this JS heuristic is the defensive fallback for older data that lacks Statuses. The common
-// "identical to master" case is dimmed so the eye is drawn to the few real conflicts.
 type Status = 'notdefined' | 'none' | 'identical' | 'master' | 'override' | 'win' | 'lose' | 'only';
 function cellStatus(vals: string[], idx: number): Status {
   const me = vals[idx] ?? '';
@@ -23,24 +20,21 @@ function cellStatus(vals: string[], idx: number): Status {
   const present = vals.filter(v => v !== '');
   let winner = -1;
   for (let i = vals.length - 1; i >= 0; i--) { if (vals[i] !== '') { winner = i; break; } }
-  if (present.length <= 1) return 'only';                // only this plugin defines it
+  if (present.length <= 1) return 'only';
   const allSame = present.every(v => v === present[0]);
   if (allSame) return idx === 0 ? 'master' : 'identical';
-  if (idx === winner) return 'win';                      // the value the game uses
+  if (idx === winner) return 'win';
   if (idx === 0) return 'master';
-  if (me === vals[winner]) return 'override';            // matches the winner, just not last
-  return 'lose';                                         // overridden / hidden
+  if (me === vals[winner]) return 'override';
+  return 'lose';
 }
 
-// Prefer the backend-computed status (commit C1); fall back to the JS heuristic only when Statuses
-// is missing/empty so older matrices still render with colour.
 function resolveStatus(r: ConflictFieldRow, idx: number): Status {
   const s = r.Statuses?.[idx];
   if (s) return s as Status;
   return cellStatus(r.Values, idx);
 }
 
-// Severity filter levels, ordered by how strict they are. "all" keeps every row.
 type SeverityFilter = 'all' | 'override' | 'conflict' | 'critical';
 const SEVERITY_SETS: Record<Exclude<SeverityFilter, 'all'>, Set<string>> = {
   override: new Set(['override', 'conflict', 'critical']),
@@ -48,7 +42,6 @@ const SEVERITY_SETS: Record<Exclude<SeverityFilter, 'all'>, Set<string>> = {
   critical: new Set(['critical']),
 };
 
-// Record-level rollup badge styling (Level from the matrix).
 const LEVEL_BADGES: Record<string, { label: string; cls: string }> = {
   noconflict: { label: 'No Conflict', cls: 'rv-lvl-noconflict' },
   override:   { label: 'Override', cls: 'rv-lvl-override' },
@@ -57,19 +50,38 @@ const LEVEL_BADGES: Record<string, { label: string; cls: string }> = {
   onlyone:    { label: 'Single Record', cls: 'rv-lvl-onlyone' },
 };
 
+const SEV_ORDER: Record<string, number> = { none: 0, benign: 1, override: 2, conflict: 3, critical: 4 };
+
 interface Menu { x: number; y: number; row: ConflictFieldRow; col: number; }
 interface Edit { field: string; col: number; }
 
+function TabBtn({ id, current, set, children, count }: {
+  id: RecordTab; current: RecordTab; set: (t: RecordTab) => void;
+  children: React.ReactNode; count?: number;
+}) {
+  return (
+    <button className={`rv-tab ${current === id ? 'active' : ''}`} onClick={() => set(id)}>
+      {children}
+      {count !== undefined && count > 0 && <span className="rv-tab-count">{count}</span>}
+    </button>
+  );
+}
+
 export default function RecordView(
-  { matrix, plugin, onReload, onOpenRecord }: {
+  { matrix, plugin, onReload, onOpenRecord, activeTab: externalTab, onTabChange }: {
     matrix: ConflictMatrix; plugin: string;
     onReload: () => Promise<void>;
     onOpenRecord?: (formKey: string, plugin: string) => void;
+    activeTab?: RecordTab;
+    onTabChange?: (t: RecordTab) => void;
   }
 ) {
+  const [internalTab, setInternalTab] = useState<RecordTab>('grid');
+  const recordTab = externalTab ?? internalTab;
+  const setRecordTab = (t: RecordTab) => { setInternalTab(t); onTabChange?.(t); };
+
   const [filter, setFilter] = useState('');
   const [onlyDiffing, setOnlyDiffing] = useState(false);
-  // Severity filter (driven by backend row Severity): keep rows whose Severity meets the threshold.
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -79,9 +91,7 @@ export default function RecordView(
   const [status, setStatus] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
 
-  // Bottom drawer
   const [drawerOpen, setDrawerOpen] = useState(true);
-  const [drawerTab, setDrawerTab] = useState<'referenced' | 'problems'>('problems');
   const [refBy, setRefBy] = useState<RefByEntry[] | null>(null);
   const [problems, setProblems] = useState<RecordProblem[] | null>(null);
 
@@ -92,7 +102,6 @@ export default function RecordView(
     return () => { window.removeEventListener('click', close); window.removeEventListener('scroll', close, true); };
   }, []);
 
-  // Load Referenced By + Problems when the record changes.
   useEffect(() => {
     const b = back();
     if (!b) return;
@@ -136,11 +145,43 @@ export default function RecordView(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matched, ov, filtering]);
 
-  // ---- editing ----
+  // ── Conflict tab data ──────────────────────────────────────────────────────
+  const conflictLeafRows = useMemo(
+    () => matrix.Rows.filter(r => r.Differs && !r.HasChildren),
+    [matrix.Rows]
+  );
+  const conflictStats = useMemo(() => {
+    const changedFormIds = conflictLeafRows.filter(r => r.EditKind === 'Ref').length;
+    const values = conflictLeafRows.filter(r => r.EditKind !== 'Ref').length;
+    return { total: conflictLeafRows.length, values, changedFormIds };
+  }, [conflictLeafRows]);
+
+  // Group conflicting leaf rows by their nearest Level-1 container ancestor.
+  const conflictGroups = useMemo(() => {
+    type CGroup = { label: string; rows: ConflictFieldRow[]; severity: string };
+    const groups: CGroup[] = [];
+    let cur: CGroup | null = null;
+
+    for (const r of matrix.Rows) {
+      if (r.HasChildren && r.Level <= 1) {
+        if (cur && cur.rows.length > 0) groups.push(cur);
+        cur = { label: r.DisplayLabel || r.Field, rows: [], severity: 'none' };
+      } else if (r.Differs && !r.HasChildren) {
+        if (!cur) cur = { label: 'General', rows: [], severity: 'none' };
+        cur.rows.push(r);
+        const sev = r.Severity ?? 'none';
+        if ((SEV_ORDER[sev] ?? 0) > (SEV_ORDER[cur.severity] ?? 0)) cur.severity = sev;
+      }
+    }
+    if (cur && cur.rows.length > 0) groups.push(cur);
+    return groups;
+  }, [matrix.Rows]);
+
+  // ── Editing ────────────────────────────────────────────────────────────────
   const startEdit = (r: ConflictFieldRow, col: number) => {
     setMenu(null);
-    if (r.HasChildren) return;       // containers aren't editable
-    if (r.EditKind === 'Ref') { setPicker({ row: r, col }); return; }   // FormLink -> record picker
+    if (r.HasChildren) return;
+    if (r.EditKind === 'Ref') { setPicker({ row: r, col }); return; }
     setEdit({ field: r.Field, col });
     setEditVal(r.Values[col] ?? '');
   };
@@ -149,7 +190,7 @@ export default function RecordView(
     setEdit(null);
     const b = back();
     if (!b) return;
-    if (value === (r.Values[col] ?? '')) return;   // no change
+    if (value === (r.Values[col] ?? '')) return;
     setStatus('Saving…');
     try {
       setStatus(await b.SetField(matrix.Plugins[col], matrix.FormKey, r.Field, value));
@@ -157,7 +198,6 @@ export default function RecordView(
     } catch (e: any) { setStatus('Edit failed: ' + (e?.message || e)); }
   };
 
-  // Fetch the open editable plugins when the context menu opens, to offer as copy targets (no prompt).
   useEffect(() => {
     if (!menu) return;
     const b = back();
@@ -267,34 +307,82 @@ export default function RecordView(
     );
   };
 
+  // Shared grid table used by both Record View tab and Conflicts tab.
+  const renderGrid = (gridRows: ConflictFieldRow[]) => (
+    <table className="rv-grid" style={{ minWidth: 320 + matrix.Plugins.length * 240 }}>
+      <thead>
+        <tr>
+          <th className="rv-prop-col rv-sticky">Record Property</th>
+          {matrix.Plugins.map((p, i) => (
+            <th key={p + i} className={i === winnerIdx ? 'rv-winner-col' : ''}>
+              <span className="rv-col-name">{p}</span>
+              {i === winnerIdx && matrix.Plugins.length > 1 && <span className="rv-winner-badge">WINNER</span>}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {gridRows.length === 0 ? (
+          <tr><td className="rv-empty" colSpan={matrix.Plugins.length + 1}>No fields match.</td></tr>
+        ) : gridRows.map((r, ri) => (
+          <tr key={ri} className={r.Differs ? 'rv-diff' : ''}>
+            <td
+              className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
+              onDoubleClick={() => r.HasChildren && toggle(r)}
+            >
+              <span className="rv-prop-inner" style={{ paddingLeft: r.Level * 14 }}>
+                {r.HasChildren ? (
+                  <span className="rv-expand" onClick={e => { e.stopPropagation(); toggle(r); }}>
+                    {isCollapsed(r) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                  </span>
+                ) : <span className="rv-expand-spacer" />}
+                {r.DisplayLabel || r.Field}
+              </span>
+            </td>
+            {matrix.Plugins.map((_, ci) => {
+              const editing = edit && edit.field === r.Field && edit.col === ci;
+              const st = resolveStatus(r, ci);
+              return (
+                <td
+                  key={ci}
+                  className={`rv-cell rv-c-${st}`}
+                  onDoubleClick={() => !r.HasChildren && startEdit(r, ci)}
+                  onContextMenu={e => { if (!r.HasChildren) { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); } }}
+                >
+                  {st === 'win' && <Crown size={10} className="rv-win-icon" />}
+                  {editing ? renderEditor(r, ci) : r.Values[ci]}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   const problemCount = problems?.length ?? 0;
+  const refByCount = refBy?.length ?? 0;
+  const conflictCount = conflictLeafRows.length;
 
   return (
     <div className="rv-container">
-      {/* Toolbar */}
-      <div className="rv-toolbar">
-        <div className="rv-filter">
-          <Filter size={12} />
-          <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter fields…" />
-        </div>
-        <button className={`rv-toggle-btn ${onlyDiffing ? 'on' : ''}`} onClick={() => setOnlyDiffing(v => !v)}>
-          <EyeOff size={12} /> Only conflicts
-        </button>
-        <select
-          className="rv-status-filter"
-          value={severityFilter}
-          onChange={e => setSeverityFilter(e.target.value as SeverityFilter)}
-          title="Filter rows by conflict severity"
-        >
-          <option value="all">All rows</option>
-          <option value="override">Conflicts (override+)</option>
-          <option value="conflict">Real conflicts (conflict+)</option>
-          <option value="critical">Critical only</option>
-        </select>
-        {status && <span className="rv-status">{status}</span>}
+
+      {/* ── Tab bar ───────────────────────────────────────────────── */}
+      <div className="rv-tab-bar">
+        <TabBtn id="grid" current={recordTab} set={setRecordTab}>Record View</TabBtn>
+        <TabBtn id="conflicts" current={recordTab} set={setRecordTab} count={conflictCount}>Conflicts</TabBtn>
+        <TabBtn id="references" current={recordTab} set={setRecordTab} count={refByCount}>
+          <Link2 size={12} /> References
+        </TabBtn>
+        <TabBtn id="history" current={recordTab} set={setRecordTab}>
+          <Clock size={12} /> History
+        </TabBtn>
+        <TabBtn id="dependencies" current={recordTab} set={setRecordTab}>
+          <Network size={12} /> Dependencies
+        </TabBtn>
       </div>
 
-      {/* Breadcrumb */}
+      {/* ── Breadcrumb (always visible) ───────────────────────────── */}
       <div className="rv-breadcrumb">
         <Folder size={13} />
         <span>{plugin}</span>
@@ -306,68 +394,158 @@ export default function RecordView(
           const badge = LEVEL_BADGES[matrix.Level];
           return badge ? <span className={`rv-lvl-badge ${badge.cls}`}>{badge.label}</span> : null;
         })()}
+        {status && <span className="rv-status">{status}</span>}
       </div>
 
-      {/* Comparison grid */}
-      <div className="rv-grid-scroll">
-        <table className="rv-grid" style={{ minWidth: 320 + matrix.Plugins.length * 240 }}>
-          <thead>
-            <tr>
-              <th className="rv-prop-col rv-sticky">Record Property</th>
-              {matrix.Plugins.map((p, i) => (
-                <th key={p + i} className={i === winnerIdx ? 'rv-winner-col' : ''}>
-                  <span className="rv-col-name">{p}</span>
-                  {i === winnerIdx && matrix.Plugins.length > 1 && <span className="rv-winner-badge">WINNER</span>}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td className="rv-empty" colSpan={matrix.Plugins.length + 1}>No fields match.</td></tr>
-            ) : rows.map((r, ri) => (
-              <tr key={ri} className={r.Differs ? 'rv-diff' : ''}>
-                <td
-                  className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
-                  onDoubleClick={() => r.HasChildren && toggle(r)}
-                >
-                  <span className="rv-prop-inner" style={{ paddingLeft: r.Level * 14 }}>
-                    {r.HasChildren ? (
-                      <span className="rv-expand" onClick={e => { e.stopPropagation(); toggle(r); }}>
-                        {isCollapsed(r) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+      {/* ── RECORD VIEW tab ───────────────────────────────────────── */}
+      {recordTab === 'grid' && (
+        <>
+          <div className="rv-toolbar">
+            <div className="rv-filter">
+              <Filter size={12} />
+              <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter fields…" />
+            </div>
+            <button className={`rv-toggle-btn ${onlyDiffing ? 'on' : ''}`} onClick={() => setOnlyDiffing(v => !v)}>
+              <EyeOff size={12} /> Only conflicts
+            </button>
+            <select
+              className="rv-status-filter"
+              value={severityFilter}
+              onChange={e => setSeverityFilter(e.target.value as SeverityFilter)}
+              title="Filter rows by conflict severity"
+            >
+              <option value="all">All rows</option>
+              <option value="override">Conflicts (override+)</option>
+              <option value="conflict">Real conflicts (conflict+)</option>
+              <option value="critical">Critical only</option>
+            </select>
+          </div>
+          <div className="rv-grid-scroll">
+            {renderGrid(rows)}
+          </div>
+        </>
+      )}
+
+      {/* ── CONFLICTS tab ─────────────────────────────────────────── */}
+      {recordTab === 'conflicts' && (
+        <div className="rv-conflicts-tab">
+          {conflictCount === 0 ? (
+            <div className="rv-tab-empty">No conflicts in this record.</div>
+          ) : (
+            <>
+              {/* Stat bar */}
+              <div className="rv-conflict-stats-bar">
+                <span className="rv-cs-total">{conflictCount} conflict{conflictCount !== 1 ? 's' : ''} found in this record</span>
+                <div className="rv-cs-pills">
+                  <span className="rv-cs-pill rv-cs-values">{conflictStats.values} Modified Values</span>
+                  <span className="rv-cs-pill rv-cs-formids">{conflictStats.changedFormIds} Changed FormIDs</span>
+                </div>
+              </div>
+
+              {/* Conflict cards grouped by subrecord */}
+              <div className="rv-conflict-groups">
+                {conflictGroups.map((g, gi) => (
+                  <div key={gi} className={`rv-cg rv-cg-sev-${g.severity}`}>
+                    <div className="rv-cg-header">
+                      <span className="rv-cg-name">{g.label}</span>
+                      <span className={`rv-cg-badge rv-cg-sev-badge-${g.severity}`}>
+                        {g.rows.length} conflict{g.rows.length !== 1 ? 's' : ''}
                       </span>
-                    ) : <span className="rv-expand-spacer" />}
-                    {r.DisplayLabel || r.Field}
-                  </span>
-                </td>
-                {matrix.Plugins.map((_, ci) => {
-                  const editing = edit && edit.field === r.Field && edit.col === ci;
-                  const st = resolveStatus(r, ci);
-                  return (
-                    <td
-                      key={ci}
-                      className={`rv-cell rv-c-${st}`}
-                      onDoubleClick={() => !r.HasChildren && startEdit(r, ci)}
-                      onContextMenu={e => { if (!r.HasChildren) { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); } }}
-                    >
-                      {st === 'win' && <Crown size={10} className="rv-win-icon" />}
-                      {editing ? renderEditor(r, ci) : r.Values[ci]}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    </div>
+                    <div className="rv-cg-scroll">
+                      <table className="rv-grid rv-cg-table" style={{ minWidth: 280 + matrix.Plugins.length * 220 }}>
+                        <thead>
+                          <tr>
+                            <th className="rv-prop-col rv-sticky">Field</th>
+                            {matrix.Plugins.map((p, i) => (
+                              <th key={p + i} className={i === winnerIdx ? 'rv-winner-col' : ''}>
+                                <span className="rv-col-name">{p}</span>
+                                {i === winnerIdx && matrix.Plugins.length > 1 && <span className="rv-winner-badge">WINNER</span>}
+                              </th>
+                            ))}
+                            <th className="rv-final-col">Final Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {g.rows.map((r, ri) => {
+                            const winVal = r.Values[winnerIdx] || r.Values.find(v => v) || '';
+                            return (
+                              <tr key={ri} className="rv-diff">
+                                <td className="rv-prop-col rv-sticky">
+                                  <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
+                                </td>
+                                {matrix.Plugins.map((_, ci) => {
+                                  const st = resolveStatus(r, ci);
+                                  return (
+                                    <td
+                                      key={ci}
+                                      className={`rv-cell rv-c-${st}`}
+                                      onDoubleClick={() => startEdit(r, ci)}
+                                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
+                                    >
+                                      {st === 'win' && <Crown size={10} className="rv-win-icon" />}
+                                      {r.Values[ci]}
+                                    </td>
+                                  );
+                                })}
+                                <td className="rv-cell rv-c-win rv-final-val">
+                                  <Crown size={10} className="rv-win-icon" />{winVal}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-      {/* Bottom drawer: Referenced By / Problems */}
+      {/* ── REFERENCES tab ────────────────────────────────────────── */}
+      {recordTab === 'references' && (
+        <div className="rv-references-tab">
+          {refBy === null ? (
+            <div className="rv-tab-loading">Scanning load order for references…</div>
+          ) : refBy.length === 0 ? (
+            <div className="rv-tab-empty">Nothing in the load order references this record.</div>
+          ) : (
+            <>
+              <div className="rv-ref-header">{refBy.length} record{refBy.length !== 1 ? 's' : ''} reference this</div>
+              <div className="rv-ref-list">
+                {refBy.map((e, i) => (
+                  <div
+                    key={i}
+                    className={`rv-ref-row ${onOpenRecord ? 'rv-ref-clickable' : ''}`}
+                    onClick={() => onOpenRecord?.(e.FormKey, e.Plugin)}
+                    title={onOpenRecord ? `Open ${e.EditorID || e.FormKey}` : undefined}
+                  >
+                    <span className="rv-ref-type">{e.Type}</span>
+                    <span className="rv-ref-id">{e.EditorID || e.FormKey}</span>
+                    <span className="rv-ref-plugin">{e.Plugin}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── HISTORY / DEPENDENCIES stubs ──────────────────────────── */}
+      {(recordTab === 'history' || recordTab === 'dependencies') && (
+        <div className="rv-tab-empty rv-tab-stub">
+          <Clock size={28} />
+          <span>{recordTab === 'history' ? 'Change history' : 'Record dependencies'} — coming soon.</span>
+        </div>
+      )}
+
+      {/* ── Bottom drawer: Problems only ──────────────────────────── */}
       <div className={`rv-drawer ${drawerOpen ? 'open' : 'closed'}`}>
         <div className="rv-drawer-tabs">
-          <button className={drawerTab === 'referenced' ? 'on' : ''} onClick={() => { setDrawerTab('referenced'); setDrawerOpen(true); }}>
-            <Link2 size={12} /> Referenced By {refBy === null ? '…' : `(${refBy.length})`}
-          </button>
-          <button className={drawerTab === 'problems' ? 'on' : ''} onClick={() => { setDrawerTab('problems'); setDrawerOpen(true); }}>
+          <button className="on">
             <AlertTriangle size={12} /> Problems
             {problemCount > 0 && <span className="rv-prob-badge">{problemCount}</span>}
           </button>
@@ -377,36 +555,19 @@ export default function RecordView(
         </div>
         {drawerOpen && (
           <div className="rv-drawer-body">
-            {drawerTab === 'referenced' ? (
-              refBy === null ? <div className="rv-drawer-note">Scanning load order…</div>
-              : refBy.length === 0 ? <div className="rv-drawer-note">Nothing references this record.</div>
-              : refBy.map((e, i) => (
-                <div
-                  key={i}
-                  className={`rv-ref-row ${onOpenRecord ? 'rv-ref-clickable' : ''}`}
-                  onClick={() => onOpenRecord?.(e.FormKey, e.Plugin)}
-                  title={onOpenRecord ? `Open ${e.EditorID || e.FormKey}` : undefined}
-                >
-                  <span className="rv-ref-type">{e.Type}</span>
-                  <span className="rv-ref-id">{e.EditorID || e.FormKey}</span>
-                  <span className="rv-ref-plugin">{e.Plugin}</span>
-                </div>
-              ))
-            ) : (
-              problems === null ? <div className="rv-drawer-note">Checking…</div>
-              : problems.length === 0 ? <div className="rv-drawer-note">No problems found.</div>
-              : problems.map((p, i) => (
-                <div key={i} className="rv-prob-row">
-                  <AlertTriangle size={12} className="rv-prob-icon" />
-                  <span>{p.Description}</span>
-                </div>
-              ))
-            )}
+            {problems === null ? <div className="rv-drawer-note">Checking…</div>
+            : problems.length === 0 ? <div className="rv-drawer-note">No problems found.</div>
+            : problems.map((p, i) => (
+              <div key={i} className="rv-prob-row">
+                <AlertTriangle size={12} className="rv-prob-icon" />
+                <span>{p.Description}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Right-click context menu */}
+      {/* ── Right-click context menu ──────────────────────────────── */}
       {menu && (
         <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
           <button onClick={() => startEdit(menu.row, menu.col)}><Pencil size={13} /> Edit value <span className="rv-key">F2</span></button>
@@ -416,8 +577,8 @@ export default function RecordView(
             <button key={p} onClick={() => copyInto(menu.col, p)}><Copy size={13} /> {p}</button>
           ))}
           <div className="rv-context-sep" />
-          <button onClick={() => savePlugin(menu.col)}><Save size={13} /> Save “{matrix.Plugins[menu.col]}”</button>
-          <button className="rv-danger" onClick={() => deleteRecord(menu.col)}><Trash2 size={13} /> Delete from “{matrix.Plugins[menu.col]}”</button>
+          <button onClick={() => savePlugin(menu.col)}><Save size={13} /> Save "{matrix.Plugins[menu.col]}"</button>
+          <button className="rv-danger" onClick={() => deleteRecord(menu.col)}><Trash2 size={13} /> Delete from "{matrix.Plugins[menu.col]}"</button>
           <div className="rv-context-sep" />
           <div className="rv-context-label">Plugin: {matrix.Plugins[menu.col]}</div>
           <button onClick={() => renumberFormId(menu.col)}><Hash size={13} /> Change FormID…</button>
@@ -428,7 +589,7 @@ export default function RecordView(
         </div>
       )}
 
-      {/* FormLink record picker */}
+      {/* ── FormLink record picker ────────────────────────────────── */}
       {picker && (
         <RecordPicker
           title={picker.row.DisplayLabel}

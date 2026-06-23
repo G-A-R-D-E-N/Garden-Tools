@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Home, Database, X, Search, Settings, PanelRight, HelpCircle, MessageSquare,
+  Home, Database, X, Search, Settings, PanelRight, HelpCircle, MessageSquare, Sun, Moon,
 } from 'lucide-react';
 import type { SearchHit } from '../backend';
 import './TopBar.css';
@@ -18,6 +18,8 @@ interface TopBarProps {
   railVisible: boolean;
   onToggleChat: () => void;
   chatVisible: boolean;
+  isDark: boolean;
+  onToggleTheme: () => void;
   // Command bar wiring (reuses the existing record search bridge).
   onSearch: (query: string) => Promise<SearchHit[]>;
   onOpenHit: (hit: SearchHit) => void;
@@ -26,6 +28,7 @@ interface TopBarProps {
 export default function TopBar({
   activeTab, hasRecord, recordTitle, onSelectTab, onCloseRecord,
   onOpenSettings, onToggleRail, railVisible, onToggleChat, chatVisible,
+  isDark, onToggleTheme,
   onSearch, onOpenHit,
 }: TopBarProps) {
   const [query, setQuery] = useState('');
@@ -160,6 +163,9 @@ export default function TopBar({
 
       {/* Tool cluster */}
       <div className="topbar-tools">
+        <button className={`tool-btn`} onClick={onToggleTheme} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+          {isDark ? <Sun size={17} strokeWidth={1.6} /> : <Moon size={17} strokeWidth={1.6} />}
+        </button>
         <button className="tool-btn" onClick={onOpenSettings} title="Settings">
           <Settings size={17} strokeWidth={1.6} />
         </button>
