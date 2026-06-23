@@ -268,6 +268,21 @@ public sealed class PluginToolExecutor
                 properties = new { plugin = new { type = "string" } },
                 required = new[] { "plugin" }
             }),
+        new("renumber_formid",
+            "Change one record's FormID within its plugin (xEdit 'Change FormID') and repoint every " +
+            "reference to it in the SAME plugin. References in OTHER plugins are NOT rewritten — call " +
+            "get_referenced_by first and patch external referrers if any. In memory until save_plugin.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "EditorID or current FormKey of the record." },
+                    new_id = new { type = "string", description = "New 6-digit hex object id, e.g. '000F99'." }
+                },
+                required = new[] { "plugin", "record", "new_id" }
+            }),
         new("clean_plugin",
             "Clean a plugin xEdit-style: undelete deleted records and mark them initially disabled (UDR), " +
             "which removes hard deletes that cause crashes. Call save_plugin afterwards.",
@@ -522,7 +537,7 @@ public sealed class PluginToolExecutor
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or
             "create_record" or "delete_record" or "copy_as_override" or "clean_plugin" or
-            "compact_to_esl" or "reload_plugin" or "strip_masters_clean" or
+            "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides";
 
         var val = Str("value");
@@ -545,6 +560,7 @@ public sealed class PluginToolExecutor
             "check_plugin"        => $"check {plugin}",
             "clean_plugin"        => $"clean UDRs in {plugin}",
             "compact_to_esl"      => $"compact {plugin} to ESL",
+            "renumber_formid"     => $"renumber a record in {plugin}",
             "get_record"          => $"read {ShortId(Str("id"))} in {plugin}",
             "list_records"        => $"list {Str("type")} in {plugin}",
             "search_records"      => $"search '{Str("query")}' in {plugin}",
@@ -628,6 +644,8 @@ public sealed class PluginToolExecutor
                 return MutagenLoader.CheckPlugin(env, Str("plugin"));
             case "compact_to_esl":
                 return WriteService.CompactToEsl(Str("plugin"), env);
+            case "renumber_formid":
+                return WriteService.RenumberFormId(Str("plugin"), Str("record"), Str("new_id"), env);
             case "clean_plugin":
                 return WriteService.CleanPlugin(Str("plugin"), env);
             case "save_plugin":

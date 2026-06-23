@@ -288,4 +288,20 @@ public class WriteServiceTests
         WriteService.RenumberFormId(plugin, "Dup_A", "000802", null)
             .Should().Contain("already used");
     }
+
+    [Fact]
+    public void RenumberFormIdTool_ChangesId()
+    {
+        var plugin = $"RenumTool_{Guid.NewGuid():N}.esp";
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("create_plugin", $"{{\"name\":\"{plugin}\"}}");
+        exec.Execute("create_record", $"{{\"plugin\":\"{plugin}\",\"type\":\"MISC\",\"editorId\":\"Renum_Widget\"}}");
+
+        exec.Execute("renumber_formid",
+            $"{{\"plugin\":\"{plugin}\",\"record\":\"Renum_Widget\",\"new_id\":\"000ABC\"}}")
+            .Should().Contain("Renumbered").And.Contain("000ABC");
+
+        exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"Renum_Widget\"}}")
+            .Should().Contain("ABC:");   // FormKey line now shows the new object id
+    }
 }
