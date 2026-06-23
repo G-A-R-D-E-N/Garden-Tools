@@ -62,6 +62,16 @@ Plan: [docs/superpowers/plans/2026-06-09-ai-plugin-ide.md](superpowers/plans/202
 - **AI UI Enhancements**: Corrected the `Markdig.Wpf` dark-theme styling. Injected custom resource overrides for `Styles.CodeStyleKey` (inline) and `Styles.CodeBlockStyleKey` (multiline) so code blocks sent by the AI feature proper contrast (dark grey background, light blue/grey text).
 - **Settings Fixes**: Updated the default Anthropic API model to the valid `claude-3-7-sonnet-20250219`.
 
+### M8 — Power-User Editing UX  ✅ implemented (2026-06-23)
+- **WriteService.RenumberFormId** + the `renumber_formid` AI tool: xEdit-style "Change FormID" within a plugin, repointing every in-plugin reference. References in OTHER plugins are not rewritten (the result message and tool description point the user/AI to Referenced By).
+- **BackendInterop**: exposed `CompactToEsl`, `CleanPlugin`, and `RenumberFormId` to the WebView2 host bridge, plus a `ConflictEntry` TS type for the conflicts panel.
+- **RecordView**: conflict-status filter (Winning / Overridden / Override / Identical); context-menu actions Change FormID, Compact to ESL, and Clean (UDR) — the two destructive plugin-wide ops (Compact, Clean) are gated behind `window.confirm` guards. Referenced-By rows are now clickable to jump-navigate to the referencing record, and an "Ask AI: what breaks?" action fires an impact prompt into the chat panel.
+- **MainShell**: Conflicts panel with multi-select batch copy-as-override.
+- **ChatPanel**: `fo4:ask-ai` external-prompt bridge — a `CustomEvent` dispatched from anywhere in the UI is received by the chat panel and submitted as a prompt.
+- **Polish**: removed em-dashes from feature-authored strings; updated the tool-count assertion to match the current 31 tools.
+- **Tests**: 84 total (83 passing, 1 integration test skipped), including the 3 `RenumberFormId*` tests.
+- **Known follow-up**: the batch copy-as-override success count is inferred from the human-readable result string — a structured `CopyAsOverride` return would be more robust. A manual in-game smoke test is still pending (requires a real modlist + Anthropic API key).
+
 ---
 
 ## STILL REQUIRED
