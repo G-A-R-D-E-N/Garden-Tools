@@ -1,26 +1,57 @@
 :root {
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #252526;
-  --bg-tertiary: #2d2d30;
-  --bg-hover: #2a2d2e;
-  --border-color: #3f3f46;
-  
-  --text-primary: #cccccc;
-  --text-secondary: #888888;
-  --text-highlight: #f44747;
-  --text-identical: #89d185;
+  /* Surfaces - darkest (app) to lightest (hover) */
+  --bg-primary: #0d0e11;    /* app background */
+  --bg-secondary: #16171b;  /* panel */
+  --bg-tertiary: #1c1d22;   /* raised surface */
+  --bg-hover: #23252b;      /* hover state */
 
-  /* Conflict Colors */
-  --conflict-green: #234b23;
-  --conflict-yellow: #5c5321;
-  --conflict-orange: #7b4b1a;
-  --conflict-purple: #412a63;
-  --conflict-red: #662222;
-  --conflict-empty: #1e1e1e;
+  /* Borders */
+  --border-color: #2a2c33;  /* subtle */
+  --border-strong: #3a3d45; /* stronger separator */
 
-  --accent-color: #0e639c;
-  --accent-hover: #1177bb;
-  --accent-success: #2e7d32;
+  /* Text */
+  --text-primary: #e6e6e6;
+  --text-secondary: #9aa0aa;
+  --text-muted: #6b7079;
+  --text-highlight: #f85149;  /* attention / changed text */
+  --text-identical: #56d364;  /* unchanged / matching text */
+
+  /* Conflict Colors - retuned to harmonize with deep dark surfaces */
+  --conflict-green: #1b3a26;
+  --conflict-yellow: #4a4119;
+  --conflict-orange: #5e3a18;
+  --conflict-purple: #352253;
+  --conflict-red: #4d1f1f;
+  --conflict-empty: #0d0e11;
+
+  /* Accent - GREEN primary brand + primary actions */
+  --accent-color: #3fb950;   /* base green */
+  --accent-hover: #46c45a;   /* hover green */
+  --accent-dim: #2ea043;     /* pressed / dim green */
+  --accent-success: #3fb950; /* success stays green */
+  --accent-info: #388bfd;    /* legacy blue, opt-in only */
+
+  /* Status colors - for conflict cards, value diffs, icons */
+  --status-base: #56d364;    /* unchanged / master value (green text) */
+  --status-changed: #f85149; /* overridden / losing value (red) */
+  --status-warning: #d29922; /* amber */
+  --status-ok: #3fb950;      /* check icon (green) */
+  --status-info: #388bfd;    /* info (blue) */
+
+  /* Plugin chip palette - distinct, legible dots/chips on dark */
+  --chip-1: #3fb950; /* green */
+  --chip-2: #a371f7; /* purple */
+  --chip-3: #388bfd; /* blue */
+  --chip-4: #d29922; /* amber */
+  --chip-5: #2dd4bf; /* teal */
+  --chip-6: #f778ba; /* pink */
+  --chip-7: #f0883e; /* orange */
+  --chip-8: #56d4dd; /* cyan */
+
+  /* Radii / shadows */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --shadow-panel: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
 
   font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.5;
@@ -52,11 +83,11 @@ body {
   background: var(--bg-primary);
 }
 ::-webkit-scrollbar-thumb {
-  background: #424242;
+  background: var(--border-strong);
   border-radius: 0;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4f4f4f;
+  background: var(--text-muted);
 }
 
 .animate-fade-in {
@@ -69,10 +100,11 @@ body {
 }
 
 .glass-panel {
-  background: rgba(37, 37, 38, 0.8);
+  background: rgba(22, 23, 27, 0.8); /* matches --bg-secondary panel surface */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: var(--shadow-panel);
 }
 
 .button {
@@ -80,20 +112,20 @@ body {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   padding: 6px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .button:hover {
   background: var(--bg-hover);
-  border-color: #555;
+  border-color: var(--border-strong);
 }
 
 .button-primary {
   background: var(--accent-color);
   border-color: var(--accent-color);
-  color: white;
+  color: #0d0e11;
 }
 .button-primary:hover {
   background: var(--accent-hover);
@@ -103,11 +135,11 @@ body {
 .button-success {
   background: var(--accent-success);
   border-color: var(--accent-success);
-  color: white;
+  color: #0d0e11;
 }
 .button-success:hover {
-  background: #388e3c;
-  border-color: #388e3c;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 input, select {
@@ -115,7 +147,7 @@ input, select {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   padding: 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: inherit;
 }
