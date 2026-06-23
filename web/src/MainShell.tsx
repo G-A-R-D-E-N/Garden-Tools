@@ -17,7 +17,7 @@ import './MainShell.css';
 import SettingsModal from './SettingsModal';
 import RecordView from './RecordView';
 import ChatPanel from './ChatPanel';
-import type { ConflictMatrix, SearchHit } from './backend';
+import type { ConflictMatrix, SearchHit, ConflictEntry } from './backend';
 
 interface RecordNode {
   Key: string;
@@ -268,6 +268,46 @@ export default function MainShell() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Conflicts panel
+  const [conflicts, setConflicts] = useState<ConflictEntry[] | null>(null);
+  const [conflictSel, setConflictSel] = useState<Record<string, boolean>>({});
+  const [conflictBusy, setConflictBusy] = useState(false);
+
+  const loadConflicts = async () => {
+    const b = window.chrome?.webview?.hostObjects?.backend;
+    if (!b) return;
+    setConflicts(null);
+    try { setConflicts(JSON.parse(await b.GetConflicts())); }
+    catch (e: any) { setErrorStr(e?.message || String(e)); setConflicts([]); }
+  };
+
+  // Load the conflict list the first time the Conflicts tab is opened.
+  useEffect(() => {
+    if (activeTab === 'compare' && conflicts === null) loadConflicts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const batchCopyAsOverride = async () => {
+    const b = window.chrome?.webview?.hostObjects?.backend;
+    if (!b || !conflicts) return;
+    const picked = conflicts.filter(c => conflictSel[c.FormKey]);
+    if (picked.length === 0) { setStatus('Select at least one conflict first.'); return; }
+    const patch = window.prompt(`Copy ${picked.length} record(s) as override into which patch plugin?`, 'ConflictPatch.esp');
+    if (!patch) return;
+    setConflictBusy(true);
+    let ok = 0;
+    try {
+      for (const c of picked) {
+        const res = await b.CopyAsOverride(c.Winner, c.FormKey, patch);
+        if (!/fail|could not|not an overridable|cannot be overridden/i.test(res)) ok++;
+      }
+      setStatus(`Copied ${ok}/${picked.length} into ${patch}. Save it from a record's context menu, then enable it last.`);
+      setConflictSel({});
+    } catch (e: any) {
+      setStatus('Batch copy failed: ' + (e?.message || e));
+    } finally { setConflictBusy(false); }
+  };
+
   // Open a record directly by FormKey (from a search hit).
   const openHit = async (hit: SearchHit) => {
     const back = window.chrome?.webview?.hostObjects?.backend;
@@ -350,7 +390,7 @@ export default function MainShell() {
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-header">
-          <h2>EXPLORER</h2>
+          <h2>{activeTab === 'compare' ? 'CONFLICTS' : 'EXPLORER'}</h2>
         </div>
         <div className="sidebar-actions">
           <button className="sidebar-action-btn" onClick={handleLoadEnv}>Load Env</button>
@@ -367,6 +407,7 @@ export default function MainShell() {
           />
           {search && <button className="sidebar-search-clear" onClick={() => setSearch('')} title="Clear"><X size={13} /></button>}
         </div>
+        {activeTab !== 'compare' && (
         <div className="sidebar-tree">
           {errorStr && <div className="sidebar-empty" style={{ color: '#f44747' }}>{errorStr}</div>}
           {plugins.length === 0 && !errorStr ? (
@@ -406,6 +447,39 @@ export default function MainShell() {
             </>
           )}
         </div>
+        )}
+        {activeTab === 'compare' && (
+          <div className="conflicts-panel">
+            <div className="conflicts-actions">
+              <button className="sidebar-action-btn" onClick={loadConflicts}>Rescan</button>
+              <button className="sidebar-action-btn" disabled={conflictBusy} onClick={batchCopyAsOverride}>
+                Copy selected → patch
+              </button>
+            </div>
+            {conflicts === null ? (
+              <div className="sidebar-empty">Scanning conflicts…</div>
+            ) : conflicts.length === 0 ? (
+              <div className="sidebar-empty">No conflicts. Load a modlist and Scan Conflicts.</div>
+            ) : (
+              <div className="conflicts-list">
+                {conflicts.map((c, i) => (
+                  <div key={`${c.FormKey}:${i}`} className="conflict-row">
+                    <input
+                      type="checkbox"
+                      checked={!!conflictSel[c.FormKey]}
+                      onChange={e => setConflictSel(s => ({ ...s, [c.FormKey]: e.target.checked }))}
+                    />
+                    <span className="conflict-id" onClick={() => openByFormKey(c.FormKey, c.Winner)} title={`${c.FormKey} · ${c.Plugins.length} plugins`}>
+                      {c.EditorID || c.FormKey}
+                    </span>
+                    <span className="conflict-type">{c.Type}</span>
+                    <span className="conflict-count">{c.Plugins.length}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Content Area */}
