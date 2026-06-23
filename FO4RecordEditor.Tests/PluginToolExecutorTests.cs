@@ -46,7 +46,8 @@ public class PluginToolExecutorTests
     {
         // Read/diagnose tools (incl. get_conflicts, get_winning_record, search_robco_configs,
         // scan_conflicts, get_referenced_by, get_problems) + write tools (incl. copy_as_override,
-        // set_components, set_conditions, revert_overrides, reload_plugin, strip_masters_clean).
+        // set_components, set_conditions, revert_overrides, renumber_formid, reload_plugin,
+        // strip_masters_clean).
         PluginToolExecutor.ToolDefinitions().Should().HaveCount(31);
         PluginToolExecutor.McpToolDefinitions().Should().HaveCount(31);
 
@@ -57,7 +58,7 @@ public class PluginToolExecutorTests
             "get_conflicts", "get_winning_record", "search_robco_configs",
             "scan_conflicts", "get_referenced_by", "get_problems",
             "copy_as_override", "delete_record", "remove_list_item", "set_components", "set_conditions",
-            "revert_overrides",
+            "revert_overrides", "renumber_formid",
         });
     }
 }
