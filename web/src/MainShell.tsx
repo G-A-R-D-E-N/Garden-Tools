@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Files, Search, GitCompare, Settings, AlertCircle,
-  ChevronRight, ChevronDown, Database, FileBox, X, Zap
+  Files, Search, GitCompare, AlertCircle,
+  ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
 } from 'lucide-react';
 
 interface McpLiveMsg {
@@ -17,6 +17,9 @@ import './MainShell.css';
 import SettingsModal from './SettingsModal';
 import RecordView from './RecordView';
 import ChatPanel from './ChatPanel';
+import TopBar, { type ShellTab } from './Shell/TopBar';
+import DetailRail from './Shell/DetailRail';
+import StatusBar from './Shell/StatusBar';
 import type { ConflictMatrix, SearchHit, ConflictEntry } from './backend';
 
 interface RecordNode {
@@ -80,6 +83,11 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
   const [showSettings, setShowSettings] = useState(false);
+
+  // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
+  const [shellTab, setShellTab] = useState<ShellTab>('home');
+  const [railVisible, setRailVisible] = useState(true);
+  const [chatVisible, setChatVisible] = useState(true);
   const [plugins, setPlugins] = useState<RecordNode[]>([]);
   const [backend, setBackend] = useState<any>(null);
   const [errorStr, setErrorStr] = useState<string>("");
@@ -359,27 +367,55 @@ export default function MainShell() {
   const reloadMatrixRef = useRef(reloadMatrix);
   reloadMatrixRef.current = reloadMatrix;
 
+  // Opening any record switches the top-bar tab to the Record Viewer.
+  useEffect(() => {
+    if (openRecord) setShellTab('record');
+  }, [openRecord]);
+
+  // Command-bar search for the top bar: reuse the existing SearchRecords bridge.
+  const commandSearch = useCallback(async (q: string): Promise<SearchHit[]> => {
+    const back = window.chrome?.webview?.hostObjects?.backend;
+    if (!back) return [];
+    try { return JSON.parse(await back.SearchRecords(q, '')); }
+    catch { return []; }
+  }, []);
+
+  const closeRecord = () => { setOpenRecord(null); setShellTab('home'); };
+
   return (
-    <div className="shell-container animate-fade-in">
-      {/* Activity Bar */}
+    <div
+      className={`shell-container animate-fade-in ${railVisible ? 'rail-on' : 'rail-off'} ${chatVisible ? 'chat-on' : 'chat-off'}`}
+    >
+      <TopBar
+        activeTab={shellTab}
+        hasRecord={!!openRecord}
+        recordTitle={openRecord?.title ?? ''}
+        onSelectTab={setShellTab}
+        onCloseRecord={closeRecord}
+        onOpenSettings={() => setShowSettings(true)}
+        onToggleRail={() => setRailVisible(v => !v)}
+        railVisible={railVisible}
+        onToggleChat={() => setChatVisible(v => !v)}
+        chatVisible={chatVisible}
+        onSearch={commandSearch}
+        onOpenHit={openHit}
+      />
+
+      {/* LEFT pane: slim activity rail + navigator sidebar */}
+      <div className="shell-left">
       <div className="activity-bar">
         <div className="activity-top">
-          <button className={`activity-btn ${activeTab === 'explorer' ? 'active' : ''}`} onClick={() => setActiveTab('explorer')}>
-            <Files size={24} strokeWidth={1.5} />
+          <button className={`activity-btn ${activeTab === 'explorer' ? 'active' : ''}`} onClick={() => setActiveTab('explorer')} title="Explorer">
+            <Files size={22} strokeWidth={1.5} />
           </button>
-          <button className={`activity-btn ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
-            <Search size={24} strokeWidth={1.5} />
+          <button className={`activity-btn ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')} title="Search">
+            <Search size={22} strokeWidth={1.5} />
           </button>
-          <button className={`activity-btn ${activeTab === 'errors' ? 'active' : ''}`} onClick={() => setActiveTab('errors')}>
-            <AlertCircle size={24} strokeWidth={1.5} />
+          <button className={`activity-btn ${activeTab === 'errors' ? 'active' : ''}`} onClick={() => setActiveTab('errors')} title="Errors">
+            <AlertCircle size={22} strokeWidth={1.5} />
           </button>
-          <button className={`activity-btn ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => setActiveTab('compare')}>
-            <GitCompare size={24} strokeWidth={1.5} />
-          </button>
-        </div>
-        <div className="activity-bottom">
-          <button className={`activity-btn ${showSettings ? 'active' : ''}`} onClick={() => setShowSettings(true)} title="Settings">
-            <Settings size={24} strokeWidth={1.5} />
+          <button className={`activity-btn ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => setActiveTab('compare')} title="Conflicts">
+            <GitCompare size={22} strokeWidth={1.5} />
           </button>
         </div>
       </div>
@@ -478,76 +514,94 @@ export default function MainShell() {
           </div>
         )}
       </div>
+      </div>{/* /shell-left */}
 
-      {/* Main Content Area */}
+      {/* CENTER pane: Home placeholder or the record workspace */}
       <div className="main-area">
-        <div className="editor-tabs">
-          <div className="editor-tab active">
-            {openRecord
-              ? <><Database size={14} color="#569CD6"/> {openRecord.title}</>
-              : <><Zap size={14} color="#F44747"/> Welcome</>}
-            {openRecord && (
-              <button className="tab-close" onClick={() => setOpenRecord(null)} title="Close"><X size={14} /></button>
-            )}
-          </div>
-        </div>
-
-        <div className={`editor-content ${openRecord && !recordLoading ? 'has-record' : ''}`}>
-          {recordLoading ? (
-            <div className="welcome-screen glass-panel">
-              <Database size={48} color="var(--border-color)" />
-              <p>Loading record…</p>
-            </div>
-          ) : openRecord ? (
-            <RecordView matrix={openRecord.matrix} plugin={openRecord.plugin} onReload={reloadMatrix} onOpenRecord={openByFormKey} />
-          ) : (
-            <div className="welcome-screen glass-panel">
-              <Database size={64} color="var(--border-color)" />
+        {shellTab === 'home' ? (
+          <div className="home-view">
+            <div className="home-card glass-panel">
+              <Rocket size={56} color="var(--accent-color)" />
               <h1>FO4 Record Editor</h1>
-              <p>Welcome to the next-generation Modding IDE.</p>
-              <div className="welcome-shortcuts">
-                <p>Load your environment from the Explorer sidebar.</p>
-                <p>Click a record to view its fields.</p>
+              <p>The next-generation modding IDE for Fallout 4 plugins.</p>
+              <div className="home-hints">
+                <p>Load your environment from the Explorer on the left.</p>
+                <p>Click a record to open it in the Record Viewer.</p>
+                <p>Press <kbd>Ctrl K</kbd> to search records, fields, or formIDs.</p>
               </div>
             </div>
-          )}
-        </div>
-
-        {mcpFeed.length > 0 && (
-          <div className="mcp-feed">
-            <div className="mcp-feed-header">
-              <span className={`mcp-dot ${mcpActive ? 'mcp-dot-active' : ''}`} />
-              <span>MCP TOOL CALLS</span>
-              <button className="mcp-feed-clear" onClick={() => setMcpFeed([])}>✕</button>
+          </div>
+        ) : (
+          <>
+            <div className="editor-tabs">
+              <div className="editor-tab active">
+                {openRecord
+                  ? <><Database size={14} color="#569CD6"/> {openRecord.title}</>
+                  : <><Zap size={14} color="#F44747"/> Welcome</>}
+                {openRecord && (
+                  <button className="tab-close" onClick={closeRecord} title="Close"><X size={14} /></button>
+                )}
+              </div>
             </div>
-            <div className="mcp-feed-rows">
-              {mcpFeed.map((ev, i) => (
-                <div key={i} className={`mcp-row ${ev.IsWrite ? 'mcp-row-write' : 'mcp-row-read'} ${i === 0 ? 'mcp-row-new' : ''}`}>
-                  <span className="mcp-badge">{ev.Tool}</span>
-                  <span className="mcp-summary">{ev.Summary}</span>
-                  <span className="mcp-time">{new Date(ev.ts).toLocaleTimeString()}</span>
+
+            <div className={`editor-content ${openRecord && !recordLoading ? 'has-record' : ''}`}>
+              {recordLoading ? (
+                <div className="welcome-screen glass-panel">
+                  <Database size={48} color="var(--border-color)" />
+                  <p>Loading record...</p>
                 </div>
-              ))}
+              ) : openRecord ? (
+                <RecordView matrix={openRecord.matrix} plugin={openRecord.plugin} onReload={reloadMatrix} onOpenRecord={openByFormKey} />
+              ) : (
+                <div className="welcome-screen glass-panel">
+                  <Database size={64} color="var(--border-color)" />
+                  <h1>No record open</h1>
+                  <p>Pick a record from the Explorer or search with Ctrl K.</p>
+                </div>
+              )}
             </div>
-          </div>
+
+            {mcpFeed.length > 0 && (
+              <div className="mcp-feed">
+                <div className="mcp-feed-header">
+                  <span className={`mcp-dot ${mcpActive ? 'mcp-dot-active' : ''}`} />
+                  <span>MCP TOOL CALLS</span>
+                  <button className="mcp-feed-clear" onClick={() => setMcpFeed([])}>✕</button>
+                </div>
+                <div className="mcp-feed-rows">
+                  {mcpFeed.map((ev, i) => (
+                    <div key={i} className={`mcp-row ${ev.IsWrite ? 'mcp-row-write' : 'mcp-row-read'} ${i === 0 ? 'mcp-row-new' : ''}`}>
+                      <span className="mcp-badge">{ev.Tool}</span>
+                      <span className="mcp-summary">{ev.Summary}</span>
+                      <span className="mcp-time">{new Date(ev.ts).toLocaleTimeString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* AI Panel — Claude (sessions + slash commands) */}
-      <ChatPanel />
+      {/* RIGHT pane: detail rail (Phase 5 fills this in) */}
+      {railVisible && <DetailRail matrix={openRecord?.matrix ?? null} />}
 
-      {/* Status bar (bottom): loader status text + progress bar */}
-      <div className="status-bar">
-        {progress !== null && (
-          <div className="status-progress">
-            <div
-              className={`status-progress-fill ${progress === 0 ? 'indeterminate' : ''}`}
-              style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
-            />
-          </div>
-        )}
-        <span className="status-text">{status || (progress !== null ? 'Working…' : 'Ready')}</span>
-      </div>
+      {/* AI Panel - Claude (toggleable 4th column) */}
+      {chatVisible && (
+        <div className="shell-chat">
+          <ChatPanel />
+        </div>
+      )}
+
+      {/* Status bar (bottom): loader status + load-order parity */}
+      <StatusBar
+        status={status}
+        progress={progress}
+        recordCount={plugins.length}
+        visibleCount={plugins.length}
+        selectedCount={openRecord ? 1 : 0}
+        loadOrder={plugins.map(p => p.Key)}
+      />
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
