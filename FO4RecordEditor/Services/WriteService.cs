@@ -18,6 +18,8 @@ namespace FO4RecordEditor.Services;
 /// </summary>
 public static class WriteService
 {
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
     private static readonly Dictionary<string, IFallout4Mod> _mutable = new(StringComparer.OrdinalIgnoreCase);
     // Original on-disk path of an opened plugin, so save_plugin can overwrite it in place.
     private static readonly Dictionary<string, string> _sourcePath = new(StringComparer.OrdinalIgnoreCase);
@@ -29,6 +31,15 @@ public static class WriteService
         !string.IsNullOrWhiteSpace(OutputFolderOverride)
             ? OutputFolderOverride!
             : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
+
+    /// <summary>The loaded MO2 instance's overwrite folder (&lt;instance&gt;\overwrite). When set, NEW
+    /// patches save here so MO2 loads them automatically at top priority — no manual mod install.</summary>
+    public static string? Mo2OverwriteFolder { get; set; }
+
+    /// <summary>Where a brand-new patch (no source file) saves by default: the MO2 overwrite folder
+    /// when a modlist is loaded, otherwise the configured Output folder.</summary>
+    public static string NewPatchDir =>
+        !string.IsNullOrWhiteSpace(Mo2OverwriteFolder) ? Mo2OverwriteFolder! : DefaultOutputDir;
 
     public static IFallout4Mod? GetMutable(string name) =>
         _mutable.TryGetValue(name, out var m) ? m : null;
@@ -382,8 +393,8 @@ public static class WriteService
                     scriptProp = op;
                     break;
                 }
-                case "int":    scriptProp = new ScriptIntProperty    { Name = propName, Data = int.Parse(value) };   break;
-                case "float":  scriptProp = new ScriptFloatProperty  { Name = propName, Data = float.Parse(value) }; break;
+                case "int":    scriptProp = new ScriptIntProperty    { Name = propName, Data = int.Parse(value, Inv) };   break;
+                case "float":  scriptProp = new ScriptFloatProperty  { Name = propName, Data = float.Parse(value, Inv) }; break;
                 case "bool":   scriptProp = new ScriptBoolProperty   { Name = propName, Data = bool.Parse(value) };  break;
                 default:       scriptProp = new ScriptStringProperty { Name = propName, Data = value };              break;
             }
@@ -431,8 +442,10 @@ public static class WriteService
 
         // Default: overwrite the original file the plugin was opened from (modify in place).
         // Newly created plugins (no source) fall back to the configured Output folder.
+        // New patches (no source file) save into the MO2 overwrite folder when a modlist is loaded, so
+        // MO2 picks them up automatically; plugins opened from disk overwrite their original file.
         if (string.IsNullOrWhiteSpace(path))
-            path = explicitPath ?? (_sourcePath.TryGetValue(name, out var sp) ? sp : Path.Combine(DefaultOutputDir, name));
+            path = explicitPath ?? (_sourcePath.TryGetValue(name, out var sp) ? sp : Path.Combine(NewPatchDir, name));
 
         var prms = new BinaryWriteParameters
         {
@@ -456,7 +469,13 @@ public static class WriteService
             if (File.Exists(path)) File.Replace(tmp, path, null);
             else File.Move(tmp, path);
             NotifyChanged(name);
-            return $"Saved {name} to {path}.";
+            var inOverwrite = !string.IsNullOrWhiteSpace(Mo2OverwriteFolder) &&
+                path.StartsWith(Mo2OverwriteFolder!, StringComparison.OrdinalIgnoreCase);
+            return inOverwrite
+                ? $"Saved {name} to the MO2 overwrite folder ({path}). MO2 loads it automatically at top " +
+                  "priority — just enable it in the plugin list if it isn't already checked, and place it " +
+                  "after the plugins it patches."
+                : $"Saved {name} to {path}.";
         }
         catch (Exception)
         {
@@ -471,6 +490,89 @@ public static class WriteService
                    $"'{Path.GetFileName(sideways)}' to '{Path.GetFileName(path)}', or save the patch under a " +
                    $"NEW plugin name that isn't in the loaded list.";
         }
+    }
+
+    /// <summary>
+    /// Evict a plugin from the editor session and re-open it from its original on-disk path.
+    /// Fixes stale in-memory state after a save (e.g. check_plugin reporting false-positive
+    /// undeclared-master errors because it sees pre-save session state).
+    /// </summary>
+    public static string ReloadPlugin(string plugin, object? env)
+    {
+        var (name, _) = NormalizePlugin(plugin);
+        if (!_sourcePath.TryGetValue(name, out var path))
+            return $"'{name}' is not open for editing. Use open_plugin first.";
+        _mutable.Remove(name);
+        _sourcePath.Remove(name);
+        MutagenLoader.EditableMods.TryRemove(name, out _);
+        MutagenLoader.LooseMods.TryRemove(name, out _);
+        MutagenLoader.InvalidateModIndex(name);
+        return OpenPlugin(path, env);
+    }
+
+    /// <summary>
+    /// Load a plugin binary, drop every COBJ condition whose param1/param2/reference FormKey
+    /// belongs to one of the stripped masters, then write it back via Mutagen so that the master
+    /// list is recomputed from scratch and all remaining FormID high-bytes are correct.
+    /// This is the Mutagen-native fix for the ITO master-index corruption found in session 2026-06-22.
+    /// </summary>
+    public static string StripMastersClean(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun)
+    {
+        if (!File.Exists(sourcePath))
+            return $"Source file not found: '{sourcePath}'.";
+        if (mastersToStrip.Length == 0)
+            return "Provide at least one master name to strip.";
+
+        var stripSet = new HashSet<string>(mastersToStrip, StringComparer.OrdinalIgnoreCase);
+        IFallout4Mod mod;
+        try { mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(sourcePath), Fallout4Release.Fallout4); }
+        catch (Exception ex) { return $"Failed to load '{sourcePath}': {ex.Message}"; }
+
+        int dropped = 0, touched = 0;
+        foreach (var cobj in mod.ConstructibleObjects)
+        {
+            var toRemove = cobj.Conditions.Where(c => ConditionRefersToStrippedMaster(c, stripSet)).ToList();
+            if (toRemove.Count == 0) continue;
+            foreach (var c in toRemove) cobj.Conditions.Remove(c);
+            dropped += toRemove.Count;
+            touched++;
+        }
+
+        var summary = $"Loaded '{Path.GetFileName(sourcePath)}': " +
+                      $"{dropped} condition(s) across {touched} record(s) reference the stripped master(s).";
+        if (dryRun)
+            return $"[DRY RUN] {summary} Pass dry_run=false to write.";
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+            outputPath = sourcePath;
+        try { Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!); } catch { }
+
+        var prms = new BinaryWriteParameters
+        {
+            MastersListContent = MastersListContentOption.Iterate,
+            ModKey = ModKeyOption.NoCheck,
+        };
+        var tmp = outputPath + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+        try { mod.WriteToBinary(tmp, prms); }
+        catch (Exception ex) { try { File.Delete(tmp); } catch { } return $"Write failed: {ex.Message}"; }
+
+        try
+        {
+            if (File.Exists(outputPath)) File.Replace(tmp, outputPath, null);
+            else File.Move(tmp, outputPath);
+        }
+        catch (Exception ex) { return $"Swap failed: {ex.Message} (tmp preserved at '{tmp}')"; }
+
+        return $"Saved to '{outputPath}'. Stripped {mastersToStrip.Length} master(s); dropped {dropped} condition(s) across {touched} record(s). Mutagen recomputed all FormID master indices.";
+    }
+
+    private static bool ConditionRefersToStrippedMaster(Mutagen.Bethesda.Fallout4.IConditionGetter cond, HashSet<string> stripSet)
+    {
+        if (cond.Data is not Mutagen.Bethesda.Fallout4.IFunctionConditionDataGetter data) return false;
+        if (!data.ParameterOneRecord.FormKey.IsNull && stripSet.Contains(data.ParameterOneRecord.FormKey.ModKey.FileName.String)) return true;
+        if (!data.ParameterTwoRecord.FormKey.IsNull && stripSet.Contains(data.ParameterTwoRecord.FormKey.ModKey.FileName.String)) return true;
+        if (!data.Reference.FormKey.IsNull && stripSet.Contains(data.Reference.FormKey.ModKey.FileName.String)) return true;
+        return false;
     }
 
     /// <summary>
@@ -783,16 +885,26 @@ public static class WriteService
 
                 var op = ParseOperator(el.TryGetProperty("operator", out var o) ? o.GetString() : null);
 
+                Condition.Flag condFlags = default;
+                if (el.TryGetProperty("flags", out var flagEl) && flagEl.GetString() is { Length: > 0 } flagStr)
+                {
+                    foreach (var part in flagStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        if (Enum.TryParse<Condition.Flag>(part, ignoreCase: true, out var fl)) condFlags |= fl;
+                }
+
                 if (el.TryGetProperty("compareGlobal", out var cg) && cg.GetString() is { } cgStr && ResolveFk(env, cgStr, out var cgFk))
                 {
                     var cond = new ConditionGlobal { CompareOperator = op, Data = data };
                     cond.ComparisonValue.SetTo(cgFk);
+                    if (condFlags != default) cond.Flags = condFlags;
                     built.Add(cond);
                 }
                 else
                 {
                     float val = el.TryGetProperty("value", out var v) && v.TryGetSingle(out var fv) ? fv : 1f;
-                    built.Add(new ConditionFloat { CompareOperator = op, ComparisonValue = val, Data = data });
+                    var cond = new ConditionFloat { CompareOperator = op, ComparisonValue = val, Data = data };
+                    if (condFlags != default) cond.Flags = condFlags;
+                    built.Add(cond);
                 }
             }
         }
@@ -1113,15 +1225,17 @@ public static class WriteService
                 converted = typeof(TranslatedString).GetMethod("op_Implicit", new[] { typeof(string) })!
                     .Invoke(null, new object[] { value })!;
             else if (t.IsEnum) converted = Enum.Parse(t, value, ignoreCase: true);
+            // Values arrive as invariant-formatted strings (from JSON / the React editor), so parse
+            // them with InvariantCulture -- the current culture would break "1.5" on comma-decimal locales.
             else if (t == typeof(bool)) converted = bool.Parse(value);
-            else if (t == typeof(float)) converted = float.Parse(value);
-            else if (t == typeof(double)) converted = double.Parse(value);
-            else if (t == typeof(int)) converted = int.Parse(value);
-            else if (t == typeof(uint)) converted = uint.Parse(value);
-            else if (t == typeof(short)) converted = short.Parse(value);
-            else if (t == typeof(ushort)) converted = ushort.Parse(value);
-            else if (t == typeof(byte)) converted = byte.Parse(value);
-            else if (t == typeof(long)) converted = long.Parse(value);
+            else if (t == typeof(float)) converted = float.Parse(value, Inv);
+            else if (t == typeof(double)) converted = double.Parse(value, Inv);
+            else if (t == typeof(int)) converted = int.Parse(value, Inv);
+            else if (t == typeof(uint)) converted = uint.Parse(value, Inv);
+            else if (t == typeof(short)) converted = short.Parse(value, Inv);
+            else if (t == typeof(ushort)) converted = ushort.Parse(value, Inv);
+            else if (t == typeof(byte)) converted = byte.Parse(value, Inv);
+            else if (t == typeof(long)) converted = long.Parse(value, Inv);
             else { msg = $"Field '{field}' has type {t.Name}, which set_field can't set yet (scalar/text only)."; return false; }
 
             prop.SetValue(rec, converted);

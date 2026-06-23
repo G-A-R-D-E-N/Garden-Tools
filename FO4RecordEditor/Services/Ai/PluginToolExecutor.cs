@@ -111,6 +111,48 @@ public sealed class PluginToolExecutor
                 required = new[] { "query" }
             }),
 
+        new("scan_conflicts",
+            "Scan the ENTIRE load order for conflicting records (the same scan as the app's conflict view) " +
+            "to survey what conflicts exist before planning fixes. Returns each conflicting record with the " +
+            "plugins that touch it and the WINNER. By default only conflicts that involve a mod (non-vanilla) " +
+            "are returned. Use this to get the big picture; then get_conflicts / get_winning_record on a " +
+            "specific record for detail. Can be slow on a large modlist.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    mod_only = new { type = "boolean", description = "Only conflicts involving a non-vanilla plugin (default true)." },
+                    type = new { type = "string", description = "Optional record-type filter, e.g. 'ConstructibleObject' or 'Weapon'." },
+                    limit = new { type = "integer", description = "Max records to return (default 200)." }
+                },
+                required = Array.Empty<string>()
+            }),
+        new("get_referenced_by",
+            "List records across the load order that REFERENCE the given record (xEdit 'Referenced By') -- i.e. " +
+            "what would break if you changed or removed it. Accepts a FormKey or EditorID. Use for impact " +
+            "analysis before editing or deleting a record.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    id = new { type = "string", description = "FormKey or EditorID of the record." },
+                    limit = new { type = "integer", description = "Max referencing records (default 200)." }
+                },
+                required = new[] { "id" }
+            }),
+        new("get_problems",
+            "Report problems with a single record's WINNING version: whether it is flagged DELETED, and any " +
+            "FormLink references that don't resolve in the load order (dangling, crash-risk). Accepts a " +
+            "FormKey or EditorID. Use to validate a record before/after editing.",
+            new
+            {
+                type = "object",
+                properties = new { id = new { type = "string", description = "FormKey or EditorID of the record." } },
+                required = new[] { "id" }
+            }),
+
         // ---- write tools (author plugins) ----
         new("open_plugin",
             "Open an existing plugin for editing so records can be added or modified. The 'plugin' arg " +
@@ -316,7 +358,8 @@ public sealed class PluginToolExecutor
             "function = GetGlobalValue/GetBaseValue/GetItemCount/HasKeyword/GetStageDone/...; param1/param2 = a FormKey/EditorID " +
             "(record arg, e.g. the global or actor-value form) or an integer; operator = == != > >= < <=; value = the constant " +
             "compared against; compareGlobal = optional global FormKey to compare against instead of a constant; runOn = " +
-            "Subject/Target/Reference; reference = the ref FormKey when runOn=Reference (e.g. '000014:Fallout4.esm' for PlayerRef).",
+            "Subject/Target/Reference; reference = the ref FormKey when runOn=Reference (e.g. '000014:Fallout4.esm' for PlayerRef); " +
+            "flags = optional comma-separated condition flags, e.g. 'UseOr' to combine this condition with OR instead of AND.",
             new
             {
                 type = "object",
@@ -349,6 +392,35 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "bad_plugin", "patch_plugin" }
             }),
+        new("reload_plugin",
+            "Evict a plugin from the editor session and re-open it fresh from disk. Fixes stale " +
+            "in-memory state that causes check_plugin to report false-positive 'undeclared master' errors " +
+            "after save_plugin writes new master references. Use this when check_plugin complains about a " +
+            "master that the binary file already declares correctly.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string", description = "Plugin file name, e.g. 'FWC_NonFWC_Schematics.esp'." } },
+                required = new[] { "plugin" }
+            }),
+        new("strip_masters_clean",
+            "Load a plugin binary, drop every COBJ condition whose param/reference FormKey belongs to " +
+            "one of the named masters, then save via Mutagen so that the master list and all FormID " +
+            "high-bytes are recomputed correctly. Use to fix master-index corruption caused by binary " +
+            "header surgery (e.g. the ITO strip). source_path may be a .bak file. Defaults to a dry run; " +
+            "pass dry_run=false to write. output_path defaults to source_path (overwrites in place).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_path = new { type = "string", description = "Full path to the binary plugin to load, e.g. 'E:\\\\...\\\\FWC_NonFWC_Schematics.esp.bak'." },
+                    masters = new { type = "string", description = "JSON array of master file names to strip, e.g. '[\"ITO.esp\",\"ITOBeta.esp\"]'." },
+                    output_path = new { type = "string", description = "Full path to write the result (optional; defaults to source_path)." },
+                    dry_run = new { type = "boolean", description = "true (default) = preview only; false = write the file." }
+                },
+                required = new[] { "source_path", "masters" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -374,13 +446,57 @@ public sealed class PluginToolExecutor
     public static object[] McpToolDefinitions() =>
         _specs.Select(t => (object)new { name = t.Name, description = t.Description, inputSchema = t.Schema }).ToArray();
 
+    /// <summary>Gemini function-declaration format. Gemini's schema wants UPPERCASE OpenAPI types
+    /// (OBJECT/STRING/INTEGER/BOOLEAN/…), so we transform our lowercase JSON-schema types.</summary>
+    public static object[] GeminiToolDefinitions() =>
+        _specs.Select(t => (object)new
+        {
+            name = t.Name,
+            description = t.Description,
+            parameters = ToGeminiSchema(t.Schema),
+        }).ToArray();
+
+    // Built with System.Text.Json nodes so GeminiProvider (which serializes with System.Text.Json) emits it correctly.
+    private static System.Text.Json.Nodes.JsonNode ToGeminiSchema(object schema)
+    {
+        var node = System.Text.Json.JsonSerializer.SerializeToNode(schema)!;
+        UppercaseTypes(node);
+        return node;
+    }
+
+    private static void UppercaseTypes(System.Text.Json.Nodes.JsonNode? node)
+    {
+        if (node is System.Text.Json.Nodes.JsonObject o)
+        {
+            if (o["type"] is System.Text.Json.Nodes.JsonValue tv && tv.TryGetValue<string>(out var ts))
+                o["type"] = ts.ToUpperInvariant();
+            foreach (var kv in o) UppercaseTypes(kv.Value);
+        }
+        else if (node is System.Text.Json.Nodes.JsonArray a)
+        {
+            foreach (var item in a) UppercaseTypes(item);
+        }
+    }
+
     // Hard ceiling on any single tool result. A full record dump or a big conflict matrix can be
     // tens of KB; returning that to the model is slow and trips Claude Code's "output too large".
     private const int MaxResultChars = 8000;
 
     public string Execute(string toolName, string inputJson)
     {
-        var raw = ExecuteInner(toolName, inputJson);
+        DebugLog.Write("INFO", "AI-Tool", $"call {toolName}",
+            string.IsNullOrWhiteSpace(inputJson) ? null : inputJson);
+        string raw;
+        try
+        {
+            raw = ExecuteInner(toolName, inputJson);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Exception($"AI-Tool {toolName}", ex);
+            throw;   // the agent surfaces "Tool error: ..."; the full stack is now in the debug log
+        }
+        DebugLog.Write("DEBUG", "AI-Tool", $"done {toolName} -> {raw.Length} chars");
         if (raw.Length <= MaxResultChars) return raw;
         return raw[..MaxResultChars] +
                $"\n\n…[truncated {raw.Length - MaxResultChars:N0} more chars. Narrow the request — e.g. ask for a " +
@@ -427,6 +543,13 @@ public sealed class PluginToolExecutor
                 return GetWinningRecord(env, Str("id"));
             case "search_robco_configs":
                 return SearchRobcoConfigs(_mo2PathProvider?.Invoke(), Str("query"), Int("limit", 60));
+            case "scan_conflicts":
+                return ScanConflicts(env, !root.TryGetProperty("mod_only", out var mo) || mo.ValueKind != JsonValueKind.False,
+                    root.TryGetProperty("type", out var tf) ? tf.GetString() : null, Int("limit", 200));
+            case "get_referenced_by":
+                return GetReferencedByText(env, Str("id"), Int("limit", 200));
+            case "get_problems":
+                return GetProblemsText(env, Str("id"));
 
             // ---- write tools ----
             case "open_plugin":
@@ -467,6 +590,22 @@ public sealed class PluginToolExecutor
                     root.TryGetProperty("signature", out var sg) ? sg.GetString() : null,
                     root.TryGetProperty("contains_component", out var cc) ? cc.GetString() : null,
                     Bool("apply"), Int("limit", 50));
+            case "reload_plugin":
+                return WriteService.ReloadPlugin(Str("plugin"), env);
+            case "strip_masters_clean":
+            {
+                var mastersRaw = Str("masters");
+                string[] masters;
+                try
+                {
+                    using var mastersDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(mastersRaw) ? "[]" : mastersRaw);
+                    masters = mastersDoc.RootElement.EnumerateArray()
+                        .Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToArray();
+                }
+                catch { masters = Array.Empty<string>(); }
+                bool isDryRun = !root.TryGetProperty("dry_run", out var dr) || dr.ValueKind != JsonValueKind.False;
+                return WriteService.StripMastersClean(Str("source_path"), masters, Str("output_path"), isDryRun);
+            }
 
             default:
                 return $"Unknown tool: {toolName}";
@@ -509,6 +648,56 @@ public sealed class PluginToolExecutor
             sb.AppendLine($"{diffs} field(s) differ across versions. Call get_winning_record for the effective values.");
         }
         return sb.ToString();
+    }
+
+    private static string ScanConflicts(object? env, bool modOnly, string? typeFilter, int limit)
+    {
+        if (env == null) return "No environment loaded. Use 'Load Env' or 'Open MO2' first.";
+
+        var all = ConflictScanner.ScanCached(env);
+        var filtered = all.Where(c =>
+            (!modOnly || c.InvolvesMod) &&
+            (string.IsNullOrWhiteSpace(typeFilter) || string.Equals(c.Type, typeFilter, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        if (filtered.Count == 0)
+            return "No conflicts found" + (modOnly ? " involving mods" : "") +
+                   (string.IsNullOrWhiteSpace(typeFilter) ? "." : $" of type {typeFilter}.");
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{filtered.Count} conflicting record(s){(modOnly ? " involving mods" : "")}" +
+                      $"{(string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}")}; showing {Math.Min(limit, filtered.Count)}:");
+        foreach (var c in filtered.Take(limit))
+            sb.AppendLine($"  {c.EditorID} [{c.FormKey}] ({c.Type}) — {c.Plugins.Count} plugins, WINNER={c.Winner}");
+        if (filtered.Count > limit)
+            sb.AppendLine($"…and {filtered.Count - limit} more. Filter by 'type' or raise 'limit' to see them.");
+        return sb.ToString();
+    }
+
+    private static string GetReferencedByText(object? env, string id, int limit)
+    {
+        var fk = ResolveToFk(env, id);
+        if (fk.IsNull) return $"Could not resolve '{id}'. Pass a FormKey or an exact EditorID.";
+
+        var refs = MutagenLoader.GetReferencedBy(env, fk.ToString(), limit);
+        if (refs.Count == 0) return $"Nothing references {fk}.";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{refs.Count} record(s) reference {fk}:");
+        foreach (var r in refs)
+            sb.AppendLine($"  {(string.IsNullOrEmpty(r.EditorID) ? r.FormKey : r.EditorID)} [{r.FormKey}] ({r.Type}) in {r.Plugin}");
+        return sb.ToString();
+    }
+
+    private static string GetProblemsText(object? env, string id)
+    {
+        var fk = ResolveToFk(env, id);
+        if (fk.IsNull) return $"Could not resolve '{id}'. Pass a FormKey or an exact EditorID.";
+
+        var problems = MutagenLoader.GetRecordProblems(env, fk.ToString());
+        if (problems.Count == 0) return $"No problems found for {fk}.";
+        return $"{problems.Count} problem(s) for {fk}:\n" +
+               string.Join("\n", problems.Select(p => $"  [{p.Severity}] {p.Description}"));
     }
 
     private static string GetWinningRecord(object? env, string id)
