@@ -553,17 +553,22 @@ public static class MutagenLoader
         GetRecordContexts(object? envObj, FormKey fk)
     {
         var ordered = new List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>();
-        if (envObj == null) return ordered;
-        try
+        // The on-disk load order comes from the env's link cache; with no env (CLI / unit tests /
+        // a session that only authored patches) we skip it and rely solely on the EditableMods scan
+        // below, so in-editor patches are still resolvable.
+        if (envObj != null)
         {
-            var lc = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
-            // ResolveAllSimpleContexts returns winning-first; reverse to load order.
-            var contexts = lc.ResolveAllSimpleContexts(fk).ToList();
-            contexts.Reverse();
-            foreach (var ctx in contexts)
-                ordered.Add((ctx.ModKey.FileName.String, ctx.Record));
+            try
+            {
+                var lc = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
+                // ResolveAllSimpleContexts returns winning-first; reverse to load order.
+                var contexts = lc.ResolveAllSimpleContexts(fk).ToList();
+                contexts.Reverse();
+                foreach (var ctx in contexts)
+                    ordered.Add((ctx.ModKey.FileName.String, ctx.Record));
+            }
+            catch { }
         }
-        catch { }
 
         // Hot-load AI/in-editor patches: any EditableMods plugin that carries this FormKey is a LIVE
         // override applied on top of the on-disk load order. If that plugin is already in the env, swap

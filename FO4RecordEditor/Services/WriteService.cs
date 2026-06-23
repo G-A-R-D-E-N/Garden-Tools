@@ -817,6 +817,54 @@ public static class WriteService
         return ResolveConflict(env, fk.ToString(), sourcePlugin, patchPlugin);
     }
 
+    /// <summary>
+    /// Copy several records into a patch as overrides in one call (the Conflicts-panel batch action).
+    /// itemsJson is a JSON array of { "formKey": "...", "source": "..." }. Returns a JSON summary
+    /// { total, ok, failed, failures: [ { formKey, reason } ] } so callers get authoritative counts
+    /// instead of parsing human-readable result strings.
+    /// </summary>
+    public static string CopyAsOverrideMany(object? env, string itemsJson, string patchPlugin)
+    {
+        int total = 0, ok = 0;
+        var failures = new List<(string formKey, string reason)>();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(itemsJson) ? "[]" : itemsJson);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                total++;
+                var formKey = el.TryGetProperty("formKey", out var fkEl) ? fkEl.GetString() ?? "" : "";
+                var source = el.TryGetProperty("source", out var sEl) ? sEl.GetString() ?? "" : "";
+
+                var msg = ResolveConflict(env, formKey, source, patchPlugin);
+                // Couples to ResolveConflict's success contract: a successful copy is the only result
+                // whose message starts with "Copied" — the one authoritative success token.
+                if (msg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase)) ok++;
+                else failures.Add((formKey, msg));
+            }
+        }
+        catch (Exception ex)
+        {
+            // Invalid/unparseable input: report an empty batch with the parse error as the reason.
+            return JsonSerializer.Serialize(new
+            {
+                total = 0,
+                ok = 0,
+                failed = 0,
+                failures = new[] { new { formKey = "", reason = $"Could not parse items JSON: {ex.Message}" } },
+            });
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            total,
+            ok,
+            failed = total - ok,
+            failures = failures.Select(f => new { formKey = f.formKey, reason = f.reason }).ToArray(),
+        });
+    }
+
     /// <summary>Remove a record entirely from a plugin (xEdit "Remove"). Use for deleting a stub
     /// record the editor created incompletely, or dropping an unwanted override from a patch.</summary>
     public static string DeleteRecord(string plugin, string recordId, object? env)

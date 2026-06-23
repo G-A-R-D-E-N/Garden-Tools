@@ -295,14 +295,11 @@ export default function MainShell() {
     const patch = window.prompt(`Copy ${picked.length} record(s) as override into which patch plugin?`, 'ConflictPatch.esp');
     if (!patch) return;
     setConflictBusy(true);
-    let ok = 0;
     try {
-      for (const c of picked) {
-        const res = await b.CopyAsOverride(c.Winner, c.FormKey, patch);
-        if (!/fail|could not|not an overridable|cannot be overridden/i.test(res)) ok++;
-      }
-      setStatus(`Copied ${ok}/${picked.length} into ${patch}. Save it from a record's context menu, then enable it last.`);
-      setConflictSel({});
+      const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
+      const res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch));
+      setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${res.failed ? ` ${res.failed} failed.` : ''} Save ${patch} from a record's context menu, then enable it last.`);
+      if (!res.failed) setConflictSel({});
     } catch (e: any) {
       setStatus('Batch copy failed: ' + (e?.message || e));
     } finally { setConflictBusy(false); }

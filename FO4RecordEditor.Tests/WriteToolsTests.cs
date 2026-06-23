@@ -119,4 +119,37 @@ public class WriteToolsTests
         WriteService.DeleteRecord(name, "FWTest_Stub", env: null).Should().Contain("Removed");
         WriteService.GetMutable(name)!.ConstructibleObjects.Should().BeEmpty();
     }
+
+    // The Conflicts-panel batch action must hand back authoritative counts: one valid record copies
+    // as an override, one bogus reference fails, and the JSON summary reports total/ok/failed + the
+    // failing FormKey (so the UI no longer guesses success by regex-matching a result string).
+    [Fact]
+    public void CopyAsOverrideMany_ReportsStructuredCounts()
+    {
+        var source = $"BatchSrc_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(source);
+        WriteService.CreateRecord(source, "KYWD", "FWTest_BatchKw", env: null);
+
+        // The created record's FormKey (the read tools see the mutable mod immediately).
+        var dump = MutagenLoader.QueryRecordFields(null, source, "FWTest_BatchKw");
+        var validFk = dump.Split('\n').First(l => l.TrimStart().StartsWith("FormKey:")).Split(':', 2)[1].Trim();
+
+        var patch = $"BatchPatch_{Guid.NewGuid():N}.esp";
+        var itemsJson = $$"""
+            [{"formKey":"{{validFk}}","source":"{{source}}"},
+             {"formKey":"000000:DoesNotExist.esp","source":"DoesNotExist.esp"}]
+            """;
+
+        var json = WriteService.CopyAsOverrideMany(env: null, itemsJson, patch);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.GetProperty("total").GetInt32().Should().Be(2);
+        root.GetProperty("ok").GetInt32().Should().Be(1);
+        root.GetProperty("failed").GetInt32().Should().Be(1);
+
+        var failures = root.GetProperty("failures");
+        failures.GetArrayLength().Should().Be(1);
+        failures[0].GetProperty("formKey").GetString().Should().Be("000000:DoesNotExist.esp");
+    }
 }

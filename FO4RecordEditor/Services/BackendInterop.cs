@@ -120,6 +120,8 @@ public class BackendInterop
     public string CopyAsOverride(string sourcePlugin, string id, string patchPlugin) =>
         DebugLog.Guard(nameof(CopyAsOverride), () => WriteService.CopyAsOverride(Env, sourcePlugin, id, patchPlugin),
             $"{id} {sourcePlugin}->{patchPlugin}");
+    public string CopyAsOverrideMany(string itemsJson, string patchPlugin) =>
+        DebugLog.Guard(nameof(CopyAsOverrideMany), () => WriteService.CopyAsOverrideMany(Env, itemsJson, patchPlugin), patchPlugin);
     public string RevertOverrides(string badPlugin, string patchPlugin, string signature, string containsComponent, bool apply, int limit) =>
         DebugLog.Guard(nameof(RevertOverrides), () => WriteService.RevertOverridesFrom(Env, badPlugin, patchPlugin,
             string.IsNullOrWhiteSpace(signature) ? null : signature,

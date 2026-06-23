@@ -22,6 +22,7 @@ export interface Backend {
   RemoveListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
   DeleteRecord(plugin: string, id: string): Promise<string>;
   CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string): Promise<string>;
+  CopyAsOverrideMany(itemsJson: string, patchPlugin: string): Promise<string>;
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
