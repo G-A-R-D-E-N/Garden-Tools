@@ -285,6 +285,23 @@ export default function MainShell() {
     }
   };
 
+  // Open any record by FormKey (used by Referenced-By jump navigation and the Conflicts panel).
+  const openByFormKey = async (formKey: string, pluginName: string) => {
+    const b = window.chrome?.webview?.hostObjects?.backend;
+    if (!b) return;
+    setRecordLoading(true);
+    try {
+      const json = await b.GetConflictMatrix(formKey);
+      const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
+      if (!matrix) { setErrorStr(`No record for ${formKey}.`); return; }
+      setOpenRecord({ title: matrix.EditorID || formKey, plugin: pluginName || matrix.Winner, matrix });
+    } catch (err: any) {
+      setErrorStr(err?.message || String(err));
+    } finally {
+      setRecordLoading(false);
+    }
+  };
+
   // Re-fetch the open record's conflict matrix after an edit (a new patch column may appear).
   const reloadMatrix = async () => {
     const b = window.chrome?.webview?.hostObjects?.backend;
@@ -411,7 +428,7 @@ export default function MainShell() {
               <p>Loading record…</p>
             </div>
           ) : openRecord ? (
-            <RecordView matrix={openRecord.matrix} plugin={openRecord.plugin} onReload={reloadMatrix} />
+            <RecordView matrix={openRecord.matrix} plugin={openRecord.plugin} onReload={reloadMatrix} onOpenRecord={openByFormKey} />
           ) : (
             <div className="welcome-screen glass-panel">
               <Database size={64} color="var(--border-color)" />

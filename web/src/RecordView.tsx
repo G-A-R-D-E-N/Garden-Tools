@@ -35,7 +35,11 @@ interface Menu { x: number; y: number; row: ConflictFieldRow; col: number; }
 interface Edit { field: string; col: number; }
 
 export default function RecordView(
-  { matrix, plugin, onReload }: { matrix: ConflictMatrix; plugin: string; onReload: () => Promise<void> }
+  { matrix, plugin, onReload, onOpenRecord }: {
+    matrix: ConflictMatrix; plugin: string;
+    onReload: () => Promise<void>;
+    onOpenRecord?: (formKey: string, plugin: string) => void;
+  }
 ) {
   const [filter, setFilter] = useState('');
   const [onlyDiffing, setOnlyDiffing] = useState(false);
@@ -338,7 +342,12 @@ export default function RecordView(
               refBy === null ? <div className="rv-drawer-note">Scanning load order…</div>
               : refBy.length === 0 ? <div className="rv-drawer-note">Nothing references this record.</div>
               : refBy.map((e, i) => (
-                <div key={i} className="rv-ref-row">
+                <div
+                  key={i}
+                  className={`rv-ref-row ${onOpenRecord ? 'rv-ref-clickable' : ''}`}
+                  onClick={() => onOpenRecord?.(e.FormKey, e.Plugin)}
+                  title={onOpenRecord ? `Open ${e.EditorID || e.FormKey}` : undefined}
+                >
                   <span className="rv-ref-type">{e.Type}</span>
                   <span className="rv-ref-id">{e.EditorID || e.FormKey}</span>
                   <span className="rv-ref-plugin">{e.Plugin}</span>
