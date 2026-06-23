@@ -54,6 +54,8 @@ export interface ConflictFieldRow {
   Level: number;
   Values: string[];      // one per plugin column, parallel to ConflictMatrix.Plugins ("" = unset)
   Differs: boolean;
+  Statuses: string[];    // per-plugin status parallel to Values: notdefined|master|identical|win|override|lose|only
+  Severity: string;      // row severity: none|override|conflict|critical
   IsSummary: boolean;    // a condition/component entry: collapse its sub-fields by default
   HasChildren: boolean;  // deeper rows belong to this one (show an expand chevron)
   EditKind: 'Text' | 'Bool' | 'Enum' | 'Ref';   // how a value cell edits ('Ref' = record picker)
@@ -72,6 +74,7 @@ export interface ConflictMatrix {
   Winner: string;        // winning plugin (last in load order)
   Plugins: string[];     // columns, in load order
   Rows: ConflictFieldRow[];
+  Level: string;         // record rollup: onlyone|noconflict|override|conflict|critical
 }
 
 /** One conflicting record across the load order (matches Models/ConflictEntry). */

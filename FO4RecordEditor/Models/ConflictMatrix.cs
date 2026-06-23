@@ -16,6 +16,10 @@ public sealed class ConflictMatrix
     public required IReadOnlyList<string> Plugins { get; init; }
     public required string Winner { get; init; }
     public required IReadOnlyList<ConflictFieldRow> Rows { get; init; }
+
+    /// <summary>Record-level ConflictAll rollup across all rows:
+    /// "onlyone" | "noconflict" | "override" | "conflict" | "critical".</summary>
+    public string Level { get; init; } = "noconflict";
 }
 
 public sealed class ConflictFieldRow
@@ -28,6 +32,13 @@ public sealed class ConflictFieldRow
     /// <summary>Value per plugin, parallel to <see cref="ConflictMatrix.Plugins"/>. "" = not set.</summary>
     public required IReadOnlyList<string> Values { get; init; }
     public required bool Differs { get; init; }
+
+    /// <summary>Per-plugin conflict status, parallel to <see cref="Values"/>:
+    /// "notdefined" | "master" | "identical" | "win" | "override" | "lose" | "only".</summary>
+    public IReadOnlyList<string> Statuses { get; init; } = System.Array.Empty<string>();
+
+    /// <summary>Row-level severity: "none" | "override" | "conflict" | "critical".</summary>
+    public string Severity { get; init; } = "none";
 
     /// <summary>This row has a one-line summary (e.g. a condition or component) AND deeper sub-field
     /// rows beneath it — the grid collapses those children by default and expands them on click,

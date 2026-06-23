@@ -616,6 +616,14 @@ public static class MutagenLoader
             return idx == -1 ? 999 : idx;
         }).ToList();
 
+        // Record-level ConflictAll rollup: only one version -> "onlyone"; otherwise worst severity.
+        string level;
+        if (plugins.Count <= 1) level = "onlyone";
+        else if (orderedRows.Any(r => r.Severity == "critical")) level = "critical";
+        else if (orderedRows.Any(r => r.Severity == "conflict")) level = "conflict";
+        else if (orderedRows.Any(r => r.Severity == "override")) level = "override";
+        else level = "noconflict";
+
         var last = versions[^1];
         return new ConflictMatrix
         {
@@ -625,6 +633,7 @@ public static class MutagenLoader
             Plugins = plugins,
             Winner = last.plugin,
             Rows = orderedRows,
+            Level = level,
         };
     }
 
@@ -643,11 +652,14 @@ public static class MutagenLoader
                 var present = vals.Where(v => v.Length > 0).ToList();
                 bool anyMissing = present.Count < plugins.Count;
                 bool differs = present.Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
+                var editKindString = child.EditKind.ToString();
+                var (statuses, severity) = ClassifyRow(vals, editKindString);
                 rows.Add(new ConflictFieldRow
                 {
                     Field = p, DisplayLabel = child.Key, Level = depth, Values = vals, Differs = differs,
+                    Statuses = statuses, Severity = severity,
                     IsSummary = child.IsSummary, HasChildren = hasKids,
-                    EditKind = child.EditKind.ToString(), EnumOptions = child.EnumOptions,
+                    EditKind = editKindString, EnumOptions = child.EnumOptions,
                     RefType = child.RefType, RefTypes = child.RefTypes,
                 });
             }
@@ -657,6 +669,69 @@ public static class MutagenLoader
             FlattenConflictRows(child, p, depth + 1, plugins, rows);
         }
     }
+
+    // Canonicalize a value for semantic equality: numbers compare by value (so "1.0" == "1.000000"),
+    // everything else compares ordinally. This is our lightweight stand-in for xEdit's DisplaySortKey.
+    internal static string CanonValue(string v)
+    {
+        if (double.TryParse(v, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands,
+                System.Globalization.CultureInfo.InvariantCulture, out var d))
+            return d.ToString("R", System.Globalization.CultureInfo.InvariantCulture); // canonical numeric form
+        return v;
+    }
+
+    // Compute per-plugin conflict status (parallel to vals) and a row-level severity using semantic
+    // equality. masterIdx = first present column, winnerIdx = last present column (load-order winner).
+    internal static (string[] statuses, string severity) ClassifyRow(IReadOnlyList<string> vals, string editKind)
+    {
+        int n = vals.Count;
+        var statuses = new string[n];
+        // present columns (non-empty)
+        var present = new List<int>();
+        for (int i = 0; i < n; i++) if (!string.IsNullOrEmpty(vals[i])) present.Add(i);
+
+        if (present.Count == 0) { for (int i = 0; i < n; i++) statuses[i] = "notdefined"; return (statuses, "none"); }
+
+        int masterIdx = present[0];
+        int winnerIdx = present[^1];
+        string Canon(int i) => CanonValue(vals[i]);
+        bool Eq(int a, int b) => string.Equals(Canon(a), Canon(b), StringComparison.Ordinal);
+
+        // distinct semantic values among present
+        var distinct = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var i in present) distinct.Add(Canon(i));
+        bool anyMissing = present.Count < n;
+        bool differs = distinct.Count > 1 || (present.Count > 0 && anyMissing);
+
+        for (int i = 0; i < n; i++)
+        {
+            if (string.IsNullOrEmpty(vals[i])) { statuses[i] = "notdefined"; continue; }
+            if (present.Count == 1) { statuses[i] = "only"; continue; }
+            if (i == masterIdx) { statuses[i] = "master"; continue; }
+            if (Eq(i, masterIdx)) { statuses[i] = "identical"; continue; }
+            if (i == winnerIdx) { statuses[i] = "win"; continue; }
+            statuses[i] = Eq(i, winnerIdx) ? "override" : "lose";
+        }
+
+        // Severity
+        string severity;
+        if (!differs) severity = "none";
+        else
+        {
+            // critical: a FormLink (Ref) whose WINNING value is a null/broken target while another plugin
+            // supplied a real one (a reference that resolves to nothing -> in-game break).
+            bool refBrokenWinner = string.Equals(editKind, "Ref", StringComparison.OrdinalIgnoreCase)
+                && LooksNullRef(vals[winnerIdx]) && present.Any(i => !LooksNullRef(vals[i]));
+            if (refBrokenWinner) severity = "critical";
+            else if (distinct.Count >= 3) severity = "conflict";
+            else severity = "override";
+        }
+        return (statuses, severity);
+    }
+
+    private static bool LooksNullRef(string v) =>
+        string.IsNullOrEmpty(v) || v.Equals("Null", StringComparison.OrdinalIgnoreCase)
+        || v.Equals("None", StringComparison.OrdinalIgnoreCase) || v.StartsWith("000000:", StringComparison.OrdinalIgnoreCase);
 
     // ============================================================================
     //  Public query API for the AI tool executor (read all loaded plugin data).
