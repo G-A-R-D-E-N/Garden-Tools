@@ -237,4 +237,55 @@ public class WriteServiceTests
         var recipeDump = exec.Execute("get_record", $"{{\"plugin\":\"{plugin}\",\"id\":\"Link_Recipe\"}}");
         recipeDump.Should().Contain(formKey);
     }
+
+    [Fact]
+    public void RenumberFormId_ChangesId_AndFixesInPluginReferences()
+    {
+        var plugin = $"RenumTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
+
+        // A keyword at 0x000801 and a weapon that links it.
+        var kw = new Mutagen.Bethesda.Fallout4.Keyword(
+            new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x801), rel) { EditorID = "Renum_Kw" };
+        mod.Keywords.Add(kw);
+        var gun = new Mutagen.Bethesda.Fallout4.Weapon(
+            new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x802), rel) { EditorID = "Renum_Gun" };
+        gun.Keywords = new() {
+            new Mutagen.Bethesda.Plugins.FormLink<Mutagen.Bethesda.Fallout4.IKeywordGetter>(kw.FormKey) };
+        mod.Weapons.Add(gun);
+
+        // Renumber the keyword 0x801 -> 0x0F0F.
+        WriteService.RenumberFormId(plugin, "Renum_Kw", "000F0F", null)
+            .Should().Contain("Renumbered").And.Contain("000F0F");
+
+        // Save + reload, assert the new id AND that the weapon's link followed.
+        var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), plugin);
+        WriteService.SavePlugin(plugin, outPath);
+        using var reload = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+            Mutagen.Bethesda.Plugins.ModPath.FromPath(outPath), rel);
+        var rkw = reload.Keywords.First(k => k.EditorID == "Renum_Kw");
+        var rgun = reload.Weapons.First(w => w.EditorID == "Renum_Gun");
+        rkw.FormKey.ID.Should().Be(0x0F0Fu);
+        rgun.Keywords!.Select(k => k.FormKey).Should().Contain(rkw.FormKey);
+
+        try { System.IO.File.Delete(outPath); } catch { }
+    }
+
+    [Fact]
+    public void RenumberFormId_TargetIdInUse_Rejected()
+    {
+        var plugin = $"RenumDup_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
+        mod.Keywords.Add(new Mutagen.Bethesda.Fallout4.Keyword(
+            new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x801), rel) { EditorID = "Dup_A" });
+        mod.Keywords.Add(new Mutagen.Bethesda.Fallout4.Keyword(
+            new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x802), rel) { EditorID = "Dup_B" });
+
+        WriteService.RenumberFormId(plugin, "Dup_A", "000802", null)
+            .Should().Contain("already used");
+    }
 }

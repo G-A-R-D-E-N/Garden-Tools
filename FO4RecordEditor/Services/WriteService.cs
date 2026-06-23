@@ -305,6 +305,57 @@ public static class WriteService
                $"This is in memory until you save.";
     }
 
+    /// <summary>
+    /// Change one record's FormID within its plugin (xEdit "Change FormID") and repoint every
+    /// reference to it that lives in the SAME plugin. References in OTHER plugins are not rewritten
+    /// (that needs a patch); the message flags how many exist so the caller / AI can fix them.
+    /// In memory until save_plugin. newIdHex is the 6-digit object id, e.g. "000F99" or "0xF99".
+    /// </summary>
+    public static string RenumberFormId(string plugin, string recordId, string newIdHex, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var rec = FindMutableRecord(mod, recordId);
+        if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+
+        var hex = (newIdHex ?? "").Trim();
+        if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) hex = hex[2..];
+        if (!uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, Inv, out var newId))
+            return $"'{newIdHex}' is not a valid hex FormID (use the 6-digit object id, e.g. '000F99').";
+        if (newId == 0) return "FormID 000000 is the null id and can't be assigned.";
+
+        var oldFk = rec.FormKey;
+        var newFk = new FormKey(mod.ModKey, newId);
+        if (newFk == oldFk) return "The new FormID is the same as the current one.";
+        if (mod.EnumerateMajorRecords().Any(r => r.FormKey == newFk))
+            return $"FormID {newId:X6} is already used by another record in {plugin}. Pick a free id.";
+
+        // Re-key: duplicate the record into its group under the new FormKey, then drop the old one.
+        bool rekeyed = false;
+        foreach (var groupProp in mod.GetType().GetProperties()
+                     .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType)))
+        {
+            if (groupProp.GetValue(mod) is not Mutagen.Bethesda.Plugins.Records.IGroup group) continue;
+            var match = ((System.Collections.IEnumerable)group)
+                .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>()
+                .FirstOrDefault(r => r.FormKey == oldFk);
+            if (match == null) continue;
+            group.DuplicateInAsNewUntypedRecord((Mutagen.Bethesda.Plugins.Records.IMajorRecord)match, newFk);
+            group.GetType().GetMethod("Remove", new[] { typeof(FormKey) })?.Invoke(group, new object[] { oldFk });
+            rekeyed = true;
+            break;
+        }
+        if (!rekeyed) return $"Could not locate the group holding {oldFk} in {plugin}.";
+
+        // Repoint every in-plugin reference to the new id.
+        mod.RemapLinks(new Dictionary<FormKey, FormKey> { [oldFk] = newFk });
+        MutagenLoader.InvalidateModIndex(plugin);
+        NotifyChanged(plugin);
+
+        return $"Renumbered {rec.EditorID} from {oldFk} to {newFk} in {plugin} and fixed in-plugin references. " +
+               $"NOTE: references to {oldFk} in OTHER plugins are NOT updated — check 'Referenced By' (or ask the " +
+               $"AI to find and patch them). save_plugin to persist.";
+    }
+
     // ---- cleaning (xEdit-style UDR) ----------------------------------------------------
 
     // FO4 "Initially Disabled" major-record flag.
