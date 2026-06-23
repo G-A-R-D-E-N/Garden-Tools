@@ -125,6 +125,13 @@ public class BackendInterop
             string.IsNullOrWhiteSpace(signature) ? null : signature,
             string.IsNullOrWhiteSpace(containsComponent) ? null : containsComponent,
             apply, limit <= 0 ? 50 : limit), $"{badPlugin}->{patchPlugin} apply={apply}");
+    public string CompactToEsl(string plugin) =>
+        DebugLog.Guard(nameof(CompactToEsl), () => WriteService.CompactToEsl(plugin, Env), plugin);
+    public string CleanPlugin(string plugin) =>
+        DebugLog.Guard(nameof(CleanPlugin), () => WriteService.CleanPlugin(plugin, Env), plugin);
+    public string RenumberFormId(string plugin, string record, string newId) =>
+        DebugLog.Guard(nameof(RenumberFormId), () => WriteService.RenumberFormId(plugin, record, newId, Env),
+            $"{plugin} {record}->{newId}");
 
     // ---- save ----
     public string ResolveConflict(string formKey, string winner, string patch) =>

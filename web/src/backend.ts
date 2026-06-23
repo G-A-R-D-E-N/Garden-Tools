@@ -24,6 +24,9 @@ export interface Backend {
   CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string): Promise<string>;
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
+  CompactToEsl(plugin: string): Promise<string>;
+  CleanPlugin(plugin: string): Promise<string>;
+  RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;
 
   // ---- save ----
   ResolveConflict(formKey: string, winner: string, patch: string): Promise<string>;
@@ -68,6 +71,16 @@ export interface ConflictMatrix {
   Winner: string;        // winning plugin (last in load order)
   Plugins: string[];     // columns, in load order
   Rows: ConflictFieldRow[];
+}
+
+/** One conflicting record across the load order (matches Models/ConflictEntry). */
+export interface ConflictEntry {
+  FormKey: string;
+  EditorID: string;
+  Type: string;
+  Plugins: string[];
+  Winner: string;
+  InvolvesMod: boolean;
 }
 
 /** Shape of each node from Backend.GetRecordTree (matches BackendInterop.NodeDto). */
