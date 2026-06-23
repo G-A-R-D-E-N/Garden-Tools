@@ -637,6 +637,16 @@ public static class MutagenLoader
         };
     }
 
+    /// <summary>Human-friendly display label for a conflict row. Array-entry keys like "[0]"
+    /// are shown as "Item [0]" (singular of parent collection name + index) so users see
+    /// "Item [0]", "Condition [0]", "Component [0]" instead of raw "[0]".</summary>
+    private static string MakeDisplayLabel(string key, string parentKey)
+    {
+        if (key.Length > 1 && key[0] == '[' && parentKey != "root")
+            return $"{Rendering.FriendlyNames.Singular(parentKey)} {key}";
+        return Rendering.FriendlyNames.Label(key);
+    }
+
     private static void FlattenConflictRows(RecordNode node, string path, int depth, List<string> plugins, List<ConflictFieldRow> rows)
     {
         foreach (var child in node.Children)
@@ -659,7 +669,7 @@ public static class MutagenLoader
                 var (statuses, severity) = ClassifyRow(vals, editKindString);
                 rows.Add(new ConflictFieldRow
                 {
-                    Field = p, DisplayLabel = child.Key, Level = depth, Values = vals, Differs = differs,
+                    Field = p, DisplayLabel = MakeDisplayLabel(child.Key, node.Key), Level = depth, Values = vals, Differs = differs,
                     Statuses = statuses, Severity = severity,
                     IsSummary = child.IsSummary, HasChildren = hasKids,
                     EditKind = editKindString, EnumOptions = child.EnumOptions,
@@ -771,6 +781,91 @@ public static class MutagenLoader
         var idx = GetModIndex(mod, plugin);
         if (!idx.BySig.TryGetValue(sig, out var recs)) return [];
         return recs.Take(limit).Select(r => (r.FormKey.ToString(), r.EditorID ?? "")).ToList();
+    }
+
+    /// <summary>
+    /// Return a compact tabular summary for up to <paramref name="limit"/> records of a given
+    /// type — one line per record, key fields shown inline. Far cheaper than N QueryRecordFields
+    /// calls when the agent needs to survey a whole group at once.
+    /// </summary>
+    public static string QueryRecordSummaries(object? envObj, string plugin, string sig, int limit)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return $"Plugin '{plugin}' not found.";
+        var idx = GetModIndex(mod, plugin);
+        if (!idx.BySig.TryGetValue(sig, out var recs))
+            return $"No records of type '{sig}' in {plugin}.";
+
+        var take = recs.Take(limit).ToList();
+        if (take.Count == 0) return $"No records of type '{sig}' in {plugin}.";
+
+        // Discover output columns from the first record (all same-type records share identical
+        // property lists in Mutagen). Keep only scalar/enum/FormLink/collection properties.
+        var rec0 = take[0];
+        var colProps = new List<PropertyInfo>();
+        foreach (var prop in rec0.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (_skipProps.Contains(prop.Name)) continue;
+            if (prop.Name is "EditorID" or "FormKey") continue;
+            if (prop.GetIndexParameters().Length > 0) continue;
+            object? v; try { v = prop.GetValue(rec0); } catch { continue; }
+            if (v == null) continue;
+            var vt = v.GetType();
+            bool keep = _leafTypes.Contains(vt) || vt.IsEnum
+                || v is Mutagen.Bethesda.Plugins.IFormLinkIdentifier
+                || (v is IEnumerable && vt != typeof(string));
+            if (!keep) continue;
+            colProps.Add(prop);
+            if (colProps.Count >= 8) break;
+        }
+
+        const int EW = 38, VW = 28;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{sig} in {plugin}: {take.Count} of {recs.Count} records shown");
+        if (recs.Count > limit)
+            sb.AppendLine($"(use search_records or raise limit to see more)");
+
+        // Header row
+        sb.Append("  " + "EditorID [FormKey]".PadRight(EW));
+        foreach (var p in colProps) sb.Append(" | " + SumTrunc(p.Name, VW).PadRight(VW));
+        sb.AppendLine();
+        sb.AppendLine("  " + new string('-', EW + colProps.Count * (VW + 3)));
+
+        foreach (var rec in take)
+        {
+            var hdr = (rec.EditorID ?? "(no-eid)") + " [" + rec.FormKey + "]";
+            sb.Append("  " + SumTrunc(hdr, EW).PadRight(EW));
+            foreach (var prop in colProps)
+            {
+                string cell;
+                try
+                {
+                    var v = prop.GetValue(rec);
+                    cell = v switch
+                    {
+                        null => "",
+                        Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli => FormatFormLink(fli),
+                        IEnumerable ie when v.GetType() != typeof(string) =>
+                            "[" + SumCountEnumerable(ie) + " items]",
+                        _ => v.ToString() ?? "",
+                    };
+                }
+                catch { cell = "?"; }
+                sb.Append(" | " + SumTrunc(cell, VW).PadRight(VW));
+            }
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private static string SumTrunc(string? s, int max) =>
+        string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..(max - 3)] + "...";
+
+    private static int SumCountEnumerable(IEnumerable ie)
+    {
+        if (ie is ICollection c) return c.Count;
+        int n = 0; foreach (var _ in ie) n++; return n;
     }
 
     public static IReadOnlyList<(string formKey, string editorId, string type)> QuerySearch(

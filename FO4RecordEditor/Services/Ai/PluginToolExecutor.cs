@@ -48,6 +48,25 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "type" }
             }),
+        new("list_records_summary",
+            "Get a compact field table for ALL records of a type in a plugin — one row per record with " +
+            "key fields (scalars, FormLinks, list counts) shown inline. Use this to survey an entire " +
+            "record group AT ONCE instead of calling get_record in a loop. Essential for bulk conflict " +
+            "analysis: e.g. all COBJ records with their CreatedObject + component count + workbench, " +
+            "all WEAP with damage values, all NPC_ with race + level. Follow up with get_record ONLY " +
+            "on specific records that need a complete field dump. 'type' is the Mutagen class name: " +
+            "ConstructibleObject, Weapon, Armor, Npc, LeveledItem, FormList, etc.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    type = new { type = "string", description = "Record type (Mutagen class name), e.g. 'ConstructibleObject'." },
+                    limit = new { type = "integer", description = "Max records to return (default 200, max 500)." }
+                },
+                required = new[] { "plugin", "type" }
+            }),
         new("search_records",
             "Search a plugin for records whose EditorID or FormKey contains the query text. Returns EditorID, type and FormKey.",
             new
@@ -575,7 +594,8 @@ public sealed class PluginToolExecutor
             "compact_to_esl"      => $"compact {plugin} to ESL",
             "renumber_formid"     => $"renumber a record in {plugin}",
             "get_record"          => $"read {ShortId(Str("id"))} in {plugin}",
-            "list_records"        => $"list {Str("type")} in {plugin}",
+            "list_records"         => $"list {Str("type")} in {plugin}",
+            "list_records_summary" => $"summary {Str("type")} in {plugin}",
             "search_records"      => $"search '{Str("query")}' in {plugin}",
             "get_conflicts"       => $"conflicts for {ShortId(Str("id"))}",
             "get_winning_record"  => $"winning record {ShortId(Str("id"))}",
@@ -616,6 +636,8 @@ public sealed class PluginToolExecutor
                 var recs = MutagenLoader.QueryRecordsOfType(env, Str("plugin"), Str("type"), Int("limit", 100));
                 return recs.Count == 0 ? "No records of that type." : string.Join("\n", recs.Select(r => $"{r.editorId} [{r.formKey}]"));
             }
+            case "list_records_summary":
+                return MutagenLoader.QueryRecordSummaries(env, Str("plugin"), Str("type"), Math.Min(Int("limit", 200), 500));
             case "search_records":
             {
                 var hits = MutagenLoader.QuerySearch(env, Str("plugin"), Str("query"), Int("limit", 50));

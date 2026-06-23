@@ -19,10 +19,14 @@ public static class AiGuidance
         + "## Be efficient — directly controls the user's cost\n"
         + "The ENTIRE conversation + every tool result is re-sent each turn. Fewer, broader calls = "
         + "far less cost. Hard rules:\n"
+        + "- NEVER call get_record or get_conflicts in a loop over many records — that is the " +
+        "single most expensive mistake. Use list_records_summary to read ALL records of a type in " +
+        "ONE call (it shows key fields per record: FormLinks, component counts, stats). " +
+        "Then call get_record ONLY on specific records that need a complete field dump.\n"
         + "- scan_conflicts ONCE for the big picture. Do NOT call get_winning_record one record at a "
         + "time to survey — that is the slow, expensive path.\n"
-        + "- Read ONE representative record to learn the pattern, apply the same fix to similar records "
-        + "WITHOUT re-reading each one. Never re-read a record you have already seen this conversation.\n"
+        + "- list_records_summary gives you a field table for the whole group in one call. Use it " +
+        "before any bulk analysis or patch authoring session over a record type.\n"
         + "- Stop calling tools the moment you have enough information to act.\n\n"
 
         // ── SESSION START ─────────────────────────────────────────────────────────────────────────────
@@ -36,7 +40,7 @@ public static class AiGuidance
 
         // ── TOOLS ────────────────────────────────────────────────────────────────────────────────────
         + "## Tools\n"
-        + "Read: list_plugins, list_record_types, list_records, search_records, "
+        + "Read: list_plugins, list_record_types, list_records, list_records_summary, search_records, "
         + "get_record(plugin,id), get_conflicts(id), get_winning_record(id), "
         + "scan_conflicts, get_referenced_by, get_problems, search_robco_configs.\n"
         + "Write: open_plugin, backup_plugin, create_plugin, create_record, delete_record, "
