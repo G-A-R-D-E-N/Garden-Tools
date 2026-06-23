@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Folder, ChevronRight, ChevronDown, Filter, EyeOff, Pencil, Copy, Save, Trash2,
-  Link2, AlertTriangle, Hash, Minimize2, Eraser,
+  Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain,
 } from 'lucide-react';
 import type { ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem } from './backend';
 import RecordPicker from './RecordPicker';
@@ -203,6 +203,17 @@ export default function RecordView(
     catch (e: any) { setStatus('Clean failed: ' + (e?.message || e)); }
   };
 
+  const askImpact = () => {
+    setMenu(null);
+    const id = matrix.EditorID || matrix.FormKey;
+    const prompt =
+      `What breaks if I change or renumber the record ${id} [${matrix.FormKey}] (${matrix.Type})? ` +
+      `Use get_referenced_by on ${matrix.FormKey} to list every record and plugin that references it, ` +
+      `then tell me which would break and how to patch them.`;
+    window.dispatchEvent(new CustomEvent('fo4:ask-ai', { detail: prompt }));
+    setStatus('Asked Claude about impact — see the chat panel.');
+  };
+
   const renderEditor = (r: ConflictFieldRow, ci: number) => {
     if (r.EditKind === 'Bool') {
       return (
@@ -384,6 +395,8 @@ export default function RecordView(
           <button onClick={() => renumberFormId(menu.col)}><Hash size={13} /> Change FormID…</button>
           <button onClick={() => compactEsl(menu.col)}><Minimize2 size={13} /> Compact to ESL</button>
           <button onClick={() => cleanPlugin(menu.col)}><Eraser size={13} /> Clean (UDR)</button>
+          <div className="rv-context-sep" />
+          <button onClick={askImpact}><Brain size={13} /> Ask AI: what breaks?</button>
         </div>
       )}
 
