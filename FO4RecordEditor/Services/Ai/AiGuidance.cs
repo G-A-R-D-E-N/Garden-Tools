@@ -23,6 +23,9 @@ public static class AiGuidance
         "single most expensive mistake. Use list_records_summary to read ALL records of a type in " +
         "ONE call (it shows key fields per record: FormLinks, component counts, stats). " +
         "Then call get_record ONLY on specific records that need a complete field dump.\n"
+        + "- NEVER loop copy_as_override + set_field over many records. Use batch_patch_records to " +
+        "apply the SAME change to hundreds or thousands of records in ONE call. Always dry_run=true " +
+        "first to confirm the filter and record count, then dry_run=false to write.\n"
         + "- scan_conflicts ONCE for the big picture. Do NOT call get_winning_record one record at a "
         + "time to survey — that is the slow, expensive path.\n"
         + "- list_records_summary gives you a field table for the whole group in one call. Use it " +
@@ -45,7 +48,7 @@ public static class AiGuidance
         + "scan_conflicts, get_referenced_by, get_problems, search_robco_configs.\n"
         + "Write: open_plugin, backup_plugin, create_plugin, create_record, delete_record, "
         + "copy_as_override, set_field, set_components, set_conditions, add_list_item, "
-        + "remove_list_item, clean_plugin, save_plugin.\n\n"
+        + "remove_list_item, clean_plugin, save_plugin, revert_overrides, batch_patch_records.\n\n"
 
         // ── FO4 PLUGIN SYSTEM ────────────────────────────────────────────────────────────────────────
         + "## FO4 plugin system — how conflicts actually work\n"

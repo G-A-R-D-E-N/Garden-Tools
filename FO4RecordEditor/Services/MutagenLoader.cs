@@ -868,6 +868,19 @@ public static class MutagenLoader
         int n = 0; foreach (var _ in ie) n++; return n;
     }
 
+    /// <summary>
+    /// Expose raw record list for batch write operations. Returns all records of the given
+    /// signature from the named plugin, or an empty list when the plugin/type isn't found.
+    /// </summary>
+    public static IReadOnlyList<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> GetRecordsForBatch(
+        object? envObj, string plugin, string sig)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return [];
+        var idx = GetModIndex(mod, plugin);
+        return idx.BySig.TryGetValue(sig, out var recs) ? recs : [];
+    }
+
     public static IReadOnlyList<(string formKey, string editorId, string type)> QuerySearch(
         object? envObj, string plugin, string query, int limit = 50)
     {

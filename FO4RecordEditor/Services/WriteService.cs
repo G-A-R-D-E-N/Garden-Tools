@@ -485,6 +485,30 @@ public static class WriteService
         return "string";
     }
 
+    /// <summary>
+    /// Copy the plugin's original on-disk file to a timestamped .bak file beside it.
+    /// Safe to call multiple times; each call produces a uniquely named backup.
+    /// </summary>
+    public static string BackupPlugin(string plugin)
+    {
+        var (name, _) = NormalizePlugin(plugin);
+        if (!_sourcePath.TryGetValue(name, out var sourcePath) || string.IsNullOrWhiteSpace(sourcePath))
+            return $"'{name}' has no on-disk source path — it may be a newly created plugin that hasn't been saved yet. No backup needed.";
+        if (!File.Exists(sourcePath))
+            return $"Source file not found on disk at '{sourcePath}'; cannot back it up.";
+        var ts = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var bakPath = sourcePath + $".{ts}.bak";
+        try
+        {
+            File.Copy(sourcePath, bakPath, overwrite: false);
+            return $"Backup created: {bakPath}";
+        }
+        catch (Exception ex)
+        {
+            return $"Backup failed: {ex.Message}";
+        }
+    }
+
     public static string SavePlugin(string plugin, string? path)
     {
         var (name, explicitPath) = NormalizePlugin(plugin);
@@ -1132,6 +1156,158 @@ public static class WriteService
         if (reverted > preview.Count) sb.AppendLine($"  …and {reverted - preview.Count} more.");
         sb.AppendLine($"Run revert_overrides again with apply=true to write these into '{patchPlugin}'.");
         return sb.ToString();
+    }
+
+    // ---- batch patch --------------------------------------------------------
+
+    /// <summary>
+    /// Apply a list of field operations (set/add/remove) to ALL records of a given type in a
+    /// source plugin, optionally filtered by a field value. Copies each matching record as an
+    /// override into patchPlugin, then applies the operations. Defaults to dry-run mode.
+    /// </summary>
+    public static string BatchPatchRecords(
+        object? env, string patchPlugin, string sourcePlugin, string sig,
+        string operationsJson, string? filterField, string? filterValue,
+        bool dryRun, int limit)
+    {
+        if (string.IsNullOrWhiteSpace(sig))         return "Provide record type, e.g. 'ConstructibleObject'.";
+        if (string.IsNullOrWhiteSpace(sourcePlugin)) return "Provide source_plugin.";
+        if (string.IsNullOrWhiteSpace(patchPlugin))  return "Provide patch_plugin.";
+
+        // Parse operations array: [{op:"set"|"add"|"remove", field:"...", value:"..."}]
+        List<(string op, string field, string val)> ops;
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(operationsJson) ? "[]" : operationsJson);
+            ops = doc.RootElement.EnumerateArray().Select(el => (
+                op:    el.TryGetProperty("op",    out var o) ? o.GetString() ?? "set" : "set",
+                field: el.TryGetProperty("field", out var f) ? f.GetString() ?? ""   : "",
+                val:   el.TryGetProperty("value", out var v) ? v.GetString() ?? ""   : ""
+            )).Where(x => x.field.Length > 0).ToList();
+        }
+        catch (Exception ex) { return $"Invalid operations JSON: {ex.Message}"; }
+
+        if (ops.Count == 0 && !dryRun)
+            return "Provide at least one operation in 'operations' (or use dry_run=true to preview).";
+
+        // Collect and filter candidates
+        var allRecs = MutagenLoader.GetRecordsForBatch(env, sourcePlugin, sig);
+        if (allRecs.Count == 0)
+            return $"No records of type '{sig}' found in '{sourcePlugin}'. Use list_record_types to confirm.";
+
+        var matched = new List<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>();
+        foreach (var rec in allRecs)
+        {
+            if (!BatchMatchesFilter(rec, filterField, filterValue)) continue;
+            matched.Add(rec);
+            if (matched.Count >= limit) break;
+        }
+
+        if (matched.Count == 0)
+            return $"No {sig} records in '{sourcePlugin}' match the filter " +
+                   $"({filterField}={filterValue}). Adjust the filter or check field names.";
+
+        // Dry run: report what would change
+        if (dryRun)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"DRY RUN — {matched.Count} of {allRecs.Count} {sig} records in '{sourcePlugin}' match" +
+                          (string.IsNullOrWhiteSpace(filterField) ? " (no filter)" : $" ({filterField}={filterValue})") + ":");
+            foreach (var rec in matched.Take(25))
+                sb.AppendLine($"  {rec.EditorID ?? "(no-eid)"} [{rec.FormKey}]");
+            if (matched.Count > 25) sb.AppendLine($"  ...and {matched.Count - 25} more.");
+            sb.AppendLine($"\nOperations to apply to each:");
+            foreach (var (op, field, val) in ops)
+                sb.AppendLine($"  {op} {field} = \"{val}\"");
+            sb.AppendLine($"\nRun again with dry_run=false to write {matched.Count} records into '{patchPlugin}'.");
+            return sb.ToString();
+        }
+
+        // Ensure patch plugin is open/created
+        var (patchName, patchPath) = NormalizePlugin(patchPlugin);
+        if (GetMutable(patchName) == null)
+        {
+            bool existsOnDisk = (patchPath != null && File.Exists(patchPath))
+                || MutagenLoader.LooseModPaths.ContainsKey(patchName)
+                || FindPluginPath(patchName, env) != null;
+            if (existsOnDisk) OpenPlugin(patchPlugin, env);
+            else CreatePlugin(patchPlugin);
+        }
+        var patch = GetMutable(patchName);
+        if (patch == null) return $"Could not open or create patch plugin '{patchName}'.";
+
+        int done = 0, failed = 0;
+        var errors = new List<string>();
+
+        foreach (var rec in matched)
+        {
+            try
+            {
+                if (!AddOverride(patch, rec))
+                {
+                    failed++;
+                    errors.Add($"{rec.EditorID} [{rec.FormKey}]: cannot override type '{sig}'");
+                    continue;
+                }
+                var fkStr = rec.FormKey.ToString();
+                foreach (var (op, field, val) in ops)
+                {
+                    var result = op switch
+                    {
+                        "add"    => AddListItem(patchName, fkStr, field, val, env),
+                        "remove" => RemoveListItem(patchName, fkStr, field, val, env),
+                        _        => SetField(patchName, fkStr, field, val, env),
+                    };
+                    // Only report errors (not routine success)
+                    if (result.StartsWith("Error", StringComparison.OrdinalIgnoreCase) ||
+                        result.StartsWith("Could not", StringComparison.OrdinalIgnoreCase) ||
+                        result.StartsWith("No record", StringComparison.OrdinalIgnoreCase))
+                        errors.Add($"{rec.EditorID ?? fkStr}: {result}");
+                }
+                done++;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                errors.Add($"{rec.FormKey}: {ex.Message}");
+            }
+        }
+
+        MutagenLoader.InvalidateModIndex(patchName);
+        NotifyChanged(patchName);
+
+        var msg = new System.Text.StringBuilder();
+        msg.AppendLine($"Batch patched {done} of {matched.Count} records into '{patchName}'." +
+                       (failed > 0 ? $" {failed} failed." : ""));
+        if (errors.Count > 0)
+        {
+            msg.AppendLine("First errors (check field names and value formats):");
+            foreach (var e in errors.Take(5)) msg.AppendLine("  " + e);
+        }
+        msg.Append(SavePlugin(patchName, null));
+        return msg.ToString();
+    }
+
+    // Check if a record matches a simple field filter. filterValue is a case-insensitive
+    // substring check against the string representation of the field value (FormLinks are
+    // formatted as "EditorID [FormID:Plugin]" so matching EditorID or FormKey both work).
+    private static bool BatchMatchesFilter(
+        Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec, string? filterField, string? filterValue)
+    {
+        if (string.IsNullOrWhiteSpace(filterField)) return true;
+
+        var prop = rec.GetType().GetProperty(filterField, BindingFlags.Public | BindingFlags.Instance);
+        if (prop == null) return false;
+
+        object? val; try { val = prop.GetValue(rec); } catch { return false; }
+        if (val == null) return string.IsNullOrWhiteSpace(filterValue);
+
+        var valStr = val is Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli
+            ? MutagenLoader.FormatFormLink(fli)
+            : val.ToString() ?? "";
+
+        return string.IsNullOrWhiteSpace(filterValue) ||
+               valStr.Contains(filterValue, StringComparison.OrdinalIgnoreCase);
     }
 
     // ---- helpers --------------------------------------------------------

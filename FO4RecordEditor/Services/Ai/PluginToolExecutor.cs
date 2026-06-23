@@ -438,6 +438,33 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "bad_plugin", "patch_plugin" }
             }),
+        new("batch_patch_records",
+            "Apply field operations to ALL records of a type in a plugin IN ONE CALL — the bulk write " +
+            "equivalent of list_records_summary for reading. Instead of N copy_as_override + N set_field " +
+            "calls, this handles 3000+ records at once. Defaults to dry_run=true (safe preview). " +
+            "Pass dry_run=false to write. 'operations' is a JSON array of {op, field, value}: " +
+            "op = 'set' (default), 'add' (list append), 'remove' (list remove). " +
+            "Optional filter_field + filter_value narrow to only records whose field contains that value " +
+            "(FormLink fields match on EditorID or FormKey string). " +
+            "Always dry-run first to confirm the record count and filter, then pass dry_run=false. " +
+            "Example: fix all 3000 COBJ workbench keywords in one call with filter_field='WorkbenchKeyword' " +
+            "filter_value='OldWorkbench' and op set WorkbenchKeyword to the new FormKey.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_plugin = new { type = "string", description = "Plugin whose records to patch." },
+                    patch_plugin  = new { type = "string", description = "Patch plugin to write overrides into." },
+                    type          = new { type = "string", description = "Record type (Mutagen class name), e.g. 'ConstructibleObject'." },
+                    operations    = new { type = "string", description = "JSON array of operations: [{\"op\":\"set\",\"field\":\"WorkbenchKeyword\",\"value\":\"001234:Fallout4.esm\"}]." },
+                    filter_field  = new { type = "string", description = "Optional: only patch records where this field contains filter_value." },
+                    filter_value  = new { type = "string", description = "Filter value (substring match; FormLinks matched by EditorID or FormKey)." },
+                    dry_run       = new { type = "boolean", description = "true (default) = preview only; false = write the patch." },
+                    limit         = new { type = "integer", description = "Max records to process (default 5000)." }
+                },
+                required = new[] { "source_plugin", "patch_plugin", "type", "operations" }
+            }),
         new("reload_plugin",
             "Evict a plugin from the editor session and re-open it fresh from disk. Fixes stale " +
             "in-memory state that causes check_plugin to report false-positive 'undeclared master' errors " +
@@ -569,7 +596,7 @@ public sealed class PluginToolExecutor
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
             "create_record" or "delete_record" or "copy_as_override" or "clean_plugin" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
-            "attach_script" or "set_script_property" or "revert_overrides";
+            "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
@@ -600,6 +627,7 @@ public sealed class PluginToolExecutor
             "get_conflicts"       => $"conflicts for {ShortId(Str("id"))}",
             "get_winning_record"  => $"winning record {ShortId(Str("id"))}",
             "revert_overrides"    => $"revert {Str("bad_plugin")} -> {Str("patch_plugin")}",
+            "batch_patch_records" => $"batch patch {Str("type")} in {Str("source_plugin")} -> {Str("patch_plugin")}",
             "scan_conflicts"      => "scan all conflicts",
             _                     => toolName.Replace('_', ' '),
         };
@@ -702,6 +730,14 @@ public sealed class PluginToolExecutor
                     root.TryGetProperty("signature", out var sg) ? sg.GetString() : null,
                     root.TryGetProperty("contains_component", out var cc) ? cc.GetString() : null,
                     Bool("apply"), Int("limit", 50));
+            case "batch_patch_records":
+                return WriteService.BatchPatchRecords(
+                    env, Str("patch_plugin"), Str("source_plugin"), Str("type"),
+                    Str("operations"),
+                    root.TryGetProperty("filter_field",  out var ff) ? ff.GetString() : null,
+                    root.TryGetProperty("filter_value",  out var fv) ? fv.GetString() : null,
+                    !root.TryGetProperty("dry_run", out var dr2) || dr2.ValueKind != JsonValueKind.False,
+                    Int("limit", 5000));
             case "reload_plugin":
                 return WriteService.ReloadPlugin(Str("plugin"), env);
             case "strip_masters_clean":
