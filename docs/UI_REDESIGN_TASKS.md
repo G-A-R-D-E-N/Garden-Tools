@@ -10,9 +10,15 @@ differ only in how the Conflicts view is laid out:
 - **Variant A (matrix):** one row per field with columns `Field | Fallout4.esm | MyMod.esp | Other Plugins (N) | Final Value`, plus a status icon (check / warning) per row.
 - **Variant B (cards):** each conflict group is a card showing base-vs-override side by side, with an `Overridden By (N)` column listing the plugin chips that also touch it.
 
-Recommendation: build the shared shell first (Phases 1-3), then implement **Variant A** as the
-default Conflicts layout (it maps most directly onto the existing `ConflictMatrix` data) and keep
-Variant B as an optional follow-up toggle.
+Recommendation: build the shared shell first (Phases 1-3), then implement the Conflicts layout.
+
+**DECISIONS (locked 2026-06-23):**
+- **Scope:** full end-to-end redesign approved (all 6 phases + the backend contracts).
+- **Default Conflicts layout: Variant B (cards)** - base-vs-override cards with an `Overridden By (N)`
+  plugin-chip column. Phase 4 builds Variant B as the primary view; Variant A (matrix) is an
+  optional secondary toggle if wanted later.
+- **Execution model:** one phase at a time, each as its own plan + subagent execution + two-stage
+  review, staying in the loop between phases. Progress is tracked in [PROGRESS.md](PROGRESS.md).
 
 ---
 
