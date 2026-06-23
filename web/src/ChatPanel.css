@@ -179,3 +179,14 @@
 .chat-activity.tool { color: #8fae8f; border-left-color: rgba(143, 174, 143, 0.5); }
 .chat-activity.think { color: #8a85a8; font-style: italic; }
 .chat-activity.result { color: #6f6f6f; }
+
+/* ── Light mode overrides for ChatPanel ── */
+[data-theme="light"] .chat-session-select            { background: var(--bg-tertiary); color: var(--text-primary); }
+[data-theme="light"] .chat-md strong                 { color: var(--text-primary); }
+[data-theme="light"] .chat-md a                      { color: var(--accent-color); }
+[data-theme="light"] .chat-md code                   { background: rgba(0,0,0,0.07); color: #7c3a1e; }
+[data-theme="light"] .chat-md pre                    { background: var(--bg-tertiary); border-color: var(--border-color); }
+[data-theme="light"] .chat-activity                  { background: rgba(0,0,0,0.03); border-left-color: var(--border-color); }
+[data-theme="light"] .chat-activity.tool             { color: #2d6e2d; border-left-color: rgba(45,110,45,0.4); }
+[data-theme="light"] .chat-activity.think            { color: #5b4d8a; }
+[data-theme="light"] .chat-activity.result           { color: var(--text-muted); }

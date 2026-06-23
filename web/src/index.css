@@ -90,12 +90,12 @@ body {
   background: var(--text-muted);
 }
 
-/* ── Light theme ── All conflict cells use solid backgrounds on white so they pop. ── */
+/* ── Light theme ── Professional slate-grey palette; conflict cells use solid fills. ── */
 [data-theme="light"] {
-  --bg-primary: #f6f8fa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f0f2f5;
-  --bg-hover: #e8eaed;
+  --bg-primary: #eef0f4;
+  --bg-secondary: #f6f7f9;
+  --bg-tertiary: #e6e8ed;
+  --bg-hover: #dadde4;
   --border-color: #d0d7de;
   --border-strong: #afb8c1;
   --text-primary: #1f2328;

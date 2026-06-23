@@ -35,8 +35,10 @@
   flex-direction: column;
   gap: 2px;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-color);
+  opacity: 0.85;
 }
+[data-theme="light"] .rail-field { opacity: 1; }
 .rail-field:last-child { border-bottom: none; }
 
 .rf-label {
