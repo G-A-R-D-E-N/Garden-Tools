@@ -44,11 +44,11 @@ public class PluginToolExecutorTests
     [Fact]
     public void ToolDefinitions_ExposesReadAndWriteTools()
     {
-        // 12 read/diagnose tools (incl. get_conflicts, get_winning_record, search_robco_configs,
-        // scan_conflicts, get_referenced_by, get_problems) + 16 write tools (incl. copy_as_override,
-        // set_components, set_conditions, revert_overrides).
-        PluginToolExecutor.ToolDefinitions().Should().HaveCount(28);
-        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(28);
+        // Read/diagnose tools (incl. get_conflicts, get_winning_record, search_robco_configs,
+        // scan_conflicts, get_referenced_by, get_problems) + write tools (incl. copy_as_override,
+        // set_components, set_conditions, revert_overrides, reload_plugin, strip_masters_clean).
+        PluginToolExecutor.ToolDefinitions().Should().HaveCount(31);
+        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(31);
 
         var names = PluginToolExecutor.ToolDefinitions()
             .Select(t => (string)t.GetType().GetProperty("name")!.GetValue(t)!).ToList();

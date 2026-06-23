@@ -352,7 +352,7 @@ public static class WriteService
         NotifyChanged(plugin);
 
         return $"Renumbered {rec.EditorID} from {oldFk} to {newFk} in {plugin} and fixed in-plugin references. " +
-               $"NOTE: references to {oldFk} in OTHER plugins are NOT updated — check 'Referenced By' (or ask the " +
+               $"NOTE: references to {oldFk} in OTHER plugins are NOT updated. Check 'Referenced By' (or ask the " +
                $"AI to find and patch them). save_plugin to persist.";
     }
 

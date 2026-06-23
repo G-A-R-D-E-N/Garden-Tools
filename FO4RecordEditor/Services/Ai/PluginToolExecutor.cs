@@ -270,7 +270,7 @@ public sealed class PluginToolExecutor
             }),
         new("renumber_formid",
             "Change one record's FormID within its plugin (xEdit 'Change FormID') and repoint every " +
-            "reference to it in the SAME plugin. References in OTHER plugins are NOT rewritten — call " +
+            "reference to it in the SAME plugin. References in OTHER plugins are NOT rewritten. Call " +
             "get_referenced_by first and patch external referrers if any. In memory until save_plugin.",
             new
             {

@@ -189,6 +189,7 @@ export default function RecordView(
     setMenu(null);
     const b = back();
     if (!b) return;
+    if (!window.confirm(`Compact ${matrix.Plugins[col]} to ESL? This renumbers every record's FormID into the 0x800-0xFFF range and can break references from other plugins.`)) return;
     setStatus('Compacting…');
     try { setStatus(await b.CompactToEsl(matrix.Plugins[col])); await onReload(); }
     catch (e: any) { setStatus('Compact failed: ' + (e?.message || e)); }
@@ -198,6 +199,7 @@ export default function RecordView(
     setMenu(null);
     const b = back();
     if (!b) return;
+    if (!window.confirm(`Clean (UDR) ${matrix.Plugins[col]}? This undeletes and disables every deleted record in the plugin.`)) return;
     setStatus('Cleaning…');
     try { setStatus(await b.CleanPlugin(matrix.Plugins[col])); await onReload(); }
     catch (e: any) { setStatus('Clean failed: ' + (e?.message || e)); }
@@ -211,7 +213,7 @@ export default function RecordView(
       `Use get_referenced_by on ${matrix.FormKey} to list every record and plugin that references it, ` +
       `then tell me which would break and how to patch them.`;
     window.dispatchEvent(new CustomEvent('fo4:ask-ai', { detail: prompt }));
-    setStatus('Asked Claude about impact — see the chat panel.');
+    setStatus('Asked Claude about impact. See the chat panel.');
   };
 
   const renderEditor = (r: ConflictFieldRow, ci: number) => {
