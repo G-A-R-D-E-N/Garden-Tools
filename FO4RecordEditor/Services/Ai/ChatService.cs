@@ -40,6 +40,15 @@ public sealed class ChatService
         return sb.ToString().Trim();
     }
 
+    /// <summary>Stream a fully-built message list through the provider WITHOUT touching the shared
+    /// _history. Lets several chat sessions run at once, each with its own conversation, instead of
+    /// sharing one history (which would interleave/bleed between chats).</summary>
+    public async Task StreamOneShot(IReadOnlyList<ChatMessage> messages, Action<string> onToken, CancellationToken ct = default)
+    {
+        await foreach (var token in _provider.StreamAsync(messages, ct))
+            onToken(token);
+    }
+
     public async Task<string> SendAsync(
         string userMessage, string? systemContext,
         Action<string> onToken, CancellationToken ct = default)

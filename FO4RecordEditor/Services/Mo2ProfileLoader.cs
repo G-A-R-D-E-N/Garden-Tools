@@ -33,7 +33,7 @@ public static class Mo2ProfileLoader
         public required DirectoryPath DataFolderPath { get; init; }
     }
 
-    public sealed record Mo2Info(string InstancePath, string Profile, string GameDataFolder);
+    public sealed record Mo2Info(string InstancePath, string Profile, string GameDataFolder, string OverwriteFolder);
 
     /// <summary>Reads ModOrganizer.ini at the instance root to find the active profile + game Data folder.</summary>
     public static Mo2Info ReadInstanceInfo(string instancePath)
@@ -55,17 +55,48 @@ public static class Mo2ProfileLoader
 
         // gamePath points at the game install root; plugins live in its Data subfolder.
         var dataFolder = string.IsNullOrWhiteSpace(gamePath) ? "" : Path.Combine(gamePath, "Data");
-        return new Mo2Info(instancePath, profile, dataFolder);
+        return new Mo2Info(instancePath, profile, dataFolder, ResolveOverwriteFolder(instancePath));
+    }
 
-        // Values are stored as: key=@ByteArray(value)  with '\' escaped as '\\'.
-        static string Unwrap(string line)
+    /// <summary>The instance's real overwrite folder, honoring ModOrganizer.ini's base_directory /
+    /// overwrite_directory (with the %BASE_DIR% placeholder). Defaults to &lt;instance&gt;\overwrite —
+    /// correct for portable instances and for global instances whose ini sets explicit paths.</summary>
+    public static string ResolveOverwriteFolder(string instancePath)
+    {
+        string baseDir = "", overwriteDir = "";
+        var ini = Path.Combine(instancePath, "ModOrganizer.ini");
+        if (File.Exists(ini))
         {
-            var v = line[(line.IndexOf('=') + 1)..].Trim();
-            const string prefix = "@ByteArray(";
-            if (v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && v.EndsWith(")"))
-                v = v[prefix.Length..^1];
-            return v.Replace("\\\\", "\\");
+            foreach (var raw in File.ReadAllLines(ini))
+            {
+                var line = raw.Trim();
+                if (line.StartsWith("base_directory=", StringComparison.OrdinalIgnoreCase))
+                    baseDir = Unwrap(line);
+                else if (line.StartsWith("overwrite_directory=", StringComparison.OrdinalIgnoreCase))
+                    overwriteDir = Unwrap(line);
+            }
         }
+
+        if (string.IsNullOrWhiteSpace(baseDir)) baseDir = instancePath;
+        baseDir = baseDir.Replace("%BASE_DIR%", instancePath);
+
+        var ow = string.IsNullOrWhiteSpace(overwriteDir)
+            ? Path.Combine(baseDir, "overwrite")
+            : overwriteDir.Replace("%BASE_DIR%", baseDir);
+
+        ow = ow.Replace('/', Path.DirectorySeparatorChar);
+        if (!Path.IsPathRooted(ow)) ow = Path.Combine(baseDir, ow);
+        try { return Path.GetFullPath(ow); } catch { return ow; }
+    }
+
+    // ModOrganizer.ini values are stored as: key=@ByteArray(value)  with '\' escaped as '\\'.
+    private static string Unwrap(string line)
+    {
+        var v = line[(line.IndexOf('=') + 1)..].Trim();
+        const string prefix = "@ByteArray(";
+        if (v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && v.EndsWith(")"))
+            v = v[prefix.Length..^1];
+        return v.Replace("\\\\", "\\");
     }
 
     /// <summary>
@@ -139,7 +170,7 @@ public static class Mo2ProfileLoader
         var modsDir = Path.Combine(instancePath, "mods");
         for (int i = modsHighToLow.Count - 1; i >= 0; i--)   // bottom -> top so top wins
             Index(Path.Combine(modsDir, modsHighToLow[i]));
-        Index(Path.Combine(instancePath, "overwrite"));
+        Index(ResolveOverwriteFolder(instancePath));   // honors ModOrganizer.ini base/overwrite paths
 
         // Load each plugin (in load order). Patch-sized plugins are read FULLY into memory so they
         // are not memory-mapped -- the file stays unlocked, so the AI/editor can save edits straight

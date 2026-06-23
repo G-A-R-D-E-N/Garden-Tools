@@ -1,0 +1,2901 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-zinc-950 text-zinc-100 selection:bg-zinc-800">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FO4 Record Editor — VS Code & xEdit Hybrid Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter & JetBrains Mono Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        vscode: {
+                            activityBg: '#12121a',
+                            sidebarBg: '#181822',
+                            editorBg: '#0b0b0f',
+                            statusBarBg: '#0e0e14',
+                            border: '#222230',
+                            tabActive: '#0b0b0f',
+                            tabInactive: '#14141e'
+                        },
+                        conflict: {
+                            winner: '#10b981',       
+                            winnerBg: 'rgba(16, 185, 129, 0.04)',
+                            loser: '#ef4444',        
+                            loserBg: 'rgba(239, 68, 68, 0.04)',
+                            override: '#a855f7',     
+                            overrideBg: 'rgba(168, 85, 247, 0.04)',
+                            identical: '#71717a'     
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0b0f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #222230;
+            border: 1px solid #0b0b0f;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #333348;
+        }
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+        }
+        .drag-over {
+            outline: 2px dashed #10b981 !important;
+            background-color: rgba(16, 185, 129, 0.08) !important;
+        }
+        .keyboard-badge {
+            background: #27272a;
+            border: 1px solid #3f3f46;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-hidden select-none text-[12px] bg-vscode-editorBg text-zinc-300" onclick="closeContextMenu()">
+
+<!-- Custom Context Menu -->
+<div id="grid-context-menu" class="hidden absolute z-50 bg-vscode-sidebarBg border border-vscode-border rounded shadow-2xl py-1 w-56 font-sans text-zinc-300">
+    <button onclick="contextAction('copy-override')" class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-[11px]">
+        <span class="flex items-center"><i data-lucide="copy" class="w-3.5 h-3.5 mr-2 text-zinc-400"></i>Copy as Override into...</span>
+        <span class="text-[9px] text-zinc-500 font-mono">Ctrl+C</span>
+    </button>
+    <button onclick="contextAction('sync')" class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-[11px]">
+        <span class="flex items-center"><i data-lucide="corner-down-left" class="w-3.5 h-3.5 mr-2 text-emerald-400"></i>Sync to Winner Value</span>
+        <span class="text-[9px] text-emerald-500 font-mono">Enter</span>
+    </button>
+    <button onclick="contextAction('edit')" class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-[11px]">
+        <span class="flex items-center"><i data-lucide="edit-3" class="w-3.5 h-3.5 mr-2 text-amber-400"></i>Edit Value Directly</span>
+        <span class="text-[9px] text-amber-500 font-mono">F2</span>
+    </button>
+    <button onclick="contextAction('reset')" class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 flex items-center text-[11px]">
+        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 mr-2 text-rose-400"></i>Revert to Original Value
+    </button>
+    <hr class="border-vscode-border my-1">
+    <button onclick="contextAction('open-master')" class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 flex items-center text-[11px]">
+        <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-2 text-sky-400"></i>Jump to Master Definition
+    </button>
+    <button onclick="contextAction('go-to-reference')" class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-[11px]">
+        <span class="flex items-center"><i data-lucide="book-open" class="w-3.5 h-3.5 mr-2 text-indigo-400"></i>Go to Reference</span>
+        <span class="text-[9px] text-indigo-500 font-mono">F12</span>
+    </button>
+</div>
+
+<!-- Header Console -->
+<header class="h-8 border-b border-vscode-border bg-vscode-activityBg flex items-center justify-between px-3 text-[11px] text-zinc-400 shrink-0">
+    <div class="flex items-center space-x-2">
+        <svg class="w-4 h-4 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+        <span class="font-semibold text-zinc-200">FO4Edit - Web Edition <span class="text-rose-500 text-[10px] font-bold px-1 py-0.2 bg-rose-950/40 rounded border border-rose-900/40 ml-1">X-KILLER</span></span>
+        <span class="text-zinc-600">|</span>
+        <span class="font-mono text-[10px] bg-zinc-900 text-zinc-300 px-1.5 py-0.2 rounded border border-vscode-border">v3.0-enterprise</span>
+    </div>
+    <div class="hidden md:flex items-center space-x-1.5 bg-zinc-950 border border-vscode-border px-3 py-0.5 rounded text-zinc-500 font-mono text-[10px] w-80">
+        <i data-lucide="search" class="w-3 h-3"></i>
+        <input type="text" placeholder="Jump to FormID (e.g. 000462)..." class="bg-transparent border-none outline-none text-zinc-300 text-[10px] w-full" onkeydown="handleGlobalSearch(event)">
+    </div>
+    <div class="flex items-center space-x-3">
+        <button onclick="undoLastAction()" id="btn-undo" class="flex items-center space-x-1 text-zinc-600 cursor-not-allowed transition-colors" title="Undo Last Action (Ctrl+Z)">
+            <i data-lucide="undo-2" class="w-4 h-4"></i>
+            <span class="hidden lg:inline text-[10px]">Undo</span>
+        </button>
+        <button onclick="toggleKeyboardModal()" class="flex items-center space-x-1 text-zinc-500 hover:text-zinc-300" title="Keyboard Shortcuts">
+            <i data-lucide="keyboard" class="w-4 h-4"></i>
+            <span class="hidden lg:inline text-[10px]">Shortcuts</span>
+        </button>
+        <button onclick="toggleAiSidebar()" class="flex items-center space-x-1 text-indigo-400 hover:text-indigo-300 bg-indigo-900/20 px-2 py-0.5 rounded border border-indigo-500/30 transition-colors" title="Toggle AI Assistant">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span class="hidden lg:inline text-[10px] font-bold">Ask AI</span>
+        </button>
+        <div class="flex items-center space-x-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="text-zinc-400">Conflict Matrix Synced</span>
+        </div>
+    </div>
+</header>
+
+<div class="flex-1 flex overflow-hidden">
+
+    <!-- VS Code Activity Bar (Leftmost Strip) -->
+    <nav class="w-12 bg-vscode-activityBg border-r border-vscode-border flex flex-col items-center justify-between py-2 shrink-0">
+        <div class="flex flex-col items-center space-y-1 w-full">
+            <button onclick="setActiveSidebarTab('explorer')" id="btn-activity-explorer" class="w-10 h-10 rounded flex items-center justify-center transition-colors text-emerald-400 border-l-2 border-emerald-500 bg-zinc-900/40" title="Load Order Explorer">
+                <i data-lucide="files" class="w-5 h-5"></i>
+            </button>
+            <button onclick="setActiveSidebarTab('conflicts')" id="btn-activity-conflicts" class="w-10 h-10 rounded flex items-center justify-center transition-colors text-zinc-400 hover:text-zinc-200" title="Conflict Filter Settings">
+                <i data-lucide="git-pull-request" class="w-5 h-5"></i>
+            </button>
+            <button onclick="setActiveSidebarTab('itm')" id="btn-activity-itm" class="w-10 h-10 rounded flex items-center justify-center transition-colors text-zinc-400 hover:text-zinc-200 relative" title="Identical To Master Cleaner">
+                <i data-lucide="shield-check" class="w-5 h-5"></i>
+                <span id="itm-alert-badge" class="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 border border-vscode-activityBg"></span>
+            </button>
+            <button onclick="setActiveSidebarTab('stats')" id="btn-activity-stats" class="w-10 h-10 rounded flex items-center justify-center transition-colors text-zinc-400 hover:text-zinc-200" title="Patch Statistics & Log">
+                <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+            </button>
+        </div>
+        
+        <div class="flex flex-col items-center space-y-3 w-full pb-1">
+            <button onclick="resetToDefaults()" class="text-zinc-500 hover:text-zinc-300 transition-colors" title="Reset Matrix state">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            </button>
+            <button onclick="toggleSettingsModal()" class="text-zinc-500 hover:text-zinc-300 transition-colors" title="Settings">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Side Panel (Sidebar) -->
+    <aside id="app-sidebar" class="w-[320px] bg-vscode-sidebarBg border-r border-vscode-border flex flex-col shrink-0 transition-all duration-200">
+        
+        <!-- Tab Panel 1: Main Load Order Explorer -->
+        <div id="panel-explorer" class="flex-1 flex flex-col overflow-hidden">
+            <div class="p-3 border-b border-vscode-border flex items-center justify-between">
+                <span class="font-bold tracking-wider uppercase text-[10px] text-zinc-400">Load Order Explorer</span>
+                <button onclick="toggleSidebar()" class="text-zinc-400 hover:text-zinc-200" title="Collapse Panel">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="p-2 border-b border-vscode-border/60 bg-zinc-950/40">
+                <div class="relative flex items-center space-x-1.5">
+                    <div class="relative flex-1">
+                        <i data-lucide="search" class="absolute left-2.5 top-2 w-3.5 h-3.5 text-zinc-500"></i>
+                        <input type="text" id="plugin-search" placeholder="Filter plugins, folders..." oninput="filterSidebarTree()" class="w-full bg-zinc-950 border border-vscode-border rounded py-1 pl-8 pr-2.5 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500 placeholder-zinc-600 font-sans">
+                    </div>
+                    <button onclick="toggleTreeConflictsOnly()" id="btn-tree-conflicts" class="p-1.5 rounded border border-vscode-border bg-zinc-950 text-zinc-500 hover:text-amber-400 transition-colors" title="Show Only Conflicts">
+                        <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Accordion Wrapper -->
+            <div class="flex-1 overflow-y-auto divide-y divide-vscode-border/50">
+                
+                <!-- Bookmarks -->
+                <div class="p-2">
+                    <div onclick="toggleSection('sec-bookmarks', 'arrow-bookmarks')" class="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 px-1.5 cursor-pointer hover:text-zinc-200 transition-colors">
+                        <span class="flex items-center space-x-1">
+                            <i data-lucide="chevron-right" id="arrow-bookmarks" class="w-3 h-3 text-zinc-500 transition-transform -rotate-90"></i>
+                            <span>Bookmarks</span>
+                        </span>
+                        <span class="text-[9px] bg-zinc-900 border border-vscode-border text-amber-500 px-1 rounded" id="bookmarks-count">0</span>
+                    </div>
+                    <div id="sec-bookmarks" class="hidden space-y-0.5 pl-1.5 mt-1"></div>
+                </div>
+
+                <!-- Open Editors -->
+                <div class="p-2">
+                    <div onclick="toggleSection('sec-open-editors', 'arrow-open')" class="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 px-1.5 cursor-pointer hover:text-zinc-200 transition-colors">
+                        <span class="flex items-center space-x-1">
+                            <i data-lucide="chevron-down" id="arrow-open" class="w-3 h-3 text-zinc-500 transition-transform"></i>
+                            <span>Open Editors</span>
+                        </span>
+                        <span class="text-[9px] bg-zinc-900 border border-vscode-border text-zinc-500 px-1 rounded" id="open-editors-count">2</span>
+                    </div>
+                    <div id="sec-open-editors" class="space-y-0.5 pl-1.5"></div>
+                </div>
+
+                <!-- Load Order Tree -->
+                <div class="p-2">
+                    <div onclick="toggleSection('sec-load-order', 'arrow-lo')" class="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 px-1.5 cursor-pointer hover:text-zinc-200 transition-colors">
+                        <span class="flex items-center space-x-1">
+                            <i data-lucide="chevron-down" id="arrow-lo" class="w-3 h-3 text-zinc-500 transition-transform"></i>
+                            <span>Module Load Order</span>
+                        </span>
+                        <span class="text-[9px] bg-zinc-900 border border-vscode-border text-emerald-400 px-1 rounded" id="sidebar-plugin-count">5</span>
+                    </div>
+
+                    <div id="sec-load-order" class="space-y-1.5 pl-1 mt-1 font-mono">
+                        <!-- Fallout4.esm -->
+                        <div class="plugin-node" id="plugin-node-fallout4">
+                            <div onclick="toggleTreeGroup('dir-fallout4')" class="flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800/40 cursor-pointer text-zinc-300">
+                                <span class="flex items-center space-x-1.5 truncate">
+                                    <i data-lucide="chevron-right" id="arrow-dir-fallout4" class="w-3 h-3 text-zinc-500"></i>
+                                    <i data-lucide="archive" class="w-3.5 h-3.5 text-zinc-500 shrink-0"></i>
+                                    <span class="text-[11px] font-semibold text-zinc-400">[00] Fallout4.esm</span>
+                                </span>
+                                <span class="text-[8px] px-1 bg-zinc-950 border border-vscode-border text-zinc-500 rounded">MASTER</span>
+                            </div>
+                            <div id="dir-fallout4" class="hidden pl-3.5 mt-0.5 space-y-1 border-l border-zinc-800/50 ml-2">
+                                <div>
+                                    <div onclick="toggleTreeGroup('dir-fo4-weap')" class="flex items-center py-0.5 px-1.5 rounded hover:bg-zinc-800/20 cursor-pointer text-zinc-400 text-[10px]">
+                                        <i data-lucide="chevron-right" id="arrow-dir-fo4-weap" class="w-2.5 h-2.5 text-zinc-600 mr-1"></i>
+                                        <i data-lucide="crosshair" class="w-3 h-3 text-sky-600 mr-1.5"></i>
+                                        <span>Weapons (WEAP)</span>
+                                    </div>
+                                    <div id="dir-fo4-weap" class="hidden pl-3 mt-0.5 space-y-0.5">
+                                        <div onclick="openRecordTab('WEAP_10mm')" id="lo-WEAP_10mm" class="flex items-center justify-between py-0.5 px-1.5 rounded hover:bg-zinc-800/50 cursor-pointer text-zinc-400">
+                                            <span class="flex items-center">
+                                                <span class="text-zinc-600 mr-1.5">[000462]</span>
+                                                <span class="text-zinc-300 font-mono">WEAP_10mm</span>
+                                            </span>
+                                            <span class="status-dot w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        </div>
+                                        <div onclick="openRecordTab('WEAP_HuntingRifle')" id="lo-WEAP_HuntingRifle" class="flex items-center justify-between py-0.5 px-1.5 rounded hover:bg-zinc-800/50 cursor-pointer text-zinc-400">
+                                            <span class="flex items-center">
+                                                <span class="text-zinc-600 mr-1.5">[004C10]</span>
+                                                <span class="text-zinc-300 font-mono">WEAP_HuntingRifle</span>
+                                            </span>
+                                            <span class="status-dot w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div onclick="toggleTreeGroup('dir-fo4-ammo')" class="flex items-center py-0.5 px-1.5 rounded hover:bg-zinc-800/20 cursor-pointer text-zinc-400 text-[10px]">
+                                        <i data-lucide="chevron-right" id="arrow-dir-fo4-ammo" class="w-2.5 h-2.5 text-zinc-600 mr-1"></i>
+                                        <i data-lucide="disc" class="w-3 h-3 text-amber-600 mr-1.5"></i>
+                                        <span>Ammunition (AMMO)</span>
+                                    </div>
+                                    <div id="dir-fo4-ammo" class="hidden pl-3 mt-0.5 space-y-0.5">
+                                        <div onclick="openRecordTab('AMMO_556')" id="lo-AMMO_556" class="flex items-center justify-between py-0.5 px-1.5 rounded hover:bg-zinc-800/50 cursor-pointer text-zinc-400">
+                                            <span class="flex items-center">
+                                                <span class="text-zinc-600 mr-1.5">[001908]</span>
+                                                <span class="text-zinc-300 font-mono">AMMO_5.56mm</span>
+                                            </span>
+                                            <span class="status-dot w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div onclick="toggleTreeGroup('dir-fo4-armo')" class="flex items-center py-0.5 px-1.5 rounded hover:bg-zinc-800/20 cursor-pointer text-zinc-400 text-[10px]">
+                                        <i data-lucide="chevron-right" id="arrow-dir-fo4-armo" class="w-2.5 h-2.5 text-zinc-600 mr-1"></i>
+                                        <i data-lucide="shield" class="w-3 h-3 text-indigo-500 mr-1.5"></i>
+                                        <span>Armor (ARMO)</span>
+                                    </div>
+                                    <div id="dir-fo4-armo" class="hidden pl-3 mt-0.5 space-y-0.5">
+                                        <div onclick="openRecordTab('ARMO_CombatChest')" id="lo-ARMO_CombatChest" class="flex items-center justify-between py-0.5 px-1.5 rounded hover:bg-zinc-800/50 cursor-pointer text-zinc-400">
+                                            <span class="flex items-center">
+                                                <span class="text-zinc-600 mr-1.5">[004A42]</span>
+                                                <span class="text-zinc-300 font-mono">ARMO_CombatChest</span>
+                                            </span>
+                                            <span class="status-dot w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DLCCoast.esm -->
+                        <div class="plugin-node" id="plugin-node-dlccoast">
+                            <div onclick="toggleTreeGroup('dir-dlccoast')" class="flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800/40 cursor-pointer text-zinc-300">
+                                <span class="flex items-center space-x-1.5 truncate">
+                                    <i data-lucide="chevron-right" id="arrow-dir-dlccoast" class="w-3 h-3 text-zinc-500"></i>
+                                    <i data-lucide="archive" class="w-3.5 h-3.5 text-zinc-500 shrink-0"></i>
+                                    <span class="text-[11px] text-zinc-400">[01] DLCCoast.esm</span>
+                                </span>
+                                <span class="text-[8px] px-1 bg-zinc-950 border border-vscode-border text-zinc-500 rounded">MASTER</span>
+                            </div>
+                            <div id="dir-dlccoast" class="hidden pl-3.5 mt-0.5 space-y-1 border-l border-zinc-800/50 ml-2">
+                                <div class="p-1 text-[10px] text-zinc-600">No active structures</div>
+                            </div>
+                        </div>
+
+                        <!-- MAIM.esp -->
+                        <div class="plugin-node" id="plugin-node-maim">
+                            <div onclick="toggleTreeGroup('dir-maim')" class="flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800/40 cursor-pointer text-zinc-300">
+                                <span class="flex items-center space-x-1.5 truncate">
+                                    <i data-lucide="chevron-down" id="arrow-dir-maim" class="w-3 h-3 text-zinc-500"></i>
+                                    <i data-lucide="file-code" class="w-3.5 h-3.5 text-rose-500/80 shrink-0"></i>
+                                    <span class="text-[11px] font-semibold text-rose-400">[02] MAIM.esp</span>
+                                </span>
+                                <span class="text-[9px] px-1 bg-rose-950/30 border border-rose-900/40 text-rose-400 rounded">CONFLICT</span>
+                            </div>
+                            <div id="dir-maim" class="pl-3.5 mt-0.5 space-y-1 border-l border-zinc-800/50 ml-2">
+                                <div>
+                                    <div onclick="toggleTreeGroup('dir-maim-cobj')" class="flex items-center py-0.5 px-1.5 rounded hover:bg-zinc-800/20 cursor-pointer text-zinc-400 text-[10px]">
+                                        <i data-lucide="chevron-down" id="arrow-dir-maim-cobj" class="w-2.5 h-2.5 text-zinc-600 mr-1"></i>
+                                        <i data-lucide="box" class="w-3 h-3 text-amber-500 mr-1.5"></i>
+                                        <span>Constructible Object (COBJ)</span>
+                                    </div>
+                                    <div id="dir-maim-cobj" class="pl-3 mt-0.5 space-y-0.5">
+                                        <div onclick="openRecordTab('CO_Bandage')" id="lo-CO_Bandage" class="flex items-center justify-between py-0.5 px-1.5 rounded hover:bg-zinc-800/50 cursor-pointer text-zinc-300">
+                                            <span class="flex items-center">
+                                                <span class="text-zinc-600 mr-1">[00008E]</span>
+                                                <span class="font-semibold text-rose-400">CO_Bandage</span>
+                                            </span>
+                                            <span class="status-dot w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                        </div>
+                                        <div onclick="openRecordTab('HC_CO_Bandage')" id="lo-HC_CO_Bandage" class="flex items-center justify-between py-0.5 px-1.5 rounded hover:bg-zinc-800/50 cursor-pointer text-zinc-300">
+                                            <span class="flex items-center">
+                                                <span class="text-zinc-600 mr-1">[00011D]</span>
+                                                <span class="text-amber-400">HC_CO_Bandage</span>
+                                            </span>
+                                            <span class="status-dot w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- User Created Custom Plugins container -->
+                        <div id="sidebar-user-plugins" class="space-y-1.5"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="panel-conflicts" class="hidden flex-1 flex flex-col p-3 overflow-hidden">
+            <div class="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider border-b border-vscode-border pb-2 mb-3">
+                <span>Conflict Rules Solver</span>
+                <i data-lucide="sliders" class="w-3.5 h-3.5 text-emerald-500"></i>
+            </div>
+            <div class="space-y-4">
+                <div class="space-y-2 bg-zinc-900/40 p-2.5 rounded border border-vscode-border/60">
+                    <label class="text-[11px] text-zinc-400 font-semibold block">Primary Conflict Mode</label>
+                    <div class="grid grid-cols-2 gap-1 bg-zinc-950 p-0.5 rounded border border-vscode-border">
+                        <button onclick="setResolutionRule('priority')" id="btn-rule-priority" class="px-2 py-1 rounded text-[10px] font-semibold text-zinc-200 bg-zinc-800">Winner Takes All</button>
+                        <button onclick="setResolutionRule('strict')" id="btn-rule-strict" class="px-2 py-1 rounded text-[10px] font-medium text-zinc-500 hover:text-zinc-300">Strict Manual</button>
+                    </div>
+                </div>
+                <div class="space-y-2 pt-2">
+                    <span class="text-[11px] text-zinc-400 font-semibold block uppercase">Quick Action Hub</span>
+                    <button onclick="autoResolveCurrentRecord()" class="w-full bg-emerald-700/10 border border-emerald-500/30 hover:bg-emerald-700/20 text-emerald-400 hover:text-emerald-300 p-1.5 rounded flex items-center justify-center space-x-1.5 transition-colors mb-2">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                        <span>Auto-Resolve Current Tab</span>
+                    </button>
+                    <button onclick="openPatchWizardModal()" class="w-full bg-violet-700/10 border border-violet-500/30 hover:bg-violet-700/20 text-violet-400 hover:text-violet-300 p-1.5 rounded flex items-center justify-center space-x-1.5 transition-colors">
+                        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                        <span>Generate ESL/ESP Patch</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Panel: ITM Cleaner -->
+        <div id="panel-itm" class="hidden flex-1 flex flex-col p-3 overflow-hidden">
+            <div class="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider border-b border-vscode-border pb-2 mb-3">
+                <span>ITM (Identical to Master)</span>
+                <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-500"></i>
+            </div>
+            <div class="space-y-3 flex-1 flex flex-col justify-between">
+                <div class="space-y-3 overflow-y-auto pr-1">
+                    <p class="text-[11px] text-zinc-400 leading-relaxed">
+                        ITMs are redundant records containing identical properties as the master file. Cleaning them reduces loading times, size, and mod conflict overhead.
+                    </p>
+                    <div class="bg-zinc-950 p-2 rounded border border-vscode-border">
+                        <div class="flex justify-between items-center text-[11px]">
+                            <span class="text-zinc-500">Scanned Overrides:</span>
+                            <span class="text-zinc-300 font-mono font-bold" id="itm-total-overrides">28</span>
+                        </div>
+                        <div class="flex justify-between items-center text-[11px] mt-1">
+                            <span class="text-zinc-500">Identical Redundancies:</span>
+                            <span class="text-amber-400 font-mono font-bold" id="itm-redundant-count">4</span>
+                        </div>
+                    </div>
+                    <div class="space-y-1.5 max-h-[220px] overflow-y-auto" id="itm-list-container">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+                <button onclick="cleanAllITMRecords()" class="w-full bg-amber-600/10 border border-amber-500/40 text-amber-400 hover:bg-amber-600/20 hover:text-amber-300 py-2 rounded font-semibold flex items-center justify-center space-x-1 transition-all">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    <span>Clean Redundant ITMs</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="panel-stats" class="hidden flex-1 flex flex-col p-3 overflow-hidden">
+            <div class="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider border-b border-vscode-border pb-2 mb-3">
+                <span>Active Workspace Stats</span>
+                <i data-lucide="info" class="w-3.5 h-3.5 text-zinc-500"></i>
+            </div>
+            <div class="space-y-3 font-mono text-[11px]">
+                <div class="bg-zinc-950 p-2.5 rounded border border-vscode-border space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-zinc-500">Total Database Records:</span>
+                        <span class="text-zinc-300 font-semibold" id="stats-total-records">124</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-zinc-500">Active Conflicts:</span>
+                        <span class="text-rose-400 font-bold" id="stats-conflict-count">2</span>
+                    </div>
+                </div>
+                <div class="text-[10px] text-zinc-500 leading-relaxed bg-zinc-950/40 p-2 rounded border border-vscode-border/50">
+                    <div class="font-sans font-semibold text-zinc-400 mb-1">Interactive Event Log:</div>
+                    <ul class="space-y-1 list-disc list-inside text-[10px]" id="event-log-list">
+                        <li>[SYSTEM] Ready</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- Main Panel Container -->
+    <main class="flex-1 flex flex-col overflow-hidden bg-vscode-editorBg">
+        
+        <!-- VS Code Tab bar -->
+        <div class="h-9 border-b border-vscode-border bg-vscode-activityBg flex items-center justify-between px-2 shrink-0">
+            <div class="flex items-end h-full space-x-[1px]" id="opened-tabs-container"></div>
+            
+            <div class="flex items-center space-x-1.5 bg-zinc-950 border border-vscode-border/85 p-0.5 rounded text-[11px] mr-1.5">
+                <!-- Inline Property Search -->
+                <div class="flex items-center space-x-1 border-r border-vscode-border/80 pr-1.5 mr-1 bg-zinc-900 rounded px-1.5 py-0.5">
+                    <i data-lucide="filter" class="w-3 h-3 text-zinc-500"></i>
+                    <input type="text" id="grid-property-filter" placeholder="Filter fields..." oninput="filterGridProperties()" class="w-24 bg-transparent border-none outline-none text-[10px] text-zinc-300 placeholder-zinc-600">
+                </div>
+                <button onclick="toggleGridOption('only-diffing')" id="opt-only-diffing" class="px-2 py-0.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors flex items-center space-x-1">
+                    <i data-lucide="eye-off" class="w-3 h-3"></i>
+                    <span>Only Diffing</span>
+                </button>
+                <button onclick="toggleGridOption('hide-identical')" id="opt-hide-identical" class="px-2 py-0.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors flex items-center space-x-1">
+                    <i data-lucide="minus-square" class="w-3 h-3"></i>
+                    <span>Hide Identical</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Breadcrumbs -->
+        <div class="h-6 bg-vscode-editorBg border-b border-vscode-border/40 px-3 flex items-center justify-between shrink-0">
+            <div class="flex items-center space-x-1.5 text-[11px] text-zinc-500 font-mono">
+                <i data-lucide="folder" class="w-3.5 h-3.5 text-zinc-600"></i>
+                <span>LoadOrder</span>
+                <i data-lucide="chevron-right" class="w-2.5 h-2.5"></i>
+                <span id="breadcrumb-plugin" class="text-zinc-400">MAIM.esp</span>
+                <i data-lucide="chevron-right" class="w-2.5 h-2.5"></i>
+                <span id="breadcrumb-category" class="text-zinc-400 font-semibold">Constructible Object</span>
+                <i data-lucide="chevron-right" class="w-2.5 h-2.5"></i>
+                <span id="breadcrumb-record" class="text-emerald-400 font-bold font-mono">CO_Bandage</span>
+            </div>
+            <button onclick="toggleActiveBookmark()" id="btn-toggle-bookmark" class="text-zinc-500 hover:text-amber-400 transition-colors" title="Bookmark this record (Ctrl+D)">
+                <i data-lucide="star" class="w-3.5 h-3.5"></i>
+            </button>
+        </div>
+
+        <!-- Grid & Minimap Wrapper -->
+        <div class="flex-1 flex overflow-hidden relative">
+            <!-- Scrollable Comparison Grid Wrapper -->
+            <div id="grid-scroll-container" class="flex-1 overflow-auto relative scroll-smooth" onscroll="updateMinimapViewport()">
+                <table class="w-full text-left border-collapse table-fixed min-w-[1250px]" id="record-compare-grid">
+                    <thead class="sticky top-0 bg-vscode-editorBg z-20 border-b border-vscode-border">
+                        <tr id="grid-header-row" class="bg-vscode-editorBg">
+                            <th class="w-[300px] p-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider bg-vscode-sidebarBg border-r border-vscode-border sticky-col left-0">
+                                Comparison Record Property
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-vscode-border/30 text-[11px] font-mono" id="grid-body"></tbody>
+                </table>
+            </div>
+
+            <!-- VS Code Style Conflict Minimap -->
+            <div id="conflict-minimap" class="w-3.5 bg-vscode-activityBg border-l border-vscode-border relative shrink-0 cursor-pointer hover:bg-zinc-900/50 transition-colors z-20" onclick="handleMinimapClick(event)" title="Conflict Minimap">
+                <!-- Markers injected here -->
+            </div>
+        </div>
+
+        <!-- Collapsible Bottom VS Code Drawer (Referenced By / Problems Terminal) -->
+        <div id="bottom-drawer" class="h-48 border-t border-vscode-border bg-vscode-activityBg flex flex-col shrink-0 transition-all duration-200">
+            <div class="h-7 border-b border-vscode-border flex items-center justify-between px-3 shrink-0 bg-zinc-950/40">
+                <div class="flex items-center space-x-4 text-[11px]">
+                    <button onclick="setActiveDrawerTab('referenced')" id="btn-draw-referenced" class="text-emerald-400 font-semibold border-b border-emerald-500 pb-1 pt-0.5">Referenced By</button>
+                    <button onclick="setActiveDrawerTab('problems')" id="btn-draw-problems" class="text-zinc-500 hover:text-zinc-300 pb-1 pt-0.5 flex items-center space-x-1">
+                        <span>Problems</span>
+                        <span id="problems-count-badge" class="bg-rose-950 text-rose-400 border border-rose-900/60 text-[9px] px-1 rounded-full font-bold">2</span>
+                    </button>
+                    <button onclick="setActiveDrawerTab('terminal')" id="btn-draw-terminal" class="text-zinc-500 hover:text-zinc-300 pb-1 pt-0.5">xEdit Pascal Runner</button>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="toggleBottomDrawer()" class="text-zinc-500 hover:text-zinc-300" title="Collapse Panel">
+                        <i id="drawer-toggle-icon" data-lucide="chevron-down" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Drawer Container Context Panels -->
+            <div class="flex-1 overflow-auto p-3 font-mono text-[11px]" id="drawer-content-container">
+                <!-- Tab Panel: Referenced By (xEdit Classic) -->
+                <div id="draw-panel-referenced" class="space-y-1">
+                    <div class="text-zinc-500 text-[10px] mb-1">The following active plugin records link or resolve directly back to this FormID:</div>
+                    <div id="referenced-records-list" class="space-y-1">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+
+                <!-- Tab Panel: Warnings & Problems -->
+                <div id="draw-panel-problems" class="hidden space-y-1.5 text-rose-400/90">
+                    <div id="problems-list-container" class="space-y-1.5 overflow-y-auto max-h-[140px] pr-2">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+
+                <!-- Tab Panel: Console Pascal scripting -->
+                <div id="draw-panel-terminal" class="hidden h-full flex flex-row space-x-3">
+                    <div class="w-2/5 flex flex-col space-y-1.5 border-r border-vscode-border pr-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-zinc-400 text-[10px]">Select Pascal Automations:</span>
+                            <span class="text-[8px] px-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">READY</span>
+                        </div>
+                        <select id="pascal-script-picker" onchange="loadPascalTemplate()" class="bg-zinc-950 outline-none text-zinc-300 font-mono text-[10px] py-1 px-1.5 border border-vscode-border rounded focus:border-emerald-500">
+                            <option value="damage-multiplier">Multiply Weapons BaseDamage by 1.5x</option>
+                            <option value="clear-workbench-keyword">Reset WorkbenchKeyword to ChemLab</option>
+                            <option value="prefix-titles">Prefix Record Titles with [MOD]</option>
+                        </select>
+                        <textarea id="pascal-script-editor" class="flex-1 bg-zinc-950 text-zinc-300 p-1.5 border border-vscode-border rounded font-mono text-[10px] resize-none focus:outline-none focus:border-emerald-500" placeholder="Pascal scripting workspace..."></textarea>
+                        <button onclick="executePascalScript()" class="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold py-1 rounded text-center text-[10px] flex items-center justify-center space-x-1">
+                            <i data-lucide="play" class="w-3 h-3"></i>
+                            <span>Compile & Run Script</span>
+                        </button>
+                    </div>
+                    <div class="flex-1 flex flex-col min-w-0">
+                        <div class="text-zinc-500 text-[10px] pb-1">Interpreter Logs:</div>
+                        <div id="pascal-script-log" class="flex-1 bg-zinc-950 p-2 rounded border border-vscode-border font-mono text-[10px] text-zinc-400 overflow-y-auto space-y-0.5">
+                            <div>Pascal Script Console Interpreter v3.12</div>
+                            <div class="text-zinc-600">Select template scripts on the left and run automation natively.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- AI Sidebar (Right) -->
+    <aside id="ai-sidebar" class="w-[320px] bg-vscode-sidebarBg border-l border-vscode-border flex flex-col shrink-0 transition-all duration-200 z-10 overflow-hidden">
+        <!-- Header -->
+        <div class="h-9 border-b border-vscode-border flex items-center justify-between px-3 shrink-0 bg-vscode-activityBg">
+            <span class="font-bold tracking-wider uppercase text-[10px] text-indigo-400 flex items-center space-x-1.5">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span>Antigravity AI</span>
+            </span>
+            <div class="flex items-center space-x-1">
+                <button onclick="clearAiChat()" class="text-zinc-500 hover:text-zinc-300 p-1 rounded hover:bg-zinc-800 transition-colors" title="Clear Chat History">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="toggleAiSidebar()" class="text-zinc-500 hover:text-zinc-300 p-1 rounded hover:bg-zinc-800 transition-colors" title="Close Panel">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat History -->
+        <div id="ai-chat-history" class="flex-1 overflow-y-auto p-3 space-y-4 text-[11px] font-sans scroll-smooth">
+            <!-- Initial Greeting -->
+            <div class="flex items-start space-x-2">
+                <div class="w-6 h-6 rounded bg-indigo-900/50 border border-indigo-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="bot" class="w-3.5 h-3.5 text-indigo-400"></i>
+                </div>
+                <div class="space-y-1 w-full min-w-0">
+                    <div class="text-zinc-400 font-bold text-[10px]">Antigravity AI</div>
+                    <div class="bg-zinc-900 border border-vscode-border rounded-md p-2 text-zinc-300 leading-relaxed shadow-sm">
+                        I am Antigravity AI. I can help you resolve mod conflicts, write Pascal scripts, and query load order records. How can I assist you today?
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-3 border-t border-vscode-border bg-vscode-activityBg shrink-0">
+            <div class="relative bg-zinc-950 border border-vscode-border rounded-md focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all shadow-inner">
+                <textarea id="ai-chat-input" rows="2" placeholder="Ask AI about records, conflicts..." class="w-full bg-transparent text-zinc-200 text-[11px] p-2 pr-8 resize-none focus:outline-none scrollbar-hide" onkeydown="handleAiInputKey(event)"></textarea>
+                <button onclick="submitAiQuery()" class="absolute right-1.5 bottom-1.5 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors shadow-md flex items-center justify-center">
+                    <i data-lucide="send" class="w-3 h-3"></i>
+                </button>
+            </div>
+            <div class="flex justify-between items-center mt-1.5 text-[9px] text-zinc-500">
+                <span class="flex items-center"><i data-lucide="code" class="w-3 h-3 mr-1"></i> Markdown supported</span>
+                <span>Press <kbd class="bg-zinc-800 px-1 rounded border border-zinc-700">Enter</kbd> to send</span>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<!-- MODAL: ESL/ESP Patch Creator -->
+<div id="patch-wizard-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="w-full max-w-md bg-vscode-sidebarBg border border-vscode-border rounded-lg shadow-2xl p-4 flex flex-col font-sans">
+        <div class="flex items-center justify-between border-b border-vscode-border pb-2.5">
+            <h3 class="text-xs font-bold text-zinc-100 flex items-center">
+                <i data-lucide="plus-circle" class="w-4 h-4 mr-2 text-violet-400"></i>
+                <span>ESL/ESP Dynamic Patch Generator</span>
+            </h3>
+            <button onclick="closePatchWizardModal()" class="text-zinc-500 hover:text-zinc-300">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <div class="py-3 space-y-3 text-[11px]">
+            <p class="text-zinc-400 leading-normal">
+                Generates a new, active patch plugin merging current selected record states directly into a clean override. This will appear instantly in the matrix layout.
+            </p>
+            <div class="space-y-1">
+                <label class="block text-zinc-400 font-semibold">Patch File Name:</label>
+                <input type="text" id="patch-filename" value="FallenWorld_MyFixes.esp" class="w-full bg-zinc-950 border border-vscode-border rounded py-1 px-2.5 outline-none focus:border-violet-500 font-mono text-zinc-200">
+            </div>
+            <div class="space-y-1">
+                <label class="block text-zinc-400 font-semibold">File Format Headers:</label>
+                <div class="grid grid-cols-2 gap-2 bg-zinc-950 p-1.5 rounded border border-vscode-border">
+                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                        <input type="radio" name="patch-type" value="esp" checked class="accent-violet-500">
+                        <span class="text-zinc-300">ESP (Full Module Slot)</span>
+                    </label>
+                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                        <input type="radio" name="patch-type" value="esl" class="accent-violet-500">
+                        <span class="text-zinc-300">ESL (Light Mod Flag)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="p-2 bg-zinc-950 rounded border border-vscode-border space-y-1.5">
+                <span class="text-zinc-500 block text-[10px] font-bold">Records to Package:</span>
+                <div class="space-y-1 max-h-[80px] overflow-y-auto">
+                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                        <input type="checkbox" id="chk-rec-bandage" checked class="accent-violet-500">
+                        <span class="font-mono text-zinc-300">CO_Bandage [Constructible Object]</span>
+                    </label>
+                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                        <input type="checkbox" id="chk-rec-hcbandage" checked class="accent-violet-500">
+                        <span class="font-mono text-zinc-300">HC_CO_Bandage [Constructible Object]</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end space-x-2 pt-2 border-t border-vscode-border">
+            <button onclick="closePatchWizardModal()" class="px-3 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-vscode-border rounded text-[11px]">Cancel</button>
+            <button onclick="generateCustomPatch()" class="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-zinc-950 font-bold rounded text-[11px]">Generate & Append</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Settings -->
+<div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="w-full max-w-md bg-vscode-sidebarBg border border-vscode-border rounded-lg shadow-2xl p-4 flex flex-col font-sans">
+        <div class="flex items-center justify-between border-b border-vscode-border pb-2.5">
+            <h3 class="text-xs font-bold text-zinc-100 flex items-center">
+                <i data-lucide="settings" class="w-4 h-4 mr-2 text-zinc-400"></i>
+                <span>Workspace Settings</span>
+            </h3>
+            <button onclick="toggleSettingsModal()" class="text-zinc-500 hover:text-zinc-300">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <div class="py-3 space-y-4 text-[11px] text-zinc-300">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="font-semibold text-zinc-200">Auto-Backup on Resolution</div>
+                    <div class="text-[10px] text-zinc-500">Create a history state before applying patch generation or scripts.</div>
+                </div>
+                <input type="checkbox" checked class="accent-emerald-500 w-4 h-4">
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="font-semibold text-zinc-200">Strict ITM Checking</div>
+                    <div class="text-[10px] text-zinc-500">Flag identical-to-master records even if order is different.</div>
+                </div>
+                <input type="checkbox" checked class="accent-emerald-500 w-4 h-4">
+            </div>
+            <div class="space-y-1">
+                <label class="block text-zinc-400 font-semibold">Default Conflict Engine</label>
+                <select class="w-full bg-zinc-950 border border-vscode-border rounded py-1 px-2 outline-none text-zinc-300">
+                    <option>Winner Takes All (Load Order Priority)</option>
+                    <option>Strict Manual Triage</option>
+                    <option>Merge Arrays Automatically</option>
+                </select>
+            </div>
+        </div>
+        <div class="flex justify-end pt-2 border-t border-vscode-border">
+            <button onclick="toggleSettingsModal()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold rounded text-[11px]">Save Preferences</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Keyboard Shortcuts Guide -->
+<div id="keyboard-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="w-full max-w-sm bg-vscode-sidebarBg border border-vscode-border rounded-lg shadow-2xl p-4 flex flex-col font-sans">
+        <div class="flex items-center justify-between border-b border-vscode-border pb-2.5">
+            <h3 class="text-xs font-bold text-zinc-100 flex items-center">
+                <i data-lucide="keyboard" class="w-4 h-4 mr-2 text-emerald-400"></i>
+                <span>Power-User Shortcuts Cheat-Sheet</span>
+            </h3>
+            <button onclick="toggleKeyboardModal()" class="text-zinc-500 hover:text-zinc-300">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <div class="py-3 space-y-2 text-[11px] text-zinc-300 font-mono">
+            <div class="flex justify-between items-center border-b border-vscode-border/50 pb-1">
+                <span>Direct Search Jump</span>
+                <span class="keyboard-badge px-1 py-0.5 rounded text-[10px] text-zinc-400">Ctrl + F</span>
+            </div>
+            <div class="flex justify-between items-center border-b border-vscode-border/50 pb-1">
+                <span>Sync Selected Field</span>
+                <span class="keyboard-badge px-1 py-0.5 rounded text-[10px] text-zinc-400">Enter</span>
+            </div>
+            <div class="flex justify-between items-center border-b border-vscode-border/50 pb-1">
+                <span>Edit Raw Field</span>
+                <span class="keyboard-badge px-1 py-0.5 rounded text-[10px] text-zinc-400">F2</span>
+            </div>
+            <div class="flex justify-between items-center border-b border-vscode-border/50 pb-1">
+                <span>Create ESL/ESP Patch</span>
+                <span class="keyboard-badge px-1 py-0.5 rounded text-[10px] text-zinc-400">Alt + P</span>
+            </div>
+            <div class="flex justify-between items-center border-b border-vscode-border/50 pb-1">
+                <span>Go to Reference</span>
+                <span class="keyboard-badge px-1 py-0.5 rounded text-[10px] text-zinc-400">F12</span>
+            </div>
+            <div class="flex justify-between items-center border-b border-vscode-border/50 pb-1">
+                <span>Toggle Bookmark</span>
+                <span class="keyboard-badge px-1 py-0.5 rounded text-[10px] text-zinc-400">Ctrl + D</span>
+            </div>
+            <div class="flex justify-between items-center pb-1">
+                <span>Close Active Modals</span>
+                <span class="keyboard-badge px-1 py-0.5 rounded text-[10px] text-zinc-400">Esc</span>
+            </div>
+        </div>
+        <div class="flex justify-end pt-2 border-t border-vscode-border">
+            <button onclick="toggleKeyboardModal()" class="px-3 py-1 bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-vscode-border rounded text-[11px]">Dismiss</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Command Palette -->
+<div id="command-palette" class="hidden fixed inset-0 z-[100] bg-black/50 flex items-start justify-center pt-[15vh] backdrop-blur-sm transition-opacity" onclick="if(event.target === this) toggleCommandPalette()">
+    <div class="w-full max-w-2xl bg-vscode-sidebarBg border border-vscode-border rounded shadow-2xl flex flex-col font-sans overflow-hidden transform transition-transform scale-95" id="cmd-palette-window">
+        <div class="flex items-center px-3 py-2 border-b border-vscode-border bg-zinc-950">
+            <i data-lucide="chevron-right" class="w-4 h-4 text-emerald-500 mr-2 shrink-0"></i>
+            <input type="text" id="cmd-input" placeholder="Type a command or search (e.g. '> Clean ITMs')..." class="w-full bg-transparent text-zinc-200 text-[12px] outline-none placeholder-zinc-500 font-mono" onkeydown="handleCommandKey(event)" oninput="filterCommands()">
+        </div>
+        <div id="cmd-list" class="max-h-[40vh] overflow-y-auto text-[11px] py-1 select-none">
+            <!-- Commands injected dynamically -->
+        </div>
+        <div class="bg-vscode-activityBg border-t border-vscode-border px-3 py-1.5 flex justify-between items-center text-[9px] text-zinc-500 font-mono">
+            <span><strong class="text-zinc-300">↑↓</strong> to navigate</span>
+            <span><strong class="text-zinc-300">Enter</strong> to select</span>
+            <span><strong class="text-zinc-300">Esc</strong> to dismiss</span>
+        </div>
+    </div>
+</div>
+
+<footer class="h-6 bg-vscode-statusBarBg border-t border-vscode-border flex items-center justify-between px-2 text-[11px] text-zinc-400 select-none shrink-0 font-mono">
+    <div class="flex items-center space-x-3.5">
+        <div class="flex items-center space-x-1 text-emerald-400 font-semibold cursor-pointer hover:text-emerald-300" onclick="exportActivePlugin()" title="Commit & Export Active Plugin">
+            <i data-lucide="save" class="w-3.5 h-3.5"></i>
+            <span>Commit to .ESP</span>
+        </div>
+        <span class="text-zinc-700">|</span>
+        <div class="flex items-center space-x-1 text-zinc-500">
+            <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+            <span>loadorder-profile-v1</span>
+        </div>
+        <div class="flex items-center space-x-1.5 text-zinc-500">
+            <i data-lucide="alert-triangle" class="w-3 h-3 text-rose-400"></i>
+            <span>Active Conflicts: <strong class="text-rose-400" id="status-bar-conflict-count">2</strong></span>
+        </div>
+        <span class="text-zinc-700">|</span>
+        <div class="flex items-center space-x-1">
+            <span class="text-zinc-500">Conflict Engine:</span>
+            <span class="text-purple-400 font-semibold" id="status-bar-rule">Priority (Winner)</span>
+        </div>
+    </div>
+
+    <div class="flex items-center space-x-3.5 text-zinc-500">
+        <span>Active Grid Target: <strong class="text-zinc-300 font-semibold" id="status-active-record">CO_Bandage</strong></span>
+        <span class="text-zinc-700">|</span>
+        <span>UTF-8</span>
+        <span>LF</span>
+        <div class="flex items-center space-x-1 bg-zinc-900 px-1.5 py-0.5 rounded text-[10px] text-zinc-300 border border-zinc-800 cursor-pointer hover:bg-zinc-800" onclick="toggleCommandPalette()" title="Open Command Palette (Ctrl+Shift+P)">
+            <i data-lucide="terminal-square" class="w-3 h-3"></i>
+            <span>xEdit Hybrid Ready</span>
+        </div>
+    </div>
+</footer>
+
+<div id="toast-host" class="fixed bottom-8 right-4 z-50 pointer-events-none space-y-2 max-w-sm"></div>
+
+<script>
+    // System load plugins
+    let PLUGINS = [
+        { id: 'maim', name: 'MAIM.esp', isWinner: false, isUserPatch: false },
+        { id: 'compat', name: 'Fallout4_Combat_Compat.esp', isWinner: false, isUserPatch: false },
+        { id: 's7', name: 'FallenWorld_S7_Overhaul.esp', isWinner: false, isUserPatch: false },
+        { id: 'fixes', name: 'FallenWorld_CraftingFixes.esp', isWinner: true, isUserPatch: false }
+    ];
+
+    let state = {
+        onlyDiffing: false,
+        hideIdentical: false,
+        treeConflictsOnly: false,
+        resolutionRule: 'priority',
+        activeRecordId: 'CO_Bandage',
+        openTabs: ['CO_Bandage', 'HC_CO_Bandage'],
+        bookmarks: ['WEAP_10mm'],
+        sidebarTab: 'explorer',
+        drawerTab: 'referenced',
+        drawerCollapsed: false,
+        gridPropertyQuery: '',
+        contextTarget: { rowLabel: '', pluginId: '' },
+        currentCellEditor: null,
+        aiSidebarOpen: true
+    };
+
+    let historyStack = [];
+
+    // Deep database representing real Fallout 4 structures
+    let recordsDb = {
+        CO_Bandage: [
+            {
+                group: "Record Identification Header",
+                rows: [
+                    { label: "EditorID", differing: false, values: { maim: "CO_Bandage", compat: "CO_Bandage", s7: "CO_Bandage", fixes: "CO_Bandage" } },
+                    { label: "FormKey", differing: false, values: { maim: "00008E:MAIM.esp", compat: "00008E:MAIM.esp", s7: "00008E:MAIM.esp", fixes: "00008E:MAIM.esp" } },
+                    { label: "Record Flags", differing: true, values: { maim: "0x00000000", compat: "0x00000800 (Deleted)", s7: "0x00000000", fixes: "0x00000000" } },
+                    { label: "TitleString", differing: true, values: { maim: "CO_Bandage — Standard", compat: "CO_Bandage — Legacy", s7: "CO_Bandage — Overhaul Edition", fixes: "CO_Bandage — Overhaul Edition" } }
+                ]
+            },
+            {
+                group: "Crafting Components (Recipe list)",
+                rows: [
+                    { label: "Ingredient [0]", differing: true, values: { maim: 'c_Adhesive "Adhesive" [01FAA5]', compat: 'c_Glass "Glass" [01FAA4]', s7: 'c_Adhesive "Adhesive" [01FAA5]', fixes: 'c_Adhesive "Adhesive" [01FAA5]' } },
+                    { label: "Ingredient [1]", differing: true, values: { maim: 'Mutfruit "Raw" [033104]', compat: 'Stimpak "[AID] Medkit" [02A200]', s7: 'Mutfruit "Raw" [033104]', fixes: 'Mutfruit "Raw" [033104]' } },
+                    { label: "Ingredient [2]", differing: true, values: { maim: 'c_Cloth "Cloth" [1223C7]', compat: 'Hubflower "Herb" [10C4A4]', s7: 'c_Cloth "Cloth" [1223C7]', fixes: 'c_Cloth "Cloth" [1223C7]' } }
+                ]
+            },
+            {
+                group: "Workbench Assignments",
+                rows: [
+                    { label: "WorkbenchKeyword", differing: true, values: { maim: "WorkbenchChemLab [102158]", compat: "WorkbenchChemLab [102158]", s7: "wSW_UtilityWorkbench_CraftKey", fixes: "wSW_UtilityWorkbench_CraftKey" } },
+                    { label: "CreatedObject", differing: false, values: { maim: "Bandage_Item [0008E1]", compat: "Bandage_Item [0008E1]", s7: "Bandage_Item [0008E1]", fixes: "Bandage_Item [0008E1]" } }
+                ]
+            }
+        ],
+
+        HC_CO_Bandage: [
+            {
+                group: "Record Identification Header",
+                rows: [
+                    { label: "EditorID", differing: false, values: { maim: "HC_CO_Bandage", compat: "ZZdup_HC_CO", s7: "HC_CO_Bandage", fixes: "HC_CO_Bandage" } },
+                    { label: "FormKey", differing: false, values: { maim: "00011D:MAIM.esp", compat: "00011D:MAIM.esp", s7: "00011D:MAIM.esp", fixes: "00011D:MAIM.esp" } }
+                ]
+            },
+            {
+                group: "Logic Controls & Requirements",
+                rows: [
+                    { label: "Condition [0]", differing: true, values: { maim: "GetGlobalValue(MAIMLiteInstalled)", compat: "GetGlobalValue(CMChems)", s7: "GetGlobalValue(MAIMLiteInstalled)", fixes: "GetGlobalValue(MAIMLiteInstalled)" } },
+                    { label: "Condition [1]", differing: true, values: { maim: "HasPerk(Medic01)", compat: "Null", s7: "GetBaseValue(S7_SkillMed)", fixes: "GetBaseValue(MedicVal) >= 25" } }
+                ]
+            }
+        ],
+
+        WEAP_10mm: [
+            {
+                group: "Record Identification Header",
+                rows: [
+                    { label: "EditorID", differing: false, values: { maim: "Weap10mm", compat: "Weap10mm", s7: "Weap10mm", fixes: "Weap10mm" } },
+                    { label: "FormID", differing: false, values: { maim: "000462:Fallout4.esm", compat: "000462:Fallout4.esm", s7: "000462:Fallout4.esm", fixes: "000462:Fallout4.esm" } }
+                ]
+            },
+            {
+                group: "Damage Configuration",
+                rows: [
+                    { label: "BaseDamage", differing: true, values: { maim: "18", compat: "22", s7: "35", fixes: "35" } },
+                    { label: "CritDamageMult", differing: false, values: { maim: "1.50", compat: "1.50", s7: "1.50", fixes: "1.50" } }
+                ]
+            }
+        ],
+
+        WEAP_HuntingRifle: [
+            {
+                group: "Record Identification Header",
+                rows: [
+                    { label: "EditorID", differing: false, values: { maim: "HuntingRifle", compat: "HuntingRifle", s7: "HuntingRifle", fixes: "HuntingRifle" } },
+                    { label: "FormID", differing: false, values: { maim: "004C10:Fallout4.esm", compat: "004C10:Fallout4.esm", s7: "004C10:Fallout4.esm", fixes: "004C10:Fallout4.esm" } }
+                ]
+            },
+            {
+                group: "Properties",
+                rows: [
+                    { label: "AmmoType", differing: false, values: { maim: "Ammo308 [001908]", compat: "Ammo308 [001908]", s7: "Ammo308 [001908]", fixes: "Ammo308 [001908]" } },
+                    { label: "BaseDamage", differing: true, values: { maim: "55", compat: "60", s7: "85", fixes: "85" } }
+                ]
+            }
+        ],
+
+        AMMO_556: [
+            {
+                group: "Record Identification Header",
+                rows: [
+                    { label: "EditorID", differing: false, values: { maim: "Ammo556", compat: "Ammo556", s7: "Ammo556", fixes: "Ammo556" } },
+                    { label: "FormID", differing: false, values: { maim: "001908:Fallout4.esm", compat: "001908:Fallout4.esm", s7: "001908:Fallout4.esm", fixes: "001908:Fallout4.esm" } }
+                ]
+            },
+            {
+                group: "Projectile Attributes",
+                rows: [
+                    { label: "BaseValue", differing: false, values: { maim: "2", compat: "2", s7: "2", fixes: "2" } },
+                    { label: "DamageModifier", differing: false, values: { maim: "1.00", compat: "1.00", s7: "1.00", fixes: "1.00" } }
+                ]
+            }
+        ],
+
+        ARMO_CombatChest: [
+            {
+                group: "Record Identification Header",
+                rows: [
+                    { label: "EditorID", differing: false, values: { maim: "Armor_Combat_Chest", compat: "Armor_Combat_Chest", s7: "Armor_Combat_Chest", fixes: "Armor_Combat_Chest" } },
+                    { label: "FormID", differing: false, values: { maim: "0004A42:Fallout4.esm", compat: "0004A42:Fallout4.esm", s7: "0004A42:Fallout4.esm", fixes: "0004A42:Fallout4.esm" } }
+                ]
+            },
+            {
+                group: "Biped Body Template",
+                rows: [
+                    { label: "First Person Flags", differing: true, values: { maim: "36 - Torso", compat: "36 - Torso, 39 - Backpack", s7: "36 - Torso", fixes: "36 - Torso" } },
+                    { label: "Armor Type", differing: false, values: { maim: "Heavy", compat: "Heavy", s7: "Heavy", fixes: "Heavy" } }
+                ]
+            },
+            {
+                group: "Armor Rating",
+                rows: [
+                    { label: "Physical [dt]", differing: true, values: { maim: "15", compat: "20", s7: "35", fixes: "35" } },
+                    { label: "Energy [er]", differing: false, values: { maim: "15", compat: "15", s7: "15", fixes: "15" } },
+                    { label: "Radiation [rr]", differing: true, values: { maim: "0", compat: "0", s7: "10", fixes: "10" } }
+                ]
+            }
+        ]
+    };
+
+    // "Referenced By" map mirroring actual database logic
+    const REFERENCED_BY_MAP = {
+        CO_Bandage: [
+            { form: "000B21:MAIM_HardcorePatch.esp", type: "Constructible Object Override (COBJ)", refField: "Ingredient list" },
+            { form: "001C8A:FallenWorld_ChemCrafting.esp", type: "Container Item Group", refField: "Base chem spawns" }
+        ],
+        HC_CO_Bandage: [
+            { form: "002B41:S7_SurvivalPatch.esp", type: "Requirement Rule", refField: "Recipe verification global" }
+        ],
+        WEAP_10mm: [
+            { form: "0005C8:Fallout4.esm", type: "Leveled Item List (LVLI)", refField: "LL_Weapon_10mm_Any" },
+            { form: "01A24B:MAIM.esp", type: "Non-Player Character Override (NPC_)", refField: "LL_Raider_Scavver_Loadout" }
+        ],
+        WEAP_HuntingRifle: [
+            { form: "0006A1:Fallout4.esm", type: "Leveled Item List (LVLI)", refField: "LL_HuntingRifle_Sniper" }
+        ],
+        AMMO_556: [
+            { form: "001B9D:Fallout4.esm", type: "Container Info", refField: "AmmoBox556" }
+        ],
+        ARMO_CombatChest: [
+            { form: "0008C3:Fallout4.esm", type: "Non-Player Character (NPC_)", refField: "Gunner_Commander_Outfit" },
+            { form: "0009B1:Fallout4.esm", type: "Leveled Item List (LVLI)", refField: "LLI_Armor_Combat_Heavy" }
+        ]
+    };
+
+    const initialDbSnapshot = JSON.stringify(recordsDb);
+
+    const FORM_ID_MAP = {
+        '00008E': 'CO_Bandage',
+        '00011D': 'HC_CO_Bandage',
+        '0008E1': 'HC_CO_Bandage', // Mapped CreatedObject pointer to jump dynamically
+        '000462': 'WEAP_10mm',
+        '004C10': 'WEAP_HuntingRifle',
+        '001908': 'AMMO_556',
+        '004A42': 'ARMO_CombatChest'
+    };
+
+    window.onload = function() {
+        initializeIcons();
+        renderOpenEditorsList();
+        renderTabHeaders();
+        renderCompareGrid();
+        updateConflictMetrics();
+        updateReferencedTab();
+        updateProblemsTab();
+        recalculateITMRecords();
+        loadPascalTemplate();
+        renderBookmarksList();
+        setupShortcuts();
+        logEvent("System Load Order structures parsed successfully.");
+        
+        window.addEventListener('resize', () => {
+            requestAnimationFrame(() => {
+                updateMinimapViewport();
+                renderMinimap();
+            });
+        });
+    };
+
+    function saveStateForUndo(actionName) {
+        historyStack.push({
+            action: actionName,
+            state: JSON.parse(JSON.stringify(recordsDb)),
+            activeTab: state.activeRecordId
+        });
+        if (historyStack.length > 15) historyStack.shift();
+        
+        const btnUndo = document.getElementById('btn-undo');
+        btnUndo.classList.remove('cursor-not-allowed', 'text-zinc-600');
+        btnUndo.classList.add('text-amber-400', 'hover:text-amber-300');
+        btnUndo.title = `Undo ${actionName} (Ctrl+Z)`;
+    }
+
+    function undoLastAction() {
+        if (historyStack.length === 0) return;
+        
+        const lastAction = historyStack.pop();
+        recordsDb = lastAction.state;
+        
+        if (state.openTabs.includes(lastAction.activeTab)) {
+            state.activeRecordId = lastAction.activeTab;
+        }
+
+        if (historyStack.length === 0) {
+            const btnUndo = document.getElementById('btn-undo');
+            btnUndo.classList.add('cursor-not-allowed', 'text-zinc-600');
+            btnUndo.classList.remove('text-amber-400', 'hover:text-amber-300');
+            btnUndo.title = `Undo Last Action (Ctrl+Z)`;
+        } else {
+            const btnUndo = document.getElementById('btn-undo');
+            btnUndo.title = `Undo ${historyStack[historyStack.length-1].action} (Ctrl+Z)`;
+        }
+
+        renderCompareGrid();
+        updateConflictMetrics();
+        recalculateITMRecords();
+        updateProblemsTab();
+        showCustomToast("Action Undone", `Reverted: ${lastAction.action}`, "info");
+        logEvent(`Reverted state using undo stack: ${lastAction.action}`);
+    }
+
+    function toggleSettingsModal() {
+        const modal = document.getElementById('settings-modal');
+        modal.classList.toggle('hidden');
+    }
+
+    function updateProblemsTab() {
+        const container = document.getElementById('problems-list-container');
+        const badge = document.getElementById('problems-count-badge');
+        container.innerHTML = '';
+        let problemCount = 0;
+
+        // Dynamic checks against recordsDb
+        Object.keys(recordsDb).forEach(recordKey => {
+            recordsDb[recordKey].forEach(group => {
+                group.rows.forEach(row => {
+                    if (row.differing) {
+                        // Check for missing ingredients
+                        if (row.label.includes('Ingredient')) {
+                            const values = Object.values(row.values);
+                            if (values.includes('Null') || values.some(v => v === '')) {
+                                problemCount++;
+                                const item = document.createElement('div');
+                                item.className = "flex items-start space-x-2 p-1.5 rounded bg-rose-950/20 border border-rose-900/40";
+                                item.innerHTML = `
+                                    <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5"></i>
+                                    <div>
+                                        <span class="font-bold">Missing Reference:</span> ${recordKey} -> <code class="bg-zinc-950 px-1 border border-vscode-border rounded text-[10px]">${row.label}</code> has a Null/Empty array element. Will cause CTD on workbench load.
+                                    </div>
+                                `;
+                                container.appendChild(item);
+                            }
+                        }
+                        
+                        // Check for extreme damage jumps (suspicious balance issue)
+                        if (row.label === 'BaseDamage' || row.label.includes('[dt]')) {
+                            const vals = Object.values(row.values).map(v => parseInt(v)).filter(v => !isNaN(v));
+                            if (vals.length > 0) {
+                                const max = Math.max(...vals);
+                                const min = Math.min(...vals);
+                                if (max > min * 2 && min > 0) {
+                                    problemCount++;
+                                    const item = document.createElement('div');
+                                    item.className = "flex items-start space-x-2 p-1.5 rounded bg-amber-950/20 border border-amber-900/40 text-amber-400";
+                                    item.innerHTML = `
+                                        <i data-lucide="info" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+                                        <div>
+                                            <span class="font-bold">Balance Warning:</span> ${recordKey} -> <code class="bg-zinc-950 px-1 border border-vscode-border rounded text-[10px]">${row.label}</code> has a >200% variance across plugins (${min} vs ${max}).
+                                        </div>
+                                    `;
+                                    container.appendChild(item);
+                                }
+                            }
+                        }
+
+                        // Check for Biped Slot conflicts
+                        if (row.label === 'First Person Flags') {
+                            problemCount++;
+                            const item = document.createElement('div');
+                            item.className = "flex items-start space-x-2 p-1.5 rounded bg-rose-950/20 border border-rose-900/40";
+                            item.innerHTML = `
+                                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5"></i>
+                                <div>
+                                    <span class="font-bold">Biped Slot Conflict:</span> ${recordKey} -> <code class="bg-zinc-950 px-1 border border-vscode-border rounded text-[10px]">${row.label}</code> modifies slots. If multiple armors use these slots, they will unequip each other in-game.
+                                </div>
+                            `;
+                            container.appendChild(item);
+                        }
+                    }
+                });
+            });
+        });
+
+        if (problemCount === 0) {
+            container.innerHTML = `<div class="p-2 text-zinc-500 text-[11px] italic flex items-center"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-500 mr-2"></i> No active structural problems or warnings detected.</div>`;
+            badge.classList.add('hidden');
+        } else {
+            badge.innerText = problemCount;
+            badge.classList.remove('hidden');
+        }
+        initializeIcons();
+    }
+
+    function initializeIcons() {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }
+
+    function logEvent(msg) {
+        const list = document.getElementById('event-log-list');
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        const item = document.createElement('li');
+        item.className = "text-zinc-500 hover:text-zinc-400 cursor-default truncate";
+        item.innerHTML = `[${timeStr}] <span class="text-zinc-300">${msg}</span>`;
+        list.prepend(item);
+        if (list.children.length > 5) {
+            list.lastElementChild.remove();
+        }
+    }
+
+    function toggleSidebar() {
+        const sidebar = document.getElementById('app-sidebar');
+        sidebar.classList.toggle('w-[320px]');
+        sidebar.classList.toggle('w-0');
+        sidebar.classList.toggle('opacity-0');
+        sidebar.classList.toggle('overflow-hidden');
+    }
+
+    function toggleSection(id, arrowId) {
+        const target = document.getElementById(id);
+        const arrow = document.getElementById(arrowId);
+        target.classList.toggle('hidden');
+        if (target.classList.contains('hidden')) {
+            arrow.style.transform = 'rotate(-90deg)';
+        } else {
+            arrow.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    function toggleTreeGroup(id) {
+        const element = document.getElementById(id);
+        const icon = document.getElementById(`arrow-${id}`);
+        element.classList.toggle('hidden');
+        if (element.classList.contains('hidden')) {
+            icon.setAttribute('data-lucide', 'chevron-right');
+        } else {
+            icon.setAttribute('data-lucide', 'chevron-down');
+        }
+        initializeIcons();
+    }
+
+    function setActiveSidebarTab(tabName) {
+        state.sidebarTab = tabName;
+        ['explorer', 'conflicts', 'itm', 'stats'].forEach(t => {
+            const btn = document.getElementById(`btn-activity-${t}`);
+            const panel = document.getElementById(`panel-${t}`);
+            if (t === tabName) {
+                btn.className = "w-10 h-10 rounded flex items-center justify-center transition-colors text-emerald-400 border-l-2 border-emerald-500 bg-zinc-900/40";
+                panel.classList.remove('hidden');
+            } else {
+                btn.className = "w-10 h-10 rounded flex items-center justify-center transition-colors text-zinc-400 hover:text-zinc-200";
+                panel.classList.add('hidden');
+            }
+        });
+        initializeIcons();
+    }
+
+    function renderOpenEditorsList() {
+        const container = document.getElementById('sec-open-editors');
+        container.innerHTML = '';
+        
+        document.getElementById('open-editors-count').innerText = state.openTabs.length;
+
+        if (state.openTabs.length === 0) {
+            container.innerHTML = `<div class="p-2 text-zinc-600 text-[11px] italic">No active tabs open</div>`;
+            return;
+        }
+
+        state.openTabs.forEach(tabKey => {
+            const isActive = state.activeRecordId === tabKey;
+            const item = document.createElement('div');
+            item.className = `flex items-center justify-between py-1 px-2 rounded cursor-pointer transition-colors ${
+                isActive ? 'bg-zinc-800/50 text-zinc-200' : 'text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300'
+            }`;
+            
+            let hasConflict = false;
+            if (recordsDb[tabKey]) {
+                hasConflict = recordsDb[tabKey].some(g => g.rows.some(r => r.differing));
+            }
+
+            item.innerHTML = `
+                <span onclick="selectRecordTab('${tabKey}')" class="flex items-center space-x-1.5 truncate">
+                    <span class="status-dot w-1.5 h-1.5 rounded-full ${hasConflict ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+                    <span class="font-mono text-[11px]">${tabKey}</span>
+                </span>
+                <button onclick="closeRecordTab(event, '${tabKey}')" class="text-zinc-600 hover:text-zinc-400 p-0.5">
+                    <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+            `;
+            container.appendChild(item);
+        });
+
+        initializeIcons();
+    }
+
+    function renderTabHeaders() {
+        const container = document.getElementById('opened-tabs-container');
+        container.innerHTML = '';
+
+        state.openTabs.forEach(tabKey => {
+            const isActive = state.activeRecordId === tabKey;
+            const tabDiv = document.createElement('div');
+            
+            tabDiv.className = `h-9 flex items-center space-x-1.5 px-3 border-t-2 cursor-pointer transition-all ${
+                isActive 
+                    ? 'bg-vscode-editorBg text-zinc-100 border-emerald-500 font-semibold' 
+                    : 'bg-vscode-tabInactive text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-vscode-sidebarBg/30'
+            }`;
+
+            let hasConflict = false;
+            if (recordsDb[tabKey]) {
+                hasConflict = recordsDb[tabKey].some(g => g.rows.some(r => r.differing));
+            }
+
+            tabDiv.innerHTML = `
+                <span class="status-dot w-1.5 h-1.5 rounded-full ${hasConflict ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+                <span class="font-mono text-[11px]">${tabKey}</span>
+                <button onclick="closeRecordTab(event, '${tabKey}')" class="p-0.5 rounded hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300">
+                    <i data-lucide="x" class="w-2.5 h-2.5"></i>
+                </button>
+            `;
+
+            tabDiv.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                selectRecordTab(tabKey);
+            });
+
+            container.appendChild(tabDiv);
+        });
+
+        initializeIcons();
+    }
+
+    function openRecordTab(recordKey) {
+        if (!state.openTabs.includes(recordKey)) {
+            state.openTabs.push(recordKey);
+        }
+        selectRecordTab(recordKey);
+    }
+
+    function selectRecordTab(recordKey) {
+        state.activeRecordId = recordKey;
+        
+        const keys = ['CO_Bandage', 'HC_CO_Bandage', 'WEAP_10mm', 'WEAP_HuntingRifle', 'AMMO_556', 'ARMO_CombatChest'];
+        keys.forEach(k => {
+            const treeEl = document.getElementById(`lo-${k}`);
+            if (treeEl) {
+                if (k === recordKey) {
+                    treeEl.classList.add('bg-zinc-800/80', 'text-zinc-100');
+                } else {
+                    treeEl.classList.remove('bg-zinc-800/80', 'text-zinc-100');
+                }
+            }
+        });
+
+        document.getElementById('breadcrumb-record').innerText = recordKey;
+        document.getElementById('status-active-record').innerText = recordKey;
+        
+        let moduleName = "Fallout4.esm";
+        let cat = "Constructible Object";
+
+        if (recordKey.includes('CO_Bandage')) {
+            moduleName = "MAIM.esp";
+            cat = "Constructible Object (COBJ)";
+        } else if (recordKey.includes('WEAP')) {
+            moduleName = "Fallout4.esm";
+            cat = "Weapons (WEAP)";
+        } else if (recordKey.includes('AMMO')) {
+            moduleName = "Fallout4.esm";
+            cat = "Ammunition (AMMO)";
+        } else if (recordKey.includes('ARMO')) {
+            moduleName = "Fallout4.esm";
+            cat = "Armor (ARMO)";
+        }
+
+        document.getElementById('breadcrumb-plugin').innerText = moduleName;
+        document.getElementById('breadcrumb-category').innerText = cat;
+
+        renderOpenEditorsList();
+        renderTabHeaders();
+        renderBookmarksList();
+        renderCompareGrid();
+        updateConflictMetrics();
+        updateReferencedTab();
+    }
+
+    function closeRecordTab(event, recordKey) {
+        if (event) event.stopPropagation();
+        state.openTabs = state.openTabs.filter(t => t !== recordKey);
+        if (state.activeRecordId === recordKey && state.openTabs.length > 0) {
+            state.activeRecordId = state.openTabs[state.openTabs.length - 1];
+        } else if (state.openTabs.length === 0) {
+            state.activeRecordId = '';
+        }
+        renderOpenEditorsList();
+        renderTabHeaders();
+        renderCompareGrid();
+        updateReferencedTab();
+    }
+
+    function toggleGridOption(option) {
+        if (option === 'only-diffing') {
+            state.onlyDiffing = !state.onlyDiffing;
+            const btn = document.getElementById('opt-only-diffing');
+            btn.className = state.onlyDiffing 
+                ? "px-2 py-0.5 rounded text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold" 
+                : "px-2 py-0.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors flex items-center space-x-1";
+            logEvent(`Filter set: Only conflicts: ${state.onlyDiffing}`);
+        } else if (option === 'hide-identical') {
+            state.hideIdentical = !state.hideIdentical;
+            const btn = document.getElementById('opt-hide-identical');
+            btn.className = state.hideIdentical
+                ? "px-2 py-0.5 rounded text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold" 
+                : "px-2 py-0.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors flex items-center space-x-1";
+            logEvent(`Filter set: Hide identical columns: ${state.hideIdentical}`);
+        }
+        renderCompareGrid();
+    }
+
+    function filterGridProperties() {
+        state.gridPropertyQuery = document.getElementById('grid-property-filter').value.toLowerCase().trim();
+        renderCompareGrid();
+    }
+
+    function renderCompareGrid() {
+        const headerRow = document.getElementById('grid-header-row');
+        const gridBody = document.getElementById('grid-body');
+
+        const oldHeaders = headerRow.querySelectorAll('th:not(:first-child)');
+        oldHeaders.forEach(th => th.remove());
+        gridBody.innerHTML = '';
+
+        if (!state.activeRecordId) {
+            gridBody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-zinc-600 font-mono">No active record tab selected. Click any highlighted record in the load order explorer to compare.</td></tr>`;
+            return;
+        }
+
+        const recordDataset = recordsDb[state.activeRecordId];
+
+        // Column Headers
+        PLUGINS.forEach(plugin => {
+            if (state.hideIdentical && !plugin.isWinner) {
+                return;
+            }
+
+            const th = document.createElement('th');
+            th.className = `p-2 font-mono text-[11px] select-none border-b border-r border-vscode-border transition-all ${
+                plugin.isWinner 
+                    ? 'bg-emerald-950/20 text-emerald-400 font-semibold border-b-2 border-b-emerald-500' 
+                    : (plugin.isUserPatch ? 'bg-violet-950/20 text-violet-400 border-b-2 border-b-violet-500' : 'text-zinc-400 bg-vscode-sidebarBg/40')
+            }`;
+
+            th.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span class="truncate" title="${plugin.name}">${plugin.name}</span>
+                    ${plugin.isWinner ? '<span class="text-[8px] bg-emerald-500/20 px-1 py-0.2 rounded text-emerald-400 border border-emerald-500/30 font-sans tracking-wide">WINNER</span>' : ''}
+                    ${plugin.isUserPatch ? '<span class="text-[8px] bg-violet-500/20 px-1 py-0.2 rounded text-violet-400 border border-violet-500/30 font-sans tracking-wide">USER PATCH</span>' : ''}
+                </div>
+            `;
+            headerRow.appendChild(th);
+        });
+
+        // Rows
+        recordDataset.forEach(section => {
+            let matchingRows = section.rows;
+            
+            // Apply property search queries
+            if (state.gridPropertyQuery) {
+                matchingRows = matchingRows.filter(r => r.label.toLowerCase().includes(state.gridPropertyQuery));
+            }
+
+            if (state.onlyDiffing) {
+                matchingRows = matchingRows.filter(r => r.differing);
+            }
+
+            if (matchingRows.length === 0) return;
+
+            // Section Divider Row
+            const secRow = document.createElement('tr');
+            secRow.className = "bg-zinc-950/80 border-y border-vscode-border select-none";
+            
+            let currentSpanLength = 1;
+            PLUGINS.forEach(plugin => {
+                if (state.hideIdentical && !plugin.isWinner) return;
+                currentSpanLength++;
+            });
+
+            secRow.innerHTML = `
+                <td colspan="${currentSpanLength}" class="p-1 pl-3 text-[10px] font-bold text-zinc-500 font-sans tracking-wider">
+                    <div class="flex items-center space-x-1.5">
+                        <i data-lucide="chevron-down" class="w-3 h-3 text-zinc-500"></i>
+                        <span>${section.group.toUpperCase()}</span>
+                    </div>
+                </td>
+            `;
+            gridBody.appendChild(secRow);
+
+            // Data Rows
+            matchingRows.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "group/row border-b border-vscode-border/40 hover:bg-zinc-900/30 transition-colors";
+                tr.setAttribute('data-differing', row.differing);
+
+                const tdField = document.createElement('td');
+                tdField.className = `p-1.5 border-r border-vscode-border font-sans font-medium text-zinc-400 max-w-[300px] truncate sticky-col left-0 bg-vscode-sidebarBg z-10 ${
+                    row.differing ? 'border-l-2 border-l-rose-500/60 pl-1.5' : 'border-l-2 border-l-transparent pl-1.5'
+                }`;
+
+                let indicatorDot = row.differing 
+                    ? '<span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-2 inline-block"></span>' 
+                    : '<span class="w-1.5 h-1.5 rounded-full bg-zinc-700 mr-2 inline-block"></span>';
+
+                tdField.innerHTML = `
+                    <div class="flex items-center">
+                        ${indicatorDot}
+                        <span class="${row.differing ? 'text-zinc-200' : 'text-zinc-500'} font-mono text-[11px]">${row.label}</span>
+                    </div>
+                `;
+                tr.appendChild(tdField);
+
+                PLUGINS.forEach(plugin => {
+                    if (state.hideIdentical && !plugin.isWinner) return;
+
+                    const tdVal = document.createElement('td');
+                    const originalVal = row.values[plugin.id] || "Null";
+                    const cellState = getGridCellClass(row, plugin.id);
+                    
+                    tdVal.className = `p-1.5 font-mono text-[11px] border-r border-vscode-border relative cursor-context-menu select-text ${cellState.styleClass}`;
+                    tdVal.setAttribute('draggable', 'true');
+                    tdVal.setAttribute('data-plugin-id', plugin.id);
+                    tdVal.setAttribute('data-row-label', row.label);
+
+                    // Sync Merge Action Button
+                    let actionsHtml = '';
+                    if (row.differing && !plugin.isWinner) {
+                        actionsHtml = `
+                            <div class="absolute inset-y-0 right-1 hidden group-hover/row:flex items-center">
+                                <button onclick="quickResolveValue('${row.label}', '${plugin.id}')" 
+                                        class="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-emerald-400 hover:text-emerald-300 border border-zinc-700 shadow-md transition-all text-[9px] font-sans"
+                                        title="Override target element with winning data">
+                                    <i data-lucide="corner-down-left" class="w-2.5 h-2.5"></i>
+                                    <span>Sync</span>
+                                </button>
+                            </div>
+                        `;
+                    }
+
+                    tdVal.innerHTML = `
+                        <div class="truncate max-w-[220px]" title="${originalVal}" id="cell-text-${plugin.id}-${row.label}">${originalVal}</div>
+                        ${actionsHtml}
+                    `;
+
+                    // Drag and Drop Event Binds
+                    tdVal.addEventListener('dragstart', (e) => handleDragStart(e, row.label, plugin.id, originalVal));
+                    tdVal.addEventListener('dragover', handleDragOver);
+                    tdVal.addEventListener('dragleave', handleDragLeave);
+                    tdVal.addEventListener('drop', (e) => handleDrop(e, row.label, plugin.id));
+
+                    // Inline Edit on Double Click
+                    tdVal.addEventListener('dblclick', (e) => {
+                        e.preventDefault();
+                        startInlineEditing(tdVal, row.label, plugin.id, originalVal);
+                    });
+
+                    // Bind Right-Click context menu trigger
+                    tdVal.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        showContextMenu(e, row.label, plugin.id);
+                    });
+
+                    tr.appendChild(tdVal);
+                });
+
+                gridBody.appendChild(tr);
+            });
+        });
+
+        initializeIcons();
+        renderMinimap();
+    }
+
+    function getGridCellClass(row, pluginId) {
+        const value = row.values[pluginId];
+        // Winner is either custom user patch or the core dynamic winner
+        const activeWinnerPlugin = PLUGINS.find(p => p.isUserPatch) || PLUGINS.find(p => p.isWinner);
+        const activeWinnerValue = row.values[activeWinnerPlugin.id];
+
+        if (!row.differing) {
+            return { styleClass: 'text-zinc-500 bg-transparent' };
+        }
+
+        if (pluginId === activeWinnerPlugin.id) {
+            return { styleClass: 'bg-emerald-950/10 text-emerald-400/90 font-semibold border-l-2 border-l-emerald-500/20' };
+        }
+
+        if (value === activeWinnerValue) {
+            return { styleClass: 'text-emerald-400/80 bg-emerald-950/5' };
+        } else {
+            return { styleClass: 'text-rose-400/80 bg-rose-950/5' };
+        }
+    }
+
+    // --- Conflict Minimap System ---
+    function renderMinimap() {
+        const minimap = document.getElementById('conflict-minimap');
+        const scrollContainer = document.getElementById('grid-scroll-container');
+        const gridBody = document.getElementById('grid-body');
+        
+        if (!minimap) return;
+        minimap.innerHTML = '';
+        
+        if (!state.activeRecordId || !gridBody.children.length) return;
+        
+        requestAnimationFrame(() => {
+            const totalHeight = scrollContainer.scrollHeight || 1;
+            const rows = gridBody.querySelectorAll('tr.group\\/row');
+            
+            // Viewport block indicator
+            const viewportThumb = document.createElement('div');
+            viewportThumb.className = 'absolute w-full bg-zinc-700/20 border border-zinc-500/30 transition-all pointer-events-none z-0 rounded-sm';
+            viewportThumb.id = 'minimap-viewport';
+            minimap.appendChild(viewportThumb);
+            
+            updateMinimapViewport();
+            
+            rows.forEach(tr => {
+                const isDiffering = tr.getAttribute('data-differing') === 'true';
+                const topPercent = (tr.offsetTop / totalHeight) * 100;
+                
+                const marker = document.createElement('div');
+                
+                if (isDiffering) {
+                    marker.className = 'absolute w-full h-[3px] bg-rose-500/90 z-20 hover:bg-rose-400 cursor-pointer shadow-[0_0_4px_rgba(244,63,94,0.5)]';
+                    marker.title = "Active Conflict";
+                } else {
+                    marker.className = 'absolute w-[60%] mx-auto left-0 right-0 h-[2px] bg-emerald-500/40 z-10 hover:bg-emerald-400 cursor-pointer';
+                    marker.title = "Resolved / Matched";
+                }
+                
+                marker.style.top = `${topPercent}%`;
+                marker.onclick = (e) => {
+                    e.stopPropagation();
+                    scrollContainer.scrollTo({ top: Math.max(0, tr.offsetTop - 35), behavior: 'smooth' });
+                };
+                minimap.appendChild(marker);
+            });
+        });
+    }
+
+    function updateMinimapViewport() {
+        const scrollContainer = document.getElementById('grid-scroll-container');
+        const thumb = document.getElementById('minimap-viewport');
+        if (!thumb || !scrollContainer) return;
+        
+        const totalHeight = scrollContainer.scrollHeight;
+        const visibleHeight = scrollContainer.clientHeight;
+        const scrollTop = scrollContainer.scrollTop;
+        
+        const topPercent = (scrollTop / totalHeight) * 100;
+        const heightPercent = (visibleHeight / totalHeight) * 100;
+        
+        thumb.style.top = `${topPercent}%`;
+        thumb.style.height = `${heightPercent}%`;
+    }
+
+    function handleMinimapClick(event) {
+        const minimap = document.getElementById('conflict-minimap');
+        const scrollContainer = document.getElementById('grid-scroll-container');
+        if (!minimap || !scrollContainer) return;
+        
+        const clickY = event.clientY - minimap.getBoundingClientRect().top;
+        const clickPercent = clickY / minimap.clientHeight;
+        
+        // Center the click target within the viewport
+        const targetScrollTop = (clickPercent * scrollContainer.scrollHeight) - (scrollContainer.clientHeight / 2);
+        scrollContainer.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'smooth' });
+    }
+
+    // Drag & Drop Functionality
+    let draggedData = null;
+
+    function handleDragStart(event, rowLabel, pluginId, value) {
+        draggedData = { rowLabel, sourcePluginId: pluginId, value };
+        event.dataTransfer.effectAllowed = 'copy';
+        event.target.classList.add('opacity-50');
+    }
+
+    function handleDragOver(event) {
+        event.preventDefault();
+        const cell = event.currentTarget;
+        const targetRow = cell.getAttribute('data-row-label');
+        if (draggedData && draggedData.rowLabel === targetRow) {
+            cell.classList.add('drag-over');
+        }
+    }
+
+    function handleDragLeave(event) {
+        event.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleDrop(event, rowLabel, targetPluginId) {
+        event.preventDefault();
+        const cell = event.currentTarget;
+        cell.classList.remove('drag-over');
+
+        if (!draggedData) return;
+        
+        // Ensure same property row drop
+        if (draggedData.rowLabel !== rowLabel) {
+            showCustomToast("Invalid Drop", "You can only copy values within the same property row.", "info");
+            return;
+        }
+
+        saveStateForUndo(`Drag & Drop on ${rowLabel}`);
+
+        const value = draggedData.value;
+        const recordDataset = recordsDb[state.activeRecordId];
+        let matchingRow = null;
+
+        recordDataset.forEach(g => {
+            const found = g.rows.find(r => r.label === rowLabel);
+            if (found) matchingRow = found;
+        });
+
+        if (matchingRow) {
+            matchingRow.values[targetPluginId] = value;
+            
+            // Re-evaluate conflict status
+            const valList = Object.values(matchingRow.values);
+            const allMatch = valList.every(v => v === valList[0]);
+            matchingRow.differing = !allMatch;
+
+            logEvent(`Drag & Drop Resolved: Set '${rowLabel}' on target [${targetPluginId}] to: ${value}`);
+            renderCompareGrid();
+            updateConflictMetrics();
+            recalculateITMRecords();
+            updateProblemsTab();
+            showCustomToast("Resolved Conflict", "Copied value via Drag-and-Drop successfully.", "success");
+        }
+
+        draggedData = null;
+    }
+
+    // Inline Field Editing
+    function startInlineEditing(cellElement, rowLabel, pluginId, currentValue) {
+        if (state.currentCellEditor) {
+            finishInlineEditing(state.currentCellEditor.input, state.currentCellEditor.rowLabel, state.currentCellEditor.pluginId, false);
+        }
+
+        cellElement.innerHTML = '';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
+        input.className = 'w-full bg-zinc-950 text-emerald-400 border border-emerald-500 font-mono text-[11px] px-1 focus:outline-none rounded';
+        
+        cellElement.appendChild(input);
+        input.focus();
+        input.select();
+
+        state.currentCellEditor = { input, cellElement, rowLabel, pluginId, originalValue: currentValue };
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                finishInlineEditing(input, rowLabel, pluginId, true);
+            } else if (e.key === 'Escape') {
+                finishInlineEditing(input, rowLabel, pluginId, false);
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            finishInlineEditing(input, rowLabel, pluginId, true);
+        });
+    }
+
+    function finishInlineEditing(inputElement, rowLabel, pluginId, save) {
+        if (!state.currentCellEditor) return;
+
+        const newValue = inputElement.value.trim();
+        const recordDataset = recordsDb[state.activeRecordId];
+        let matchingRow = null;
+
+        recordDataset.forEach(g => {
+            const found = g.rows.find(r => r.label === rowLabel);
+            if (found) matchingRow = found;
+        });
+
+        if (save && matchingRow && newValue !== state.currentCellEditor.originalValue) {
+            saveStateForUndo(`Inline Edit on ${rowLabel}`);
+            matchingRow.values[pluginId] = newValue;
+
+            const valList = Object.values(matchingRow.values);
+            const allMatch = valList.every(v => v === valList[0]);
+            matchingRow.differing = !allMatch;
+
+            logEvent(`Field Modified: Direct edit saved '${rowLabel}' to: ${newValue}`);
+            showCustomToast("Value Updated", "Record value modified directly.", "success");
+        }
+
+        state.currentCellEditor = null;
+        renderCompareGrid();
+        updateConflictMetrics();
+        recalculateITMRecords();
+        updateProblemsTab();
+    }
+
+    function quickResolveValue(rowLabel, pluginId) {
+        const recordDataset = recordsDb[state.activeRecordId];
+        let matchingRow = null;
+
+        recordDataset.forEach(g => {
+            const found = g.rows.find(r => r.label === rowLabel);
+            if (found) matchingRow = found;
+        });
+
+        if (matchingRow) {
+            saveStateForUndo(`Sync Winner on ${rowLabel}`);
+            const winPlugin = PLUGINS.find(p => p.isUserPatch) || PLUGINS.find(p => p.isWinner);
+            const winningValue = matchingRow.values[winPlugin.id];
+            matchingRow.values[pluginId] = winningValue;
+
+            let isUnified = true;
+            Object.keys(matchingRow.values).forEach(k => {
+                if (matchingRow.values[k] !== winningValue) {
+                    isUnified = false;
+                }
+            });
+
+            if (isUnified) {
+                matchingRow.differing = false;
+            }
+
+            logEvent(`Resolved parameter '${rowLabel}' on target [${pluginId}] to: ${winningValue}`);
+            renderCompareGrid();
+            updateConflictMetrics();
+            recalculateITMRecords();
+            updateProblemsTab();
+            showCustomToast("Record Synced", "Parameter updated manually successfully.", "success");
+        }
+    }
+
+    function autoResolveCurrentRecord() {
+        if (!state.activeRecordId) return;
+        saveStateForUndo(`Auto-Resolve ${state.activeRecordId}`);
+        const recordDataset = recordsDb[state.activeRecordId];
+        let changesMade = 0;
+
+        recordDataset.forEach(group => {
+            group.rows.forEach(row => {
+                if (row.differing) {
+                    const winPlugin = PLUGINS.find(p => p.isUserPatch) || PLUGINS.find(p => p.isWinner);
+                    const winVal = row.values[winPlugin.id];
+                    Object.keys(row.values).forEach(plug => {
+                        row.values[plug] = winVal;
+                    });
+                    row.differing = false;
+                    changesMade++;
+                }
+            });
+        });
+
+        if (changesMade > 0) {
+            logEvent(`Auto-resolved complete workspace payload: synced ${changesMade} parameters.`);
+            renderCompareGrid();
+            updateConflictMetrics();
+            recalculateITMRecords();
+            updateProblemsTab();
+            showCustomToast("Auto-Resolved", `Synced ${changesMade} conflicts directly to patch winners.`, "success");
+        } else {
+            showCustomToast("Sync Complete", "Record has no active conflicts.", "info");
+        }
+    }
+
+    function updateConflictMetrics() {
+        let activeConflicts = 0;
+        let totalRecordsCount = 0;
+
+        Object.keys(recordsDb).forEach(recKey => {
+            totalRecordsCount++;
+            recordsDb[recKey].forEach(grp => {
+                grp.rows.forEach(row => {
+                    if (row.differing) activeConflicts++;
+                });
+            });
+        });
+
+        document.getElementById('status-bar-conflict-count').innerText = activeConflicts;
+        document.getElementById('stats-conflict-count').innerText = activeConflicts;
+        document.getElementById('stats-total-records').innerText = totalRecordsCount + 120; // adding master records padding
+
+        // Dynamic badges on Tree
+        const keys = ['CO_Bandage', 'HC_CO_Bandage', 'WEAP_10mm', 'WEAP_HuntingRifle', 'AMMO_556'];
+        keys.forEach(k => {
+            const sidebarRecord = document.getElementById(`lo-${k}`);
+            if (sidebarRecord) {
+                let hasConflict = recordsDb[k].some(g => g.rows.some(r => r.differing));
+                const indicator = sidebarRecord.querySelector('span.status-dot');
+                if (indicator) {
+                    indicator.className = `status-dot w-1.5 h-1.5 rounded-full ${hasConflict ? 'bg-rose-500' : 'bg-emerald-500'}`;
+                }
+            }
+        });
+    }
+
+    // Context Menu Logic
+    function showContextMenu(event, rowLabel, pluginId) {
+        state.contextTarget = { rowLabel, pluginId };
+        const menu = document.getElementById('grid-context-menu');
+        menu.style.top = `${event.pageY}px`;
+        menu.style.left = `${event.pageX}px`;
+        menu.classList.remove('hidden');
+    }
+
+    function closeContextMenu() {
+        const menu = document.getElementById('grid-context-menu');
+        menu.classList.add('hidden');
+    }
+
+    function contextAction(actionType) {
+        const { rowLabel, pluginId } = state.contextTarget;
+        if (actionType === 'sync') {
+            quickResolveValue(rowLabel, pluginId);
+        } else if (actionType === 'copy-override') {
+            showCustomToast("Action Executed", `Copied custom patch override payload for: ${rowLabel}`, "success");
+        } else if (actionType === 'edit') {
+            const cellId = `cell-text-${pluginId}-${rowLabel}`;
+            const textEl = document.getElementById(cellId);
+            if (textEl) {
+                const cellVal = textEl.innerText;
+                const cellTd = textEl.closest('td');
+                startInlineEditing(cellTd, rowLabel, pluginId, cellVal);
+            }
+        } else if (actionType === 'reset') {
+            const initialSnapshot = JSON.parse(initialDbSnapshot);
+            const originalRecord = initialSnapshot[state.activeRecordId];
+            let originalValue = null;
+            originalRecord.forEach(grp => {
+                const row = grp.rows.find(r => r.label === rowLabel);
+                if (row) originalValue = row.values[pluginId];
+            });
+            if (originalValue) {
+                const recordDataset = recordsDb[state.activeRecordId];
+                recordDataset.forEach(g => {
+                    const row = g.rows.find(r => r.label === rowLabel);
+                    if (row) {
+                        row.values[pluginId] = originalValue;
+                        const valList = Object.values(row.values);
+                        row.differing = !valList.every(v => v === valList[0]);
+                    }
+                });
+                renderCompareGrid();
+                updateConflictMetrics();
+                recalculateITMRecords();
+                showCustomToast("Reverted", `Reset ${rowLabel} values back to master definitions.`, "info");
+            }
+        } else if (actionType === 'open-master') {
+            showCustomToast("Jumped to Master", `Loaded master layout inside master column definitions.`, "info");
+        } else if (actionType === 'go-to-reference') {
+            goToReference(rowLabel, pluginId);
+        }
+        closeContextMenu();
+    }
+
+    function goToReference(rowLabel, pluginId) {
+        const recordDataset = recordsDb[state.activeRecordId];
+        let cellValue = "";
+        recordDataset.forEach(g => {
+            const row = g.rows.find(r => r.label === rowLabel);
+            if (row) cellValue = row.values[pluginId];
+        });
+
+        // Try to parse out a 6-digit hex FormID like [000462] or just 00008E
+        const match = cellValue.match(/([0-9A-Fa-f]{6})/);
+        if (match && FORM_ID_MAP[match[1]]) {
+            const targetRecord = FORM_ID_MAP[match[1]];
+            openRecordTab(targetRecord);
+            showCustomToast("Reference Found", `Navigated to reference pointer: ${targetRecord}`, "success");
+        } else {
+            showCustomToast("Reference Unresolved", `Could not locate a loaded master record matching a FormID in "${cellValue}".`, "warning");
+        }
+    }
+
+    function toggleActiveBookmark() {
+        if (!state.activeRecordId) return;
+        if (state.bookmarks.includes(state.activeRecordId)) {
+            state.bookmarks = state.bookmarks.filter(b => b !== state.activeRecordId);
+            showCustomToast("Bookmark Removed", `${state.activeRecordId} removed from bookmarks.`, "info");
+        } else {
+            state.bookmarks.push(state.activeRecordId);
+            showCustomToast("Bookmarked", `${state.activeRecordId} pinned to bookmarks.`, "success");
+        }
+        renderBookmarksList();
+    }
+
+    function renderBookmarksList() {
+        const container = document.getElementById('sec-bookmarks');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        document.getElementById('bookmarks-count').innerText = state.bookmarks.length;
+        
+        const btnBookmark = document.getElementById('btn-toggle-bookmark');
+        if (btnBookmark) {
+            if (state.bookmarks.includes(state.activeRecordId)) {
+                btnBookmark.innerHTML = `<i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400 text-amber-400"></i>`;
+            } else {
+                btnBookmark.innerHTML = `<i data-lucide="star" class="w-3.5 h-3.5"></i>`;
+            }
+        }
+
+        if (state.bookmarks.length === 0) {
+            container.innerHTML = `<div class="p-2 text-zinc-600 text-[11px] italic">No bookmarked records.</div>`;
+        } else {
+            state.bookmarks.forEach(tabKey => {
+                const item = document.createElement('div');
+                item.className = "flex items-center justify-between py-1 px-2 rounded cursor-pointer transition-colors text-amber-500 hover:bg-zinc-900/40 hover:text-amber-400";
+                item.innerHTML = `
+                    <span onclick="openRecordTab('${tabKey}')" class="flex items-center space-x-1.5 truncate">
+                        <i data-lucide="star" class="w-3 h-3 fill-amber-500"></i>
+                        <span class="font-mono text-[11px]">${tabKey}</span>
+                    </span>
+                `;
+                container.appendChild(item);
+            });
+        }
+        initializeIcons();
+    }
+
+    function handleGlobalSearch(event) {
+        if (event.key === 'Enter') {
+            const query = event.target.value.trim();
+            if (query === '000462' || query.toLowerCase() === 'weap_10mm') {
+                openRecordTab('WEAP_10mm');
+                showCustomToast("FormID Found", "Loaded WEAP_10mm comparison columns.", "success");
+            } else if (query === '00008e' || query.toLowerCase() === 'co_bandage') {
+                openRecordTab('CO_Bandage');
+                showCustomToast("FormID Found", "Loaded CO_Bandage comparison columns.", "success");
+            } else if (query === '00011d' || query.toLowerCase() === 'hc_co_bandage') {
+                openRecordTab('HC_CO_Bandage');
+                showCustomToast("FormID Found", "Loaded HC_CO_Bandage comparison columns.", "success");
+            } else if (query === '004c10' || query.toLowerCase() === 'weap_huntingrifle') {
+                openRecordTab('WEAP_HuntingRifle');
+                showCustomToast("FormID Found", "Loaded WEAP_HuntingRifle comparison columns.", "success");
+            } else if (query === '001908' || query.toLowerCase() === 'ammo_556') {
+                openRecordTab('AMMO_556');
+                showCustomToast("FormID Found", "Loaded AMMO_556 comparison columns.", "success");
+            } else {
+                showCustomToast("Query Error", `Could not locate active database references for FormID: ${query}`, "info");
+            }
+            event.target.value = '';
+        }
+    }
+
+    function setupShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                const jumpSearch = document.querySelector('input[placeholder^="Jump to FormID"]');
+                if (jumpSearch) {
+                    jumpSearch.focus();
+                    jumpSearch.select();
+                }
+            } else if (e.altKey && e.key === 'p') {
+                e.preventDefault();
+                openPatchWizardModal();
+            } else if (e.key === 'F12') {
+                e.preventDefault();
+                if (state.contextTarget && state.contextTarget.rowLabel) {
+                    goToReference(state.contextTarget.rowLabel, state.contextTarget.pluginId);
+                } else {
+                    showCustomToast("No Target", "Right-click or select a cell first to use Go To Reference.", "info");
+                }
+            } else if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                toggleActiveBookmark();
+            } else if (e.key === 'Escape') {
+                closePatchWizardModal();
+                document.getElementById('keyboard-modal').classList.add('hidden');
+                closeContextMenu();
+            }
+        });
+    }
+
+    function toggleKeyboardModal() {
+        const modal = document.getElementById('keyboard-modal');
+        modal.classList.toggle('hidden');
+    }
+
+    function setActiveDrawerTab(tabId) {
+        state.drawerTab = tabId;
+        ['referenced', 'problems', 'terminal'].forEach(t => {
+            const btn = document.getElementById(`btn-draw-${t}`);
+            const panel = document.getElementById(`draw-panel-${t}`);
+            if (t === tabId) {
+                btn.className = "text-emerald-400 font-semibold border-b border-emerald-500 pb-1 pt-0.5";
+                panel.classList.remove('hidden');
+            } else {
+                btn.className = "text-zinc-500 hover:text-zinc-300 pb-1 pt-0.5";
+                panel.classList.add('hidden');
+            }
+        });
+        initializeIcons();
+    }
+
+    function toggleBottomDrawer() {
+        const drawer = document.getElementById('bottom-drawer');
+        const icon = document.getElementById('drawer-toggle-icon');
+        state.drawerCollapsed = !state.drawerCollapsed;
+        
+        if (state.drawerCollapsed) {
+            drawer.className = "h-7 border-t border-vscode-border bg-vscode-activityBg flex flex-col shrink-0 overflow-hidden";
+            icon.setAttribute('data-lucide', 'chevron-up');
+        } else {
+            drawer.className = "h-48 border-t border-vscode-border bg-vscode-activityBg flex flex-col shrink-0 transition-all duration-200";
+            icon.setAttribute('data-lucide', 'chevron-down');
+        }
+        initializeIcons();
+    }
+
+    function updateReferencedTab() {
+        const container = document.getElementById('referenced-records-list');
+        container.innerHTML = '';
+        const currentRefList = REFERENCED_BY_MAP[state.activeRecordId];
+
+        if (!currentRefList || currentRefList.length === 0) {
+            container.innerHTML = `<div class="text-zinc-600 text-[10px] italic">No reverse pointer reference structures found pointing to this ID.</div>`;
+            return;
+        }
+
+        currentRefList.forEach(ref => {
+            const div = document.createElement('div');
+            div.className = "flex items-center justify-between text-[11px] p-1 bg-zinc-900/60 border border-vscode-border/40 rounded hover:bg-zinc-800 transition-colors";
+            div.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <span class="text-amber-500 font-semibold text-[10px] bg-amber-500/10 px-1 py-0.2 border border-amber-500/20 rounded font-sans">${ref.type}</span>
+                    <span class="text-zinc-300 font-bold">${ref.form}</span>
+                </div>
+                <div class="text-zinc-500 text-[10px]">Reference Source Path: <span class="text-zinc-400 font-semibold">${ref.refField}</span></div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function setResolutionRule(rule) {
+        state.resolutionRule = rule;
+        const btnPriority = document.getElementById('btn-rule-priority');
+        const btnStrict = document.getElementById('btn-rule-strict');
+        const statusRule = document.getElementById('status-bar-rule');
+
+        if (rule === 'priority') {
+            btnPriority.className = "px-2 py-1 rounded text-[10px] font-semibold text-zinc-200 bg-zinc-800";
+            btnStrict.className = "px-2 py-1 rounded text-[10px] font-medium text-zinc-500 hover:text-zinc-300";
+            statusRule.innerText = "Priority (Winner)";
+        } else {
+            btnPriority.className = "px-2 py-1 rounded text-[10px] font-medium text-zinc-500 hover:text-zinc-300";
+            btnStrict.className = "px-2 py-1 rounded text-[10px] font-semibold text-zinc-200 bg-zinc-800";
+            statusRule.innerText = "Strict Manual";
+        }
+        logEvent(`Rules Adjusted: Conflict resolution set to ${rule}`);
+    }
+
+    // ITM Cleaning engine
+    let itmRecordsStore = [];
+
+    function recalculateITMRecords() {
+        itmRecordsStore = [];
+        
+        // Loop through current active datasets
+        Object.keys(recordsDb).forEach(recordKey => {
+            recordsDb[recordKey].forEach(grp => {
+                grp.rows.forEach(row => {
+                    // Check if non-winners are duplicate to the first master element 'maim'
+                    const baseMasterVal = row.values['maim'];
+                    PLUGINS.forEach(p => {
+                        if (p.id !== 'maim' && !p.isWinner && !p.isUserPatch && row.values[p.id] === baseMasterVal) {
+                            itmRecordsStore.push({
+                                recordKey,
+                                rowLabel: row.label,
+                                pluginId: p.id,
+                                pluginName: p.name,
+                                value: baseMasterVal
+                            });
+                        }
+                    });
+                });
+            });
+        });
+
+        const alertBadge = document.getElementById('itm-alert-badge');
+        const listContainer = document.getElementById('itm-list-container');
+        const redundantCount = document.getElementById('itm-redundant-count');
+        const totalOverrides = document.getElementById('itm-total-overrides');
+
+        redundantCount.innerText = itmRecordsStore.length;
+        totalOverrides.innerText = PLUGINS.length * 5; // dynamic scaling
+
+        if (itmRecordsStore.length > 0) {
+            alertBadge.classList.remove('hidden');
+            listContainer.innerHTML = '';
+            itmRecordsStore.forEach((itm, index) => {
+                const item = document.createElement('div');
+                item.className = "p-1.5 bg-zinc-900 border border-vscode-border/50 rounded flex flex-col space-y-0.5 text-[10px]";
+                item.innerHTML = `
+                    <div class="flex justify-between font-mono">
+                        <span class="text-amber-400 font-bold">${itm.recordKey}</span>
+                        <span class="text-zinc-500">${itm.pluginName}</span>
+                    </div>
+                    <div class="flex justify-between items-center text-zinc-500 font-sans text-[9px]">
+                        <span>Field: <strong class="text-zinc-400">${itm.rowLabel}</strong></span>
+                        <span class="text-emerald-500">Duplicate value matching Master</span>
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+        } else {
+            alertBadge.classList.add('hidden');
+            listContainer.innerHTML = `<div class="p-4 text-center text-zinc-600 font-sans italic">Clean. Zero ITM records detected in active layers!</div>`;
+        }
+    }
+
+    function cleanAllITMRecords() {
+        if (itmRecordsStore.length === 0) {
+            showCustomToast("Cleaner Complete", "All modules are already fully optimized with zero ITM redundancies.", "info");
+            return;
+        }
+
+        let cleanedCount = 0;
+        itmRecordsStore.forEach(itm => {
+            const recordDataset = recordsDb[itm.recordKey];
+            recordDataset.forEach(g => {
+                const row = g.rows.find(r => r.label === itm.rowLabel);
+                if (row) {
+                    // In real xEdit, cleaning ITMs deletes the override row from that mod. 
+                    // We simulate this by changing the value indicator and updating.
+                    row.values[itm.pluginId] = "Master Duplicate [Cleaned]";
+                    cleanedCount++;
+                }
+            });
+        });
+
+        logEvent(`ITM Cleaner: Successfully processed and removed ${cleanedCount} redundant overrides.`);
+        recalculateITMRecords();
+        renderCompareGrid();
+        updateConflictMetrics();
+        showCustomToast("ITMs Cleaned", `Cleaned ${cleanedCount} redundant overrides matching Master data.`, "success");
+    }
+
+    // Pascal Interpreter Runner Scripts
+    const PASCAL_TEMPLATES = {
+        'damage-multiplier': `program DamageOverhaul;\nbegin\n  // Multiplies BaseDamage parameters of Weapon values by 1.5x\n  SetWeaponBaseDamageMult(1.50);\nend.`,
+        'clear-workbench-keyword': `program FixCraftingStations;\nbegin\n  // Resets all active WorkbenchKeywords to generic ChemLab keyword\n  UpdateWorkbenchKeyword('WorkbenchChemLab [102158]');\nend.`,
+        'prefix-titles': `program PrefixTitles;\nbegin\n  // Appends prefix [FW_FIXED] directly into TitleString keys\n  PrefixTitleStrings('[FW_FIXED] ');\nend.`
+    };
+
+    function loadPascalTemplate() {
+        const picker = document.getElementById('pascal-script-picker');
+        const editor = document.getElementById('pascal-script-editor');
+        editor.value = PASCAL_TEMPLATES[picker.value] || '';
+    }
+
+    function executePascalScript() {
+        const picker = document.getElementById('pascal-script-picker');
+        const scriptLog = document.getElementById('pascal-script-log');
+        
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        
+        let customLogMsg = '';
+        let targetRecordsModified = 0;
+
+        if (picker.value === 'damage-multiplier') {
+            // Apply actual logic to weapon datasets
+            ['WEAP_10mm', 'WEAP_HuntingRifle'].forEach(wpId => {
+                const weapon = recordsDb[wpId];
+                weapon.forEach(grp => {
+                    const row = grp.rows.find(r => r.label === 'BaseDamage');
+                    if (row) {
+                        Object.keys(row.values).forEach(plug => {
+                            const currentVal = parseInt(row.values[plug]);
+                            if (!isNaN(currentVal)) {
+                                row.values[plug] = String(Math.round(currentVal * 1.5));
+                                targetRecordsModified++;
+                            }
+                        });
+                        row.differing = true; // recalculate diff flag
+                    }
+                });
+            });
+            customLogMsg = `Evaluating BaseDamage mappings... Found weapon FormIDs.<br>[${timeStr}] Done. Modifying weapon damage globally by 1.5x completed successfully (${targetRecordsModified} fields compiled).`;
+        } else if (picker.value === 'clear-workbench-keyword') {
+            const recipe = recordsDb['CO_Bandage'];
+            recipe.forEach(grp => {
+                const row = grp.rows.find(r => r.label === 'WorkbenchKeyword');
+                if (row) {
+                    Object.keys(row.values).forEach(plug => {
+                        row.values[plug] = 'WorkbenchChemLab [102158]';
+                        targetRecordsModified++;
+                    });
+                    row.differing = false;
+                }
+            });
+            customLogMsg = `Parsing WorkbenchKeywords... Reset recipes to target [WorkbenchChemLab [102158]].<br>[${timeStr}] Complete. Processed ${targetRecordsModified} workbench references.`;
+        } else if (picker.value === 'prefix-titles') {
+            Object.keys(recordsDb).forEach(recId => {
+                recordsDb[recId].forEach(grp => {
+                    const row = grp.rows.find(r => r.label === 'TitleString');
+                    if (row) {
+                        Object.keys(row.values).forEach(plug => {
+                            if (!row.values[plug].startsWith('[FW_FIXED]')) {
+                                row.values[plug] = '[FW_FIXED] ' + row.values[plug];
+                                targetRecordsModified++;
+                            }
+                        });
+                        row.differing = true;
+                    }
+                });
+            });
+            customLogMsg = `Prefixing record TitleStrings... Found matching text arrays.<br>[${timeStr}] Complete. Prepended title tags to ${targetRecordsModified} overrides.`;
+        }
+
+        // Output to Script terminal
+        const div = document.createElement('div');
+        div.className = "border-t border-vscode-border pt-1.5 mt-1.5 font-mono text-[10px]";
+        div.innerHTML = `
+            <div class="text-emerald-500">&gt; compile ${picker.value} automation...</div>
+            <div class="text-zinc-500">${customLogMsg}</div>
+        `;
+        scriptLog.appendChild(div);
+        scriptLog.scrollTop = scriptLog.scrollHeight;
+
+        saveStateForUndo(`Pascal Script: ${picker.value}`);
+
+        logEvent(`Pascal script completed on database workspace. Updated ${targetRecordsModified} elements.`);
+        renderCompareGrid();
+        updateConflictMetrics();
+        recalculateITMRecords();
+        updateProblemsTab();
+        showCustomToast("Pascal Compiled", "Automation script ran successfully.", "success");
+    }
+
+    // Dynamic ESL/ESP Patch Generator Wizard
+    function openPatchWizardModal() {
+        document.getElementById('patch-wizard-modal').classList.remove('hidden');
+    }
+
+    function closePatchWizardModal() {
+        document.getElementById('patch-wizard-modal').classList.add('hidden');
+    }
+
+    function generateCustomPatch() {
+        const name = document.getElementById('patch-filename').value.trim();
+        const typeNode = document.querySelector('input[name="patch-type"]:checked');
+        const format = typeNode ? typeNode.value : 'esp';
+        
+        const chkBandage = document.getElementById('chk-rec-bandage').checked;
+        const chkHcBandage = document.getElementById('chk-rec-hcbandage').checked;
+
+        if (!name) {
+            showCustomToast("Error Name", "Please specify a valid patch file name.", "info");
+            return;
+        }
+
+        // Create new plugin record
+        const newPluginId = 'user_patch_' + Date.now();
+        const newPlugin = {
+            id: newPluginId,
+            name: name,
+            isWinner: true,
+            isUserPatch: true
+        };
+
+        // Reset previous custom winners in the PLUGINS array
+        PLUGINS.forEach(p => {
+            if (p.isUserPatch) {
+                p.isWinner = false;
+                p.isUserPatch = false;
+            }
+        });
+
+        // Set fixes as normal override now, new patch will win conflict
+        const fixesPlugin = PLUGINS.find(p => p.id === 'fixes');
+        if (fixesPlugin) fixesPlugin.isWinner = false;
+
+        // Push new patch plugin to load order
+        PLUGINS.push(newPlugin);
+
+        // Inject data into the recordsDb mapping user inputs
+        if (chkBandage) {
+            const bandageRecord = recordsDb['CO_Bandage'];
+            bandageRecord.forEach(grp => {
+                grp.rows.forEach(row => {
+                    // Copies the winning state directly to user patch column
+                    row.values[newPluginId] = row.values['fixes']; 
+                });
+            });
+        }
+
+        if (chkHcBandage) {
+            const hcBandageRecord = recordsDb['HC_CO_Bandage'];
+            hcBandageRecord.forEach(grp => {
+                grp.rows.forEach(row => {
+                    row.values[newPluginId] = row.values['fixes'];
+                });
+            });
+        }
+
+        // Inject empty or base configurations for other records
+        ['WEAP_10mm', 'WEAP_HuntingRifle', 'AMMO_556'].forEach(recKey => {
+            recordsDb[recKey].forEach(grp => {
+                grp.rows.forEach(row => {
+                    row.values[newPluginId] = row.values['fixes'];
+                });
+            });
+        });
+
+        // Add to Sidebar user plugins container
+        const container = document.getElementById('sidebar-user-plugins');
+        const customNode = document.createElement('div');
+        customNode.className = "flex items-center justify-between py-1 px-1.5 rounded hover:bg-zinc-800/40 cursor-pointer text-zinc-300";
+        customNode.innerHTML = `
+            <span class="flex items-center space-x-1.5 truncate">
+                <i data-lucide="file-code" class="w-3.5 h-3.5 text-violet-400 shrink-0"></i>
+                <span class="text-[11px] font-semibold text-violet-400">[NEW] ${name}</span>
+            </span>
+            <span class="text-[8px] px-1 bg-violet-950 border border-violet-800 text-violet-300 rounded uppercase font-bold">${format}</span>
+        `;
+        container.appendChild(customNode);
+
+        // Update plugin counter UI
+        document.getElementById('sidebar-plugin-count').innerText = PLUGINS.length;
+
+        logEvent(`Export Module: Packaging ${format.toUpperCase()} overrides inside '${name}' generated.`);
+        closePatchWizardModal();
+        renderCompareGrid();
+        updateConflictMetrics();
+        recalculateITMRecords();
+        updateProblemsTab();
+        showCustomToast("Patch Created", `Dynamically injected '${name}' as dynamic winner.`, "success");
+    }
+
+    function resetToDefaults() {
+        saveStateForUndo('Reset Defaults');
+        recordsDb = JSON.parse(initialDbSnapshot);
+        PLUGINS = [
+            { id: 'maim', name: 'MAIM.esp', isWinner: false, isUserPatch: false },
+            { id: 'compat', name: 'Fallout4_Combat_Compat.esp', isWinner: false, isUserPatch: false },
+            { id: 's7', name: 'FallenWorld_S7_Overhaul.esp', isWinner: false, isUserPatch: false },
+            { id: 'fixes', name: 'FallenWorld_CraftingFixes.esp', isWinner: true, isUserPatch: false }
+        ];
+        
+        const container = document.getElementById('sidebar-user-plugins');
+        if (container) container.innerHTML = '';
+        document.getElementById('sidebar-plugin-count').innerText = "5";
+
+        logEvent("Database reset back to original load structure.");
+        renderCompareGrid();
+        updateConflictMetrics();
+        updateReferencedTab();
+        recalculateITMRecords();
+        updateProblemsTab();
+        showCustomToast("Reset Master", "Reverted conflict states to initial plugin levels.", "info");
+    }
+
+    function toggleTreeConflictsOnly() {
+        state.treeConflictsOnly = !state.treeConflictsOnly;
+        const btn = document.getElementById('btn-tree-conflicts');
+        if (state.treeConflictsOnly) {
+            btn.classList.add('text-amber-400', 'bg-amber-950/30', 'border-amber-900/60');
+            btn.classList.remove('text-zinc-500', 'bg-zinc-950', 'border-vscode-border');
+            logEvent("Sidebar tree filter enabled: Showing conflicts only.");
+        } else {
+            btn.classList.remove('text-amber-400', 'bg-amber-950/30', 'border-amber-900/60');
+            btn.classList.add('text-zinc-500', 'bg-zinc-950', 'border-vscode-border');
+            logEvent("Sidebar tree filter disabled: Showing all records.");
+        }
+        filterSidebarTree();
+    }
+
+    function filterSidebarTree() {
+        const query = document.getElementById('plugin-search').value.toLowerCase().trim();
+        const recordNodes = document.querySelectorAll('[id^="lo-"]');
+        const pluginNodes = document.querySelectorAll('.plugin-node');
+
+        // Combined logic: Search Query AND Conflict Filter
+        recordNodes.forEach(cNode => {
+            const text = cNode.innerText.toLowerCase();
+            const recordKey = cNode.id.replace('lo-', '');
+            
+            let matchesSearch = !query || text.includes(query);
+            let matchesConflict = true;
+
+            if (state.treeConflictsOnly && recordsDb[recordKey]) {
+                const hasConflict = recordsDb[recordKey].some(g => g.rows.some(r => r.differing));
+                if (!hasConflict) matchesConflict = false;
+            }
+
+            if (matchesSearch && matchesConflict) {
+                cNode.classList.remove('hidden');
+            } else {
+                cNode.classList.add('hidden');
+            }
+        });
+
+        pluginNodes.forEach(pNode => {
+            let hasChildMatch = false;
+            const childRecords = pNode.querySelectorAll('[id^="lo-"]');
+            
+            childRecords.forEach(cNode => {
+                if (!cNode.classList.contains('hidden')) {
+                    hasChildMatch = true;
+                }
+            });
+
+            // If we have a direct plugin name match (and no conflict filter is active forcing us to only show conflict children)
+            let pluginMatchesSearch = !query || pNode.innerText.toLowerCase().includes(query);
+
+            if ((pluginMatchesSearch && !state.treeConflictsOnly) || hasChildMatch) {
+                pNode.classList.remove('hidden');
+            } else {
+                pNode.classList.add('hidden');
+            }
+
+            const subCategories = pNode.querySelectorAll('div[id^="dir-"]');
+            subCategories.forEach(sub => {
+                let subHasChildMatch = false;
+                const subChildRecords = sub.querySelectorAll('[id^="lo-"]');
+                subChildRecords.forEach(scNode => {
+                     if (!scNode.classList.contains('hidden')) subHasChildMatch = true;
+                });
+
+                if (subHasChildMatch) {
+                    sub.classList.remove('hidden');
+                    const arrow = pNode.querySelector(`[id^="arrow-${sub.id}"]`);
+                    if (arrow) arrow.setAttribute('data-lucide', 'chevron-down');
+                } else if (query || state.treeConflictsOnly) {
+                    sub.classList.add('hidden');
+                }
+            });
+        });
+
+        initializeIcons();
+    }
+
+    function setupShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'z') {
+                e.preventDefault();
+                undoLastAction();
+            } else if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                const jumpSearch = document.querySelector('input[placeholder^="Jump to FormID"]');
+                if (jumpSearch) {
+                    jumpSearch.focus();
+                    jumpSearch.select();
+                }
+            } else if (e.altKey && e.key === 'p') {
+                e.preventDefault();
+                openPatchWizardModal();
+            } else if (e.key === 'Escape') {
+                closePatchWizardModal();
+                document.getElementById('keyboard-modal').classList.add('hidden');
+                document.getElementById('settings-modal').classList.add('hidden');
+                closeContextMenu();
+            }
+        });
+    }
+
+    // Dynamic Toast Notification System
+    function showCustomToast(title, message, type = 'info') {
+        const host = document.getElementById('toast-host');
+        if (!host) return;
+
+        const toast = document.createElement('div');
+        
+        let icon = 'info';
+        let colorClass = 'border-sky-500/50 bg-sky-950/80 text-sky-400';
+        
+        if (type === 'success') {
+            icon = 'check-circle';
+            colorClass = 'border-emerald-500/50 bg-emerald-950/80 text-emerald-400';
+        } else if (type === 'warning') {
+            icon = 'alert-triangle';
+            colorClass = 'border-amber-500/50 bg-amber-950/80 text-amber-400';
+        } else if (type === 'error') {
+            icon = 'x-circle';
+            colorClass = 'border-rose-500/50 bg-rose-950/80 text-rose-400';
+        }
+
+        toast.className = `flex items-start space-x-3 p-3 rounded border ${colorClass} backdrop-blur-md shadow-lg transform transition-all duration-300 translate-x-full opacity-0 font-sans pointer-events-auto mb-2`;
+        toast.innerHTML = `
+            <i data-lucide="${icon}" class="w-4 h-4 mt-0.5 shrink-0"></i>
+            <div class="flex-1">
+                <div class="font-bold text-[11px] mb-0.5 text-zinc-100">${title}</div>
+                <div class="text-[10px] text-zinc-300 leading-snug">${message}</div>
+            </div>
+            <button onclick="this.parentElement.remove()" class="text-inherit opacity-50 hover:opacity-100 transition-opacity ml-2">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+        `;
+        
+        host.appendChild(toast);
+        initializeIcons();
+
+        // Animate in
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-x-full', 'opacity-0');
+        });
+
+        // Auto remove
+        setTimeout(() => {
+            toast.classList.add('translate-x-full', 'opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    // --- Antigravity AI Chat Sidebar Implementation ---
+
+    function toggleAiSidebar() {
+        state.aiSidebarOpen = !state.aiSidebarOpen;
+        const aiSidebar = document.getElementById('ai-sidebar');
+        if (state.aiSidebarOpen) {
+            aiSidebar.classList.remove('w-0', 'border-l-0', 'px-0');
+            aiSidebar.classList.add('w-[320px]', 'border-l');
+        } else {
+            aiSidebar.classList.add('w-0', 'border-l-0', 'px-0');
+            aiSidebar.classList.remove('w-[320px]', 'border-l');
+        }
+    }
+
+    function handleAiInputKey(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            submitAiQuery();
+        }
+    }
+
+    function submitAiQuery() {
+        const input = document.getElementById('ai-chat-input');
+        const query = input.value.trim();
+        if (!query) return;
+
+        input.value = '';
+        appendUserMessage(query);
+        
+        // Show thinking state indicator
+        const thinkingId = appendAiMessage(`<div class="flex items-center space-x-1.5 text-indigo-400 py-1">
+            <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
+            <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></span>
+            <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+        </div>`, true);
+
+        // Simulate AI response delay
+        setTimeout(() => {
+            removeAiMessage(thinkingId);
+            generateSimulatedResponse(query);
+        }, 1200);
+    }
+
+    function appendUserMessage(text) {
+        const history = document.getElementById('ai-chat-history');
+        const div = document.createElement('div');
+        div.className = "flex items-start space-x-2 flex-row-reverse space-x-reverse";
+        div.innerHTML = `
+            <div class="w-6 h-6 rounded bg-zinc-800 border border-vscode-border flex items-center justify-center shrink-0 mt-0.5">
+                <i data-lucide="user" class="w-3.5 h-3.5 text-zinc-400"></i>
+            </div>
+            <div class="space-y-1 w-full min-w-0">
+                <div class="text-zinc-500 font-bold text-[10px] text-right">You</div>
+                <div class="bg-indigo-600/20 border border-indigo-500/30 rounded-md p-2.5 text-zinc-200 leading-relaxed shadow-sm break-words">
+                    ${escapeHtml(text)}
+                </div>
+            </div>
+        `;
+        history.appendChild(div);
+        history.scrollTop = history.scrollHeight;
+        initializeIcons();
+    }
+
+    function appendAiMessage(htmlContent, isThinking = false) {
+        const history = document.getElementById('ai-chat-history');
+        const div = document.createElement('div');
+        const id = 'msg-' + Date.now();
+        div.id = id;
+        div.className = "flex items-start space-x-2 transition-all duration-300";
+        div.innerHTML = `
+            <div class="w-6 h-6 rounded bg-indigo-900/50 border border-indigo-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                <i data-lucide="bot" class="w-3.5 h-3.5 text-indigo-400"></i>
+            </div>
+            <div class="space-y-1 w-full min-w-0">
+                <div class="text-zinc-400 font-bold text-[10px]">Antigravity AI</div>
+                <div class="bg-zinc-900 border border-vscode-border rounded-md p-2.5 text-zinc-300 leading-relaxed shadow-sm overflow-x-auto">
+                    ${htmlContent}
+                </div>
+            </div>
+        `;
+        history.appendChild(div);
+        history.scrollTop = history.scrollHeight;
+        initializeIcons();
+        return id;
+    }
+
+    function removeAiMessage(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    }
+
+    function clearAiChat() {
+        const history = document.getElementById('ai-chat-history');
+        history.innerHTML = `
+            <div class="flex items-start space-x-2">
+                <div class="w-6 h-6 rounded bg-indigo-900/50 border border-indigo-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="bot" class="w-3.5 h-3.5 text-indigo-400"></i>
+                </div>
+                <div class="space-y-1 w-full min-w-0">
+                    <div class="text-zinc-400 font-bold text-[10px]">Antigravity AI</div>
+                    <div class="bg-zinc-900 border border-vscode-border rounded-md p-2.5 text-zinc-300 leading-relaxed shadow-sm">
+                        Chat history cleared. How can I help you today?
+                    </div>
+                </div>
+            </div>
+        `;
+        initializeIcons();
+    }
+
+    function escapeHtml(unsafe) {
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+
+    function generateSimulatedResponse(query) {
+        const q = query.toLowerCase();
+        let response = "";
+
+        if (q.includes("conflict") || q.includes("bandage") || q.includes("co_bandage")) {
+            response = `I see you're looking at conflicts. <br><br>The record <code class="bg-zinc-950 border border-vscode-border rounded px-1 text-rose-400 font-mono">CO_Bandage</code> has multiple overrides. I recommend checking the <strong>WorkbenchKeyword</strong> property. <br><br><code>MAIM.esp</code> assigns it to <em>WorkbenchChemLab</em>, while your S7 Overhaul assigns it to a custom utility bench.<br><br><button class="mt-2 flex items-center space-x-1.5 px-2.5 py-1.5 bg-indigo-600/20 border border-indigo-500/40 rounded text-indigo-300 hover:bg-indigo-600/40 transition-colors shadow-sm" onclick="openRecordTab('CO_Bandage')"><i data-lucide="external-link" class="w-3 h-3"></i><span class="font-semibold text-[10px]">Open CO_Bandage Record</span></button>`;
+        } else if (q.includes("script") || q.includes("pascal")) {
+            response = `Here is an example Pascal script to adjust Base Damage. You can run this in the xEdit Terminal panel below.<br><br>
+            <pre class="bg-zinc-950 p-2 rounded border border-vscode-border text-[10px] text-zinc-300 mt-2 font-mono overflow-x-auto leading-relaxed"><code>program AdjustDamage;
+begin
+  // Set all Weapon BaseDamage by 1.25x
+  SetWeaponBaseDamageMult(1.25);
+  AddMessage('Damage adjustments complete.');
+end.</code></pre>`;
+        } else if (q.includes("itm") || q.includes("clean")) {
+            response = `<strong>Identical To Master (ITM)</strong> records are redundant entries that match the base game data exactly. Cleaning them improves stability and reduces plugin load times.<br><br>Click the <i data-lucide="shield-check" class="w-3 h-3 inline text-amber-500 mx-0.5"></i> shield icon on the far-left Activity Bar to open the ITM scanner and batch clean them.`;
+        } else {
+            response = `I can certainly help with that. To give you the best advice, are you trying to resolve a conflict visually on the grid, or do you want me to write a custom Pascal script for bulk modifications?`;
+        }
+
+        appendAiMessage(response);
+    }
+
+    // --- Export / Commit System ---
+    function exportActivePlugin() {
+        const winner = PLUGINS.find(p => p.isUserPatch) || PLUGINS.find(p => p.isWinner);
+        showCustomToast("Exporting Plugin", `Compiling byte arrays and packaging ${winner.name}...`, "info");
+        
+        setTimeout(() => {
+            logEvent(`Successfully compiled and exported plugin: ${winner.name}`);
+            showCustomToast("Export Complete", `${winner.name} has been successfully committed and downloaded to your data folder.`, "success");
+        }, 1500);
+    }
+
+    // --- VS Code Command Palette ---
+    let paletteOpen = false;
+    let cmdSelectedIndex = 0;
+    
+    const SYSTEM_COMMANDS = [
+        { title: "Generate ESL/ESP Patch Plugin", category: "Conflict", action: openPatchWizardModal, icon: "plus-circle", color: "text-violet-400" },
+        { title: "Auto-Resolve Current Tab Conflicts", category: "Conflict", action: autoResolveCurrentRecord, icon: "sparkles", color: "text-emerald-400" },
+        { title: "Clean ITMs (Identical to Master)", category: "System", action: cleanAllITMRecords, icon: "trash-2", color: "text-amber-400" },
+        { title: "Run Script: Multiply Damage (1.5x)", category: "Automation", action: () => { document.getElementById('pascal-script-picker').value = 'damage-multiplier'; setActiveDrawerTab('terminal'); if(state.drawerCollapsed) toggleBottomDrawer(); executePascalScript(); }, icon: "play", color: "text-sky-400" },
+        { title: "Toggle AI Assistant", category: "View", action: toggleAiSidebar, icon: "bot", color: "text-indigo-400" },
+        { title: "Open Settings Workspace", category: "Preferences", action: toggleSettingsModal, icon: "settings", color: "text-zinc-400" },
+        { title: "Reset Workspace to Defaults", category: "System", action: resetToDefaults, icon: "rotate-ccw", color: "text-rose-400" },
+        { title: "Focus: WEAP_10mm Record", category: "Navigation", action: () => openRecordTab('WEAP_10mm'), icon: "crosshair", color: "text-zinc-400" },
+        { title: "Focus: ARMO_CombatChest Record", category: "Navigation", action: () => openRecordTab('ARMO_CombatChest'), icon: "shield", color: "text-zinc-400" },
+        { title: "Toggle Bottom Drawer Console", category: "View", action: toggleBottomDrawer, icon: "terminal", color: "text-zinc-400" }
+    ];
+
+    function toggleCommandPalette() {
+        const modal = document.getElementById('command-palette');
+        const windowEl = document.getElementById('cmd-palette-window');
+        const input = document.getElementById('cmd-input');
+        
+        paletteOpen = !paletteOpen;
+        
+        if (paletteOpen) {
+            modal.classList.remove('hidden');
+            input.value = '>';
+            cmdSelectedIndex = 0;
+            filterCommands();
+            
+            // Animation frames
+            requestAnimationFrame(() => {
+                windowEl.classList.remove('scale-95');
+                windowEl.classList.add('scale-100');
+            });
+            
+            setTimeout(() => { input.focus(); }, 50);
+        } else {
+            windowEl.classList.remove('scale-100');
+            windowEl.classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); }, 150);
+        }
+    }
+
+    function filterCommands() {
+        const query = document.getElementById('cmd-input').value.replace('>', '').toLowerCase().trim();
+        const listContainer = document.getElementById('cmd-list');
+        listContainer.innerHTML = '';
+
+        let filtered = SYSTEM_COMMANDS;
+        if (query) {
+            filtered = SYSTEM_COMMANDS.filter(cmd => 
+                cmd.title.toLowerCase().includes(query) || cmd.category.toLowerCase().includes(query)
+            );
+        }
+
+        if (filtered.length === 0) {
+            listContainer.innerHTML = `<div class="px-4 py-3 text-zinc-500 font-mono italic text-[11px]">No matching commands found.</div>`;
+            return;
+        }
+
+        // Keep index in bounds
+        if (cmdSelectedIndex >= filtered.length) cmdSelectedIndex = 0;
+        if (cmdSelectedIndex < 0) cmdSelectedIndex = filtered.length - 1;
+
+        filtered.forEach((cmd, index) => {
+            const isSelected = index === cmdSelectedIndex;
+            const item = document.createElement('div');
+            item.className = `flex items-center justify-between px-3 py-1.5 cursor-pointer ${isSelected ? 'bg-emerald-900/40 border-l-2 border-emerald-500' : 'hover:bg-zinc-900 border-l-2 border-transparent'}`;
+            
+            item.innerHTML = `
+                <div class="flex items-center space-x-2.5">
+                    <i data-lucide="${cmd.icon}" class="w-3.5 h-3.5 ${cmd.color}"></i>
+                    <span class="${isSelected ? 'text-zinc-200' : 'text-zinc-400'}">${cmd.title}</span>
+                </div>
+                <span class="text-[9px] text-zinc-600 uppercase font-bold tracking-wider">${cmd.category}</span>
+            `;
+            
+            item.onmouseover = () => {
+                cmdSelectedIndex = index;
+                filterCommands(); // Re-render highlights
+            };
+            
+            item.onclick = () => {
+                cmd.action();
+                toggleCommandPalette();
+            };
+            
+            listContainer.appendChild(item);
+        });
+        
+        initializeIcons();
+        
+        // Scroll active item into view
+        const activeItem = listContainer.children[cmdSelectedIndex];
+        if (activeItem) {
+            activeItem.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function handleCommandKey(e) {
+        if (!paletteOpen) return;
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            cmdSelectedIndex++;
+            filterCommands();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            cmdSelectedIndex--;
+            filterCommands();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const query = document.getElementById('cmd-input').value.replace('>', '').toLowerCase().trim();
+            const filtered = SYSTEM_COMMANDS.filter(cmd => 
+                cmd.title.toLowerCase().includes(query) || cmd.category.toLowerCase().includes(query)
+            );
+            if (filtered[cmdSelectedIndex]) {
+                filtered[cmdSelectedIndex].action();
+                toggleCommandPalette();
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            toggleCommandPalette();
+        }
+    }
+
+    // --- Override setupShortcuts to support Command Palette ---
+    function setupShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p') {
+                e.preventDefault();
+                toggleCommandPalette();
+            } else if (e.ctrlKey && e.key === 'z') {
+                e.preventDefault();
+                undoLastAction();
+            } else if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                const jumpSearch = document.querySelector('input[placeholder^="Jump to FormID"]');
+                if (jumpSearch) {
+                    jumpSearch.focus();
+                    jumpSearch.select();
+                }
+            } else if (e.altKey && e.key === 'p') {
+                e.preventDefault();
+                openPatchWizardModal();
+            } else if (e.key === 'F12') {
+                e.preventDefault();
+                if (state.contextTarget && state.contextTarget.rowLabel) {
+                    goToReference(state.contextTarget.rowLabel, state.contextTarget.pluginId);
+                } else {
+                    showCustomToast("No Target", "Right-click or select a cell first to use Go To Reference.", "info");
+                }
+            } else if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                toggleActiveBookmark();
+            } else if (e.key === 'Escape') {
+                closePatchWizardModal();
+                document.getElementById('keyboard-modal').classList.add('hidden');
+                document.getElementById('settings-modal').classList.add('hidden');
+                closeContextMenu();
+                if (paletteOpen) toggleCommandPalette();
+            }
+        });
+    }
+</script>
+</body>
+</html>

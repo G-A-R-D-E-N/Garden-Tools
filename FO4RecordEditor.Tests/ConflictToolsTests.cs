@@ -21,7 +21,7 @@ public class ConflictToolsTests
     // cache), which the get_record unit test never touches. Proves components/conditions collapse
     // to one readable row in the conflict grid instead of exploding into .Component/.Data.* rows.
     [Fact]
-    public void BuildConflictMatrix_CollapsesComponentsAndConditions()
+    public void BuildConflictMatrix_DrillsIntoComponentsAndConditions()
     {
         if (!Available) return;
         MakeExecutor(out var env);
@@ -38,13 +38,14 @@ public class ConflictToolsTests
         matrix.Should().NotBeNull();
         var fields = matrix!.Rows.Select(r => r.Field).ToList();
 
-        // There IS a one-line component/condition row...
+        // The component/condition entries each have a summary row...
         fields.Should().Contain(f => f.StartsWith("Components["));
         fields.Should().Contain(f => f.StartsWith("Conditions["));
-        // ...but NOT the exploded reflection sub-rows under them.
-        fields.Should().NotContain(f => f.StartsWith("Components[") && f.Contains("]."));
-        fields.Should().NotContain(f => f.StartsWith("Conditions[") && f.Contains("]."));
-        // A TranslatedString (Description) shows its text on one row, not [0].Key/[0].Value.
+        // ...AND their sub-fields are now present for xEdit-style drill-down (the UI collapses them
+        // by default and expands on click).
+        fields.Should().Contain(f => f.StartsWith("Components[") && f.Contains("]."));
+        fields.Should().Contain(f => f.StartsWith("Conditions[") && f.Contains("]."));
+        // A TranslatedString (Description) still shows its text on one row, not [0].Key/[0].Value.
         fields.Should().NotContain(f => f.StartsWith("Description["));
     }
 

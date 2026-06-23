@@ -47,6 +47,7 @@ public sealed class ShellViewModel
         // When the AI creates/opens/edits a plugin, show or refresh it in the Explorer tree.
         WriteService.PluginChanged += OnWritePluginChanged;
         WriteService.OutputFolderOverride = Settings.Current.OutputFolder;
+        UpdateOverwriteFolder(Settings.Current.Mo2InstancePath);
         Log.Log(LogCategory.App, LogLevel.Info,
             $"FO4RecordEditor started. Plugin MCP server: {(McpServer.IsRunning ? McpServer.Url : "unavailable")}");
     }
@@ -64,6 +65,8 @@ public sealed class ShellViewModel
         if (s.AiProvider == "claudecode")
             return new ClaudeCodeProvider(s.ClaudeCodePath,
                 McpServer.IsRunning ? McpServer.Url : null, McpServer.ServerName, s.Model);
+        if (s.AiProvider == "gemini")
+            return new GeminiProvider(s.GeminiApiKey, s.GeminiModel, ToolExecutor);   // agentic via plugin tools
         return AiProviderFactory.Create(s);
     }
 
@@ -72,6 +75,7 @@ public sealed class ShellViewModel
     // of getting stuck on a lazy "Loading..." placeholder that only resolves on manual expand.
     private void OnWritePluginChanged(string name)
     {
+        ConflictScanner.InvalidateCache();   // an edit can change who wins -> stale conflict cache
         var app = System.Windows.Application.Current;
         if (app == null) return;
         var env = GameEnvironment;
@@ -138,6 +142,43 @@ public sealed class ShellViewModel
     }
 
     // Build the environment and return its plugin list; the caller picks which to load.
+    // Replace the Explorer tree with a lazy node per plugin. The React frontend reads this via
+    // AppInterop.GetPlugins(); without this the env loads but the tree stays empty (the old WPF
+    // ExplorerPanel used to do this from the returned list, but the WebView2 shell discards it).
+    // Runs on the UI thread (callers await Task.Run, resuming on the WPF SynchronizationContext).
+    // Point new-patch saves at the MO2 instance's overwrite folder (from ModOrganizer.ini) so MO2
+    // auto-loads them — correct for both portable and global instances.
+    private static void UpdateOverwriteFolder(string? instancePath)
+    {
+        WriteService.Mo2OverwriteFolder =
+            string.IsNullOrWhiteSpace(instancePath) ? null
+            : Mo2ProfileLoader.ResolveOverwriteFolder(instancePath);
+    }
+
+    // The plugin list from the last env load, so Refresh can rebuild the tree without reloading.
+    private IReadOnlyList<string> _lastPlugins = System.Array.Empty<string>();
+
+    private void PopulatePluginTree(IReadOnlyList<string> plugins)
+    {
+        _lastPlugins = plugins;
+        ConflictScanner.InvalidateCache();   // a fresh env invalidates the cached conflict scan
+        Plugins.Clear();
+        foreach (var name in plugins)
+            Plugins.Add(MutagenLoader.MakeLazyNode(name));
+    }
+
+    /// <summary>Rebuild the Explorer tree as fresh lazy nodes from the current load order PLUS any
+    /// AI-created/edited plugins, so re-expanding shows the latest edits — without reloading the env
+    /// (which would be slow and discard in-memory edits). Runs on the UI thread.</summary>
+    public void RefreshPluginTree()
+    {
+        var names = _lastPlugins.ToList();
+        foreach (var k in MutagenLoader.EditableMods.Keys)
+            if (!names.Any(n => string.Equals(n, k, System.StringComparison.OrdinalIgnoreCase)))
+                names.Add(k);
+        PopulatePluginTree(names);
+    }
+
     public async Task<List<string>> LoadEnvironmentAsync(IProgress<(string message, double? percent)>? progress = null)
     {
         if (_isLoadingEsp) return new();
@@ -151,6 +192,7 @@ public sealed class ShellViewModel
                     : $"Building Load Order environment from data folder: {dataFolder}");
             var (env, plugins) = await Task.Run(() => MutagenLoader.BuildEnvironment(progress, dataFolder));
             GameEnvironment = env;
+            PopulatePluginTree(plugins);
             Log.Log(LogCategory.App, LogLevel.Info, $"Environment ready: {plugins.Count} plugins.");
             return plugins;
         }
@@ -180,8 +222,10 @@ public sealed class ShellViewModel
             var (env, plugins) = await Task.Run(() =>
                 Mo2ProfileLoader.Load(instancePath, info.Profile, info.GameDataFolder, progress));
             GameEnvironment = env;
+            PopulatePluginTree(plugins);
             Settings.Current.Mo2InstancePath = instancePath;
             Settings.Save();
+            UpdateOverwriteFolder(instancePath);   // new patches save into <instance>\overwrite
             Log.Log(LogCategory.App, LogLevel.Info, $"MO2 environment ready: {plugins.Count} plugins.");
             return plugins;
         }

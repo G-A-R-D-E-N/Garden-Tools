@@ -34,15 +34,17 @@ public static class MutagenLoader
         typeof(long), typeof(ulong), typeof(float), typeof(double),
     };
 
-    public static readonly Dictionary<string, object> LooseMods = new(StringComparer.OrdinalIgnoreCase);
+    // Concurrent: the UI thread and the AI agent thread read/write these at the same time (a tool
+    // call edits while the tree reads). Plain Dictionaries threw "concurrent update corrupted state".
+    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> LooseMods = new(StringComparer.OrdinalIgnoreCase);
 
     // Tracks file paths for loose-opened ESPs so OpenPlugin can reload them as mutable.
-    public static readonly Dictionary<string, string> LooseModPaths = new(StringComparer.OrdinalIgnoreCase);
+    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> LooseModPaths = new(StringComparer.OrdinalIgnoreCase);
 
     // Plugins the AI has opened for editing (mutable). These take priority over the env /
     // loose read-only copies for ALL reads, so edits are immediately visible in the tree and
     // to get_record (hot loading). WriteService registers entries here.
-    public static readonly Dictionary<string, object> EditableMods = new(StringComparer.OrdinalIgnoreCase);
+    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> EditableMods = new(StringComparer.OrdinalIgnoreCase);
 
     // Link cache for the currently loaded environment. Set when an env is built (env load /
     // MO2 profile). Used to resolve FormLinks to human-readable names (EditorID + FULL name)
@@ -89,6 +91,55 @@ public static class MutagenLoader
         catch { return fkStr; }
     }
 
+    // Every concrete Fallout 4 record class (Registration.Name -> the getter interface), reflected
+    // once from the Mutagen assembly. Used to resolve which record types a FormLink may point at,
+    // including broad interfaces (IItemGetter -> Weapon/Armor/Ingestible/...).
+    private static readonly Lazy<List<(string Name, Type Type)>> _fo4Records = new(() =>
+    {
+        var list = new List<(string, Type)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var major = typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter);
+        Type[] types;
+        try { types = typeof(Mutagen.Bethesda.Fallout4.IFallout4ModGetter).Assembly.GetTypes(); }
+        catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray()!; }
+        foreach (var t in types)
+        {
+            if (t is null || !t.IsClass || t.IsAbstract) continue;
+            if (!major.IsAssignableFrom(t)) continue;       // a concrete record class (e.g. Weapon)
+            if (seen.Add(t.Name)) list.Add((t.Name, t));
+        }
+        return list;
+    });
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, string> _refTypesCache = new();
+
+    // Resolve a FormLink property type to (displayLabel, csvOfTargetRecordClasses). The csv is every
+    // concrete record class assignable to the link's target interface, so the picker filter is
+    // correct for both single-type links (Keyword) and broad ones (an "item" link).
+    private static (string? Display, string? Csv) FormLinkInfo(Type t)
+    {
+        foreach (var cand in new[] { t }.Concat(t.GetInterfaces()))
+        {
+            if (!cand.IsGenericType) continue;
+            var args = cand.GetGenericArguments();
+            if (args.Length != 1) continue;
+            var arg = args[0];
+            if (!typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(arg)) continue;
+
+            var n = arg.Name;                                   // "IKeywordGetter"
+            if (n.StartsWith("I", StringComparison.Ordinal)) n = n[1..];
+            if (n.EndsWith("Getter", StringComparison.Ordinal)) n = n[..^6];
+
+            var csv = _refTypesCache.GetOrAdd(arg, target =>
+                string.Join(",", _fo4Records.Value
+                    .Where(r => target.IsAssignableFrom(r.Type))
+                    .Select(r => r.Name)
+                    .OrderBy(x => x, StringComparer.Ordinal)));
+            return (n.Length > 0 ? n : null, string.IsNullOrEmpty(csv) ? null : csv);
+        }
+        return (null, null);
+    }
+
     // ---- per-mod record index (built once, reused for every group/record load) ----
     // Without this, every group expansion re-enumerated the ENTIRE mod (O(allRecords)
     // per group), which hangs on large masters like Fallout4.esm.
@@ -99,7 +150,7 @@ public static class MutagenLoader
         public readonly Dictionary<FormKey, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> ByFormKey = new();
     }
 
-    private static readonly Dictionary<string, ModIndex> _modIndexCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ModIndex> _modIndexCache = new(StringComparer.OrdinalIgnoreCase);
 
     // Resolve a mod by file name. Editable (mutable) copies win so the AI's in-progress
     // edits are what everything reads (hot loading), then the env load order, then loose ESPs.
@@ -163,7 +214,7 @@ public static class MutagenLoader
         return idx;
     }
 
-    public static void InvalidateModIndex(string modName) => _modIndexCache.Remove(modName);
+    public static void InvalidateModIndex(string modName) => _modIndexCache.TryRemove(modName, out _);
 
     public static RecordNode LoadEsp(string espPath, IProgress<(string message, double? percent)>? progress = null)
     {
@@ -397,6 +448,62 @@ public static class MutagenLoader
     public static List<string> GetConflictingPlugins(object? envObj, FormKey fk) =>
         GetRecordContexts(envObj, fk).Select(c => c.plugin).ToList();
 
+    public sealed record RefByDto(string Plugin, string FormKey, string EditorID, string Type);
+
+    /// <summary>Records across the load order whose contained FormLinks point at the given FormKey
+    /// (xEdit's "Referenced By"). Capped to keep an on-demand scan responsive.</summary>
+    public static List<RefByDto> GetReferencedBy(object? envObj, string formKeyStr, int cap = 500)
+    {
+        var result = new List<RefByDto>();
+        if (envObj == null || !FormKey.TryFactory(formKeyStr, out var target)) return result;
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, mod) in AllLoadedMods(envObj))
+        {
+            if (mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4) continue;
+            foreach (var rec in f4.EnumerateMajorRecords())
+            {
+                if (rec.FormKey == target) continue;   // a record referencing itself isn't interesting
+                bool refs = false;
+                foreach (var link in rec.EnumerateFormLinks())
+                    if (link.FormKey == target) { refs = true; break; }
+                if (!refs) continue;
+
+                if (!seen.Add(name + "|" + rec.FormKey)) continue;
+                result.Add(new RefByDto(name, rec.FormKey.ToString(), rec.EditorID ?? "", rec.Registration.Name));
+                if (result.Count >= cap) return result;
+            }
+        }
+        return result;
+    }
+
+    public sealed record ProblemDto(string Severity, string Description);
+
+    /// <summary>Lightweight per-record problems for the winning version: deleted flag and any
+    /// FormLink that doesn't resolve anywhere in the load order (a dangling, crash-risk reference).</summary>
+    public static List<ProblemDto> GetRecordProblems(object? envObj, string formKeyStr)
+    {
+        var result = new List<ProblemDto>();
+        if (envObj == null || !FormKey.TryFactory(formKeyStr, out var fk)) return result;
+
+        var ctx = GetRecordContexts(envObj, fk);
+        if (ctx.Count == 0) return result;
+        var rec = ctx[^1].rec;   // the winning version is what the game uses
+
+        if (rec.IsDeleted)
+            result.Add(new ProblemDto("Error", "Record is flagged DELETED — prefer a disable/override; deletions can crash the game."));
+
+        var cache = LinkCache;
+        var seen = new HashSet<FormKey>();
+        foreach (var link in rec.EnumerateFormLinks())
+        {
+            if (link.FormKey.IsNull || !seen.Add(link.FormKey)) continue;
+            if (cache != null && !cache.TryResolveIdentifier(link.FormKey, out _))
+                result.Add(new ProblemDto("Error", $"Unresolved reference {link.FormKey} — target not found in the load order (crash risk)."));
+        }
+        return result;
+    }
+
     // 4-letter signature -> Mutagen record class name, for filtering EnumerateOverrides by type.
     private static readonly Dictionary<string, string> _sigToClass = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -445,7 +552,7 @@ public static class MutagenLoader
     public static List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>
         GetRecordContexts(object? envObj, FormKey fk)
     {
-        var ordered = new List<(string, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter)>();
+        var ordered = new List<(string plugin, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)>();
         if (envObj == null) return ordered;
         try
         {
@@ -457,6 +564,24 @@ public static class MutagenLoader
                 ordered.Add((ctx.ModKey.FileName.String, ctx.Record));
         }
         catch { }
+
+        // Hot-load AI/in-editor patches: any EditableMods plugin that carries this FormKey is a LIVE
+        // override applied on top of the on-disk load order. If that plugin is already in the env, swap
+        // in the edited record (position preserved); otherwise it's a new patch that wins (loads last).
+        // This is why an AI patch shows up in the conflict view / get_conflicts immediately, without
+        // the user reloading the modlist.
+        foreach (var kv in EditableMods)
+        {
+            try
+            {
+                var idx = GetModIndex(kv.Value, kv.Key);
+                if (!idx.ByFormKey.TryGetValue(fk, out var rec)) continue;
+                int at = ordered.FindIndex(o => string.Equals(o.plugin, kv.Key, StringComparison.OrdinalIgnoreCase));
+                if (at >= 0) ordered[at] = (kv.Key, rec);
+                else ordered.Add((kv.Key, rec));
+            }
+            catch { }
+        }
         return ordered;
     }
 
@@ -479,7 +604,8 @@ public static class MutagenLoader
         var rows = new List<ConflictFieldRow>();
         FlattenConflictRows(root, "", 0, plugins, rows);
 
-        var identityKeys = new[] { "EditorID", "TitleString", "FormKey", "Type", "_HasData" };
+        // Header identity fields first, in xEdit-ish order; Description sits right after FormKey.
+        var identityKeys = new[] { "EditorID", "TitleString", "FormKey", "Description", "Type", "_HasData" };
         var orderedRows = rows.OrderBy(r => {
             int idx = Array.IndexOf(identityKeys, r.Field);
             return idx == -1 ? 999 : idx;
@@ -503,17 +629,27 @@ public static class MutagenLoader
         {
             string sep = child.Key.StartsWith("[") ? "" : (path.Length == 0 ? "" : ".");
             string p = path + sep + child.Key;
-            if (child.Values.Count > 0)
+            bool hasKids = child.Children.Count > 0;
+            // Emit a row for any field with a value OR any container (so arrays like Components and
+            // Conditions get a labeled, collapsible PARENT row instead of orphaned [0]/[1] entries).
+            if (child.Values.Count > 0 || hasKids)
             {
                 var vals = plugins.Select(pl => child.Values.TryGetValue(pl, out var v) ? v : "").ToList();
                 var present = vals.Where(v => v.Length > 0).ToList();
                 bool anyMissing = present.Count < plugins.Count;
                 bool differs = present.Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
-                rows.Add(new ConflictFieldRow { Field = p, DisplayLabel = child.Key, Level = depth, Values = vals, Differs = differs });
+                rows.Add(new ConflictFieldRow
+                {
+                    Field = p, DisplayLabel = child.Key, Level = depth, Values = vals, Differs = differs,
+                    IsSummary = child.IsSummary, HasChildren = hasKids,
+                    EditKind = child.EditKind.ToString(), EnumOptions = child.EnumOptions,
+                    RefType = child.RefType, RefTypes = child.RefTypes,
+                });
             }
-            // Summary nodes (conditions/components) show their one readable row and stop, so the
-            // conflict grid is clean instead of dumping every ParameterOne*/Count/Component sub-row.
-            if (!child.IsSummary) FlattenConflictRows(child, p, depth + 1, plugins, rows);
+            // Recurse into ALL children, including summary entries (conditions/components/effects), so
+            // their sub-fields are present in the grid. The UI collapses a summary's children by
+            // default and expands them on click — xEdit's "double-click the array element" behaviour.
+            FlattenConflictRows(child, p, depth + 1, plugins, rows);
         }
     }
 
@@ -572,6 +708,45 @@ public static class MutagenLoader
                     if (hits.Count >= limit) return hits;
                 }
             }
+        return hits;
+    }
+
+    public sealed record SearchHit(string FormKey, string EditorID, string Type, string Plugin);
+
+    /// <summary>Search every loaded plugin for records whose EditorID or FormID contains the query
+    /// (the record picker). Optional signature filter ("KYWD", "WEAP", …). Winning version per
+    /// FormKey wins (de-duplicated), capped for responsiveness.</summary>
+    public static List<SearchHit> SearchAllRecords(object? envObj, string query, string? typeFilter = null, int limit = 200)
+    {
+        var hits = new List<SearchHit>();
+        if (envObj == null) return hits;
+        query ??= "";
+        var seen = new HashSet<FormKey>();
+        // typeFilter is a comma-separated set of record class names (from a FormLink's valid targets).
+        var filterSet = string.IsNullOrWhiteSpace(typeFilter)
+            ? null
+            : new HashSet<string>(
+                typeFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, mod) in AllLoadedMods(envObj))
+        {
+            var idx = GetModIndex(mod, name);
+            foreach (var kv in idx.BySig)
+            {
+                if (filterSet != null && !filterSet.Contains(kv.Key)) continue;
+                foreach (var r in kv.Value)
+                {
+                    var eid = r.EditorID ?? "";
+                    if (query.Length > 0 &&
+                        !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                        !r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!seen.Add(r.FormKey)) continue;
+                    hits.Add(new SearchHit(r.FormKey.ToString(), eid, kv.Key, name));
+                    if (hits.Count >= limit) return hits;
+                }
+            }
+        }
         return hits;
     }
 
@@ -810,7 +985,17 @@ public static class MutagenLoader
         if (obj is not Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter
             && obj is Mutagen.Bethesda.Plugins.IFormLinkIdentifier topLink)
         {
-            if (parent.IsLeaf) parent.Values[pluginName] = FormatFormLink(topLink);
+            if (parent.IsLeaf)
+            {
+                parent.Values[pluginName] = FormatFormLink(topLink);
+                // A FormLink list item (Categories, Keywords, FormList entries) is editable via the
+                // record picker, same as a FormLink property -- so these are pickable too.
+                if (parent.EditKind != Models.FieldEditKind.Ref)
+                {
+                    parent.EditKind = Models.FieldEditKind.Ref;
+                    (parent.RefType, parent.RefTypes) = FormLinkInfo(obj.GetType());
+                }
+            }
             return;
         }
 
@@ -887,6 +1072,9 @@ public static class MutagenLoader
                 else if (val is Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli)
                 {
                     child.Values[pluginName] = FormatFormLink(fli);
+                    child.EditKind = Models.FieldEditKind.Ref;   // edits via the record picker
+                    if (child.RefType == null)
+                        (child.RefType, child.RefTypes) = FormLinkInfo(prop.PropertyType);
                 }
                 // A TranslatedString (Description, FULL name, ...) is IEnumerable over its localized
                 // strings, so without this it would explode into [0].Key/[0].Value rows. Show its text.

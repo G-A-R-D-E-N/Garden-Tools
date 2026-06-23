@@ -37,30 +37,12 @@ public sealed class ClaudeCodeProvider : IAIProvider
         var prompt = new StringBuilder();
         if (_mcpUrl != null)
         {
-            prompt.AppendLine(
-                $"You have MCP tools to read the user's loaded Bethesda plugins: " +
-                $"mcp__{_mcpServerName}__list_plugins, list_record_types, list_records, " +
-                $"search_records, get_record, get_conflicts, get_winning_record. Use them to ground " +
-                $"every answer in the actual record data. Call list_plugins first if you don't know " +
-                $"what is loaded.\n\n" +
-                $"CONFLICTS: many plugins override the same record; only the one loaded LAST wins and " +
-                $"is what the game uses. Never blame a plugin from a single get_record or the first " +
-                $"override you find. To diagnose any override-driven behaviour, call get_conflicts on " +
-                $"the record to see the full chain and the WINNER, then get_winning_record for the " +
-                $"effective values, and attribute the behaviour to the winning plugin.\n\n" +
-                $"RUNTIME PATCHES: if the plugin records cannot explain a behaviour (e.g. a scrap " +
-                $"recipe, leveled list, or weapon stat that no plugin sets), the cause is usually a " +
-                $"RobCo Patcher config. Call search_robco_configs with the FormID/EditorID/component " +
-                $"name -- those INI files patch records at runtime and are invisible to the plugin " +
-                $"tools. Frameworks like FallenWorld are largely config-driven this way.\n\n" +
-                $"AUTHORING FIXES: you can FINISH a plugin fully -- never tell the user to open " +
-                $"FO4Edit/xEdit manually. To fix a broken record from another mod, call copy_as_override " +
-                $"(source_plugin, id, patch_plugin) to forward it into a patch, then edit the override: " +
-                $"set_field for scalars/FormLinks, set_components for a COBJ's materials (JSON array of " +
-                $"{{component,count}}), set_conditions for a COBJ's availability conditions (JSON array of " +
-                $"{{function,param1,operator,value,runOn,reference}}), add_list_item/remove_list_item for " +
-                $"FormList entries, and delete_record to remove a stub. Finish with save_plugin, and tell " +
-                $"the user to load the patch after the conflicting plugins.\n");
+            // Same guidance the API agent gets (efficiency first), so both paths behave identically.
+            // The tools are exposed to Claude Code as mcp__<server>__<name>.
+            prompt.AppendLine($"Your plugin tools are exposed as mcp__{_mcpServerName}__<name> " +
+                              $"(e.g. mcp__{_mcpServerName}__scan_conflicts).\n");
+            prompt.AppendLine(AiGuidance.System);
+            prompt.AppendLine();
         }
         foreach (var m in messages)
         {
@@ -111,7 +93,8 @@ public sealed class ClaudeCodeProvider : IAIProvider
             psi.ArgumentList.Add("--mcp-config");
             psi.ArgumentList.Add(cfg);
             psi.ArgumentList.Add("--allowedTools");
-            psi.ArgumentList.Add($"mcp__{_mcpServerName}");   // auto-approve this server's tools in -p mode
+            // Auto-approve this server's tools + Read (so pasted/attached images can be viewed) in -p mode.
+            psi.ArgumentList.Add($"mcp__{_mcpServerName} Read");
         }
 
         Process? proc = null;
@@ -138,9 +121,15 @@ public sealed class ClaudeCodeProvider : IAIProvider
 
         using (proc)
         {
-            // Feed the prompt via stdin, then close so the CLI starts generating.
-            await proc.StandardInput.WriteAsync(prompt.ToString());
-            proc.StandardInput.Close();
+            // Write the prompt to stdin on a BACKGROUND task so we read stdout concurrently. Writing the
+            // whole prompt first and only then reading deadlocks on a large prompt (a long chat): the CLI
+            // fills its stdout pipe — which we aren't draining yet — and stops reading stdin, while we're
+            // still blocked writing stdin. Both wait forever and the chat appears stuck on "thinking…".
+            var writeTask = Task.Run(async () =>
+            {
+                try { await proc.StandardInput.WriteAsync(prompt.ToString()); proc.StandardInput.Close(); }
+                catch { /* the CLI may exit before we finish writing; ignore */ }
+            });
 
             string? line;
             while ((line = await proc.StandardOutput.ReadLineAsync(ct)) != null)
@@ -148,6 +137,7 @@ public sealed class ClaudeCodeProvider : IAIProvider
                     yield return chunk;
 
             await proc.WaitForExitAsync(ct);
+            try { await writeTask; } catch { /* ignore */ }
 
             if (proc.ExitCode != 0)
             {

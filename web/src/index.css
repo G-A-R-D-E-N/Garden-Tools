@@ -1,0 +1,125 @@
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d30;
+  --bg-hover: #2a2d2e;
+  --border-color: #3f3f46;
+  
+  --text-primary: #cccccc;
+  --text-secondary: #888888;
+  --text-highlight: #f44747;
+  --text-identical: #89d185;
+
+  /* Conflict Colors */
+  --conflict-green: #234b23;
+  --conflict-yellow: #5c5321;
+  --conflict-orange: #7b4b1a;
+  --conflict-purple: #412a63;
+  --conflict-red: #662222;
+  --conflict-empty: #1e1e1e;
+
+  --accent-color: #0e639c;
+  --accent-hover: #1177bb;
+  --accent-success: #2e7d32;
+
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.glass-panel {
+  background: rgba(37, 37, 38, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.button {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.button:hover {
+  background: var(--bg-hover);
+  border-color: #555;
+}
+
+.button-primary {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: white;
+}
+.button-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.button-success {
+  background: var(--accent-success);
+  border-color: var(--accent-success);
+  color: white;
+}
+.button-success:hover {
+  background: #388e3c;
+  border-color: #388e3c;
+}
+
+input, select {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: inherit;
+}
+input:focus, select:focus {
+  outline: 1px solid var(--accent-color);
+  border-color: var(--accent-color);
+}

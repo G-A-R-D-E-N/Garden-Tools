@@ -1,0 +1,210 @@
+import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
+import './SettingsModal.css';
+
+interface Settings {
+  AiProvider: string;
+  AnthropicApiKey: string;
+  Model: string;
+  GeminiApiKey: string;
+  GeminiModel: string;
+  ClaudeCodePath: string;
+  OllamaUrl: string;
+  OllamaModel: string;
+  OutputFolder: string;
+  DataFolder: string;
+  Mo2InstancePath?: string;
+}
+
+const host = () => window.chrome?.webview?.hostObjects?.settings;
+
+// Known Claude models. Sonnet 4.6 is the recommended default — best balance for agentic plugin work.
+const MODELS = [
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 — Recommended (best balance)' },
+  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 — Most capable' },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 — Fastest / cheapest' },
+];
+
+const GEMINI_MODELS = [
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash — Recommended (fast, tool-use)' },
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro — Most capable' },
+  { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+];
+
+export default function SettingsModal({ onClose }: { onClose: () => void }) {
+  const [s, setS] = useState<Settings | null>(null);
+  const [status, setStatus] = useState('');
+  const [claudeTest, setClaudeTest] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      const h = host();
+      if (!h) { setStatus('Settings bridge unavailable.'); return; }
+      try { setS(JSON.parse(await h.GetSettings())); }
+      catch (e: any) { setStatus('Failed to load settings: ' + (e?.message || e)); }
+    })();
+  }, []);
+
+  const set = (k: keyof Settings, v: string) => setS(prev => (prev ? { ...prev, [k]: v } : prev));
+
+  const save = async () => {
+    const h = host();
+    if (!h || !s) return;
+    setStatus('Saving…');
+    try { setStatus(await h.SaveSettings(JSON.stringify(s))); }
+    catch (e: any) { setStatus('Save failed: ' + (e?.message || e)); }
+  };
+
+  const browse = async (key: keyof Settings, title: string) => {
+    const h = host();
+    if (!h || !s) return;
+    const path = await h.BrowseFolder(title, (s[key] as string) || '');
+    if (path) set(key, path);
+  };
+
+  const testClaude = async () => {
+    const h = host();
+    if (!h || !s) return;
+    setClaudeTest('Testing…');
+    try { setClaudeTest(await h.TestClaude(s.ClaudeCodePath || '')); }
+    catch (e: any) { setClaudeTest('✗ ' + (e?.message || e)); }
+  };
+
+  return (
+    <div className="settings-overlay" onClick={onClose}>
+      <div className="settings-modal" onClick={e => e.stopPropagation()}>
+        <div className="settings-header">
+          <h2>Settings</h2>
+          <button className="settings-close" onClick={onClose} title="Close"><X size={18} /></button>
+        </div>
+
+        {!s ? (
+          <div className="settings-body"><p className="settings-status">{status || 'Loading…'}</p></div>
+        ) : (
+          <>
+            <div className="settings-body">
+              <label className="settings-field">
+                <span>AI Provider</span>
+                <select value={s.AiProvider} onChange={e => set('AiProvider', e.target.value)}>
+                  <option value="anthropic">Claude (Anthropic API)</option>
+                  <option value="claudecode">Claude Code (CLI)</option>
+                  <option value="gemini">Gemini (Google API)</option>
+                  <option value="ollama">Ollama (local)</option>
+                </select>
+              </label>
+
+              {(s.AiProvider === 'anthropic' || s.AiProvider === 'claudecode') && (() => {
+                const known = MODELS.some(m => m.id === s.Model);
+                return (
+                  <label className="settings-field">
+                    <span>Model</span>
+                    <select
+                      value={known ? s.Model : '__custom__'}
+                      onChange={e => set('Model', e.target.value === '__custom__' ? '' : e.target.value)}
+                    >
+                      {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                      <option value="__custom__">Custom…</option>
+                    </select>
+                    {!known && (
+                      <input value={s.Model} onChange={e => set('Model', e.target.value)}
+                        placeholder="model id (e.g. claude-opus-4-8)" />
+                    )}
+                  </label>
+                );
+              })()}
+
+              {s.AiProvider === 'anthropic' && (
+                <label className="settings-field">
+                  <span>Anthropic API Key</span>
+                  <input type="password" value={s.AnthropicApiKey}
+                    onChange={e => set('AnthropicApiKey', e.target.value)} placeholder="sk-ant-…" />
+                </label>
+              )}
+
+              {s.AiProvider === 'gemini' && (
+                <>
+                  {(() => {
+                    const known = GEMINI_MODELS.some(m => m.id === s.GeminiModel);
+                    return (
+                      <label className="settings-field">
+                        <span>Gemini Model</span>
+                        <select
+                          value={known ? s.GeminiModel : '__custom__'}
+                          onChange={e => set('GeminiModel', e.target.value === '__custom__' ? '' : e.target.value)}
+                        >
+                          {GEMINI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                          <option value="__custom__">Custom…</option>
+                        </select>
+                        {!known && (
+                          <input value={s.GeminiModel} onChange={e => set('GeminiModel', e.target.value)}
+                            placeholder="model id (e.g. gemini-2.0-flash)" />
+                        )}
+                      </label>
+                    );
+                  })()}
+                  <label className="settings-field">
+                    <span>Gemini API Key</span>
+                    <input type="password" value={s.GeminiApiKey}
+                      onChange={e => set('GeminiApiKey', e.target.value)} placeholder="AIza…" />
+                  </label>
+                </>
+              )}
+
+              {s.AiProvider === 'claudecode' && (
+                <>
+                  <label className="settings-field">
+                    <span>Claude Code Path</span>
+                    <input value={s.ClaudeCodePath} onChange={e => set('ClaudeCodePath', e.target.value)} placeholder="claude" />
+                  </label>
+                  <div className="settings-inline">
+                    <button className="settings-btn" onClick={testClaude}>Test CLI</button>
+                    <span className="settings-test">{claudeTest}</span>
+                  </div>
+                </>
+              )}
+
+              {s.AiProvider === 'ollama' && (
+                <>
+                  <label className="settings-field">
+                    <span>Ollama URL</span>
+                    <input value={s.OllamaUrl} onChange={e => set('OllamaUrl', e.target.value)} />
+                  </label>
+                  <label className="settings-field">
+                    <span>Ollama Model</span>
+                    <input value={s.OllamaModel} onChange={e => set('OllamaModel', e.target.value)} />
+                  </label>
+                </>
+              )}
+
+              <hr className="settings-divider" />
+
+              <label className="settings-field">
+                <span>Output Folder <em>(AI-authored plugins)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.OutputFolder} onChange={e => set('OutputFolder', e.target.value)} />
+                  <button className="settings-btn" onClick={() => browse('OutputFolder', 'Choose output folder for AI-authored plugins')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>Data Folder <em>(Load Env override — blank = auto-detect)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.DataFolder} onChange={e => set('DataFolder', e.target.value)} />
+                  <button className="settings-btn" onClick={() => browse('DataFolder', 'Choose the game Data folder to load plugins from')}>Browse</button>
+                </div>
+              </label>
+            </div>
+
+            <div className="settings-footer">
+              <span className="settings-status">{status}</span>
+              <div className="settings-actions">
+                <button className="settings-btn" onClick={onClose}>Cancel</button>
+                <button className="settings-btn primary" onClick={save}>Save</button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -4,8 +4,9 @@ using System.Runtime.CompilerServices;
 
 namespace FO4RecordEditor.Models;
 
-/// <summary>How the value cell should be edited: a free textbox, a checkbox (bool), or a dropdown (enum).</summary>
-public enum FieldEditKind { Text, Bool, Enum }
+/// <summary>How the value cell should be edited: a free textbox, a checkbox (bool), a dropdown
+/// (enum), or a record picker (Ref — a FormLink to another record).</summary>
+public enum FieldEditKind { Text, Bool, Enum, Ref }
 
 public class RecordNode : INotifyPropertyChanged
 {
@@ -24,6 +25,12 @@ public class RecordNode : INotifyPropertyChanged
     // (xEdit-style), everything else as a textbox. Set by the walker from the field's CLR type.
     public FieldEditKind EditKind { get; set; } = FieldEditKind.Text;
     public string[]? EnumOptions { get; set; }
+
+    // For a FormLink (EditKind == Ref): a short display label for the target (e.g. "Keyword").
+    public string? RefType { get; set; }
+    // Comma-separated list of EVERY concrete record class the link may point at (e.g. an "item"
+    // link -> "Ammunition,Armor,Ingestible,MiscItem,Weapon,..."). The picker filters on this set.
+    public string? RefTypes { get; set; }
 
     // True for a record row in the Explorer tree. Records are shown as leaves there (their
     // fields live in the center property grid), so the tree binds TreeChildren, not Children.

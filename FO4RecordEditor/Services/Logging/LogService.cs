@@ -17,6 +17,8 @@ public sealed class LogService
         var entry = new LogEntry(DateTime.Now, level, cat, message, detail);
         Entries.Add(entry);
         EntryAdded?.Invoke(entry);
+        // Mirror every entry to the on-disk debug log so the full picture survives a crash/restart.
+        DebugLog.Write(level.ToString(), cat.ToString(), message, detail);
     }
 
     public IReadOnlyList<LogEntry> Filter(LogCategory? cat, LogLevel minLevel) =>

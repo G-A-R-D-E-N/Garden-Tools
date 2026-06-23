@@ -17,8 +17,23 @@ public static class ConflictScanner
         "DLCUltraHighResolution.esm",
     };
 
+    // The full load-order scan is expensive, so cache it and reuse for the UI, the tree tinting, and
+    // the AI's scan_conflicts tool. Invalidated on env (re)load and whenever a plugin is edited.
+    private static List<ConflictEntry>? _cache;
+    private static readonly object _cacheLock = new();
+    public static bool HasCache => _cache != null;
+    public static void InvalidateCache() { lock (_cacheLock) _cache = null; }
+
+    /// <summary>Cached scan: scans once, then returns the same list until invalidated. Serialized so
+    /// the UI's Scan Conflicts button and the AI's scan_conflicts tool can't both scan at once.</summary>
+    public static List<ConflictEntry> ScanCached(object env, Action<string>? progress = null)
+    {
+        lock (_cacheLock)
+            return _cache ??= Scan(env, progress);
+    }
+
     public static Task<List<ConflictEntry>> ScanAsync(object env, Action<string>? progress = null) =>
-        Task.Run(() => Scan(env, progress));
+        Task.Run(() => ScanCached(env, progress));
 
     public static List<ConflictEntry> Scan(object env, Action<string>? progress = null)
     {
@@ -29,6 +44,17 @@ public static class ConflictScanner
             dynamic ld = l;
             if (ld.Mod is Mutagen.Bethesda.Fallout4.IFallout4ModGetter m)
                 order.Add(((string)ld.ModKey.FileName.String, m));
+        }
+
+        // Hot-load AI/in-editor patches: an EditableMods plugin replaces its on-disk version in place
+        // (so its edits count) or, if new, is appended as the last (winning) plugin. This makes a
+        // freshly-authored patch show up in the conflict scan without reloading the modlist.
+        foreach (var kv in FO4RecordEditor.Services.MutagenLoader.EditableMods)
+        {
+            if (kv.Value is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter em) continue;
+            int at = order.FindIndex(o => string.Equals(o.name, kv.Key, StringComparison.OrdinalIgnoreCase));
+            if (at >= 0) order[at] = (kv.Key, em);
+            else order.Add((kv.Key, em));
         }
 
         // Pass 1 (cheap): which FormKeys are touched by 2+ distinct plugins?

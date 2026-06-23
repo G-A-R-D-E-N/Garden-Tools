@@ -6,7 +6,9 @@ public sealed class AppSettings
     // Default to a current model. claude-3-7-sonnet was retired (Feb 2026) and 404s on the API /
     // is rejected by the CLI. A full id works for both the Anthropic API and the Claude Code CLI.
     public string Model { get; set; } = "claude-opus-4-8";
-    public string AiProvider { get; set; } = "anthropic";   // anthropic | claudecode | ollama
+    public string AiProvider { get; set; } = "anthropic";   // anthropic | claudecode | gemini | ollama
+    public string GeminiApiKey { get; set; } = "";
+    public string GeminiModel { get; set; } = "gemini-2.0-flash";
     public string OllamaUrl { get; set; } = "http://localhost:11434";
     public string OllamaModel { get; set; } = "llama3.1";
     public string ClaudeCodePath { get; set; } = "claude";  // CLI on PATH, or full path
