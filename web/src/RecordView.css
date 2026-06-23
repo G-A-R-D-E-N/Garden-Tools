@@ -109,14 +109,78 @@ td.rv-section {
   text-transform: uppercase; color: var(--text-secondary); font-weight: 700; padding: 5px 8px;
 }
 
-/* xEdit conflict TEXT colors (muted). Identical-to-master is dimmed; conflicts pop. */
+/* Status-driven cell coloring (backend Statuses, commit C1). Status is shown with a BACKGROUND
+   TINT plus readable text so real conflicts pop on the deep-dark surface. Identical-to-master
+   recedes (dim, no tint); win/lose are clearly highlighted so the eye finds them fast. */
 .rv-cell { font-family: 'JetBrains Mono', monospace; cursor: default; }
-.rv-c-none      { color: #5a5a5a; }
-.rv-c-identical { color: #7c7c7c; }                 /* dim gray — the quiet majority */
-.rv-c-master    { color: #9a85b0; }                 /* muted purple */
-.rv-c-override  { color: #6a9b78; }                 /* muted green */
-.rv-c-win       { color: #c79a5e; font-weight: 600; } /* muted amber — winner */
-.rv-c-lose      { color: #b07a7a; }                 /* muted red — overridden */
+
+/* Field absent / not defined in this plugin - no tint, very dim text. */
+.rv-c-notdefined,
+.rv-c-none      { color: var(--text-muted); }
+
+/* Identical to the winning value - recedes (dim text, no tint). */
+.rv-c-identical { color: var(--text-muted); }
+
+/* Master record - subtle purple tint. */
+.rv-c-master    { background: color-mix(in srgb, var(--conflict-purple) 50%, transparent); color: var(--text-primary); }
+
+/* Sole definer - subtle neutral tint. */
+.rv-c-only      { background: color-mix(in srgb, var(--bg-hover) 70%, transparent); color: var(--text-primary); }
+
+/* Override that matches the winner (last in chain) - subtle green tint. */
+.rv-c-override  { background: color-mix(in srgb, var(--status-base) 14%, transparent); color: var(--text-primary); }
+
+/* The value the game uses - amber/orange tint, slightly bold. Must stand out. */
+.rv-c-win {
+  background: color-mix(in srgb, var(--status-warning) 26%, transparent);
+  box-shadow: inset 2px 0 0 var(--status-warning);
+  color: var(--text-primary); font-weight: 600;
+}
+
+/* Overridden / losing value - red tint so it is obvious it is being replaced. */
+.rv-c-lose {
+  background: color-mix(in srgb, var(--status-changed) 20%, transparent);
+  color: var(--text-primary);
+}
+
+/* Winner marker icon sits just before the value. */
+.rv-win-icon {
+  color: var(--status-warning); margin-right: 4px;
+  vertical-align: -1px; flex: 0 0 auto;
+}
+
+/* Record-level conflict rollup pill (matrix.Level), shown in the breadcrumb. */
+.rv-lvl-badge {
+  margin-left: 8px; font-size: 9px; letter-spacing: 0.4px;
+  font-family: 'Inter', sans-serif; font-weight: 700;
+  border-radius: var(--radius-sm); padding: 1px 7px;
+  border: 1px solid transparent; vertical-align: middle;
+}
+.rv-lvl-noconflict {
+  color: var(--status-ok);
+  background: color-mix(in srgb, var(--status-ok) 16%, transparent);
+  border-color: color-mix(in srgb, var(--status-ok) 40%, transparent);
+}
+.rv-lvl-override {
+  color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 16%, transparent);
+  border-color: color-mix(in srgb, var(--status-warning) 40%, transparent);
+}
+.rv-lvl-conflict {
+  color: var(--status-changed);
+  background: color-mix(in srgb, var(--status-changed) 16%, transparent);
+  border-color: color-mix(in srgb, var(--status-changed) 40%, transparent);
+}
+.rv-lvl-critical {
+  color: var(--chip-6);
+  background: color-mix(in srgb, var(--chip-6) 20%, transparent);
+  border-color: color-mix(in srgb, var(--chip-6) 50%, transparent);
+}
+.rv-lvl-onlyone {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-secondary) 12%, transparent);
+  border-color: var(--border-color);
+}
 
 .rv-empty { padding: 24px; color: var(--text-secondary); font-family: 'Inter', sans-serif; }
 

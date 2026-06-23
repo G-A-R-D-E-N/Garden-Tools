@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Folder, ChevronRight, ChevronDown, Filter, EyeOff, Pencil, Copy, Save, Trash2,
-  Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain,
+  Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown,
 } from 'lucide-react';
 import type { ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem } from './backend';
 import RecordPicker from './RecordPicker';
@@ -13,16 +13,17 @@ const back = () => window.chrome?.webview?.hostObjects?.backend;
 // named container fields (Conditions, Components, Model) stay expanded so their entries show.
 const defaultExpanded = (r: ConflictFieldRow) => !(r.IsSummary || r.DisplayLabel.startsWith('['));
 
-// xEdit-style per-cell conflict status -> drives the TEXT color (background stays flat). The common
+// xEdit-style per-cell conflict status. The backend now emits real status per cell (see resolveStatus);
+// this JS heuristic is the defensive fallback for older data that lacks Statuses. The common
 // "identical to master" case is dimmed so the eye is drawn to the few real conflicts.
-type Status = 'none' | 'identical' | 'master' | 'override' | 'win' | 'lose';
+type Status = 'notdefined' | 'none' | 'identical' | 'master' | 'override' | 'win' | 'lose' | 'only';
 function cellStatus(vals: string[], idx: number): Status {
   const me = vals[idx] ?? '';
-  if (me === '') return 'none';
+  if (me === '') return 'notdefined';
   const present = vals.filter(v => v !== '');
   let winner = -1;
   for (let i = vals.length - 1; i >= 0; i--) { if (vals[i] !== '') { winner = i; break; } }
-  if (present.length <= 1) return 'override';            // only this plugin defines it
+  if (present.length <= 1) return 'only';                // only this plugin defines it
   const allSame = present.every(v => v === present[0]);
   if (allSame) return idx === 0 ? 'master' : 'identical';
   if (idx === winner) return 'win';                      // the value the game uses
@@ -30,6 +31,31 @@ function cellStatus(vals: string[], idx: number): Status {
   if (me === vals[winner]) return 'override';            // matches the winner, just not last
   return 'lose';                                         // overridden / hidden
 }
+
+// Prefer the backend-computed status (commit C1); fall back to the JS heuristic only when Statuses
+// is missing/empty so older matrices still render with colour.
+function resolveStatus(r: ConflictFieldRow, idx: number): Status {
+  const s = r.Statuses?.[idx];
+  if (s) return s as Status;
+  return cellStatus(r.Values, idx);
+}
+
+// Severity filter levels, ordered by how strict they are. "all" keeps every row.
+type SeverityFilter = 'all' | 'override' | 'conflict' | 'critical';
+const SEVERITY_SETS: Record<Exclude<SeverityFilter, 'all'>, Set<string>> = {
+  override: new Set(['override', 'conflict', 'critical']),
+  conflict: new Set(['conflict', 'critical']),
+  critical: new Set(['critical']),
+};
+
+// Record-level rollup badge styling (Level from the matrix).
+const LEVEL_BADGES: Record<string, { label: string; cls: string }> = {
+  noconflict: { label: 'No Conflict', cls: 'rv-lvl-noconflict' },
+  override:   { label: 'Override', cls: 'rv-lvl-override' },
+  conflict:   { label: 'Conflict', cls: 'rv-lvl-conflict' },
+  critical:   { label: 'Critical', cls: 'rv-lvl-critical' },
+  onlyone:    { label: 'Single Record', cls: 'rv-lvl-onlyone' },
+};
 
 interface Menu { x: number; y: number; row: ConflictFieldRow; col: number; }
 interface Edit { field: string; col: number; }
@@ -43,9 +69,8 @@ export default function RecordView(
 ) {
   const [filter, setFilter] = useState('');
   const [onlyDiffing, setOnlyDiffing] = useState(false);
-  // Conflict-status filter: 'all' or one of the per-cell statuses. When set, keep only rows that
-  // have at least one cell of that status across the plugin columns.
-  const [statusFilter, setStatusFilter] = useState<'all' | 'win' | 'lose' | 'override' | 'identical'>('all');
+  // Severity filter (driven by backend row Severity): keep rows whose Severity meets the threshold.
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<Menu | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -93,12 +118,9 @@ export default function RecordView(
   const matched = useMemo(() => matrix.Rows.filter(r => {
     if (onlyDiffing && !r.Differs) return false;
     if (f && !(r.DisplayLabel || r.Field).toLowerCase().includes(f)) return false;
-    if (statusFilter !== 'all') {
-      const hit = r.Values.some((_, ci) => cellStatus(r.Values, ci) === statusFilter);
-      if (!hit) return false;
-    }
+    if (severityFilter !== 'all' && !SEVERITY_SETS[severityFilter].has(r.Severity ?? 'none')) return false;
     return true;
-  }), [matrix, f, onlyDiffing, statusFilter]);
+  }), [matrix, f, onlyDiffing, severityFilter]);
 
   const rows = useMemo(() => {
     if (filtering) return matched;
@@ -260,15 +282,14 @@ export default function RecordView(
         </button>
         <select
           className="rv-status-filter"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
-          title="Show only rows that have a cell of this conflict status"
+          value={severityFilter}
+          onChange={e => setSeverityFilter(e.target.value as SeverityFilter)}
+          title="Filter rows by conflict severity"
         >
-          <option value="all">All statuses</option>
-          <option value="win">Winning</option>
-          <option value="lose">Overridden (losing)</option>
-          <option value="override">Override (sole/last)</option>
-          <option value="identical">Identical to master</option>
+          <option value="all">All rows</option>
+          <option value="override">Conflicts (override+)</option>
+          <option value="conflict">Real conflicts (conflict+)</option>
+          <option value="critical">Critical only</option>
         </select>
         {status && <span className="rv-status">{status}</span>}
       </div>
@@ -281,6 +302,10 @@ export default function RecordView(
         <span className="rv-bc-cat">{matrix.Type}</span>
         <ChevronRight size={11} />
         <span className="rv-bc-rec">{matrix.EditorID || matrix.FormKey}</span>
+        {(() => {
+          const badge = LEVEL_BADGES[matrix.Level];
+          return badge ? <span className={`rv-lvl-badge ${badge.cls}`}>{badge.label}</span> : null;
+        })()}
       </div>
 
       {/* Comparison grid */}
@@ -317,7 +342,7 @@ export default function RecordView(
                 </td>
                 {matrix.Plugins.map((_, ci) => {
                   const editing = edit && edit.field === r.Field && edit.col === ci;
-                  const st = cellStatus(r.Values, ci);
+                  const st = resolveStatus(r, ci);
                   return (
                     <td
                       key={ci}
@@ -325,6 +350,7 @@ export default function RecordView(
                       onDoubleClick={() => !r.HasChildren && startEdit(r, ci)}
                       onContextMenu={e => { if (!r.HasChildren) { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); } }}
                     >
+                      {st === 'win' && <Crown size={10} className="rv-win-icon" />}
                       {editing ? renderEditor(r, ci) : r.Values[ci]}
                     </td>
                   );
