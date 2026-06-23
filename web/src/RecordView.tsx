@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Folder, ChevronRight, ChevronDown, Filter, EyeOff, Pencil, Copy, Save, Trash2,
-  Link2, AlertTriangle,
+  Link2, AlertTriangle, Hash, Minimize2, Eraser,
 } from 'lucide-react';
 import type { ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem } from './backend';
 import RecordPicker from './RecordPicker';
@@ -39,6 +39,9 @@ export default function RecordView(
 ) {
   const [filter, setFilter] = useState('');
   const [onlyDiffing, setOnlyDiffing] = useState(false);
+  // Conflict-status filter: 'all' or one of the per-cell statuses. When set, keep only rows that
+  // have at least one cell of that status across the plugin columns.
+  const [statusFilter, setStatusFilter] = useState<'all' | 'win' | 'lose' | 'override' | 'identical'>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<Menu | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -86,8 +89,12 @@ export default function RecordView(
   const matched = useMemo(() => matrix.Rows.filter(r => {
     if (onlyDiffing && !r.Differs) return false;
     if (f && !(r.DisplayLabel || r.Field).toLowerCase().includes(f)) return false;
+    if (statusFilter !== 'all') {
+      const hit = r.Values.some((_, ci) => cellStatus(r.Values, ci) === statusFilter);
+      if (!hit) return false;
+    }
     return true;
-  }), [matrix, f, onlyDiffing]);
+  }), [matrix, f, onlyDiffing, statusFilter]);
 
   const rows = useMemo(() => {
     if (filtering) return matched;
@@ -161,6 +168,37 @@ export default function RecordView(
     catch (e: any) { setStatus('Delete failed: ' + (e?.message || e)); }
   };
 
+  const renumberFormId = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    const cur = matrix.FormKey.split(':')[0];
+    const next = window.prompt(`New FormID for ${matrix.EditorID || matrix.FormKey} in ${plug} (6-digit hex):`, cur);
+    if (!next) return;
+    setStatus('Renumbering…');
+    try { setStatus(await b.RenumberFormId(plug, matrix.FormKey, next)); await onReload(); }
+    catch (e: any) { setStatus('Renumber failed: ' + (e?.message || e)); }
+  };
+
+  const compactEsl = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    setStatus('Compacting…');
+    try { setStatus(await b.CompactToEsl(matrix.Plugins[col])); await onReload(); }
+    catch (e: any) { setStatus('Compact failed: ' + (e?.message || e)); }
+  };
+
+  const cleanPlugin = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    setStatus('Cleaning…');
+    try { setStatus(await b.CleanPlugin(matrix.Plugins[col])); await onReload(); }
+    catch (e: any) { setStatus('Clean failed: ' + (e?.message || e)); }
+  };
+
   const renderEditor = (r: ConflictFieldRow, ci: number) => {
     if (r.EditKind === 'Bool') {
       return (
@@ -203,6 +241,18 @@ export default function RecordView(
         <button className={`rv-toggle-btn ${onlyDiffing ? 'on' : ''}`} onClick={() => setOnlyDiffing(v => !v)}>
           <EyeOff size={12} /> Only conflicts
         </button>
+        <select
+          className="rv-status-filter"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
+          title="Show only rows that have a cell of this conflict status"
+        >
+          <option value="all">All statuses</option>
+          <option value="win">Winning</option>
+          <option value="lose">Overridden (losing)</option>
+          <option value="override">Override (sole/last)</option>
+          <option value="identical">Identical to master</option>
+        </select>
         {status && <span className="rv-status">{status}</span>}
       </div>
 
@@ -320,6 +370,11 @@ export default function RecordView(
           <div className="rv-context-sep" />
           <button onClick={() => savePlugin(menu.col)}><Save size={13} /> Save “{matrix.Plugins[menu.col]}”</button>
           <button className="rv-danger" onClick={() => deleteRecord(menu.col)}><Trash2 size={13} /> Delete from “{matrix.Plugins[menu.col]}”</button>
+          <div className="rv-context-sep" />
+          <div className="rv-context-label">Plugin: {matrix.Plugins[menu.col]}</div>
+          <button onClick={() => renumberFormId(menu.col)}><Hash size={13} /> Change FormID…</button>
+          <button onClick={() => compactEsl(menu.col)}><Minimize2 size={13} /> Compact to ESL</button>
+          <button onClick={() => cleanPlugin(menu.col)}><Eraser size={13} /> Clean (UDR)</button>
         </div>
       )}
 
