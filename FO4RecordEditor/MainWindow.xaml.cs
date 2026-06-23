@@ -36,10 +36,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         RegisterCommands();
         InitializeAsync();
-        Services.Ai.PluginToolExecutor.ToolCompleted += OnMcpToolCompleted;
+        Services.PluginToolExecutor.ToolCompleted += OnMcpToolCompleted;
     }
 
-    private void OnMcpToolCompleted(Services.Ai.PluginToolExecutor.McpToolEvent ev)
+    private void OnMcpToolCompleted(Services.PluginToolExecutor.McpToolEvent ev)
     {
         Dispatcher.BeginInvoke(() =>
         {
