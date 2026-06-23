@@ -68,6 +68,10 @@ export default function ChatPanel() {
   const [input, setInput] = useState('');
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
   const [currentId, setCurrentId] = useState('');
+  const currentIdRef = useRef(currentId);
+  currentIdRef.current = currentId;
+  const busyMapRef = useRef(busyMap);
+  busyMapRef.current = busyMap;
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [cmdIndex, setCmdIndex] = useState(0);
   const [attachments, setAttachments] = useState<string[]>([]);   // pending image data URLs
@@ -150,6 +154,17 @@ export default function ChatPanel() {
         renderSession(JSON.parse(list.length > 0 ? await c.LoadSession(list[0].id) : await c.NewSession()));
       } catch { /* ignore */ }
     })();
+  }, []);
+
+  // Bridge: other components dispatch window CustomEvent('fo4:ask-ai', {detail: prompt}).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === 'string') sendExternal(detail);
+    };
+    window.addEventListener('fo4:ask-ai', handler);
+    return () => window.removeEventListener('fo4:ask-ai', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -236,6 +251,20 @@ export default function ChatPanel() {
     try { await c.SendMessage(sid, text, imagesJson); }
     catch (e: any) { setBusyFor(sid, false); setMsgs(sid, p => appendToLastAssistant(p, '\n⚠️ ' + (e?.message || e))); }
     refreshSessions();   // the first message auto-renames the session
+  };
+
+  // Send a prompt supplied by another component (e.g. "Ask AI: what breaks?"). Uses refs so the
+  // once-registered event listener always targets the current, non-busy session.
+  const sendExternal = async (text: string) => {
+    const sid = currentIdRef.current;
+    if (!text.trim() || !sid || busyMapRef.current[sid]) return;
+    const c = host();
+    if (!c) return;
+    setMsgs(sid, p => [...p, { role: 'user', text }, { role: 'assistant', text: '' }]);
+    setBusyFor(sid, true);
+    try { await c.SendMessage(sid, text, '[]'); }
+    catch (e: any) { setBusyFor(sid, false); setMsgs(sid, p => appendToLastAssistant(p, '\n⚠️ ' + (e?.message || e))); }
+    refreshSessions();
   };
 
   const stop = () => host()?.CancelMessage(currentId);
