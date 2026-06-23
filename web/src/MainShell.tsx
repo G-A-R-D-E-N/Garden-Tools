@@ -586,12 +586,10 @@ export default function MainShell() {
       {/* RIGHT pane: detail rail (Phase 5 fills this in) */}
       {railVisible && <DetailRail matrix={openRecord?.matrix ?? null} />}
 
-      {/* AI Panel - Claude (toggleable 4th column) */}
-      {chatVisible && (
-        <div className="shell-chat">
-          <ChatPanel />
-        </div>
-      )}
+      {/* AI Panel - Claude (always mounted so the live session survives a toggle; hidden via CSS) */}
+      <div className="shell-chat" style={{ display: chatVisible ? undefined : 'none' }}>
+        <ChatPanel />
+      </div>
 
       {/* Status bar (bottom): loader status + load-order parity */}
       <StatusBar
