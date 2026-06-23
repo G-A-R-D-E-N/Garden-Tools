@@ -1,5 +1,6 @@
 import { Info } from 'lucide-react';
 import type { ConflictMatrix } from '../backend';
+import OverriddenBy from '../Workspace/OverriddenBy';
 import './DetailRail.css';
 
 interface DetailRailProps {
@@ -26,6 +27,12 @@ export default function DetailRail({ matrix }: DetailRailProps) {
           </div>
         )}
       </div>
+      {/* Record-level summary so the section is usable now. Phase 4 will render
+          OverriddenBy per conflict-group card instead of this single rail rollup.
+          Plugins[0] is the base master, so slice(1) is everything overriding it. */}
+      {matrix && matrix.Plugins.length > 1 && (
+        <OverriddenBy plugins={matrix.Plugins.slice(1)} />
+      )}
     </aside>
   );
 }
