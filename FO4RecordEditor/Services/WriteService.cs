@@ -204,22 +204,32 @@ public static class WriteService
         var rec = FindMutableRecord(mod, recordId);
         if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
 
+        if (!AddListItemToRecord(rec, field, value, env, out var msg)) return msg;
+        MutagenLoader.InvalidateModIndex(plugin);
+        NotifyChanged(plugin);
+        return $"Added {value} to {field} on {recordId} in {plugin} ({msg}).";
+    }
+
+    // Record-level core of AddListItem: append a FormLink to a list field on an already-resolved
+    // record. No index invalidation / change notification — the caller batches those. Returns false
+    // with a reason in 'msg' on failure, or true with a short success note (e.g. "now 4 item(s)").
+    private static bool AddListItemToRecord(object rec, string field, string value, object? env, out string msg)
+    {
         var prop = rec.GetType().GetProperty(field,
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-        if (prop == null) return $"No field '{field}' on {rec.GetType().Name}.";
+        if (prop == null) { msg = $"No field '{field}' on {rec.GetType().Name}."; return false; }
 
         // The list may be null on a freshly created record -- initialise it.
         var listObj = prop.CanRead ? prop.GetValue(rec) : null;
         if (listObj == null)
         {
-            if (!prop.CanWrite) return $"Field '{field}' is an uninitialised list and can't be created.";
+            if (!prop.CanWrite) { msg = $"Field '{field}' is an uninitialised list and can't be created."; return false; }
             var listType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
             try { listObj = System.Activator.CreateInstance(listType); } catch { listObj = null; }
-            if (listObj == null) return $"Could not initialise list '{field}'.";
+            if (listObj == null) { msg = $"Could not initialise list '{field}'."; return false; }
             prop.SetValue(rec, listObj);
         }
-        if (listObj is not System.Collections.IList list)
-            return $"Field '{field}' is not a list.";
+        if (listObj is not System.Collections.IList list) { msg = $"Field '{field}' is not a list."; return false; }
 
         // Find the FormLink target type of the list elements (e.g. IKeywordGetter).
         var elemType = prop.PropertyType.IsGenericType ? prop.PropertyType.GetGenericArguments().FirstOrDefault() : null;
@@ -232,26 +242,29 @@ public static class WriteService
                 linkTarget = elemType.GetGenericArguments()[0];
         }
         if (linkTarget == null)
-            return $"Field '{field}' is a list of {elemType?.Name ?? "?"}; add_list_item supports FormLink lists " +
-                   $"(e.g. Keywords, FormList Items) for now.";
+        {
+            msg = $"Field '{field}' is a list of {elemType?.Name ?? "?"}; add_list_item supports FormLink lists " +
+                  $"(e.g. Keywords, FormList Items) for now.";
+            return false;
+        }
 
         if (!FormKey.TryFactory(value, out var fk))
         {
             fk = MutagenLoader.ResolveEditorIdToFormKey(env, value);
-            if (fk.IsNull) return $"'{value}' is not a FormKey and no loaded record has that EditorID.";
+            if (fk.IsNull) { msg = $"'{value}' is not a FormKey and no loaded record has that EditorID."; return false; }
         }
 
         try
         {
             var link = System.Activator.CreateInstance(typeof(FormLink<>).MakeGenericType(linkTarget), fk);
             list.Add(link);
-            MutagenLoader.InvalidateModIndex(plugin);
-            NotifyChanged(plugin);
-            return $"Added {value} to {field} on {recordId} in {plugin} (now {list.Count} item(s)).";
+            msg = $"now {list.Count} item(s)";
+            return true;
         }
         catch (Exception ex)
         {
-            return $"Could not add to {field}: {ex.Message}";
+            msg = $"Could not add to {field}: {ex.Message}";
+            return false;
         }
     }
 
@@ -705,9 +718,15 @@ public static class WriteService
             && m.GetGenericArguments().Length == 2
             && m.GetParameters().Length == 2);
 
-    private static bool AddOverride(IFallout4Mod mod, IMajorRecordGetter getter)
+    private static bool AddOverride(IFallout4Mod mod, IMajorRecordGetter getter) =>
+        AddOverrideReturning(mod, getter) != null;
+
+    // As AddOverride, but hands back the mutable override record so callers (e.g. batch_patch_records)
+    // can apply edits in-place instead of re-finding it with a full-mod scan. GetOrAddAsOverride is
+    // idempotent: a second call for the same FormKey returns the existing override.
+    private static IFallout4MajorRecord? AddOverrideReturning(IFallout4Mod mod, IMajorRecordGetter getter)
     {
-        if (_groupOverrideMixin == null) return false;
+        if (_groupOverrideMixin == null) return null;
         // Match the mod's typed group by the record's GETTER type: the group's generic argument
         // is the CONCRETE record class (e.g. ConstructibleObject), which implements the getter
         // interface (IConstructibleObjectGetter). Registration.SetterType is the *interface*, so
@@ -728,13 +747,13 @@ public static class WriteService
 
             try
             {
-                _groupOverrideMixin.MakeGenericMethod(groupMajor, getterType)
+                var ovr = _groupOverrideMixin.MakeGenericMethod(groupMajor, getterType)
                     .Invoke(null, new[] { group, getter });
-                return true;
+                return ovr as IFallout4MajorRecord;
             }
             catch { /* try another candidate group */ }
         }
-        return false;
+        return null;
     }
 
     /// <summary>Plugins currently open for editing (candidates for a conflict patch target).</summary>
@@ -918,9 +937,17 @@ public static class WriteService
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
 
+        if (!RemoveListItemFromRecord(rec, field, value, env, out var msg)) return msg;
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"{msg} on {recordId}. save_plugin to persist.";
+    }
+
+    // Record-level core of RemoveListItem: no index invalidation / change notification (caller batches).
+    private static bool RemoveListItemFromRecord(object rec, string field, string value, object? env, out string msg)
+    {
         var prop = rec.GetType().GetProperty(field, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-        if (prop?.GetValue(rec) is not System.Collections.IList list) return $"Field '{field}' is not a list on {rec.GetType().Name}.";
-        if (!ResolveFk(env, value, out var fk)) return $"'{value}' is not a FormKey and no loaded record has that EditorID.";
+        if (prop?.GetValue(rec) is not System.Collections.IList list) { msg = $"Field '{field}' is not a list on {rec.GetType().Name}."; return false; }
+        if (!ResolveFk(env, value, out var fk)) { msg = $"'{value}' is not a FormKey and no loaded record has that EditorID."; return false; }
 
         int removed = 0;
         for (int i = list.Count - 1; i >= 0; i--)
@@ -929,9 +956,9 @@ public static class WriteService
             var fkProp = item?.GetType().GetProperty("FormKey");
             if (fkProp?.GetValue(item) is FormKey ifk && ifk == fk) { list.RemoveAt(i); removed++; }
         }
-        if (removed == 0) return $"No entry matching {value} found in {field} ({list.Count} item(s)).";
-        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
-        return $"Removed {removed} entr(y/ies) matching {value} from {field} on {recordId} (now {list.Count}). save_plugin to persist.";
+        if (removed == 0) { msg = $"No entry matching {value} found in {field} ({list.Count} item(s))."; return false; }
+        msg = $"Removed {removed} entr(y/ies) matching {value} from {field} (now {list.Count})";
+        return true;
     }
 
     /// <summary>Replace a COBJ's component list. componentsJson is an array of
@@ -1236,40 +1263,41 @@ public static class WriteService
         var patch = GetMutable(patchName);
         if (patch == null) return $"Could not open or create patch plugin '{patchName}'.";
 
-        int done = 0, failed = 0;
+        int done = 0, failed = 0, opsApplied = 0;
         var errors = new List<string>();
 
+        // Apply ops to the override IN-PLACE. The previous version round-tripped through
+        // SetField/AddListItem/RemoveListItem, each of which re-scanned the whole (growing) patch
+        // mod and fired an index-invalidation + UI notification per op — O(M²) plus a notification
+        // storm for thousands of records. Here we keep the override AddOverride hands back and edit
+        // it directly, invalidating + notifying ONCE at the end.
         foreach (var rec in matched)
         {
             try
             {
-                if (!AddOverride(patch, rec))
+                var ovr = AddOverrideReturning(patch, rec);
+                if (ovr == null)
                 {
                     failed++;
-                    errors.Add($"{rec.EditorID} [{rec.FormKey}]: cannot override type '{sig}'");
+                    if (errors.Count < 20) errors.Add($"{rec.EditorID} [{rec.FormKey}]: cannot override type '{sig}'");
                     continue;
                 }
-                var fkStr = rec.FormKey.ToString();
                 foreach (var (op, field, val) in ops)
                 {
-                    var result = op switch
+                    bool ok = op switch
                     {
-                        "add"    => AddListItem(patchName, fkStr, field, val, env),
-                        "remove" => RemoveListItem(patchName, fkStr, field, val, env),
-                        _        => SetField(patchName, fkStr, field, val, env),
+                        "add"    => AddListItemToRecord(ovr, field, val, env, out var ma) ? true : Fail(ref errors, rec, ma),
+                        "remove" => RemoveListItemFromRecord(ovr, field, val, env, out var mr) ? true : Fail(ref errors, rec, mr),
+                        _        => TrySet(ovr, field, val, env, out var ms) ? true : Fail(ref errors, rec, ms),
                     };
-                    // Only report errors (not routine success)
-                    if (result.StartsWith("Error", StringComparison.OrdinalIgnoreCase) ||
-                        result.StartsWith("Could not", StringComparison.OrdinalIgnoreCase) ||
-                        result.StartsWith("No record", StringComparison.OrdinalIgnoreCase))
-                        errors.Add($"{rec.EditorID ?? fkStr}: {result}");
+                    if (ok) opsApplied++;
                 }
                 done++;
             }
             catch (Exception ex)
             {
                 failed++;
-                errors.Add($"{rec.FormKey}: {ex.Message}");
+                if (errors.Count < 20) errors.Add($"{rec.FormKey}: {ex.Message}");
             }
         }
 
@@ -1277,8 +1305,24 @@ public static class WriteService
         NotifyChanged(patchName);
 
         var msg = new System.Text.StringBuilder();
-        msg.AppendLine($"Batch patched {done} of {matched.Count} records into '{patchName}'." +
-                       (failed > 0 ? $" {failed} failed." : ""));
+
+        // If operations were requested but not one applied, the patch holds only ITM overrides
+        // (almost always a wrong field name or value format). Don't persist that noise.
+        if (ops.Count > 0 && opsApplied == 0)
+        {
+            msg.AppendLine($"ABORTED — overrode {done} record(s) but NOT ONE operation succeeded " +
+                           "(likely a wrong field name or value format). Nothing was saved.");
+            if (errors.Count > 0)
+            {
+                msg.AppendLine("Errors:");
+                foreach (var e in errors.Take(5)) msg.AppendLine("  " + e);
+            }
+            msg.Append("Check exact field names with list_records_summary, fix the operation, and re-run.");
+            return msg.ToString();
+        }
+
+        msg.AppendLine($"Batch patched {done} of {matched.Count} records into '{patchName}' " +
+                       $"({opsApplied} field op(s) applied)." + (failed > 0 ? $" {failed} failed." : ""));
         if (errors.Count > 0)
         {
             msg.AppendLine("First errors (check field names and value formats):");
@@ -1286,6 +1330,13 @@ public static class WriteService
         }
         msg.Append(SavePlugin(patchName, null));
         return msg.ToString();
+    }
+
+    // Record an op failure (capped) and return false so it threads through the bool switch above.
+    private static bool Fail(ref List<string> errors, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec, string m)
+    {
+        if (errors.Count < 20) errors.Add($"{rec.EditorID ?? rec.FormKey.ToString()}: {m}");
+        return false;
     }
 
     // Check if a record matches a simple field filter. filterValue is a case-insensitive

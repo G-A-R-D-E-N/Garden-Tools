@@ -25,7 +25,11 @@ public static class AiGuidance
         "Then call get_record ONLY on specific records that need a complete field dump.\n"
         + "- NEVER loop copy_as_override + set_field over many records. Use batch_patch_records to " +
         "apply the SAME change to hundreds or thousands of records in ONE call. Always dry_run=true " +
-        "first to confirm the filter and record count, then dry_run=false to write.\n"
+        "first to confirm the filter and record count, then dry_run=false to write. If it reports " +
+        "ABORTED (no operation succeeded), your field name or value format is wrong — fix it, don't retry blindly.\n"
+        + "- list_records_summary and get_conflicts self-limit to a token budget and tell you how many " +
+        "rows they OMITTED. When they truncate, do NOT just raise 'limit' (that burns more tokens) — " +
+        "add a filter, search_records for the specific records, or get_record one at a time.\n"
         + "- scan_conflicts ONCE for the big picture. Do NOT call get_winning_record one record at a "
         + "time to survey — that is the slow, expensive path.\n"
         + "- list_records_summary gives you a field table for the whole group in one call. Use it " +

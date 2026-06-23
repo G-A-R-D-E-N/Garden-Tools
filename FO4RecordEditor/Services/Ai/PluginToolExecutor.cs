@@ -799,21 +799,29 @@ public sealed class PluginToolExecutor
 
         if (diffRows.Count > 0)
         {
-            const int FW = 36, VW = 22;
-            sb.Append("  " + "Field".PadRight(FW));
-            foreach (var p in matrix.Plugins) sb.Append(" | " + Trunc(p, VW).PadRight(VW));
-            sb.AppendLine();
-            sb.AppendLine("  " + new string('-', FW + matrix.Plugins.Count * (VW + 3)));
+            // Budget-bound the table so the executor's 8 KB hard cap never blind-truncates it
+            // mid-row (which loses the footer and wastes the cut tokens). We stop emitting rows
+            // when approaching the budget and report an honest omission count instead.
+            const int FW = 34, VW = 20, Budget = 6500;
+            var head = "  " + "Field".PadRight(FW);
+            foreach (var p in matrix.Plugins) head += " | " + Trunc(p, VW).PadRight(VW);
+            sb.AppendLine(head.TrimEnd());
+            sb.AppendLine("  " + new string('-', Math.Min(FW + matrix.Plugins.Count * (VW + 3), 180)));
 
             int shown = 0;
             foreach (var row in diffRows)
             {
-                if (shown >= 60) { sb.AppendLine($"  ... {diffRows.Count - 60} more rows omitted."); break; }
+                if (sb.Length > Budget)
+                {
+                    sb.AppendLine($"  ... {diffRows.Count - shown} more differing field(s) omitted to save tokens. " +
+                                  "Use get_winning_record for effective values, or get_record(plugin,id) for one plugin's full dump.");
+                    break;
+                }
                 var sev = $"[{row.Severity.ToUpperInvariant()}]";
-                sb.Append($"  {(sev + " " + row.Field).PadRight(FW)}");
+                var line = "  " + (sev + " " + row.Field).PadRight(FW);
                 for (int ci = 0; ci < matrix.Plugins.Count; ci++)
-                    sb.Append(" | " + Trunc(ci < row.Values.Count ? row.Values[ci] : "", VW).PadRight(VW));
-                sb.AppendLine();
+                    line += " | " + Trunc(ci < row.Values.Count ? row.Values[ci] : "", VW).PadRight(VW);
+                sb.AppendLine(line.TrimEnd());   // drop trailing column padding -- pure wasted tokens
                 shown++;
             }
         }

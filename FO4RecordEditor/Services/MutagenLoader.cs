@@ -819,22 +819,25 @@ public static class MutagenLoader
             if (colProps.Count >= 8) break;
         }
 
-        const int EW = 38, VW = 28;
+        // Budget-bound the output so the AI executor's ~8 KB hard cap never blind-truncates the
+        // table mid-row (which would leave a misleading "N of M shown" header above a cut body).
+        // We emit rows until the budget, then report the ACTUAL count emitted.
+        const int EW = 36, VW = 26, Budget = 6800;
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"{sig} in {plugin}: {take.Count} of {recs.Count} records shown");
-        if (recs.Count > limit)
-            sb.AppendLine($"(use search_records or raise limit to see more)");
+        sb.AppendLine($"{sig} in {plugin}: {recs.Count} total record(s).");
 
         // Header row
-        sb.Append("  " + "EditorID [FormKey]".PadRight(EW));
-        foreach (var p in colProps) sb.Append(" | " + SumTrunc(p.Name, VW).PadRight(VW));
-        sb.AppendLine();
-        sb.AppendLine("  " + new string('-', EW + colProps.Count * (VW + 3)));
+        var head = "  " + "EditorID [FormKey]".PadRight(EW);
+        foreach (var p in colProps) head += " | " + SumTrunc(p.Name, VW).PadRight(VW);
+        sb.AppendLine(head.TrimEnd());
+        sb.AppendLine("  " + new string('-', Math.Min(EW + colProps.Count * (VW + 3), 200)));
 
+        int emitted = 0;
         foreach (var rec in take)
         {
+            if (sb.Length > Budget) break;
             var hdr = (rec.EditorID ?? "(no-eid)") + " [" + rec.FormKey + "]";
-            sb.Append("  " + SumTrunc(hdr, EW).PadRight(EW));
+            var line = "  " + SumTrunc(hdr, EW).PadRight(EW);
             foreach (var prop in colProps)
             {
                 string cell;
@@ -851,10 +854,15 @@ public static class MutagenLoader
                     };
                 }
                 catch { cell = "?"; }
-                sb.Append(" | " + SumTrunc(cell, VW).PadRight(VW));
+                line += " | " + SumTrunc(cell, VW).PadRight(VW);
             }
-            sb.AppendLine();
+            sb.AppendLine(line.TrimEnd());   // drop trailing column padding -- pure wasted tokens
+            emitted++;
         }
+
+        if (emitted < recs.Count)
+            sb.AppendLine($"  ... showed {emitted} of {recs.Count}. Narrow with search_records (by EditorID/FormKey) " +
+                          "or get_record for one record's full dump; raise 'limit' only if you truly need more rows.");
 
         return sb.ToString();
     }
