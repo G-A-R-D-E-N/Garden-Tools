@@ -129,6 +129,15 @@ body {
 }
 
 /* Light mode — solid conflict cell colors for maximum readability on white. */
+/* Make the glass panel a light card instead of a frosted-dark slab. */
+[data-theme="light"] .glass-panel {
+  background: var(--bg-secondary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05);
+}
+
 [data-theme="light"] .rv-c-master    { background: #ede9fe; color: #5b21b6; }
 [data-theme="light"] .rv-c-win       { background: #fef9c3; box-shadow: inset 2px 0 0 #b45309; color: #713f12; font-weight: 600; }
 [data-theme="light"] .rv-c-lose      { background: #fee2e2; color: #991b1b; }

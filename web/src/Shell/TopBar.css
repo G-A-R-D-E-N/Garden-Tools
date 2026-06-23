@@ -9,6 +9,11 @@
   border-bottom: 1px solid var(--border-color);
   z-index: 30;
 }
+[data-theme="light"] .topbar {
+  background: var(--bg-secondary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+}
+[data-theme="light"] .top-tab-close:hover { background: rgba(0,0,0,0.08); color: var(--text-primary); }
 
 /* Brand */
 .topbar-brand {

@@ -603,6 +603,13 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    LIGHT THEME OVERRIDES — all hardcoded dark hex values replaced by tokens
    ═══════════════════════════════════════════════════════════════════════════ */
+/* Shell-level area separation — without shadows in light mode all zones look identical. */
+[data-theme="light"] .shell-container  { background: var(--bg-primary); }
+[data-theme="light"] .main-area        { background: var(--bg-primary); }
+[data-theme="light"] .shell-left       { box-shadow: 2px 0 6px rgba(0,0,0,0.07); }
+[data-theme="light"] .shell-chat       { box-shadow: -2px 0 6px rgba(0,0,0,0.06); }
+[data-theme="light"] .home-hints       { background: var(--bg-tertiary); border-color: var(--border-color); }
+
 [data-theme="light"] .activity-bar         { background: var(--bg-tertiary); }
 [data-theme="light"] .activity-btn         { color: var(--text-muted); }
 [data-theme="light"] .activity-btn:hover   { color: var(--text-primary); background: var(--bg-hover); }
