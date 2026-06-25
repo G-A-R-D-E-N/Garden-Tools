@@ -220,6 +220,65 @@ public sealed class PatchScriptHost
         return cache != null && cache.TryResolve<IMajorRecordGetter>(cobj.CreatedObject.FormKey, out _);
     }
 
+    /// <summary>
+    /// Stronger usability gate than <see cref="CnamIsResolvable"/>. Returns true only when the
+    /// COBJ has a resolvable CNAM <em>and</em> at least a workbench keyword or a component list
+    /// — i.e. it is a full record, not a conditions-only partial override stub (e.g. the
+    /// FallenWorldCrafting_S7.esp partial records that have only conditions and null everything
+    /// else). Use this instead of <see cref="CnamIsResolvable"/> when iterating a plugin that
+    /// may contain pipeline stubs.
+    /// </summary>
+    public bool RecordIsUsable(IConstructibleObjectGetter cobj)
+    {
+        if (!CnamIsResolvable(cobj)) return false;
+        return !cobj.WorkbenchKeyword.FormKey.IsNull
+            || (cobj.Components != null && cobj.Components.Count > 0);
+    }
+
+    /// <summary>
+    /// Walks the full override chain for <paramref name="cobj"/> (winning → original), skipping
+    /// plugins named in <paramref name="skipPlugins"/>, and returns the first non-empty
+    /// <c>Categories</c> (FNAM keyword list) found. Use this after deep-copying from a shallow
+    /// override — e.g. a Compat record that only sets Conditions and leaves Categories null —
+    /// so the FNAM keywords from the original or an intermediate plugin are not silently lost.
+    /// Returns <c>null</c> when no entry in the chain has categories.
+    /// </summary>
+    public IReadOnlyList<IFormLinkGetter<IKeywordGetter>>? GetCategoriesFromChain(
+        IConstructibleObjectGetter cobj, params string[] skipPlugins)
+    {
+        var cache = MutagenLoader.LinkCache;
+        if (cache == null) return null;
+        var skip = new HashSet<string>(skipPlugins, StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var ctx in cache.ResolveAllSimpleContexts<IConstructibleObjectGetter>(cobj.FormKey))
+            {
+                if (skip.Contains(ctx.ModKey.FileName.String)) continue;
+                if (ctx.Record.Categories != null && ctx.Record.Categories.Count > 0)
+                    return ctx.Record.Categories;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>
+    /// Copies categories from <paramref name="categories"/> into <paramref name="target"/>,
+    /// replacing any existing entries. Pair with <see cref="GetCategoriesFromChain"/> to
+    /// restore FNAM keywords that a shallow Compat override silently nulled by not re-declaring
+    /// them in its partial record. No-op when <paramref name="categories"/> is null or empty.
+    /// </summary>
+    public void CopyCategories(ConstructibleObject target,
+        IReadOnlyList<IFormLinkGetter<IKeywordGetter>>? categories)
+    {
+        if (categories == null || categories.Count == 0) return;
+        target.Categories ??= new ExtendedList<IFormLinkGetter<IKeywordGetter>>();
+        target.Categories.Clear();
+        foreach (var cat in categories)
+            target.Categories.Add(new FormLink<IKeywordGetter>(cat.FormKey));
+        Edits++;
+    }
+
     // ── utility ───────────────────────────────────────────────────────────────────────────────
     /// <summary>Resolve a FormKey or EditorID to its "XXXXXX:Plugin.esp" string, or null if unknown.</summary>
     public string? Resolve(string idOrEditorId) => Resolve(idOrEditorId, out var fk) ? fk.ToString() : null;
