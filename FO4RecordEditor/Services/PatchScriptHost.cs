@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
@@ -177,6 +178,48 @@ public sealed class PatchScriptHost
         return ok;
     }
 
+    // ── record-base helpers ───────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Returns the best available getter to use as the base for a COBJ override in the patch.
+    /// Walks the full override chain from winning to original, skipping any plugin named in
+    /// <paramref name="skipPlugins"/> (e.g. your own patch plugin and mid-chain intermediaries
+    /// like FallenWorldCrafting_S7.esp that wrote partial/broken records). Returns the first
+    /// non-skipped entry — typically FallenWorldCrafting_Compat.esp's full record when that
+    /// plugin overrides the same COBJ, or the original defining plugin otherwise. This preserves
+    /// conditions added by Compat (CMWeapons, CMImmersiveMode, etc.) and ensures all fields
+    /// (CNAM, FVPA, BNAM) are populated from a full-record plugin, never from a partial patch.
+    /// Falls back to <paramref name="fallback"/> if the cache is unavailable or yields only
+    /// skipped entries.
+    /// </summary>
+    public IConstructibleObjectGetter GetBestBase(IConstructibleObjectGetter fallback, params string[] skipPlugins)
+    {
+        var cache = MutagenLoader.LinkCache;
+        if (cache == null) return fallback;
+        var skip = new HashSet<string>(skipPlugins, StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var ctx in cache.ResolveAllSimpleContexts<IConstructibleObjectGetter>(fallback.FormKey))
+            {
+                if (!skip.Contains(ctx.ModKey.FileName.String))
+                    return ctx.Record;
+            }
+        }
+        catch { /* record not in cache; fall through */ }
+        return fallback;
+    }
+
+    /// <summary>
+    /// Returns true when the COBJ's Created Object (CNAM) is non-null and resolves to an
+    /// existing record. Records where CNAM is broken or unresolvable should be skipped before
+    /// deep-copying — otherwise the override in the patch contains no meaningful data.
+    /// </summary>
+    public bool CnamIsResolvable(IConstructibleObjectGetter cobj)
+    {
+        if (cobj.CreatedObject.FormKey.IsNull) return false;
+        var cache = MutagenLoader.LinkCache;
+        return cache != null && cache.TryResolve<IMajorRecordGetter>(cobj.CreatedObject.FormKey, out _);
+    }
+
     // ── utility ───────────────────────────────────────────────────────────────────────────────
     /// <summary>Resolve a FormKey or EditorID to its "XXXXXX:Plugin.esp" string, or null if unknown.</summary>
     public string? Resolve(string idOrEditorId) => Resolve(idOrEditorId, out var fk) ? fk.ToString() : null;
@@ -188,7 +231,7 @@ public sealed class PatchScriptHost
     {
         if (FormKey.TryFactory(id, out fk)) return true;
         var cache = MutagenLoader.LinkCache;
-        if (cache != null && cache.TryResolve(id, out var rec)) { fk = rec.FormKey; return true; }
+        if (cache != null && cache.TryResolve<IMajorRecordGetter>(id, out var rec)) { fk = rec.FormKey; return true; }
         fk = MutagenLoader.ResolveEditorIdToFormKey(_env, id);
         return !fk.IsNull;
     }
