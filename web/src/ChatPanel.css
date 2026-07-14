@@ -180,6 +180,66 @@
 .chat-activity.think { color: #8a85a8; font-style: italic; }
 .chat-activity.result { color: #6f6f6f; }
 
+/* ---- Stop generating button ---- */
+.chat-stop-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.chat-stop-btn:hover {
+  color: var(--status-changed);
+  border-color: var(--status-changed);
+  background: rgba(248, 81, 73, 0.07);
+}
+
+/* ---- Queue indicator banner ---- */
+.chat-queue-banner {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 3px 12px 0;
+}
+
+/* ---- Typing animation (three pulsing dots) ---- */
+.chat-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+}
+.chat-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: chat-dot-pulse 1.2s ease-in-out infinite;
+}
+.chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes chat-dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.75); }
+  40%            { opacity: 1;    transform: scale(1);    }
+}
+
+/* ---- Write-activity rows (AI plugin edits) — green highlight ---- */
+.chat-activity.write {
+  color: #5a9e5a;
+  border-left-color: rgba(90, 158, 90, 0.5);
+  background: rgba(90, 158, 90, 0.04);
+}
+
 /* ── Light mode overrides for ChatPanel ── */
 [data-theme="light"] .chat-session-select            { background: var(--bg-tertiary); color: var(--text-primary); }
 [data-theme="light"] .chat-md strong                 { color: var(--text-primary); }
@@ -190,3 +250,4 @@
 [data-theme="light"] .chat-activity.tool             { color: #2d6e2d; border-left-color: rgba(45,110,45,0.4); }
 [data-theme="light"] .chat-activity.think            { color: #5b4d8a; }
 [data-theme="light"] .chat-activity.result           { color: var(--text-muted); }
+[data-theme="light"] .chat-activity.write            { color: #1a7f37; border-left-color: rgba(26, 127, 55, 0.4); background: rgba(26, 127, 55, 0.04); }

@@ -16,7 +16,7 @@ namespace FO4RecordEditor.Services;
 /// tools (list/search/get) immediately see what was created. Changes live in memory until
 /// save_plugin is called.
 /// </summary>
-public static class WriteService
+public static partial class WriteService
 {
     private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
 
@@ -319,12 +319,19 @@ public static class WriteService
     }
 
     /// <summary>
-    /// Change one record's FormID within its plugin (xEdit "Change FormID") and repoint every
-    /// reference to it that lives in the SAME plugin. References in OTHER plugins are not rewritten
-    /// (that needs a patch); the message notes they may exist so the caller / AI can fix them.
+    /// Change one record's FormID within its plugin (xEdit "Change FormID") and (by default) repoint
+    /// every reference to it that lives in the SAME plugin. References in OTHER plugins are not
+    /// rewritten (that needs a patch); the message notes they may exist so the caller / AI can fix them.
     /// In memory until save_plugin. newIdHex is the 6-digit object id, e.g. "000F99" or "0xF99".
+    ///
+    /// <paramref name="repointRefs"/> MUST be false when resolving a DUPLICATE FormKey (two records
+    /// illegally sharing one id): references to the shared id are ambiguous, so repointing them would
+    /// drag the OTHER record's referrers onto the moved record. With it false, the moved record simply
+    /// takes a fresh id and existing references stay pointing at the id (now owned solely by the twin).
+    /// The record is targeted by exact type+identity so the correct twin is moved, not the first match.
     /// </summary>
-    public static string RenumberFormId(string plugin, string recordId, string newIdHex, object? env)
+    public static string RenumberFormId(string plugin, string recordId, string newIdHex, object? env,
+        bool repointRefs = true)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var rec = FindMutableRecord(mod, recordId);
@@ -342,7 +349,8 @@ public static class WriteService
         if (mod.EnumerateMajorRecords().Any(r => r.FormKey == newFk))
             return $"FormID {newId:X6} is already used by another record in {plugin}. Pick a free id.";
 
-        // Re-key: duplicate the record into its group under the new FormKey, then drop the old one.
+        // Re-key the SPECIFIC record we resolved (match by FormKey AND record type, so when two records
+        // illegally share oldFk we move the intended twin -- not whichever group enumerates first).
         bool rekeyed = false;
         foreach (var groupProp in mod.GetType().GetProperties()
                      .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType)))
@@ -350,23 +358,29 @@ public static class WriteService
             if (groupProp.GetValue(mod) is not Mutagen.Bethesda.Plugins.Records.IGroup group) continue;
             var match = ((System.Collections.IEnumerable)group)
                 .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>()
-                .FirstOrDefault(r => r.FormKey == oldFk);
+                .FirstOrDefault(r => r.FormKey == oldFk && r.GetType() == rec.GetType());
             if (match == null) continue;
             group.DuplicateInAsNewUntypedRecord((Mutagen.Bethesda.Plugins.Records.IMajorRecord)match, newFk);
             group.GetType().GetMethod("Remove", new[] { typeof(FormKey) })?.Invoke(group, new object[] { oldFk });
             rekeyed = true;
             break;
         }
-        if (!rekeyed) return $"Could not locate the group holding {oldFk} in {plugin}.";
+        if (!rekeyed) return $"Could not locate the group holding {oldFk} ({rec.GetType().Name}) in {plugin}.";
 
-        // Repoint every in-plugin reference to the new id.
-        mod.RemapLinks(new Dictionary<FormKey, FormKey> { [oldFk] = newFk });
+        // Repoint in-plugin references to the new id -- UNLESS we're splitting a duplicate FormKey, in
+        // which case the shared references belong to the twin and must stay on the old id.
+        if (repointRefs)
+            mod.RemapLinks(new Dictionary<FormKey, FormKey> { [oldFk] = newFk });
         MutagenLoader.InvalidateModIndex(plugin);
         NotifyChanged(plugin);
 
-        return $"Renumbered {rec.EditorID} from {oldFk} to {newFk} in {plugin} and fixed in-plugin references. " +
-               $"NOTE: references to {oldFk} in OTHER plugins are NOT updated. Check 'Referenced By' (or ask the " +
-               $"AI to find and patch them). save_plugin to persist.";
+        var refNote = repointRefs
+            ? $"and fixed in-plugin references. NOTE: references to {oldFk} in OTHER plugins are NOT updated. " +
+              "Check 'Referenced By' (or ask the AI to find and patch them)."
+            : $"WITHOUT repointing references (duplicate-FormKey split): every existing reference to {oldFk} " +
+              "stays pointing at the record that keeps that id. Verify that was the intent.";
+        return $"Renumbered {rec.EditorID} ({rec.GetType().Name}) from {oldFk} to {newFk} in {plugin} {refNote} " +
+               "save_plugin to persist.";
     }
 
     // ---- cleaning (xEdit-style UDR) ----------------------------------------------------
@@ -545,11 +559,20 @@ public static class WriteService
         };
         try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); } catch { }
 
+        // Repair custom-ActorValue condition params (GetBaseValue etc.) that Mutagen would otherwise
+        // serialize as null. When it returns true, mod.MasterReferences was explicitly rebuilt
+        // (Iterate does NOT walk ParameterOneRecord in CTDA, so S7 etc. would be missing);
+        // use NoCheck for the real write so Mutagen uses our hand-built MAST list instead of rescanning.
+        bool masterListFixed = FixActorValueConditionParams(mod, prms);
+        var writeParams = masterListFixed
+            ? new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck, ModKey = ModKeyOption.NoCheck }
+            : prms;
+
         // Write to a temp file first, then swap it in. A direct in-place write fails when the file is
         // memory-mapped -- every plugin loaded via 'Open MO2' is an overlay the editor itself locks,
         // so we never write straight over the live file.
         var tmp = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
-        try { mod.WriteToBinary(tmp, prms); }
+        try { mod.WriteToBinary(tmp, writeParams); }
         catch (Exception ex) { try { File.Delete(tmp); } catch { } return $"Save failed while writing: {ex.Message}"; }
 
         try
@@ -692,6 +715,26 @@ public static class WriteService
 
         if (src is not IMajorRecordGetter getter)
             return $"{fk} is not an overridable record.";
+
+        // Guard: verify the BASE record in the originating master at this FormKey is the same type.
+        // Using TryResolve (winning) is wrong: if the patch plugin is already in the load order
+        // with its own COBJ override, TryResolve returns COBJ == COBJ and the check silently passes.
+        // Instead compare against the specific master-plugin version (ground truth before overrides).
+        var masterPlugin = fk.ModKey.FileName;
+        var masterRec = MutagenLoader.GetRecordVersion(env, masterPlugin, fk);
+        if (masterRec != null)
+        {
+            var srcSig = getter.Registration.GetterType;
+            var masterSig = masterRec.Registration.GetterType;
+            if (!masterSig.IsAssignableFrom(srcSig) && !srcSig.IsAssignableFrom(masterSig))
+            {
+                var masterEdid = string.IsNullOrEmpty(masterRec.EditorID) ? fk.ToString() : masterRec.EditorID;
+                return $"Type collision refused: {fk} is {masterSig.Name} '{masterEdid}' in {masterPlugin} " +
+                       $"but the supplied record is {srcSig.Name} from '{winningPlugin}'. " +
+                       $"Creating this override would clobber the base record. " +
+                       $"Check which mod owns this FormID in xEdit before proceeding.";
+            }
+        }
 
         try
         {
@@ -967,10 +1010,11 @@ public static class WriteService
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
-        if (rec is not ConstructibleObject cobj)
-            return $"set_components only applies to COBJ records; {recordId} is {rec.GetType().Name}.";
+        if (rec is not ConstructibleObject && rec is not MiscItem)
+            return $"set_components applies to COBJ (recipe inputs) and MISC (scrap components); {recordId} is {rec.GetType().Name}.";
 
-        var list = new Noggog.ExtendedList<ConstructibleObjectComponent>();
+        // COBJ and MISC use the same {component (a CMPO FormLink), count} shape - parse once.
+        var parsed = new List<(Mutagen.Bethesda.Plugins.FormKey fk, uint count)>();
         var failures = new List<string>();
         try
         {
@@ -980,16 +1024,28 @@ public static class WriteService
                 var comp = el.TryGetProperty("component", out var c) ? c.GetString() ?? "" : "";
                 uint count = el.TryGetProperty("count", out var ct) && ct.TryGetUInt32(out var n) ? n : 1u;
                 if (!ResolveFk(env, comp, out var fk)) { failures.Add($"{comp}: unresolved"); continue; }
-                var item = new ConstructibleObjectComponent { Count = count };
-                item.Component.SetTo(fk);
-                list.Add(item);
+                parsed.Add((fk, count));
             }
         }
         catch (Exception ex) { return $"Could not parse components JSON: {ex.Message}. Expected [{{\"component\":\"01FAA5:Fallout4.esm\",\"count\":1}}]."; }
 
-        cobj.Components = list;
+        int written;
+        if (rec is ConstructibleObject cobj)
+        {
+            var list = new Noggog.ExtendedList<ConstructibleObjectComponent>();
+            foreach (var (fk, count) in parsed) { var it = new ConstructibleObjectComponent { Count = count }; it.Component.SetTo(fk); list.Add(it); }
+            cobj.Components = list; written = list.Count;
+        }
+        else
+        {
+            var misc = (MiscItem)rec;
+            var list = new Noggog.ExtendedList<MiscItemComponent>();
+            foreach (var (fk, count) in parsed) { var it = new MiscItemComponent { Count = count }; it.Component.SetTo(fk); list.Add(it); }
+            misc.Components = list; written = list.Count;
+        }
+
         MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
-        var msg = $"Set {list.Count} component(s) on {recordId} in {plugin}.";
+        var msg = $"Set {written} component(s) on {recordId} in {plugin}.";
         if (failures.Count > 0) msg += $" Skipped {failures.Count}: {string.Join("; ", failures)}.";
         return msg + " save_plugin to persist.";
     }
@@ -1097,7 +1153,7 @@ public static class WriteService
     {
         if (FormKey.TryFactory(value, out fk)) return true;
         var cache = MutagenLoader.LinkCache;
-        if (cache != null && cache.TryResolve(value, out var rec)) { fk = rec.FormKey; return true; }
+        if (cache != null && cache.TryResolve<IMajorRecordGetter>(value, out var rec)) { fk = rec.FormKey; return true; }
         fk = MutagenLoader.ResolveEditorIdToFormKey(env, value);
         return !fk.IsNull;
     }
@@ -1433,6 +1489,103 @@ public static class WriteService
         else if (ResolveFk(env, s!, out var fk)) setRecord(fk);
     }
 
+    // ── custom-ActorValue condition parameter fixup ───────────────────────────────────────────────
+    // Mutagen serializes a GetBaseValue/GetValue-style condition's ActorValue parameter from
+    // ParameterOneNumber and DROPS ParameterOneRecord, so a CUSTOM actor value (an AVIF record, e.g.
+    // an S7 skill) is written as 00000000 -- a silently dead condition. (The CK and xEdit write it
+    // correctly; Mutagen/Spriggit do not.) Fix: for any condition whose Parameter #1 points to an
+    // ActorValueInformation record, set ParameterOneNumber to the correctly master-mapped FormID --
+    // a regular high-byte index for full masters, or the 0xFE light-master encoding for ESL masters.
+    // A throwaway "probe" write establishes the final master list first so the indices are right.
+    // Returns true when it encoded AV params AND rebuilt mod.ModHeader.MasterFiles, so the caller
+    // must use NoCheck (not Iterate) for the real write — Iterate would throw away our master list.
+    private static bool FixActorValueConditionParams(IFallout4Mod mod, BinaryWriteParameters prms)
+    {
+        var cache = MutagenLoader.LinkCache;
+        if (cache == null || MutagenLoader.MasterIsEsl.Count == 0) return false;
+
+        // 1. Collect mutable condition data whose Parameter #1 resolves to a custom ActorValue.
+        var targets = new List<(FunctionConditionData data, FormKey av)>();
+        foreach (var rec in mod.EnumerateMajorRecords())
+        {
+            if (rec.GetType().GetProperty("Conditions")?.GetValue(rec) is not System.Collections.IEnumerable conds)
+                continue;
+            foreach (var item in conds)
+            {
+                if (item is not Condition cond || cond.Data is not FunctionConditionData fcd) continue;
+                var fk = fcd.ParameterOneRecord.FormKey;
+                if (fk.IsNull) continue;
+                if (cache.TryResolve<IActorValueInformationGetter>(fk, out _))
+                    targets.Add((fcd, fk));
+            }
+        }
+        if (targets.Count == 0) return false;
+
+        // 2. Probe-write to discover FormLink-referenced masters (Iterate scans proper FormLinks),
+        //    then read the MAST order it produced.
+        var probe = Path.Combine(Path.GetTempPath(), "FO4RE_avprobe_" + Guid.NewGuid().ToString("N")[..8] + ".tmp");
+        List<string> masters;
+        try { mod.WriteToBinary(probe, prms); masters = ReadMasterOrder(probe); }
+        catch { return false; }
+        finally { try { File.Delete(probe); } catch { } }
+
+        // 3. Augment the master list with any AV source plugins not found by Iterate.
+        //    Mutagen's Iterate does NOT walk ParameterOneRecord in CTDA conditions, so e.g.
+        //    S7 System.esp never appears in the probe even though every skill gate points into it.
+        var mastersSet = new HashSet<string>(masters, StringComparer.OrdinalIgnoreCase);
+        foreach (var plugin in targets
+            .Select(t => t.av.ModKey.FileName.String)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(p => !string.Equals(p, mod.ModKey.FileName.String, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (mastersSet.Add(plugin)) masters.Add(plugin);
+        }
+
+        // 4. Plugin-file FormID encoding uses the MAST table index for ALL masters, including ESL.
+        //    The 0xFExxxxxx space is the engine's runtime remapping, not the on-disk format.
+        //    On disk: FormID = (mastIndex << 24) | (localObjId & 0x00FFFFFF) for every master type.
+        var enc = new Dictionary<string, (uint bse, uint mask)>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < masters.Count; i++)
+            enc[masters[i]] = ((uint)i << 24, 0x00FFFFFFu);
+
+        // 5. Write the real FormID into ParameterOneNumber (what Mutagen actually serializes).
+        int fixedCount = 0;
+        foreach (var (data, av) in targets)
+            if (enc.TryGetValue(av.ModKey.FileName.String, out var m))
+            { data.ParameterOneNumber = unchecked((int)(m.bse | (av.ID & m.mask))); fixedCount++; }
+        if (fixedCount == 0) return false;
+
+        // 6. Rebuild mod.MasterReferences from the augmented list so the caller can use
+        //    NoCheck for the real write and Mutagen emits exactly these MAST subrecords — including
+        //    S7 System.esp which Iterate would never add (no ParameterOneRecord scanning in CTDA).
+        mod.MasterReferences.Clear();
+        foreach (var m in masters)
+            mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = m });
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[AVFix] Encoded {fixedCount} AV condition param(s); {masters.Count} master(s) in header.");
+        return true;
+    }
+
+    // Read the ordered master file names from a written plugin's TES4 header (MAST subrecords).
+    private static List<string> ReadMasterOrder(string path)
+    {
+        var b = File.ReadAllBytes(path);
+        var masters = new List<string>();
+        if (b.Length < 24) return masters;
+        uint hdrSize = BitConverter.ToUInt32(b, 4);
+        int pos = 24; long end = Math.Min(24L + hdrSize, b.Length);
+        while (pos + 6 <= end)
+        {
+            var sig = System.Text.Encoding.ASCII.GetString(b, pos, 4);
+            ushort sz = BitConverter.ToUInt16(b, pos + 4);
+            if (sig == "MAST" && sz > 1 && pos + 6 + sz <= b.Length)
+                masters.Add(System.Text.Encoding.ASCII.GetString(b, pos + 6, sz - 1));
+            pos += 6 + sz;
+        }
+        return masters;
+    }
+
     // Check if a record matches a simple field filter. filterValue is a case-insensitive
     // substring check against the string representation of the field value (FormLinks are
     // formatted as "EditorID [FormID:Plugin]" so matching EditorID or FormKey both work).
@@ -1458,8 +1611,9 @@ public static class WriteService
     // ---- helpers --------------------------------------------------------
 
     private const string SupportedTypes =
-        "BOOK/HOLOTAPE, TERM, WEAP, ARMO, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, " +
-        "FLST, MGEF, PERK, NPC_, QUST, MESG.";
+        "BOOK/HOLOTAPE, TERM, WEAP, ARMO, ARMA, ANIO, IDLE, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, " +
+        "FLST, MGEF, PERK, NPC_, QUST, MESG, GLOB (GLOBFLOAT/GLOBINT/GLOBSHORT/GLOBBOOL), AVIF, " +
+        "LVLI, LVLN, SPEL, ENCH, FURN, IMAD.";
 
     // True if the plugin must keep FormIDs in the ESL light range (0x800-0xFFF).
     private static bool IsEsl(IFallout4Mod mod)
@@ -1496,6 +1650,12 @@ public static class WriteService
             case "TERM":                  { var x = new Terminal(fk, r) { EditorID = editorId };           mod.Terminals.Add(x);            return x; }
             case "WEAP":                  { var x = new Weapon(fk, r) { EditorID = editorId };             mod.Weapons.Add(x);              return x; }
             case "ARMO":                  { var x = new Armor(fk, r) { EditorID = editorId };              mod.Armors.Add(x);               return x; }
+            // Armor addon (ARMA), animated object (ANIO), idle animation (IDLE): the building blocks
+            // for animated equippables. Mutagen handles their binary serialization, so creating them
+            // here removes any need for a downstream tool (e.g. FO4AnimForge) to reimplement it.
+            case "ARMA":                  { var x = new ArmorAddon(fk, r) { EditorID = editorId };         mod.ArmorAddons.Add(x);          return x; }
+            case "ANIO":                  { var x = new AnimatedObject(fk, r) { EditorID = editorId };     mod.AnimatedObjects.Add(x);      return x; }
+            case "IDLE":                  { var x = new IdleAnimation(fk, r) { EditorID = editorId };      mod.IdleAnimations.Add(x);       return x; }
             case "MISC":                  { var x = new MiscItem(fk, r) { EditorID = editorId };           mod.MiscItems.Add(x);            return x; }
             case "COBJ":                  { var x = new ConstructibleObject(fk, r) { EditorID = editorId };mod.ConstructibleObjects.Add(x); return x; }
             case "KYWD":                  { var x = new Keyword(fk, r) { EditorID = editorId };            mod.Keywords.Add(x);             return x; }
@@ -1509,6 +1669,26 @@ public static class WriteService
             case "NPC_":                  { var x = new Npc(fk, r) { EditorID = editorId };                mod.Npcs.Add(x);                 return x; }
             case "QUST":                  { var x = new Quest(fk, r) { EditorID = editorId };              mod.Quests.Add(x);               return x; }
             case "MESG":                  { var x = new Message(fk, r) { EditorID = editorId };            mod.Messages.Add(x);             return x; }
+            // GlobalVariable: bare "GLOB" defaults to a float global (the bridge's getGlobal reads a
+            // float and GetGlobalValue conditions are float-compared). Explicit subtypes let callers
+            // pick int/short/bool. Set the value afterward via set_field on the 'Data' field.
+            case "GLOB": case "GLOBFLOAT": { var x = new GlobalFloat(fk, r) { EditorID = editorId, Data = 0 };   mod.Globals.Add(x);          return x; }
+            case "GLOBINT":               { var x = new GlobalInt(fk, r) { EditorID = editorId, Data = 0 };     mod.Globals.Add(x);          return x; }
+            case "GLOBSHORT":             { var x = new GlobalShort(fk, r) { EditorID = editorId, Data = 0 };   mod.Globals.Add(x);          return x; }
+            case "GLOBBOOL":              { var x = new GlobalBool(fk, r) { EditorID = editorId, Data = false };mod.Globals.Add(x);          return x; }
+            // ActorValueInfo: custom actor value usable with Papyrus GetValue/ModValue and
+            // GetBaseValue/GetValue conditions.
+            case "AVIF":                  { var x = new ActorValueInformation(fk, r) { EditorID = editorId }; mod.ActorValueInformation.Add(x); return x; }
+            // Leveled lists: shells only. Add weighted entries with add_leveled_entry (entries are
+            // structs, not FormLinks, so add_list_item cannot build them).
+            case "LVLI":                  { var x = new LeveledItem(fk, r) { EditorID = editorId };          mod.LeveledItems.Add(x);         return x; }
+            case "LVLN":                  { var x = new LeveledNpc(fk, r) { EditorID = editorId };           mod.LeveledNpcs.Add(x);          return x; }
+            // Spell / enchantment / object-effect: shells. Add effects with set_magic_effects.
+            case "SPEL":                  { var x = new Spell(fk, r) { EditorID = editorId };               mod.Spells.Add(x);               return x; }
+            case "ENCH":                  { var x = new ObjectEffect(fk, r) { EditorID = editorId };        mod.ObjectEffects.Add(x);        return x; }
+            // Furniture (tents/benches with sit/sleep markers) and image-space adapter (visor tints).
+            case "FURN":                  { var x = new Furniture(fk, r) { EditorID = editorId };           mod.Furniture.Add(x);            return x; }
+            case "IMAD":                  { var x = new ImageSpaceAdapter(fk, r) { EditorID = editorId };   mod.ImageSpaceAdapters.Add(x);   return x; }
             default:                      return null;
         }
     }

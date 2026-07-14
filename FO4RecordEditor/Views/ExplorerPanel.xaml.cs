@@ -211,6 +211,46 @@ public partial class ExplorerPanel : UserControl
         if (hit != null) { var p = hit.Parent; while (p != null) { p.IsExpanded = true; p = p.Parent; } hit.IsSelected = true; }
     }
 
+    // Enter -> deep search every loaded plugin via the backend index (so substring matches on
+    // EditorID, FormID, and the display Name find records that aren't expanded in the tree yet).
+    private async void Search_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        e.Handled = true;
+        var q = SearchBox.Text.Trim();
+        if (q.Length < 2) return;
+
+        var main = Window.GetWindow(this) as MainWindow;
+        var env = _shell.GameEnvironment;
+        if (env == null)
+        {
+            MessageBox.Show("Load the environment first ('Open MO2' or 'Load Env') so the search can scan plugins.");
+            return;
+        }
+
+        main?.SetStatus($"Searching for '{q}' across loaded plugins...");
+        var hits = await Task.Run(() =>
+            FO4RecordEditor.Services.MutagenLoader.SearchAllRecords(env, q, null, 500));
+        main?.SetStatus($"Search '{q}': {hits.Count} hit(s)");
+
+        if (hits.Count == 0)
+        {
+            ResultsDialog.Show(main, $"Search: {q}", "(no matches across EditorID, FormID, or Name)");
+            return;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{hits.Count} hit(s) for \"{q}\" (matches EditorID / FormID / Name, substring, case-insensitive):");
+        sb.AppendLine();
+        foreach (var h in hits)
+        {
+            var name = string.IsNullOrEmpty(h.Name) ? "" : $" \"{h.Name}\"";
+            var eid  = string.IsNullOrEmpty(h.EditorID) ? "<no EditorID>" : h.EditorID;
+            sb.AppendLine($"[{h.Type}] {eid}{name}  ({h.FormKey})  in {h.Plugin}");
+        }
+        ResultsDialog.Show(main, $"Search: {q}", sb.ToString());
+    }
+
     private void Tree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (Tree.SelectedItem is not RecordNode n) { e.Handled = true; return; }

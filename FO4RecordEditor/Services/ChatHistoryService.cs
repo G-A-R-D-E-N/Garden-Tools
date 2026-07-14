@@ -73,9 +73,16 @@ public class ChatHistoryService
 
     public void Delete(Guid id)
     {
-        try {
-            var file = Path.Combine(_dir, $"{id}.json");
-            if (File.Exists(file)) File.Delete(file);
-        } catch {}
+        // Delete from the stable dir AND every legacy per-exe dir so the session doesn't
+        // reappear on the next LoadAll() (which merges all dirs).
+        foreach (var dir in LegacyChatDirs().Append(_dir))
+        {
+            try
+            {
+                var file = Path.Combine(dir, $"{id}.json");
+                if (File.Exists(file)) File.Delete(file);
+            }
+            catch { }
+        }
     }
 }

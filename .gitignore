@@ -8,3 +8,6 @@ TES5Edit-dev-4.1.6/
 
 web/node_modules/
 web/dist/
+
+# Release output from package.ps1
+dist/

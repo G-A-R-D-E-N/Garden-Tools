@@ -150,8 +150,11 @@ body {
 
 /* Light mode — table surfaces */
 [data-theme="light"] .rv-grid th           { background: var(--bg-tertiary); color: var(--text-secondary); }
-[data-theme="light"] .rv-sticky            { background: var(--bg-secondary); }
-[data-theme="light"] thead .rv-sticky      { background: var(--bg-tertiary); }
+[data-theme="light"] td.rv-sticky,
+[data-theme="light"] th.rv-sticky          { background: var(--bg-secondary); }
+[data-theme="light"] thead th.rv-sticky    { background: var(--bg-tertiary); }
+[data-theme="light"] .rv-diff td.rv-sticky { background: var(--bg-secondary); }
+[data-theme="light"] .rv-grid tr:hover td.rv-sticky { background: var(--bg-hover); }
 [data-theme="light"] .rv-grid td           { border-bottom: 1px solid #e8eaed; border-right: 1px solid #e8eaed; }
 [data-theme="light"] .rv-diff td           { background: rgba(180,83,9,0.03); }
 [data-theme="light"] .rv-grid tr:hover td  { background: rgba(0,0,0,0.025); }

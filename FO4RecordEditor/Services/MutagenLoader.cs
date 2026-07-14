@@ -5,6 +5,7 @@ using FO4RecordEditor.Models;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Environments;
 
 namespace FO4RecordEditor.Services;
@@ -51,6 +52,12 @@ public static class MutagenLoader
     // in the field walker, so the UI shows `c_Gears "Gear" [...]` instead of a bare FormID.
     public static Mutagen.Bethesda.Plugins.Cache.ILinkCache? LinkCache;
 
+    // Per-plugin ESL ("small master") flag for the loaded load order, keyed by file name. Populated
+    // when the env is built. Used to compute the correct master-mapped FormID (regular high-byte vs
+    // 0xFE light-master encoding) when fixing custom-ActorValue condition parameters on save.
+    public static readonly System.Collections.Generic.Dictionary<string, bool> MasterIsEsl =
+        new(System.StringComparer.OrdinalIgnoreCase);
+
     // Cache of the per-type "Name" property (FULL) used to label resolved FormLinks.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, PropertyInfo?> _nameProp = new();
 
@@ -69,7 +76,7 @@ public static class MutagenLoader
         if (cache == null) return fkStr;
         try
         {
-            if (!cache.TryResolve(fk, out var rec)) return fkStr;
+            if (!cache.TryResolve<IMajorRecordGetter>(fk, out var rec)) return fkStr;
 
             var eid = rec.EditorID ?? "";
             string name = rec is Mutagen.Bethesda.Plugins.Aspects.INamedGetter named ? named.Name ?? "" : "";
@@ -148,6 +155,14 @@ public static class MutagenLoader
         public readonly Dictionary<string, List<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>> BySig =
             new(StringComparer.Ordinal);
         public readonly Dictionary<FormKey, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> ByFormKey = new();
+        // The exact mod instance this index was built from. Cached entries are keyed by file name,
+        // but a plugin's backing instance is REPLACED on reload_plugin / open / env refresh (the
+        // editable in-memory copy supersedes the env/loose copy). If we served the cache by name
+        // alone, a stale index built from a pre-edit (or empty deployed) instance would be returned
+        // forever — the silent cause of list_records/get_record showing 0 records while
+        // check_plugin (which enumerates directly) correctly saw them. Rebuilding when Source no
+        // longer matches the resolved mod makes the cache self-healing across every replace path.
+        public object? Source;
     }
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ModIndex> _modIndexCache = new(StringComparer.OrdinalIgnoreCase);
@@ -195,9 +210,13 @@ public static class MutagenLoader
     // Enumerate a mod exactly once, bucketing records by signature and FormKey. Cached per mod.
     private static ModIndex GetModIndex(object mod, string modName, Action<string>? progress = null)
     {
-        if (_modIndexCache.TryGetValue(modName, out var cached)) return cached;
+        // Serve the cache only when it was built from the SAME mod instance we're resolving now.
+        // A name-only hit would hand back a stale index after the backing instance was replaced
+        // (reload_plugin, open_plugin, env refresh, or an editable copy superseding the env copy).
+        if (_modIndexCache.TryGetValue(modName, out var cached) && ReferenceEquals(cached.Source, mod))
+            return cached;
 
-        var idx = new ModIndex();
+        var idx = new ModIndex { Source = mod };
         if (mod is Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod)
         {
             int count = 0;
@@ -267,8 +286,13 @@ public static class MutagenLoader
         LinkCache = env.LinkCache;
 
         var plugins = new List<string>();
+        MasterIsEsl.Clear();
         foreach (var l in env.LoadOrder.ListedOrder)
-            if (l.Mod != null) plugins.Add(l.ModKey.FileName.String);
+            if (l.Mod != null)
+            {
+                plugins.Add(l.ModKey.FileName.String);
+                MasterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
+            }
 
         progress?.Report(($"Found {plugins.Count} plugins.", null));
         return (env, plugins);
@@ -498,7 +522,7 @@ public static class MutagenLoader
         foreach (var link in rec.EnumerateFormLinks())
         {
             if (link.FormKey.IsNull || !seen.Add(link.FormKey)) continue;
-            if (cache != null && !cache.TryResolveIdentifier(link.FormKey, out _))
+            if (cache != null && !cache.TryResolveIdentifier<IMajorRecordGetter>(link.FormKey, out _))
                 result.Add(new ProblemDto("Error", $"Unresolved reference {link.FormKey} — target not found in the load order (crash risk)."));
         }
         return result;
@@ -562,7 +586,7 @@ public static class MutagenLoader
             {
                 var lc = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
                 // ResolveAllSimpleContexts returns winning-first; reverse to load order.
-                var contexts = lc.ResolveAllSimpleContexts(fk).ToList();
+                var contexts = lc.ResolveAllSimpleContexts<IMajorRecordGetter>(fk).ToList();
                 contexts.Reverse();
                 foreach (var ctx in contexts)
                     ordered.Add((ctx.ModKey.FileName.String, ctx.Record));
@@ -770,17 +794,30 @@ public static class MutagenLoader
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
-        return GetModIndex(mod, plugin).BySig.Keys.OrderBy(x => x).ToList();
+        // Include per-type counts so the caller can gauge group size before listing.
+        return GetModIndex(mod, plugin).BySig
+            .OrderBy(kv => kv.Key)
+            .Select(kv => $"{kv.Key} ({kv.Value.Count})")
+            .ToList();
     }
 
     public static IReadOnlyList<(string formKey, string editorId)> QueryRecordsOfType(
-        object? envObj, string plugin, string sig, int limit = 100)
+        object? envObj, string plugin, string sig, int limit = 100, int offset = 0)
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
         var idx = GetModIndex(mod, plugin);
         if (!idx.BySig.TryGetValue(sig, out var recs)) return [];
-        return recs.Take(limit).Select(r => (r.FormKey.ToString(), r.EditorID ?? "")).ToList();
+        return recs.Skip(Math.Max(0, offset)).Take(limit).Select(r => (r.FormKey.ToString(), r.EditorID ?? "")).ToList();
+    }
+
+    /// <summary>Total record count for a signature in a plugin (for pagination headers).</summary>
+    public static int CountRecordsOfType(object? envObj, string plugin, string sig)
+    {
+        var mod = ResolveMod(plugin, envObj);
+        if (mod == null) return 0;
+        var idx = GetModIndex(mod, plugin);
+        return idx.BySig.TryGetValue(sig, out var recs) ? recs.Count : 0;
     }
 
     /// <summary>
@@ -788,7 +825,7 @@ public static class MutagenLoader
     /// type — one line per record, key fields shown inline. Far cheaper than N QueryRecordFields
     /// calls when the agent needs to survey a whole group at once.
     /// </summary>
-    public static string QueryRecordSummaries(object? envObj, string plugin, string sig, int limit)
+    public static string QueryRecordSummaries(object? envObj, string plugin, string sig, int limit, int offset = 0)
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return $"Plugin '{plugin}' not found.";
@@ -796,8 +833,8 @@ public static class MutagenLoader
         if (!idx.BySig.TryGetValue(sig, out var recs))
             return $"No records of type '{sig}' in {plugin}.";
 
-        var take = recs.Take(limit).ToList();
-        if (take.Count == 0) return $"No records of type '{sig}' in {plugin}.";
+        var take = recs.Skip(Math.Max(0, offset)).Take(limit).ToList();
+        if (take.Count == 0) return $"No records of type '{sig}' in {plugin} at offset {offset}.";
 
         // Discover output columns from the first record (all same-type records share identical
         // property lists in Mutagen). Keep only scalar/enum/FormLink/collection properties.
@@ -890,12 +927,13 @@ public static class MutagenLoader
     }
 
     public static IReadOnlyList<(string formKey, string editorId, string type)> QuerySearch(
-        object? envObj, string plugin, string query, int limit = 50)
+        object? envObj, string plugin, string query, int limit = 50, int offset = 0)
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
         var idx = GetModIndex(mod, plugin);
         var hits = new List<(string, string, string)>();
+        int skipped = 0;
         foreach (var kv in idx.BySig)
             foreach (var r in kv.Value)
             {
@@ -903,6 +941,7 @@ public static class MutagenLoader
                 if (eid.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase))
                 {
+                    if (skipped < offset) { skipped++; continue; }
                     hits.Add((r.FormKey.ToString(), eid, kv.Key));
                     if (hits.Count >= limit) return hits;
                 }
@@ -910,11 +949,11 @@ public static class MutagenLoader
         return hits;
     }
 
-    public sealed record SearchHit(string FormKey, string EditorID, string Type, string Plugin);
+    public sealed record SearchHit(string FormKey, string EditorID, string Type, string Plugin, string Name = "");
 
-    /// <summary>Search every loaded plugin for records whose EditorID or FormID contains the query
-    /// (the record picker). Optional signature filter ("KYWD", "WEAP", …). Winning version per
-    /// FormKey wins (de-duplicated), capped for responsiveness.</summary>
+    /// <summary>Search every loaded plugin for records whose EditorID, FormID, or display Name
+    /// contains the query (substring, case-insensitive). Optional signature filter ("KYWD",
+    /// "WEAP", …). Winning version per FormKey wins (de-duplicated), capped for responsiveness.</summary>
     public static List<SearchHit> SearchAllRecords(object? envObj, string query, string? typeFilter = null, int limit = 200)
     {
         var hits = new List<SearchHit>();
@@ -937,11 +976,13 @@ public static class MutagenLoader
                 foreach (var r in kv.Value)
                 {
                     var eid = r.EditorID ?? "";
+                    var dispName = r is Mutagen.Bethesda.Plugins.Aspects.INamedGetter nm ? (nm.Name ?? "") : "";
                     if (query.Length > 0 &&
                         !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                        !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
                         !r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
                     if (!seen.Add(r.FormKey)) continue;
-                    hits.Add(new SearchHit(r.FormKey.ToString(), eid, kv.Key, name));
+                    hits.Add(new SearchHit(r.FormKey.ToString(), eid, kv.Key, name, dispName));
                     if (hits.Count >= limit) return hits;
                 }
             }
@@ -1006,7 +1047,10 @@ public static class MutagenLoader
         var declared = new HashSet<ModKey> { f4.ModKey };
         foreach (var m in f4.MasterReferences) declared.Add(m.Master);
 
-        int count = 0, deleted = 0, broken = 0;
+        // Use the live link cache for type-collision detection if available.
+        var liveCache = envObj != null ? LinkCache : null;
+
+        int count = 0, deleted = 0, broken = 0, typeCollisions = 0;
         var samples = new List<string>();
         foreach (var rec in f4.EnumerateMajorRecords())
         {
@@ -1023,22 +1067,72 @@ public static class MutagenLoader
                 broken++;
                 if (samples.Count < 50) samples.Add($"REF TO UNDECLARED MASTER  {CheckLabel(rec)} -> {link.FormKey}");
             }
+
+            // Check for type collision against the BASE record in the originating master plugin.
+            // Using TryResolve (winning) is wrong here: if this plugin already overrides the FormKey,
+            // TryResolve returns this plugin's own COBJ -- same type, no mismatch detected.
+            // Instead, resolve from the specific master plugin (rec.FormKey.ModKey) to get the ground
+            // truth type before any override. A COBJ override on a FormID whose master is ARMO is a
+            // game-breaking record corruption (FallenWorldCrafting_Compat root cause).
+            if (envObj != null && !f4.ModKey.Equals(rec.FormKey.ModKey))
+            {
+                var masterPlugin = rec.FormKey.ModKey.FileName;
+                var masterRec = GetRecordVersion(envObj, masterPlugin, rec.FormKey);
+                if (masterRec != null)
+                {
+                    var thisType = rec.Registration.GetterType;
+                    var masterType = masterRec.Registration.GetterType;
+                    if (!masterType.IsAssignableFrom(thisType) && !thisType.IsAssignableFrom(masterType))
+                    {
+                        typeCollisions++;
+                        var masterEdid = string.IsNullOrEmpty(masterRec.EditorID)
+                            ? masterRec.FormKey.ToString() : masterRec.EditorID;
+                        if (samples.Count < 50)
+                            samples.Add($"TYPE COLLISION (game-breaking)  {CheckLabel(rec)} overrides " +
+                                        $"{masterType.Name} '{masterEdid}' [{masterRec.FormKey}] " +
+                                        $"in {masterPlugin}");
+                    }
+                }
+            }
         }
 
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"Checked {plugin}: {count} records, {deleted} deleted, {broken} reference(s) to undeclared masters.");
-        if (deleted + broken == 0) { sb.AppendLine("No issues found."); return sb.ToString(); }
+        sb.AppendLine($"Checked {plugin}: {count} records, {deleted} deleted, {broken} reference(s) to undeclared masters, {typeCollisions} type collision(s).");
+        if (deleted + broken + typeCollisions == 0) { sb.AppendLine("No issues found."); return sb.ToString(); }
         sb.AppendLine("Issues:");
         foreach (var s in samples) sb.AppendLine("  " + s);
-        if (deleted + broken > samples.Count) sb.AppendLine($"  ... and {deleted + broken - samples.Count} more");
+        if (deleted + broken + typeCollisions > samples.Count) sb.AppendLine($"  ... and {deleted + broken + typeCollisions - samples.Count} more");
         return sb.ToString();
+    }
+
+    /// <summary>Remove a ConstructibleObject override from an editable (open) plugin by FormKey.
+    /// Returns true when the record was found and removed. No-op if the plugin isn't editable
+    /// or the record isn't in it.</summary>
+    public static bool RemoveFromEditableMod(string plugin, Mutagen.Bethesda.Plugins.FormKey fk)
+    {
+        if (!EditableMods.TryGetValue(plugin, out var modObj)) return false;
+        if (modObj is not Mutagen.Bethesda.Fallout4.Fallout4Mod mod) return false;
+        return mod.ConstructibleObjects.Remove(fk);
     }
 
     private static string CheckLabel(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter r) =>
         $"{(string.IsNullOrEmpty(r.EditorID) ? r.FormKey.ToString() : r.EditorID)} [{r.FormKey}] ({r.Registration.Name})";
 
+    // Vanilla core masters whose ACHR/REFR/cell-placed records aren't indexed by Mutagen's
+    // top-level group cache. FormLinks pointing into these are always valid at runtime.
+    private static readonly HashSet<string> VanillaMasters = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
+        "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"
+    };
+
+    private static bool IsVanillaRef(Mutagen.Bethesda.Plugins.FormKey fk) =>
+        VanillaMasters.Contains(fk.ModKey.FileName.String);
+
     // Deep error scan using the load-order link cache: references that resolve to NOTHING
     // anywhere in the load order are dangling and will crash the game.
+    // Vanilla-master refs are skipped — Mutagen can't index cell-placed ACHR/REFR records,
+    // so those refs would all appear dangling even when valid.
     public static string ScanErrorsDeep(object? envObj, string plugin)
     {
         if (envObj == null) return "Deep error scan needs the loaded game environment. Use 'Load Env' first.";
@@ -1054,8 +1148,8 @@ public static class MutagenLoader
             if (rec.IsDeleted) { deleted++; if (samples.Count < 60) samples.Add($"DELETED  {CheckLabel(rec)}"); }
             foreach (var link in rec.EnumerateFormLinks())
             {
-                if (link.FormKey.IsNull) continue;
-                if (!cache.TryResolveIdentifier(link.FormKey, out _))
+                if (link.FormKey.IsNull || IsVanillaRef(link.FormKey)) continue;
+                if (!cache.TryResolveIdentifier<IMajorRecordGetter>(link.FormKey, out _))
                 {
                     dangling++;
                     if (samples.Count < 60) samples.Add($"DANGLING REF (crash risk)  {CheckLabel(rec)} -> {link.FormKey}");
@@ -1070,6 +1164,121 @@ public static class MutagenLoader
         foreach (var s in samples) sb.AppendLine("  " + s);
         if (deleted + dangling > samples.Count) sb.AppendLine($"  ... and {deleted + dangling - samples.Count} more");
         return sb.ToString();
+    }
+
+    // Scan a single plugin for broken FormLinks to non-vanilla masters. Returns grouped results.
+    public static string ScanBrokenRefs(object? envObj, string plugin)
+    {
+        if (envObj == null) return "scan_broken_refs needs the loaded game environment. Use 'Load Env' first.";
+        if (ResolveMod(plugin, envObj) is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod)
+            return $"(plugin '{plugin}' is not loaded)";
+
+        var cache = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
+        var loadedPlugins = BuildLoadedPluginSet(envObj);
+        var result = ScanBrokenRefsInMod(cache, plugin, mod, loadedPlugins);
+        return result ?? $"{plugin}: no broken references found.";
+    }
+
+    // Build the set of plugin filenames present in the loaded environment (env + editable mods).
+    // Used by the broken-ref scan to distinguish "target plugin not in load order" (skip — might
+    // be CC content or external content not managed by MO2) from "plugin loaded but record missing"
+    // (real broken ref worth reporting).
+    private static HashSet<string> BuildLoadedPluginSet(object? envObj)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in EditableMods) set.Add(kv.Key);
+        foreach (var kv in LooseMods) set.Add(kv.Key);
+        if (envObj != null)
+        {
+            dynamic env = envObj;
+            foreach (var l in ((IEnumerable)env.LoadOrder.ListedOrder).Cast<dynamic>())
+                if (l.Mod != null) set.Add((string)l.ModKey.FileName.String);
+        }
+        return set;
+    }
+
+    // Returns null when the plugin is clean (no broken refs), so callers can skip it.
+    // A "broken reference" is a FormLink that points to a FormID inside a LOADED plugin where
+    // that record does not exist — the target was deleted or never added. At runtime the engine
+    // dereferences a null pointer when it tries to load that record, causing a crash.
+    // Refs to vanilla masters (Fallout4.esm / DLC*.esm) are excluded: Mutagen can't index
+    // cell-placed ACHR/REFR records so those would all appear broken even when valid.
+    // Refs to plugins NOT in the load order are also excluded: those are typically CC content
+    // or other external content not visible to the MO2-managed environment; they can't be
+    // verified and would all appear broken (false positives).
+    private static string? ScanBrokenRefsInMod(
+        Mutagen.Bethesda.Plugins.Cache.ILinkCache cache, string pluginName,
+        Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod,
+        HashSet<string> loadedPlugins)
+    {
+        int count = 0, dangling = 0;
+        var byMaster = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var samples = new List<string>();
+
+        foreach (var rec in mod.EnumerateMajorRecords())
+        {
+            count++;
+            foreach (var link in rec.EnumerateFormLinks())
+            {
+                var fk = link.FormKey;
+                if (fk.IsNull || IsVanillaRef(fk)) continue;
+                // Skip refs to plugins not present in the load order: they can't be resolved
+                // through Mutagen regardless of whether they're actually installed (CC content,
+                // external loaders, etc.), so they would all appear broken.
+                if (!loadedPlugins.Contains(fk.ModKey.FileName.String)) continue;
+                if (!cache.TryResolveIdentifier<IMajorRecordGetter>(fk, out _))
+                {
+                    dangling++;
+                    var master = fk.ModKey.FileName.String;
+                    byMaster[master] = byMaster.TryGetValue(master, out var n) ? n + 1 : 1;
+                    if (samples.Count < 80)
+                        samples.Add($"  [{fk}] in {CheckLabel(rec)}");
+                }
+            }
+        }
+
+        if (dangling == 0) return null;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{pluginName}  ({dangling} broken ref(s) across {count} records)");
+        sb.AppendLine("  Broken refs by target plugin:");
+        foreach (var kv in byMaster.OrderByDescending(x => x.Value))
+            sb.AppendLine($"    {kv.Value,5}x  {kv.Key}");
+        sb.AppendLine("  Sample broken refs:");
+        foreach (var s in samples) sb.AppendLine(s);
+        if (dangling > samples.Count) sb.AppendLine($"  ... and {dangling - samples.Count} more");
+        return sb.ToString();
+    }
+
+    // Scan every non-vanilla plugin in the load order for dangling FormLinks.
+    // Only plugins with actual broken refs appear in the output.
+    public static string ScanAllPluginsForBrokenRefs(object? envObj)
+    {
+        if (envObj == null) return "scan_all_plugins needs the loaded game environment. Use 'Load Env' first.";
+
+        var cache = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
+        var loadedPlugins = BuildLoadedPluginSet(envObj);
+        var results = new System.Text.StringBuilder();
+        int totalPlugins = 0, dirtyPlugins = 0, totalBroken = 0;
+
+        foreach (var (name, modObj) in AllLoadedMods(envObj))
+        {
+            if (VanillaMasters.Contains(name)) continue;
+            if (modObj is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
+            totalPlugins++;
+            var pluginResult = ScanBrokenRefsInMod(cache, name, mod, loadedPlugins);
+            if (pluginResult == null) continue; // clean — skip entirely
+            dirtyPlugins++;
+            var m = System.Text.RegularExpressions.Regex.Match(pluginResult, @"(\d+) broken ref");
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var n)) totalBroken += n;
+            results.AppendLine(pluginResult);
+        }
+
+        if (dirtyPlugins == 0)
+            return $"All {totalPlugins} non-vanilla plugins are clean — no broken references found.";
+
+        return $"=== Crash Risk Scan: {dirtyPlugins} of {totalPlugins} plugins have broken refs — {totalBroken} total ===\n\n" +
+               results.ToString();
     }
 
     // Conflict scan: records in this plugin that other loaded plugins also define/override.

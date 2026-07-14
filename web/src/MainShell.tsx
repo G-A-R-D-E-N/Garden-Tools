@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Files, Search, GitCompare, AlertCircle,
+  Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
 } from 'lucide-react';
+import PapyrusPanel from './PapyrusPanel';
+import NifPanel from './NifPanel';
 
 interface McpLiveMsg {
   Tool: string;
   Plugin: string;
   Record: string;
+  Field: string;
   Summary: string;
   IsWrite: boolean;
   ts: number;
@@ -84,11 +87,35 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
   const [showSettings, setShowSettings] = useState(false);
+  const [showPapyrus, setShowPapyrus] = useState(false);
+  const [showNif, setShowNif] = useState(false);
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
   const [railVisible, setRailVisible] = useState(true);
   const [chatVisible, setChatVisible] = useState(true);
+  const [chatWidth, setChatWidth] = useState(() => Number(localStorage.getItem('chatWidth') || 320));
+
+  const onChatResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = chatWidth;
+    const onMove = (mv: MouseEvent) => {
+      const w = Math.max(240, Math.min(800, startW + (startX - mv.clientX)));
+      setChatWidth(w);
+      localStorage.setItem('chatWidth', String(w));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [chatWidth]);
 
   // Theme: dark by default; persisted in localStorage.
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light');
@@ -113,6 +140,9 @@ export default function MainShell() {
   const [mcpFeed, setMcpFeed] = useState<McpLiveMsg[]>([]);
   const [mcpActive, setMcpActive] = useState(false);
   const mcpActiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Field path of the last AI write — passed to RecordView so it can flash that row.
+  const [aiHighlightField, setAiHighlightField] = useState('');
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Stable refs so the message-handler closure (which runs only once on mount) can always
   // read the latest openRecord and call the latest reloadMatrix without stale captures.
@@ -152,7 +182,21 @@ export default function MainShell() {
         setMcpActive(true);
         if (mcpActiveTimerRef.current) clearTimeout(mcpActiveTimerRef.current);
         mcpActiveTimerRef.current = setTimeout(() => setMcpActive(false), 2000);
-        if (ev.IsWrite && openRecordRef.current) {
+        if (ev.IsWrite && ev.Record) {
+          const cur = openRecordRef.current;
+          if (cur && cur.matrix.FormKey === ev.Record) {
+            reloadMatrixRef.current();
+          } else {
+            // Navigate to the record being edited — auto-switches to record tab.
+            openByFormKeyRef.current(ev.Record, ev.Plugin);
+          }
+          // Flash the exact field the AI just wrote.
+          if (ev.Field) {
+            if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+            setAiHighlightField(ev.Field);
+            highlightTimerRef.current = setTimeout(() => setAiHighlightField(''), 3000);
+          }
+        } else if (ev.IsWrite && openRecordRef.current) {
           reloadMatrixRef.current();
         }
       }
@@ -250,6 +294,26 @@ export default function MainShell() {
     } catch (err: any) {
       setErrorStr(err?.message || JSON.stringify(err));
     } finally {
+      setProgress(null);
+    }
+  };
+
+  const [brokenRefsReport, setBrokenRefsReport] = useState<string | null>(null);
+  const [brokenRefsScanning, setBrokenRefsScanning] = useState(false);
+
+  const handleScanBrokenRefs = async () => {
+    const b = window.chrome?.webview?.hostObjects?.appInterop;
+    if (!b) return;
+    setBrokenRefsScanning(true);
+    setStatus('Scanning for broken references...');
+    try {
+      const report = await b.ScanBrokenRefs();
+      setBrokenRefsReport(report);
+      setStatus('Broken-ref scan complete.');
+    } catch (err: any) {
+      setErrorStr(err?.message || JSON.stringify(err));
+    } finally {
+      setBrokenRefsScanning(false);
       setProgress(null);
     }
   };
@@ -373,10 +437,12 @@ export default function MainShell() {
     }
   };
 
-  // Keep reloadMatrix ref current so the onMessage handler (mounted once) always calls the
-  // latest version, which has a fresh closure over the current openRecord state.
+  // Keep reloadMatrix and openByFormKey refs current so the onMessage handler (mounted once)
+  // always calls the latest version with a fresh closure over current state.
   const reloadMatrixRef = useRef(reloadMatrix);
   reloadMatrixRef.current = reloadMatrix;
+  const openByFormKeyRef = useRef(openByFormKey);
+  openByFormKeyRef.current = openByFormKey;
 
   // Opening any record switches to the Record Viewer and resets the inner tab.
   useEffect(() => {
@@ -430,6 +496,12 @@ export default function MainShell() {
           <button className={`activity-btn ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => setActiveTab('compare')} title="Conflicts">
             <GitCompare size={22} strokeWidth={1.5} />
           </button>
+          <button className={`activity-btn ${showPapyrus ? 'active' : ''}`} onClick={() => setShowPapyrus(true)} title="Papyrus (compile / decompile)">
+            <ScrollText size={22} strokeWidth={1.5} />
+          </button>
+          <button className={`activity-btn ${showNif ? 'active' : ''}`} onClick={() => setShowNif(true)} title="NIF (author / inspect / verify / fix)">
+            <Box size={22} strokeWidth={1.5} />
+          </button>
         </div>
       </div>
 
@@ -442,6 +514,9 @@ export default function MainShell() {
           <button className="sidebar-action-btn" onClick={handleLoadEnv}>Load Env</button>
           <button className="sidebar-action-btn" onClick={handleLoadMo2}>Open MO2</button>
           <button className="sidebar-action-btn" onClick={handleScanConflicts}>Scan Conflicts</button>
+          <button className="sidebar-action-btn sidebar-action-btn--warn" onClick={handleScanBrokenRefs} disabled={brokenRefsScanning} title="Scan all plugins for dangling FormLinks (crash risks)">
+            {brokenRefsScanning ? 'Scanning...' : 'Scan Crash Risks'}
+          </button>
           <button className="sidebar-action-btn" onClick={handleRefresh}>Refresh</button>
         </div>
         <div className="sidebar-search">
@@ -571,6 +646,7 @@ export default function MainShell() {
                   onOpenRecord={openByFormKey}
                   activeTab={recordTab}
                   onTabChange={setRecordTab}
+                  highlightField={aiHighlightField}
                 />
               ) : (
                 <div className="welcome-screen glass-panel">
@@ -612,7 +688,8 @@ export default function MainShell() {
       )}
 
       {/* AI Panel - Claude (always mounted so the live session survives a toggle; hidden via CSS) */}
-      <div className="shell-chat" style={{ display: chatVisible ? undefined : 'none' }}>
+      <div className="shell-chat" style={{ display: chatVisible ? undefined : 'none', width: chatVisible ? chatWidth : undefined }}>
+        <div className="chat-resizer" onMouseDown={onChatResizeStart} />
         <ChatPanel />
       </div>
 
@@ -626,7 +703,33 @@ export default function MainShell() {
         loadOrder={plugins.map(p => p.Key)}
       />
 
+      {brokenRefsReport !== null && (
+        <div className="broken-refs-overlay" onClick={() => setBrokenRefsReport(null)}>
+          <div className="broken-refs-modal" onClick={e => e.stopPropagation()}>
+            <div className="broken-refs-header">
+              <span>Crash Risk Report</span>
+              <div className="broken-refs-header-actions">
+                <button className="sidebar-action-btn" onClick={() => navigator.clipboard.writeText(brokenRefsReport)}>Copy</button>
+                <button className="sidebar-action-btn" onClick={() => {
+                  const blob = new Blob([brokenRefsReport], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'crash_risk_report.txt';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}>Export</button>
+                <button className="broken-refs-close" onClick={() => setBrokenRefsReport(null)}>✕</button>
+              </div>
+            </div>
+            <pre className="broken-refs-body">{brokenRefsReport}</pre>
+          </div>
+        </div>
+      )}
+
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showPapyrus && <PapyrusPanel onClose={() => setShowPapyrus(false)} />}
+      {showNif && <NifPanel onClose={() => setShowNif(false)} />}
     </div>
   );
 }

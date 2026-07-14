@@ -19,7 +19,7 @@
       <Button Content="Errors" Click="ScanErrorsBtn_Click" Style="{StaticResource ActivityBtn}" Width="48" Height="24" FontSize="11" ToolTip="Scan selected plugin for crash-causing errors"/>
       <Button Content="Conflicts" Click="ScanConflictsBtn_Click" Style="{StaticResource ActivityBtn}" Width="56" Height="24" FontSize="11" ToolTip="Scan selected plugin for conflicts"/>
     </StackPanel>
-    <TextBox Grid.Row="1" x:Name="SearchBox" Background="#1E1E1E" Foreground="#CCCCCC" BorderThickness="0,1,0,1" BorderBrush="#2B2B2B" Padding="4" TextChanged="Search_TextChanged"/>
+    <TextBox Grid.Row="1" x:Name="SearchBox" Background="#1E1E1E" Foreground="#CCCCCC" BorderThickness="0,1,0,1" BorderBrush="#2B2B2B" Padding="4" TextChanged="Search_TextChanged" PreviewKeyDown="Search_PreviewKeyDown" ToolTip="Substring match across EditorID, FormID, and display Name. Press Enter to search every loaded plugin (records load lazily; Enter forces a backend scan)."/>
     <TreeView Grid.Row="2" x:Name="Tree" Background="#252526" BorderThickness="0"
               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"

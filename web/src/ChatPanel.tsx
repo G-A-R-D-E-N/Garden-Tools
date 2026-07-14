@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type KeyboardEvent, type ClipboardEvent } from 'react';
-import { MessageSquare, X, Plus, Pencil, Trash2, Wrench, Brain, CornerDownRight, Image as ImageIcon, GitBranch } from 'lucide-react';
+import { MessageSquare, X, Plus, Pencil, Trash2, Wrench, Brain, CornerDownRight, Image as ImageIcon, GitBranch, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatSessionMeta, ChatSessionFull, SlashCommand } from './backend';
@@ -8,11 +8,13 @@ import './ChatPanel.css';
 interface ChatMsg { role: 'system' | 'user' | 'assistant'; text: string; images?: string[] }
 
 // The Claude Code provider streams activity lines inline: "🔧 tool(args)", "💭 reasoning", "↳ result".
+// ✍️ write events are injected by our McpLive handler when the AI commits a plugin edit.
 // Pull them out so prose renders as markdown and the activity shows as compact, dim rows.
 const ACTIVITY = [
   { e: '🔧', kind: 'tool' as const },
   { e: '💭', kind: 'think' as const },
   { e: '↳', kind: 'result' as const },
+  { e: '✍️', kind: 'write' as const },
 ];
 function parseActivity(line: string) {
   const t = line.trim().replace(/^_+|_+$/g, '').trim();   // strip markdown italics the provider adds
@@ -40,7 +42,10 @@ function RichText({ text }: { text: string }) {
         </div>
       ) : (
         <div key={i} className={`chat-activity ${b.kind}`} title={b.text}>
-          {b.kind === 'tool' ? <Wrench size={11} /> : b.kind === 'think' ? <Brain size={11} /> : <CornerDownRight size={11} />}
+          {b.kind === 'tool'  ? <Wrench size={11} />
+           : b.kind === 'think' ? <Brain size={11} />
+           : b.kind === 'write' ? <Pencil size={11} />
+           : <CornerDownRight size={11} />}
           <span>{b.text}</span>
         </div>
       ))}
@@ -78,9 +83,15 @@ export default function ChatPanel() {
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // The active chat's view + per-session mutators (keyed by session id from the C# events).
+  // Messages typed while the AI is busy are held here and sent sequentially after AiDone.
+  const pendingQueues = useRef<Record<string, Array<{ text: string; imgs: string[] }>>>({});
+  const [queueCounts, setQueueCounts] = useState<Record<string, number>>({});
+
+  // The active chat's view.
   const messages = buffers[currentId] ?? [GREETING];
   const busy = !!busyMap[currentId];
+  const queueCount = queueCounts[currentId] ?? 0;
+
   const setMsgs = (sid: string, fn: (m: ChatMsg[]) => ChatMsg[]) =>
     setBuffers(b => ({ ...b, [sid]: fn(b[sid] ?? [GREETING]) }));
   const setBusyFor = (sid: string, v: boolean) => setBusyMap(b => ({ ...b, [sid]: v }));
@@ -117,6 +128,38 @@ export default function ChatPanel() {
     try { setSessions(JSON.parse(await c.ListSessions())); } catch { /* ignore */ }
   };
 
+  // Core send path — used by user input, the queue drain, and slash commands.
+  const sendDirect = async (sid: string, text: string, imgs: string[]) => {
+    const c = host();
+    if (!c) return;
+
+    if (text.startsWith('/')) {
+      setMsgs(sid, p => [...p, { role: 'user', text }]);
+      try { await c.SendMessage(sid, text, '[]'); }
+      catch (e: any) { setMsgs(sid, p => [...p, { role: 'system', text: '⚠️ ' + (e?.message || e) }]); }
+      refreshSessions();
+      return;
+    }
+
+    setMsgs(sid, p => [...p, { role: 'user', text, images: imgs }, { role: 'assistant', text: '' }]);
+    setBusyFor(sid, true);
+    try { await c.SendMessage(sid, text, JSON.stringify(imgs)); }
+    catch (e: any) { setBusyFor(sid, false); setMsgs(sid, p => appendToLastAssistant(p, '\n⚠️ ' + (e?.message || e))); }
+    refreshSessions();
+  };
+
+  // Drain the next queued message for a session after AiDone. Uses a ref so the once-mounted
+  // message handler always calls the latest closure (which captures current sendDirect).
+  const drainFnRef = useRef<(sid: string) => void>(() => {});
+  drainFnRef.current = (sid: string) => {
+    const q = pendingQueues.current[sid] ?? [];
+    if (q.length === 0) return;
+    const [next, ...rest] = q;
+    pendingQueues.current[sid] = rest;
+    setQueueCounts(prev => ({ ...prev, [sid]: rest.length }));
+    sendDirect(sid, next.text, next.imgs);
+  };
+
   // Streamed AI + session events from C#.
   useEffect(() => {
     const onMessage = (e: any) => {
@@ -128,10 +171,26 @@ export default function ChatPanel() {
         case 'AiToolStatus': if (sid) setMsgs(sid, p => appendToLastAssistant(p, `\n🔧 ${data.Text}\n`)); break;
         case 'AiInfo': if (sid) setMsgs(sid, p => [...p, { role: 'system', text: data.Text }]); break;
         case 'AiError': if (sid) { setBusyFor(sid, false); setMsgs(sid, p => appendToLastAssistant(p, `\n⚠️ ${data.Text}`)); } break;
-        case 'AiDone': if (sid) { setBusyFor(sid, false); if (data.Stopped) setMsgs(sid, p => appendToLastAssistant(p, '\n[stopped]')); } break;
+        case 'AiDone':
+          if (sid) {
+            setBusyFor(sid, false);
+            if (data.Stopped) setMsgs(sid, p => appendToLastAssistant(p, '\n[stopped]'));
+            // Process the next queued message (if any) after this response finishes.
+            setTimeout(() => drainFnRef.current(sid), 80);
+          }
+          break;
         case 'AiClear': if (sid) setMsgs(sid, () => [GREETING]); break;
         case 'AiRetry': if (sid) { setMsgs(sid, p => [...p, { role: 'assistant', text: '' }]); setBusyFor(sid, true); } break;
         case 'AiReload': if (data.Session) setBuffers(b => ({ ...b, [data.Session.id]: dtoToMsgs(data.Session) })); break;
+        case 'McpLive':
+          // Inject a highlighted write-activity row into the streaming AI response so the user can
+          // see exactly which plugin field the AI modified. The record view auto-reloads separately
+          // (MainShell's message handler does that).
+          if (data.IsWrite) {
+            const activeSid = sid ?? Object.entries(busyMapRef.current).find(([, v]) => v)?.[0];
+            if (activeSid) setMsgs(activeSid, p => appendToLastAssistant(p, `\n✍️ ${data.Summary}\n`));
+          }
+          break;
         case 'SessionRenamed':
         case 'SessionsChanged': refreshSessions(); break;
       }
@@ -198,10 +257,10 @@ export default function ChatPanel() {
     const from = currentId;
     try {
       const dto = JSON.parse(await c.ForkSession(from));
-      renderSession(dto);        // switch to the new forked chat (recent context kept)
-      refreshSessions();
+      await refreshSessions();   // populate sessions list BEFORE switching so the dropdown shows the fork
+      renderSession(dto);        // now switch — currentId will match an entry in sessions
     } catch (e: any) {
-      setMsgs(from, p => [...p, { role: 'system', text: '⚠️ Fork failed: ' + (e?.message || JSON.stringify(e)) }]);
+      setMsgs(from, p => [...p, { role: 'system', text: '⚠️ Fork failed: ' + (e?.message || e?.toString() || '') }]);
     } finally { setForking(false); }
   };
 
@@ -230,27 +289,22 @@ export default function ChatPanel() {
   const send = async () => {
     const text = input.trim();
     const imgs = attachments;
-    if ((!text && imgs.length === 0) || busy) return;
-    const c = host();
-    if (!c) return;
-    const sid = currentId;            // the chat this message belongs to (capture before any await)
+    if (!text && imgs.length === 0) return;
     setInput('');
     setAttachments([]);
-    const imagesJson = JSON.stringify(imgs);
+    const c = host();
+    if (!c) return;
+    const sid = currentId;
 
-    if (text.startsWith('/')) {
-      setMsgs(sid, p => [...p, { role: 'user', text }]);
-      try { await c.SendMessage(sid, text, '[]'); }   // commands ignore attachments
-      catch (e: any) { setMsgs(sid, p => [...p, { role: 'system', text: '⚠️ ' + (e?.message || e) }]); }
-      refreshSessions();
+    if (busy) {
+      // Queue the message — never cancel a running stream.
+      const q = pendingQueues.current[sid] ?? [];
+      pendingQueues.current[sid] = [...q, { text, imgs }];
+      setQueueCounts(prev => ({ ...prev, [sid]: q.length + 1 }));
       return;
     }
 
-    setMsgs(sid, p => [...p, { role: 'user', text, images: imgs }, { role: 'assistant', text: '' }]);
-    setBusyFor(sid, true);
-    try { await c.SendMessage(sid, text, imagesJson); }
-    catch (e: any) { setBusyFor(sid, false); setMsgs(sid, p => appendToLastAssistant(p, '\n⚠️ ' + (e?.message || e))); }
-    refreshSessions();   // the first message auto-renames the session
+    await sendDirect(sid, text, imgs);
   };
 
   // Send a prompt supplied by another component (e.g. "Ask AI: what breaks?"). Uses refs so the
@@ -306,7 +360,11 @@ export default function ChatPanel() {
             )}
             {m.role === 'user'
               ? m.text
-              : (m.text ? <RichText text={m.text} /> : (m.role === 'assistant' && busy ? '…' : ''))}
+              : (m.text
+                  ? <RichText text={m.text} />
+                  : (m.role === 'assistant' && busy
+                      ? <span className="chat-typing"><span /><span /><span /></span>
+                      : ''))}
           </div>
         ))}
         <div ref={endRef} />
@@ -338,6 +396,11 @@ export default function ChatPanel() {
             ))}
           </div>
         )}
+        {busy && queueCount > 0 && (
+          <div className="chat-queue-banner">
+            {queueCount} message{queueCount !== 1 ? 's' : ''} queued
+          </div>
+        )}
         <div className="ai-input">
           <input
             ref={fileRef}
@@ -347,20 +410,22 @@ export default function ChatPanel() {
             style={{ display: 'none' }}
             onChange={e => { addImageFiles(e.target.files); e.target.value = ''; }}
           />
-          <button className="chat-attach-btn" onClick={() => fileRef.current?.click()} title="Attach image" disabled={busy}>
+          <button className="chat-attach-btn" onClick={() => fileRef.current?.click()} title="Attach image">
             <ImageIcon size={16} />
           </button>
           <input
             type="text"
-            placeholder={busy ? 'Claude is thinking…' : 'Ask Claude…  (paste or attach images)'}
+            placeholder={busy ? 'Responding… press Enter to queue' : 'Ask Claude…  (paste or attach images)'}
             value={input}
             onChange={e => { setInput(e.target.value); setCmdIndex(0); }}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
-            disabled={busy}
           />
           {busy
-            ? <button onClick={stop} title="Stop"><X size={16} /></button>
+            ? <button className="chat-stop-btn" onClick={stop} title="Stop generating">
+                <Square size={11} />
+                Stop
+              </button>
             : <button onClick={send} title="Send"><MessageSquare size={16} /></button>}
         </div>
       </div>

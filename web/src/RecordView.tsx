@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Folder, ChevronRight, ChevronDown, Filter, EyeOff, Pencil, Copy, Save, Trash2,
   Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network,
@@ -68,12 +68,13 @@ function TabBtn({ id, current, set, children, count }: {
 }
 
 export default function RecordView(
-  { matrix, plugin, onReload, onOpenRecord, activeTab: externalTab, onTabChange }: {
+  { matrix, plugin, onReload, onOpenRecord, activeTab: externalTab, onTabChange, highlightField }: {
     matrix: ConflictMatrix; plugin: string;
     onReload: () => Promise<void>;
     onOpenRecord?: (formKey: string, plugin: string) => void;
     activeTab?: RecordTab;
     onTabChange?: (t: RecordTab) => void;
+    highlightField?: string;
   }
 ) {
   const [internalTab, setInternalTab] = useState<RecordTab>('grid');
@@ -91,6 +92,12 @@ export default function RecordView(
   const [status, setStatus] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
 
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<number, boolean>>({});
+
+  // Field path flashing from AI write events (highlightField prop → local flashedField state).
+  const [flashedField, setFlashedField] = useState('');
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [refBy, setRefBy] = useState<RefByEntry[] | null>(null);
   const [problems, setProblems] = useState<RecordProblem[] | null>(null);
@@ -105,12 +112,22 @@ export default function RecordView(
   useEffect(() => {
     const b = back();
     if (!b) return;
-    setRefBy(null); setProblems(null);
+    setRefBy(null); setProblems(null); setCollapsedGroups({});
     (async () => {
       try { setProblems(JSON.parse(await b.GetProblems(matrix.FormKey))); } catch { setProblems([]); }
       try { setRefBy(JSON.parse(await b.GetReferencedBy(matrix.FormKey))); } catch { setRefBy([]); }
     })();
   }, [matrix.FormKey]);
+
+  // When the AI writes to a field, flash that row and switch to grid view so it's visible.
+  useEffect(() => {
+    if (!highlightField) return;
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    setFlashedField(highlightField);
+    setRecordTab('grid');
+    flashTimerRef.current = setTimeout(() => setFlashedField(''), 1800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightField]);
 
   const winnerIdx = useMemo(() => {
     const i = matrix.Plugins.lastIndexOf(matrix.Winner);
@@ -146,8 +163,18 @@ export default function RecordView(
   }, [matched, ov, filtering]);
 
   // ── Conflict tab data ──────────────────────────────────────────────────────
+  // A row is a genuine conflict only when ≥2 plugins have non-empty values that differ.
+  // Rows where all defining plugins agree (ITM overrides) are excluded.
+  const isGenuineConflict = (r: ConflictFieldRow) => {
+    if (!r.Differs || r.HasChildren) return false;
+    const nonEmpty = r.Values.filter(v => v !== '' && v != null);
+    if (nonEmpty.length < 2) return false;
+    return !nonEmpty.every(v => v === nonEmpty[0]);
+  };
+
   const conflictLeafRows = useMemo(
-    () => matrix.Rows.filter(r => r.Differs && !r.HasChildren),
+    () => matrix.Rows.filter(isGenuineConflict),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [matrix.Rows]
   );
   const conflictStats = useMemo(() => {
@@ -166,7 +193,7 @@ export default function RecordView(
       if (r.HasChildren && r.Level <= 1) {
         if (cur && cur.rows.length > 0) groups.push(cur);
         cur = { label: r.DisplayLabel || r.Field, rows: [], severity: 'none' };
-      } else if (r.Differs && !r.HasChildren) {
+      } else if (isGenuineConflict(r)) {
         if (!cur) cur = { label: 'General', rows: [], severity: 'none' };
         cur.rows.push(r);
         const sev = r.Severity ?? 'none';
@@ -175,7 +202,7 @@ export default function RecordView(
     }
     if (cur && cur.rows.length > 0) groups.push(cur);
     return groups;
-  }, [matrix.Rows]);
+  }, [matrix.Rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Editing ────────────────────────────────────────────────────────────────
   const startEdit = (r: ConflictFieldRow, col: number) => {
@@ -325,7 +352,7 @@ export default function RecordView(
         {gridRows.length === 0 ? (
           <tr><td className="rv-empty" colSpan={matrix.Plugins.length + 1}>No fields match.</td></tr>
         ) : gridRows.map((r, ri) => (
-          <tr key={ri} className={r.Differs ? 'rv-diff' : ''}>
+          <tr key={ri} className={[r.Differs ? 'rv-diff' : '', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
             <td
               className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
               onDoubleClick={() => r.HasChildren && toggle(r)}
@@ -442,63 +469,66 @@ export default function RecordView(
                 </div>
               </div>
 
-              {/* Conflict cards grouped by subrecord */}
+              {/* Single unified table — xEdit style with group separator rows */}
               <div className="rv-conflict-groups">
-                {conflictGroups.map((g, gi) => (
-                  <div key={gi} className={`rv-cg rv-cg-sev-${g.severity}`}>
-                    <div className="rv-cg-header">
-                      <span className="rv-cg-name">{g.label}</span>
-                      <span className={`rv-cg-badge rv-cg-sev-badge-${g.severity}`}>
-                        {g.rows.length} conflict{g.rows.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <div className="rv-cg-scroll">
-                      <table className="rv-grid rv-cg-table" style={{ minWidth: 280 + matrix.Plugins.length * 220 }}>
-                        <thead>
-                          <tr>
-                            <th className="rv-prop-col rv-sticky">Field</th>
-                            {matrix.Plugins.map((p, i) => (
-                              <th key={p + i} className={i === winnerIdx ? 'rv-winner-col' : ''}>
-                                <span className="rv-col-name">{p}</span>
-                                {i === winnerIdx && matrix.Plugins.length > 1 && <span className="rv-winner-badge">WINNER</span>}
-                              </th>
-                            ))}
-                            <th className="rv-final-col">Final Value</th>
+                <table className="rv-grid rv-cg-table" style={{ minWidth: 280 + matrix.Plugins.length * 200 }}>
+                  <thead>
+                    <tr>
+                      <th className="rv-prop-col rv-sticky">Field</th>
+                      {matrix.Plugins.map((p, i) => (
+                        <th key={p + i} className={i === winnerIdx ? 'rv-winner-col' : ''}>
+                          <span className="rv-col-name" title={p}>{p}</span>
+                          {i === winnerIdx && matrix.Plugins.length > 1 && <span className="rv-winner-badge">WINNER</span>}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {conflictGroups.map((g, gi) => {
+                      const collapsed = !!collapsedGroups[gi];
+                      const colCount = matrix.Plugins.length + 1;
+                      return (
+                        <Fragment key={gi}>
+                          <tr
+                            className={`rv-cg-sep rv-cg-sep-sev-${g.severity}`}
+                            onClick={() => setCollapsedGroups(prev => ({ ...prev, [gi]: !prev[gi] }))}
+                          >
+                            <td colSpan={colCount}>
+                              <div className="rv-sep-inner">
+                                <span className="rv-sep-name">{g.label}</span>
+                                <span className={`rv-sep-badge rv-cg-sev-badge-${g.severity}`}>
+                                  {g.rows.length} conflict{g.rows.length !== 1 ? 's' : ''}
+                                </span>
+                                <ChevronRight size={12} className={`rv-sep-chevron${collapsed ? '' : ' rv-sep-chevron-open'}`} />
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {g.rows.map((r, ri) => {
-                            const winVal = r.Values[winnerIdx] || r.Values.find(v => v) || '';
-                            return (
-                              <tr key={ri} className="rv-diff">
-                                <td className="rv-prop-col rv-sticky">
-                                  <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
-                                </td>
-                                {matrix.Plugins.map((_, ci) => {
-                                  const st = resolveStatus(r, ci);
-                                  return (
-                                    <td
-                                      key={ci}
-                                      className={`rv-cell rv-c-${st}`}
-                                      onDoubleClick={() => startEdit(r, ci)}
-                                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
-                                    >
-                                      {st === 'win' && <Crown size={10} className="rv-win-icon" />}
-                                      {r.Values[ci]}
-                                    </td>
-                                  );
-                                })}
-                                <td className="rv-cell rv-c-win rv-final-val">
-                                  <Crown size={10} className="rv-win-icon" />{winVal}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
+                          {!collapsed && g.rows.map((r, ri) => (
+                            <tr key={ri} className={['rv-diff', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
+                              <td className="rv-prop-col rv-sticky">
+                                <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
+                              </td>
+                              {matrix.Plugins.map((_, ci) => {
+                                const st = resolveStatus(r, ci);
+                                return (
+                                  <td
+                                    key={ci}
+                                    className={`rv-cell rv-c-${st}`}
+                                    onDoubleClick={() => startEdit(r, ci)}
+                                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
+                                  >
+                                    {st === 'win' && <Crown size={10} className="rv-win-icon" />}
+                                    {r.Values[ci]}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </>
           )}

@@ -94,6 +94,23 @@ public class AppInterop
         finally { _onProgress?.Invoke("", -1); }
     }
 
+    public async System.Threading.Tasks.Task<string> ScanBrokenRefs()
+    {
+        DebugLog.Interop(nameof(ScanBrokenRefs));
+        var env = _shell.GameEnvironment;
+        if (env == null) return "No environment loaded — Load Env or Open MO2 first.";
+        _onProgress?.Invoke("Scanning for broken references...", null);
+        try
+        {
+            return await System.Threading.Tasks.Task.Run(() =>
+            {
+                try { return MutagenLoader.ScanAllPluginsForBrokenRefs(env); }
+                catch (Exception ex) { DebugLog.Exception("ScanBrokenRefs", ex); return "Scan failed: " + ex.Message; }
+            });
+        }
+        finally { _onProgress?.Invoke("", -1); }
+    }
+
     /// <summary>Rebuild the plugin tree from the current load order + AI edits (fresh lazy nodes), so
     /// changes the AI just made show on re-expand. Does NOT reload the environment.</summary>
     public string RefreshTree()

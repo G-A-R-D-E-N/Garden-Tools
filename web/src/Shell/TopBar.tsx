@@ -94,7 +94,7 @@ export default function TopBar({
     <div className="topbar">
       {/* Brand */}
       <div className="topbar-brand">
-        <span className="brand-x">xEdit</span>
+        <span className="brand-x">NexusEdit</span>
       </div>
 
       {/* Tab strip */}

@@ -17,6 +17,11 @@ public sealed class AppSettings
     public string OutputFolder { get; set; } = "";   // where save_plugin writes (blank = <app>/Output)
     public string DataFolder { get; set; } = "";   // Load Env data-folder override (blank = auto-detect / MO2 VFS)
     public string Mo2InstancePath { get; set; } = "";   // MO2 instance folder (the one with mods\ and profiles\)
+    public string Fallout4Path { get; set; } = "";   // FO4 install root (blank = registry / Steam auto-detect)
+    public string NiftoolPath { get; set; } = "";   // niftool.exe (blank = bundled copy next to the exe)
+    public string TexconvPath { get; set; } = "";   // Texconvx64.exe (blank = bundled copy next to the exe)
+    public string PapyrusCompilerPath { get; set; } = "";   // CK PapyrusCompiler.exe (blank = from the FO4 install)
+    public string PapyrusBaseImports { get; set; } = "";   // extra base-script roots, ';'-separated, highest first
     public double SidePanelWidth { get; set; } = 320;
     public double AiPanelWidth { get; set; } = 420;
     public double BottomPanelHeight { get; set; } = 200;

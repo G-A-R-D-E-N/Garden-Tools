@@ -28,7 +28,7 @@ public sealed class PluginToolExecutor
             "List every loaded plugin (ESP/ESM/ESL) the user has open. Call this first to discover what data is available.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }),
         new("list_record_types",
-            "List the record-type signatures (e.g. WEAP, ARMO, COBJ, NPC_, LVLI) present in a given plugin.",
+            "List the record-type signatures present in a given plugin, each with its record count, e.g. 'WEAP (42)'.",
             new
             {
                 type = "object",
@@ -36,7 +36,8 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin" }
             }),
         new("list_records",
-            "List records of a specific type in a plugin (EditorID + FormKey). Use to browse a group.",
+            "List records of a specific type in a plugin (EditorID + FormKey). Use to browse a group. Paginated: " +
+            "the header reports 'Showing X-Y of TOTAL' and the next-page offset; pass 'offset' to page through large groups.",
             new
             {
                 type = "object",
@@ -44,7 +45,8 @@ public sealed class PluginToolExecutor
                 {
                     plugin = new { type = "string" },
                     type = new { type = "string", description = "Record signature, e.g. 'WEAP'." },
-                    limit = new { type = "integer", description = "Max records to return (default 100)." }
+                    limit = new { type = "integer", description = "Max records to return (default 100)." },
+                    offset = new { type = "integer", description = "Skip this many records first (for paging; default 0)." }
                 },
                 required = new[] { "plugin", "type" }
             }),
@@ -63,12 +65,13 @@ public sealed class PluginToolExecutor
                 {
                     plugin = new { type = "string" },
                     type = new { type = "string", description = "Record type (Mutagen class name), e.g. 'ConstructibleObject'." },
-                    limit = new { type = "integer", description = "Max records to return (default 200, max 500)." }
+                    limit = new { type = "integer", description = "Max records to return (default 200, max 500)." },
+                    offset = new { type = "integer", description = "Skip this many records first (for paging; default 0)." }
                 },
                 required = new[] { "plugin", "type" }
             }),
         new("search_records",
-            "Search a plugin for records whose EditorID or FormKey contains the query text. Returns EditorID, type and FormKey.",
+            "Search a SINGLE plugin for records whose EditorID or FormKey contains the query text. Returns EditorID, type and FormKey. (Use search_all to search the whole load order and match display Name too.)",
             new
             {
                 type = "object",
@@ -76,9 +79,60 @@ public sealed class PluginToolExecutor
                 {
                     plugin = new { type = "string" },
                     query = new { type = "string" },
-                    limit = new { type = "integer", description = "Max matches (default 50)." }
+                    limit = new { type = "integer", description = "Max matches (default 50)." },
+                    offset = new { type = "integer", description = "Skip this many matches first (for paging; default 0)." }
                 },
                 required = new[] { "plugin", "query" }
+            }),
+        new("search_all",
+            "Search the ENTIRE load order for records whose EditorID, FormID, or display Name contains the query " +
+            "(case-insensitive). Optional 'type' signature filter (e.g. 'KYWD' or 'WEAP,ARMO'). De-duplicated to the " +
+            "winning version per FormKey. Returns EditorID (type) [FormKey] \"Name\" <plugin>. Use this when you don't " +
+            "know which plugin defines something, or to match by in-game name.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string" },
+                    type = new { type = "string", description = "Optional signature filter, comma-separated (e.g. 'WEAP,ARMO')." },
+                    limit = new { type = "integer", description = "Max matches (default 100)." }
+                },
+                required = new[] { "query" }
+            }),
+        new("resolve_editorid",
+            "Resolve an EditorID (or a FormKey) to its 'XXXXXX:Plugin.esp' FormKey across the whole load order. " +
+            "Use before set_field/set_conditions/script-property calls when you have an EditorID but need the FormKey, " +
+            "or to confirm a record exists. Returns the FormKey string, or a not-found message.",
+            new
+            {
+                type = "object",
+                properties = new { id = new { type = "string", description = "EditorID or FormKey to resolve." } },
+                required = new[] { "id" }
+            }),
+        new("get_scripts",
+            "Read back the Papyrus scripts (VMAD) attached to a record and their property values. Use to VERIFY " +
+            "attach_script / set_script_property results (e.g. confirm a quest's bridge properties or a holotape's " +
+            "linked terminal). Accepts a FormKey or EditorID; reads the winning version.",
+            new
+            {
+                type = "object",
+                properties = new { id = new { type = "string", description = "FormKey or EditorID of the record." } },
+                required = new[] { "id" }
+            }),
+        new("diff_records",
+            "Field-level diff of two records (each resolved to its winning version) — lines only in A are marked '-', " +
+            "lines only in B '+'. Useful to verify a copy_as_override matches its source, or to compare two similar " +
+            "records. Accepts FormKeys or EditorIDs.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    a = new { type = "string", description = "FormKey or EditorID of record A." },
+                    b = new { type = "string", description = "FormKey or EditorID of record B." }
+                },
+                required = new[] { "a", "b" }
             }),
         new("get_record",
             "Get the full field dump of a single record by FormKey ('001234:Plugin.esp') or EditorID, within a plugin.",
@@ -173,6 +227,27 @@ public sealed class PluginToolExecutor
                 properties = new { id = new { type = "string", description = "FormKey or EditorID of the record." } },
                 required = new[] { "id" }
             }),
+        new("scan_broken_refs",
+            "Scan a single plugin for FormLinks that point to records no longer present in the load order " +
+            "(crash-risk dangling references). Skips vanilla DLC master refs that Mutagen cannot index. " +
+            "Results are grouped by master plugin so you can see which mod version mismatch is the cause.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string", description = "Plugin file name to scan, e.g. 'FallenWorldCrafting_Compat.esp'." } },
+                required = new[] { "plugin" }
+            }),
+        new("scan_all_plugins",
+            "Scan every non-vanilla plugin in the full load order for dangling FormLinks (crash risks). " +
+            "Returns a per-plugin summary grouped by missing master so you can identify which mods have " +
+            "broken references and what target plugin caused the mismatch. Slower than scan_broken_refs " +
+            "but covers the entire modlist in one call.",
+            new
+            {
+                type = "object",
+                properties = new { },
+                required = Array.Empty<string>()
+            }),
 
         // ---- write tools (author plugins) ----
         new("open_plugin",
@@ -195,7 +270,10 @@ public sealed class PluginToolExecutor
             }),
         new("create_record",
             "Add a new record of a given type to a plugin. Existing loaded plugins are opened for editing automatically. Returns the new FormKey. " +
-            "Supported types: BOOK/HOLOTAPE, TERM, WEAP, ARMO, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, FLST, MGEF, PERK, NPC_, QUST, MESG.",
+            "Supported types: BOOK/HOLOTAPE, TERM, WEAP, ARMO, ARMA, ANIO, IDLE, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, FLST, MGEF, PERK, NPC_, QUST, MESG, GLOB, AVIF, LVLI, LVLN, SPEL, ENCH, FURN, IMAD. " +
+            "GLOB defaults to a float global; use GLOBINT/GLOBSHORT/GLOBBOOL for other global value types. Set a global's value via set_field on 'Data'. " +
+            "LVLI/LVLN/SPEL/ENCH are shells: add leveled entries with add_leveled_entry and spell/enchant effects with set_magic_effects (their lists are structs, not FormLinks). " +
+            "Build perk effects with set_perk_effects and quest internals with set_quest_aliases/set_quest_stages/set_quest_objectives.",
             new
             {
                 type = "object",
@@ -292,15 +370,19 @@ public sealed class PluginToolExecutor
         new("renumber_formid",
             "Change one record's FormID within its plugin (xEdit 'Change FormID') and repoint every " +
             "reference to it in the SAME plugin. References in OTHER plugins are NOT rewritten. Call " +
-            "get_referenced_by first and patch external referrers if any. In memory until save_plugin.",
+            "get_referenced_by first and patch external referrers if any. In memory until save_plugin. " +
+            "To split a DUPLICATE FormKey (two records sharing one id, which makes the plugin unsavable), " +
+            "pass the EditorID of the WRONG twin as 'record' and set repoint_references=false so the " +
+            "shared references stay on the id kept by the correct twin.",
             new
             {
                 type = "object",
                 properties = new
                 {
                     plugin = new { type = "string" },
-                    record = new { type = "string", description = "EditorID or current FormKey of the record." },
-                    new_id = new { type = "string", description = "New 6-digit hex object id, e.g. '000F99'." }
+                    record = new { type = "string", description = "EditorID or current FormKey of the record. Use the EditorID to disambiguate a duplicate FormKey." },
+                    new_id = new { type = "string", description = "New 6-digit hex object id, e.g. '000F99'." },
+                    repoint_references = new { type = "boolean", description = "Default true: repoint in-plugin references onto the new id. Set FALSE when splitting a duplicate FormKey so existing references stay on the retained twin." }
                 },
                 required = new[] { "plugin", "record", "new_id" }
             }),
@@ -384,16 +466,17 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "record", "field", "value" }
             }),
         new("set_components",
-            "Replace a COBJ (crafting recipe) record's component list — the materials it consumes. Pass a JSON " +
-            "array of {\"component\":\"FormKeyOrEditorId\",\"count\":N}. Example: " +
-            "[{\"component\":\"01FAA5:Fallout4.esm\",\"count\":1},{\"component\":\"1223C7:Fallout4.esm\",\"count\":3}].",
+            "Replace a record's component list. Works on COBJ (crafting-recipe INPUT materials) AND MISC " +
+            "(the scrap COMPONENTS a junk/part item breaks down into at a workbench). Pass a JSON array of " +
+            "{\"component\":\"FormKeyOrEditorId\",\"count\":N} where component is a CMPO (e.g. c_Steel). Example: " +
+            "[{\"component\":\"c_Steel\",\"count\":3},{\"component\":\"c_Circuitry\",\"count\":1}].",
             new
             {
                 type = "object",
                 properties = new
                 {
                     plugin = new { type = "string" },
-                    record = new { type = "string", description = "FormKey or EditorID of the COBJ." },
+                    record = new { type = "string", description = "FormKey or EditorID of the COBJ or MISC." },
                     components = new { type = "string", description = "JSON array of {component, count}." }
                 },
                 required = new[] { "plugin", "record", "components" }
@@ -416,6 +499,150 @@ public sealed class PluginToolExecutor
                     conditions = new { type = "string", description = "JSON array of condition objects." }
                 },
                 required = new[] { "plugin", "record", "conditions" }
+            }),
+        new("add_leveled_entry",
+            "Append a weighted entry to a LeveledItem (LVLI) or LeveledNpc (LVLN). Leveled-list entries are " +
+            "structs (reference + level + count + chance-none), so add_list_item CANNOT build them — use this. " +
+            "level = min player/zone level for this entry; count = how many; chance_none = % chance the entry " +
+            "rolls nothing (0 = always). Call once per entry.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the LVLI/LVLN." },
+                    reference = new { type = "string", description = "FormKey or EditorID of the item/npc/leveled-list to add." },
+                    level = new { type = "integer", description = "Minimum level for this entry (default 1)." },
+                    count = new { type = "integer", description = "Count for this entry (default 1)." },
+                    chance_none = new { type = "number", description = "Percent chance (0-100) this entry yields nothing (default 0)." }
+                },
+                required = new[] { "plugin", "record", "reference" }
+            }),
+        new("set_perk_effects",
+            "Replace a PERK's effects list (perk entry-point effects are structs that no other tool can build). " +
+            "Pass a JSON array; each object has \"kind\": \"ability\" {ability:\"<SPEL/perk-ability>\"}, " +
+            "\"modifyValue\" {entryPoint, modification:\"Set|Add|Multiply\", value}, or \"activateChoice\" " +
+            "{buttonLabel, spell?:\"<SPEL>\", entryPoint?=Activate}. Optional per-effect: rank, priority, and " +
+            "conditions (same objects as set_conditions, each may add tabIndex). entryPoint = an " +
+            "APerkEntryPointEffect.EntryType name (e.g. Activate, ModAttackDamage, CalculateMyCriticalHitChance).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the PERK." },
+                    effects = new { type = "string", description = "JSON array of perk-effect objects." }
+                },
+                required = new[] { "plugin", "record", "effects" }
+            }),
+        new("set_magic_effects",
+            "Replace a Spell (SPEL) or Object Effect/enchantment (ENCH) Effects list — the MGEF chain with " +
+            "magnitude/area/duration. Pass a JSON array: {\"effect\":\"<MGEF FormKey/EditorID>\",\"magnitude\":N," +
+            "\"area\":N,\"duration\":N,\"conditions\":[...]}. Conditions use the same objects as set_conditions.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the SPEL/ENCH." },
+                    effects = new { type = "string", description = "JSON array of {effect, magnitude, area, duration, conditions}." }
+                },
+                required = new[] { "plugin", "record", "effects" }
+            }),
+        new("set_quest_aliases",
+            "Replace a QUEST's reference aliases (structs add_list_item can't build). JSON array: " +
+            "{\"id\":0,\"name\":\"PlayerAlias\",\"forcedReference\":\"000014:Fallout4.esm\"} for a forced ref " +
+            "(player = 000014:Fallout4.esm), or \"uniqueActor\":\"<NPC>\" for a unique actor. Optional flags " +
+            "(comma-separated AQuestAlias.Flag names). A persistent quest with a forced player alias is the " +
+            "standard host for the PrismaUI bridge and for OnPlayerLoadGame events.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the QUST." },
+                    aliases = new { type = "string", description = "JSON array of alias objects." }
+                },
+                required = new[] { "plugin", "record", "aliases" }
+            }),
+        new("set_quest_stages",
+            "Replace a QUEST's stages. JSON array: {\"index\":10,\"logEntry\":\"Journal text...\"," +
+            "\"flags\":\"RunOnStart\",\"complete\":false}. index = stage number; logEntry = optional journal " +
+            "text shown at this stage; complete=true marks the log entry as completing the quest.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the QUST." },
+                    stages = new { type = "string", description = "JSON array of stage objects." }
+                },
+                required = new[] { "plugin", "record", "stages" }
+            }),
+        new("set_quest_objectives",
+            "Replace a QUEST's objectives (the on-screen quest goals). JSON array: " +
+            "{\"index\":10,\"displayText\":\"Hunt the beast\",\"flags\":\"ORObjective\"}.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the QUST." },
+                    objectives = new { type = "string", description = "JSON array of objective objects." }
+                },
+                required = new[] { "plugin", "record", "objectives" }
+            }),
+        new("compile_papyrus",
+            "Compile Papyrus source .psc -> .pex with the Creation Kit PapyrusCompiler. 'source' auto-detects a " +
+            "single .psc file or a folder (set all=true for a folder). NAMESPACES are handled automatically: a " +
+            "single namespaced file is targeted by its object name; a folder is staged into a namespace tree first, " +
+            "so even a FLAT folder of namespaced scripts (IHO:Foo) compiles. F4SE + vanilla base scripts + the " +
+            "Institute flags file are on the import path automatically; add extra extender roots via 'imports' " +
+            "(semicolon-separated). 'output' defaults to the source folder. optimize=-op, release=-r. Passing a " +
+            ".pas (assembly) is rejected with guidance (compile .psc, not .pas). On failure, a DEPENDENCY HELP " +
+            "section names the missing script extender + Nexus link. Returns a 'RESULT: X succeeded, Y failed' summary.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source = new { type = "string", description = "A .psc file path, or a folder of scripts (with all=true)." },
+                    output = new { type = "string", description = "Output dir for .pex (default: the source folder)." },
+                    imports = new { type = "string", description = "Extra import roots, semicolon-separated (base scripts added automatically)." },
+                    flags = new { type = "string", description = "Flags file name (default Institute_Papyrus_Flags.flg)." },
+                    all = new { type = "boolean", description = "Compile every .psc in the source folder." },
+                    optimize = new { type = "boolean", description = "Optimize (-op)." },
+                    release = new { type = "boolean", description = "Release build, strips debug (-r)." },
+                    compiler_path = new { type = "string", description = "Override path to PapyrusCompiler.exe." }
+                },
+                required = new[] { "source" }
+            }),
+        new("decompile_papyrus",
+            "Decompile compiled Papyrus .pex -> source .psc with the built-in FO4 decompiler (no external tool). " +
+            "'source' auto-detects: a single .pex, or a folder/whole-mod (recurses ALL subfolders for .pex). " +
+            "For a single .pex it returns the source inline; it SAVES when write=true OR an 'output' folder is given " +
+            "(folder mode always saves, default output = source folder). Namespaced scripts (IHO:Foo) are written " +
+            "into namespace subfolders (IHO\\Foo.psc) so they recompile as-is. Declarations are reconstructed " +
+            "exactly; bodies are best-effort (temps inlined, jumps -> If/Else/While) and validated at full parity " +
+            "with original source. assembly=true emits a faithful .pas bytecode listing (inspect-only; NOT " +
+            "compilable). Returns a 'RESULT: X/Y decompiled' summary + OUTPUT path.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source = new { type = "string", description = "A .pex file, or a folder of .pex files." },
+                    output = new { type = "string", description = "Output dir when writing (default: the source folder)." },
+                    assembly = new { type = "boolean", description = "Emit faithful bytecode disassembly instead of reconstructed source." },
+                    write = new { type = "boolean", description = "Write .psc/.pas files to disk instead of returning text inline." }
+                },
+                required = new[] { "source" }
             }),
         new("revert_overrides",
             "BATCH-fix a mod that injected the same bad edit across many records (e.g. a corrupted recipe " +
@@ -524,6 +751,61 @@ public sealed class PluginToolExecutor
                     dry_run = new { type = "boolean", description = "true (default) = preview only; false = write the file." }
                 },
                 required = new[] { "source_path", "masters" }
+            }),
+        new("nif_import",
+            "Author a game-ready Fallout 4 static NIF from a Blender-exported OBJ mesh (no NifSkope, no " +
+            "Creation Kit). Builds a BSTriShape with a BSLightingShaderProperty, texture slots, computed " +
+            "normals+tangents, BSXFlags, and (optionally) a box collision derived from the mesh bounds. " +
+            "Auto-runs verify after writing. Point a record's mesh at the result with set_field " +
+            "(field 'Model' / 'nif') on a STAT/WEAP/MISC/ARMO. Returns a 'RESULT:' line.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    obj_path = new { type = "string", description = "Full path to the input .obj (Blender export)." },
+                    out_nif = new { type = "string", description = "Full path to write the .nif." },
+                    material = new { type = "string", description = "BGSM material path stored on the shader, e.g. 'Materials\\\\mymod\\\\thing.bgsm' (optional)." },
+                    tex_diffuse = new { type = "string", description = "Diffuse texture path, slot 0, e.g. 'Textures\\\\mymod\\\\thing_d.dds' (optional)." },
+                    tex_normal = new { type = "string", description = "Normal texture path, slot 1 (optional)." },
+                    collision = new { type = "boolean", description = "Add a box collision sized to the mesh bounds (OL_STATIC). Default false." },
+                    from_blender = new { type = "boolean", description = "Convert Blender Y-up axes to NIF Z-up. Set true if the OBJ was exported Y-up. Default false." }
+                },
+                required = new[] { "obj_path", "out_nif" }
+            }),
+        new("nif_inspect",
+            "Inspect a Fallout 4 NIF and return a JSON summary: FO4 header check, per-shape " +
+            "{name, verts, tris, skinned, shader type, texture slots, tangents}, plus whether it has " +
+            "BSXFlags and collision. The programmatic replacement for opening a NIF in NifSkope.",
+            new
+            {
+                type = "object",
+                properties = new { nif_path = new { type = "string", description = "Full path to the .nif file." } },
+                required = new[] { "nif_path" }
+            }),
+        new("nif_verify",
+            "Verify a Fallout 4 NIF loads and is structurally game-ready: FO4 header, every shape has " +
+            "verts/tris, a shader, a diffuse texture, tangents, and the file has BSXFlags. Returns a " +
+            "'RESULT: N checks, M failed' line followed by [ok]/[FAIL] per check.",
+            new
+            {
+                type = "object",
+                properties = new { nif_path = new { type = "string", description = "Full path to the .nif file." } },
+                required = new[] { "nif_path" }
+            }),
+        new("nif_fix",
+            "Repair common NIF breakages without NifSkope: recompute missing tangents, add a missing " +
+            "BSXFlags, trim texture paths, and fix shader/BSX flags. Writes a corrected copy and reports " +
+            "the actions taken. Run nif_verify afterwards to confirm.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    nif_path = new { type = "string", description = "Full path to the input .nif file." },
+                    out_nif = new { type = "string", description = "Full path to write the fixed .nif (may equal nif_path to overwrite)." }
+                },
+                required = new[] { "nif_path", "out_nif" }
             }),
     ];
 
@@ -662,6 +944,8 @@ public sealed class PluginToolExecutor
             "batch_patch_records" => $"batch patch {Str("type")} in {Str("source_plugin")} -> {Str("patch_plugin")}",
             "run_script"          => $"run script -> {Str("patch_plugin")}",
             "scan_conflicts"      => "scan all conflicts",
+            "scan_broken_refs"    => $"scan broken refs in {plugin}",
+            "scan_all_plugins"    => "scan entire modlist for broken refs",
             _                     => toolName.Replace('_', ' '),
         };
 
@@ -694,16 +978,38 @@ public sealed class PluginToolExecutor
             }
             case "list_records":
             {
-                var recs = MutagenLoader.QueryRecordsOfType(env, Str("plugin"), Str("type"), Int("limit", 100));
-                return recs.Count == 0 ? "No records of that type." : string.Join("\n", recs.Select(r => $"{r.editorId} [{r.formKey}]"));
+                int limit = Int("limit", 100), offset = Int("offset", 0);
+                var recs = MutagenLoader.QueryRecordsOfType(env, Str("plugin"), Str("type"), limit, offset);
+                if (recs.Count == 0) return offset > 0 ? $"No records at offset {offset}." : "No records of that type.";
+                int total = MutagenLoader.CountRecordsOfType(env, Str("plugin"), Str("type"));
+                var body = string.Join("\n", recs.Select(r => $"{r.editorId} [{r.formKey}]"));
+                int end = offset + recs.Count;
+                var hdr = $"Showing {offset + 1}-{end} of {total}." + (end < total ? $" Next page: offset={end}." : "");
+                return hdr + "\n" + body;
             }
             case "list_records_summary":
-                return MutagenLoader.QueryRecordSummaries(env, Str("plugin"), Str("type"), Math.Min(Int("limit", 200), 500));
+                return MutagenLoader.QueryRecordSummaries(env, Str("plugin"), Str("type"), Math.Min(Int("limit", 200), 500), Int("offset", 0));
             case "search_records":
             {
-                var hits = MutagenLoader.QuerySearch(env, Str("plugin"), Str("query"), Int("limit", 50));
+                var hits = MutagenLoader.QuerySearch(env, Str("plugin"), Str("query"), Int("limit", 50), Int("offset", 0));
                 return hits.Count == 0 ? "No matches." : string.Join("\n", hits.Select(h => $"{h.editorId} ({h.type}) [{h.formKey}]"));
             }
+            case "search_all":
+            {
+                var hits = MutagenLoader.SearchAllRecords(env, Str("query"),
+                    root.TryGetProperty("type", out var saT) ? saT.GetString() : null, Int("limit", 100));
+                return hits.Count == 0 ? "No matches across the load order."
+                    : string.Join("\n", hits.Select(h => $"{h.EditorID} ({h.Type}) [{h.FormKey}] {(string.IsNullOrEmpty(h.Name) ? "" : "\"" + h.Name + "\" ")}<{h.Plugin}>"));
+            }
+            case "resolve_editorid":
+            {
+                var fk = ResolveToFk(env, Str("id"));
+                return fk.IsNull ? $"Could not resolve '{Str("id")}' to a FormKey in the load order." : fk.ToString();
+            }
+            case "get_scripts":
+                return GetScripts(env, Str("id"));
+            case "diff_records":
+                return DiffRecords(env, Str("a"), Str("b"));
             case "get_record":
                 return MutagenLoader.QueryRecordFields(env, Str("plugin"), Str("id"));
             case "get_conflicts":
@@ -719,6 +1025,10 @@ public sealed class PluginToolExecutor
                 return GetReferencedByText(env, Str("id"), Int("limit", 200));
             case "get_problems":
                 return GetProblemsText(env, Str("id"));
+            case "scan_broken_refs":
+                return MutagenLoader.ScanBrokenRefs(env, Str("plugin"));
+            case "scan_all_plugins":
+                return MutagenLoader.ScanAllPluginsForBrokenRefs(env);
 
             // ---- write tools ----
             case "open_plugin":
@@ -741,7 +1051,8 @@ public sealed class PluginToolExecutor
             case "compact_to_esl":
                 return WriteService.CompactToEsl(Str("plugin"), env);
             case "renumber_formid":
-                return WriteService.RenumberFormId(Str("plugin"), Str("record"), Str("new_id"), env);
+                return WriteService.RenumberFormId(Str("plugin"), Str("record"), Str("new_id"), env,
+                    repointRefs: !(root.TryGetProperty("repoint_references", out var rr) && rr.ValueKind == JsonValueKind.False));
             case "clean_plugin":
                 return WriteService.CleanPlugin(Str("plugin"), env);
             case "backup_plugin":
@@ -758,6 +1069,20 @@ public sealed class PluginToolExecutor
                 return WriteService.SetComponents(Str("plugin"), Str("record"), Str("components"), env);
             case "set_conditions":
                 return WriteService.SetConditions(Str("plugin"), Str("record"), Str("conditions"), env);
+            case "add_leveled_entry":
+                return WriteService.AddLeveledEntry(Str("plugin"), Str("record"), Str("reference"),
+                    Int("level", 1), Int("count", 1),
+                    root.TryGetProperty("chance_none", out var cn) && cn.TryGetDouble(out var cnv) ? cnv : 0.0, env);
+            case "set_perk_effects":
+                return WriteService.SetPerkEffects(Str("plugin"), Str("record"), Str("effects"), env);
+            case "set_magic_effects":
+                return WriteService.SetMagicEffects(Str("plugin"), Str("record"), Str("effects"), env);
+            case "set_quest_aliases":
+                return WriteService.SetQuestAliases(Str("plugin"), Str("record"), Str("aliases"), env);
+            case "set_quest_stages":
+                return WriteService.SetQuestStages(Str("plugin"), Str("record"), Str("stages"), env);
+            case "set_quest_objectives":
+                return WriteService.SetQuestObjectives(Str("plugin"), Str("record"), Str("objectives"), env);
             case "revert_overrides":
                 return WriteService.RevertOverridesFrom(env, Str("bad_plugin"), Str("patch_plugin"),
                     root.TryGetProperty("signature", out var sg) ? sg.GetString() : null,
@@ -776,6 +1101,17 @@ public sealed class PluginToolExecutor
                     !root.TryGetProperty("dry_run", out var drs) || drs.ValueKind != JsonValueKind.False);
             case "reload_plugin":
                 return WriteService.ReloadPlugin(Str("plugin"), env);
+            case "decompile_papyrus":
+                return PapyrusService.Decompile(Str("source"),
+                    root.TryGetProperty("output", out var dpo) ? dpo.GetString() : null,
+                    Bool("assembly"), Bool("write"));
+            case "compile_papyrus":
+                return PapyrusService.Compile(Str("source"),
+                    root.TryGetProperty("output", out var poo) ? poo.GetString() : null,
+                    root.TryGetProperty("imports", out var pii) ? pii.GetString() : null,
+                    root.TryGetProperty("flags", out var pff) ? pff.GetString() : null,
+                    Bool("all"), Bool("optimize"), Bool("release"),
+                    root.TryGetProperty("compiler_path", out var pcc) ? pcc.GetString() : null);
             case "strip_masters_clean":
             {
                 var mastersRaw = Str("masters");
@@ -791,6 +1127,16 @@ public sealed class PluginToolExecutor
                 return WriteService.StripMastersClean(Str("source_path"), masters, Str("output_path"), isDryRun);
             }
 
+            case "nif_import":
+                return NifService.Import(Str("obj_path"), Str("out_nif"), Str("material"),
+                    Str("tex_diffuse"), Str("tex_normal"), Bool("collision"), Bool("from_blender"));
+            case "nif_inspect":
+                return NifService.Inspect(Str("nif_path"));
+            case "nif_verify":
+                return NifService.Verify(Str("nif_path"));
+            case "nif_fix":
+                return NifService.Fix(Str("nif_path"), Str("out_nif"));
+
             default:
                 return $"Unknown tool: {toolName}";
         }
@@ -803,7 +1149,7 @@ public sealed class PluginToolExecutor
         if (string.IsNullOrWhiteSpace(id)) return Mutagen.Bethesda.Plugins.FormKey.Null;
         if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(id, out var fk)) return fk;
         var cache = MutagenLoader.LinkCache;
-        if (cache != null && cache.TryResolve(id, out var rec)) return rec.FormKey;
+        if (cache != null && cache.TryResolve<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>(id, out var rec)) return rec.FormKey;
         return MutagenLoader.ResolveEditorIdToFormKey(env, id);
     }
 
@@ -933,6 +1279,86 @@ public sealed class PluginToolExecutor
         return $"Winning plugin: {winner}  (of {contexts.Count} version(s) in the load order)\n{dump}";
     }
 
+    // Read back the Papyrus scripts (VMAD) attached to a record and their property values, so the
+    // AI can verify attach_script / set_script_property results. Reflection-based (works for every
+    // record family that exposes a VirtualMachineAdapter).
+    private static string GetScripts(object? env, string id)
+    {
+        var fk = ResolveToFk(env, id);
+        if (fk.IsNull) return $"Could not resolve '{id}'.";
+        var cache = MutagenLoader.LinkCache;
+        if (cache == null || !cache.TryResolve<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>(fk, out var rec))
+            return $"No record found for {fk}.";
+
+        var vmad = rec.GetType().GetProperty("VirtualMachineAdapter")?.GetValue(rec);
+        if (vmad == null) return $"{rec.EditorID ?? fk.ToString()} [{fk}] has no attached scripts.";
+        if (vmad.GetType().GetProperty("Scripts")?.GetValue(vmad) is not System.Collections.IEnumerable scripts)
+            return $"{rec.EditorID ?? fk.ToString()} [{fk}] has a script adapter but no scripts.";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Scripts on {rec.EditorID ?? fk.ToString()} [{fk}]:");
+        int n = 0;
+        foreach (var s in scripts)
+        {
+            n++;
+            var name = s.GetType().GetProperty("Name")?.GetValue(s)?.ToString() ?? "(unnamed)";
+            sb.AppendLine($"  - {name}");
+            if (s.GetType().GetProperty("Properties")?.GetValue(s) is System.Collections.IEnumerable props)
+                foreach (var p in props)
+                {
+                    var pname = p.GetType().GetProperty("Name")?.GetValue(p)?.ToString() ?? "?";
+                    sb.AppendLine($"      {pname} = {DescribeScriptProp(p)}");
+                }
+        }
+        if (n == 0) sb.AppendLine("  (adapter present but no scripts)");
+        return sb.ToString();
+    }
+
+    private static string DescribeScriptProp(object p)
+    {
+        var t = p.GetType();
+        if (t.GetProperty("Object")?.GetValue(p) is { } obj)
+        {
+            var inner = obj.GetType().GetProperty("Object")?.GetValue(obj) ?? obj;
+            var fkv = inner.GetType().GetProperty("FormKey")?.GetValue(inner);
+            return $"<{fkv}> (object)";
+        }
+        if (t.GetProperty("Data") is { } dataProp)
+        {
+            var v = dataProp.GetValue(p);
+            if (v is System.Collections.IEnumerable en && v is not string)
+            {
+                int c = 0; foreach (var _ in en) c++;
+                return $"[{c} items] ({t.Name})";
+            }
+            return $"{v} ({t.Name})";
+        }
+        return $"({t.Name})";
+    }
+
+    // Field-level diff of two records (each resolved to its winning version), using the same field
+    // dump as get_record. Self-contained text diff — no dependency on the GUI's RecordNode tree.
+    private static string DiffRecords(object? env, string aId, string bId)
+    {
+        var fa = ResolveToFk(env, aId); if (fa.IsNull) return $"Could not resolve A '{aId}'.";
+        var fb = ResolveToFk(env, bId); if (fb.IsNull) return $"Could not resolve B '{bId}'.";
+        var ca = MutagenLoader.GetRecordContexts(env, fa); if (ca.Count == 0) return $"No record for A {fa}.";
+        var cb = MutagenLoader.GetRecordContexts(env, fb); if (cb.Count == 0) return $"No record for B {fb}.";
+
+        var da = MutagenLoader.QueryRecordFields(env, ca[^1].plugin, fa.ToString()).Replace("\r", "").Split('\n');
+        var db = MutagenLoader.QueryRecordFields(env, cb[^1].plugin, fb.ToString()).Replace("\r", "").Split('\n');
+        var setA = new HashSet<string>(da.Select(x => x.TrimEnd()));
+        var setB = new HashSet<string>(db.Select(x => x.TrimEnd()));
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"diff  A={fa} ({ca[^1].plugin})  B={fb} ({cb[^1].plugin})   (- only in A, + only in B)");
+        int diffs = 0;
+        foreach (var line in da) { var l = line.TrimEnd(); if (l.Trim().Length > 0 && !setB.Contains(l)) { sb.AppendLine("  - " + l.Trim()); diffs++; } }
+        foreach (var line in db) { var l = line.TrimEnd(); if (l.Trim().Length > 0 && !setA.Contains(l)) { sb.AppendLine("  + " + l.Trim()); diffs++; } }
+        if (diffs == 0) sb.AppendLine("  (identical field dumps)");
+        return sb.ToString();
+    }
+
     private static string SearchRobcoConfigs(string? instancePath, string query, int limit)
     {
         if (string.IsNullOrWhiteSpace(instancePath) || !System.IO.Directory.Exists(instancePath))
@@ -954,7 +1380,9 @@ public sealed class PluginToolExecutor
         var hits = new List<string>();
         foreach (var root in roots)
         {
-            foreach (var ini in System.IO.Directory.EnumerateFiles(root, "*.ini", System.IO.SearchOption.AllDirectories))
+            // RobCo Patcher reads disabled/renamed configs too (.ini.bak, .ini.DISABLED, .ini.hidden),
+            // so match "*.ini*" not just "*.ini" — a renamed config still applies in-game.
+            foreach (var ini in System.IO.Directory.EnumerateFiles(root, "*.ini*", System.IO.SearchOption.AllDirectories))
             {
                 string[] lines;
                 try { lines = System.IO.File.ReadAllLines(ini); } catch { continue; }

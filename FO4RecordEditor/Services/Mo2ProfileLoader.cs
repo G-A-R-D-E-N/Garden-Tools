@@ -209,6 +209,12 @@ public static class Mo2ProfileLoader
         var linkCache = lo.ToImmutableLinkCache<IFallout4Mod, IFallout4ModGetter>();
         MutagenLoader.LinkCache = linkCache;   // lets the field walker resolve FormLinks to names
 
+        // Record each plugin's ESL ("small master") flag so the save path can master-map custom
+        // ActorValue condition params correctly (0xFE light-master encoding for ESL masters).
+        MutagenLoader.MasterIsEsl.Clear();
+        foreach (var l in listings)
+            if (l.Mod != null) MutagenLoader.MasterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
+
         var summary = $"Loaded {loaded.Count} plugins from MO2 profile '{profile}'."
             + (missing.Count > 0
                 ? $" {missing.Count} could not be resolved (e.g. {string.Join(", ", missing.Take(5))})."

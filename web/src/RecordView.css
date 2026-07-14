@@ -77,11 +77,17 @@
 }
 
 .rv-prop-col { width: 300px; max-width: 300px; }
-.rv-sticky {
+/* Sticky left column — always needs an opaque background so scrolled content doesn't show through.
+   Use td.rv-sticky / th.rv-sticky specificity (0,1,1) to beat .rv-diff td (0,1,1) and
+   .rv-grid tr:hover td (0,2,1) rules below. */
+td.rv-sticky, th.rv-sticky {
   position: sticky; left: 0; z-index: 10;
   background: var(--bg-secondary); border-right: 1px solid var(--border-color);
 }
-thead .rv-sticky { z-index: 21; }
+thead th.rv-sticky { z-index: 21; background: var(--bg-secondary); }
+/* Keep sticky col opaque when row is highlighted */
+.rv-diff td.rv-sticky       { background: var(--bg-secondary); }
+.rv-grid tr:hover td.rv-sticky { background: var(--bg-hover); }
 
 .rv-grid td {
   padding: 4px 8px;
@@ -362,47 +368,15 @@ td.rv-section {
   border: 1px solid color-mix(in srgb, var(--chip-2) 30%, transparent);
 }
 
-/* Conflict groups */
+/* Conflict groups — single-table xEdit style */
 .rv-conflict-groups {
   flex: 1;
   overflow: auto;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  padding: 0;
 }
-.rv-cg {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.rv-cg-sev-conflict { border-color: color-mix(in srgb, var(--status-changed) 35%, transparent); }
-.rv-cg-sev-critical { border-color: color-mix(in srgb, var(--chip-6) 45%, transparent); }
-.rv-cg-sev-override { border-color: color-mix(in srgb, var(--status-warning) 35%, transparent); }
+.rv-cg-table { margin: 0; width: 100%; }
 
-.rv-cg-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-color);
-}
-.rv-cg-name {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.rv-cg-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 8px;
-  border-radius: 8px;
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-}
+/* Severity badge colors (also used inside separator rows) */
 .rv-cg-sev-badge-conflict {
   background: color-mix(in srgb, var(--status-changed) 18%, transparent);
   color: var(--status-changed);
@@ -419,10 +393,54 @@ td.rv-section {
   border-color: color-mix(in srgb, var(--status-warning) 35%, transparent);
 }
 
-.rv-cg-scroll { overflow-x: auto; }
-.rv-cg-table { margin: 0; }
-.rv-final-col { width: 180px; min-width: 140px; }
-.rv-final-val { font-weight: 600; }
+/* Group separator row */
+.rv-cg-sep td {
+  padding: 5px 12px;
+  background: var(--bg-tertiary);
+  border-top: 2px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  user-select: none;
+}
+.rv-cg-sep:hover td { background: var(--bg-hover); }
+.rv-cg-sep-sev-override td { border-left: 3px solid var(--status-warning); }
+.rv-cg-sep-sev-conflict td { border-left: 3px solid var(--status-changed); }
+.rv-cg-sep-sev-critical  td { border-left: 3px solid var(--chip-6); }
+
+.rv-sep-inner  { display: flex; align-items: center; gap: 10px; }
+.rv-sep-name   { color: var(--text-primary); flex: 1; }
+.rv-sep-badge  {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+.rv-sep-chevron      { transition: transform 0.15s; color: var(--text-muted); flex: 0 0 auto; }
+.rv-sep-chevron-open { transform: rotate(90deg); }
+
+/* AI write flash: row pulses green when the AI just modified that field */
+.rv-row-flash td {
+  animation: rv-flash 1.8s ease-out forwards;
+}
+@keyframes rv-flash {
+  0%   { background: rgba(63, 185, 80, 0.35); box-shadow: inset 0 0 0 1px rgba(63, 185, 80, 0.6); }
+  30%  { background: rgba(63, 185, 80, 0.22); }
+  100% { background: transparent; box-shadow: none; }
+}
+[data-theme="light"] .rv-row-flash td {
+  animation: rv-flash-light 1.8s ease-out forwards;
+}
+@keyframes rv-flash-light {
+  0%   { background: rgba(26, 127, 55, 0.18); box-shadow: inset 0 0 0 1px rgba(26, 127, 55, 0.4); }
+  30%  { background: rgba(26, 127, 55, 0.10); }
+  100% { background: transparent; box-shadow: none; }
+}
 
 /* ── References tab ───────────────────────────────────────────────────────── */
 .rv-references-tab {

@@ -41,6 +41,7 @@ export interface AppInterop {
   OpenMo2Profile(instancePath: string): Promise<void>;
   LoadEnvironment(): Promise<void>;
   ScanConflicts(): Promise<string>;          // full load-order conflict scan (cached); returns a summary
+  ScanBrokenRefs(): Promise<string>;         // full modlist broken-ref scan; returns full text report
   RefreshTree(): Promise<string>;            // rebuild the tree from current state (incl. AI edits); JSON plugin nodes
   GetPlugins(): Promise<string>;            // JSON: plugin nodes
   GetChildren(path: string): Promise<string>;
@@ -123,6 +124,43 @@ export interface ChatSessionMsg { isUser: boolean; text: string; }
 export interface ChatSessionFull { id: string; name: string; messages: ChatSessionMsg[]; }
 export interface SlashCommand { name: string; args: string; help: string; }
 
+/** The "papyrus" bridge (FO4RecordEditor.Services.PapyrusInterop) — compile/decompile Papyrus. */
+export interface PapyrusHost {
+  BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
+  BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
+  // Compile .psc -> .pex via the CK PapyrusCompiler. Returns compiler output + exit code.
+  Compile(source: string, output: string, imports: string, flags: string,
+          all: boolean, optimize: boolean, release: boolean, compilerPath: string): Promise<string>;
+  // Decompile .pex -> .psc (built-in). For a single file returns source text inline unless write=true.
+  Decompile(source: string, output: string, assembly: boolean, write: boolean): Promise<string>;
+  // Open a folder (or a file's folder) in Windows Explorer. Returns "" on success.
+  OpenFolder(path: string): Promise<string>;
+  // Write a dropped file's bytes to a temp path and return it (drag-and-drop helper). "ERR:" on fail.
+  StageDroppedFile(name: string, base64: string): Promise<string>;
+}
+
+/** The "nif" bridge (FO4RecordEditor.Services.NifInterop) — author/inspect/verify/repair FO4 NIFs. */
+export interface NifHost {
+  BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
+  BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
+  BrowseForSave(title: string, filter: string): Promise<string>;   // native save picker; "" if cancelled
+  // Author a static FO4 NIF from an OBJ. Returns niftool's RESULT + verify output.
+  Import(objPath: string, outNif: string, material: string, texDiffuse: string,
+         texNormal: string, collision: boolean, fromBlender: boolean): Promise<string>;
+  Inspect(nifPath: string): Promise<string>;   // JSON summary
+  Geo(nifPath: string): Promise<string>;        // full geometry JSON (flat arrays) for the 3D viewer
+  // Resolve a NIF texture (game-relative path) to a PNG data URL via texconv; "" if not found.
+  // textureRoot: optional user-picked Data/Textures folder tried before auto-resolution.
+  GetTexture(nifPath: string, relTexPath: string, textureRoot: string): Promise<string>;
+  Verify(nifPath: string): Promise<string>;    // RESULT: + [ok]/[FAIL] checks
+  Fix(nifPath: string, outNif: string): Promise<string>;  // repair + report actions
+  Tree(nifPath: string): Promise<string>;      // curated editable property tree (JSON) for Edit mode
+  // Apply a JSON array of field edits and save. outNif blank = save in place. Returns RESULT text.
+  ApplyEdits(nifPath: string, editsJson: string, outNif: string): Promise<string>;
+  OpenFolder(path: string): Promise<string>;   // reveal in Explorer; "" on success
+  StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
+}
+
 /** The "settings" bridge (FO4RecordEditor.Services.SettingsInterop) — the app settings panel. */
 export interface SettingsHost {
   GetSettings(): Promise<string>;            // JSON of editable settings
@@ -140,6 +178,8 @@ declare global {
           appInterop?: AppInterop;
           chat?: Chat;
           settings?: SettingsHost;
+          papyrus?: PapyrusHost;
+          nif?: NifHost;
         };
       };
     };
@@ -151,3 +191,9 @@ export const getBackend = (): Backend | undefined =>
 
 export const getAppInterop = (): AppInterop | undefined =>
   window.chrome?.webview?.hostObjects?.appInterop;
+
+export const getPapyrus = (): PapyrusHost | undefined =>
+  window.chrome?.webview?.hostObjects?.papyrus;
+
+export const getNif = (): NifHost | undefined =>
+  window.chrome?.webview?.hostObjects?.nif;

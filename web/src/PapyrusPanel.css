@@ -1,0 +1,225 @@
+.papyrus-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fade-in 0.12s ease;
+}
+
+.papyrus-modal {
+  width: min(1800px, 97vw);
+  height: min(1100px, 95vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color, #2b2b2b);
+  border-radius: 10px;
+  background: var(--panel-bg, #1a1a1a);
+  overflow: hidden;
+}
+
+.papyrus-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color, #2b2b2b);
+}
+
+.papyrus-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--accent-color, #4ec9b0);
+}
+
+.papyrus-modes { display: flex; gap: 6px; margin-left: 8px; }
+
+.papyrus-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-color, #2b2b2b);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #aaa);
+  cursor: pointer;
+  font-size: 13px;
+}
+.papyrus-mode:hover { background: rgba(255, 255, 255, 0.05); }
+.papyrus-mode.active {
+  background: rgba(78, 201, 176, 0.12);
+  border-color: var(--accent-color, #4ec9b0);
+  color: var(--accent-color, #4ec9b0);
+}
+
+.papyrus-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #aaa);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.papyrus-close:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+
+.papyrus-warn {
+  padding: 8px 14px;
+  background: rgba(244, 71, 71, 0.12);
+  color: #f44747;
+  font-size: 12px;
+}
+
+.papyrus-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  min-height: 0;
+}
+
+.papyrus-form {
+  padding: 14px;
+  border-right: 1px solid var(--border-color, #2b2b2b);
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.papyrus-field { display: flex; flex-direction: column; gap: 5px; }
+.papyrus-field > span { font-size: 11px; color: var(--text-muted, #9a9a9a); text-transform: uppercase; letter-spacing: 0.3px; }
+
+.papyrus-input-row { display: flex; gap: 6px; }
+.papyrus-input-row input, .papyrus-field > input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 9px;
+  background: var(--input-bg, #111);
+  border: 1px solid var(--border-color, #2b2b2b);
+  border-radius: 6px;
+  color: var(--text-color, #ddd);
+  font-size: 12px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+.papyrus-input-row input:focus, .papyrus-field > input:focus { outline: none; border-color: var(--accent-color, #4ec9b0); }
+
+.papyrus-opts { display: flex; flex-direction: column; gap: 7px; padding: 4px 0; }
+.papyrus-opts label { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-color, #ccc); cursor: pointer; }
+
+.papyrus-run {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--accent-color, #4ec9b0);
+  border-radius: 6px;
+  background: rgba(78, 201, 176, 0.14);
+  color: var(--accent-color, #4ec9b0);
+  font-weight: 600;
+  cursor: pointer;
+}
+.papyrus-run:hover:not(:disabled) { background: rgba(78, 201, 176, 0.24); }
+.papyrus-run:disabled { opacity: 0.5; cursor: default; }
+
+/* min-height:0 + overflow:hidden so the output body SCROLLS within the column instead of growing
+   the column and pushing the LOG strip off the bottom of the modal. */
+/* drag-drop zone around the source input */
+.papyrus-drop { border: 1px dashed transparent; border-radius: 6px; transition: border-color .12s, background .12s; }
+.papyrus-drop.over { border-color: var(--accent-color, #4ec9b0); background: rgba(78, 201, 176, 0.08); }
+
+.papyrus-output { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+
+/* result banner */
+.papyrus-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; font-size: 12.5px; font-weight: 600;
+  border-bottom: 1px solid var(--border-color, #2b2b2b);
+}
+.papyrus-banner .papyrus-banner-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.papyrus-banner.ok { background: rgba(78, 201, 176, 0.12); color: #6bbf59; }
+.papyrus-banner.warn { background: rgba(229, 192, 123, 0.12); color: #e5c07b; }
+.papyrus-banner.error { background: rgba(244, 71, 71, 0.12); color: #f44747; }
+.papyrus-openfolder {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; border: 1px solid currentColor; border-radius: 5px;
+  color: inherit; font-size: 11px; padding: 3px 9px; cursor: pointer; opacity: 0.9;
+}
+.papyrus-openfolder:hover { opacity: 1; background: rgba(255,255,255,0.06); }
+
+/* syntax highlight tokens */
+.papyrus-output-body .tk-key { color: #c586c0; }
+.papyrus-output-body .tk-type { color: #4ec9b0; }
+.papyrus-output-body .tk-str { color: #ce9178; }
+.papyrus-output-body .tk-comment { color: #6a9955; font-style: italic; }
+.papyrus-output-body .tk-ok { color: #6bbf59; }
+.papyrus-output-body .tk-err { color: #f48771; }
+.papyrus-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #9a9a9a);
+  border-bottom: 1px solid var(--border-color, #2b2b2b);
+}
+.papyrus-copy {
+  background: transparent;
+  border: 1px solid var(--border-color, #2b2b2b);
+  border-radius: 5px;
+  color: var(--text-muted, #aaa);
+  font-size: 11px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.papyrus-copy:hover { color: #fff; border-color: var(--accent-color, #4ec9b0); }
+
+.papyrus-output-body {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-color, #d4d4d4);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+
+.papyrus-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #9a9a9a);
+  border-top: 1px solid var(--border-color, #2b2b2b);
+  border-bottom: 1px solid var(--border-color, #2b2b2b);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.papyrus-log-body {
+  height: 240px;
+  flex: 0 0 auto;
+  overflow-y: auto;
+  padding: 6px 12px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.papyrus-log-empty { color: var(--text-muted, #777); }
+.papyrus-log-row { white-space: pre-wrap; word-break: break-all; }
+.papyrus-log-row.ok { color: #6bbf59; }
+.papyrus-log-row.err { color: #f44747; }

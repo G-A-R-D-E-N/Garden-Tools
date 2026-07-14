@@ -255,7 +255,8 @@ public class ChatInterop
         var full = new StringBuilder();
         try
         {
-            var ctx = _shell.Context.BuildForQuestion(prompt, _shell.SelectedNode);
+            var loadedPlugins = MutagenLoader.QueryLoadedPlugins(_shell.GameEnvironment);
+            var ctx = _shell.Context.BuildForQuestion(prompt, _shell.SelectedNode, loadedPlugins);
             _shell.Log.Log(LogCategory.AI, LogLevel.Info, "Prompt sent", prompt);
 
             if (_shell.Agent != null)

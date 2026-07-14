@@ -73,6 +73,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 AppWebView.CoreWebView2?.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(payload)))));
         // React Settings panel (replaces the WPF SettingsDialog).
         AppWebView.CoreWebView2.AddHostObjectToScript("settings", new Services.SettingsInterop(_shell));
+        // Papyrus panel: compile (.psc -> .pex) + decompile (.pex -> .psc).
+        AppWebView.CoreWebView2.AddHostObjectToScript("papyrus", new Services.PapyrusInterop());
+        // NIF panel: author / inspect / verify / repair FO4 NIFs via niftool.exe.
+        AppWebView.CoreWebView2.AddHostObjectToScript("nif", new Services.NifInterop());
 
 #if DEBUG
         AppWebView.Source = new Uri("http://localhost:5173/#/main");

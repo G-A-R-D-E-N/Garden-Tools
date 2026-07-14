@@ -27,10 +27,24 @@ public sealed class AIContextBuilder
         return sb.ToString();
     }
 
-    public string BuildForQuestion(string question, RecordNode? selected)
+    public string BuildForQuestion(string question, RecordNode? selected, IReadOnlyList<string>? loadedPlugins = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(SystemPreamble);   // preamble emitted exactly once
+
+        // Inject the current plugin list so Claude never has to call list_plugins just to discover
+        // what's loaded. This is the single most important piece of ambient context.
+        sb.AppendLine();
+        if (loadedPlugins != null && loadedPlugins.Count > 0)
+        {
+            sb.AppendLine("## Loaded plugins (in load order — these are what you can read and edit):");
+            foreach (var p in loadedPlugins) sb.AppendLine($"- {p}");
+        }
+        else
+        {
+            sb.AppendLine("## Loaded plugins: none loaded yet. Ask the user to open a modlist or individual plugin.");
+        }
+
         if (selected != null)
         {
             sb.AppendLine();

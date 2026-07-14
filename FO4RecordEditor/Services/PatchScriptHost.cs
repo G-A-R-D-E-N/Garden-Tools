@@ -49,6 +49,32 @@ public sealed class PatchScriptHost
     public IEnumerable<IMajorRecordGetter> Records(string type, string plugin) =>
         MutagenLoader.GetRecordsForBatch(_env, plugin, type);
 
+    /// <summary>Names of every plugin in the current load order (including loose mods opened for editing).</summary>
+    public IReadOnlyList<string> AllPlugins() => MutagenLoader.QueryLoadedPlugins(_env);
+
+    /// <summary>Remove a COBJ override from the patch plugin entirely (as if it was never added).
+    /// Use this to undo a previous override — the record then falls back to its previous winning
+    /// version in the load order. Returns true when the record was found and removed.</summary>
+    public bool DeleteOverride(IConstructibleObjectGetter getter) =>
+        MutagenLoader.RemoveFromEditableMod(_patchPlugin, getter.FormKey);
+
+    // ── create (author a brand-new record in the patch) ───────────────────────────────────────
+    /// <summary>Create a NEW record in the patch plugin and return it for full Mutagen editing.
+    /// sig = any create_record signature (e.g. "QUST", "PERK", "LVLI", "SPEL", "FURN"). This is the
+    /// general escape hatch: cast the result to its concrete type and populate any struct list
+    /// (Stages/Aliases/Effects/Entries) that the dedicated tools don't cover.</summary>
+    public IFallout4MajorRecord New(string sig, string editorId)
+    {
+        var rec = WriteService.CreateForScript(_patchPlugin, _env, sig, editorId)
+            ?? throw new InvalidOperationException($"Could not create '{sig}' '{editorId}' in '{_patchPlugin}' (unsupported signature or ESL range full).");
+        Applied++;
+        return rec;
+    }
+
+    /// <summary>Typed convenience over <see cref="New(string,string)"/>: host.New&lt;Quest&gt;("QUST","MyQuest").</summary>
+    public T New<T>(string sig, string editorId) where T : class, IFallout4MajorRecord =>
+        (T)New(sig, editorId);
+
     // ── override (forward a getter into the patch as a mutable record) ────────────────────────
     /// <summary>Forward a COBJ getter into the patch and return the mutable override.</summary>
     public ConstructibleObject Cobj(IConstructibleObjectGetter getter) => (ConstructibleObject)OverrideRec(getter);

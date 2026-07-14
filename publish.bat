@@ -36,7 +36,7 @@ if errorlevel 1 (
 
 REM Deploy the fresh build into the MO2 Tools folder the editor is actually launched from,
 REM so re-publishing always updates the running launch point (not just the bin\ output).
-set "DEPLOY=D:\Games\ModlistDownloads\Tools\FO4Editor"
+set "DEPLOY=E:\Modlists\Fallen World Alpha 2\Tools\FO4Editor"
 if exist "%DEPLOY%\" (
   echo Deploying to MO2 Tools folder: %DEPLOY%
   robocopy "FO4RecordEditor\bin\Release\net9.0-windows\win-x64\publish" "%DEPLOY%" /MIR /NJH /NJS /NDL /NC /NS /NP >nul

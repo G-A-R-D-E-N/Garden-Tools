@@ -34,6 +34,24 @@
   display: flex;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.chat-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.chat-resizer:hover,
+.chat-resizer:active {
+  background: var(--accent-color, #0e639c);
+  opacity: 0.5;
 }
 
 .activity-bar {
@@ -381,7 +399,7 @@
 }
 
 .ai-panel {
-  width: 320px;
+  width: 100%;
   background: #202020;
   border-left: 1px solid var(--border-color);
   display: flex;
@@ -650,3 +668,80 @@
 [data-theme="light"] .mcp-row             { border-bottom-color: var(--border-color); background: transparent; }
 [data-theme="light"] .mcp-row-write .mcp-badge { background: rgba(180,83,9,0.12); color: var(--status-warning); border-color: rgba(180,83,9,0.25); }
 [data-theme="light"] .mcp-row-read .mcp-badge  { background: rgba(5,80,174,0.1); color: var(--status-info); border-color: rgba(5,80,174,0.2); }
+
+/* ---- Scan Crash Risks button variant ---- */
+.sidebar-action-btn--warn {
+  border-color: rgba(244, 71, 71, 0.4);
+  color: #f47171;
+}
+.sidebar-action-btn--warn:hover {
+  background: rgba(244, 71, 71, 0.15);
+  border-color: rgba(244, 71, 71, 0.7);
+  color: #ff8888;
+}
+.sidebar-action-btn--warn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- Broken-refs report modal ---- */
+.broken-refs-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.broken-refs-modal {
+  background: #1e1e1e;
+  border: 1px solid #454545;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 90vw);
+  max-height: 80vh;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.broken-refs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #454545;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f47171;
+  letter-spacing: 0.06em;
+}
+.broken-refs-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.broken-refs-close {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.broken-refs-close:hover { color: #fff; }
+.broken-refs-body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 14px;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  color: #d4d4d4;
+  white-space: pre;
+  margin: 0;
+  line-height: 1.5;
+}
+
+[data-theme="light"] .broken-refs-modal { background: #ffffff; border-color: #ddd; }
+[data-theme="light"] .broken-refs-header { border-color: #ddd; }
+[data-theme="light"] .broken-refs-body { color: #1e1e1e; }
