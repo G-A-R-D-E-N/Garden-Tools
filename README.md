@@ -104,7 +104,7 @@ web\dist\                  the editor's UI (WebView2)
 tools\niftool\             NIF authoring/repair CLI (nif_* tools)
 tools\texconv\             DDS conversion, for texture previews
 mcp.sample.json            copy-paste MCP config
-docs\                      MCP setup, knowledge base, record format
+docs\MCP_SETUP.md          the MCP wiring, the tool surface, and the rules
 ```
 
 ---

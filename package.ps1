@@ -124,7 +124,16 @@ Step 'Adding docs and the sample MCP config'
 foreach ($f in 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md') {
     Copy-Item (Join-Path $Root $f) $Staging -Force
 }
-Copy-Item (Join-Path $Root 'docs') $Staging -Recurse -Force
+
+# Allowlist, never `Copy-Item docs -Recurse`: this repo's docs/ also held internal planning notes and
+# redirect stubs pointing at a private workspace path, and a recursive copy shipped them to end users.
+$ShippedDocs = 'MCP_SETUP.md'
+$DocsDest = New-Item -ItemType Directory -Path (Join-Path $Staging 'docs') -Force
+foreach ($d in $ShippedDocs) {
+    $src = Join-Path $Root "docs\$d"
+    if (-not (Test-Path $src)) { throw "Shipped doc missing: $src" }
+    Copy-Item $src $DocsDest -Force
+}
 
 # The path is left as a placeholder on purpose: it must be the recipient's own absolute path, and a
 # stale one silently starts nothing.
