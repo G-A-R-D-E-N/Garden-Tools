@@ -285,6 +285,49 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "type", "editorId" }
             }),
+        new("create_cell",
+            "Create an interior CELL in a plugin. create_record cannot make cells: they live in a Block/SubBlock " +
+            "tree under the mod's Cells group rather than a flat top-level group. Interior cells are self-contained " +
+            "(no worldspace, no vanilla cell override), so they are the safe place to park references a plugin owns " +
+            "outright — e.g. map markers a script relocates at runtime. Add references with create_placed_object.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    editorId = new { type = "string" },
+                    name = new { type = "string", description = "Optional in-game cell name." }
+                },
+                required = new[] { "plugin", "editorId" }
+            }),
+        new("create_placed_object",
+            "Create a placed reference (REFR) inside a cell the plugin owns. create_record cannot make these: a " +
+            "placed object is not a top-level record, it lives in a Cell's Persistent/Temporary list. The cell must " +
+            "be in THIS plugin — make one with create_cell, or copy_as_override an existing cell in first. " +
+            "For a MAP MARKER: set base to the vanilla MapMarker static (000010:Fallout4.esm) and pass mapMarkerName " +
+            "— without map marker data the reference is just an invisible static and no marker appears.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    cell = new { type = "string", description = "EditorID or FormKey of a cell in THIS plugin." },
+                    baseObject = new { type = "string", description = "FormKey or EditorID of the base object, e.g. '000010:Fallout4.esm' for a map marker." },
+                    editorId = new { type = "string", description = "Optional EditorID for the reference." },
+                    x = new { type = "number" },
+                    y = new { type = "number" },
+                    z = new { type = "number" },
+                    rotZ = new { type = "number", description = "Z rotation in radians." },
+                    persistent = new { type = "boolean", description = "Default true. Persistent refs go in the cell's Persistent list and can be reached by script from anywhere." },
+                    initiallyDisabled = new { type = "boolean", description = "Default false." },
+                    mapMarkerName = new { type = "string", description = "Set to attach map-marker data (turns the ref into a real map marker)." },
+                    mapMarkerType = new { type = "string", description = "Marker icon, e.g. 'Graveyard', 'Settlement', 'Cave'. Default Cave." },
+                    mapMarkerVisible = new { type = "boolean", description = "Default false — visible on the map from the start." }
+                },
+                required = new[] { "plugin", "cell", "baseObject" }
+            }),
         new("set_field",
             "Set a field on a record. Supports scalar/text fields (Name, Value, Weight, Description), booleans " +
             "(pass 'true'/'false' to check/UNCHECK a flag), enums (pass the value name), FormLink references " +
@@ -907,7 +950,8 @@ public sealed class PluginToolExecutor
 
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
-            "create_record" or "delete_record" or "copy_as_override" or "clean_plugin" or
+            "create_record" or "create_cell" or "create_placed_object" or
+            "delete_record" or "copy_as_override" or "clean_plugin" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
             "run_script";
@@ -926,6 +970,8 @@ public sealed class PluginToolExecutor
             "add_list_item"       => $"{ShortId(record)}.{field} += {Str("value")}",
             "remove_list_item"    => $"{ShortId(record)}.{field} -= {Str("value")}",
             "create_record"       => $"create {Str("type")} '{Str("editorId")}' in {plugin}",
+            "create_cell"         => $"create CELL '{Str("editorId")}' in {plugin}",
+            "create_placed_object" => $"place {ShortId(Str("baseObject"))} in cell '{Str("cell")}' of {plugin}",
             "delete_record"       => $"delete {ShortId(record)} from {plugin}",
             "copy_as_override"    => $"{ShortId(Str("id"))} -> {Str("patch_plugin")}",
             "reload_plugin"       => $"reload {plugin}",
@@ -963,6 +1009,13 @@ public sealed class PluginToolExecutor
         string Str(string k) => root.TryGetProperty(k, out var v) ? v.GetString() ?? "" : "";
         int Int(string k, int def) => root.TryGetProperty(k, out var v) && v.TryGetInt32(out var i) ? i : def;
         bool Bool(string k) => root.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.True;
+        // Distinguishes "absent" from "" — an absent mapMarkerName must NOT attach marker data.
+        string? StrOrNull(string k) => root.TryGetProperty(k, out var v) ? v.GetString() : null;
+        // Bool() can't express a default of true (absent reads as false).
+        bool BoolOr(string k, bool def) => root.TryGetProperty(k, out var v)
+            ? v.ValueKind == JsonValueKind.True
+            : def;
+        float Flt(string k, float def) => root.TryGetProperty(k, out var v) && v.TryGetSingle(out var f) ? f : def;
 
         switch (toolName)
         {
@@ -1037,6 +1090,15 @@ public sealed class PluginToolExecutor
                 return WriteService.CreatePlugin(Str("name"));
             case "create_record":
                 return WriteService.CreateRecord(Str("plugin"), Str("type"), Str("editorId"), env);
+            case "create_cell":
+                return WriteService.CreateCell(Str("plugin"), Str("editorId"), StrOrNull("name"), env);
+            case "create_placed_object":
+                return WriteService.CreatePlacedObject(
+                    Str("plugin"), Str("cell"), Str("baseObject"), StrOrNull("editorId"),
+                    Flt("x", 0f), Flt("y", 0f), Flt("z", 0f), Flt("rotZ", 0f),
+                    BoolOr("persistent", true), BoolOr("initiallyDisabled", false),
+                    StrOrNull("mapMarkerName"), StrOrNull("mapMarkerType"), BoolOr("mapMarkerVisible", false),
+                    env);
             case "set_field":
                 return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
             case "add_list_item":
