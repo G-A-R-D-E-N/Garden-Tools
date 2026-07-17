@@ -399,6 +399,48 @@ public static partial class WriteService
         return $"Set {built.Count} menu button(s) on {recordId} in {plugin} and flagged it MessageBox. Show() returns: {idx}. save_plugin to persist.";
     }
 
+    /// <summary>
+    /// Replace a FURN record's marker parameters — the entry markers that tell the engine WHERE to
+    /// put the actor using it. MarkerParameters is a STRUCT list, so nothing else in this tool could
+    /// author it, and create_record FURN produces a shell with none. A furniture with zero markers
+    /// cannot be entered at all: a bed reports "someone else is using it" and a workbench reads as
+    /// unusable. Vanilla's equivalents all carry at least one {enabled, entryTypes:255} marker.
+    /// JSON array: [{"enabled":true,"entryTypes":255,"offsetX":0,"offsetY":0,"offsetZ":0,"rotationZ":0}]
+    /// or just [{}] for a single default front/back/left/right marker at the origin.
+    /// </summary>
+    public static string SetFurnitureMarkers(string plugin, string recordId, string json, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        if (rec is not Furniture f) return $"set_furniture_markers requires a FURN record, got {rec.GetType().Name}.";
+
+        var built = new List<FurnitureMarkerParameters>();
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "[{}]" : json);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var m = new FurnitureMarkerParameters
+                {
+                    Enabled = !el.TryGetProperty("enabled", out var en) || en.GetBoolean(),
+                    Offset = new Noggog.P3Float(
+                        JFloat(el, "offsetX", 0f), JFloat(el, "offsetY", 0f), JFloat(el, "offsetZ", 0f)),
+                    RotationZ = JFloat(el, "rotationZ", 0f),
+                    EntryTypes = (Furniture.EntryParameterType)JInt(el, "entryTypes", 255),
+                };
+                built.Add(m);
+            }
+        }
+        catch (Exception ex) { return $"Could not parse markers JSON: {ex.Message}."; }
+
+        f.MarkerParameters ??= new Noggog.ExtendedList<FurnitureMarkerParameters>();
+        f.MarkerParameters.Clear();
+        foreach (var m in built) f.MarkerParameters.Add(m);
+
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"Set {built.Count} furniture marker(s) on {recordId} in {plugin}. save_plugin to persist.";
+    }
+
     // ── shared JSON / reflection helpers ─────────────────────────────────────────────────────────
     // Build one FO4 Condition from a JSON element (same schema as set_conditions). Reuses the
     // private ApplyParam / ParseOperator / ResolveFk from the main partial.

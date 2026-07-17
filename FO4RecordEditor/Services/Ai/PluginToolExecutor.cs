@@ -641,6 +641,24 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "record", "objectives" }
             }),
+        new("set_furniture_markers",
+            "Replace a FURN's marker parameters -- the entry markers that tell the engine WHERE to put the " +
+            "actor using it. MarkerParameters is a STRUCT list, and create_record FURN makes a shell with NONE; " +
+            "a furniture with zero markers cannot be entered at all (a bed reports 'someone else is using it', " +
+            "a workbench reads as unusable). Vanilla equivalents all carry at least one {enabled, entryTypes:255} " +
+            "marker. JSON array: [{\"enabled\":true,\"entryTypes\":255,\"offsetX\":0,\"offsetY\":0,\"offsetZ\":0," +
+            "\"rotationZ\":0}], or [{}] for one default marker at the origin.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the FURN." },
+                    markers = new { type = "string", description = "JSON array of marker objects; [{}] for a single default." }
+                },
+                required = new[] { "plugin", "record", "markers" }
+            }),
         new("set_message_buttons",
             "Replace a MESG record's menu buttons and flag it as a MessageBox (without that flag it renders " +
             "as a corner notification and Show() returns nothing). MenuButtons is a STRUCT list, so " +
@@ -1163,6 +1181,8 @@ public sealed class PluginToolExecutor
                 return WriteService.SetQuestObjectives(Str("plugin"), Str("record"), Str("objectives"), env);
             case "set_message_buttons":
                 return WriteService.SetMessageButtons(Str("plugin"), Str("record"), Str("buttons"), env);
+            case "set_furniture_markers":
+                return WriteService.SetFurnitureMarkers(Str("plugin"), Str("record"), Str("markers"), env);
             case "revert_overrides":
                 return WriteService.RevertOverridesFrom(env, Str("bad_plugin"), Str("patch_plugin"),
                     root.TryGetProperty("signature", out var sg) ? sg.GetString() : null,
