@@ -1120,7 +1120,7 @@ public sealed class PluginToolExecutor
             case "backup_plugin":
                 return WriteService.BackupPlugin(Str("plugin"));
             case "save_plugin":
-                return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null);
+                return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null, env);
             case "copy_as_override":
                 return WriteService.CopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"));
             case "delete_record":
@@ -1186,7 +1186,7 @@ public sealed class PluginToolExecutor
                 }
                 catch { masters = Array.Empty<string>(); }
                 bool isDryRun = !root.TryGetProperty("dry_run", out var dr) || dr.ValueKind != JsonValueKind.False;
-                return WriteService.StripMastersClean(Str("source_path"), masters, Str("output_path"), isDryRun);
+                return WriteService.StripMastersClean(Str("source_path"), masters, Str("output_path"), isDryRun, env);
             }
 
             case "nif_import":

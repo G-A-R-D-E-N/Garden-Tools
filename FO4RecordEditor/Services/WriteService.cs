@@ -549,7 +549,7 @@ public static partial class WriteService
         }
     }
 
-    public static string SavePlugin(string plugin, string? path)
+    public static string SavePlugin(string plugin, string? path, object? env = null)
     {
         var (name, explicitPath) = NormalizePlugin(plugin);
         var mod = GetMutable(name);
@@ -562,6 +562,13 @@ public static partial class WriteService
         if (string.IsNullOrWhiteSpace(path))
             path = explicitPath ?? (_sourcePath.TryGetValue(name, out var sp) ? sp : Path.Combine(NewPatchDir, name));
 
+        // Order the MAST entries by the real load order. Without this Mutagen emits them in whatever
+        // order it built the set, which can put a dependent ESM before the one it depends on (observed:
+        // DLCCoast.esm written BEFORE Fallout4.esm). The game does not error on that - it HANGS on load
+        // forever with no crash log. This is the cause of the long-standing "save_plugin scrambles
+        // master order" freeze.
+        var loOrdering = TryGetLoadOrderOrdering(env);
+
         var prms = new BinaryWriteParameters
         {
             // Build the master list from the records' FormLinks (self-contained, no load order needed).
@@ -569,6 +576,7 @@ public static partial class WriteService
             // We write to a temp file whose name (Plugin.esp.xxxx.tmp) is not a valid ModKey; the mod
             // already carries the correct ModKey, so skip Mutagen's filename<->ModKey check.
             ModKey = ModKeyOption.NoCheck,
+            MastersListOrdering = loOrdering,
         };
         try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); } catch { }
 
@@ -578,7 +586,12 @@ public static partial class WriteService
         // use NoCheck for the real write so Mutagen uses our hand-built MAST list instead of rescanning.
         bool masterListFixed = FixActorValueConditionParams(mod, prms);
         var writeParams = masterListFixed
-            ? new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck, ModKey = ModKeyOption.NoCheck }
+            ? new BinaryWriteParameters
+            {
+                MastersListContent = MastersListContentOption.NoCheck,
+                ModKey = ModKeyOption.NoCheck,
+                MastersListOrdering = loOrdering,
+            }
             : prms;
 
         // Write to a temp file first, then swap it in. A direct in-place write fails when the file is
@@ -640,7 +653,7 @@ public static partial class WriteService
     /// list is recomputed from scratch and all remaining FormID high-bytes are correct.
     /// This is the Mutagen-native fix for the ITO master-index corruption found in session 2026-06-22.
     /// </summary>
-    public static string StripMastersClean(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun)
+    public static string StripMastersClean(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun, object? env = null)
     {
         if (!File.Exists(sourcePath))
             return $"Source file not found: '{sourcePath}'.";
@@ -662,10 +675,13 @@ public static partial class WriteService
             touched++;
         }
 
-        // MastersListContentOption.Iterate ADDS any master the records need; it does NOT prune one
-        // that nothing references. A stale master therefore survives the write untouched. Remove it
-        // from the header explicitly. Iterate still runs afterwards, so if any record really does
-        // reference it, Mutagen re-adds it and this becomes a no-op rather than a corruption.
+        // Iterate rebuilds the master list from the records' FormLinks, so a genuinely unused master
+        // does drop on write. Remove the header entries explicitly anyway: it makes the intent
+        // explicit and lets us report honestly. Iterate still runs afterwards, so a master something
+        // really references is re-added and the call degrades to a no-op instead of writing dangling
+        // references. The real trap is the reverse of what it looks like -- when a "stale" master
+        // refuses to die, it is because something still references it (check the link report below),
+        // NOT because the write failed.
         var presentTargets = mod.ModHeader.MasterReferences
             .Where(m => stripSet.Contains(m.Master.FileName.String))
             .ToList();
@@ -699,10 +715,14 @@ public static partial class WriteService
             outputPath = sourcePath;
         try { Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!); } catch { }
 
+        // Order MAST by the real load order, same as SavePlugin. Without this a multi-master result
+        // can list a dependent ESM before its dependency (observed: DLCCoast.esm before Fallout4.esm),
+        // which hangs the game on load with no crash log.
         var prms = new BinaryWriteParameters
         {
             MastersListContent = MastersListContentOption.Iterate,
             ModKey = ModKeyOption.NoCheck,
+            MastersListOrdering = TryGetLoadOrderOrdering(env),
         };
         var tmp = outputPath + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
         try { mod.WriteToBinary(tmp, prms); }
@@ -727,6 +747,26 @@ public static partial class WriteService
         if (survivors.Count > 0)
             result += $" STILL PRESENT (records reference them, so removal would dangle): {string.Join(", ", survivors)}.";
         return result;
+    }
+
+    /// <summary>
+    /// Build a MAST-ordering option from the live load order. Returns null when no environment is
+    /// available, in which case Mutagen falls back to its own ordering — acceptable for a single-master
+    /// plugin, but a multi-master one written that way can list a dependent ESM before its dependency
+    /// and hang the game on load. Callers with an env should always pass it.
+    /// </summary>
+    private static AMastersListOrderingOption? TryGetLoadOrderOrdering(object? env)
+    {
+        if (env == null) return null;
+        try
+        {
+            var keys = new List<ModKey>();
+            foreach (var l in ((System.Collections.IEnumerable)((dynamic)env).LoadOrder.ListedOrder).Cast<dynamic>())
+                keys.Add((ModKey)l.ModKey);
+            if (keys.Count == 0) return null;
+            return new MastersListOrderingByLoadOrder(keys);
+        }
+        catch { return null; }
     }
 
     /// <summary>
