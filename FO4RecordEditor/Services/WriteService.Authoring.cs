@@ -360,6 +360,45 @@ public static partial class WriteService
         return $"Set {built.Count} quest objective(s) on {recordId} in {plugin}. save_plugin to persist.";
     }
 
+    /// <summary>
+    /// Replace a MESG record's menu buttons. MenuButtons is an ExtendedList&lt;MessageButton&gt;, i.e. a
+    /// STRUCT list, so add_list_item (FormLinks only) cannot author it. Buttons are returned by
+    /// Message.Show() as their zero-based index, in this order.
+    /// </summary>
+    public static string SetMessageButtons(string plugin, string recordId, string json, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        if (rec is not Message m) return $"set_message_buttons requires a MESG record, got {rec.GetType().Name}.";
+
+        var built = new List<MessageButton>();
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "[]" : json);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                // Accept either a bare string ("Move") or an object ({"text":"Move"}).
+                var text = el.ValueKind == JsonValueKind.String
+                    ? el.GetString()
+                    : (el.TryGetProperty("text", out var tEl) ? tEl.GetString() : null);
+                if (string.IsNullOrEmpty(text)) return "Every button needs a non-empty 'text'.";
+                built.Add(new MessageButton { Text = text });
+            }
+        }
+        catch (Exception ex) { return $"Could not parse buttons JSON: {ex.Message}."; }
+
+        m.MenuButtons.Clear();
+        foreach (var b in built) m.MenuButtons.Add(b);
+
+        // A MESG only renders as a button menu when the MessageBox flag is set; without it the game
+        // shows a corner notification and Show() returns immediately with no selection.
+        TrySetNullableEnumFlags(m, "Flags", "MessageBox");
+
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        var idx = string.Join(", ", built.Select((b, i) => $"{i}={b.Text}"));
+        return $"Set {built.Count} menu button(s) on {recordId} in {plugin} and flagged it MessageBox. Show() returns: {idx}. save_plugin to persist.";
+    }
+
     // ── shared JSON / reflection helpers ─────────────────────────────────────────────────────────
     // Build one FO4 Condition from a JSON element (same schema as set_conditions). Reuses the
     // private ApplyParam / ParseOperator / ResolveFk from the main partial.

@@ -641,6 +641,22 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "record", "objectives" }
             }),
+        new("set_message_buttons",
+            "Replace a MESG record's menu buttons and flag it as a MessageBox (without that flag it renders " +
+            "as a corner notification and Show() returns nothing). MenuButtons is a STRUCT list, so " +
+            "add_list_item cannot author it. JSON array of strings [\"Use\",\"Move\",\"Pack up\",\"Cancel\"] or " +
+            "objects [{\"text\":\"Use\"}]. Papyrus Message.Show() returns the zero-based index in this order.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the MESG." },
+                    buttons = new { type = "string", description = "JSON array of button texts (or {text} objects), in order." }
+                },
+                required = new[] { "plugin", "record", "buttons" }
+            }),
         new("compile_papyrus",
             "Compile Papyrus source .psc -> .pex with the Creation Kit PapyrusCompiler. 'source' auto-detects a " +
             "single .psc file or a folder (set all=true for a folder). NAMESPACES are handled automatically: a " +
@@ -1145,6 +1161,8 @@ public sealed class PluginToolExecutor
                 return WriteService.SetQuestStages(Str("plugin"), Str("record"), Str("stages"), env);
             case "set_quest_objectives":
                 return WriteService.SetQuestObjectives(Str("plugin"), Str("record"), Str("objectives"), env);
+            case "set_message_buttons":
+                return WriteService.SetMessageButtons(Str("plugin"), Str("record"), Str("buttons"), env);
             case "revert_overrides":
                 return WriteService.RevertOverridesFrom(env, Str("bad_plugin"), Str("patch_plugin"),
                     root.TryGetProperty("signature", out var sg) ? sg.GetString() : null,
