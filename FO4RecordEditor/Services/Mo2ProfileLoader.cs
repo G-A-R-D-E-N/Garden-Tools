@@ -21,9 +21,9 @@ namespace FO4RecordEditor.Services;
 /// </summary>
 public static class Mo2ProfileLoader
 {
-    // Plugins at or below this size are read fully into memory (unlocked, editable in place);
-    // larger ones load as memory-mapped overlays. Patches are tiny; masters are 10s-100s of MB.
-    private const long FullReadMaxBytes = 16 * 1024 * 1024;   // 16 MB
+    // At/below this size a plugin is full-read (unlocked, save_plugin can File.Replace in place);
+    // larger ones are mmap overlays (record data stays off the managed heap). See docs Code Notes.
+    private const long FullReadMaxBytes = 1 * 1024 * 1024;   // 1 MB
 
     /// <summary>Minimal env shape the rest of the app accesses via dynamic.</summary>
     public sealed class Mo2GameEnvironment
