@@ -460,14 +460,27 @@ public static partial class WriteService
             {
                 case "object": case "form": case "formlink":
                 {
+                    var op = new ScriptObjectProperty { Name = propName };
+                    var link = op.GetType().GetProperty("Object")!.GetValue(op)!;
+                    var setTo = link.GetType().GetMethod("SetTo", new[] { typeof(FormKey) })!;
+                    // Explicit null. Without this, "none" is not a parseable FormKey, falls through to
+                    // the EditorID resolver, and ends up written as a DANGLING 0x00FFFFFF form -- a
+                    // broken reference that still reported success. Clearing a property has to be a
+                    // real null FormLink.
+                    if (string.IsNullOrWhiteSpace(value) ||
+                        value.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+                        value.Equals("null", StringComparison.OrdinalIgnoreCase))
+                    {
+                        setTo.Invoke(link, new object[] { FormKey.Null });
+                        scriptProp = op;
+                        break;
+                    }
                     if (!FormKey.TryFactory(value, out var fk))
                     {
                         fk = MutagenLoader.ResolveEditorIdToFormKey(env, value);
                         if (fk.IsNull) return $"'{value}' is not a FormKey and no loaded record has that EditorID.";
                     }
-                    var op = new ScriptObjectProperty { Name = propName };
-                    var link = op.GetType().GetProperty("Object")!.GetValue(op)!;
-                    link.GetType().GetMethod("SetTo", new[] { typeof(FormKey) })!.Invoke(link, new object[] { fk });
+                    setTo.Invoke(link, new object[] { fk });
                     scriptProp = op;
                     break;
                 }
@@ -649,10 +662,38 @@ public static partial class WriteService
             touched++;
         }
 
+        // MastersListContentOption.Iterate ADDS any master the records need; it does NOT prune one
+        // that nothing references. A stale master therefore survives the write untouched. Remove it
+        // from the header explicitly. Iterate still runs afterwards, so if any record really does
+        // reference it, Mutagen re-adds it and this becomes a no-op rather than a corruption.
+        var presentTargets = mod.ModHeader.MasterReferences
+            .Where(m => stripSet.Contains(m.Master.FileName.String))
+            .ToList();
+        foreach (var m in presentTargets)
+            mod.ModHeader.MasterReferences.Remove(m);
+
+        var targetNames = string.Join(", ", presentTargets.Select(m => m.Master.FileName.String));
+
+        // Ask Mutagen itself which records still link to the target masters. Mutagen is the authority:
+        // it is what recomputes the master list on write, and it sees FormLinks in places a hand-rolled
+        // binary scan misses (MGEF/SPEL data structs, perk entry-point data, etc).
+        var linkers = FindRecordsLinkingTo(mod, stripSet);
+        var linkReport = linkers.Count == 0
+            ? "No record links to the named master(s)."
+            : $"{linkers.Count} record(s) still link to them: " +
+              string.Join("; ", linkers.Take(15)) + (linkers.Count > 15 ? ", ..." : "");
+
         var summary = $"Loaded '{Path.GetFileName(sourcePath)}': " +
-                      $"{dropped} condition(s) across {touched} record(s) reference the stripped master(s).";
+                      $"{dropped} condition(s) across {touched} record(s) reference the stripped master(s). " +
+                      (presentTargets.Count == 0
+                          ? "None of the named masters are declared in this plugin's header."
+                          : $"Header master(s) to remove: {targetNames}.") +
+                      " " + linkReport;
         if (dryRun)
             return $"[DRY RUN] {summary} Pass dry_run=false to write.";
+
+        if (presentTargets.Count == 0 && dropped == 0)
+            return $"{summary} Nothing to do; file left untouched.";
 
         if (string.IsNullOrWhiteSpace(outputPath))
             outputPath = sourcePath;
@@ -667,6 +708,11 @@ public static partial class WriteService
         try { mod.WriteToBinary(tmp, prms); }
         catch (Exception ex) { try { File.Delete(tmp); } catch { } return $"Write failed: {ex.Message}"; }
 
+        // Report what the written file ACTUALLY contains, not what was asked for. A master that
+        // survives here is one Iterate re-added because a record still references it.
+        var written = ReadMasterNames(tmp);
+        var survivors = written.Where(w => stripSet.Contains(w)).ToList();
+
         try
         {
             if (File.Exists(outputPath)) File.Replace(tmp, outputPath, null);
@@ -674,7 +720,60 @@ public static partial class WriteService
         }
         catch (Exception ex) { return $"Swap failed: {ex.Message} (tmp preserved at '{tmp}')"; }
 
-        return $"Saved to '{outputPath}'. Stripped {mastersToStrip.Length} master(s); dropped {dropped} condition(s) across {touched} record(s). Mutagen recomputed all FormID master indices.";
+        var removedCount = presentTargets.Count - survivors.Count;
+        var result = $"Saved to '{outputPath}'. Removed {removedCount} of {presentTargets.Count} header master(s); " +
+                     $"dropped {dropped} condition(s) across {touched} record(s). " +
+                     $"Masters now: [{string.Join(", ", written)}].";
+        if (survivors.Count > 0)
+            result += $" STILL PRESENT (records reference them, so removal would dangle): {string.Join(", ", survivors)}.";
+        return result;
+    }
+
+    /// <summary>
+    /// Enumerate every record whose FormLinks point at one of the named masters. This is what
+    /// decides whether a master can be stripped: if anything links to it, removing it from the
+    /// header would leave a dangling reference (Mutagen re-adds it on write anyway).
+    /// </summary>
+    private static List<string> FindRecordsLinkingTo(IFallout4Mod mod, HashSet<string> stripSet)
+    {
+        var found = new List<string>();
+        foreach (var rec in mod.EnumerateMajorRecords())
+        {
+            var seen = new HashSet<string>();
+            foreach (var link in rec.EnumerateFormLinks())
+            {
+                if (link.FormKey.IsNull) continue;
+                var name = link.FormKey.ModKey.FileName.String;
+                if (!stripSet.Contains(name)) continue;
+                seen.Add(link.FormKey.ToString());
+            }
+            if (seen.Count > 0)
+                found.Add($"{rec.EditorID ?? rec.FormKey.ToString()} ({rec.GetType().Name}) -> {string.Join(",", seen)}");
+        }
+        return found;
+    }
+
+    /// <summary>Read the MAST entries straight out of a plugin's TES4 header, in order.</summary>
+    private static List<string> ReadMasterNames(string path)
+    {
+        var names = new List<string>();
+        try
+        {
+            var d = File.ReadAllBytes(path);
+            if (d.Length < 24 || d[0] != 'T' || d[1] != 'E' || d[2] != 'S' || d[3] != '4') return names;
+            int size = BitConverter.ToInt32(d, 4);
+            int pos = 24, end = 24 + size;
+            while (pos + 6 <= end && pos + 6 <= d.Length)
+            {
+                var sig = System.Text.Encoding.ASCII.GetString(d, pos, 4);
+                int len = BitConverter.ToUInt16(d, pos + 4);
+                if (sig == "MAST")
+                    names.Add(System.Text.Encoding.Latin1.GetString(d, pos + 6, len).TrimEnd('\0'));
+                pos += 6 + len;
+            }
+        }
+        catch { }
+        return names;
     }
 
     private static bool ConditionRefersToStrippedMaster(Mutagen.Bethesda.Fallout4.IConditionGetter cond, HashSet<string> stripSet)
@@ -1613,7 +1712,7 @@ public static partial class WriteService
     private const string SupportedTypes =
         "BOOK/HOLOTAPE, TERM, WEAP, ARMO, ARMA, ANIO, IDLE, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, " +
         "FLST, MGEF, PERK, NPC_, QUST, MESG, GLOB (GLOBFLOAT/GLOBINT/GLOBSHORT/GLOBBOOL), AVIF, " +
-        "LVLI, LVLN, SPEL, ENCH, FURN, IMAD.";
+        "LVLI, LVLN, SPEL, ENCH, FURN, IMAD, LIGH, STAT.";
 
     // True if the plugin must keep FormIDs in the ESL light range (0x800-0xFFF).
     private static bool IsEsl(IFallout4Mod mod)
@@ -1689,6 +1788,13 @@ public static partial class WriteService
             // Furniture (tents/benches with sit/sleep markers) and image-space adapter (visor tints).
             case "FURN":                  { var x = new Furniture(fk, r) { EditorID = editorId };           mod.Furniture.Add(x);            return x; }
             case "IMAD":                  { var x = new ImageSpaceAdapter(fk, r) { EditorID = editorId };   mod.ImageSpaceAdapters.Add(x);   return x; }
+            // Light: the record a campfire/lantern needs to actually emit light. Without this the only
+            // options were borrowing a vanilla LIGH (dragging in whatever master owns it) or a Spriggit
+            // roundtrip. Shell only -- set Radius/Color/Flags/FadeValue etc. with set_field afterwards.
+            case "LIGH":                  { var x = new Light(fk, r) { EditorID = editorId };               mod.Lights.Add(x);               return x; }
+            // Static: plain world meshes (lit/unlit prop variants, markers) that get spawned with
+            // PlaceAtMe. Same gap as LIGH -- previously you had to borrow a vanilla STAT.
+            case "STAT":                  { var x = new Static(fk, r) { EditorID = editorId };              mod.Statics.Add(x);              return x; }
             default:                      return null;
         }
     }
@@ -1716,6 +1822,13 @@ public static partial class WriteService
         var segments = SplitFieldPath(field);
         if (segments.Count == 0) { msg = "Empty field path."; return false; }
 
+        // Every hop is recorded so a value-type (struct) hop can be written BACK afterwards. Reflection
+        // hands back a BOXED COPY of a struct, so mutating it silently changes nothing: that is why
+        // set_field on ObjectBounds.First.X ("ObjectBounds" -> "First" is a P3Int16 struct) reported
+        // success while the record kept 0,0,0. Reference types are mutated in place and need no
+        // write-back; the loop at the end stops as soon as it reaches one.
+        var hops = new List<(object Owner, PropertyInfo? Prop, System.Collections.IList? List, int Idx)>();
+
         object cur = rec;
         for (int i = 0; i < segments.Count - 1; i++)
         {
@@ -1726,6 +1839,7 @@ public static partial class WriteService
                 { msg = $"'{(i > 0 ? segments[i - 1] : "value")}' is not an indexable list."; return false; }
                 if (idx < 0 || idx >= list.Count)
                 { msg = $"index {idx} is out of range (the list has {list.Count} item(s))."; return false; }
+                hops.Add((list, null, list, idx));
                 cur = list[idx]!;
             }
             else
@@ -1740,6 +1854,7 @@ public static partial class WriteService
                     if (next == null || !p.CanWrite) { msg = $"Can't initialise '{seg}'."; return false; }
                     p.SetValue(cur, next);
                 }
+                hops.Add((cur, p, null, -1));
                 cur = next;
             }
         }
@@ -1750,7 +1865,25 @@ public static partial class WriteService
             msg = $"Address a field INSIDE the list element, e.g. '{field}.<Field>' -- setting a whole element by index isn't supported.";
             return false;
         }
-        return SetLeaf(cur, last, value, env, out msg);
+        if (!SetLeaf(cur, last, value, env, out msg)) return false;
+
+        // Propagate struct edits back up. Stops at the first reference type, which was mutated in place.
+        for (int i = hops.Count - 1; i >= 0 && cur.GetType().IsValueType; i--)
+        {
+            var (owner, prop, list, idx) = hops[i];
+            if (prop != null)
+            {
+                if (!prop.CanWrite)
+                { msg = $"'{segments[i]}' is a read-only struct and can't be written back."; return false; }
+                prop.SetValue(owner, cur);
+            }
+            else if (list != null)
+            {
+                list[idx] = cur;
+            }
+            cur = owner;
+        }
+        return true;
     }
 
     // "[3]" -> 3. Returns false for property names.
@@ -1836,6 +1969,10 @@ public static partial class WriteService
             else if (t == typeof(ushort)) converted = ushort.Parse(value, Inv);
             else if (t == typeof(byte)) converted = byte.Parse(value, Inv);
             else if (t == typeof(long)) converted = long.Parse(value, Inv);
+            // Color: light/effect tints. Accepts "#RRGGBB" / "RRGGBB" / "R,G,B" (and an optional alpha
+            // as "#AARRGGBB" or a 4th component). Without this every LIGH/EFSH colour had to be done
+            // through a Spriggit roundtrip.
+            else if (t == typeof(System.Drawing.Color)) converted = ParseColor(value);
             else { msg = $"Field '{field}' has type {t.Name}, which set_field can't set yet (scalar/text only)."; return false; }
 
             prop.SetValue(rec, converted);
@@ -1846,5 +1983,27 @@ public static partial class WriteService
             msg = $"Could not set {field}: {ex.Message}";
             return false;
         }
+    }
+
+    // "#F4A964" / "F4A964" / "#FFF4A964" / "244,169,100" -> Color. Throws on anything else so the
+    // caller reports a real error instead of silently writing black.
+    private static System.Drawing.Color ParseColor(string value)
+    {
+        var s = value.Trim();
+        if (s.Contains(','))
+        {
+            var parts = s.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length is not (3 or 4)) throw new FormatException($"'{value}' is not R,G,B[,A].");
+            var c = parts.Select(p => byte.Parse(p.Trim(), Inv)).ToArray();
+            return parts.Length == 3
+                ? System.Drawing.Color.FromArgb(255, c[0], c[1], c[2])
+                : System.Drawing.Color.FromArgb(c[3], c[0], c[1], c[2]);
+        }
+        if (s.StartsWith('#')) s = s[1..];
+        if (s.Length is not (6 or 8)) throw new FormatException($"'{value}' is not #RRGGBB or #AARRGGBB.");
+        var v = uint.Parse(s, System.Globalization.NumberStyles.HexNumber, Inv);
+        return s.Length == 6
+            ? System.Drawing.Color.FromArgb(255, (byte)(v >> 16), (byte)(v >> 8), (byte)v)
+            : System.Drawing.Color.FromArgb((byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v);
     }
 }

@@ -270,7 +270,7 @@ public sealed class PluginToolExecutor
             }),
         new("create_record",
             "Add a new record of a given type to a plugin. Existing loaded plugins are opened for editing automatically. Returns the new FormKey. " +
-            "Supported types: BOOK/HOLOTAPE, TERM, WEAP, ARMO, ARMA, ANIO, IDLE, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, FLST, MGEF, PERK, NPC_, QUST, MESG, GLOB, AVIF, LVLI, LVLN, SPEL, ENCH, FURN, IMAD. " +
+            "Supported types: BOOK/HOLOTAPE, TERM, WEAP, ARMO, ARMA, ANIO, IDLE, MISC, COBJ, KYWD, AMMO, ALCH, ACTI, CONT, FLST, MGEF, PERK, NPC_, QUST, MESG, GLOB, AVIF, LVLI, LVLN, SPEL, ENCH, FURN, IMAD, LIGH, STAT. " +
             "GLOB defaults to a float global; use GLOBINT/GLOBSHORT/GLOBBOOL for other global value types. Set a global's value via set_field on 'Data'. " +
             "LVLI/LVLN/SPEL/ENCH are shells: add leveled entries with add_leveled_entry and spell/enchant effects with set_magic_effects (their lists are structs, not FormLinks). " +
             "Build perk effects with set_perk_effects and quest internals with set_quest_aliases/set_quest_stages/set_quest_objectives.",
