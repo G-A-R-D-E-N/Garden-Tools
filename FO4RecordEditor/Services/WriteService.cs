@@ -578,7 +578,7 @@ public static partial class WriteService
         // DLCCoast.esm written BEFORE Fallout4.esm). The game does not error on that - it HANGS on load
         // forever with no crash log. This is the cause of the long-standing "save_plugin scrambles
         // master order" freeze.
-        var loOrdering = TryGetLoadOrderOrdering(env);
+        var loOrdering = TryGetLoadOrderOrdering(env, out var orderingUnavailable);
 
         var prms = new BinaryWriteParameters
         {
@@ -619,11 +619,20 @@ public static partial class WriteService
             NotifyChanged(name);
             var inOverwrite = !string.IsNullOrWhiteSpace(Mo2OverwriteFolder) &&
                 path.StartsWith(Mo2OverwriteFolder!, StringComparison.OrdinalIgnoreCase);
-            return inOverwrite
+            var baseMsg = inOverwrite
                 ? $"Saved {name} to the MO2 overwrite folder ({path}). MO2 loads it automatically at top " +
                   "priority — just enable it in the plugin list if it isn't already checked, and place it " +
                   "after the plugins it patches."
                 : $"Saved {name} to {path}.";
+
+            // Only matters with 2+ masters: a single-master plugin has nothing to mis-order. Warn
+            // rather than fail, because the write did succeed and may well be fine.
+            if (orderingUnavailable != null && ReadMasterNames(path).Count > 1)
+                baseMsg += $" WARNING: master order was NOT set from the load order ({orderingUnavailable}), " +
+                           "so the MAST table is in Mutagen's own order. A multi-master plugin written this way " +
+                           "can list a dependent ESM before its dependency, which makes the game hang on load " +
+                           "with no crash log. Verify the master order, or re-save with the environment loaded.";
+            return baseMsg;
         }
         catch (Exception)
         {
@@ -733,7 +742,7 @@ public static partial class WriteService
         {
             MastersListContent = MastersListContentOption.Iterate,
             ModKey = ModKeyOption.NoCheck,
-            MastersListOrdering = TryGetLoadOrderOrdering(env),
+            MastersListOrdering = TryGetLoadOrderOrdering(env, out var stripOrderingUnavailable),
         };
         var tmp = outputPath + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
         try { mod.WriteToBinary(tmp, prms); }
@@ -757,6 +766,9 @@ public static partial class WriteService
                      $"Masters now: [{string.Join(", ", written)}].";
         if (survivors.Count > 0)
             result += $" STILL PRESENT (records reference them, so removal would dangle): {string.Join(", ", survivors)}.";
+        if (stripOrderingUnavailable != null && written.Count > 1)
+            result += $" WARNING: master order was NOT set from the load order ({stripOrderingUnavailable}); " +
+                      "verify the MAST order before loading the game.";
         return result;
     }
 
@@ -766,18 +778,34 @@ public static partial class WriteService
     /// plugin, but a multi-master one written that way can list a dependent ESM before its dependency
     /// and hang the game on load. Callers with an env should always pass it.
     /// </summary>
-    private static AMastersListOrderingOption? TryGetLoadOrderOrdering(object? env)
+    private static AMastersListOrderingOption? TryGetLoadOrderOrdering(object? env, out string? unavailableReason)
     {
-        if (env == null) return null;
+        if (env == null)
+        {
+            unavailableReason = "no game environment is loaded";
+            return null;
+        }
         try
         {
             var keys = new List<ModKey>();
             foreach (var l in ((System.Collections.IEnumerable)((dynamic)env).LoadOrder.ListedOrder).Cast<dynamic>())
                 keys.Add((ModKey)l.ModKey);
-            if (keys.Count == 0) return null;
+            if (keys.Count == 0)
+            {
+                unavailableReason = "the loaded environment reports an empty load order";
+                return null;
+            }
+            unavailableReason = null;
             return new MastersListOrderingByLoadOrder(keys);
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            // Was a bare `catch { return null; }`, which silently degraded to an unordered write --
+            // the exact condition that hangs the game on load, reported as a clean save.
+            DebugLog.Exception("SavePlugin master ordering", ex);
+            unavailableReason = $"reading the load order failed ({ex.Message})";
+            return null;
+        }
     }
 
     /// <summary>
@@ -805,7 +833,12 @@ public static partial class WriteService
     }
 
     /// <summary>Read the MAST entries straight out of a plugin's TES4 header, in order.</summary>
-    private static List<string> ReadMasterNames(string path)
+    /// <summary>
+    /// Reads the MAST entries straight out of a plugin's TES4 header, in file order. Public because
+    /// the raw header is the only trustworthy check of master order after a save -- check_plugin
+    /// reports from the in-memory model, not from what was written.
+    /// </summary>
+    public static List<string> ReadMasterNames(string path)
     {
         var names = new List<string>();
         try
@@ -992,7 +1025,7 @@ public static partial class WriteService
 
         // 3. Write the patch (Output folder by default).
         MutagenLoader.InvalidateModIndex(patchPlugin);
-        var save = SavePlugin(patchPlugin, null);
+        var save = SavePlugin(patchPlugin, null, env);
         record.ClearDirty();
 
         var msg = $"Applied {applied} edit(s) to {patchPlugin} and saved. {save} " +
@@ -1389,7 +1422,7 @@ public static partial class WriteService
         if (apply)
         {
             MutagenLoader.InvalidateModIndex(patchPlugin); NotifyChanged(patchPlugin);
-            var save = SavePlugin(patchPlugin, null);
+            var save = SavePlugin(patchPlugin, null, env);
             return $"Reverted {reverted} record(s) that {badPlugin} was overriding, into {patchPlugin}. " +
                    $"{(skipped > 0 ? skipped + " skipped (not the winner / filtered out). " : "")}{save} " +
                    $"Load {patchPlugin} AFTER {badPlugin} so the reverts win.{existingPatchWarning}";
@@ -1548,7 +1581,7 @@ public static partial class WriteService
             msg.AppendLine("First errors (check field names and value formats):");
             foreach (var e in errors.Take(5)) msg.AppendLine("  " + e);
         }
-        msg.Append(SavePlugin(patchName, null));
+        msg.Append(SavePlugin(patchName, null, env));
         return msg.ToString();
     }
 
@@ -1580,12 +1613,12 @@ public static partial class WriteService
     }
 
     /// <summary>Invalidate + notify + write the script's patch plugin to disk (apply mode).</summary>
-    public static string SaveScriptPatch(string patchPlugin)
+    public static string SaveScriptPatch(string patchPlugin, object? env = null)
     {
         var (name, _) = NormalizePlugin(patchPlugin);
         MutagenLoader.InvalidateModIndex(name);
         NotifyChanged(name);
-        return SavePlugin(name, null);
+        return SavePlugin(name, null, env);
     }
 
     /// <summary>Drop a patch plugin from the in-memory editable set without saving (dry-run cleanup),

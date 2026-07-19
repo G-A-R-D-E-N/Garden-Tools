@@ -402,7 +402,7 @@ public static class PatchScriptRunner
         }
         else
         {
-            sb.Append(WriteService.SaveScriptPatch(patchPlugin));
+            sb.Append(WriteService.SaveScriptPatch(patchPlugin, env));
         }
         return sb.ToString();
     }
