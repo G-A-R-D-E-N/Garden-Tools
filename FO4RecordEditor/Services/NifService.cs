@@ -121,10 +121,6 @@ public static class NifService
         {
             FileName = exe,
             WorkingDirectory = Path.GetDirectoryName(exe) ?? ".",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
             // niftool emits UTF-8 (nlohmann JSON); decode as UTF-8 so non-ASCII paths/labels don't mangle.
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
@@ -133,24 +129,13 @@ public static class NifService
 
         try
         {
-            using var p = Process.Start(psi);
-            if (p == null) return "Failed to start niftool.exe.";
+            var run = ProcessRunner.Run(psi, TimeSpan.FromSeconds(120));
+            if (!run.Started) return "Failed to start niftool.exe.";
+            if (run.TimedOut) return "niftool timed out after 120s (killed).";
 
-            var soTask = p.StandardOutput.ReadToEndAsync();
-            var seTask = p.StandardError.ReadToEndAsync();
-            if (!p.WaitForExit(120_000))
-            {
-                try { p.Kill(true); } catch { }
-                return "niftool timed out after 120s (killed).";
-            }
-            try { Task.WaitAll(new Task[] { soTask, seTask }, 10_000); } catch { }
-
-            string so = soTask.IsCompletedSuccessfully ? soTask.Result : "";
-            string se = seTask.IsCompletedSuccessfully ? seTask.Result : "";
-            var combined = (so + "\n" + se).Replace("\r", "").Trim();
-            return string.IsNullOrWhiteSpace(combined)
-                ? $"niftool exited {p.ExitCode} with no output."
-                : combined;
+            return string.IsNullOrWhiteSpace(run.Combined)
+                ? $"niftool exited {run.ExitCode} with no output."
+                : run.Combined;
         }
         catch (Exception ex)
         {

@@ -105,36 +105,26 @@ public static class PapyrusService
             FileName = exe,
             Arguments = args.ToString(),
             WorkingDirectory = workDir,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
         };
 
         var sb = new StringBuilder();
         try
         {
-            using var p = Process.Start(psi);
-            if (p == null) return "Failed to start the Papyrus compiler process.";
-            // Read stdout AND stderr concurrently. Reading one stream to end while the other's pipe
-            // buffer fills (a batch of 90 scripts emits a lot on both) deadlocks: the child blocks
-            // writing the full pipe while we block reading the other. Async reads drain both at once.
-            var soTask = p.StandardOutput.ReadToEndAsync();
-            var seTask = p.StandardError.ReadToEndAsync();
-            if (!p.WaitForExit(300_000)) { try { p.Kill(true); } catch { } return "Papyrus compile timed out after 300s (killed)."; }
-            string so = "", se = "";
-            try { System.Threading.Tasks.Task.WaitAll(new[] { soTask, seTask }, 10_000); } catch { }
-            if (soTask.IsCompletedSuccessfully) so = soTask.Result;
-            if (seTask.IsCompletedSuccessfully) se = seTask.Result;
+            // A batch of 90 scripts emits heavily on BOTH streams, so they must be drained
+            // concurrently -- see ProcessRunner for why sequential reads deadlock.
+            var run = ProcessRunner.Run(psi, TimeSpan.FromSeconds(300));
+            if (!run.Started) return "Failed to start the Papyrus compiler process.";
+            if (run.TimedOut) return "Papyrus compile timed out after 300s (killed).";
 
-            var combined = (so + "\n" + se).Replace("\r", "");
+            // Not run.Combined: this parser splits on '\n' and must keep the untrimmed shape.
+            var combined = (run.StdOut + "\n" + run.StdErr).Replace("\r", "");
             // Lead with a parse-friendly RESULT line (so Claude/the GUI can read success at a glance).
             var batch = combined.Split('\n').FirstOrDefault(l => l.Contains("Batch compile", StringComparison.OrdinalIgnoreCase));
             var mOk = System.Text.RegularExpressions.Regex.Match(batch ?? "", @"(\d+)\s+succeeded,\s+(\d+)\s+failed");
             if (mOk.Success)
                 sb.AppendLine($"RESULT: {mOk.Groups[1].Value} succeeded, {mOk.Groups[2].Value} failed (output -> {outDir})");
             else
-                sb.AppendLine($"RESULT: {(p.ExitCode == 0 ? "success" : "FAILED")} (output -> {outDir})");
+                sb.AppendLine($"RESULT: {(run.ExitCode == 0 ? "success" : "FAILED")} (output -> {outDir})");
             sb.AppendLine();
             sb.AppendLine($"compiler: {exe}");
             sb.AppendLine($"workdir : {workDir}");
@@ -152,8 +142,8 @@ public static class PapyrusService
             if (important.Count > 0) sb.AppendLine(string.Join("\n", important));
             else if (combined.Trim().Length > 0) sb.AppendLine(combined.Trim());
             sb.AppendLine();
-            sb.AppendLine($"exit code: {p.ExitCode} ({(p.ExitCode == 0 ? "success" : "FAILED")})");
-            if (p.ExitCode != 0)
+            sb.AppendLine($"exit code: {run.ExitCode} ({(run.ExitCode == 0 ? "success" : "FAILED")})");
+            if (run.ExitCode != 0)
             {
                 var hint = DiagnoseDependencies(combined);
                 if (hint.Length > 0) { sb.AppendLine(); sb.Append(hint); }

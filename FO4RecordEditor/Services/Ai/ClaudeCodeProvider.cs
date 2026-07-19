@@ -131,6 +131,12 @@ public sealed class ClaudeCodeProvider : IAIProvider
                 catch { /* the CLI may exit before we finish writing; ignore */ }
             });
 
+            // Drain stderr from the START, not after the stdout loop. Same shape as the stdin
+            // deadlock above: stderr is redirected, so once the CLI fills that pipe it blocks on
+            // write and stops producing stdout — the read loop below then never sees EOF and the
+            // chat hangs on "thinking…" forever.
+            var errTask = proc.StandardError.ReadToEndAsync(ct);
+
             string? line;
             while ((line = await proc.StandardOutput.ReadLineAsync(ct)) != null)
                 foreach (var chunk in ParseStreamLine(line))
@@ -141,7 +147,8 @@ public sealed class ClaudeCodeProvider : IAIProvider
 
             if (proc.ExitCode != 0)
             {
-                var err = await proc.StandardError.ReadToEndAsync(ct);
+                var err = "";
+                try { err = await errTask; } catch { /* ignore */ }
                 if (!string.IsNullOrWhiteSpace(err))
                     yield return $"\n[Claude Code error] {err.Trim()}";
             }

@@ -278,20 +278,14 @@ public static class TextureService
         {
             FileName = texconv,
             WorkingDirectory = work,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
 
-        using (var p = Process.Start(psi))
-        {
-            if (p == null) return null;
-            p.StandardOutput.ReadToEnd();
-            p.StandardError.ReadToEnd();
-            if (!p.WaitForExit(30_000)) { try { p.Kill(true); } catch { } return null; }
-        }
+        // Was: ReadToEnd() on stdout, then stderr, then WaitForExit(30s). texconv warning-spamming
+        // stderr filled that pipe while we blocked on stdout, and the timeout sat after the reads
+        // where it could never run -- so a chatty conversion hung the caller permanently.
+        var run = ProcessRunner.Run(psi, TimeSpan.FromSeconds(30));
+        if (!run.Started || run.TimedOut) return null;
 
         if (File.Exists(produced)) return produced;
         if (reconstructZ) { try { File.Delete(produced); } catch { } return RunTexconv(texconv, ddsPath, work, false); }

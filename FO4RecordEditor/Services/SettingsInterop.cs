@@ -92,22 +92,20 @@ public class SettingsInterop
         path = string.IsNullOrWhiteSpace(path) ? "claude" : path;
         try
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
+            var psi = new ProcessStartInfo { FileName = "cmd.exe" };
             psi.ArgumentList.Add("/c");
             psi.ArgumentList.Add(path);
             psi.ArgumentList.Add("--version");
-            var proc = Process.Start(psi)!;
-            var output = await proc.StandardOutput.ReadToEndAsync();
-            await proc.WaitForExitAsync();
-            return proc.ExitCode == 0
-                ? $"✓ Found: {output.Trim()}"
+
+            // Was: read stdout to EOF, then WaitForExitAsync, with stderr redirected but never
+            // drained and no timeout at all. A child that wrote enough to stderr to fill that pipe
+            // blocked forever, and this is on the settings dialog's button — it froze the UI.
+            var run = await ProcessRunner.RunAsync(psi, TimeSpan.FromSeconds(30));
+
+            if (!run.Started) return "✗ Could not start the Claude Code CLI.";
+            if (run.TimedOut) return "✗ `claude --version` timed out after 30s.";
+            return run.ExitCode == 0
+                ? $"✓ Found: {run.StdOut.Trim()}"
                 : "✗ `claude` ran but returned an error.";
         }
         catch (Exception ex)
