@@ -44,21 +44,31 @@ public class PluginToolExecutorTests
     [Fact]
     public void ToolDefinitions_ExposesReadAndWriteTools()
     {
-        // Read/diagnose tools (incl. get_conflicts, get_winning_record, search_robco_configs,
-        // scan_conflicts, get_referenced_by, get_problems) + write tools (incl. copy_as_override,
-        // set_components, set_conditions, revert_overrides, renumber_formid, reload_plugin,
-        // strip_masters_clean).
-        PluginToolExecutor.ToolDefinitions().Should().HaveCount(31);
-        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(31);
+        // The exposed tool surface, maintained explicitly. Adding or renaming a tool must fail here
+        // so the docs (README, docs/MCP_SETUP.md, AiGuidance) get updated in the same change --
+        // a bare count assertion let the surface drift from 31 to 57 unnoticed.
+        var expected = new[]
+        {
+            "list_plugins", "list_record_types", "list_records", "list_records_summary",
+            "search_records", "search_all", "resolve_editorid", "get_scripts", "diff_records",
+            "get_record", "get_conflicts", "get_winning_record", "search_robco_configs",
+            "scan_conflicts", "get_referenced_by", "get_problems", "scan_broken_refs",
+            "scan_all_plugins", "open_plugin", "create_plugin", "create_record", "create_cell",
+            "create_placed_object", "set_field", "add_list_item", "attach_script",
+            "set_script_property", "check_plugin", "compact_to_esl", "renumber_formid",
+            "clean_plugin", "backup_plugin", "save_plugin", "copy_as_override", "delete_record",
+            "remove_list_item", "set_components", "set_conditions", "add_leveled_entry",
+            "set_perk_effects", "set_magic_effects", "set_quest_aliases", "set_quest_stages",
+            "set_quest_objectives", "set_furniture_markers", "set_message_buttons",
+            "compile_papyrus", "decompile_papyrus", "revert_overrides", "batch_patch_records",
+            "run_script", "reload_plugin", "strip_masters_clean", "nif_import", "nif_inspect",
+            "nif_verify", "nif_fix",
+        };
 
         var names = PluginToolExecutor.ToolDefinitions()
             .Select(t => (string)t.GetType().GetProperty("name")!.GetValue(t)!).ToList();
-        names.Should().Contain(new[]
-        {
-            "get_conflicts", "get_winning_record", "search_robco_configs",
-            "scan_conflicts", "get_referenced_by", "get_problems",
-            "copy_as_override", "delete_record", "remove_list_item", "set_components", "set_conditions",
-            "revert_overrides", "renumber_formid",
-        });
+
+        names.Should().BeEquivalentTo(expected);
+        PluginToolExecutor.McpToolDefinitions().Should().HaveCount(expected.Length);
     }
 }

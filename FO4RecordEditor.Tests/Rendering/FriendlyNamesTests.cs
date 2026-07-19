@@ -7,13 +7,30 @@ namespace FO4RecordEditor.Tests.Rendering;
 public class FriendlyNamesTests
 {
     [Fact]
-    public void Maps_known_names_and_passes_through_unknowns()
+    public void Maps_known_names_and_auto_splits_unknowns()
     {
         FriendlyNames.Label("EditorID").Should().Be("Editor ID");
         FriendlyNames.Label("CreatedObject").Should().Be("Created Object");
-        FriendlyNames.Label("WorkbenchKeyword").Should().Be("Workbench Keyword");
-        FriendlyNames.Label("SomeUnmappedField").Should().Be("SomeUnmappedField");
+
+        // Deliberate semantic rename, not a truncation: the COBJ field names the bench a recipe
+        // routes to, and the UI calls that column "Workbench".
+        FriendlyNames.Label("WorkbenchKeyword").Should().Be("Workbench");
+
+        // Unmapped names are auto-split, not passed through -- the override map exists only for
+        // labels that differ from the auto-split result.
+        FriendlyNames.Label("SomeUnmappedField").Should().Be("Some Unmapped Field");
         FriendlyNames.Label("[0]").Should().Be("[0]");
+    }
+
+    [Fact]
+    public void Auto_split_handles_acronyms()
+    {
+        FriendlyNames.Label("AIData").Should().Be("AI Data");
+        FriendlyNames.Label("NPCAttackSound").Should().Be("NPC Attack Sound");
+        FriendlyNames.Label("SoundIDs").Should().Be("Sound IDs");
+        FriendlyNames.Label("HasDistantLOD").Should().Be("Has Distant LOD");
+        FriendlyNames.Label("HTMLParser").Should().Be("HTML Parser");
+        FriendlyNames.Label("_HasData").Should().Be("Has Data");
     }
 
     [Fact]
