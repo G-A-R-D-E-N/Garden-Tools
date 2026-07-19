@@ -950,7 +950,25 @@ public sealed class PluginToolExecutor
     public record McpToolEvent(string Tool, string Plugin, string Record, string Field, string Summary, bool IsWrite);
     public static event Action<McpToolEvent>? ToolCompleted;
 
-    public string Execute(string toolName, string inputJson)
+    /// <summary>
+    /// Runs a tool and reports whether it failed, per the <see cref="ToolError"/> contract, so a
+    /// transport can set JSON-RPC <c>isError</c> honestly. Framing a failed edit as success lets an
+    /// agent proceed to save_plugin and report a change that was never applied.
+    /// </summary>
+    public ToolResult ExecuteWithStatus(string toolName, string inputJson)
+    {
+        try { return ToolError.Unwrap(ExecuteMarked(toolName, inputJson)); }
+        catch (Exception ex) { return ToolResult.Fail("Tool error: " + ex.Message); }
+    }
+
+    /// <summary>
+    /// Plain-string tool call for the GUI. Text and throwing behaviour are unchanged; the internal
+    /// error marker is stripped. Use <see cref="ExecuteWithStatus"/> to detect failure.
+    /// </summary>
+    public string Execute(string toolName, string inputJson) =>
+        ToolError.Unwrap(ExecuteMarked(toolName, inputJson)).Text;
+
+    private string ExecuteMarked(string toolName, string inputJson)
     {
         DebugLog.Write("INFO", "AI-Tool", $"call {toolName}",
             string.IsNullOrWhiteSpace(inputJson) ? null : inputJson);
@@ -1238,7 +1256,7 @@ public sealed class PluginToolExecutor
                 return NifService.Fix(Str("nif_path"), Str("out_nif"));
 
             default:
-                return $"Unknown tool: {toolName}";
+                return ToolError.Fail($"Unknown tool: {toolName}");
         }
     }
 

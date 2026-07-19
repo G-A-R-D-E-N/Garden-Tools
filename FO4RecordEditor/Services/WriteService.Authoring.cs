@@ -48,7 +48,7 @@ public static partial class WriteService
         int level, int count, double chanceNonePercent, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (!ResolveFk(env, reference, out var fk)) return $"Could not resolve reference '{reference}'.";
 
         var chance = new Percent(Math.Clamp(chanceNonePercent, 0, 100) / 100.0);
@@ -95,7 +95,7 @@ public static partial class WriteService
     public static string SetPerkEffects(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Perk perk) return $"set_perk_effects requires a PERK record, got {rec.GetType().Name}.";
 
         var built = new List<APerkEffect>();
@@ -207,7 +207,7 @@ public static partial class WriteService
     public static string SetMagicEffects(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         // Restrict to Spell/ObjectEffect(ENCH) — other records (ALCH/INGR/...) also expose an Effects
         // list, and we don't want a mistyped record to silently clobber them.
         if (rec is not (Spell or ObjectEffect))
@@ -259,7 +259,7 @@ public static partial class WriteService
     public static string SetQuestAliases(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Quest q) return $"set_quest_aliases requires a QUST record, got {rec.GetType().Name}.";
 
         var built = new List<AQuestAlias>();
@@ -297,7 +297,7 @@ public static partial class WriteService
     public static string SetQuestStages(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Quest q) return $"set_quest_stages requires a QUST record, got {rec.GetType().Name}.";
 
         var built = new List<QuestStage>();
@@ -333,7 +333,7 @@ public static partial class WriteService
     public static string SetQuestObjectives(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Quest q) return $"set_quest_objectives requires a QUST record, got {rec.GetType().Name}.";
 
         var built = new List<QuestObjective>();
@@ -368,7 +368,7 @@ public static partial class WriteService
     public static string SetMessageButtons(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Message m) return $"set_message_buttons requires a MESG record, got {rec.GetType().Name}.";
 
         var built = new List<MessageButton>();
@@ -411,7 +411,7 @@ public static partial class WriteService
     public static string SetFurnitureMarkers(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Furniture f) return $"set_furniture_markers requires a FURN record, got {rec.GetType().Name}.";
 
         var built = new List<FurnitureMarkerParameters>();

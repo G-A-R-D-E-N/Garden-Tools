@@ -828,7 +828,7 @@ public static class MutagenLoader
     public static string QueryRecordSummaries(object? envObj, string plugin, string sig, int limit, int offset = 0)
     {
         var mod = ResolveMod(plugin, envObj);
-        if (mod == null) return $"Plugin '{plugin}' not found.";
+        if (mod == null) return ToolError.Fail($"Plugin '{plugin}' not found.");
         var idx = GetModIndex(mod, plugin);
         if (!idx.BySig.TryGetValue(sig, out var recs))
             return $"No records of type '{sig}' in {plugin}.";

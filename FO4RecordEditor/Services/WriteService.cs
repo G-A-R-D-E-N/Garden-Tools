@@ -169,7 +169,7 @@ public static partial class WriteService
         if (mod == null) return openMsg;
 
         var rec = FindMutableRecord(mod, recordId);
-        if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
         if (TrySet(rec, field, value, env, out var msg))
         {
@@ -202,7 +202,7 @@ public static partial class WriteService
         if (mod == null) return openMsg;
 
         var rec = FindMutableRecord(mod, recordId);
-        if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
         if (!AddListItemToRecord(rec, field, value, env, out var msg)) return msg;
         MutagenLoader.InvalidateModIndex(plugin);
@@ -335,7 +335,7 @@ public static partial class WriteService
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var rec = FindMutableRecord(mod, recordId);
-        if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
         var hex = (newIdHex ?? "").Trim();
         if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) hex = hex[2..];
@@ -418,7 +418,7 @@ public static partial class WriteService
     public static string AttachScript(string plugin, string recordId, string scriptName, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
         var vmad = GetOrCreateVmad(rec, out var vmadMsg); if (vmad == null) return vmadMsg;
         var scripts = (System.Collections.IList)vmad.GetType().GetProperty("Scripts")!.GetValue(vmad)!;
@@ -435,7 +435,7 @@ public static partial class WriteService
         string propName, string value, string? type, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
         var vmad = rec.GetType().GetProperty("VirtualMachineAdapter")?.GetValue(rec);
         if (vmad == null) return $"{recordId} has no scripts. Call attach_script first.";
@@ -553,7 +553,7 @@ public static partial class WriteService
     {
         var (name, explicitPath) = NormalizePlugin(plugin);
         var mod = GetMutable(name);
-        if (mod == null) return $"Plugin '{name}' is not open for editing.";
+        if (mod == null) return ToolError.Fail($"Plugin '{name}' is not open for editing.");
 
         // Default: overwrite the original file the plugin was opened from (modify in place).
         // Newly created plugins (no source) fall back to the configured Output folder.
@@ -599,7 +599,7 @@ public static partial class WriteService
         // so we never write straight over the live file.
         var tmp = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
         try { mod.WriteToBinary(tmp, writeParams); }
-        catch (Exception ex) { try { File.Delete(tmp); } catch { } return $"Save failed while writing: {ex.Message}"; }
+        catch (Exception ex) { try { File.Delete(tmp); } catch { } return ToolError.Fail($"Save failed while writing: {ex.Message}"); }
 
         try
         {
@@ -1095,7 +1095,7 @@ public static partial class WriteService
     public static string DeleteRecord(string plugin, string recordId, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         var fk = rec.FormKey;
 
         foreach (var groupProp in mod.GetType().GetProperties()
@@ -1117,7 +1117,7 @@ public static partial class WriteService
     public static string RemoveListItem(string plugin, string recordId, string field, string value, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
         if (!RemoveListItemFromRecord(rec, field, value, env, out var msg)) return msg;
         MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
@@ -1148,7 +1148,7 @@ public static partial class WriteService
     public static string SetComponents(string plugin, string recordId, string componentsJson, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not ConstructibleObject && rec is not MiscItem)
             return $"set_components applies to COBJ (recipe inputs) and MISC (scrap components); {recordId} is {rec.GetType().Name}.";
 
@@ -1199,7 +1199,7 @@ public static partial class WriteService
     public static string SetConditions(string plugin, string recordId, string conditionsJson, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
-        var rec = FindMutableRecord(mod, recordId); if (rec == null) return $"Record '{recordId}' not found in {plugin}.";
+        var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
         var condProp = rec.GetType().GetProperty("Conditions");
         if (condProp?.GetValue(rec) is not System.Collections.IList condList)

@@ -63,13 +63,11 @@ public static class StdioMcpServer
                 var p = root.GetProperty("params");
                 var toolName = p.GetProperty("name").GetString() ?? "";
                 var args = p.TryGetProperty("arguments", out var aEl) ? aEl.GetRawText() : "{}";
-                string toolResult;
-                try { toolResult = executor.Execute(toolName, args); }
-                catch (Exception ex) { toolResult = "Tool error: " + ex.Message; }
+                var toolResult = executor.ExecuteWithStatus(toolName, args);
                 return Result(id, new
                 {
-                    content = new object[] { new { type = "text", text = toolResult } },
-                    isError = false
+                    content = new object[] { new { type = "text", text = toolResult.Text } },
+                    isError = toolResult.IsError
                 });
             }
 

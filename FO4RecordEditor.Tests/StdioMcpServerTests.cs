@@ -74,4 +74,32 @@ public class StdioMcpServerTests
     {
         StdioMcpServer.HandleLine("not json", NoEnvExecutor()).Should().BeNull();
     }
+
+    // Regression: every outcome used to be framed isError:false, so an agent could not tell a
+    // failed edit from an applied one and would go on to save_plugin and report success.
+    [Fact]
+    public void ToolsCall_UnknownTool_IsReportedAsError()
+    {
+        var resp = StdioMcpServer.HandleLine(
+            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\"," +
+            "\"params\":{\"name\":\"no_such_tool\",\"arguments\":{}}}", NoEnvExecutor());
+
+        resp.Should().NotBeNull();
+        resp!.Should().Contain("\"isError\":true");
+        resp.Should().Contain("Unknown tool");
+        resp.Should().NotContain("\\u0091");   // sentinel must be stripped before the agent sees it
+    }
+
+    [Fact]
+    public void ToolsCall_FailedWrite_IsReportedAsError()
+    {
+        // set_field against a plugin that is not open -> "Plugin '...' is not open for editing."
+        var resp = StdioMcpServer.HandleLine(
+            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"set_field\"," +
+            "\"arguments\":{\"plugin\":\"NotOpen.esp\",\"record\":\"000800:NotOpen.esp\"," +
+            "\"field\":\"EditorID\",\"value\":\"X\"}}}", NoEnvExecutor());
+
+        resp.Should().NotBeNull();
+        resp!.Should().Contain("\"isError\":true");
+    }
 }
