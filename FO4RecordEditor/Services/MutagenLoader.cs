@@ -1120,11 +1120,8 @@ public static class MutagenLoader
 
     // Vanilla core masters whose ACHR/REFR/cell-placed records aren't indexed by Mutagen's
     // top-level group cache. FormLinks pointing into these are always valid at runtime.
-    private static readonly HashSet<string> VanillaMasters = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
-        "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"
-    };
+    // Single source of truth -- also gates the write layer, see ProtectedPlugins.
+    private static readonly IReadOnlySet<string> VanillaMasters = ProtectedPlugins.VanillaMasters;
 
     private static bool IsVanillaRef(Mutagen.Bethesda.Plugins.FormKey fk) =>
         VanillaMasters.Contains(fk.ModKey.FileName.String);

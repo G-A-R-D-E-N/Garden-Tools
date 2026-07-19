@@ -66,6 +66,9 @@ public static partial class WriteService
     {
         if (string.IsNullOrWhiteSpace(plugin)) return "Provide a plugin name.";
         var (name, explicitPath) = NormalizePlugin(plugin);
+        // Never hand out a mutable vanilla master -- save_plugin defaults to overwriting the file a
+        // plugin was opened from, so opening one is already one typo away from destroying it.
+        if (ProtectedPlugins.IsProtected(name)) return ToolError.Fail(ProtectedPlugins.RefusalMessage(name));
         if (_mutable.ContainsKey(name)) return $"'{name}' is already open for editing.";
 
         string? filePath = explicitPath ?? FindPluginPath(name, env);
@@ -552,6 +555,8 @@ public static partial class WriteService
     public static string SavePlugin(string plugin, string? path, object? env = null)
     {
         var (name, explicitPath) = NormalizePlugin(plugin);
+        if (ProtectedPlugins.IsProtected(name)) return ToolError.Fail(ProtectedPlugins.RefusalMessage(name));
+
         var mod = GetMutable(name);
         if (mod == null) return ToolError.Fail($"Plugin '{name}' is not open for editing.");
 
@@ -561,6 +566,12 @@ public static partial class WriteService
         // MO2 picks them up automatically; plugins opened from disk overwrite their original file.
         if (string.IsNullOrWhiteSpace(path))
             path = explicitPath ?? (_sourcePath.TryGetValue(name, out var sp) ? sp : Path.Combine(NewPatchDir, name));
+
+        // The destination is unvalidated user/agent input, and below we create its parent directory
+        // and then File.Replace/File.Move over whatever is there. Check extension and vanilla-master
+        // name on the NORMALIZED path before any of that happens.
+        var pathProblem = ProtectedPlugins.ValidateSavePath(path);
+        if (pathProblem != null) return ToolError.Fail(pathProblem);
 
         // Order the MAST entries by the real load order. Without this Mutagen emits them in whatever
         // order it built the set, which can put a dependent ESM before the one it depends on (observed:
@@ -1324,17 +1335,31 @@ public static partial class WriteService
             return $"'{badPlugin}' carries no override records{(sig != null ? $" of type {sig}" : "")} (or it isn't loaded).";
 
         IFallout4Mod? patch = null;
+        var existingPatchWarning = "";
         if (apply)
         {
             if (string.IsNullOrWhiteSpace(patchPlugin)) return "Provide a patch plugin to write the reverts into.";
+            // Explicit refusal: without it OpenPlugin's guard would just leave patch null below and
+            // report the misleading "Could not open or create".
+            if (ProtectedPlugins.IsProtected(NormalizePlugin(patchPlugin).name))
+                return ToolError.Fail(ProtectedPlugins.RefusalMessage(NormalizePlugin(patchPlugin).name));
+
+            // When patch_plugin already exists on disk this injects overrides into that real,
+            // installed mod and saves over it -- surfaced in the result so it is not mistaken for
+            // "wrote a new patch".
+            bool patchExisted = GetMutable(patchPlugin) != null ||
+                                MutagenLoader.LooseModPaths.ContainsKey(patchPlugin) ||
+                                FindPluginPath(patchPlugin, env) != null;
             if (GetMutable(patchPlugin) == null)
             {
-                if (MutagenLoader.LooseModPaths.ContainsKey(patchPlugin) || FindPluginPath(patchPlugin, env) != null)
-                    OpenPlugin(patchPlugin, env);
+                if (patchExisted) OpenPlugin(patchPlugin, env);
                 else CreatePlugin(patchPlugin);
             }
             patch = GetMutable(patchPlugin);
-            if (patch == null) return $"Could not open or create patch plugin '{patchPlugin}'.";
+            if (patch == null) return ToolError.Fail($"Could not open or create patch plugin '{patchPlugin}'.");
+            existingPatchWarning = patchExisted
+                ? $" NOTE: '{patchPlugin}' already existed and was modified in place — the reverts were added to it."
+                : "";
         }
 
         var preview = new List<string>();
@@ -1367,7 +1392,7 @@ public static partial class WriteService
             var save = SavePlugin(patchPlugin, null);
             return $"Reverted {reverted} record(s) that {badPlugin} was overriding, into {patchPlugin}. " +
                    $"{(skipped > 0 ? skipped + " skipped (not the winner / filtered out). " : "")}{save} " +
-                   $"Load {patchPlugin} AFTER {badPlugin} so the reverts win.";
+                   $"Load {patchPlugin} AFTER {badPlugin} so the reverts win.{existingPatchWarning}";
         }
 
         var sb = new System.Text.StringBuilder();

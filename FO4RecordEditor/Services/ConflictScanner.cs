@@ -10,12 +10,8 @@ namespace FO4RecordEditor.Services;
 /// </summary>
 public static class ConflictScanner
 {
-    private static readonly HashSet<string> VanillaMasters = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
-        "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm",
-        "DLCUltraHighResolution.esm",
-    };
+    // Single source of truth -- also gates the write layer, see ProtectedPlugins.
+    private static readonly IReadOnlySet<string> VanillaMasters = ProtectedPlugins.VanillaMasters;
 
     // The full load-order scan is expensive, so cache it and reuse for the UI, the tree tinting, and
     // the AI's scan_conflicts tool. Invalidated on env (re)load and whenever a plugin is edited.
