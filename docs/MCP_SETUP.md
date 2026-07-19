@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **53 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **57 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -48,8 +48,9 @@ and not a single mod.
 
 ### Confirming it connected
 
-Restart the client, or in Claude Code run `/mcp reconnect`. Then ask it to call `ping`, or just
-`list_plugins` — if you get your load order back, it works.
+Restart the client, or in Claude Code run `/mcp reconnect`. Then ask it to call `list_plugins` — if
+you get your load order back, it works. (`ping` is a JSON-RPC method the client uses for its own
+health checks, not a tool; asking the AI to "call ping" will not work.)
 
 > **After you rebuild the exe, the running server is the old code.** Stop every `FO4RecordEditor.exe`
 > process, rebuild, then `/mcp reconnect`. Skipping the reconnect is the single most common way to
@@ -76,9 +77,16 @@ Restart the client, or in Claude Code run `/mcp reconnect`. Then ask it to call 
 `remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` · `delete_record` ·
 `renumber_formid` · `compact_to_esl` · `batch_patch_records` · `revert_overrides`
 
+### Cells and placed objects
+`create_cell` · `create_placed_object`
+
+`create_record` only adds **top-level** records, so it cannot make either of these — a placed object
+lives inside a cell's persistent/temporary list, and cells live in a block tree. This is the pair you
+need for map markers and for parking references you relocate at runtime.
+
 ### Struct lists that `add_list_item` cannot express
 `add_leveled_entry` · `set_perk_effects` · `set_magic_effects` · `set_quest_aliases` ·
-`set_quest_stages` · `set_quest_objectives`
+`set_quest_stages` · `set_quest_objectives` · `set_furniture_markers` · `set_message_buttons`
 
 ### Papyrus (built in — no Champollion needed)
 `compile_papyrus` (`.psc` → `.pex`) · `decompile_papyrus` (`.pex` → `.psc`, recursive)

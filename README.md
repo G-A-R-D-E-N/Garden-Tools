@@ -5,7 +5,7 @@ A Fallout 4 plugin IDE. It is two things in one executable:
 - **A desktop editor** — browse, diff, and edit records across your whole load order, scan for
   conflicts, compile and decompile Papyrus, and inspect NIFs. Think xEdit, but with a modern UI and
   a real undo stack.
-- **An MCP server** — the same 53 operations, exposed to an AI assistant (Claude Code, or any other
+- **An MCP server** — the same 57 operations, exposed to an AI assistant (Claude Code, or any other
   MCP client). This is the part most people want: you describe the edit, the AI makes it, and the
   plugin is written by [Mutagen](https://github.com/Mutagen-Modding/Mutagen) rather than by hand.
 
