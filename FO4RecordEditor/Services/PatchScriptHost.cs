@@ -348,10 +348,19 @@ public static class PatchScriptRunner
             typeof(ExtendedList<>).Assembly,          // Noggog
             typeof(Enumerable).Assembly);
 
+    /// <summary>Wall-clock ceiling for one run_script call. Settable so tests can use a short one.</summary>
+    internal static TimeSpan ScriptTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
     /// <summary>
     /// Run <paramref name="code"/> against the loaded env, forwarding edits into <paramref name="patchPlugin"/>.
     /// On a dry run the script executes against a throwaway "<patch>.preview" plugin that is discarded
-    /// afterwards, so you get accurate counts and logs with zero writes and zero in-memory pollution.
+    /// afterwards, so record edits are counted without touching the real patch.
+    ///
+    /// TRUST MODEL: this runs AI-authored C# in-process at full trust. Roslyn scripting applies no
+    /// security boundary, so a script can reach System.IO, Process.Start and this app's own static
+    /// write API by fully qualifying the type. That is accepted — it is the user's own agent on the
+    /// user's own machine — but it means dry_run bounds ONLY Mutagen record edits, never filesystem,
+    /// process or network side effects, which have already happened by the time this returns.
     /// </summary>
     public static string Run(string code, object? env, string patchPlugin, bool dryRun)
     {
@@ -366,8 +375,42 @@ public static class PatchScriptRunner
         string? error = null;
         try
         {
-            CSharpScript.RunAsync(code, _options, new PatchScriptGlobals { host = host })
-                .GetAwaiter().GetResult();
+            // Run on a dedicated background thread and abandon it if it overruns, so a runaway
+            // script cannot wedge the caller -- for the stdio MCP server, the calling thread IS the
+            // server. A CancellationToken alone is NOT enough: Roslyn only observes it at await
+            // points, so a tight `while(true){}` ignores it entirely (verified in
+            // PatchScriptTimeoutTests). The token is still passed so cooperative scripts stop early.
+            using var cts = new CancellationTokenSource(ScriptTimeout);
+            Exception? threadError = null;
+            var worker = new Thread(() =>
+            {
+                try
+                {
+                    CSharpScript.RunAsync(code, _options, new PatchScriptGlobals { host = host },
+                            cancellationToken: cts.Token)
+                        .GetAwaiter().GetResult();
+                }
+                catch (Exception ex) { threadError = ex; }
+            })
+            {
+                IsBackground = true,   // an abandoned runaway must not keep the process alive
+                Name = "run_script",
+            };
+            worker.Start();
+
+            if (!worker.Join(ScriptTimeout))
+            {
+                cts.Cancel();
+                error = $"Script exceeded the {ScriptTimeout.TotalSeconds:0}s limit and was abandoned. " +
+                        "NOTE: .NET cannot forcibly kill a running thread, so if the script is in a tight " +
+                        "loop it is still burning a CPU core in the background and may still be mutating " +
+                        "state — restart the editor to be sure. Any edits it made are in memory only; " +
+                        "run reload_plugin to discard them.";
+            }
+            else if (threadError != null)
+            {
+                throw threadError;
+            }
         }
         catch (CompilationErrorException ex)
         {
@@ -398,7 +441,13 @@ public static class PatchScriptRunner
         if (dryRun)
         {
             WriteService.DiscardScriptPatch(target);
-            sb.AppendLine($"Nothing was written. Re-run with dry_run=false to apply into '{patchPlugin}'.");
+            // Scoped claim: dry_run discards the preview plugin's record edits. It cannot undo
+            // anything the script did directly (File.WriteAllText, Process.Start, a WriteService
+            // call), so promising "nothing was written" would be false for any such script.
+            sb.AppendLine($"No plugin records were written — the preview patch was discarded. " +
+                          $"Re-run with dry_run=false to apply into '{patchPlugin}'. " +
+                          "(dry_run only rolls back record edits; any file, process or network side " +
+                          "effects the script performed directly have already happened.)");
         }
         else
         {
