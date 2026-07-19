@@ -296,21 +296,57 @@ public static partial class WriteService
         if (remap.Count == 0)
             return $"'{plugin}' is already ESL-compatible (all native FormIDs within 0x800-0xFFF).";
 
-        // Re-key each out-of-range record (duplicate into its group with the new FormKey,
-        // then remove the old), iterating the mod's top-level groups generically.
-        foreach (var groupProp in mod.GetType().GetProperties()
-                     .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType)))
+        // The groups the re-key loop below can actually reach.
+        var topLevelGroups = mod.GetType().GetProperties()
+            .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType))
+            .Select(p => p.GetValue(mod) as Mutagen.Bethesda.Plugins.Records.IGroup)
+            .Where(g => g != null).Select(g => g!).ToList();
+
+        // 'remap' comes from a DEEP EnumerateMajorRecords() walk, but the loop below only sees
+        // top-level IGroup properties. Cells are Fallout4ListGroup<CellBlock>, which does NOT
+        // implement IGroup (verified by reflection — see CellCompactionTests), so CELLs, their
+        // PlacedObjects and worldspace sub-cells are skipped silently rather than throwing, and
+        // RemapLinks would then repoint references onto FormKeys that no record owns.
+        // Checked up front so nothing has been mutated when we refuse.
+        var reachable = new HashSet<FormKey>(topLevelGroups
+            .SelectMany(g => ((System.Collections.IEnumerable)g)
+                .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>())
+            .Select(r => r.FormKey));
+        var unreachable = remap.Keys.Where(k => !reachable.Contains(k)).ToList();
+        if (unreachable.Count > 0)
         {
-            if (groupProp.GetValue(mod) is not Mutagen.Bethesda.Plugins.Records.IGroup group) continue;
+            var byType = string.Join(", ", native.Where(r => unreachable.Contains(r.FormKey))
+                .GroupBy(r => r.GetType().Name).Select(g => $"{g.Key} x{g.Count()}"));
+            return ToolError.Fail(
+                $"compact_to_esl cannot compact '{plugin}': {unreachable.Count} out-of-range record(s) live in " +
+                "nested groups (cells / placed objects / worldspace sub-cells) that this tool cannot re-key " +
+                $"[{byType}]. Nothing was modified — references were NOT repointed, so the plugin is unchanged. " +
+                "Compact in xEdit instead, or keep cell-placed records within 0x800-0xFFF when authoring them.");
+        }
+
+        // Re-key each out-of-range record (duplicate into its group with the new FormKey,
+        // then remove the old).
+        var rekeyFailures = new List<string>();
+        foreach (var group in topLevelGroups)
+        {
             var toRekey = ((System.Collections.IEnumerable)group).Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>()
                 .Where(r => remap.ContainsKey(r.FormKey)).ToList();
-            var removeM = group.GetType().GetMethod("Remove", new[] { typeof(FormKey) });
             foreach (var rg in toRekey)
             {
                 group.DuplicateInAsNewUntypedRecord((Mutagen.Bethesda.Plugins.Records.IMajorRecord)rg, remap[rg.FormKey]);
-                removeM?.Invoke(group, new object[] { rg.FormKey });
+                if (!TryRemoveFromGroup(group, rg.FormKey, out var removeErr)) rekeyFailures.Add(removeErr);
             }
         }
+
+        // Abort BEFORE RemapLinks. Each failure left the original next to its duplicate; repointing
+        // references now would scatter them across a plugin that already has duplicate FormKeys.
+        if (rekeyFailures.Count > 0)
+            return ToolError.Fail(
+                $"compact_to_esl FAILED on '{plugin}': {rekeyFailures.Count} record(s) were duplicated but the " +
+                "original could not be removed, so the plugin now holds duplicate FormKeys in memory. " +
+                "It was NOT saved and references were NOT repointed — run reload_plugin to discard these " +
+                "in-memory changes before doing anything else.\n  " +
+                string.Join("\n  ", rekeyFailures.Take(10)));
 
         // Repoint every reference in the plugin to the new FormKeys.
         mod.RemapLinks(remap);
@@ -364,11 +400,17 @@ public static partial class WriteService
                 .FirstOrDefault(r => r.FormKey == oldFk && r.GetType() == rec.GetType());
             if (match == null) continue;
             group.DuplicateInAsNewUntypedRecord((Mutagen.Bethesda.Plugins.Records.IMajorRecord)match, newFk);
-            group.GetType().GetMethod("Remove", new[] { typeof(FormKey) })?.Invoke(group, new object[] { oldFk });
+            // The duplicate already exists; a silent no-op here would leave both records.
+            if (!TryRemoveFromGroup(group, oldFk, out var removeErr))
+                return ToolError.Fail(
+                    $"renumber_formid FAILED on '{plugin}': {recordId} was duplicated to {newFk} but the original " +
+                    $"could not be removed, so the plugin now holds both in memory. It was NOT saved — run " +
+                    $"reload_plugin to discard this change. Reason: {removeErr}");
             rekeyed = true;
             break;
         }
-        if (!rekeyed) return $"Could not locate the group holding {oldFk} ({rec.GetType().Name}) in {plugin}.";
+        if (!rekeyed)
+            return ToolError.Fail($"Could not locate the group holding {oldFk} ({rec.GetType().Name}) in {plugin}.");
 
         // Repoint in-plugin references to the new id -- UNLESS we're splitting a duplicate FormKey, in
         // which case the shared references belong to the twin and must stay on the old id.
@@ -773,6 +815,51 @@ public static partial class WriteService
     }
 
     /// <summary>
+    /// Remove <paramref name="fk"/> from a top-level group and PROVE it is gone, by re-counting
+    /// rather than trusting the call.
+    ///
+    /// The re-key paths add the replacement record before removing the original, so a removal that
+    /// quietly does nothing leaves both -- two records sharing one FormKey, which is a documented
+    /// save-breaking condition. These sites previously used
+    /// <c>GetMethod("Remove", ...)?.Invoke(...)</c>, where the null-conditional swallowed an
+    /// unresolved method and the caller still reported success.
+    /// </summary>
+    private static bool TryRemoveFromGroup(
+        Mutagen.Bethesda.Plugins.Records.IGroup group, FormKey fk, out string error)
+    {
+        int CountMatching() => ((System.Collections.IEnumerable)group)
+            .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>().Count(r => r.FormKey == fk);
+
+        var groupName = group.GetType().Name;
+        var before = CountMatching();
+        if (before == 0) { error = $"{fk} is not in group '{groupName}'."; return false; }
+
+        var removeM = group.GetType().GetMethod("Remove", new[] { typeof(FormKey) });
+        if (removeM == null)
+        {
+            error = $"Mutagen group '{groupName}' exposes no Remove(FormKey), so {fk} cannot be removed.";
+            return false;
+        }
+
+        try { removeM.Invoke(group, new object[] { fk }); }
+        catch (Exception ex)
+        {
+            error = $"Removing {fk} from '{groupName}' threw: {ex.InnerException?.Message ?? ex.Message}";
+            return false;
+        }
+
+        var after = CountMatching();
+        if (after >= before)
+        {
+            error = $"Removing {fk} from '{groupName}' had no effect ({before} -> {after}).";
+            return false;
+        }
+
+        error = "";
+        return true;
+    }
+
+    /// <summary>
     /// Build a MAST-ordering option from the live load order. Returns null when no environment is
     /// available, in which case Mutagen falls back to its own ordering — acceptable for a single-master
     /// plugin, but a multi-master one written that way can list a dependent ESM before its dependency
@@ -1149,11 +1236,12 @@ public static partial class WriteService
             var contains = ((System.Collections.IEnumerable)group)
                 .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>().Any(r => r.FormKey == fk);
             if (!contains) continue;
-            group.GetType().GetMethod("Remove", new[] { typeof(FormKey) })?.Invoke(group, new object[] { fk });
+            if (!TryRemoveFromGroup(group, fk, out var removeErr))
+                return ToolError.Fail($"Could not remove {rec.EditorID} [{fk}] from {plugin}: {removeErr}");
             MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
             return $"Removed {rec.EditorID} [{fk}] from {plugin}. Call save_plugin to persist.";
         }
-        return $"Could not locate the group holding {fk} in {plugin}.";
+        return ToolError.Fail($"Could not locate the group holding {fk} in {plugin}.");
     }
 
     /// <summary>Remove a FormLink entry (by FormKey or EditorID) from a list field — e.g. drop an
