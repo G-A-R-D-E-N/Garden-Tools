@@ -2,40 +2,50 @@
 
 FO4RecordEditor is distributed under the **GNU General Public License v3.0** (see [LICENSE](LICENSE)).
 
-It has to be. The editor links **Mutagen** (GPL-3.0) to read and write plugin binaries, and bundles
-**niftool**, which embeds **nifly** (GPL-3.0). GPL-3.0 is a copyleft license: a program that links
-GPL-3.0 code and is then distributed to anyone else must itself be distributed under GPL-3.0, with
-its source made available to the people who receive it. That applies whether it is published
-publicly or handed to one person privately.
+It has to be. The editor is built directly against **Mutagen** (GPL-3.0) to read and write plugin
+binaries, and bundles **niftool**, which embeds **nifly** (GPL-3.0). GPL-3.0 is a copyleft license: a
+program that links GPL-3.0 code and is then distributed to anyone else must itself be distributed
+under GPL-3.0, with its source made available to the people who receive it. That applies whether it
+is published publicly or handed to one person privately.
 
-So: when you send this package to someone, you also owe them the source. The simplest way to satisfy
-that is to publish the repository and link it from here.
+So: when you send this package to someone, you also owe them the source. Mutagen's patched source is
+vendored directly in this repository, under [`Mutagen/`](Mutagen/) — publishing this repository is how
+that obligation is satisfied; there is no separate location to also track.
 
 ## Components
 
 | Component | License | Used for |
 |---|---|---|
-| [Mutagen](https://github.com/Mutagen-Modding/Mutagen) | GPL-3.0 | Reading and writing `.esp`/`.esm`/`.esl` records. Linked. **Patched** — see below. |
+| [Mutagen](https://github.com/Mutagen-Modding/Mutagen) | GPL-3.0 | Reading and writing `.esp`/`.esm`/`.esl` records. Vendored in-repo under `Mutagen/`. **Patched** — see below. |
 | [nifly](https://github.com/ousnius/nifly) (inside `niftool`) | GPL-3.0 | NIF parsing and repair, behind the `nif_*` tools. |
 | [texconv](https://github.com/microsoft/DirectXTex) (DirectXTex) | MIT | DDS decode for texture previews. |
 | [WPF-UI](https://github.com/lepoco/wpfui) | MIT | The desktop UI theme and controls. |
 | [Markdig.Wpf](https://github.com/Kryptos-FR/markdig.wpf) | MIT | Markdown rendering in the docs panel. |
 | [Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json) | MIT | JSON, including the MCP wire format. |
-| [YamlDotNet](https://github.com/aaubry/YamlDotNet) | MIT | Spriggit YAML interop. |
 | [Roslyn scripting](https://github.com/dotnet/roslyn) (`Microsoft.CodeAnalysis.CSharp.Scripting`) | MIT | The `run_script` C# escape hatch. |
 | [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) | Microsoft proprietary, redistributable | Hosts the editor's web UI. |
 
 ## Our Mutagen is patched
 
-The bundled Mutagen is a fork with two fixes that upstream does not have. Without them the editor
-writes broken perk data, so a clean upstream Mutagen is **not** a drop-in replacement:
+The vendored Mutagen (`Mutagen/`) is a fork with two functional fixes that upstream does not have.
+Without them the editor writes broken perk data, so a clean upstream Mutagen is **not** a drop-in
+replacement:
 
 - `Mutagen.Bethesda.Core/Translations/Binary/EnumBinaryTranslation.cs` — adds the missing case for
   short-backed (2-byte) enums, which previously threw `NotImplementedException` on write.
 - `Mutagen.Bethesda.Fallout4/Records/Major Records/Perk.cs` — writes the EPF3 perk-choice flags as a
   raw 2-byte value, mirroring how the read side already parses them.
 
-Both are committed to the Mutagen fork's own history, with the reasoning in the commit message.
+`Mutagen/Directory.Build.targets` additionally carries one build-configuration-only local change,
+clearly marked in a comment at the top of that file: NuGet packaging is turned off (we compile and
+link this directly, we never `dotnet pack` it) and a set of warning codes are suppressed. Every one of
+them is a pre-existing upstream characteristic of Mutagen's own generated code (missing XML doc
+comments, a few harmless member-hiding patterns, and similar), confirmed to be zero editor-code
+warnings by checking attribution on every one before suppressing it — not a functional change, only
+build noise reduction so a first `dotnet build` after cloning is not a wall of unrelated warnings.
+
+Only the two Perk/EnumBinaryTranslation files above are functional patches. Everything else in
+`Mutagen/` is an unmodified copy of the upstream source at the point this fork was vendored.
 
 ## What is not here
 
