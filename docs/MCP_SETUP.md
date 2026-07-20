@@ -49,7 +49,10 @@ and not a single mod.
 Optionally, also pass `--ck-wiki <folder>` pointing at an offline Creation Kit Wiki HTML mirror (a full
 export of creationkit.com/fallout4) to enable `papyrus_function_lookup` and `papyrus_script_info`. This
 is independent of `--mo2`/`--data` and unrelated to plugin loading — without it those two tools just
-return a "not configured" message; nothing else is affected.
+return a "not configured" message; nothing else is affected. **This flag is only needed for the
+headless/stdio MCP server** (no GUI to read from). In the desktop app, set the same path once under
+Settings -> CK Wiki Path instead — the tool executor reads `Settings.Current.CkWikiPath` live, so it
+takes effect immediately with no restart and no launch flag.
 
 ### Confirming it connected
 
@@ -103,10 +106,11 @@ need for map markers and for parking references you relocate at runtime.
 `archive_list` · `archive_extract` · `archive_extract_all` — read-only access to packed archives via
 Mutagen's own reader, no Archive2.exe needed.
 
-### Papyrus wiki lookup (needs `--ck-wiki`)
+### Papyrus wiki lookup (needs a CK wiki mirror configured)
 `papyrus_function_lookup` · `papyrus_script_info` — reads an offline Creation Kit Wiki HTML mirror
 directly instead of you grepping wiki pages yourself. Disabled (returns a clear message, not an error)
-until `--ck-wiki <folder>` is passed at launch.
+until the wiki root is set — `--ck-wiki <folder>` at launch (headless server), or Settings -> CK Wiki
+Path in the desktop app. Also reachable by hand in the desktop app's Papyrus panel -> "Wiki Lookup" tab.
 
 ### Materials
 `bgsm_inspect` · `bgsm_set_field` — read and edit individual `.bgsm` shader fields (Smoothness,
