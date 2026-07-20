@@ -127,7 +127,13 @@ class BA2DX10Entry : IArchiveFile
         _bsa = ba2Reader;
         _nameHash = reader.ReadUInt32();
         Path = _nameHash.ToString("X");
-        if (version > 1)
+        // v7 excluded: v7 DX10 (the Next-Gen texture archives, Fallout4 - Textures*.ba2) is the plain
+        // classic v1 24-byte entry layout -- hex-verified against Fallout4 - Textures1.ba2 (ext="dds",
+        // chunkHdrLen=24, 1024x1024, 11 mips, format=71/BC1, chunk ends 0xBAADF00D). This phantom read
+        // (and its twin below, plus the chunk startMip/endMip/align read) mis-strided every entry, so
+        // _format/_width/_height came out garbage -> "Unsupported DDS header format" / arithmetic
+        // overflow on extract. Left for 2..6 (unverified, but not the observed real case).
+        if (version > 1 && version < 7)
         {
             var unknown = reader.ReadUInt32();
         }
@@ -142,7 +148,7 @@ class BA2DX10Entry : IArchiveFile
         _format = reader.ReadByte();
         _unk16 = reader.ReadUInt16();
         _index = idx;
-        if (version > 1)
+        if (version > 1 && version < 7)   // v7 excluded -- see the note on the first phantom read above
         {
             var unknown = reader.ReadUInt32();
         }
@@ -342,9 +348,10 @@ class BA2TextureChunk
         _offset = rdr.ReadUInt64();
         _packSz = rdr.ReadUInt32();
         _fullSz = rdr.ReadUInt32();
-        if (version <= 1)
+        // v7 included: v7 DX10 chunks carry the full startMip/endMip/align tail (hex-verified -- chunk 0
+        // of Fallout4 - Textures1.ba2 ends 0xBAADF00D at the v1 offset). Only 2..6 remain a guess.
+        if (version <= 1 || version == 7)
         {
-            // Unsure if these are actually the fields that are missing in v2, just a guess
             _startMip = rdr.ReadUInt16();
             _endMip = rdr.ReadUInt16();
             _align = rdr.ReadUInt32();

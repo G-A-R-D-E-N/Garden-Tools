@@ -30,6 +30,18 @@ public class Ba2Version7Tests
     };
     private static string? Archive => Candidates.FirstOrDefault(File.Exists);
 
+    // v7 DX10 (texture) archives share the same v7 layout family: classic v1 24-byte entry + 24-byte
+    // chunk (startMip/endMip/align). Mutagen read two phantom entry unknowns and skipped the chunk tail
+    // for version>1, so _format/_width/_height decoded as garbage -> "Unsupported DDS header format" /
+    // arithmetic overflow. Verified against Fallout4 - Textures1.ba2 (entry 0: ext="dds", 1024x1024,
+    // 11 mips, format=71/BC1, chunk ends 0xBAADF00D).
+    private static readonly string[] TexCandidates =
+    {
+        @"E:\Modlists\Fallen World Alpha 2\Stock Folder\Data\Fallout4 - Textures1.ba2",
+        @"E:\SteamLibrary\steamapps\common\Fallout 4\Data\Fallout4 - Textures1.ba2",
+    };
+    private static string? TexArchive => TexCandidates.FirstOrDefault(File.Exists);
+
     private readonly ITestOutputHelper _out;
     public Ba2Version7Tests(ITestOutputHelper o) => _out = o;
 
@@ -53,6 +65,31 @@ public class Ba2Version7Tests
             magic.Should().Be("FUZE",
                 "a correctly-strided v7 entry table resolves the name to real FUZ data; a drifted " +
                 "table would hand back an unrelated blob");
+        }
+        finally { try { File.Delete(outPath); } catch { } }
+    }
+
+    [Fact]
+    public void ExtractFile_FromARealVersion7Dx10TextureArchive_ProducesAValidDds()
+    {
+        var archive = TexArchive;
+        if (archive == null) { _out.WriteLine("Skipped -- v7 DX10 texture fixture not present in any known location."); return; }
+
+        var outPath = Path.Combine(Path.GetTempPath(),
+            "FO4RE_Ba2V7Tex_" + Guid.NewGuid().ToString("N")[..8] + ".dds");
+        try
+        {
+            var result = ArchiveService.ExtractFile(archive, @"Textures\Props\Cigar\AshTray_d.DDS", outPath);
+            _out.WriteLine(result);
+            File.Exists(outPath).Should().BeTrue();
+
+            var bytes = File.ReadAllBytes(outPath);
+            var magic = System.Text.Encoding.ASCII.GetString(bytes, 0, 4);
+            magic.Should().Be("DDS ",
+                "the DX10 entry+chunk layout must be read at the right stride to reconstruct a valid " +
+                "DDS header; a mis-strided entry threw 'Unsupported DDS header format' or overflowed");
+            // Reconstructed header (magic+DDS_HEADER) is 128 bytes; real texture data follows.
+            bytes.Length.Should().BeGreaterThan(128);
         }
         finally { try { File.Delete(outPath); } catch { } }
     }
