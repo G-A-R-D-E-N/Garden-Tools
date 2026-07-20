@@ -390,13 +390,18 @@ class BA2FileEntry : IArchiveFile
             _align = reader.ReadUInt32();
         }
 
-        if (version < 7)
+        // Next-Gen (v7/v8) GNRL entries have no separate real/uncompressed-size field -- what used to
+        // be `realSize` now reads back as the sentinel 0xBAADF00D for every entry that has data, real
+        // or not. Verified empirically against live Next-Gen archives (Fallout4 - Meshes.ba2 v8,
+        // Fallout4 - Textures*.ba2 v7): the SAME `size != 0` rule used for v1 is also correct here --
+        // reading exactly `size` bytes from `offset` and inflating them, unbounded (matching
+        // AsStream()'s InflaterInputStream), always reproduces the real file content, and the
+        // decompressed length always equals `size`. So `size` doubles as the real/uncompressed length
+        // too, and `_realSize = _size` below is what actually supplies it for `Size`/AsStream()'s
+        // FramedStream cap, not the (unusable) old `_realSize` field.
+        Compressed = _size != 0;
+        if (version >= 7)
         {
-            Compressed = _size != 0;
-        }
-        else
-        {
-            Compressed = _realSize != 0xBAADF00D;
             _realSize = _size;
         }
     }

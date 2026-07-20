@@ -30,14 +30,21 @@ that obligation is satisfied; there is no separate location to also track.
 
 ## Our Mutagen is patched
 
-The vendored Mutagen (`Mutagen/`) is a fork with two functional fixes that upstream does not have.
-Without them the editor writes broken perk data, so a clean upstream Mutagen is **not** a drop-in
-replacement:
+The vendored Mutagen (`Mutagen/`) is a fork with three functional fixes that upstream does not have.
+Without them the editor writes broken perk data or misreads Next-Gen archives, so a clean upstream
+Mutagen is **not** a drop-in replacement:
 
 - `Mutagen.Bethesda.Core/Translations/Binary/EnumBinaryTranslation.cs` — adds the missing case for
   short-backed (2-byte) enums, which previously threw `NotImplementedException` on write.
 - `Mutagen.Bethesda.Fallout4/Records/Major Records/Perk.cs` — writes the EPF3 perk-choice flags as a
   raw 2-byte value, mirroring how the read side already parses them.
+- `Mutagen.Bethesda.Core/Archives/Ba2/Ba2Reader.cs` (`BA2FileEntry`) — fixes Next-Gen (BA2 version
+  >= 7) archives reading back as raw, still-compressed bytes instead of the real file. The old code
+  guessed at a sentinel-based compressed-flag rule for the newer format (`_realSize != 0xBAADF00D`)
+  that never actually holds on real archives; fixed to use the same `size != 0` rule version 1
+  already uses, which is empirically correct for Next-Gen too (confirmed identical in upstream
+  Mutagen's own `dev` branch before this fix — not a stale-fork issue). See
+  `docs/Code Notes/FO4RecordEditor.md` for the verification.
 
 `Mutagen/Directory.Build.targets` additionally carries one build-configuration-only local change,
 clearly marked in a comment at the top of that file: NuGet packaging is turned off (we compile and
@@ -47,8 +54,8 @@ comments, a few harmless member-hiding patterns, and similar), confirmed to be z
 warnings by checking attribution on every one before suppressing it — not a functional change, only
 build noise reduction so a first `dotnet build` after cloning is not a wall of unrelated warnings.
 
-Only the two Perk/EnumBinaryTranslation files above are functional patches. Everything else in
-`Mutagen/` is an unmodified copy of the upstream source at the point this fork was vendored.
+Only the three files above are functional patches. Everything else in `Mutagen/` is an unmodified
+copy of the upstream source at the point this fork was vendored.
 
 ## Offline Creation Kit Wiki mirror
 
