@@ -4,7 +4,7 @@ A Fallout 4 plugin IDE. It is two things in one executable:
 
 - **A desktop editor** — browse, diff, and edit records across your whole load order, scan for
   conflicts, compile and decompile Papyrus, and inspect NIFs. Think xEdit, but with a modern UI.
-- **An MCP server** — the same 68 operations, exposed to an AI assistant (Claude Code, or any other
+- **An MCP server** — the same 72 operations, exposed to an AI assistant (Claude Code, or any other
   MCP client). This is the part most people want: you describe the edit, the AI makes it, and the
   plugin is written by [Mutagen](https://github.com/Mutagen-Modding/Mutagen) rather than by hand.
 
@@ -80,11 +80,16 @@ path below is optional and auto-detected when blank — set one only to override
 | `papyrusBaseImports` | Base script roots, `;`-separated | `<Fallout 4>\Data\Scripts\Source\Base` |
 | `niftoolPath` | `niftool.exe` | The bundled copy in `tools\niftool\` |
 | `texconvPath` | `Texconvx64.exe` | The bundled copy in `tools\texconv\` |
+| `ckWikiPath` | Offline Creation Kit Wiki HTML mirror | The bundled copy in `tools\ckwiki\fallout4\` |
+| `ffmpegPath` | `ffmpeg.exe` | The bundled copy in `tools\audio\` |
+| `xwmaEncodePath` | `xWMAEncode.exe` | The bundled copy in `tools\audio\` |
 | `mo2InstancePath` | MO2 instance | The `--mo2` argument |
 | `dataFolder` | A plain `Data` folder | The `--data` argument |
 
 Each also honours an environment variable, which wins over the settings file:
-`NIFTOOL_PATH`, `TEXCONV_PATH`, `PAPYRUS_COMPILER_PATH`, `PAPYRUS_BASE_IMPORTS`.
+`NIFTOOL_PATH`, `TEXCONV_PATH`, `PAPYRUS_COMPILER_PATH`, `PAPYRUS_BASE_IMPORTS`, `CK_WIKI_PATH`,
+`FFMPEG_PATH`, `XWMAENCODE_PATH`. `BmlFuzEncode.exe`/`BmlFuzDecode.exe` (the .fuz packer/splitter) are
+bundled-only, in the same `tools\audio\` folder, with no override — there's nothing to point them at.
 
 ### Papyrus compiling needs the Creation Kit
 
@@ -102,6 +107,8 @@ FO4RecordEditor.exe        the editor + MCP server
 web\dist\                  the editor's UI (WebView2)
 tools\niftool\             NIF authoring/repair CLI (nif_* tools)
 tools\texconv\             DDS conversion, for texture previews
+tools\ckwiki\fallout4\     offline Creation Kit Wiki mirror, for papyrus_function_lookup/papyrus_script_info
+tools\audio\               ffmpeg, xWMAEncode, BmlFuzEncode/Decode, for the audio_* tools
 mcp.sample.json            copy-paste MCP config
 docs\MCP_SETUP.md          the MCP wiring, the tool surface, and the rules
 docs\MODKIT21_PULLS.md     tracker for features reviewed/pulled from a comparable tool, and what's still open

@@ -83,6 +83,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AppWebView.CoreWebView2.AddHostObjectToScript("masters", new Services.MastersInterop(_shell));
         // Archive panel: list/extract BA2/BSA contents.
         AppWebView.CoreWebView2.AddHostObjectToScript("archive", new Services.ArchiveInterop());
+        // Audio panel: convert to/from xWMA, merge/split .fuz.
+        AppWebView.CoreWebView2.AddHostObjectToScript("audio", new Services.AudioInterop());
 
 #if DEBUG
         AppWebView.Source = new Uri("http://localhost:5173/#/main");

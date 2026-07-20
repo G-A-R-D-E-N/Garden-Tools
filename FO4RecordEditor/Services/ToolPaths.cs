@@ -176,6 +176,39 @@ public static class ToolPaths
         App("tools", "ckwiki", "fallout4"),
         @"E:\F4SE OG\docs\Knowledge Materials\Creation Kit Wiki\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4");
 
+    /// <summary>
+    /// ffmpeg — decodes any input audio (mp3/flac/ogg/m4a/wma/...) to PCM WAV for xWMAEncode, and the
+    /// reverse (xwm-derived WAV to whatever output format is asked for). Bundled under tools\audio\.
+    /// </summary>
+    public static string? Ffmpeg() => FirstFile(
+        Env("FFMPEG_PATH"),
+        Settings.FfmpegPath,
+        App("tools", "audio", "ffmpeg.exe"),
+        @"E:\F4SE OG\Tools\Audio Converter\bin\ffmpeg.exe");
+
+    /// <summary>Microsoft's xWMAEncode.exe — the only thing that actually reads/writes xWMA. Encodes
+    /// PCM WAV to xWMA and decodes xWMA back to PCM WAV depending on which direction the input is.
+    /// Bundled under tools\audio\.</summary>
+    public static string? XwmaEncode() => FirstFile(
+        Env("XWMAENCODE_PATH"),
+        Settings.XwmaEncodePath,
+        App("tools", "audio", "xWMAEncode.exe"),
+        @"E:\F4SE OG\Tools\Audio Converter\bin\xWMAEncode.exe");
+
+    /// <summary>BmlFuzEncode.exe (BowmoreLover) — packs an xwm + a lip file into a .fuz voice
+    /// container. Bundled-only: single-purpose, nobody keeps their own copy to point at.</summary>
+    public static string? BmlFuzEncode() => FirstFile(
+        Env("BMLFUZENCODE_PATH"),
+        App("tools", "audio", "BmlFuzEncode.exe"),
+        @"E:\F4SE OG\Tools\Audio Converter\bin\BmlFuzEncode.exe");
+
+    /// <summary>BmlFuzDecode.exe (BowmoreLover) — splits a .fuz voice container back into its xwm and
+    /// lip file. Bundled-only, same reasoning as BmlFuzEncode.</summary>
+    public static string? BmlFuzDecode() => FirstFile(
+        Env("BMLFUZDECODE_PATH"),
+        App("tools", "audio", "BmlFuzDecode.exe"),
+        @"E:\F4SE OG\Tools\Audio Converter\bin\BmlFuzDecode.exe");
+
     /// <summary>A one-line "here is where I looked" for the not-found errors the AI reads back.</summary>
     public static string Describe(string tool) => tool switch
     {
@@ -183,6 +216,10 @@ public static class ToolPaths
         "texconv" => "set TEXCONV_PATH, or put Texconvx64.exe in tools\\texconv\\ next to the exe",
         "papyrus" => "install the Creation Kit, or set PAPYRUS_COMPILER_PATH / papyrusCompilerPath in settings.json",
         "ckwiki" => "set CK_WIKI_PATH, or put the wiki mirror in tools\\ckwiki\\fallout4\\ next to the exe",
+        "ffmpeg" => "set FFMPEG_PATH, or put ffmpeg.exe in tools\\audio\\ next to the exe",
+        "xwmaencode" => "set XWMAENCODE_PATH, or put xWMAEncode.exe in tools\\audio\\ next to the exe",
+        "bmlfuzencode" => "put BmlFuzEncode.exe in tools\\audio\\ next to the exe",
+        "bmlfuzdecode" => "put BmlFuzDecode.exe in tools\\audio\\ next to the exe",
         _ => "",
     };
 }

@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **68 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **72 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -107,11 +107,12 @@ need for map markers and for parking references you relocate at runtime.
 `archive_list` · `archive_extract` · `archive_extract_all` — read-only access to packed archives via
 Mutagen's own reader, no Archive2.exe needed.
 
-### Papyrus wiki lookup (needs a CK wiki mirror configured)
+### Papyrus wiki lookup
 `papyrus_function_lookup` · `papyrus_script_info` — reads an offline Creation Kit Wiki HTML mirror
-directly instead of you grepping wiki pages yourself. Disabled (returns a clear message, not an error)
-until the wiki root is set — `--ck-wiki <folder>` at launch (headless server), or Settings -> CK Wiki
-Path in the desktop app. Also reachable by hand in the desktop app's Papyrus panel -> "Wiki Lookup" tab.
+directly instead of you grepping wiki pages yourself. Works out of the box against the mirror bundled
+with the app; `--ck-wiki <folder>` at launch (headless server) or Settings -> CK Wiki Path in the
+desktop app only override which mirror is used. Also reachable by hand in the desktop app's Papyrus
+panel -> "Wiki Lookup" tab.
 
 ### Materials
 `bgsm_inspect` · `bgsm_set_field` — read and edit individual `.bgsm` shader fields (Smoothness,
@@ -122,6 +123,12 @@ GUI needed. `.bgem` (effect materials) isn't supported yet.
 `catalog_mod_folder` — bucket an unfamiliar mod's files by category (meshes/textures/materials/
 sounds/scripts/plugins/archives/voice/...) with per-category counts, to get oriented before deciding
 what to inspect next.
+
+### Audio
+`audio_convert_to_xwm` · `audio_convert_from_xwm` · `audio_make_fuz` · `audio_extract_fuz` — convert
+any ffmpeg-readable audio/video to Fallout 4's xWMA format (and back), and pack/split the `.fuz` voice
+container (xwm + lip sync). Works out of the box against ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode
+bundled with the app — nothing to configure. Also reachable by hand in the desktop app's Audio panel.
 
 ### Escape hatch
 `run_script` — executes C# against the loaded mod through Mutagen, for anything the tools above do not

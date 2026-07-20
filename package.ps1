@@ -21,6 +21,11 @@
   papyrus_function_lookup / papyrus_script_info work out of the box for recipients with no setup.
   Use this for a fast local iteration build; never for a build you're actually handing to someone.
 
+.PARAMETER SkipAudioTools
+  Skip bundling ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode (~110MB, mostly ffmpeg). Bundled by
+  default so the audio_* tools work out of the box. Use this for a fast local iteration build; never
+  for a build you're actually handing to someone.
+
 .PARAMETER IncludeBaseScripts
   Bundle the vanilla Papyrus base scripts from ..\papyrus\Base.
 
@@ -38,6 +43,7 @@ param(
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
     [switch] $SkipWeb,
     [switch] $SkipCkWiki,
+    [switch] $SkipAudioTools,
     [switch] $IncludeBaseScripts
 )
 
@@ -55,6 +61,7 @@ $Niftool   = Join-Path $Root '..\niftool\build\windows\x64\release\niftool.exe'
 $Texconv   = Join-Path $Root 'TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconvx64.exe'
 $BaseScripts = Join-Path $Root '..\papyrus\Base'
 $CkWiki    = 'E:\F4SE OG\docs\Knowledge Materials\Creation Kit Wiki\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4'
+$AudioToolsDir = 'E:\F4SE OG\Tools\Audio Converter\bin'
 
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
@@ -128,6 +135,24 @@ if (-not $SkipCkWiki) {
     }
 } else {
     Warn 'Skipping the CK Wiki mirror (-SkipCkWiki). Fine for a local iteration build, not for one you hand to someone.'
+}
+
+if (-not $SkipAudioTools) {
+    if (Test-Path $AudioToolsDir) {
+        $dest = Join-Path $Staging 'tools\audio'
+        New-Item -ItemType Directory -Path $dest -Force | Out-Null
+        $missing = @()
+        foreach ($exe in 'ffmpeg.exe', 'xWMAEncode.exe', 'BmlFuzEncode.exe', 'BmlFuzDecode.exe') {
+            $src = Join-Path $AudioToolsDir $exe
+            if (Test-Path $src) { Copy-Item $src $dest -Force } else { $missing += $exe }
+        }
+        if ($missing.Count -eq 0) { Write-Host '    ffmpeg.exe, xWMAEncode.exe, BmlFuzEncode.exe, BmlFuzDecode.exe' }
+        else { Warn "Missing from ${AudioToolsDir}: $($missing -join ', ') — the audio_* tools will be partially dead in this package." }
+    } else {
+        Warn "Audio tools folder not found at $AudioToolsDir — the audio_* tools will be dead in this package unless the recipient sets FfmpegPath/XwmaEncodePath themselves."
+    }
+} else {
+    Warn 'Skipping the audio tools (-SkipAudioTools). Fine for a local iteration build, not for one you hand to someone.'
 }
 
 if ($IncludeBaseScripts) {

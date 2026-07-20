@@ -19,6 +19,8 @@ interface Settings {
   PapyrusCompilerPath: string;
   PapyrusBaseImports: string;
   NiftoolPath: string;
+  FfmpegPath: string;
+  XwmaEncodePath: string;
 }
 
 const host = () => window.chrome?.webview?.hostObjects?.settings;
@@ -219,6 +221,22 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <div className="settings-input-row">
                   <input value={s.NiftoolPath} onChange={e => set('NiftoolPath', e.target.value)} placeholder="…\niftool.exe" />
                   <button className="settings-btn" onClick={() => browseFile('NiftoolPath', 'Select niftool.exe', 'niftool|niftool.exe|Executables|*.exe')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>Ffmpeg Path <em>(blank = bundled copy next to the exe)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.FfmpegPath} onChange={e => set('FfmpegPath', e.target.value)} placeholder="…\ffmpeg.exe" />
+                  <button className="settings-btn" onClick={() => browseFile('FfmpegPath', 'Select ffmpeg.exe', 'ffmpeg|ffmpeg.exe|Executables|*.exe')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>xWMAEncode Path <em>(blank = bundled copy next to the exe)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.XwmaEncodePath} onChange={e => set('XwmaEncodePath', e.target.value)} placeholder="…\xWMAEncode.exe" />
+                  <button className="settings-btn" onClick={() => browseFile('XwmaEncodePath', 'Select xWMAEncode.exe', 'xWMAEncode|xWMAEncode.exe|Executables|*.exe')}>Browse</button>
                 </div>
               </label>
 

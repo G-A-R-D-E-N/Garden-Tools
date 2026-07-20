@@ -253,6 +253,24 @@ export interface MaterialHost {
   StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
 }
 
+/** The "audio" bridge (FO4RecordEditor.Services.AudioInterop) — convert to/from xWMA, merge/split .fuz. */
+export interface AudioHost {
+  BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
+  BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
+  BrowseForSave(title: string, filter: string): Promise<string>;   // native save picker; "" if cancelled
+  // Any ffmpeg-readable audio/video source -> .xwm. bitrateBps: one of xWMAEncode's supported
+  // bitrates (20000/32000/48000/64000/96000/160000/192000), or 0 for its default (48000).
+  ConvertToXwm(source: string, output: string, bitrateBps: number): Promise<string>;
+  // .xwm -> WAV, and on to targetExt (mp3/flac/ogg/...) via ffmpeg if targetExt isn't "wav".
+  ConvertFromXwm(source: string, output: string, targetExt: string): Promise<string>;
+  // Pack an audio source (encoded to xwm first if needed) + optional .lip into a .fuz container.
+  MakeFuz(audioSource: string, lipPath: string, fuzOutput: string, noLip: boolean): Promise<string>;
+  // Split a .fuz into its xwm/lip parts, optionally also decoding the xwm to .wav.
+  ExtractFuz(fuzPath: string, xwmOutput: string, lipOutput: string, alsoWav: boolean): Promise<string>;
+  OpenFolder(path: string): Promise<string>;   // reveal in Explorer; "" on success
+  StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
+}
+
 /** The "settings" bridge (FO4RecordEditor.Services.SettingsInterop) — the app settings panel. */
 export interface SettingsHost {
   GetSettings(): Promise<string>;            // JSON of editable settings
@@ -276,6 +294,7 @@ declare global {
           material?: MaterialHost;
           masters?: MastersHost;
           archive?: ArchiveHost;
+          audio?: AudioHost;
         };
       };
     };
@@ -302,3 +321,6 @@ export const getMasters = (): MastersHost | undefined =>
 
 export const getArchive = (): ArchiveHost | undefined =>
   window.chrome?.webview?.hostObjects?.archive;
+
+export const getAudio = (): AudioHost | undefined =>
+  window.chrome?.webview?.hostObjects?.audio;

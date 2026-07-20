@@ -1047,6 +1047,67 @@ public sealed class PluginToolExecutor
                 properties = new { mod_path = new { type = "string", description = "Full path to the mod's folder." } },
                 required = new[] { "mod_path" }
             }),
+        new("audio_convert_to_xwm",
+            "Convert an audio or video file to Fallout 4's xWMA (.xwm) format. Any ffmpeg-readable input " +
+            "works (wav/mp3/flac/ogg/m4a/wma/mp4/...); non-PCM-WAV sources are decoded through ffmpeg first, " +
+            "then encoded with Microsoft's xWMAEncode. Works out of the box against the bundled ffmpeg/" +
+            "xWMAEncode; no setup needed.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source = new { type = "string", description = "Full path to the source audio/video file." },
+                    output = new { type = "string", description = "Output .xwm path. Optional -- defaults to the source path with a .xwm extension." },
+                    bitrate_bps = new { type = "integer", description = "One of xWMAEncode's supported bitrates: 20000, 32000, 48000, 64000, 96000, 160000, 192000. Omit for its default (48000)." }
+                },
+                required = new[] { "source" }
+            }),
+        new("audio_convert_from_xwm",
+            "Decode a Fallout 4 .xwm file back to WAV, and optionally on to another format (mp3/flac/ogg/" +
+            "m4a/wma/...) via ffmpeg. Works out of the box against the bundled xWMAEncode/ffmpeg.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source = new { type = "string", description = "Full path to the source .xwm file." },
+                    output = new { type = "string", description = "Output path. Optional -- defaults to the source path with the target extension." },
+                    target_ext = new { type = "string", description = "Output format: wav, mp3, flac, ogg, m4a, wma, ... Defaults to 'wav' (no ffmpeg needed for that case)." }
+                },
+                required = new[] { "source" }
+            }),
+        new("audio_make_fuz",
+            "Pack an audio source (encoded to xwm first if it isn't already) and an optional .lip file " +
+            "into a .fuz voice container -- the format FO4 voice lines actually ship as. If lip_path is " +
+            "omitted, a same-named .lip next to the audio source is used automatically if present.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    audio_source = new { type = "string", description = "Full path to the source audio file (any format audio_convert_to_xwm accepts, or an existing .xwm)." },
+                    lip_path = new { type = "string", description = "Optional .lip file path. Auto-detected next to audio_source if omitted." },
+                    fuz_output = new { type = "string", description = "Output .fuz path." },
+                    no_lip = new { type = "boolean", description = "Force a lip-less fuz even if a matching .lip file is found." }
+                },
+                required = new[] { "audio_source", "fuz_output" }
+            }),
+        new("audio_extract_fuz",
+            "Split a .fuz voice file back into its .xwm and .lip parts, optionally also decoding the xwm " +
+            "to .wav in the same step.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    fuz_path = new { type = "string", description = "Full path to the source .fuz file." },
+                    xwm_output = new { type = "string", description = "Optional output .xwm path. Defaults to the fuz path with a .xwm extension." },
+                    lip_output = new { type = "string", description = "Optional output .lip path. Defaults to the fuz path with a .lip extension." },
+                    also_wav = new { type = "boolean", description = "Also decode the extracted xwm to a .wav alongside it." }
+                },
+                required = new[] { "fuz_path" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -1170,7 +1231,7 @@ public sealed class PluginToolExecutor
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
             "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all" or
-            "bgsm_set_field";
+            "bgsm_set_field" or "audio_convert_to_xwm" or "audio_convert_from_xwm" or "audio_make_fuz" or "audio_extract_fuz";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
@@ -1203,6 +1264,10 @@ public sealed class PluginToolExecutor
             "bgsm_inspect"        => $"inspect {System.IO.Path.GetFileName(Str("path"))}",
             "bgsm_set_field"      => $"{System.IO.Path.GetFileName(Str("path"))}.{Str("field")} = {Str("value")}",
             "catalog_mod_folder"  => $"catalog {System.IO.Path.GetFileName(Str("mod_path"))}",
+            "audio_convert_to_xwm"   => $"{System.IO.Path.GetFileName(Str("source"))} -> xwm",
+            "audio_convert_from_xwm" => $"{System.IO.Path.GetFileName(Str("source"))} -> {(Str("target_ext") is { Length: > 0 } te ? te : "wav")}",
+            "audio_make_fuz"      => $"{System.IO.Path.GetFileName(Str("audio_source"))} -> {System.IO.Path.GetFileName(Str("fuz_output"))}",
+            "audio_extract_fuz"   => $"extract {System.IO.Path.GetFileName(Str("fuz_path"))}",
             "check_plugin"        => $"check {plugin}",
             "clean_plugin"        => $"clean UDRs in {plugin}",
             "compact_to_esl"      => $"compact {plugin} to ESL",
@@ -1458,6 +1523,18 @@ public sealed class PluginToolExecutor
                 return MaterialService.SetField(Str("path"), Str("field"), Str("value"), StrOrNull("out_path"));
             case "catalog_mod_folder":
                 return ModInspectService.CatalogFolder(Str("mod_path"));
+
+            case "audio_convert_to_xwm":
+            {
+                var bitrate = root.TryGetProperty("bitrate_bps", out var brEl) && brEl.TryGetInt32(out var br) ? (int?)br : null;
+                return AudioService.ConvertToXwm(Str("source"), StrOrNull("output") ?? "", bitrate);
+            }
+            case "audio_convert_from_xwm":
+                return AudioService.ConvertFromXwm(Str("source"), StrOrNull("output") ?? "", StrOrNull("target_ext") ?? "");
+            case "audio_make_fuz":
+                return AudioService.MakeFuz(Str("audio_source"), StrOrNull("lip_path") ?? "", Str("fuz_output"), Bool("no_lip"));
+            case "audio_extract_fuz":
+                return AudioService.ExtractFuz(Str("fuz_path"), StrOrNull("xwm_output") ?? "", StrOrNull("lip_output") ?? "", Bool("also_wav"));
 
             default:
                 return ToolError.Fail($"Unknown tool: {toolName}");

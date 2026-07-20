@@ -44,6 +44,8 @@ public class SettingsInterop
             s.PapyrusCompilerPath,
             s.PapyrusBaseImports,
             s.NiftoolPath,
+            s.FfmpegPath,
+            s.XwmaEncodePath,
         });
     }
 
@@ -72,6 +74,8 @@ public class SettingsInterop
             if (dto.PapyrusCompilerPath != null) s.PapyrusCompilerPath = dto.PapyrusCompilerPath.Trim();
             if (dto.PapyrusBaseImports != null)  s.PapyrusBaseImports = dto.PapyrusBaseImports.Trim();
             if (dto.NiftoolPath != null)         s.NiftoolPath = dto.NiftoolPath.Trim();
+            if (dto.FfmpegPath != null)          s.FfmpegPath = dto.FfmpegPath.Trim();
+            if (dto.XwmaEncodePath != null)      s.XwmaEncodePath = dto.XwmaEncodePath.Trim();
 
             _shell.Settings.Save();
             _shell.RebuildProvider();
@@ -159,5 +163,7 @@ public class SettingsInterop
         public string? PapyrusCompilerPath { get; set; }
         public string? PapyrusBaseImports { get; set; }
         public string? NiftoolPath { get; set; }
+        public string? FfmpegPath { get; set; }
+        public string? XwmaEncodePath { get; set; }
     }
 }

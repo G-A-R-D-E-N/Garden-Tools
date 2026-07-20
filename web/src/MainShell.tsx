@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon,
+  Link2, Archive as ArchiveIcon, Music,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
 import MastersPanel from './MastersPanel';
 import ArchivePanel from './ArchivePanel';
+import AudioPanel from './AudioPanel';
 
 interface McpLiveMsg {
   Tool: string;
@@ -94,6 +95,7 @@ export default function MainShell() {
   const [showNif, setShowNif] = useState(false);
   const [showMasters, setShowMasters] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [showAudio, setShowAudio] = useState(false);
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -513,6 +515,9 @@ export default function MainShell() {
           <button className={`activity-btn ${showArchive ? 'active' : ''}`} onClick={() => setShowArchive(true)} title="Archive (BA2/BSA browse / extract)">
             <ArchiveIcon size={22} strokeWidth={1.5} />
           </button>
+          <button className={`activity-btn ${showAudio ? 'active' : ''}`} onClick={() => setShowAudio(true)} title="Audio (convert to/from xWMA, merge/split fuz)">
+            <Music size={22} strokeWidth={1.5} />
+          </button>
         </div>
       </div>
 
@@ -743,6 +748,7 @@ export default function MainShell() {
       {showNif && <NifPanel onClose={() => setShowNif(false)} />}
       {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
       {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}
+      {showAudio && <AudioPanel onClose={() => setShowAudio(false)} />}
     </div>
   );
 }

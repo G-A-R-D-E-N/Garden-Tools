@@ -23,6 +23,8 @@ public sealed class AppSettings
     public string PapyrusCompilerPath { get; set; } = "";   // CK PapyrusCompiler.exe (blank = from the FO4 install)
     public string PapyrusBaseImports { get; set; } = "";   // extra base-script roots, ';'-separated, highest first
     public string CkWikiPath { get; set; } = "";   // offline Creation Kit Wiki HTML mirror root override (blank = use the bundled copy)
+    public string FfmpegPath { get; set; } = "";   // ffmpeg.exe (blank = bundled copy next to the exe)
+    public string XwmaEncodePath { get; set; } = "";   // xWMAEncode.exe (blank = bundled copy next to the exe)
     public double SidePanelWidth { get; set; } = 320;
     public double AiPanelWidth { get; set; } = 420;
     public double BottomPanelHeight { get; set; } = 200;

@@ -24,6 +24,9 @@ that obligation is satisfied; there is no separate location to also track.
 | [Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json) | MIT | JSON, including the MCP wire format. |
 | [Roslyn scripting](https://github.com/dotnet/roslyn) (`Microsoft.CodeAnalysis.CSharp.Scripting`) | MIT | The `run_script` C# escape hatch. |
 | [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) | Microsoft proprietary, redistributable | Hosts the editor's web UI. |
+| [ffmpeg](https://ffmpeg.org/) ([BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) win64-lgpl static build) | LGPL-3.0 | Decodes/transcodes audio (and video's audio track) for the `audio_*` tools. Run as a separate process, not linked — see below. |
+| xWMAEncode.exe (Microsoft, classic DirectX SDK, 2009) | Microsoft, unmodified redistributable | Encodes/decodes Fallout 4's xWMA (`.xwm`) format for the `audio_*` tools. |
+| BmlFuzEncode.exe / BmlFuzDecode.exe (BowmoreLover) | Freely redistributed alongside Yakitori Audio Converter | Packs/splits the `.fuz` voice container (xwm + lip) for the `audio_*` tools. |
 
 ## Our Mutagen is patched
 
@@ -59,6 +62,31 @@ modding community, originally packaged for reuse as a Nexus "Modder's Resource":
 - **Mirror packaged by:** tondabayashi (Nexus Mods)
 - **Version bundled:** 21.05.20 (matches this package's `tools\ckwiki\fallout4\` exactly)
 - **Tags on the source page:** Modder's Resource, Non-Playable Resource, Utilities for Modders
+
+## Audio tools (`tools\audio\`)
+
+Three third-party executables back the `audio_*` tools, all run as **separate processes** the editor
+shells out to (like niftool and texconv) — none of them are linked into `FO4RecordEditor.dll`, so
+none of the "combined work" complexity that applies to Mutagen/nifly above applies here.
+
+- **ffmpeg** — `tools\audio\ffmpeg.exe` is a static Windows build from
+  [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (the `win64-lgpl` variant, which
+  excludes GPL-only components like x264/x265 — everything in it is LGPL-3.0 or more permissive).
+  LGPL-3.0's source-availability obligation is satisfied by ffmpeg's own upstream source
+  (ffmpeg.org) and BtbN's public, reproducible build scripts; nothing about this project modifies
+  ffmpeg itself. Replaced the workspace's previous bundled copy, a 2012 nightly (`N-36890`) with
+  13 years of unpatched codec parsers — see the Code Notes entry for that decision.
+- **xWMAEncode.exe** — Microsoft's own tool from the classic DirectX SDK (June 2010 era; this build
+  reports itself as "build 9.29.1962.0", copyright 2009). Not open-source, but it is the *only* tool
+  that reads/writes Fallout 4's proprietary xWMA format, and it has been freely redistributed by
+  essentially every FO4/Skyrim audio-conversion modding tool for over a decade (JohnB's Skyrim Audio
+  Converter, BowmoreLover's Yakitori Audio Converter, Backporter's SSE/FO4 Sound-Music Converter,
+  and the raw batch-file tools in this workspace's `Tools\Audio Converter\` all bundle the identical
+  binary) — there is no indication Microsoft has ever objected to this, and no alternative exists.
+- **BmlFuzEncode.exe / BmlFuzDecode.exe** — small command-line tools by BowmoreLover, distributed
+  alongside Yakitori Audio Converter on Nexus Mods, that pack/split the `.fuz` voice container
+  (an xwm audio stream + a `.lip` lip-sync file). Freely redistributed the same way as the tools
+  above; no separate license file ships with them.
 
 ## What is not here
 
