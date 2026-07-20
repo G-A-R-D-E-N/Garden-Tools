@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **57 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **60 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -62,7 +62,7 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 
 ### Plugin lifecycle
 `open_plugin` · `create_plugin` · `save_plugin` · `reload_plugin` · `backup_plugin` · `list_plugins`
-· `check_plugin` · `clean_plugin` · `strip_masters_clean`
+· `check_plugin` · `clean_plugin` · `strip_masters_clean` · `list_masters` · `reorder_masters`
 
 ### Reading and analysis
 `get_record` · `get_winning_record` · `list_records` · `list_records_summary` · `list_record_types` ·
@@ -75,7 +75,7 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 ### Writing records
 `create_record` · `set_field` · `set_conditions` · `set_components` · `add_list_item` ·
 `remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` · `delete_record` ·
-`renumber_formid` · `compact_to_esl` · `batch_patch_records` · `revert_overrides`
+`renumber_formid` · `compact_to_esl` · `set_light_flag` · `batch_patch_records` · `revert_overrides`
 
 ### Cells and placed objects
 `create_cell` · `create_placed_object`

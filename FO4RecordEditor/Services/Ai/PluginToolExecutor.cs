@@ -829,6 +829,54 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "source_path", "masters" }
             }),
+        new("list_masters",
+            "List a plugin's declared masters in header order: index, on-disk size (when found), and " +
+            "whether anything IN THIS PLUGIN actually references it. A master reported UNUSED is exactly " +
+            "the kind save_plugin's automatic ordering silently drops on write. Use this to inspect a " +
+            "plugin's master table directly instead of guessing from check_plugin's error text.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string" } },
+                required = new[] { "plugin" }
+            }),
+        new("reorder_masters",
+            "Set a plugin's master order to an EXACT permutation of its CURRENT masters and write it " +
+            "immediately, bypassing save_plugin's automatic load-order-derived ordering. Call list_masters " +
+            "first to see the current set. This is a manual-repair tool for when the automatic ordering " +
+            "isn't available or produced a wrong result — a plain save_plugin call afterwards re-derives " +
+            "the order from the live load order and overwrites whatever you set here. 'order' must contain " +
+            "every current master exactly once (same names, no additions, no removals) or the call is refused.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    order = new
+                    {
+                        type = "array",
+                        items = new { type = "string" },
+                        description = "The plugin's current masters, reordered. Must be an exact permutation — see list_masters."
+                    }
+                },
+                required = new[] { "plugin", "order" }
+            }),
+        new("set_light_flag",
+            "Set or clear a plugin's header ESL ('light master' / Small) flag directly — the same bit " +
+            "xEdit's 'ESL flag' checkbox sets. compact_to_esl only renumbers FormIDs into the 0x800-0xFFF " +
+            "range and never touches this bit, so a compacted plugin still needs this call (or a .esl file " +
+            "extension at save time) to actually behave as light. In memory until save_plugin.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    light = new { type = "boolean", description = "true = set the ESL flag, false = clear it. Default true." }
+                },
+                required = new[] { "plugin" }
+            }),
         new("nif_import",
             "Author a game-ready Fallout 4 static NIF from a Blender-exported OBJ mesh (no NifSkope, no " +
             "Creation Kit). Builds a BSTriShape with a BSLightingShaderProperty, texture slots, computed " +
@@ -1006,7 +1054,7 @@ public sealed class PluginToolExecutor
             "delete_record" or "copy_as_override" or "clean_plugin" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
-            "run_script";
+            "run_script" or "reorder_masters" or "set_light_flag";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
@@ -1028,6 +1076,9 @@ public sealed class PluginToolExecutor
             "copy_as_override"    => $"{ShortId(Str("id"))} -> {Str("patch_plugin")}",
             "reload_plugin"       => $"reload {plugin}",
             "strip_masters_clean" => $"strip masters: {System.IO.Path.GetFileName(Str("source_path"))}",
+            "list_masters"        => $"list masters of {plugin}",
+            "reorder_masters"     => $"reorder masters of {plugin}",
+            "set_light_flag"      => $"set_light_flag({plugin}, {Str("light")})",
             "check_plugin"        => $"check {plugin}",
             "clean_plugin"        => $"clean UDRs in {plugin}",
             "compact_to_esl"      => $"compact {plugin} to ESL",
@@ -1244,6 +1295,17 @@ public sealed class PluginToolExecutor
                 bool isDryRun = !root.TryGetProperty("dry_run", out var dr) || dr.ValueKind != JsonValueKind.False;
                 return WriteService.StripMastersClean(Str("source_path"), masters, Str("output_path"), isDryRun, env);
             }
+            case "list_masters":
+                return WriteService.ListMasters(Str("plugin"), env);
+            case "reorder_masters":
+            {
+                var order = root.TryGetProperty("order", out var ordEl) && ordEl.ValueKind == JsonValueKind.Array
+                    ? ordEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToArray()
+                    : Array.Empty<string>();
+                return WriteService.ReorderMasters(Str("plugin"), order, env);
+            }
+            case "set_light_flag":
+                return WriteService.SetLightFlag(Str("plugin"), BoolOr("light", true), env);
 
             case "nif_import":
                 return NifService.Import(Str("obj_path"), Str("out_nif"), Str("material"),

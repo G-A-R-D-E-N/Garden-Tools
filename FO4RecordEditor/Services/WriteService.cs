@@ -358,6 +358,44 @@ public static partial class WriteService
     }
 
     /// <summary>
+    /// Set or clear the header's ESL ("light master" / Small) bit directly. compact_to_esl only
+    /// renumbers FormIDs into the 0x800-0xFFF range and tells the caller to save with a .esl path;
+    /// it never touches this bit. Whether a plugin actually behaves as light comes from this header
+    /// flag (what xEdit's "ESL flag" checkbox sets), not from the file extension or the FormID range
+    /// by itself — a .esp with the bit set is just as light as a renamed .esl. In memory until
+    /// save_plugin.
+    /// </summary>
+    public static string SetLightFlag(string plugin, bool light, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var (name, _) = NormalizePlugin(plugin);
+
+        bool wasLight = mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small);
+        if (light == wasLight)
+            return $"'{name}' already {(light ? "has" : "does not have")} the ESL (Small) flag set.";
+
+        if (light)
+        {
+            // Setting the bit does not renumber anything -- warn rather than silently ship a plugin
+            // that claims to be light while still holding FormIDs the light range can't represent.
+            var outOfRange = mod.EnumerateMajorRecords()
+                .Count(r => r.FormKey.ModKey == mod.ModKey && r.FormKey.ID > 0xFFF);
+            mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Small;
+            MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+            var warn = outOfRange > 0
+                ? $" WARNING: {outOfRange} native record(s) still have a FormID above 0xFFF, so this plugin " +
+                  "is NOT actually ESL-safe yet. Call compact_to_esl first, or the light-master FormID " +
+                  "encoding will truncate those records' high bytes at runtime."
+                : "";
+            return $"Set the ESL (Small) flag on '{name}'.{warn} In memory until save_plugin.";
+        }
+
+        mod.ModHeader.Flags &= ~Fallout4ModHeader.HeaderFlag.Small;
+        MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+        return $"Cleared the ESL (Small) flag on '{name}'. In memory until save_plugin.";
+    }
+
+    /// <summary>
     /// Change one record's FormID within its plugin (xEdit "Change FormID") and (by default) repoint
     /// every reference to it that lives in the SAME plugin. References in OTHER plugins are not
     /// rewritten (that needs a patch); the message notes they may exist so the caller / AI can fix them.
@@ -820,6 +858,129 @@ public static partial class WriteService
             result += $" WARNING: master order was NOT set from the load order ({stripOrderingUnavailable}); " +
                       "verify the MAST order before loading the game.";
         return result;
+    }
+
+    /// <summary>
+    /// Report the plugin's declared masters in header order: index, on-disk size (when the master
+    /// can be located), and whether anything in THIS plugin actually references it. "Used" comes
+    /// from the same FormLink scan SavePlugin's Iterate uses to decide master-list membership, so a
+    /// master reported unused here is exactly the kind Iterate silently drops on the next save —
+    /// this is the direct-visibility tool that was missing (the only prior view of the master list
+    /// was ReadMasterNames, which reads raw bytes off disk and has no "used" signal at all).
+    /// </summary>
+    public static string ListMasters(string plugin, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var (name, _) = NormalizePlugin(plugin);
+
+        var masters = mod.MasterReferences.Select(m => m.Master.FileName.String).ToList();
+        if (masters.Count == 0) return $"'{name}' declares no masters.";
+
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rec in mod.EnumerateMajorRecords())
+            foreach (var link in rec.EnumerateFormLinks())
+            {
+                if (link.FormKey.IsNull) continue;
+                used.Add(link.FormKey.ModKey.FileName.String);
+            }
+
+        var lines = new List<string>(masters.Count);
+        for (int i = 0; i < masters.Count; i++)
+        {
+            var m = masters[i];
+            var path = FindPluginPath(m, env);
+            string sizeStr = "size unknown (not found on disk / not in the loaded environment)";
+            if (path != null && File.Exists(path))
+                try { sizeStr = $"{new FileInfo(path).Length:N0} bytes"; } catch { }
+            var usedStr = used.Contains(m) ? "used" : "UNUSED -- save_plugin's Iterate would drop this master";
+            lines.Add($"{i}: {m}  ({sizeStr}, {usedStr})");
+        }
+        return $"Masters of '{name}' ({masters.Count}):\n" + string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Set a plugin's declared master order to an EXACT permutation of its current masters and write
+    /// it immediately, bypassing save_plugin's automatic load-order-derived ordering. That bypass is
+    /// the point, not an oversight: Mutagen's ModHeaderWriteLogic.SortMasters runs unconditionally at
+    /// write time, even under MastersListContentOption.NoCheck, so a caller-specified order only
+    /// survives the write when MastersListOrdering is ALSO explicitly NoCheck — otherwise it gets
+    /// silently re-sorted back to the load-order (or alphabetical-masters-first) order, which is
+    /// exactly right for a normal save but makes reordering here impossible any other way. This is
+    /// a manual-repair tool: use it to pin a verified-correct order when the automatic derivation
+    /// isn't available or isn't trusted, not as a routine save path. A later save_plugin call
+    /// re-derives the order from the live load order again and overwrites this one.
+    /// Rejects any 'order' that is not exactly the plugin's current master set (same names, same
+    /// count, no duplicates) — this only reorders, it never adds or drops a master.
+    /// </summary>
+    public static string ReorderMasters(string plugin, string[] order, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var (name, explicitPath) = NormalizePlugin(plugin);
+        if (ProtectedPlugins.IsProtected(name)) return ToolError.Fail(ProtectedPlugins.RefusalMessage(name));
+
+        var current = mod.MasterReferences.Select(m => m.Master.FileName.String).ToList();
+        if (current.Count == 0) return $"'{name}' has no masters to reorder.";
+        if (current.Count == 1) return $"'{name}' has only one master ({current[0]}); nothing to reorder.";
+
+        if (order == null || order.Length == 0)
+            return ToolError.Fail($"Provide 'order' as the full permutation of the current masters: [{string.Join(", ", current)}].");
+
+        var dup = order.GroupBy(o => o, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (dup != null) return ToolError.Fail($"reorder_masters: 'order' lists '{dup.Key}' more than once.");
+
+        var currentSet = new HashSet<string>(current, StringComparer.OrdinalIgnoreCase);
+        var orderSet = new HashSet<string>(order, StringComparer.OrdinalIgnoreCase);
+        if (order.Length != current.Count || !currentSet.SetEquals(orderSet))
+        {
+            var missing = current.Where(c => !orderSet.Contains(c)).ToList();
+            var extra = order.Where(o => !currentSet.Contains(o)).ToList();
+            return ToolError.Fail(
+                $"reorder_masters: 'order' must be EXACTLY the plugin's current {current.Count} master(s) " +
+                $"[{string.Join(", ", current)}] — got {order.Length}: [{string.Join(", ", order)}]." +
+                (missing.Count > 0 ? $" Missing: [{string.Join(", ", missing)}]." : "") +
+                (extra.Count > 0 ? $" Not a declared master: [{string.Join(", ", extra)}]." : ""));
+        }
+
+        mod.MasterReferences.Clear();
+        foreach (var m in order)
+            mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = m });
+
+        var path = explicitPath ?? (_sourcePath.TryGetValue(name, out var sp) ? sp : Path.Combine(NewPatchDir, name));
+        var pathProblem = ProtectedPlugins.ValidateSavePath(path);
+        if (pathProblem != null) return ToolError.Fail(pathProblem);
+
+        var prms = new BinaryWriteParameters
+        {
+            MastersListContent = MastersListContentOption.NoCheck,
+            ModKey = ModKeyOption.NoCheck,
+            MastersListOrdering = new MastersListOrderingEnumOption { Option = MastersListOrderingOption.NoCheck },
+        };
+        try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); } catch { }
+        var tmp = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+        try { mod.WriteToBinary(tmp, prms); }
+        catch (Exception ex) { try { File.Delete(tmp); } catch { } return ToolError.Fail($"reorder_masters write failed: {ex.Message}"); }
+
+        try
+        {
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
+        }
+        catch (Exception)
+        {
+            var sideways = path + ".new";
+            try { if (File.Exists(sideways)) File.Delete(sideways); File.Move(tmp, sideways); }
+            catch { sideways = tmp; }
+            return $"Reordered masters in memory and wrote '{sideways}', but could NOT overwrite '{path}' " +
+                   "(locked by this editor's own 'Open MO2' overlay). Close the editor and rename the file, " +
+                   "or save under a new plugin name.";
+        }
+
+        NotifyChanged(name);
+        var written = ReadMasterNames(path);
+        return $"Wrote {name} to '{path}' with masters in exactly this order: [{string.Join(", ", written)}]. " +
+               "This bypassed save_plugin's automatic load-order-derived ordering -- only rely on it once " +
+               "you've verified the permutation is dependency-correct (each master before anything that " +
+               "depends on it). A later save_plugin call will re-derive and overwrite this order.";
     }
 
     /// <summary>

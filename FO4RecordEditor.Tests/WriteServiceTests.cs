@@ -186,6 +186,118 @@ public class WriteServiceTests
     }
 
     [Fact]
+    public void ListMasters_ReportsUsedAndUnusedMasters()
+    {
+        var plugin = $"ListMastersTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
+
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "UsedMaster.esm" });
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "UnusedMaster.esm" });
+
+        // A record that links into UsedMaster.esm but never into UnusedMaster.esm.
+        var gun = new Mutagen.Bethesda.Fallout4.Weapon(new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x800), rel) { EditorID = "Lm_Gun" };
+        gun.Keywords = new()
+        {
+            new Mutagen.Bethesda.Plugins.FormLink<Mutagen.Bethesda.Fallout4.IKeywordGetter>(
+                new Mutagen.Bethesda.Plugins.FormKey("UsedMaster.esm", 0x001234))
+        };
+        mod.Weapons.Add(gun);
+
+        var exec = new PluginToolExecutor(() => null);
+        var result = exec.Execute("list_masters", $"{{\"plugin\":\"{plugin}\"}}");
+
+        result.Should().Contain("UsedMaster.esm").And.Contain("UnusedMaster.esm");
+        result.Split('\n').First(l => l.Contains("UsedMaster.esm")).Should().Contain("used").And.NotContain("UNUSED");
+        result.Split('\n').First(l => l.Contains("UnusedMaster.esm")).Should().Contain("UNUSED");
+    }
+
+    [Fact]
+    public void ReorderMasters_RejectsNonPermutation()
+    {
+        var plugin = $"ReorderRejectTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "A.esm" });
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "B.esm" });
+
+        var exec = new PluginToolExecutor(() => null);
+
+        // Missing a master.
+        exec.Execute("reorder_masters", $"{{\"plugin\":\"{plugin}\",\"order\":[\"A.esm\"]}}")
+            .Should().Contain("EXACTLY");
+
+        // Extra name not in the current set.
+        exec.Execute("reorder_masters", $"{{\"plugin\":\"{plugin}\",\"order\":[\"A.esm\",\"C.esm\"]}}")
+            .Should().Contain("Not a declared master");
+
+        // Duplicate.
+        exec.Execute("reorder_masters", $"{{\"plugin\":\"{plugin}\",\"order\":[\"A.esm\",\"A.esm\"]}}")
+            .Should().Contain("more than once");
+    }
+
+    [Fact]
+    public void ReorderMasters_WritesExactOrder_BypassingLoadOrderDerivation()
+    {
+        var outDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"ReorderWriteTest_{Guid.NewGuid():N}");
+        System.IO.Directory.CreateDirectory(outDir);
+        var plugin = $"ReorderWriteTest_{Guid.NewGuid():N}.esp";
+        var fullPath = System.IO.Path.Combine(outDir, plugin);
+
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("create_plugin", $"{{\"name\":\"{fullPath.Replace("\\", "\\\\")}\"}}");
+        var mod = WriteService.GetMutable(plugin)!;
+        // Deliberately out of alphabetical order, so a silent re-sort would be caught.
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "Zeta.esm" });
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "Alpha.esm" });
+
+        var result = exec.Execute("reorder_masters",
+            $"{{\"plugin\":\"{plugin}\",\"order\":[\"Alpha.esm\",\"Zeta.esm\"]}}");
+        result.Should().Contain("Wrote").And.Contain("Alpha.esm, Zeta.esm");
+
+        var written = WriteService.ReadMasterNames(fullPath);
+        written.Should().Equal("Alpha.esm", "Zeta.esm");
+
+        try { System.IO.Directory.Delete(outDir, true); } catch { }
+    }
+
+    [Fact]
+    public void SetLightFlag_SetsAndClears()
+    {
+        var plugin = $"LightFlagTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        mod.ModHeader.Flags.HasFlag(Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).Should().BeFalse();
+
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("set_light_flag", $"{{\"plugin\":\"{plugin}\",\"light\":true}}")
+            .Should().Contain("Set the ESL");
+        mod.ModHeader.Flags.HasFlag(Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).Should().BeTrue();
+
+        exec.Execute("set_light_flag", $"{{\"plugin\":\"{plugin}\",\"light\":true}}")
+            .Should().Contain("already has");
+
+        exec.Execute("set_light_flag", $"{{\"plugin\":\"{plugin}\",\"light\":false}}")
+            .Should().Contain("Cleared");
+        mod.ModHeader.Flags.HasFlag(Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetLightFlag_WarnsWhenRecordsAreOutOfEslRange()
+    {
+        var plugin = $"LightFlagWarnTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
+        mod.Keywords.Add(new Mutagen.Bethesda.Fallout4.Keyword(new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x5000), rel) { EditorID = "Hi_Kw" });
+
+        var exec = new PluginToolExecutor(() => null);
+        exec.Execute("set_light_flag", $"{{\"plugin\":\"{plugin}\",\"light\":true}}")
+            .Should().Contain("WARNING").And.Contain("compact_to_esl first");
+    }
+
+    [Fact]
     public void CreateRecord_UnsupportedType_ReturnsHelpfulMessage()
     {
         var exec = new PluginToolExecutor(() => null);

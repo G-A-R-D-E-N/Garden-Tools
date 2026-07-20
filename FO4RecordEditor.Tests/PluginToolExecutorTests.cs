@@ -61,8 +61,8 @@ public class PluginToolExecutorTests
             "set_perk_effects", "set_magic_effects", "set_quest_aliases", "set_quest_stages",
             "set_quest_objectives", "set_furniture_markers", "set_message_buttons",
             "compile_papyrus", "decompile_papyrus", "revert_overrides", "batch_patch_records",
-            "run_script", "reload_plugin", "strip_masters_clean", "nif_import", "nif_inspect",
-            "nif_verify", "nif_fix",
+            "run_script", "reload_plugin", "strip_masters_clean", "list_masters", "reorder_masters",
+            "set_light_flag", "nif_import", "nif_inspect", "nif_verify", "nif_fix",
         };
 
         var names = PluginToolExecutor.ToolDefinitions()
