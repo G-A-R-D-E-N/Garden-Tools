@@ -118,6 +118,9 @@ export default function NifViewport(
           loadTexture(diffuse.path).then(applyUrl).then(tex => {
             if (cancelled || !tex) return;
             tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace;
+            // Tiling UVs (terrain/rock/floor) need RepeatWrapping or the edge texel smears across the
+            // surface ("warped dirt"); default clamp only looks right for 0..1 UVs.
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
             tex.anisotropy = 4;
             mat.map = tex; mat.color.setHex(0xffffff); mat.needsUpdate = true;
             texes.push(tex);
@@ -127,6 +130,7 @@ export default function NifViewport(
           loadTexture(normal.path).then(applyUrl).then(tex => {
             if (cancelled || !tex) return;
             tex.flipY = false; tex.colorSpace = THREE.NoColorSpace;
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
             mat.normalMap = tex; mat.needsUpdate = true;
             texes.push(tex);
           });

@@ -160,6 +160,11 @@ export default function CellViewport(
                 if (cancelled) { tex.dispose(); return; }
                 tex.flipY = false;
                 tex.colorSpace = THREE.SRGBColorSpace;
+                // FO4 terrain/rock/floor meshes tile their diffuse (UVs run 0..N, not 0..1). Without
+                // RepeatWrapping three.js clamps to the edge texel, smearing it across the whole
+                // surface -- the "warped/streaky dirt" look. Small props (UVs in 0..1) are unaffected.
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
                 tex.anisotropy = 4;
                 mat.map = tex;
                 mat.color.setHex(0xffffff);
