@@ -314,10 +314,22 @@ export interface CellGeoBatchResult {
 }
 
 /** The "cell" bridge (FO4RecordEditor.Services.CellInterop) — the Cell Viewer panel. */
+/** One match from CellHost.SearchCells (MutagenLoader.SearchHit, CELL-filtered). Newtonsoft
+ * serializes the C# record's properties as-is (PascalCase), same as the existing SearchHit above. */
+export interface CellSearchHit {
+  FormKey: string;
+  EditorID: string;
+  Type: string;
+  Plugin: string;
+  Name: string;
+}
+
 export interface CellHost {
   GetPlacedReferences(cellId: string): Promise<string>;          // JSON: CellReferencesResult
   // relModelPathsJson: JSON array of unique modelPath strings from GetPlacedReferences.
   GetGeometryBatch(relModelPathsJson: string): Promise<string>;  // JSON: CellGeoBatchResult
+  GetPlugins(): Promise<string>;                                  // JSON: string[] -- empty = nothing loaded
+  SearchCells(query: string, limit: number): Promise<string>;    // JSON: CellSearchHit[]
 }
 
 declare global {

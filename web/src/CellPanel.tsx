@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
-import { getCell, type CellPlacedReference, type CellReferencesResult } from './backend';
+import { useEffect, useRef, useState } from 'react';
+import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search } from 'lucide-react';
+import { getCell, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap } from './CellViewport';
 import './PapyrusPanel.css';
 import './NifPanel.css';
@@ -17,21 +17,86 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [geometry, setGeometry] = useState<CellGeoMap>({});
   const [log, setLog] = useState<string[]>([]);
 
+  // Env-loaded gate: an empty plugin list means "nothing loaded yet" -- point the user at the
+  // Explorer sidebar's Load Env / Open MO2 buttons instead of letting them type a cell id blind
+  // into a panel that can't possibly resolve anything yet.
+  const [pluginCount, setPluginCount] = useState<number | null>(null);   // null = still checking
+
+  // Type-ahead cell picker: debounced search-as-you-type, dropdown of matches under the input.
+  const [suggestions, setSuggestions] = useState<CellSearchHit[] | null>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const searchSeq = useRef(0);
+  const boxRef = useRef<HTMLDivElement>(null);
+
   const cell = getCell();
   const unavailable = !cell;
 
   const appendLog = (line: string) =>
     setLog(prev => [`[${new Date().toLocaleTimeString()}] ${line}`, ...prev].slice(0, 200));
 
-  const load = async () => {
-    if (!cell || !cellId.trim()) return;
-    setLS('cellId', cellId);
+  const checkPlugins = async () => {
+    if (!cell) { setPluginCount(0); return; }
+    try {
+      const raw = await cell.GetPlugins();
+      const list = JSON.parse(raw) as string[];
+      setPluginCount(Array.isArray(list) ? list.length : 0);
+    } catch { setPluginCount(0); }
+  };
+
+  useEffect(() => { checkPlugins(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Re-check when the panel regains focus (covers "opened Cell Viewer, then loaded a modlist,
+  // then came back") without needing a manual refresh button.
+  useEffect(() => {
+    const onFocus = () => checkPlugins();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const noEnv = pluginCount === 0;
+
+  // Close the dropdown on an outside click.
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setSuggestOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  // Debounced search-as-you-type against the loaded load order.
+  useEffect(() => {
+    if (!cell || noEnv) { setSuggestions(null); return; }
+    const q = cellId.trim();
+    if (q.length < 2) { setSuggestions(null); return; }
+    const mySeq = ++searchSeq.current;
+    setSuggestBusy(true);
+    const t = setTimeout(async () => {
+      try {
+        const raw = await cell.SearchCells(q, 20);
+        if (searchSeq.current !== mySeq) return; // a newer keystroke superseded this search
+        setSuggestions(JSON.parse(raw) as CellSearchHit[]);
+        setSuggestOpen(true);
+      } catch {
+        if (searchSeq.current === mySeq) setSuggestions([]);
+      } finally {
+        if (searchSeq.current === mySeq) setSuggestBusy(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [cellId, cell, noEnv]);
+
+  const load = async (idOverride?: string) => {
+    const id = (idOverride ?? cellId).trim();
+    if (!cell || !id) return;
+    setSuggestOpen(false);
+    setLS('cellId', id);
     setBusy(true);
     setResult(null);
     setGeometry({});
     setStatus('Reading placed references…');
     try {
-      const raw = await cell.GetPlacedReferences(cellId.trim());
+      const raw = await cell.GetPlacedReferences(id);
       const parsed = JSON.parse(raw) as CellReferencesResult;
       if (parsed.error) {
         setStatus(parsed.error);
@@ -70,6 +135,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const pickSuggestion = (hit: CellSearchHit) => {
+    setCellId(hit.FormKey);
+    setSuggestOpen(false);
+    load(hit.FormKey);
+  };
+
   const references: CellPlacedReference[] = result?.references ?? [];
   const failedModelCount = Object.values(geometry).filter(g => 'error' in g).length;
   const banner = statusBanner(status, busy);
@@ -83,17 +154,48 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {unavailable && <div className="papyrus-warn">Cell bridge not available — run the desktop app (not the browser dev server).</div>}
+        {!unavailable && noEnv && (
+          <div className="papyrus-warn">
+            No modlist loaded yet — click <strong>Load Env</strong> or <strong>Open MO2</strong> in the Explorer sidebar first, then come back here.
+          </div>
+        )}
 
         <div className="papyrus-body">
           <div className="papyrus-form">
             <label className="papyrus-field">
-              <span>Cell (FormKey like 001234:Fallout4.esm, or an EditorID)</span>
-              <div className="papyrus-input-row">
-                <input value={cellId} onChange={e => setCellId(e.target.value)}
-                  placeholder="e.g. SanctuaryHouse01" onKeyDown={e => { if (e.key === 'Enter') load(); }} />
+              <span>Cell — search by name/EditorID, or paste a FormKey</span>
+              <div className="cell-search-box" ref={boxRef}>
+                <div className="papyrus-input-row">
+                  <Search size={13} className="cell-search-icon" />
+                  <input
+                    value={cellId}
+                    onChange={e => setCellId(e.target.value)}
+                    onFocus={() => { if (suggestions && suggestions.length > 0) setSuggestOpen(true); }}
+                    placeholder={noEnv ? 'Load a modlist first…' : 'e.g. Sanctuary, or SanctuaryHouse01'}
+                    disabled={unavailable || noEnv}
+                    onKeyDown={e => { if (e.key === 'Enter') load(); if (e.key === 'Escape') setSuggestOpen(false); }}
+                  />
+                </div>
+                {suggestOpen && (
+                  <div className="cell-suggest">
+                    {suggestBusy ? (
+                      <div className="cell-suggest-empty">Searching…</div>
+                    ) : !suggestions || suggestions.length === 0 ? (
+                      <div className="cell-suggest-empty">No matching cells.</div>
+                    ) : (
+                      suggestions.map((h, i) => (
+                        <div key={`${h.FormKey}:${i}`} className="cell-suggest-row" onClick={() => pickSuggestion(h)}>
+                          <span className="cell-suggest-id">{h.EditorID || h.FormKey}</span>
+                          {h.Name && <span className="cell-suggest-name">"{h.Name}"</span>}
+                          <span className="cell-suggest-plugin">{h.Plugin}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </label>
-            <button className="papyrus-run" onClick={load} disabled={busy || unavailable || !cellId.trim()}>
+            <button className="papyrus-run cell-load-btn" onClick={() => load()} disabled={busy || unavailable || noEnv || !cellId.trim()}>
               <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
             </button>
 
@@ -135,7 +237,13 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
             )}
             {references.length > 0
               ? <CellViewport references={references} geometry={geometry} />
-              : <div className="nif-view-empty">{unavailable ? 'Cell bridge unavailable.' : 'Enter a cell FormKey or EditorID, then Load Cell.'}</div>}
+              : (
+                <div className="nif-view-empty">
+                  {unavailable ? 'Cell bridge unavailable.'
+                    : noEnv ? 'Load a modlist first, then search for a cell.'
+                    : 'Search for a cell above, or paste a FormKey/EditorID and press Load Cell.'}
+                </div>
+              )}
           </div>
         </div>
       </div>

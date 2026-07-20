@@ -50,4 +50,32 @@ public class CellInterop
                 return JsonConvert.SerializeObject(new { error = "Error: " + ex.Message });
             }
         });
+
+    /// <summary>Every plugin name currently loaded (env + loose-opened) -- the panel uses an empty
+    /// result to show "load your modlist first" instead of a silent/blind cell-id text box.</summary>
+    public Task<string> GetPlugins() =>
+        Task.Run(() =>
+        {
+            try { return JsonConvert.SerializeObject(MutagenLoader.QueryLoadedPlugins(Env)); }
+            catch (Exception ex) { DebugLog.Exception("Cell.GetPlugins", ex); return "[]"; }
+        });
+
+    /// <summary>Type-ahead cell search across the whole load order (EditorID/Name/FormKey substring,
+    /// de-duplicated to the winning version per FormKey) -- backs the picker dropdown so the user
+    /// browses/searches instead of typing an exact FormKey or EditorID from memory. Reuses
+    /// MutagenLoader's existing SearchAllRecords with the CELL signature filter.</summary>
+    public Task<string> SearchCells(string query, int limit) =>
+        Task.Run(() =>
+        {
+            try
+            {
+                var hits = MutagenLoader.SearchAllRecords(Env, query ?? "", "CELL", limit <= 0 ? 25 : limit);
+                return JsonConvert.SerializeObject(hits);
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Exception("Cell.SearchCells", ex);
+                return "[]";
+            }
+        });
 }
