@@ -27,7 +27,7 @@ public static class PapyrusService
 
         // .pas is Papyrus ASSEMBLY, not source. PapyrusCompiler compiles .psc; .pas is assembled by
         // PapyrusAssembler.exe (a different tool). This is the usual "I compiled the decompiler's
-        // Assembly-listing output" mistake — point the user at the .psc path instead.
+        // Assembly-listing output" mistake -- point the user at the .psc path instead.
         if (isFile && source.EndsWith(".pas", StringComparison.OrdinalIgnoreCase))
             return "That's a Papyrus ASSEMBLY file (.pas), not source. PapyrusCompiler compiles .psc SOURCE.\n" +
                    "Fix: Decompile this script again with 'Assembly listing' UNCHECKED to get a .psc, then compile that.\n" +
@@ -50,7 +50,7 @@ public static class PapyrusService
             // The compiler derives each script's object name from its path relative to an import root,
             // so namespaced scripts ("IHO:IHO_Foo") sitting FLAT in a folder fail to read. Stage every
             // .psc into a temp tree matching its declared namespace (IHO\IHO_Foo.psc), then compile
-            // that — makes both flat and already-structured folders work.
+            // that -- makes both flat and already-structured folders work.
             stagingDir = StageNamespacedFolder(source);
             workDir = stagingDir ?? source;
             target = workDir;
@@ -206,7 +206,7 @@ public static class PapyrusService
             catch (Exception ex) { return $"Decompile failed for {Path.GetFileName(source)}: {ex.Message}"; }
 
             // Save when EITHER "write" is on OR an output folder was given (setting a folder = intent
-            // to save). With neither, this is an inline preview only — make that explicit so it's not
+            // to save). With neither, this is an inline preview only -- make that explicit so it's not
             // mistaken for a save that produced no file.
             bool doWrite = write || !string.IsNullOrWhiteSpace(output);
             if (!doWrite)

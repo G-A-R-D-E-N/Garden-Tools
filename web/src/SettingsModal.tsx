@@ -26,16 +26,16 @@ interface Settings {
 
 const host = () => window.chrome?.webview?.hostObjects?.settings;
 
-// Known Claude models. Sonnet 4.6 is the recommended default — best balance for agentic plugin work.
+// Known Claude models. Sonnet 4.6 is the recommended default -- best balance for agentic plugin work.
 const MODELS = [
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 — Recommended (best balance)' },
-  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 — Most capable' },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 — Fastest / cheapest' },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 -- Recommended (best balance)' },
+  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 -- Most capable' },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 -- Fastest / cheapest' },
 ];
 
 const GEMINI_MODELS = [
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash — Recommended (fast, tool-use)' },
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro — Most capable' },
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash -- Recommended (fast, tool-use)' },
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro -- Most capable' },
   { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
 ];
 
@@ -202,7 +202,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               </label>
 
               <label className="settings-field">
-                <span>Data Folder <em>(Load Env override — blank = auto-detect)</em></span>
+                <span>Data Folder <em>(Load Env override -- blank = auto-detect)</em></span>
                 <div className="settings-input-row">
                   <input value={s.DataFolder} onChange={e => set('DataFolder', e.target.value)} />
                   <button className="settings-btn" onClick={() => browse('DataFolder', 'Choose the game Data folder to load plugins from')}>Browse</button>
@@ -210,7 +210,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               </label>
 
               <label className="settings-field">
-                <span>CK Wiki Path <em>(offline Creation Kit Wiki mirror — blank = use the copy bundled with the app)</em></span>
+                <span>CK Wiki Path <em>(offline Creation Kit Wiki mirror -- blank = use the copy bundled with the app)</em></span>
                 <div className="settings-input-row">
                   <input value={s.CkWikiPath} onChange={e => set('CkWikiPath', e.target.value)} placeholder="…\Creation Kit Wiki\fallout4" />
                   <button className="settings-btn" onClick={() => browse('CkWikiPath', 'Select the offline Creation Kit Wiki mirror folder')}>Browse</button>

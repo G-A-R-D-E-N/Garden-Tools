@@ -36,7 +36,7 @@ public static partial class WriteService
             : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
 
     /// <summary>The loaded MO2 instance's overwrite folder (&lt;instance&gt;\overwrite). When set, NEW
-    /// patches save here so MO2 loads them automatically at top priority — no manual mod install.</summary>
+    /// patches save here so MO2 loads them automatically at top priority -- no manual mod install.</summary>
     public static string? Mo2OverwriteFolder { get; set; }
 
     /// <summary>Where a brand-new patch (no source file) saves by default: the MO2 overwrite folder
@@ -233,7 +233,7 @@ public static partial class WriteService
     }
 
     // Record-level core of AddListItem: append a FormLink to a list field on an already-resolved
-    // record. No index invalidation / change notification — the caller batches those. Returns false
+    // record. No index invalidation / change notification -- the caller batches those. Returns false
     // with a reason in 'msg' on failure, or true with a short success note (e.g. "now 4 item(s)").
     private static bool AddListItemToRecord(object rec, string field, string value, object? env, out string msg)
     {
@@ -323,7 +323,7 @@ public static partial class WriteService
 
         // 'remap' comes from a DEEP EnumerateMajorRecords() walk, but the loop below only sees
         // top-level IGroup properties. Cells are Fallout4ListGroup<CellBlock>, which does NOT
-        // implement IGroup (verified by reflection — see CellCompactionTests), so CELLs, their
+        // implement IGroup (verified by reflection -- see CellCompactionTests), so CELLs, their
         // PlacedObjects and worldspace sub-cells are skipped silently rather than throwing, and
         // RemapLinks would then repoint references onto FormKeys that no record owns.
         // Checked up front so nothing has been mutated when we refuse.
@@ -339,7 +339,7 @@ public static partial class WriteService
             return ToolError.Fail(
                 $"compact_to_esl cannot compact '{plugin}': {unreachable.Count} out-of-range record(s) live in " +
                 "nested groups (cells / placed objects / worldspace sub-cells) that this tool cannot re-key " +
-                $"[{byType}]. Nothing was modified — references were NOT repointed, so the plugin is unchanged. " +
+                $"[{byType}]. Nothing was modified -- references were NOT repointed, so the plugin is unchanged. " +
                 "Compact in xEdit instead, or keep cell-placed records within 0x800-0xFFF when authoring them.");
         }
 
@@ -363,7 +363,7 @@ public static partial class WriteService
             return ToolError.Fail(
                 $"compact_to_esl FAILED on '{plugin}': {rekeyFailures.Count} record(s) were duplicated but the " +
                 "original could not be removed, so the plugin now holds duplicate FormKeys in memory. " +
-                "It was NOT saved and references were NOT repointed — run reload_plugin to discard these " +
+                "It was NOT saved and references were NOT repointed -- run reload_plugin to discard these " +
                 "in-memory changes before doing anything else.\n  " +
                 string.Join("\n  ", rekeyFailures.Take(10)));
 
@@ -381,7 +381,7 @@ public static partial class WriteService
     /// renumbers FormIDs into the 0x800-0xFFF range and tells the caller to save with a .esl path;
     /// it never touches this bit. Whether a plugin actually behaves as light comes from this header
     /// flag (what xEdit's "ESL flag" checkbox sets), not from the file extension or the FormID range
-    /// by itself — a .esp with the bit set is just as light as a renamed .esl. In memory until
+    /// by itself -- a .esp with the bit set is just as light as a renamed .esl. In memory until
     /// save_plugin.
     /// </summary>
     public static string SetLightFlag(string plugin, bool light, object? env)
@@ -461,7 +461,7 @@ public static partial class WriteService
             if (!TryRemoveFromGroup(group, oldFk, out var removeErr))
                 return ToolError.Fail(
                     $"renumber_formid FAILED on '{plugin}': {recordId} was duplicated to {newFk} but the original " +
-                    $"could not be removed, so the plugin now holds both in memory. It was NOT saved — run " +
+                    $"could not be removed, so the plugin now holds both in memory. It was NOT saved -- run " +
                     $"reload_plugin to discard this change. Reason: {removeErr}");
             rekeyed = true;
             break;
@@ -635,7 +635,7 @@ public static partial class WriteService
     {
         var (name, _) = NormalizePlugin(plugin);
         if (!_sourcePath.TryGetValue(name, out var sourcePath) || string.IsNullOrWhiteSpace(sourcePath))
-            return $"'{name}' has no on-disk source path — it may be a newly created plugin that hasn't been saved yet. No backup needed.";
+            return $"'{name}' has no on-disk source path -- it may be a newly created plugin that hasn't been saved yet. No backup needed.";
         if (!File.Exists(sourcePath))
             return $"Source file not found on disk at '{sourcePath}'; cannot back it up.";
         var ts = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -652,12 +652,12 @@ public static partial class WriteService
     }
 
     /// <summary>
-    /// Writes a plugin to disk. <paramref name="env"/> is REQUIRED — do not give it a default.
+    /// Writes a plugin to disk. <paramref name="env"/> is REQUIRED -- do not give it a default.
     /// It is what orders the MAST table by real load order; without it Mutagen emits its own order,
     /// which can put a dependent ESM before its dependency and hang the game on load with no crash
     /// log. It carried a `= null` default for a long time and callers kept quietly omitting it
     /// (five inside this file, then three more in the GUI). Pass null explicitly if you genuinely
-    /// have no environment — that at least shows up in review.
+    /// have no environment -- that at least shows up in review.
     /// </summary>
     public static string SavePlugin(string plugin, string? path, object? env)
     {
@@ -728,7 +728,7 @@ public static partial class WriteService
                 path.StartsWith(Mo2OverwriteFolder!, StringComparison.OrdinalIgnoreCase);
             var baseMsg = inOverwrite
                 ? $"Saved {name} to the MO2 overwrite folder ({path}). MO2 loads it automatically at top " +
-                  "priority — just enable it in the plugin list if it isn't already checked, and place it " +
+                  "priority -- just enable it in the plugin list if it isn't already checked, and place it " +
                   "after the plugins it patches."
                 : $"Saved {name} to {path}.";
 
@@ -883,7 +883,7 @@ public static partial class WriteService
     /// Report the plugin's declared masters in header order: index, on-disk size (when the master
     /// can be located), and whether anything in THIS plugin actually references it. "Used" comes
     /// from the same FormLink scan SavePlugin's Iterate uses to decide master-list membership, so a
-    /// master reported unused here is exactly the kind Iterate silently drops on the next save —
+    /// master reported unused here is exactly the kind Iterate silently drops on the next save --
     /// this is the direct-visibility tool that was missing (the only prior view of the master list
     /// was ReadMasterNames, which reads raw bytes off disk and has no "used" signal at all).
     /// </summary>
@@ -956,14 +956,14 @@ public static partial class WriteService
     /// it immediately, bypassing save_plugin's automatic load-order-derived ordering. That bypass is
     /// the point, not an oversight: Mutagen's ModHeaderWriteLogic.SortMasters runs unconditionally at
     /// write time, even under MastersListContentOption.NoCheck, so a caller-specified order only
-    /// survives the write when MastersListOrdering is ALSO explicitly NoCheck — otherwise it gets
+    /// survives the write when MastersListOrdering is ALSO explicitly NoCheck -- otherwise it gets
     /// silently re-sorted back to the load-order (or alphabetical-masters-first) order, which is
     /// exactly right for a normal save but makes reordering here impossible any other way. This is
     /// a manual-repair tool: use it to pin a verified-correct order when the automatic derivation
     /// isn't available or isn't trusted, not as a routine save path. A later save_plugin call
     /// re-derives the order from the live load order again and overwrites this one.
     /// Rejects any 'order' that is not exactly the plugin's current master set (same names, same
-    /// count, no duplicates) — this only reorders, it never adds or drops a master.
+    /// count, no duplicates) -- this only reorders, it never adds or drops a master.
     /// </summary>
     public static string ReorderMasters(string plugin, string[] order, object? env)
     {
@@ -989,7 +989,7 @@ public static partial class WriteService
             var extra = order.Where(o => !currentSet.Contains(o)).ToList();
             return ToolError.Fail(
                 $"reorder_masters: 'order' must be EXACTLY the plugin's current {current.Count} master(s) " +
-                $"[{string.Join(", ", current)}] — got {order.Length}: [{string.Join(", ", order)}]." +
+                $"[{string.Join(", ", current)}] -- got {order.Length}: [{string.Join(", ", order)}]." +
                 (missing.Count > 0 ? $" Missing: [{string.Join(", ", missing)}]." : "") +
                 (extra.Count > 0 ? $" Not a declared master: [{string.Join(", ", extra)}]." : ""));
         }
@@ -1083,7 +1083,7 @@ public static partial class WriteService
 
     /// <summary>
     /// Build a MAST-ordering option from the live load order. Returns null when no environment is
-    /// available, in which case Mutagen falls back to its own ordering — acceptable for a single-master
+    /// available, in which case Mutagen falls back to its own ordering -- acceptable for a single-master
     /// plugin, but a multi-master one written that way can list a dependent ESM before its dependency
     /// and hang the game on load. Callers with an env should always pass it.
     /// </summary>
@@ -1298,7 +1298,7 @@ public static partial class WriteService
 
     /// <summary>
     /// Copy a record (identified by FormKey or EditorID) from the chosen source plugin into a patch
-    /// plugin as an override — the xEdit "Copy as Override Into" operation. The patch is opened or
+    /// plugin as an override -- the xEdit "Copy as Override Into" operation. The patch is opened or
     /// created automatically. After this, edit the override with set_field/set_components/etc.
     /// </summary>
     public static string CopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin)
@@ -1330,7 +1330,7 @@ public static partial class WriteService
 
                 var msg = ResolveConflict(env, formKey, source, patchPlugin);
                 // Couples to ResolveConflict's success contract: a successful copy is the only result
-                // whose message starts with "Copied" — the one authoritative success token.
+                // whose message starts with "Copied" -- the one authoritative success token.
                 if (msg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase)) ok++;
                 else failures.Add((formKey, msg));
             }
@@ -1379,7 +1379,7 @@ public static partial class WriteService
         return ToolError.Fail($"Could not locate the group holding {fk} in {plugin}.");
     }
 
-    /// <summary>Remove a FormLink entry (by FormKey or EditorID) from a list field — e.g. drop an
+    /// <summary>Remove a FormLink entry (by FormKey or EditorID) from a list field -- e.g. drop an
     /// item from a FormList's 'Items' or a keyword from 'Categories'/'Keywords'.</summary>
     public static string RemoveListItem(string plugin, string recordId, string field, string value, object? env)
     {
@@ -1614,7 +1614,7 @@ public static partial class WriteService
             patch = GetMutable(patchPlugin);
             if (patch == null) return ToolError.Fail($"Could not open or create patch plugin '{patchPlugin}'.");
             existingPatchWarning = patchExisted
-                ? $" NOTE: '{patchPlugin}' already existed and was modified in place — the reverts were added to it."
+                ? $" NOTE: '{patchPlugin}' already existed and was modified in place -- the reverts were added to it."
                 : "";
         }
 
@@ -1652,9 +1652,9 @@ public static partial class WriteService
         }
 
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"DRY RUN — {reverted} record(s) where {badPlugin} is the winner would be reverted to the prior version" +
+        sb.AppendLine($"DRY RUN -- {reverted} record(s) where {badPlugin} is the winner would be reverted to the prior version" +
                       $"{(compFk != null ? $" (filtered to ones using {containsComponent})" : "")}.");
-        if (skipped > 0) sb.AppendLine($"({skipped} of {badPlugin}'s overrides skipped — a later plugin already wins, or filtered out.)");
+        if (skipped > 0) sb.AppendLine($"({skipped} of {badPlugin}'s overrides skipped -- a later plugin already wins, or filtered out.)");
         foreach (var line in preview) sb.AppendLine("  " + line);
         if (reverted > preview.Count) sb.AppendLine($"  …and {reverted - preview.Count} more.");
         sb.AppendLine($"Run revert_overrides again with apply=true to write these into '{patchPlugin}'.");
@@ -1714,7 +1714,7 @@ public static partial class WriteService
         if (dryRun)
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"DRY RUN — {matched.Count} of {allRecs.Count} {sig} records in '{sourcePlugin}' match" +
+            sb.AppendLine($"DRY RUN -- {matched.Count} of {allRecs.Count} {sig} records in '{sourcePlugin}' match" +
                           (string.IsNullOrWhiteSpace(filterField) ? " (no filter)" : $" ({filterField}={filterValue})") + ":");
             foreach (var rec in matched.Take(25))
                 sb.AppendLine($"  {rec.EditorID ?? "(no-eid)"} [{rec.FormKey}]");
@@ -1744,7 +1744,7 @@ public static partial class WriteService
 
         // Apply ops to the override IN-PLACE. The previous version round-tripped through
         // SetField/AddListItem/RemoveListItem, each of which re-scanned the whole (growing) patch
-        // mod and fired an index-invalidation + UI notification per op — O(M²) plus a notification
+        // mod and fired an index-invalidation + UI notification per op -- O(M²) plus a notification
         // storm for thousands of records. Here we keep the override AddOverride hands back and edit
         // it directly, invalidating + notifying ONCE at the end.
         foreach (var rec in matched)
@@ -1786,7 +1786,7 @@ public static partial class WriteService
         // (almost always a wrong field name or value format). Don't persist that noise.
         if (ops.Count > 0 && opsApplied == 0)
         {
-            msg.AppendLine($"ABORTED — overrode {done} record(s) but NOT ONE operation succeeded " +
+            msg.AppendLine($"ABORTED -- overrode {done} record(s) but NOT ONE operation succeeded " +
                            "(likely a wrong field name or value format). Nothing was saved.");
             if (errors.Count > 0)
             {
@@ -1918,7 +1918,7 @@ public static partial class WriteService
     // a regular high-byte index for full masters, or the 0xFE light-master encoding for ESL masters.
     // A throwaway "probe" write establishes the final master list first so the indices are right.
     // Returns true when it encoded AV params AND rebuilt mod.ModHeader.MasterFiles, so the caller
-    // must use NoCheck (not Iterate) for the real write — Iterate would throw away our master list.
+    // must use NoCheck (not Iterate) for the real write -- Iterate would throw away our master list.
     private static bool FixActorValueConditionParams(IFallout4Mod mod, BinaryWriteParameters prms)
     {
         var cache = MutagenLoader.LinkCache;
@@ -1976,7 +1976,7 @@ public static partial class WriteService
         if (fixedCount == 0) return false;
 
         // 6. Rebuild mod.MasterReferences from the augmented list so the caller can use
-        //    NoCheck for the real write and Mutagen emits exactly these MAST subrecords — including
+        //    NoCheck for the real write and Mutagen emits exactly these MAST subrecords -- including
         //    S7 System.esp which Iterate would never add (no ParameterOneRecord scanning in CTDA).
         mod.MasterReferences.Clear();
         foreach (var m in masters)

@@ -10,13 +10,13 @@ const setLS = (k: string, v: string | boolean) => localStorage.setItem('audio.' 
 
 const BITRATES = [
   { value: 0, label: 'Auto (48000, xWMAEncode default)' },
-  { value: 20000, label: '20000 bps — 22050Hz mono / 32000Hz mono' },
-  { value: 32000, label: '32000 bps — 22050Hz stereo / 32000Hz stereo / 44100Hz mono+stereo' },
-  { value: 48000, label: '48000 bps — 32000Hz stereo / 44100Hz mono+stereo / 48000Hz stereo+5.1' },
-  { value: 64000, label: '64000 bps — 48000Hz stereo' },
-  { value: 96000, label: '96000 bps — 44100Hz stereo+5.1 / 48000Hz stereo' },
-  { value: 160000, label: '160000 bps — 48000Hz stereo' },
-  { value: 192000, label: '192000 bps — 44100Hz stereo+5.1 / 48000Hz stereo+5.1' },
+  { value: 20000, label: '20000 bps -- 22050Hz mono / 32000Hz mono' },
+  { value: 32000, label: '32000 bps -- 22050Hz stereo / 32000Hz stereo / 44100Hz mono+stereo' },
+  { value: 48000, label: '48000 bps -- 32000Hz stereo / 44100Hz mono+stereo / 48000Hz stereo+5.1' },
+  { value: 64000, label: '64000 bps -- 48000Hz stereo' },
+  { value: 96000, label: '96000 bps -- 44100Hz stereo+5.1 / 48000Hz stereo' },
+  { value: 160000, label: '160000 bps -- 48000Hz stereo' },
+  { value: 192000, label: '192000 bps -- 44100Hz stereo+5.1 / 48000Hz stereo+5.1' },
 ];
 const OUT_FORMATS = ['wav', 'mp3', 'flac', 'ogg', 'm4a', 'wma'];
 
@@ -86,11 +86,11 @@ export default function AudioPanel({ onClose }: { onClose: () => void }) {
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       const b64 = btoa(bin);
       const path = await audio.StageDroppedFile(f.name, b64);
-      if (path.startsWith('ERR:')) { appendLog('✗ drop failed — ' + path); return; }
+      if (path.startsWith('ERR:')) { appendLog('✗ drop failed -- ' + path); return; }
       setter(path); persist(key, path);
       appendLog('• dropped ' + f.name + ' -> source set');
     } catch (err) {
-      appendLog('✗ drop failed — ' + (err instanceof Error ? err.message : String(err)));
+      appendLog('✗ drop failed -- ' + (err instanceof Error ? err.message : String(err)));
     }
   }, [audio]);
 
@@ -123,10 +123,10 @@ export default function AudioPanel({ onClose }: { onClose: () => void }) {
       if (savedMatch) setLastOutDir(savedMatch[1].trim());
       const ok = /^RESULT: success/.test(text);
       const first = text.split('\n')[0];
-      appendLog(`${ok ? '✓' : '✗'} ${modeVerb(mode)} ${name} — ${first}`);
+      appendLog(`${ok ? '✓' : '✗'} ${modeVerb(mode)} ${name} -- ${first}`);
     } catch (e) {
       const msg = 'Error: ' + (e instanceof Error ? e.message : String(e));
-      setResult(msg); appendLog(`✗ ${modeVerb(mode)} ${name} — ${msg}`);
+      setResult(msg); appendLog(`✗ ${modeVerb(mode)} ${name} -- ${msg}`);
     } finally { setBusy(false); }
   };
 
@@ -155,7 +155,7 @@ export default function AudioPanel({ onClose }: { onClose: () => void }) {
           <button className="audio-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
-        {unavailable && <div className="audio-warn">Audio bridge not available — run the desktop app (not the browser dev server).</div>}
+        {unavailable && <div className="audio-warn">Audio bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className="audio-body">
           <div className="audio-form">
@@ -224,7 +224,7 @@ export default function AudioPanel({ onClose }: { onClose: () => void }) {
             {mode === 'fuz-make' && (
               <>
                 <label className="audio-field">
-                  <span>Audio source (any format — encoded to xwm first if needed)</span>
+                  <span>Audio source (any format -- encoded to xwm first if needed)</span>
                   <div className={`audio-drop ${dragOver ? 'over' : ''}`}
                        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                        onDragLeave={() => setDragOver(false)}
@@ -237,7 +237,7 @@ export default function AudioPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 </label>
                 <label className="audio-field">
-                  <span>Lip file (optional — default: same name .lip next to the source)</span>
+                  <span>Lip file (optional -- default: same name .lip next to the source)</span>
                   <div className="audio-input-row">
                     <input value={fuzLip} onChange={e => { setFuzLip(e.target.value); persist('fuzLip', e.target.value); }} placeholder="(auto-detected if present)" disabled={fuzNoLip} />
                     <button className="sidebar-action-btn" onClick={() => browseFile(setFuzLip, 'fuzLip', 'Select a .lip file', 'Lip file (*.lip)|*.lip|All files|*.*')} disabled={unavailable || fuzNoLip}>File…</button>
@@ -328,5 +328,5 @@ function modeLabel(m: Mode): string {
 }
 function makeBanner(text: string): { kind: 'ok' | 'error'; text: string } {
   if (/^RESULT: success/.test(text)) return { kind: 'ok', text: text.split('\n')[0].replace('RESULT: success', 'Done').trim() };
-  return { kind: 'error', text: text.split('\n')[0] || 'Failed — see output' };
+  return { kind: 'error', text: text.split('\n')[0] || 'Failed -- see output' };
 }

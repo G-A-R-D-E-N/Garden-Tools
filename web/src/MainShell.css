@@ -619,9 +619,9 @@
 .conflict-count { color: #c79a5e; font-size: 10px; min-width: 16px; text-align: right; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   LIGHT THEME OVERRIDES — all hardcoded dark hex values replaced by tokens
+   LIGHT THEME OVERRIDES -- all hardcoded dark hex values replaced by tokens
    ═══════════════════════════════════════════════════════════════════════════ */
-/* Shell-level area separation — without shadows in light mode all zones look identical. */
+/* Shell-level area separation -- without shadows in light mode all zones look identical. */
 [data-theme="light"] .shell-container  { background: var(--bg-primary); }
 [data-theme="light"] .main-area        { background: var(--bg-primary); }
 [data-theme="light"] .shell-left       { box-shadow: 2px 0 6px rgba(0,0,0,0.07); }

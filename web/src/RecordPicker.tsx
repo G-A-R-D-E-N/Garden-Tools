@@ -32,7 +32,7 @@ export default function RecordPicker(
     <div className="rp-overlay" onClick={onClose}>
       <div className="rp-modal" onClick={e => e.stopPropagation()}>
         <div className="rp-header">
-          <span>Pick a record{title ? ` — ${title}` : ''}</span>
+          <span>Pick a record{title ? ` -- ${title}` : ''}</span>
           <button onClick={onClose} title="Close"><X size={16} /></button>
         </div>
         <div className="rp-search">
@@ -42,7 +42,7 @@ export default function RecordPicker(
             <button
               className={`rp-chip ${filterOn ? 'on' : ''}`}
               onClick={() => setFilterOn(v => !v)}
-              title={filterOn ? `Showing only valid types — click to show all` : 'Click to filter to the field type'}
+              title={filterOn ? `Showing only valid types -- click to show all` : 'Click to filter to the field type'}
             >
               {refType || 'type'}{filterOn ? '' : ' (off)'}
             </button>

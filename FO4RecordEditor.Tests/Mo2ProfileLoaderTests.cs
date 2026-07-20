@@ -135,7 +135,7 @@ public class Mo2ProfileLoaderTests
         var (env, _) = Mo2ProfileLoader.Load(Instance, info.Profile, info.GameDataFolder);
         var cache = MutagenLoader.LinkCache!;
 
-        // A constructible object usually has FormLink lists (Categories / Components) — the
+        // A constructible object usually has FormLink lists (Categories / Components) -- the
         // exact shape that used to make the walker recurse into System.Type / Assembly.
         var cobj = cache.PriorityOrder
             .SelectMany(m => m.EnumerateMajorRecords())

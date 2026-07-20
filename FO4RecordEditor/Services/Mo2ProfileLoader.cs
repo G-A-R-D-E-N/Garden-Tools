@@ -72,7 +72,7 @@ public static class Mo2ProfileLoader
     }
 
     /// <summary>The instance's real overwrite folder, honoring ModOrganizer.ini's base_directory /
-    /// overwrite_directory (with the %BASE_DIR% placeholder). Defaults to &lt;instance&gt;\overwrite —
+    /// overwrite_directory (with the %BASE_DIR% placeholder). Defaults to &lt;instance&gt;\overwrite --
     /// correct for portable instances and for global instances whose ini sets explicit paths.</summary>
     public static string ResolveOverwriteFolder(string instancePath)
     {

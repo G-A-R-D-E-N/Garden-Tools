@@ -159,7 +159,7 @@ public static class MutagenLoader
         // but a plugin's backing instance is REPLACED on reload_plugin / open / env refresh (the
         // editable in-memory copy supersedes the env/loose copy). If we served the cache by name
         // alone, a stale index built from a pre-edit (or empty deployed) instance would be returned
-        // forever — the silent cause of list_records/get_record showing 0 records while
+        // forever -- the silent cause of list_records/get_record showing 0 records while
         // check_plugin (which enumerates directly) correctly saw them. Rebuilding when Source no
         // longer matches the resolved mod makes the cache self-healing across every replace path.
         public object? Source;
@@ -460,7 +460,7 @@ public static class MutagenLoader
     }
 
     // ============================================================================
-    //  Conflict field matrix — xEdit-style per-plugin/per-field view of one record.
+    //  Conflict field matrix -- xEdit-style per-plugin/per-field view of one record.
     // ============================================================================
 
     /// <summary>The override version of a record carried by a specific plugin (or null).</summary>
@@ -519,7 +519,7 @@ public static class MutagenLoader
         var rec = ctx[^1].rec;   // the winning version is what the game uses
 
         if (rec.IsDeleted)
-            result.Add(new ProblemDto("Error", "Record is flagged DELETED — prefer a disable/override; deletions can crash the game."));
+            result.Add(new ProblemDto("Error", "Record is flagged DELETED -- prefer a disable/override; deletions can crash the game."));
 
         var cache = LinkCache;
         var seen = new HashSet<FormKey>();
@@ -527,7 +527,7 @@ public static class MutagenLoader
         {
             if (link.FormKey.IsNull || !seen.Add(link.FormKey)) continue;
             if (cache != null && !cache.TryResolveIdentifier<IMajorRecordGetter>(link.FormKey, out _))
-                result.Add(new ProblemDto("Error", $"Unresolved reference {link.FormKey} — target not found in the load order (crash risk)."));
+                result.Add(new ProblemDto("Error", $"Unresolved reference {link.FormKey} -- target not found in the load order (crash risk)."));
         }
         return result;
     }
@@ -706,7 +706,7 @@ public static class MutagenLoader
             }
             // Recurse into ALL children, including summary entries (conditions/components/effects), so
             // their sub-fields are present in the grid. The UI collapses a summary's children by
-            // default and expands them on click — xEdit's "double-click the array element" behaviour.
+            // default and expands them on click -- xEdit's "double-click the array element" behaviour.
             FlattenConflictRows(child, p, depth + 1, plugins, rows);
         }
     }
@@ -826,7 +826,7 @@ public static class MutagenLoader
 
     /// <summary>
     /// Return a compact tabular summary for up to <paramref name="limit"/> records of a given
-    /// type — one line per record, key fields shown inline. Far cheaper than N QueryRecordFields
+    /// type -- one line per record, key fields shown inline. Far cheaper than N QueryRecordFields
     /// calls when the agent needs to survey a whole group at once.
     /// </summary>
     public static string QueryRecordSummaries(object? envObj, string plugin, string sig, int limit, int offset = 0)
@@ -1132,7 +1132,7 @@ public static class MutagenLoader
 
     // Deep error scan using the load-order link cache: references that resolve to NOTHING
     // anywhere in the load order are dangling and will crash the game.
-    // Vanilla-master refs are skipped — Mutagen can't index cell-placed ACHR/REFR records,
+    // Vanilla-master refs are skipped -- Mutagen can't index cell-placed ACHR/REFR records,
     // so those refs would all appear dangling even when valid.
     public static string ScanErrorsDeep(object? envObj, string plugin)
     {
@@ -1181,7 +1181,7 @@ public static class MutagenLoader
     }
 
     // Build the set of plugin filenames present in the loaded environment (env + editable mods).
-    // Used by the broken-ref scan to distinguish "target plugin not in load order" (skip — might
+    // Used by the broken-ref scan to distinguish "target plugin not in load order" (skip -- might
     // be CC content or external content not managed by MO2) from "plugin loaded but record missing"
     // (real broken ref worth reporting).
     private static HashSet<string> BuildLoadedPluginSet(object? envObj)
@@ -1200,7 +1200,7 @@ public static class MutagenLoader
 
     // Returns null when the plugin is clean (no broken refs), so callers can skip it.
     // A "broken reference" is a FormLink that points to a FormID inside a LOADED plugin where
-    // that record does not exist — the target was deleted or never added. At runtime the engine
+    // that record does not exist -- the target was deleted or never added. At runtime the engine
     // dereferences a null pointer when it tries to load that record, causing a crash.
     // Refs to vanilla masters (Fallout4.esm / DLC*.esm) are excluded: Mutagen can't index
     // cell-placed ACHR/REFR records so those would all appear broken even when valid.
@@ -1268,7 +1268,7 @@ public static class MutagenLoader
             if (modObj is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod) continue;
             totalPlugins++;
             var pluginResult = ScanBrokenRefsInMod(cache, name, mod, loadedPlugins);
-            if (pluginResult == null) continue; // clean — skip entirely
+            if (pluginResult == null) continue; // clean -- skip entirely
             dirtyPlugins++;
             var m = System.Text.RegularExpressions.Regex.Match(pluginResult, @"(\d+) broken ref");
             if (m.Success && int.TryParse(m.Groups[1].Value, out var n)) totalBroken += n;
@@ -1276,9 +1276,9 @@ public static class MutagenLoader
         }
 
         if (dirtyPlugins == 0)
-            return $"All {totalPlugins} non-vanilla plugins are clean — no broken references found.";
+            return $"All {totalPlugins} non-vanilla plugins are clean -- no broken references found.";
 
-        return $"=== Crash Risk Scan: {dirtyPlugins} of {totalPlugins} plugins have broken refs — {totalBroken} total ===\n\n" +
+        return $"=== Crash Risk Scan: {dirtyPlugins} of {totalPlugins} plugins have broken refs -- {totalBroken} total ===\n\n" +
                results.ToString();
     }
 

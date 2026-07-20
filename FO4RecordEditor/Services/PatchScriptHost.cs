@@ -11,7 +11,7 @@ namespace FO4RecordEditor.Services;
 
 /// <summary>
 /// The `host` object injected into every patch script. It exposes a high-level API over the loaded
-/// records and a target patch plugin so a C# script can do PER-RECORD edits — the thing fixed op
+/// records and a target patch plugin so a C# script can do PER-RECORD edits -- the thing fixed op
 /// sets (batch_patch_records) can't express. Discovery returns getters; <see cref="Cobj"/>/<see
 /// cref="Override"/> forward a record into the patch as a mutable override; the component/condition
 /// helpers edit that override. Nothing is written until the runner saves (apply mode); a dry run
@@ -53,7 +53,7 @@ public sealed class PatchScriptHost
     public IReadOnlyList<string> AllPlugins() => MutagenLoader.QueryLoadedPlugins(_env);
 
     /// <summary>Remove a COBJ override from the patch plugin entirely (as if it was never added).
-    /// Use this to undo a previous override — the record then falls back to its previous winning
+    /// Use this to undo a previous override -- the record then falls back to its previous winning
     /// version in the load order. Returns true when the record was found and removed.</summary>
     public bool DeleteOverride(IConstructibleObjectGetter getter) =>
         MutagenLoader.RemoveFromEditableMod(_patchPlugin, getter.FormKey);
@@ -210,7 +210,7 @@ public sealed class PatchScriptHost
     /// Walks the full override chain from winning to original, skipping any plugin named in
     /// <paramref name="skipPlugins"/> (e.g. your own patch plugin and mid-chain intermediaries
     /// like FallenWorldCrafting_S7.esp that wrote partial/broken records). Returns the first
-    /// non-skipped entry — typically FallenWorldCrafting_Compat.esp's full record when that
+    /// non-skipped entry -- typically FallenWorldCrafting_Compat.esp's full record when that
     /// plugin overrides the same COBJ, or the original defining plugin otherwise. This preserves
     /// conditions added by Compat (CMWeapons, CMImmersiveMode, etc.) and ensures all fields
     /// (CNAM, FVPA, BNAM) are populated from a full-record plugin, never from a partial patch.
@@ -237,7 +237,7 @@ public sealed class PatchScriptHost
     /// <summary>
     /// Returns true when the COBJ's Created Object (CNAM) is non-null and resolves to an
     /// existing record. Records where CNAM is broken or unresolvable should be skipped before
-    /// deep-copying — otherwise the override in the patch contains no meaningful data.
+    /// deep-copying -- otherwise the override in the patch contains no meaningful data.
     /// </summary>
     public bool CnamIsResolvable(IConstructibleObjectGetter cobj)
     {
@@ -249,7 +249,7 @@ public sealed class PatchScriptHost
     /// <summary>
     /// Stronger usability gate than <see cref="CnamIsResolvable"/>. Returns true only when the
     /// COBJ has a resolvable CNAM <em>and</em> at least a workbench keyword or a component list
-    /// — i.e. it is a full record, not a conditions-only partial override stub (e.g. the
+    /// -- i.e. it is a full record, not a conditions-only partial override stub (e.g. the
     /// FallenWorldCrafting_S7.esp partial records that have only conditions and null everything
     /// else). Use this instead of <see cref="CnamIsResolvable"/> when iterating a plugin that
     /// may contain pipeline stubs.
@@ -265,7 +265,7 @@ public sealed class PatchScriptHost
     /// Walks the full override chain for <paramref name="cobj"/> (winning → original), skipping
     /// plugins named in <paramref name="skipPlugins"/>, and returns the first non-empty
     /// <c>Categories</c> (FNAM keyword list) found. Use this after deep-copying from a shallow
-    /// override — e.g. a Compat record that only sets Conditions and leaves Categories null —
+    /// override -- e.g. a Compat record that only sets Conditions and leaves Categories null --
     /// so the FNAM keywords from the original or an intermediate plugin are not silently lost.
     /// Returns <c>null</c> when no entry in the chain has categories.
     /// </summary>
@@ -358,8 +358,8 @@ public static class PatchScriptRunner
     ///
     /// TRUST MODEL: this runs AI-authored C# in-process at full trust. Roslyn scripting applies no
     /// security boundary, so a script can reach System.IO, Process.Start and this app's own static
-    /// write API by fully qualifying the type. That is accepted — it is the user's own agent on the
-    /// user's own machine — but it means dry_run bounds ONLY Mutagen record edits, never filesystem,
+    /// write API by fully qualifying the type. That is accepted -- it is the user's own agent on the
+    /// user's own machine -- but it means dry_run bounds ONLY Mutagen record edits, never filesystem,
     /// process or network side effects, which have already happened by the time this returns.
     /// </summary>
     public static string Run(string code, object? env, string patchPlugin, bool dryRun)
@@ -404,7 +404,7 @@ public static class PatchScriptRunner
                 error = $"Script exceeded the {ScriptTimeout.TotalSeconds:0}s limit and was abandoned. " +
                         "NOTE: .NET cannot forcibly kill a running thread, so if the script is in a tight " +
                         "loop it is still burning a CPU core in the background and may still be mutating " +
-                        "state — restart the editor to be sure. Any edits it made are in memory only; " +
+                        "state -- restart the editor to be sure. Any edits it made are in memory only; " +
                         "run reload_plugin to discard them.";
             }
             else if (threadError != null)
@@ -430,7 +430,7 @@ public static class PatchScriptRunner
         {
             // A failed run must not leave half-built overrides behind.
             WriteService.DiscardScriptPatch(target);
-            sb.AppendLine($"\nSCRIPT FAILED ({sw.ElapsedMilliseconds} ms) — nothing saved.");
+            sb.AppendLine($"\nSCRIPT FAILED ({sw.ElapsedMilliseconds} ms) -- nothing saved.");
             sb.AppendLine(error);
             return sb.ToString();
         }
@@ -444,7 +444,7 @@ public static class PatchScriptRunner
             // Scoped claim: dry_run discards the preview plugin's record edits. It cannot undo
             // anything the script did directly (File.WriteAllText, Process.Start, a WriteService
             // call), so promising "nothing was written" would be false for any such script.
-            sb.AppendLine($"No plugin records were written — the preview patch was discarded. " +
+            sb.AppendLine($"No plugin records were written -- the preview patch was discarded. " +
                           $"Re-run with dry_run=false to apply into '{patchPlugin}'. " +
                           "(dry_run only rolls back record edits; any file, process or network side " +
                           "effects the script performed directly have already happened.)");

@@ -170,8 +170,8 @@ public static class PapyrusDecompiler
         try
         {
             body = DecompileBody(obj, fn, indent + "\t", inlineTemps: true);
-            // If inlining leaked a raw compiler temp (a "::" survives) — happens with loops where a
-            // temp is read before it's written in linear order — re-emit verbosely (temps become
+            // If inlining leaked a raw compiler temp (a "::" survives) -- happens with loops where a
+            // temp is read before it's written in linear order -- re-emit verbosely (temps become
             // declared locals with explicit assignments). Valid Papyrus never contains "::".
             if (body.Contains("::")) body = DecompileBody(obj, fn, indent + "\t", inlineTemps: false);
         }
@@ -249,7 +249,7 @@ public static class PapyrusDecompiler
                 case "assign": Put(i, Dest(ins,0), A(ins,1)); break;
                 case "cast":
                 {
-                    // Casting None is illegal in Papyrus (and unnecessary — None is valid for any
+                    // Casting None is illegal in Papyrus (and unnecessary -- None is valid for any
                     // object type), so collapse "(None as X)" to just "None".
                     string src = A(ins, 1);
                     if (src == "None") { Put(i, Dest(ins, 0), "None"); break; }

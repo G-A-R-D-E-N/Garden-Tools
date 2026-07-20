@@ -128,7 +128,7 @@ export default function ChatPanel() {
     try { setSessions(JSON.parse(await c.ListSessions())); } catch { /* ignore */ }
   };
 
-  // Core send path — used by user input, the queue drain, and slash commands.
+  // Core send path -- used by user input, the queue drain, and slash commands.
   const sendDirect = async (sid: string, text: string, imgs: string[]) => {
     const c = host();
     if (!c) return;
@@ -231,7 +231,7 @@ export default function ChatPanel() {
   const switchSession = async (id: string) => {
     if (id === currentId) return;
     setCurrentId(id);
-    // Only load from disk if we don't already have a live buffer — otherwise we'd wipe an in-progress
+    // Only load from disk if we don't already have a live buffer -- otherwise we'd wipe an in-progress
     // stream (the reply isn't persisted until it finishes).
     if (!buffers[id]) {
       const c = host();
@@ -258,7 +258,7 @@ export default function ChatPanel() {
     try {
       const dto = JSON.parse(await c.ForkSession(from));
       await refreshSessions();   // populate sessions list BEFORE switching so the dropdown shows the fork
-      renderSession(dto);        // now switch — currentId will match an entry in sessions
+      renderSession(dto);        // now switch -- currentId will match an entry in sessions
     } catch (e: any) {
       setMsgs(from, p => [...p, { role: 'system', text: '⚠️ Fork failed: ' + (e?.message || e?.toString() || '') }]);
     } finally { setForking(false); }
@@ -297,7 +297,7 @@ export default function ChatPanel() {
     const sid = currentId;
 
     if (busy) {
-      // Queue the message — never cancel a running stream.
+      // Queue the message -- never cancel a running stream.
       const q = pendingQueues.current[sid] ?? [];
       pendingQueues.current[sid] = [...q, { text, imgs }];
       setQueueCounts(prev => ({ ...prev, [sid]: q.length + 1 }));

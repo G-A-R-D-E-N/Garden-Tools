@@ -28,7 +28,7 @@ public class AiGuidanceTests
             _out.WriteLine("Not mentioned in AiGuidance.System:\n  " + string.Join("\n  ", missing));
 
         missing.Should().BeEmpty(
-            "every tool must appear in AiGuidance's routing map — the model reads that prose before " +
+            "every tool must appear in AiGuidance's routing map -- the model reads that prose before " +
             "its tool schemas, and an omitted tool reads as one that does not exist");
     }
 

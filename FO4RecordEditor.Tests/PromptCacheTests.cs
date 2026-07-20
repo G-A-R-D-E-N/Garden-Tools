@@ -22,7 +22,7 @@ public class PromptCacheTests
         occurrences.Should().Be(1, "only the last tool carries a cache_control breakpoint");
         json.Should().Contain("\"type\":\"ephemeral\"");
 
-        // The breakpoint must be on the LAST tool — its name should appear before the marker.
+        // The breakpoint must be on the LAST tool -- its name should appear before the marker.
         var lastName = PluginToolExecutor.ToolDefinitionsCached().Length;  // sanity: non-empty
         lastName.Should().BeGreaterThan(0);
         json.LastIndexOf("cache_control").Should().BeGreaterThan(json.Length / 2,

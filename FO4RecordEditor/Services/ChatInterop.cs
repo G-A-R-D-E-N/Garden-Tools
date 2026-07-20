@@ -59,7 +59,7 @@ public class ChatInterop
     public string ListSessions() => JsonConvert.SerializeObject(
         _history.LoadAll().Select(SessionMeta).ToArray());
 
-    /// <summary>Create a new empty chat and return it. (No shared history to reset — each session
+    /// <summary>Create a new empty chat and return it. (No shared history to reset -- each session
     /// carries its own conversation, built fresh per send.)</summary>
     public string NewSession()
     {
@@ -79,7 +79,7 @@ public class ChatInterop
     }
 
     /// <summary>Fork a chat into a NEW one seeded with its most recent messages (older bulk dropped to
-    /// save usage). Instant and reliable — it does NOT call the model (summarizing a huge transcript
+    /// save usage). Instant and reliable -- it does NOT call the model (summarizing a huge transcript
     /// through the provider is slow/can hang). For a compressed summary, run /compact first.</summary>
     public string ForkSession(string id)
     {
@@ -97,7 +97,7 @@ public class ChatInterop
         fork.Messages.Add(new SessionMessage
         {
             IsUser = false,
-            Text = $"📋 Forked from \"{src.Name}\" — continuing with the most recent {recent.Count} message(s)" +
+            Text = $"📋 Forked from \"{src.Name}\" -- continuing with the most recent {recent.Count} message(s)" +
                    (dropped > 0 ? $"; the earlier {dropped} were dropped to save usage." : "."),
         });
         foreach (var m in recent)
@@ -278,7 +278,7 @@ public class ChatInterop
             }
             else
             {
-                // Claude Code / Ollama: one-shot stream built from THIS session's messages — fully
+                // Claude Code / Ollama: one-shot stream built from THIS session's messages -- fully
                 // concurrent (each call is independent; no shared history).
                 await _shell.Chat.StreamOneShot(BuildMessages(session, ctx, prompt),
                     token => { full.Append(token); _post(new { Type = "AiToken", SessionId = sid, Text = token }); }, ct);
@@ -363,7 +363,7 @@ public class ChatInterop
         var sb = new StringBuilder("Slash commands:\n");
         foreach (var (name, args, help) in _commands)
             sb.Append("  ").Append(name).Append(string.IsNullOrEmpty(args) ? "" : " " + args)
-              .Append(" — ").Append(help).Append('\n');
+              .Append(" -- ").Append(help).Append('\n');
         return sb.ToString().TrimEnd();
     }
 
@@ -372,7 +372,7 @@ public class ChatInterop
         var chars = session.Messages.Sum(m => m.Text?.Length ?? 0);
         var tokens = chars / 4;   // rough heuristic
         return $"This chat: {session.Messages.Count} message(s), ~{chars:N0} chars (≈{tokens:N0} tokens). " +
-               "The whole transcript is re-sent each turn — use /compact if it gets large.";
+               "The whole transcript is re-sent each turn -- use /compact if it gets large.";
     }
 
     private string SetOrShowModel(string arg)
@@ -415,7 +415,7 @@ public class ChatInterop
         const int keepRecent = 6;
         if (msgs.Count <= keepRecent + 1)
         {
-            _post(new { Type = "AiInfo", SessionId = sid, Text = $"Only {msgs.Count} message(s) — nothing old enough to compact yet." });
+            _post(new { Type = "AiInfo", SessionId = sid, Text = $"Only {msgs.Count} message(s) -- nothing old enough to compact yet." });
             return;
         }
 
@@ -429,7 +429,7 @@ public class ChatInterop
             var summary = await _shell.Chat.SummarizeTextAsync(transcript, CompactInstruction);
             if (string.IsNullOrWhiteSpace(summary))
             {
-                _post(new { Type = "AiInfo", SessionId = sid, Text = "Compact produced no summary — conversation left unchanged." });
+                _post(new { Type = "AiInfo", SessionId = sid, Text = "Compact produced no summary -- conversation left unchanged." });
                 return;
             }
 

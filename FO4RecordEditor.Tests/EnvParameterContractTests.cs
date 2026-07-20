@@ -36,7 +36,7 @@ public class EnvParameterContractTests
 
         offenders.Should().BeEmpty(
             "a defaulted env can be omitted silently, which disables load-order master ordering and " +
-            "produces a plugin that hangs the game on load — pass null explicitly if you truly have none");
+            "produces a plugin that hangs the game on load -- pass null explicitly if you truly have none");
     }
 
     // Guards the specific methods that write bytes to disk, by name, so a rename or a new overload
@@ -52,7 +52,7 @@ public class EnvParameterContractTests
             .Where(m => m.Name == methodName)
             .ToList();
 
-        overloads.Should().NotBeEmpty($"{methodName} should exist — update this test if it was renamed");
+        overloads.Should().NotBeEmpty($"{methodName} should exist -- update this test if it was renamed");
 
         foreach (var m in overloads)
         {

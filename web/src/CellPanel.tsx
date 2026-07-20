@@ -105,10 +105,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       }
       setResult(parsed);
       const refs = parsed.references ?? [];
-      appendLog(`• loaded ${parsed.cellEditorId || parsed.cellFormKey} — ${refs.length} reference(s), ${parsed.withModelCount ?? 0} with a model`);
+      appendLog(`• loaded ${parsed.cellEditorId || parsed.cellFormKey} -- ${refs.length} reference(s), ${parsed.withModelCount ?? 0} with a model`);
 
       const uniqueModels = Array.from(new Set(refs.map(r => r.modelPath).filter((p): p is string => !!p)));
-      if (uniqueModels.length === 0) { setStatus('Loaded — no placeable meshes in this cell.'); return; }
+      if (uniqueModels.length === 0) { setStatus('Loaded -- no placeable meshes in this cell.'); return; }
 
       setStatus(`Resolving + converting ${uniqueModels.length} unique mesh(es)…`);
       const geoRaw = await cell.GetGeometryBatch(JSON.stringify(uniqueModels));
@@ -124,7 +124,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const ok = uniqueModels.length - failed;
       appendLog(`• geometry: ${ok}/${uniqueModels.length} mesh(es) resolved, ${failed} failed`);
       setStatus(failed > 0
-        ? `Loaded ${refs.length} reference(s). ${ok}/${uniqueModels.length} unique meshes resolved — ${failed} unavailable (see markers).`
+        ? `Loaded ${refs.length} reference(s). ${ok}/${uniqueModels.length} unique meshes resolved -- ${failed} unavailable (see markers).`
         : `Loaded ${refs.length} reference(s), all ${ok} unique mesh(es) resolved.`);
     } catch (e) {
       const msg = 'Error: ' + (e instanceof Error ? e.message : String(e));
@@ -153,17 +153,17 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
-        {unavailable && <div className="papyrus-warn">Cell bridge not available — run the desktop app (not the browser dev server).</div>}
+        {unavailable && <div className="papyrus-warn">Cell bridge not available -- run the desktop app (not the browser dev server).</div>}
         {!unavailable && noEnv && (
           <div className="papyrus-warn">
-            No modlist loaded yet — click <strong>Load Env</strong> or <strong>Open MO2</strong> in the Explorer sidebar first, then come back here.
+            No modlist loaded yet -- click <strong>Load Env</strong> or <strong>Open MO2</strong> in the Explorer sidebar first, then come back here.
           </div>
         )}
 
         <div className="papyrus-body">
           <div className="papyrus-form">
             <label className="papyrus-field">
-              <span>Cell — search by name/EditorID, or paste a FormKey</span>
+              <span>Cell -- search by name/EditorID, or paste a FormKey</span>
               <div className="cell-search-box" ref={boxRef}>
                 <div className="papyrus-input-row">
                   <Search size={13} className="cell-search-icon" />

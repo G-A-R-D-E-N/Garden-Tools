@@ -10,10 +10,10 @@ namespace FO4RecordEditor.Services;
 
 /// <summary>
 /// Resolves a NIF's game-relative texture path (e.g. "Textures\mod\thing_d.dds") to a real DDS and
-/// converts it to a PNG data URL for the WebGL viewport — via Texconv (DirectXTex), which decodes
+/// converts it to a PNG data URL for the WebGL viewport -- via Texconv (DirectXTex), which decodes
 /// every BCn format FO4 uses (BC1/3/5/7) that the browser's DDSLoader cannot. The DDS is found either
 /// as a loose file (searched from a user root and the NIF's Data\ ancestors) OR extracted from a
-/// Fallout 4 BA2 archive (Mutagen's Ba2Reader) — most vanilla/mod textures ship packed. Converted
+/// Fallout 4 BA2 archive (Mutagen's Ba2Reader) -- most vanilla/mod textures ship packed. Converted
 /// PNGs are cached by source path + write time so repeat views are instant.
 /// </summary>
 public static class TextureService
@@ -79,7 +79,7 @@ public static class TextureService
         foreach (var c in candidates)
             if (File.Exists(c)) return c;
 
-        // 2) not loose — try to pull it out of a BA2 (vanilla + mods ship packed textures).
+        // 2) not loose -- try to pull it out of a BA2 (vanilla + mods ship packed textures).
         return ResolveFromArchives(rel, nifDir, textureRoot);
     }
 
@@ -94,7 +94,7 @@ public static class TextureService
     private static readonly Dictionary<string, string> _index = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _scannedArchives = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _scannedRoots = new(StringComparer.OrdinalIgnoreCase);
-    private static string[]? _globalRoots;   // session roots if set, else settings-derived — cached until SetSessionRoots invalidates it
+    private static string[]? _globalRoots;   // session roots if set, else settings-derived -- cached until SetSessionRoots invalidates it
 
     private static string Norm(string p) => p.Replace('/', '\\').TrimStart('\\');
 
@@ -104,14 +104,14 @@ public static class TextureService
         {
             var keys = LookupKeys(rel);
 
-            // Tier 1 — cheap, NIF-local / user-root archives.
+            // Tier 1 -- cheap, NIF-local / user-root archives.
             var cheap = new List<string>();
             AddDataRoots(cheap, nifDir);
             if (!string.IsNullOrWhiteSpace(textureRoot)) AddDataRoots(cheap, textureRoot);
             var hit = ScanAndLookup(cheap, keys);
             if (hit != null) return hit;
 
-            // Tier 2 — the big scan: configured Data folder + MO2 mods tree.
+            // Tier 2 -- the big scan: configured Data folder + MO2 mods tree.
             var hit2 = ScanAndLookup(GlobalRoots(), keys);
             if (hit2 != null) return hit2;
         }

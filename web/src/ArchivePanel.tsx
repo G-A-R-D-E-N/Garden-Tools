@@ -173,7 +173,7 @@ export default function ArchivePanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
-        {unavailable && <div className="papyrus-warn">Archive bridge not available — run the desktop app (not the browser dev server).</div>}
+        {unavailable && <div className="papyrus-warn">Archive bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className="archive-toolbar">
           <input className="archive-path-input" value={archivePath} onChange={e => setArchivePath(e.target.value)}
@@ -200,7 +200,7 @@ export default function ArchivePanel({ onClose }: { onClose: () => void }) {
               {meta && (
                 <div className="archive-meta">
                   {meta.shownCount.toLocaleString()} of {meta.totalCount.toLocaleString()} entr{meta.totalCount === 1 ? 'y' : 'ies'} shown
-                  {meta.truncated && <span className="archive-truncated"> — narrow with a filter to see the rest</span>}
+                  {meta.truncated && <span className="archive-truncated"> -- narrow with a filter to see the rest</span>}
                 </div>
               )}
               <table className="archive-table">

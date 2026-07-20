@@ -73,7 +73,7 @@ public static class PapyrusWikiService
 
         var path = FindFile(wikiRoot, $"{script}_Script.html");
         if (path == null)
-            return $"No CK wiki page found for script '{script}'. Check the exact name (case-sensitive) — " +
+            return $"No CK wiki page found for script '{script}'. Check the exact name (case-sensitive) -- " +
                    "the wiki mirror's own page list is under fallout4\\*_Script.html.";
 
         var html = File.ReadAllText(path);

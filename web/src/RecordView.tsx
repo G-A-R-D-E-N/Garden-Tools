@@ -469,7 +469,7 @@ export default function RecordView(
                 </div>
               </div>
 
-              {/* Single unified table — xEdit style with group separator rows */}
+              {/* Single unified table -- xEdit style with group separator rows */}
               <div className="rv-conflict-groups">
                 <table className="rv-grid rv-cg-table" style={{ minWidth: 280 + matrix.Plugins.length * 200 }}>
                   <thead>
@@ -568,7 +568,7 @@ export default function RecordView(
       {(recordTab === 'history' || recordTab === 'dependencies') && (
         <div className="rv-tab-empty rv-tab-stub">
           <Clock size={28} />
-          <span>{recordTab === 'history' ? 'Change history' : 'Record dependencies'} — coming soon.</span>
+          <span>{recordTab === 'history' ? 'Change history' : 'Record dependencies'} -- coming soon.</span>
         </div>
       )}
 

@@ -15,7 +15,7 @@ export interface NifShapeGeo {
 export interface NifGeo { fo4: boolean; shapes: NifShapeGeo[]; }
 
 /**
- * Live three.js viewport for a NIF's geometry — rotate/zoom/pan like NifSkope or Blender.
+ * Live three.js viewport for a NIF's geometry -- rotate/zoom/pan like NifSkope or Blender.
  * NIF is Z-up, so the camera's up is Z and the grid lies in the XY plane at the model's base.
  */
 export default function NifViewport(

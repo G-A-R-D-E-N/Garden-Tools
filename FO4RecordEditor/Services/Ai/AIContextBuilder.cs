@@ -37,7 +37,7 @@ public sealed class AIContextBuilder
         sb.AppendLine();
         if (loadedPlugins != null && loadedPlugins.Count > 0)
         {
-            sb.AppendLine("## Loaded plugins (in load order — these are what you can read and edit):");
+            sb.AppendLine("## Loaded plugins (in load order -- these are what you can read and edit):");
             foreach (var p in loadedPlugins) sb.AppendLine($"- {p}");
         }
         else

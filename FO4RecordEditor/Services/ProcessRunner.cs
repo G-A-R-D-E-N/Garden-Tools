@@ -6,7 +6,7 @@ namespace FO4RecordEditor.Services;
 /// <summary>Outcome of a child-process run. <see cref="Started"/> is false when the process could not be launched.</summary>
 public readonly record struct ProcessResult(bool Started, bool TimedOut, int ExitCode, string StdOut, string StdErr)
 {
-    /// <summary>stdout and stderr joined, CR-stripped and trimmed — the usual thing to show a user.</summary>
+    /// <summary>stdout and stderr joined, CR-stripped and trimmed -- the usual thing to show a user.</summary>
     public string Combined => (StdOut + "\n" + StdErr).Replace("\r", "").Trim();
 }
 
@@ -15,7 +15,7 @@ public readonly record struct ProcessResult(bool Started, bool TimedOut, int Exi
 ///
 /// The trap this exists to prevent: reading one redirected stream to EOF before the other. A pipe
 /// buffer is only a few KB, so once the child fills the stream nobody is draining, it blocks on
-/// write — while the parent blocks reading the other stream that will never reach EOF. Neither side
+/// write -- while the parent blocks reading the other stream that will never reach EOF. Neither side
 /// moves, and any timeout placed AFTER the reads is unreachable, so it hangs forever rather than
 /// failing. Both streams must be drained concurrently, and the drain must start before the wait.
 /// </summary>
@@ -33,7 +33,7 @@ public static class ProcessRunner
         using var p = Process.Start(psi);
         if (p == null) return new ProcessResult(false, false, -1, "", "");
 
-        // Start both drains BEFORE waiting — this ordering is the whole point of the class.
+        // Start both drains BEFORE waiting -- this ordering is the whole point of the class.
         var so = p.StandardOutput.ReadToEndAsync();
         var se = p.StandardError.ReadToEndAsync();
 

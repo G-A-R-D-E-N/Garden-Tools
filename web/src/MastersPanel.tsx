@@ -82,7 +82,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
       appendLog(`${ok ? '✓' : '✗'} ${ok ? 'reordered masters' : 'reorder failed'}`);
       if (ok) await load(plugin);
     } catch (e) {
-      appendLog('✗ reorder failed — ' + (e instanceof Error ? e.message : String(e)));
+      appendLog('✗ reorder failed -- ' + (e instanceof Error ? e.message : String(e)));
     } finally { setBusy(false); }
   };
 
@@ -97,7 +97,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
       if (!ok) setLight(!checked);   // revert the checkbox if the call itself failed
     } catch (e) {
       setLight(!checked);
-      appendLog('✗ set_light_flag failed — ' + (e instanceof Error ? e.message : String(e)));
+      appendLog('✗ set_light_flag failed -- ' + (e instanceof Error ? e.message : String(e)));
     } finally { setBusy(false); }
   };
 
@@ -111,7 +111,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
       appendLog(`${ok ? '✓' : '✗'} ${ok ? 'saved ' + plugin : 'save failed'}`);
       if (ok) { setOrigLight(light); await load(plugin); }
     } catch (e) {
-      appendLog('✗ save failed — ' + (e instanceof Error ? e.message : String(e)));
+      appendLog('✗ save failed -- ' + (e instanceof Error ? e.message : String(e)));
     } finally { setBusy(false); }
   };
 
@@ -123,7 +123,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
-        {unavailable && <div className="papyrus-warn">Masters bridge not available — run the desktop app (not the browser dev server).</div>}
+        {unavailable && <div className="papyrus-warn">Masters bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className="masters-toolbar">
           <select className="masters-plugin-select" value={plugin} onChange={e => setPlugin(e.target.value)} disabled={unavailable}>
@@ -155,7 +155,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
                         </td>
                         <td>{i}</td>
                         <td className="masters-name">{name}</td>
-                        <td>{row?.size != null ? `${row.size.toLocaleString()} B` : '—'}</td>
+                        <td>{row?.size != null ? `${row.size.toLocaleString()} B` : '--'}</td>
                         <td>{row?.used ? 'used' : <span className="masters-unused-flag">UNUSED</span>}</td>
                       </tr>
                     );
@@ -169,7 +169,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
                          onChange={e => toggleLight(e.target.checked)} />
                   Light plugin (ESL)
                 </label>
-                {lightDirty && <span className="masters-dirty-badge">unsaved — click Save Plugin</span>}
+                {lightDirty && <span className="masters-dirty-badge">unsaved -- click Save Plugin</span>}
               </div>
 
               <div className="masters-actions">

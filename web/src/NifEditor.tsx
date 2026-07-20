@@ -4,7 +4,7 @@ import type { NifHost } from './backend';
 
 // Plain-language help for every field, shown as an (i) hover tooltip so newcomers know what each does.
 const FIELD_HELP: Record<string, string> = {
-  name: "This block's name. Node/shape names are just labels — renaming is safe because other blocks reference each other by index, not name.",
+  name: "This block's name. Node/shape names are just labels -- renaming is safe because other blocks reference each other by index, not name.",
   translation: 'Position offset from the parent block, in game units (X, Y, Z). NIF space is Z-up.',
   scale: 'Uniform size multiplier for this block and its children. 1 = original size.',
   verts: 'Number of vertices in this mesh (read-only).',
@@ -15,13 +15,13 @@ const FIELD_HELP: Record<string, string> = {
   emissiveMultiple: 'Strength multiplier for the emissive glow color.',
   specularColor: 'Color of the shiny specular highlights.',
   specularStrength: 'Intensity of the specular highlights (0 = matte).',
-  glossiness: 'Tightness of the specular highlight — higher looks smoother/shinier with a smaller hotspot.',
+  glossiness: 'Tightness of the specular highlight -- higher looks smoother/shinier with a smaller hotspot.',
   alpha: 'Overall surface opacity from the shader (1 = fully opaque). For see-through transparency you usually also enable Alpha Blend below.',
   uvOffset: 'Shifts the texture across the surface (U, V). Use to pan/align a texture.',
   uvScale: 'Tiles/scales the texture (U, V). Values above 1 repeat the texture.',
   shaderFlags: 'Rendering feature toggles for the shader. Only the commonly-edited flags are shown; any others already in the file are left untouched.',
   alphaBlend: 'Smooth transparency using the diffuse texture’s alpha channel (for glass, foliage edges, decals).',
-  alphaTest: 'Hard cutout transparency — pixels are either fully shown or fully hidden using the Threshold below (for chain-link, leaves).',
+  alphaTest: 'Hard cutout transparency -- pixels are either fully shown or fully hidden using the Threshold below (for chain-link, leaves).',
   alphaThreshold: 'Cutoff value (0-255) for Alpha Test: pixels with alpha below this are discarded.',
   // effect shader
   eff_baseColor: 'Base tint color of the effect shader.',
@@ -52,7 +52,7 @@ const TEX_HELP: Record<string, string> = {
 // Collision "material" and shape "material" collide by key; disambiguate by field type at call site.
 const fieldHelp = (key: string, type: string): string => {
   if (key in TEX_HELP) return TEX_HELP[key];
-  if (key === 'material' && type === 'int') return 'Havok material index — sets the impact/footstep sound and friction of the collision.';
+  if (key === 'material' && type === 'int') return 'Havok material index -- sets the impact/footstep sound and friction of the collision.';
   return FIELD_HELP[key] ?? '';
 };
 
@@ -144,7 +144,7 @@ export default function NifEditor(
       if (/set OK/.test(res)) setEdits({});
       onSaved(res);
     } catch (e) {
-      appendLog('✗ save failed — ' + (e instanceof Error ? e.message : String(e)));
+      appendLog('✗ save failed -- ' + (e instanceof Error ? e.message : String(e)));
     } finally { setSaving(false); }
   };
 

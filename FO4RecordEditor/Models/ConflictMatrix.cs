@@ -41,7 +41,7 @@ public sealed class ConflictFieldRow
     public string Severity { get; init; } = "none";
 
     /// <summary>This row has a one-line summary (e.g. a condition or component) AND deeper sub-field
-    /// rows beneath it — the grid collapses those children by default and expands them on click,
+    /// rows beneath it -- the grid collapses those children by default and expands them on click,
     /// like double-clicking an array element in xEdit.</summary>
     public bool IsSummary { get; init; }
     /// <summary>True if any deeper rows belong to this one (so the grid shows an expand chevron).</summary>

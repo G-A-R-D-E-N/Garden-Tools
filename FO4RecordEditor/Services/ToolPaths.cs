@@ -73,7 +73,7 @@ public static class ToolPaths
                 var path = k?.GetValue("installed path") as string;
                 if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path)) return path;
             }
-            catch { /* registry unreadable — fall through to the disk probe */ }
+            catch { /* registry unreadable -- fall through to the disk probe */ }
         }
 
         foreach (var drive in DriveInfo.GetDrives())
@@ -95,7 +95,7 @@ public static class ToolPaths
         return null;
     }
 
-    /// <summary>niftool.exe — our nifly-based CLI. Bundled in the release under tools\niftool\.</summary>
+    /// <summary>niftool.exe -- our nifly-based CLI. Bundled in the release under tools\niftool\.</summary>
     public static string? Niftool() => FirstFile(
         Env("NIFTOOL_PATH"),
         Settings.NiftoolPath,
@@ -103,7 +103,7 @@ public static class ToolPaths
         App("niftool", "niftool.exe"),
         @"E:\F4SE OG\Tools\PluginEditTool\niftool\build\windows\x64\release\niftool.exe");
 
-    /// <summary>texconv — ships inside xEdit's Edit Scripts folder; also bundled in the release.</summary>
+    /// <summary>texconv -- ships inside xEdit's Edit Scripts folder; also bundled in the release.</summary>
     public static string? Texconv() => FirstFile(
         Env("TEXCONV_PATH"),
         Settings.TexconvPath,
@@ -113,7 +113,7 @@ public static class ToolPaths
         @"E:\F4SE OG\Tools\PluginEditTool\FO4RecordEditor\TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconv.exe");
 
     /// <summary>
-    /// The Creation Kit's PapyrusCompiler.exe. It is not redistributable, so it is never bundled —
+    /// The Creation Kit's PapyrusCompiler.exe. It is not redistributable, so it is never bundled --
     /// it is found in the user's own Fallout 4 install.
     /// </summary>
     public static string? PapyrusCompiler()
@@ -206,7 +206,7 @@ public static class ToolPaths
         @"E:\F4SE OG\docs\Knowledge Materials\Creation Kit Wiki\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4");
 
     /// <summary>
-    /// ffmpeg — decodes any input audio (mp3/flac/ogg/m4a/wma/...) to PCM WAV for xWMAEncode, and the
+    /// ffmpeg -- decodes any input audio (mp3/flac/ogg/m4a/wma/...) to PCM WAV for xWMAEncode, and the
     /// reverse (xwm-derived WAV to whatever output format is asked for). Bundled under tools\audio\.
     /// </summary>
     public static string? Ffmpeg() => FirstFile(
@@ -215,7 +215,7 @@ public static class ToolPaths
         App("tools", "audio", "ffmpeg.exe"),
         @"E:\F4SE OG\Tools\Audio Converter\bin\ffmpeg.exe");
 
-    /// <summary>Microsoft's xWMAEncode.exe — the only thing that actually reads/writes xWMA. Encodes
+    /// <summary>Microsoft's xWMAEncode.exe -- the only thing that actually reads/writes xWMA. Encodes
     /// PCM WAV to xWMA and decodes xWMA back to PCM WAV depending on which direction the input is.
     /// Bundled under tools\audio\.</summary>
     public static string? XwmaEncode() => FirstFile(
@@ -224,14 +224,14 @@ public static class ToolPaths
         App("tools", "audio", "xWMAEncode.exe"),
         @"E:\F4SE OG\Tools\Audio Converter\bin\xWMAEncode.exe");
 
-    /// <summary>BmlFuzEncode.exe (BowmoreLover) — packs an xwm + a lip file into a .fuz voice
+    /// <summary>BmlFuzEncode.exe (BowmoreLover) -- packs an xwm + a lip file into a .fuz voice
     /// container. Bundled-only: single-purpose, nobody keeps their own copy to point at.</summary>
     public static string? BmlFuzEncode() => FirstFile(
         Env("BMLFUZENCODE_PATH"),
         App("tools", "audio", "BmlFuzEncode.exe"),
         @"E:\F4SE OG\Tools\Audio Converter\bin\BmlFuzEncode.exe");
 
-    /// <summary>BmlFuzDecode.exe (BowmoreLover) — splits a .fuz voice container back into its xwm and
+    /// <summary>BmlFuzDecode.exe (BowmoreLover) -- splits a .fuz voice container back into its xwm and
     /// lip file. Bundled-only, same reasoning as BmlFuzEncode.</summary>
     public static string? BmlFuzDecode() => FirstFile(
         Env("BMLFUZDECODE_PATH"),

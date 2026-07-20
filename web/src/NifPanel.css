@@ -1,4 +1,4 @@
-/* NIF panel — reuses PapyrusPanel.css for the modal/form/output shell.
+/* NIF panel -- reuses PapyrusPanel.css for the modal/form/output shell.
    Only override the output body to a monospace, JSON-friendly readout. */
 .nif-output {
   white-space: pre-wrap;

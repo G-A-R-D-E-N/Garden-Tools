@@ -96,13 +96,13 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
       let bin = ''; const bytes = new Uint8Array(buf);
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       const path = await nif.StageDroppedFile(f.name, btoa(bin));
-      if (path.startsWith('ERR:')) { appendLog('✗ drop failed — ' + path); return; }
+      if (path.startsWith('ERR:')) { appendLog('✗ drop failed -- ' + path); return; }
       if (/\.obj$/i.test(f.name)) { setMode('import'); setObjPath(path); }
       else if (/\.bgsm$/i.test(f.name)) { setMatPath(path); loadMaterial(path); }
       else if (/\.nif$/i.test(f.name)) { setNifPath(path); if (mode === 'view') loadGeo(path); else if (mode === 'edit') loadTree(path); else if (mode === 'import') setMode('inspect'); }
       appendLog('• dropped ' + f.name);
     } catch (err) {
-      appendLog('✗ drop failed — ' + (err instanceof Error ? err.message : String(err)));
+      appendLog('✗ drop failed -- ' + (err instanceof Error ? err.message : String(err)));
     }
   }, [nif, mode]);
 
@@ -190,7 +190,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
         if (!nifPath.trim()) { setResult('Pick a NIF to verify.'); setBusy(false); return; }
         out = await nif.Verify(nifPath);
         const r = out.split('\n').find(l => l.startsWith('RESULT:')) ?? '';
-        appendLog(`${/0 failed/.test(out) ? '✓' : '✗'} verify ${baseName(nifPath)} — ${r.replace('RESULT:', '').trim()}`);
+        appendLog(`${/0 failed/.test(out) ? '✓' : '✗'} verify ${baseName(nifPath)} -- ${r.replace('RESULT:', '').trim()}`);
       } else {
         if (!nifPath.trim() || !fixOut.trim()) { setResult('Pick a NIF and an output path.'); setBusy(false); return; }
         out = await nif.Fix(nifPath, fixOut);
@@ -200,7 +200,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
       setResult(out || '(no output)');
     } catch (e) {
       const msg = 'Error: ' + (e instanceof Error ? e.message : String(e));
-      setResult(msg); appendLog(`✗ ${mode} — ${msg}`);
+      setResult(msg); appendLog(`✗ ${mode} -- ${msg}`);
     } finally { setBusy(false); }
   };
 
@@ -233,8 +233,8 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
-        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available — run the desktop app (not the browser dev server). niftool.exe must be built.</div>}
-        {mode === 'materials' && matUnavailable && <div className="papyrus-warn">Material bridge not available — run the desktop app (not the browser dev server).</div>}
+        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available -- run the desktop app (not the browser dev server). niftool.exe must be built.</div>}
+        {mode === 'materials' && matUnavailable && <div className="papyrus-warn">Material bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className={`papyrus-body ${mode === 'edit' || mode === 'materials' ? 'nif-edit-body' : ''}`}>
           <div className={`papyrus-form ${mode === 'edit' || mode === 'materials' ? 'nif-edit-sidebar' : ''}`}>
@@ -296,7 +296,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
                   <label><input type="checkbox" checked={wireframe} onChange={e => setWireframe(e.target.checked)} /> <Grid3x3 size={12} /> Wireframe</label>
                 </div>
                 <label className="papyrus-field">
-                  <span>Texture folder (optional — a Data or Textures root)</span>
+                  <span>Texture folder (optional -- a Data or Textures root)</span>
                   <div className="papyrus-input-row">
                     <input value={texRoot} onChange={e => setTexRoot(e.target.value)} placeholder="(auto: resolves against the NIF's Data\ folder)" />
                     <button className="sidebar-action-btn" onClick={browseTexRoot} disabled={unavailable}>Folder…</button>
@@ -415,7 +415,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className="papyrus-output-head">
-              <span>OUTPUT — niftool {mode}</span>
+              <span>OUTPUT -- niftool {mode}</span>
               {result && <button className="papyrus-copy" onClick={() => navigator.clipboard.writeText(result)}>Copy</button>}
             </div>
             <pre className="papyrus-output-body nif-output">{result || 'Pick a file and run.'}</pre>
@@ -444,7 +444,7 @@ function makeBanner(text: string): { kind: 'ok' | 'warn' | 'error'; text: string
     if (/FAILED/i.test(result)) return { kind: 'error', text: result.replace('RESULT:', '').trim() };
     return { kind: 'ok', text: result.replace('RESULT:', '').trim() };
   }
-  if (/^\s*\{/.test(text)) return { kind: 'ok', text: 'Inspected — JSON below' };
-  if (/error|cannot|not found|FAILED/i.test(text)) return { kind: 'error', text: 'Failed — see output' };
+  if (/^\s*\{/.test(text)) return { kind: 'ok', text: 'Inspected -- JSON below' };
+  if (/error|cannot|not found|FAILED/i.test(text)) return { kind: 'error', text: 'Failed -- see output' };
   return { kind: 'ok', text: 'Done' };
 }

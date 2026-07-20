@@ -20,7 +20,7 @@ public static class FriendlyNames
         // ── Semantic renames (auto-split gives wrong/confusing result) ─────────────────────────────
         // Mutagen names FormList's FULL subrecord "TitleString"; users know it as "Name".
         ["TitleString"]              = "Name",
-        // Item sell price — disambiguate from the generic word "Value" used in conditions.
+        // Item sell price -- disambiguate from the generic word "Value" used in conditions.
         ["Value"]                    = "Value (caps)",
         // Papyrus scripting subrecord appears as VirtualMachineAdapter in reflection.
         ["VirtualMachineAdapter"]    = "Scripts",
@@ -112,7 +112,7 @@ public static class FriendlyNames
                 // (b) UPPER UPPER→lower: we're at the LAST char of an acronym before a new word
                 //     (e.g. 'P' in "HTMLParser" or 'D' in "AIData").
                 //     Requires s[i-2] to also be uppercase so we know there IS a preceding acronym
-                //     run — this naturally excludes 2-char sequences like "ID" in "SoundIDs" where
+                //     run -- this naturally excludes 2-char sequences like "ID" in "SoundIDs" where
                 //     s[i-2] ('d') is lowercase (we're in the middle of the acronym, not the end).
                 bool case_b = char.IsUpper(prev)
                            && next != '\0' && char.IsLower(next)

@@ -20,7 +20,7 @@ public static partial class WriteService
 {
     /// <summary>
     /// Create an interior CELL. Interior cells are self-contained (no worldspace, no vanilla cell
-    /// override), which makes them the safe place to park references a plugin owns outright — e.g.
+    /// override), which makes them the safe place to park references a plugin owns outright -- e.g.
     /// map markers that a script relocates at runtime.
     /// </summary>
     public static string CreateCell(string plugin, string editorId, string? name, object? env)
@@ -68,7 +68,7 @@ public static partial class WriteService
         var cell = FindCellInMod(mod, cellId);
         if (cell == null)
             return $"Cell '{cellId}' not found in {plugin}. A placed object must live in a cell this " +
-                   $"plugin owns or overrides — create one with create_cell, or copy_as_override an " +
+                   $"plugin owns or overrides -- create one with create_cell, or copy_as_override an " +
                    $"existing cell into this plugin first.";
 
         if (!ResolveFk(env, baseId, out var baseFk))

@@ -49,7 +49,7 @@ public class AppInterop
         if (!System.IO.Directory.Exists(System.IO.Path.Combine(instance, "profiles")))
         {
             System.Windows.MessageBox.Show(
-                "That folder doesn't look like an MO2 instance — it has no 'profiles' subfolder. " +
+                "That folder doesn't look like an MO2 instance -- it has no 'profiles' subfolder. " +
                 "Pick the instance folder that contains 'mods', 'profiles', and 'ModOrganizer.ini'.");
             return "";
         }
@@ -80,7 +80,7 @@ public class AppInterop
     {
         DebugLog.Interop(nameof(ScanConflicts));
         var env = _shell.GameEnvironment;
-        if (env == null) return "No environment loaded — Load Env or Open MO2 first.";
+        if (env == null) return "No environment loaded -- Load Env or Open MO2 first.";
         var prog = MakeProgress();
         try
         {
@@ -98,7 +98,7 @@ public class AppInterop
     {
         DebugLog.Interop(nameof(ScanBrokenRefs));
         var env = _shell.GameEnvironment;
-        if (env == null) return "No environment loaded — Load Env or Open MO2 first.";
+        if (env == null) return "No environment loaded -- Load Env or Open MO2 first.";
         _onProgress?.Invoke("Scanning for broken references...", null);
         try
         {

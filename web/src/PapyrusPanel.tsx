@@ -19,7 +19,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const [lastOutDir, setLastOutDir] = useState('');
 
-  // decompile options — default Write ON (smarter default: people expect files on disk)
+  // decompile options -- default Write ON (smarter default: people expect files on disk)
   const [assembly, setAssembly] = useState(() => LSB('assembly', false));
   const [write, setWrite] = useState(() => LSB('write', true));
 
@@ -70,7 +70,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   const browseCompiler = async () => { if (papyrus) { const p = await papyrus.BrowseForFile('Select PapyrusCompiler.exe', 'PapyrusCompiler|PapyrusCompiler.exe|Executables|*.exe'); if (p) setCompilerPath(p); } };
 
   // drag & drop: read the dropped file's bytes and stage them to a temp path the backend can use
-  // (WebView2 doesn't expose dropped files' real OS paths to JS). Folders can't be read this way —
+  // (WebView2 doesn't expose dropped files' real OS paths to JS). Folders can't be read this way --
   // use the Folder button for those.
   const onDrop = useCallback(async (e: DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -83,14 +83,14 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       const b64 = btoa(bin);
       const path = await papyrus.StageDroppedFile(f.name, b64);
-      if (path.startsWith('ERR:')) { appendLog('✗ drop failed — ' + path); return; }
+      if (path.startsWith('ERR:')) { appendLog('✗ drop failed -- ' + path); return; }
       setSource(path);
       // auto-switch mode to match the dropped file type
       if (/\.pex$/i.test(f.name)) setMode('decompile');
       else if (/\.psc$/i.test(f.name)) setMode('compile');
       appendLog('• dropped ' + f.name + ' -> source set');
     } catch (err) {
-      appendLog('✗ drop failed — ' + (err instanceof Error ? err.message : String(err)));
+      appendLog('✗ drop failed -- ' + (err instanceof Error ? err.message : String(err)));
     }
   }, [papyrus]);
 
@@ -104,10 +104,10 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
         ? await papyrus.LookupFunction(lookupScript.trim(), lookupFunction.trim())
         : await papyrus.LookupScriptInfo(lookupScript.trim());
       setResult(text || '(no result)');
-      appendLog(`${isLookupError(text) ? '✗' : '✓'} wiki lookup — ${query}`);
+      appendLog(`${isLookupError(text) ? '✗' : '✓'} wiki lookup -- ${query}`);
     } catch (e) {
       const msg = 'Error: ' + (e instanceof Error ? e.message : String(e));
-      setResult(msg); appendLog(`✗ wiki lookup ${query} — ${msg}`);
+      setResult(msg); appendLog(`✗ wiki lookup ${query} -- ${msg}`);
     } finally { setBusy(false); }
   };
 
@@ -131,14 +131,14 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
       if (mode === 'decompile') {
         const kind = assembly ? 'disassembled' : 'decompiled';
         const savedLine = text.split('\n').find(l => /^(SAVED ->|RESULT:)/.test(l)) || `${text.split('\n').length} lines`;
-        appendLog(`${isErr ? '✗' : '✓'} ${kind} ${name} — ${savedLine}`);
+        appendLog(`${isErr ? '✗' : '✓'} ${kind} ${name} -- ${savedLine}`);
       } else {
         const r = text.split('\n').find(l => l.startsWith('RESULT:')) || (text.split('\n').find(l => l.trim()) ?? '');
-        appendLog(`${isErr ? '✗' : '✓'} compiled ${name} — ${r}`);
+        appendLog(`${isErr ? '✗' : '✓'} compiled ${name} -- ${r}`);
       }
     } catch (e) {
       const msg = 'Error: ' + (e instanceof Error ? e.message : String(e));
-      setResult(msg); appendLog(`✗ ${mode} ${name} — ${msg}`);
+      setResult(msg); appendLog(`✗ ${mode} ${name} -- ${msg}`);
     } finally { setBusy(false); }
   };
 
@@ -159,7 +159,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
-        {unavailable && <div className="papyrus-warn">Papyrus bridge not available — run the desktop app (not the browser dev server).</div>}
+        {unavailable && <div className="papyrus-warn">Papyrus bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className="papyrus-body">
           <div className="papyrus-form">
@@ -198,7 +198,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
                   <label><input type="radio" checked={lookupKind === 'script'} onChange={() => setLookupKind('script')} /> Script overview</label>
                 </div>
                 <label className="papyrus-field">
-                  <span>Script {lookupKind === 'function' ? '(optional — disambiguates a function defined on several scripts)' : ''}</span>
+                  <span>Script {lookupKind === 'function' ? '(optional -- disambiguates a function defined on several scripts)' : ''}</span>
                   <input value={lookupScript} onChange={e => setLookupScript(e.target.value)}
                          placeholder="e.g. ActiveMagicEffect, ObjectReference…"
                          onKeyDown={e => { if (e.key === 'Enter' && lookupKind === 'script') run(); }} />
@@ -259,7 +259,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className="papyrus-output-head">
-              <span>OUTPUT — {mode === 'lookup' ? 'CK wiki' : mode === 'decompile' ? (assembly ? 'assembly (.pas)' : 'decompiled source (.psc)') : 'compiler'}</span>
+              <span>OUTPUT -- {mode === 'lookup' ? 'CK wiki' : mode === 'decompile' ? (assembly ? 'assembly (.pas)' : 'decompiled source (.psc)') : 'compiler'}</span>
               {result && <button className="papyrus-copy" onClick={() => navigator.clipboard.writeText(result)}>Copy</button>}
             </div>
             <pre className="papyrus-output-body">
@@ -291,7 +291,7 @@ function isLookupError(text: string): boolean {
   return /^(No CK wiki|No .* found for|Provide a|Error:)/i.test(text) || /is defined on multiple scripts/.test(text);
 }
 function makeLookupBanner(text: string): { kind: 'ok' | 'error'; text: string } {
-  return isLookupError(text) ? { kind: 'error', text: 'Lookup failed — see output' } : { kind: 'ok', text: 'Done' };
+  return isLookupError(text) ? { kind: 'error', text: 'Lookup failed -- see output' } : { kind: 'ok', text: 'Done' };
 }
 
 // ---- result banner ----
@@ -312,9 +312,9 @@ function makeBanner(text: string, mode: Mode): { kind: 'ok' | 'warn' | 'error'; 
     return { kind, text: result.replace('RESULT:', '').trim() };
   }
   if (/^SAVED ->/m.test(text)) return { kind: 'ok', text: text.split('\n').find(l => l.startsWith('SAVED ->'))!.replace('SAVED ->', 'Saved:').trim() };
-  if (/NOT SAVED/.test(text)) return { kind: 'warn', text: 'Not saved — shown below only. Tick "Write files to disk" or set an Output folder.' };
+  if (/NOT SAVED/.test(text)) return { kind: 'warn', text: 'Not saved -- shown below only. Tick "Write files to disk" or set an Output folder.' };
   const k = bannerKind(text);
-  return { kind: k, text: k === 'error' ? (mode === 'compile' ? 'Compile failed — see output' : 'Failed — see output') : 'Done' };
+  return { kind: k, text: k === 'error' ? (mode === 'compile' ? 'Compile failed -- see output' : 'Failed -- see output') : 'Done' };
 }
 
 // ---- lightweight syntax highlighting (no deps) ----

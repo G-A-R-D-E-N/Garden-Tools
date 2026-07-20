@@ -145,11 +145,11 @@ export default function MainShell() {
   const [openRecord, setOpenRecord] = useState<{ title: string; plugin: string; matrix: ConflictMatrix } | null>(null);
   const [recordLoading, setRecordLoading] = useState(false);
 
-  // MCP live feed — updated by tool-call events pushed from C# via PostWebMessageAsJson.
+  // MCP live feed -- updated by tool-call events pushed from C# via PostWebMessageAsJson.
   const [mcpFeed, setMcpFeed] = useState<McpLiveMsg[]>([]);
   const [mcpActive, setMcpActive] = useState(false);
   const mcpActiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Field path of the last AI write — passed to RecordView so it can flash that row.
+  // Field path of the last AI write -- passed to RecordView so it can flash that row.
   const [aiHighlightField, setAiHighlightField] = useState('');
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -196,7 +196,7 @@ export default function MainShell() {
           if (cur && cur.matrix.FormKey === ev.Record) {
             reloadMatrixRef.current();
           } else {
-            // Navigate to the record being edited — auto-switches to record tab.
+            // Navigate to the record being edited -- auto-switches to record tab.
             openByFormKeyRef.current(ev.Record, ev.Plugin);
           }
           // Flash the exact field the AI just wrote.
@@ -278,7 +278,7 @@ export default function MainShell() {
     }
   };
 
-  // Re-read the tree (and the open record) from the current state — picks up the AI's latest edits
+  // Re-read the tree (and the open record) from the current state -- picks up the AI's latest edits
   // without the heavy Open MO2 reload.
   const handleRefresh = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;

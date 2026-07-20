@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace FO4RecordEditor.Models;
 
 /// <summary>How the value cell should be edited: a free textbox, a checkbox (bool), a dropdown
-/// (enum), or a record picker (Ref — a FormLink to another record).</summary>
+/// (enum), or a record picker (Ref -- a FormLink to another record).</summary>
 public enum FieldEditKind { Text, Bool, Enum, Ref }
 
 public class RecordNode : INotifyPropertyChanged

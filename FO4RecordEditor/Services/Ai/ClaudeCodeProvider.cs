@@ -123,7 +123,7 @@ public sealed class ClaudeCodeProvider : IAIProvider
         {
             // Write the prompt to stdin on a BACKGROUND task so we read stdout concurrently. Writing the
             // whole prompt first and only then reading deadlocks on a large prompt (a long chat): the CLI
-            // fills its stdout pipe — which we aren't draining yet — and stops reading stdin, while we're
+            // fills its stdout pipe -- which we aren't draining yet -- and stops reading stdin, while we're
             // still blocked writing stdin. Both wait forever and the chat appears stuck on "thinking…".
             var writeTask = Task.Run(async () =>
             {
@@ -133,7 +133,7 @@ public sealed class ClaudeCodeProvider : IAIProvider
 
             // Drain stderr from the START, not after the stdout loop. Same shape as the stdin
             // deadlock above: stderr is redirected, so once the CLI fills that pipe it blocks on
-            // write and stops producing stdout — the read loop below then never sees EOF and the
+            // write and stops producing stdout -- the read loop below then never sees EOF and the
             // chat hangs on "thinking…" forever.
             var errTask = proc.StandardError.ReadToEndAsync(ct);
 

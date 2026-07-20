@@ -379,9 +379,21 @@ class BA2FileEntry : IArchiveFile
         _dirHash = reader.ReadUInt32();
         _flags = reader.ReadUInt32();
         _offset = reader.ReadUInt64();
+
+        // Version 8 (the PC Next-Gen format, distinct from Xbox's version 7) inserts a REAL packed
+        // (compressed) byte count here. What the field below is read into as `_size` is NOT the
+        // compressed size for v8 -- it is the true UNCOMPRESSED length. Verified empirically against
+        // 50 real entries across two different live Next-Gen archives (Fallout4 - Meshes.ba2 and
+        // Fallout4 - Interface.ba2): reading exactly `packedSize` bytes at `offset` and inflating them
+        // reproduces the real file, with decompressed length == `_size` every time -- including the
+        // packedSize==0 "stored, not compressed" case (e.g. STRINGS\Fallout4_en.STRINGS), where `_size`
+        // bytes must be read RAW instead. The field Mutagen calls `_realSize` below is unused garbage
+        // for v8 -- it reads back as the sentinel 0xBAADF00D for every entry regardless of true
+        // compression state, which is what made the old sentinel-based Compressed check always wrong.
+        uint packedSize = 0;
         if (version > 7)
         {
-            reader.ReadUInt32();
+            packedSize = reader.ReadUInt32();
         }
         _size = reader.ReadUInt32();
         _realSize = reader.ReadUInt32();
@@ -390,19 +402,21 @@ class BA2FileEntry : IArchiveFile
             _align = reader.ReadUInt32();
         }
 
-        // Next-Gen (v7/v8) GNRL entries have no separate real/uncompressed-size field -- what used to
-        // be `realSize` now reads back as the sentinel 0xBAADF00D for every entry that has data, real
-        // or not. Verified empirically against live Next-Gen archives (Fallout4 - Meshes.ba2 v8,
-        // Fallout4 - Textures*.ba2 v7): the SAME `size != 0` rule used for v1 is also correct here --
-        // reading exactly `size` bytes from `offset` and inflating them, unbounded (matching
-        // AsStream()'s InflaterInputStream), always reproduces the real file content, and the
-        // decompressed length always equals `size`. So `size` doubles as the real/uncompressed length
-        // too, and `_realSize = _size` below is what actually supplies it for `Size`/AsStream()'s
-        // FramedStream cap, not the (unusable) old `_realSize` field.
-        Compressed = _size != 0;
-        if (version >= 7)
+        if (version > 7)
         {
-            _realSize = _size;
+            Compressed = packedSize != 0;
+            _realSize = _size;   // `_size` is the true length here -- see the doc comment above.
+        }
+        else
+        {
+            // Version <= 7 (including Xbox's version 7): unverified against a real archive as
+            // thoroughly as v8 above -- only one v7 GNRL archive exists in the test modlist this was
+            // checked against (DLCRobot - Voices_en.ba2), and its per-entry layout didn't fully match
+            // either the classic v1 fields or v8's extra field on a full pass. Falls back to the
+            // original v1 rule (size!=0 => compressed, _realSize as read) rather than guess further --
+            // no worse than what shipped before, and scoped to a single archive in real-world testing
+            // so far. See docs/Code Notes/FO4RecordEditor.md for the open item.
+            Compressed = _size != 0;
         }
     }
         

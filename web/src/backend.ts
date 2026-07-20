@@ -1,7 +1,7 @@
 // Typed access to the C# host objects exposed to the WebView2 page via AddHostObjectToScript.
 // Every call is async: the WebView2 host-object proxy returns a Promise for each method.
 
-/** The "backend" bridge (FO4RecordEditor.Services.BackendInterop) — conflicts, records, edits, saves. */
+/** The "backend" bridge (FO4RecordEditor.Services.BackendInterop) -- conflicts, records, edits, saves. */
 export interface Backend {
   // ---- read ----
   GetConflicts(): Promise<string>;                          // JSON: ConflictEntry[]
@@ -35,7 +35,7 @@ export interface Backend {
   SavePlugin(plugin: string, path: string): Promise<string>;
 }
 
-/** The "appInterop" bridge (FO4RecordEditor.Services.AppInterop) — explorer tree + env loading. */
+/** The "appInterop" bridge (FO4RecordEditor.Services.AppInterop) -- explorer tree + env loading. */
 export interface AppInterop {
   BrowseForMo2Folder(): Promise<string>;   // native folder picker; "" if cancelled/invalid
   OpenMo2Profile(instancePath: string): Promise<void>;
@@ -101,7 +101,7 @@ export interface FieldNode {
   children: FieldNode[];
 }
 
-/** The "chat" bridge (FO4RecordEditor.Services.ChatInterop) — the Claude AI assistant.
+/** The "chat" bridge (FO4RecordEditor.Services.ChatInterop) -- the Claude AI assistant.
  *  Replies stream back as web messages, not return values: listen on chrome.webview 'message'
  *  for {Type:"AiToken",Text} / {Type:"AiToolStatus",Text} / {Type:"AiDone"[,Stopped]} / {Type:"AiError",Text}. */
 export interface Chat {
@@ -124,7 +124,7 @@ export interface ChatSessionMsg { isUser: boolean; text: string; }
 export interface ChatSessionFull { id: string; name: string; messages: ChatSessionMsg[]; }
 export interface SlashCommand { name: string; args: string; help: string; }
 
-/** The "papyrus" bridge (FO4RecordEditor.Services.PapyrusInterop) — compile/decompile Papyrus. */
+/** The "papyrus" bridge (FO4RecordEditor.Services.PapyrusInterop) -- compile/decompile Papyrus. */
 export interface PapyrusHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
@@ -144,7 +144,7 @@ export interface PapyrusHost {
   LookupScriptInfo(script: string): Promise<string>;
 }
 
-/** The "nif" bridge (FO4RecordEditor.Services.NifInterop) — author/inspect/verify/repair FO4 NIFs. */
+/** The "nif" bridge (FO4RecordEditor.Services.NifInterop) -- author/inspect/verify/repair FO4 NIFs. */
 export interface NifHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
@@ -180,7 +180,7 @@ export interface MastersListResult {
   error?: string;
 }
 
-/** The "masters" bridge (FO4RecordEditor.Services.MastersInterop) — master table + ESL flag. */
+/** The "masters" bridge (FO4RecordEditor.Services.MastersInterop) -- master table + ESL flag. */
 export interface MastersHost {
   GetPlugins(): Promise<string>;                       // JSON: string[] of plugin names
   List(plugin: string): Promise<string>;                // JSON: MastersListResult
@@ -216,7 +216,7 @@ export interface ArchiveCompareResult {
   error?: string;
 }
 
-/** The "archive" bridge (FO4RecordEditor.Services.ArchiveInterop) — list/extract BA2/BSA contents. */
+/** The "archive" bridge (FO4RecordEditor.Services.ArchiveInterop) -- list/extract BA2/BSA contents. */
 export interface ArchiveHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
@@ -246,7 +246,7 @@ export interface MaterialInspectResult {
   error?: string;
 }
 
-/** The "material" bridge (FO4RecordEditor.Services.MaterialInterop) — inspect/edit .bgsm shader fields. */
+/** The "material" bridge (FO4RecordEditor.Services.MaterialInterop) -- inspect/edit .bgsm shader fields. */
 export interface MaterialHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   Inspect(path: string): Promise<string>;    // JSON: MaterialInspectResult
@@ -256,7 +256,7 @@ export interface MaterialHost {
   StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
 }
 
-/** The "audio" bridge (FO4RecordEditor.Services.AudioInterop) — convert to/from xWMA, merge/split .fuz. */
+/** The "audio" bridge (FO4RecordEditor.Services.AudioInterop) -- convert to/from xWMA, merge/split .fuz. */
 export interface AudioHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
@@ -274,7 +274,7 @@ export interface AudioHost {
   StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
 }
 
-/** The "settings" bridge (FO4RecordEditor.Services.SettingsInterop) — the app settings panel. */
+/** The "settings" bridge (FO4RecordEditor.Services.SettingsInterop) -- the app settings panel. */
 export interface SettingsHost {
   GetSettings(): Promise<string>;            // JSON of editable settings
   SaveSettings(json: string): Promise<string>;  // persists + rebuilds AI provider; returns status
@@ -313,7 +313,7 @@ export interface CellGeoBatchResult {
   geometry: Record<string, unknown>;
 }
 
-/** The "cell" bridge (FO4RecordEditor.Services.CellInterop) — the Cell Viewer panel. */
+/** The "cell" bridge (FO4RecordEditor.Services.CellInterop) -- the Cell Viewer panel. */
 /** One match from CellHost.SearchCells (MutagenLoader.SearchHit, CELL-filtered). Newtonsoft
  * serializes the C# record's properties as-is (PascalCase), same as the existing SearchHit above. */
 export interface CellSearchHit {

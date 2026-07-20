@@ -3,8 +3,8 @@ using System.IO;
 namespace FO4RecordEditor.Services;
 
 /// <summary>
-/// Central, thread-safe debug log written to a file so we can see EVERYTHING that happens — every
-/// interop call from the React UI, every AI tool call, every exception (with stack trace) — even the
+/// Central, thread-safe debug log written to a file so we can see EVERYTHING that happens -- every
+/// interop call from the React UI, every AI tool call, every exception (with stack trace) -- even the
 /// ones WebView2 swallows into an opaque "Uncaught (in promise)" on the JS side.
 ///
 /// File: %AppData%\FO4RecordEditor\debug.log  (falls back to next-to-exe). Each line carries a

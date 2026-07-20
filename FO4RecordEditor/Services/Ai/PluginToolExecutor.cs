@@ -54,7 +54,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "type" }
             }),
         new("list_records_summary",
-            "Get a compact field table for ALL records of a type in a plugin — one row per record with " +
+            "Get a compact field table for ALL records of a type in a plugin -- one row per record with " +
             "key fields (scalars, FormLinks, list counts) shown inline. Use this to survey an entire " +
             "record group AT ONCE instead of calling get_record in a loop. Essential for bulk conflict " +
             "analysis: e.g. all COBJ records with their CreatedObject + component count + workbench, " +
@@ -124,7 +124,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "id" }
             }),
         new("diff_records",
-            "Field-level diff of two records (each resolved to its winning version) — lines only in A are marked '-', " +
+            "Field-level diff of two records (each resolved to its winning version) -- lines only in A are marked '-', " +
             "lines only in B '+'. Useful to verify a copy_as_override matches its source, or to compare two similar " +
             "records. Accepts FormKeys or EditorIDs.",
             new
@@ -292,7 +292,7 @@ public sealed class PluginToolExecutor
             "Create an interior CELL in a plugin. create_record cannot make cells: they live in a Block/SubBlock " +
             "tree under the mod's Cells group rather than a flat top-level group. Interior cells are self-contained " +
             "(no worldspace, no vanilla cell override), so they are the safe place to park references a plugin owns " +
-            "outright — e.g. map markers a script relocates at runtime. Add references with create_placed_object.",
+            "outright -- e.g. map markers a script relocates at runtime. Add references with create_placed_object.",
             new
             {
                 type = "object",
@@ -307,9 +307,9 @@ public sealed class PluginToolExecutor
         new("create_placed_object",
             "Create a placed reference (REFR) inside a cell the plugin owns. create_record cannot make these: a " +
             "placed object is not a top-level record, it lives in a Cell's Persistent/Temporary list. The cell must " +
-            "be in THIS plugin — make one with create_cell, or copy_as_override an existing cell in first. " +
+            "be in THIS plugin -- make one with create_cell, or copy_as_override an existing cell in first. " +
             "For a MAP MARKER: set base to the vanilla MapMarker static (000010:Fallout4.esm) and pass mapMarkerName " +
-            "— without map marker data the reference is just an invisible static and no marker appears.",
+            "-- without map marker data the reference is just an invisible static and no marker appears.",
             new
             {
                 type = "object",
@@ -327,7 +327,7 @@ public sealed class PluginToolExecutor
                     initiallyDisabled = new { type = "boolean", description = "Default false." },
                     mapMarkerName = new { type = "string", description = "Set to attach map-marker data (turns the ref into a real map marker)." },
                     mapMarkerType = new { type = "string", description = "Marker icon, e.g. 'Graveyard', 'Settlement', 'Cave'. Default Cave." },
-                    mapMarkerVisible = new { type = "boolean", description = "Default false — visible on the map from the start." }
+                    mapMarkerVisible = new { type = "boolean", description = "Default false -- visible on the map from the start." }
                 },
                 required = new[] { "plugin", "cell", "baseObject" }
             }),
@@ -443,7 +443,7 @@ public sealed class PluginToolExecutor
             }),
         new("backup_plugin",
             "Copy the plugin's original on-disk file to a timestamped .bak file beside it BEFORE making any edits. " +
-            "ALWAYS call this before the first write to any existing plugin in a session. Safe to call multiple times — " +
+            "ALWAYS call this before the first write to any existing plugin in a session. Safe to call multiple times -- " +
             "each call produces a distinct backup (e.g. MyMod.esp.20250623_142031.bak).",
             new
             {
@@ -484,7 +484,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "source_plugin", "id", "patch_plugin" }
             }),
         new("delete_record",
-            "Remove a record entirely from a plugin (xEdit 'Remove') — e.g. delete an incomplete stub record, " +
+            "Remove a record entirely from a plugin (xEdit 'Remove') -- e.g. delete an incomplete stub record, " +
             "or drop an unwanted override from a patch.",
             new
             {
@@ -497,7 +497,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "id" }
             }),
         new("remove_list_item",
-            "Remove a FormLink entry (by FormKey or EditorID) from a list field — e.g. drop an item from a " +
+            "Remove a FormLink entry (by FormKey or EditorID) from a list field -- e.g. drop an item from a " +
             "FormList's 'Items', or a keyword from 'Categories'/'Keywords'.",
             new
             {
@@ -548,7 +548,7 @@ public sealed class PluginToolExecutor
             }),
         new("add_leveled_entry",
             "Append a weighted entry to a LeveledItem (LVLI) or LeveledNpc (LVLN). Leveled-list entries are " +
-            "structs (reference + level + count + chance-none), so add_list_item CANNOT build them — use this. " +
+            "structs (reference + level + count + chance-none), so add_list_item CANNOT build them -- use this. " +
             "level = min player/zone level for this entry; count = how many; chance_none = % chance the entry " +
             "rolls nothing (0 = always). Call once per entry.",
             new
@@ -584,7 +584,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "record", "effects" }
             }),
         new("set_magic_effects",
-            "Replace a Spell (SPEL) or Object Effect/enchantment (ENCH) Effects list — the MGEF chain with " +
+            "Replace a Spell (SPEL) or Object Effect/enchantment (ENCH) Effects list -- the MGEF chain with " +
             "magnitude/area/duration. Pass a JSON array: {\"effect\":\"<MGEF FormKey/EditorID>\",\"magnitude\":N," +
             "\"area\":N,\"duration\":N,\"conditions\":[...]}. Conditions use the same objects as set_conditions.",
             new
@@ -727,7 +727,7 @@ public sealed class PluginToolExecutor
         new("revert_overrides",
             "BATCH-fix a mod that injected the same bad edit across many records (e.g. a corrupted recipe " +
             "template). For every record where 'bad_plugin' is currently the WINNER, this restores the " +
-            "version loaded just before it, forwarded into a patch plugin — in ONE call, no per-record loop. " +
+            "version loaded just before it, forwarded into a patch plugin -- in ONE call, no per-record loop. " +
             "Defaults to a DRY RUN that lists what it would do; pass apply=true to write them. Optionally " +
             "filter by 'signature' (e.g. COBJ) and/or 'contains_component' (a FormKey/EditorID like the " +
             "hubflower) to target exactly the corrupted records.",
@@ -746,7 +746,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "bad_plugin", "patch_plugin" }
             }),
         new("batch_patch_records",
-            "Apply field operations to ALL records of a type in a plugin IN ONE CALL — the bulk write " +
+            "Apply field operations to ALL records of a type in a plugin IN ONE CALL -- the bulk write " +
             "equivalent of list_records_summary for reading. Instead of N copy_as_override + N set_field " +
             "calls, this handles 3000+ records at once. Defaults to dry_run=true (safe preview). " +
             "Pass dry_run=false to write. 'operations' is a JSON array of {op, field, value}: " +
@@ -773,7 +773,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "source_plugin", "patch_plugin", "type", "operations" }
             }),
         new("run_script",
-            "Run a C# script you author to make PER-RECORD edits across many records in ONE call — for " +
+            "Run a C# script you author to make PER-RECORD edits across many records in ONE call -- for " +
             "changes batch_patch_records can't express because each record needs different values " +
             "(e.g. per-recipe component swaps, conditional condition edits). The script gets a 'host' " +
             "object; the tool compiles + runs it against the loaded records and writes overrides into " +
@@ -847,7 +847,7 @@ public sealed class PluginToolExecutor
             "Set a plugin's master order to an EXACT permutation of its CURRENT masters and write it " +
             "immediately, bypassing save_plugin's automatic load-order-derived ordering. Call list_masters " +
             "first to see the current set. This is a manual-repair tool for when the automatic ordering " +
-            "isn't available or produced a wrong result — a plain save_plugin call afterwards re-derives " +
+            "isn't available or produced a wrong result -- a plain save_plugin call afterwards re-derives " +
             "the order from the live load order and overwrites whatever you set here. 'order' must contain " +
             "every current master exactly once (same names, no additions, no removals) or the call is refused.",
             new
@@ -860,13 +860,13 @@ public sealed class PluginToolExecutor
                     {
                         type = "array",
                         items = new { type = "string" },
-                        description = "The plugin's current masters, reordered. Must be an exact permutation — see list_masters."
+                        description = "The plugin's current masters, reordered. Must be an exact permutation -- see list_masters."
                     }
                 },
                 required = new[] { "plugin", "order" }
             }),
         new("set_light_flag",
-            "Set or clear a plugin's header ESL ('light master' / Small) flag directly — the same bit " +
+            "Set or clear a plugin's header ESL ('light master' / Small) flag directly -- the same bit " +
             "xEdit's 'ESL flag' checkbox sets. compact_to_esl only renumbers FormIDs into the 0x800-0xFFF " +
             "range and never touches this bit, so a compacted plugin still needs this call (or a .esl file " +
             "extension at save time) to actually behave as light. In memory until save_plugin.",
@@ -967,7 +967,7 @@ public sealed class PluginToolExecutor
         new("archive_extract_all",
             "Extract ALL (or filter-matched) files from a BA2/BSA archive into a folder, preserving the " +
             "archive's internal folder structure. Refuses rather than silently truncating if the match count " +
-            "exceeds 'limit' — narrow with 'filter' first for a big archive.",
+            "exceeds 'limit' -- narrow with 'filter' first for a big archive.",
             new
             {
                 type = "object",
@@ -1019,7 +1019,7 @@ public sealed class PluginToolExecutor
                 required = new[] { "path" }
             }),
         new("bgsm_set_field",
-            "Set ONE field on a FO4 .bgsm material file and write it back — direct structured editing, no " +
+            "Set ONE field on a FO4 .bgsm material file and write it back -- direct structured editing, no " +
             "material-editor GUI needed. Call bgsm_inspect first to see the exact field names and current " +
             "values for this file. Color fields (SpecularColor, EmittanceColor, HairTintColor, " +
             "TranslucencySubsurfaceColor) take 3 comma-separated numbers, e.g. '1.0, 0.5, 0.2'. " +
@@ -1153,7 +1153,7 @@ public sealed class PluginToolExecutor
 
     /// <summary>
     /// Tool definitions with a prompt-cache breakpoint on the LAST tool. Tools render before the
-    /// system prompt and never change, so this caches the whole tool prefix across every request —
+    /// system prompt and never change, so this caches the whole tool prefix across every request --
     /// the cached tokens then cost ~0.1x. cache_control is null (dropped by WhenWritingNull) on the
     /// others.
     /// </summary>
@@ -1247,7 +1247,7 @@ public sealed class PluginToolExecutor
         try { ToolCompleted?.Invoke(ExtractEvent(toolName, inputJson)); } catch { }
         if (raw.Length <= MaxResultChars) return raw;
         return raw[..MaxResultChars] +
-               $"\n\n…[truncated {raw.Length - MaxResultChars:N0} more chars. Narrow the request — e.g. ask for a " +
+               $"\n\n…[truncated {raw.Length - MaxResultChars:N0} more chars. Narrow the request -- e.g. ask for a " +
                "specific field, use a higher 'limit' sparingly, or use revert_overrides for bulk fixes instead of reading each record.]";
     }
 
@@ -1341,7 +1341,7 @@ public sealed class PluginToolExecutor
         string Str(string k) => root.TryGetProperty(k, out var v) ? v.GetString() ?? "" : "";
         int Int(string k, int def) => root.TryGetProperty(k, out var v) && v.TryGetInt32(out var i) ? i : def;
         bool Bool(string k) => root.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.True;
-        // Distinguishes "absent" from "" — an absent mapMarkerName must NOT attach marker data.
+        // Distinguishes "absent" from "" -- an absent mapMarkerName must NOT attach marker data.
         string? StrOrNull(string k) => root.TryGetProperty(k, out var v) ? v.GetString() : null;
         // Bool() can't express a default of true (absent reads as false).
         bool BoolOr(string k, bool def) => root.TryGetProperty(k, out var v)
@@ -1676,7 +1676,7 @@ public sealed class PluginToolExecutor
         sb.AppendLine($"{filtered.Count} conflicting record(s){(modOnly ? " involving mods" : "")}" +
                       $"{(string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}")}; showing {Math.Min(limit, filtered.Count)}:");
         foreach (var c in filtered.Take(limit))
-            sb.AppendLine($"  {c.EditorID} [{c.FormKey}] ({c.Type}) — {c.Plugins.Count} plugins, WINNER={c.Winner}");
+            sb.AppendLine($"  {c.EditorID} [{c.FormKey}] ({c.Type}) -- {c.Plugins.Count} plugins, WINNER={c.Winner}");
         if (filtered.Count > limit)
             sb.AppendLine($"…and {filtered.Count - limit} more. Filter by 'type' or raise 'limit' to see them.");
         return sb.ToString();
@@ -1780,7 +1780,7 @@ public sealed class PluginToolExecutor
     }
 
     // Field-level diff of two records (each resolved to its winning version), using the same field
-    // dump as get_record. Self-contained text diff — no dependency on the GUI's RecordNode tree.
+    // dump as get_record. Self-contained text diff -- no dependency on the GUI's RecordNode tree.
     private static string DiffRecords(object? env, string aId, string bId)
     {
         var fa = ResolveToFk(env, aId); if (fa.IsNull) return $"Could not resolve A '{aId}'.";
@@ -1824,7 +1824,7 @@ public sealed class PluginToolExecutor
         foreach (var root in roots)
         {
             // RobCo Patcher reads disabled/renamed configs too (.ini.bak, .ini.DISABLED, .ini.hidden),
-            // so match "*.ini*" not just "*.ini" — a renamed config still applies in-game.
+            // so match "*.ini*" not just "*.ini" -- a renamed config still applies in-game.
             foreach (var ini in System.IO.Directory.EnumerateFiles(root, "*.ini*", System.IO.SearchOption.AllDirectories))
             {
                 string[] lines;

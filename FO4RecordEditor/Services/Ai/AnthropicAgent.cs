@@ -64,7 +64,7 @@ public sealed class AnthropicAgent
         var finalText = new StringBuilder();
 
         // Prompt-cache the stable prefix (tools + system). Within one question the tool loop
-        // re-sends this prefix up to 8x, and across questions the tool block is identical — cached
+        // re-sends this prefix up to 8x, and across questions the tool block is identical -- cached
         // tokens cost ~0.1x, which is the main lever for cutting API spend.
         var systemBlocks = string.IsNullOrWhiteSpace(systemContext) ? null : new object[]
         {
@@ -151,7 +151,7 @@ public sealed class AnthropicAgent
         if (onUsage != null && (totalIn + totalCacheRead + totalCacheWrite + totalOut) > 0)
         {
             long billedIn = totalIn + totalCacheWrite;
-            onUsage($"Tokens — in {billedIn:N0} (+{totalCacheRead:N0} cached @0.1x), out {totalOut:N0}");
+            onUsage($"Tokens -- in {billedIn:N0} (+{totalCacheRead:N0} cached @0.1x), out {totalOut:N0}");
         }
 
         return finalText.ToString();

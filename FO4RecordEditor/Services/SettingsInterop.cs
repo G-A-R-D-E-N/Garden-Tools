@@ -133,7 +133,7 @@ public class SettingsInterop
 
             // Was: read stdout to EOF, then WaitForExitAsync, with stderr redirected but never
             // drained and no timeout at all. A child that wrote enough to stderr to fill that pipe
-            // blocked forever, and this is on the settings dialog's button — it froze the UI.
+            // blocked forever, and this is on the settings dialog's button -- it froze the UI.
             var run = await ProcessRunner.RunAsync(psi, TimeSpan.FromSeconds(30));
 
             if (!run.Started) return "✗ Could not start the Claude Code CLI.";

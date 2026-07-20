@@ -143,7 +143,7 @@ public static partial class WriteService
                         else if (!TrySetEntryPoint(ac, el, failures, idx)) continue;
                         if (el.TryGetProperty("buttonLabel", out var blEl) && blEl.GetString() is { } bl)
                             ac.ButtonLabel = bl;
-                        // 'spell' is optional, but if given it must resolve — don't silently drop it.
+                        // 'spell' is optional, but if given it must resolve -- don't silently drop it.
                         if (el.TryGetProperty("spell", out var spEl) && spEl.GetString() is { Length: > 0 } spStr)
                         {
                             if (!ResolveFk(env, spStr, out var spFk))
@@ -208,7 +208,7 @@ public static partial class WriteService
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
-        // Restrict to Spell/ObjectEffect(ENCH) — other records (ALCH/INGR/...) also expose an Effects
+        // Restrict to Spell/ObjectEffect(ENCH) -- other records (ALCH/INGR/...) also expose an Effects
         // list, and we don't want a mistyped record to silently clobber them.
         if (rec is not (Spell or ObjectEffect))
             return $"set_magic_effects requires a SPEL or ENCH record, got {rec.GetType().Name}.";
@@ -400,7 +400,7 @@ public static partial class WriteService
     }
 
     /// <summary>
-    /// Replace a FURN record's marker parameters — the entry markers that tell the engine WHERE to
+    /// Replace a FURN record's marker parameters -- the entry markers that tell the engine WHERE to
     /// put the actor using it. MarkerParameters is a STRUCT list, so nothing else in this tool could
     /// author it, and create_record FURN produces a shell with none. A furniture with zero markers
     /// cannot be entered at all: a bed reports "someone else is using it" and a workbench reads as
@@ -477,7 +477,7 @@ public static partial class WriteService
         return c2;
     }
 
-    // Accept both JSON numbers and numeric strings ("5") — LLMs frequently quote numbers, and
+    // Accept both JSON numbers and numeric strings ("5") -- LLMs frequently quote numbers, and
     // silently defaulting to 0 would produce wrong-but-valid records.
     private static int JInt(JsonElement el, string name, int def)
     {

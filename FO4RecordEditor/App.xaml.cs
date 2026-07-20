@@ -77,14 +77,14 @@ public partial class App : Application
     /// <summary>
     /// Build the env lazily (on first tool use) and serve plugin tools over stdio until stdin
     /// closes, then exit. Lazy so startup is instant and a missing game install doesn't stop the
-    /// server — the failing tool just reports it.
+    /// server -- the failing tool just reports it.
     /// <para>
     /// Source of the load order, in order of precedence:
     /// <list type="bullet">
-    /// <item><c>--mo2 &lt;instancePath&gt;</c> — reconstruct an MO2 modlist (profile plugins.txt +
+    /// <item><c>--mo2 &lt;instancePath&gt;</c> -- reconstruct an MO2 modlist (profile plugins.txt +
     /// mods/overwrite) so modlist plugins like FallenWorldCrafting.esp are visible/editable.</item>
-    /// <item><c>--data &lt;folder&gt;</c> — a plain Data folder override for the vanilla builder.</item>
-    /// <item>neither — the default Fallout 4 install (vanilla + DLC + CC only).</item>
+    /// <item><c>--data &lt;folder&gt;</c> -- a plain Data folder override for the vanilla builder.</item>
+    /// <item>neither -- the default Fallout 4 install (vanilla + DLC + CC only).</item>
     /// </list>
     /// </para>
     /// <c>--ck-wiki &lt;folder&gt;</c> is independent of the above: points papyrus_function_lookup /
@@ -167,7 +167,7 @@ public partial class App : Application
             MessageBox.Show(
                 $"FO4RecordEditor hit an unhandled error.\n\n{ex?.Message}\n\n" +
                 $"Details written to:\n{_logPath ?? "(could not write log)"}",
-                "FO4RecordEditor — Crash", MessageBoxButton.OK, MessageBoxImage.Error);
+                "FO4RecordEditor -- Crash", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch { /* UI may be gone; the log is the source of truth */ }
     }

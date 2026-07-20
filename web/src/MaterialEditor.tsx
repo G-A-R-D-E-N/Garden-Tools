@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Save, RotateCcw, ChevronDown, ChevronRight, Undo2 } from 'lucide-react';
 import type { MaterialHost, MaterialField } from './backend';
 
-// [r,g,b] 0..1  <->  #rrggbb — same convention NifEditor's color fields use, so the two panels
+// [r,g,b] 0..1  <->  #rrggbb -- same convention NifEditor's color fields use, so the two panels
 // behave identically even though BGSM values are stored/edited as strings, not numbers.
 const toHex = (v: number[]) =>
   '#' + v.slice(0, 3).map(c => Math.round(Math.min(1, Math.max(0, c)) * 255).toString(16).padStart(2, '0')).join('');
@@ -64,11 +64,11 @@ export default function MaterialEditor(
       const payload = JSON.stringify(edits);
       const res = await material.SetFields(path, payload, '');   // overwrite in place
       const ok = /^Set \d+ field/.test(res);
-      appendLog(`${ok ? '✓' : '✗'} ${ok ? res : 'save failed — ' + res}`);
+      appendLog(`${ok ? '✓' : '✗'} ${ok ? res : 'save failed -- ' + res}`);
       if (ok) setEdits({});
       onSaved();
     } catch (e) {
-      appendLog('✗ save failed — ' + (e instanceof Error ? e.message : String(e)));
+      appendLog('✗ save failed -- ' + (e instanceof Error ? e.message : String(e)));
     } finally { setSaving(false); }
   };
 

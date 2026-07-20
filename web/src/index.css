@@ -128,7 +128,7 @@ body {
   color: var(--text-primary);
 }
 
-/* Light mode — solid conflict cell colors for maximum readability on white. */
+/* Light mode -- solid conflict cell colors for maximum readability on white. */
 /* Make the glass panel a light card instead of a frosted-dark slab. */
 [data-theme="light"] .glass-panel {
   background: var(--bg-secondary);
@@ -148,7 +148,7 @@ body {
 [data-theme="light"] .rv-c-none      { color: #c8cdd5; background: transparent; }
 [data-theme="light"] .rv-win-icon    { color: #b45309; }
 
-/* Light mode — table surfaces */
+/* Light mode -- table surfaces */
 [data-theme="light"] .rv-grid th           { background: var(--bg-tertiary); color: var(--text-secondary); }
 [data-theme="light"] td.rv-sticky,
 [data-theme="light"] th.rv-sticky          { background: var(--bg-secondary); }
