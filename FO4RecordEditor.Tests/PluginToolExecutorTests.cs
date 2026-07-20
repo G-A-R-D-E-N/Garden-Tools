@@ -65,6 +65,7 @@ public class PluginToolExecutorTests
             "set_light_flag", "nif_import", "nif_inspect", "nif_verify", "nif_fix",
             "archive_list", "archive_extract", "archive_extract_all",
             "papyrus_function_lookup", "papyrus_script_info",
+            "bgsm_inspect", "bgsm_set_field", "catalog_mod_folder",
         };
 
         var names = PluginToolExecutor.ToolDefinitions()

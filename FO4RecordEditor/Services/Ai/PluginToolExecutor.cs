@@ -1006,6 +1006,45 @@ public sealed class PluginToolExecutor
                 properties = new { script = new { type = "string", description = "Script name, e.g. 'ObjectReference' or 'Actor'." } },
                 required = new[] { "script" }
             }),
+        new("bgsm_inspect",
+            "Read a FO4 .bgsm material file and dump every shader field (Smoothness, SpecularColor, " +
+            "texture paths, PBR/porosity, emissive, translucency, terrain, ...). Fields absent from the " +
+            "output aren't stored by this file's BGSM version, not an error.",
+            new
+            {
+                type = "object",
+                properties = new { path = new { type = "string", description = "Full path to the .bgsm file." } },
+                required = new[] { "path" }
+            }),
+        new("bgsm_set_field",
+            "Set ONE field on a FO4 .bgsm material file and write it back — direct structured editing, no " +
+            "material-editor GUI needed. Call bgsm_inspect first to see the exact field names and current " +
+            "values for this file. Color fields (SpecularColor, EmittanceColor, HairTintColor, " +
+            "TranslucencySubsurfaceColor) take 3 comma-separated numbers, e.g. '1.0, 0.5, 0.2'. " +
+            "BGEM (effect materials) is not supported yet, only .bgsm.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    path = new { type = "string", description = "Full path to the .bgsm file." },
+                    field = new { type = "string", description = "Exact field name from bgsm_inspect, e.g. 'Smoothness' or 'SpecularColor'." },
+                    value = new { type = "string", description = "New value: a number, 'true'/'false', a string, or 'r, g, b' for a color field." },
+                    out_path = new { type = "string", description = "Optional output path; defaults to overwriting 'path' in place." }
+                },
+                required = new[] { "path", "field", "value" }
+            }),
+        new("catalog_mod_folder",
+            "Summarize an unfamiliar mod folder's contents by category (meshes/textures/materials/sounds/" +
+            "scripts/plugins/archives/voice/...) with per-category counts and a few top-level subfolders. " +
+            "Use this to get oriented in a mod before deciding what to inspect next, instead of walking the " +
+            "folder tree yourself.",
+            new
+            {
+                type = "object",
+                properties = new { mod_path = new { type = "string", description = "Full path to the mod's folder." } },
+                required = new[] { "mod_path" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -1128,7 +1167,8 @@ public sealed class PluginToolExecutor
             "delete_record" or "copy_as_override" or "clean_plugin" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
-            "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all";
+            "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all" or
+            "bgsm_set_field";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
@@ -1158,6 +1198,9 @@ public sealed class PluginToolExecutor
             "archive_extract_all" => $"extract all <- {System.IO.Path.GetFileName(Str("archive_path"))}",
             "papyrus_function_lookup" => $"papyrus lookup {Str("function")}",
             "papyrus_script_info" => $"papyrus script {Str("script")}",
+            "bgsm_inspect"        => $"inspect {System.IO.Path.GetFileName(Str("path"))}",
+            "bgsm_set_field"      => $"{System.IO.Path.GetFileName(Str("path"))}.{Str("field")} = {Str("value")}",
+            "catalog_mod_folder"  => $"catalog {System.IO.Path.GetFileName(Str("mod_path"))}",
             "check_plugin"        => $"check {plugin}",
             "clean_plugin"        => $"clean UDRs in {plugin}",
             "compact_to_esl"      => $"compact {plugin} to ESL",
@@ -1406,6 +1449,13 @@ public sealed class PluginToolExecutor
                 return PapyrusWikiService.LookupFunction(_ckWikiPathProvider?.Invoke() ?? "", Str("script"), Str("function"));
             case "papyrus_script_info":
                 return PapyrusWikiService.LookupScriptInfo(_ckWikiPathProvider?.Invoke() ?? "", Str("script"));
+
+            case "bgsm_inspect":
+                return MaterialService.Inspect(Str("path"));
+            case "bgsm_set_field":
+                return MaterialService.SetField(Str("path"), Str("field"), Str("value"), StrOrNull("out_path"));
+            case "catalog_mod_folder":
+                return ModInspectService.CatalogFolder(Str("mod_path"));
 
             default:
                 return ToolError.Fail($"Unknown tool: {toolName}");

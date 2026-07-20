@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **65 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **68 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -107,6 +107,16 @@ Mutagen's own reader, no Archive2.exe needed.
 `papyrus_function_lookup` · `papyrus_script_info` — reads an offline Creation Kit Wiki HTML mirror
 directly instead of you grepping wiki pages yourself. Disabled (returns a clear message, not an error)
 until `--ck-wiki <folder>` is passed at launch.
+
+### Materials
+`bgsm_inspect` · `bgsm_set_field` — read and edit individual `.bgsm` shader fields (Smoothness,
+SpecularColor, texture paths, PBR/emissive/translucency/terrain, ...) directly, no material-editor
+GUI needed. `.bgem` (effect materials) isn't supported yet.
+
+### Mod folder triage
+`catalog_mod_folder` — bucket an unfamiliar mod's files by category (meshes/textures/materials/
+sounds/scripts/plugins/archives/voice/...) with per-category counts, to get oriented before deciding
+what to inspect next.
 
 ### Escape hatch
 `run_script` — executes C# against the loaded mod through Mutagen, for anything the tools above do not
