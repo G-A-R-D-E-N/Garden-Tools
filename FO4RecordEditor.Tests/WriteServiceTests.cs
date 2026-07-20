@@ -262,7 +262,7 @@ public class WriteServiceTests
 
         // Save + reload, assert the new id AND that the weapon's link followed.
         var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), plugin);
-        WriteService.SavePlugin(plugin, outPath);
+        WriteService.SavePlugin(plugin, outPath, null);   // env: null — none in tests
         using var reload = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
             Mutagen.Bethesda.Plugins.ModPath.FromPath(outPath), rel);
         var rkw = reload.Keywords.First(k => k.EditorID == "Renum_Kw");

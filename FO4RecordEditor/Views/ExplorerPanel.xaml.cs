@@ -347,7 +347,7 @@ public partial class ExplorerPanel : UserControl
         if (r == MessageBoxResult.Yes)
         {
             var saveMsg = await System.Threading.Tasks.Task.Run(() =>
-                FO4RecordEditor.Services.WriteService.SavePlugin(plugin, null));
+                FO4RecordEditor.Services.WriteService.SavePlugin(plugin, null, env));
             main?.SetStatus(saveMsg);
             ResultsDialog.Show(main, "Save", saveMsg);
         }

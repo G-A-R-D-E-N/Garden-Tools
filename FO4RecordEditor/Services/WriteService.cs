@@ -594,7 +594,15 @@ public static partial class WriteService
         }
     }
 
-    public static string SavePlugin(string plugin, string? path, object? env = null)
+    /// <summary>
+    /// Writes a plugin to disk. <paramref name="env"/> is REQUIRED — do not give it a default.
+    /// It is what orders the MAST table by real load order; without it Mutagen emits its own order,
+    /// which can put a dependent ESM before its dependency and hang the game on load with no crash
+    /// log. It carried a `= null` default for a long time and callers kept quietly omitting it
+    /// (five inside this file, then three more in the GUI). Pass null explicitly if you genuinely
+    /// have no environment — that at least shows up in review.
+    /// </summary>
+    public static string SavePlugin(string plugin, string? path, object? env)
     {
         var (name, explicitPath) = NormalizePlugin(plugin);
         if (ProtectedPlugins.IsProtected(name)) return ToolError.Fail(ProtectedPlugins.RefusalMessage(name));
@@ -715,7 +723,7 @@ public static partial class WriteService
     /// list is recomputed from scratch and all remaining FormID high-bytes are correct.
     /// This is the Mutagen-native fix for the ITO master-index corruption found in session 2026-06-22.
     /// </summary>
-    public static string StripMastersClean(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun, object? env = null)
+    public static string StripMastersClean(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun, object? env)
     {
         if (!File.Exists(sourcePath))
             return $"Source file not found: '{sourcePath}'.";
@@ -1701,7 +1709,7 @@ public static partial class WriteService
     }
 
     /// <summary>Invalidate + notify + write the script's patch plugin to disk (apply mode).</summary>
-    public static string SaveScriptPatch(string patchPlugin, object? env = null)
+    public static string SaveScriptPatch(string patchPlugin, object? env)
     {
         var (name, _) = NormalizePlugin(patchPlugin);
         MutagenLoader.InvalidateModIndex(name);

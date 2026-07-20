@@ -52,7 +52,9 @@ public sealed class RecordTabViewModel
             : FO4RecordEditor.Services.MutagenLoader.BuildConflictMatrix(_env, fk);
     }
 
-    public RecordTabViewModel(RecordNode record, UndoStack undo, object? env = null)
+    // env is required, not optional: it reaches WriteService.SavePlugin from this tab's
+    // RemoveWinnerOverrideAndSave, and a null one silently drops load-order master ordering.
+    public RecordTabViewModel(RecordNode record, UndoStack undo, object? env)
     {
         Record = record;
         Undo = undo;

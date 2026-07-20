@@ -35,7 +35,8 @@ public class WriteToolsTests
             .Should().Contain("Set 2 condition(s)");
 
         var path = Path.Combine(Path.GetTempPath(), name);
-        WriteService.SavePlugin(name, path).Should().Contain("Saved");
+        // env: null — no game environment in tests, so master ordering falls back to Mutagen's.
+        WriteService.SavePlugin(name, path, null).Should().Contain("Saved");
 
         try
         {
