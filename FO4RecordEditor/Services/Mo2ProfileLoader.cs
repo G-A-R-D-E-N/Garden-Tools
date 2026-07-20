@@ -236,6 +236,10 @@ public static class Mo2ProfileLoader
                 : "");
         progress?.Report((summary, 100));
 
+        // So texture/mesh lookups (TextureService.ResolveDds/ResolveNif) search this ACTUAL modlist's
+        // mods\ and overwrite\ folders, not whatever (if anything) is saved in settings.json.
+        TextureService.SetSessionRoots(new[] { gameDataFolder, modsDir, ResolveOverwriteFolder(instancePath) });
+
         var env = new Mo2GameEnvironment
         {
             LoadOrder = lo,

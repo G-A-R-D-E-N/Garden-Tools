@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music,
+  Link2, Archive as ArchiveIcon, Music, Boxes,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
 import MastersPanel from './MastersPanel';
 import ArchivePanel from './ArchivePanel';
 import AudioPanel from './AudioPanel';
+import CellPanel from './CellPanel';
 
 interface McpLiveMsg {
   Tool: string;
@@ -96,6 +97,7 @@ export default function MainShell() {
   const [showMasters, setShowMasters] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
   const [showAudio, setShowAudio] = useState(false);
+  const [showCell, setShowCell] = useState(false);
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -518,6 +520,9 @@ export default function MainShell() {
           <button className={`activity-btn ${showAudio ? 'active' : ''}`} onClick={() => setShowAudio(true)} title="Audio (convert to/from xWMA, merge/split fuz)">
             <Music size={22} strokeWidth={1.5} />
           </button>
+          <button className={`activity-btn ${showCell ? 'active' : ''}`} onClick={() => setShowCell(true)} title="Cell Viewer (read-only 3D, like Creation Kit's render window)">
+            <Boxes size={22} strokeWidth={1.5} />
+          </button>
         </div>
       </div>
 
@@ -749,6 +754,7 @@ export default function MainShell() {
       {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
       {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}
       {showAudio && <AudioPanel onClose={() => setShowAudio(false)} />}
+      {showCell && <CellPanel onClose={() => setShowCell(false)} />}
     </div>
   );
 }

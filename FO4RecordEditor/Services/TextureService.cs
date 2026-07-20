@@ -94,7 +94,7 @@ public static class TextureService
     private static readonly Dictionary<string, string> _index = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _scannedArchives = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _scannedRoots = new(StringComparer.OrdinalIgnoreCase);
-    private static string[]? _globalRoots;   // settings-derived (DataFolder, MO2 mods) — computed once
+    private static string[]? _globalRoots;   // session roots if set, else settings-derived — cached until SetSessionRoots invalidates it
 
     private static string Norm(string p) => p.Replace('/', '\\').TrimStart('\\');
 
@@ -121,12 +121,16 @@ public static class TextureService
 
     // A slot path is normally "Textures\...". Match that, and also a bare form (some NIFs omit the
     // leading Textures\), against the archives' Data-relative entries.
-    private static List<string> LookupKeys(string rel)
+    private static List<string> LookupKeys(string rel) => LookupKeys(rel, "textures");
+
+    // Generalized for ResolveNif: meshes use the "Meshes\..." top folder instead of "Textures\...".
+    private static List<string> LookupKeys(string rel, string topFolder)
     {
         var norm = Norm(rel);
         var keys = new List<string> { norm };
-        if (!norm.StartsWith("textures\\", StringComparison.OrdinalIgnoreCase))
-            keys.Add("textures\\" + norm);
+        var prefix = topFolder + "\\";
+        if (!norm.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            keys.Add(prefix + norm);
         return keys;
     }
 
@@ -154,9 +158,26 @@ public static class TextureService
         }
     }
 
+    // Set by Mo2ProfileLoader.Load/MutagenLoader.BuildEnvironment right after a modlist actually
+    // loads, so resolution reflects what's LOADED this session -- not just settings.json. Nothing
+    // ever wrote the picked MO2 instance path back to settings.json (Mo2InstancePath is read-only
+    // config for a *default*, not session state), so before this every texture/mesh lookup outside
+    // the vanilla Data folder silently failed for any interactively-opened MO2 modlist. Found while
+    // building the cell viewer, which depends on this to find almost anything: nearly every placed
+    // object in a real modlist lives in a mods\ folder, not the vanilla Data folder.
+    private static string[]? _sessionRoots;
+
+    public static void SetSessionRoots(IEnumerable<string> roots)
+    {
+        _sessionRoots = roots.Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        _globalRoots = null;   // next GlobalRoots() call re-derives instead of returning a stale cache
+    }
+
     private static string[] GlobalRoots()
     {
         if (_globalRoots != null) return _globalRoots;
+        if (_sessionRoots != null) return _globalRoots = _sessionRoots;
+
         var roots = new List<string>();
         try
         {
@@ -199,7 +220,12 @@ public static class TextureService
                 foreach (var f in reader.Files)
                 {
                     var p = f.Path?.ToString();
-                    if (string.IsNullOrEmpty(p) || !p.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) continue;
+                    // Indexed together (one scan pass over each archive) rather than two separate
+                    // dds-only / nif-only scans -- the same BA2s hold both, so a texture lookup and a
+                    // mesh lookup (ResolveNif, for the cell viewer) share this one cache.
+                    if (string.IsNullOrEmpty(p) ||
+                        !(p.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) ||
+                          p.EndsWith(".nif", StringComparison.OrdinalIgnoreCase))) continue;
                     var key = Norm(p);
                     if (!_index.ContainsKey(key)) { _index[key] = archive; added++; }  // first (most-local) wins
                 }
@@ -207,10 +233,13 @@ public static class TextureService
             catch (Exception ex) { DebugLog.Exception("Texture.ReadBa2:" + Path.GetFileName(archive), ex); }
         }
         if (added > 0)
-            DebugLog.Info("Texture.Index", $"Indexed {added} DDS entries from BA2s under {root} in {sw.ElapsedMilliseconds}ms");
+            DebugLog.Info("Texture.Index", $"Indexed {added} DDS/NIF entries from BA2s under {root} in {sw.ElapsedMilliseconds}ms");
     }
 
-    // Pull one entry out of a BA2 to a cached temp .dds (keyed by archive path+mtime+inner path).
+    // Pull one entry out of a BA2 to a cached temp file (keyed by archive path+mtime+inner path).
+    // Extension comes from the actual inner entry, not assumed -- this used to hardcode ".dds", which
+    // silently corrupted mesh resolution (a .nif extracted and named "....dds" is a file niftool
+    // will reject); caught while adding ResolveNif for the cell viewer, so fixed for both callers.
     private static string? ExtractFromArchive(string archivePath, string innerKey)
     {
         try
@@ -218,22 +247,60 @@ public static class TextureService
             long stamp = 0;
             try { stamp = File.GetLastWriteTimeUtc(archivePath).Ticks; } catch { }
             var key = Hash(archivePath.ToLowerInvariant() + "|" + stamp + "|" + innerKey);
+            var ext = Path.GetExtension(innerKey);
+            if (string.IsNullOrEmpty(ext)) ext = ".dds";
             var cacheDir = Path.Combine(Path.GetTempPath(), "FO4RE_Tex");
             Directory.CreateDirectory(cacheDir);
-            var outDds = Path.Combine(cacheDir, "ba2_" + key + ".dds");
-            if (File.Exists(outDds)) return outDds;
+            var outPath = Path.Combine(cacheDir, "ba2_" + key + ext);
+            if (File.Exists(outPath)) return outPath;
 
             var reader = Archive.CreateReader(GameRelease.Fallout4, new Noggog.FilePath(archivePath));
             foreach (var f in reader.Files)
             {
                 if (!string.Equals(Norm(f.Path?.ToString() ?? ""), innerKey, StringComparison.OrdinalIgnoreCase))
                     continue;
-                File.WriteAllBytes(outDds, f.GetBytes());
-                return outDds;
+                File.WriteAllBytes(outPath, f.GetBytes());
+                return outPath;
             }
         }
         catch (Exception ex) { DebugLog.Exception("Texture.Extract", ex); }
         return null;
+    }
+
+    /// <summary>
+    /// Resolve a Data-relative NIF path (a placed reference's base object Model.File, e.g.
+    /// "Clutter\Rock01.nif") to a real file -- loose under the session's data/mods roots, or
+    /// extracted from a BA2 to a cached temp file. Built for the cell viewer's batch geometry
+    /// resolution (NifService), same search roots as ResolveDds (SetSessionRoots/GlobalRoots) but
+    /// with no per-call anchor directory: a cell's placed objects are always Data-relative, there is
+    /// no "the nif this texture belongs to" to anchor against the way single-mesh preview has.
+    /// </summary>
+    public static string? ResolveNif(string relPath)
+    {
+        relPath = (relPath ?? "").Trim().Trim('"');
+        if (string.IsNullOrWhiteSpace(relPath)) return null;
+        var rel = relPath.Replace('/', '\\').TrimStart('\\');
+        if (Path.IsPathRooted(rel) && File.Exists(rel)) return rel;
+
+        var roots = GlobalRoots();
+        foreach (var root in roots)
+        {
+            if (string.IsNullOrWhiteSpace(root)) continue;
+            var direct = Path.Combine(root, rel);
+            if (File.Exists(direct)) return direct;
+            if (rel.StartsWith("meshes\\", StringComparison.OrdinalIgnoreCase))
+            {
+                var stripped = Path.Combine(root, rel.Substring("meshes\\".Length));
+                if (File.Exists(stripped)) return stripped;
+            }
+            else
+            {
+                var prefixed = Path.Combine(root, "Meshes", rel);
+                if (File.Exists(prefixed)) return prefixed;
+            }
+        }
+
+        return ScanAndLookup(roots, LookupKeys(rel, "meshes"));
     }
 
     private static string? ConvertToPng(string ddsPath)

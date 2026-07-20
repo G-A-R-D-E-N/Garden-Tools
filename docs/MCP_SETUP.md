@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **73 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **74 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -111,6 +111,13 @@ folders into a new BA2. Mutagen has no BA2 *writer*, so packing shells out to th
 automatically, same as `compile_papyrus`). Typical flow to re-encode a mod's packed sounds:
 `archive_extract_all` its BA2 -> `audio_convert_to_xwm` on the extracted Sound folder ->
 `archive_pack` that same folder back into a new BA2.
+
+### Cells
+`cell_get_placed_references` — list a CELL's placed references (position/rotation/scale + base object
+model path), unioned across the whole load order rather than just the winning record (a plugin can
+"win" a CELL with an empty reference list while every other plugin's own placed objects still load
+in-game). Powers the desktop app's Cell Viewer panel; useful for an AI agent to inspect what's actually
+placed in a cell without opening the UI.
 
 ### Papyrus wiki lookup
 `papyrus_function_lookup` · `papyrus_script_info` — reads an offline Creation Kit Wiki HTML mirror

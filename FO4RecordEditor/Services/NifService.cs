@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
+using JsonConvert = Newtonsoft.Json.JsonConvert;
 
 namespace FO4RecordEditor.Services;
 
@@ -46,6 +49,43 @@ public static class NifService
         if (string.IsNullOrWhiteSpace(nifPath)) return "Provide 'nif_path'.";
         if (!File.Exists(nifPath)) return $"NIF not found: {nifPath}";
         return Run(new List<string> { "geo", nifPath });
+    }
+
+    /// <summary>
+    /// Batch-resolve+convert unique Data-relative NIF paths (e.g. "Clutter\Rock01.nif") to geometry
+    /// JSON, for the cell viewer. One resolve+niftool call per UNIQUE path, not per placed reference
+    /// -- a mesh placed 40 times in a cell converts once, not 40 times -- run in parallel with a
+    /// capped degree since each call is a real child process. Keyed by the ORIGINAL relative path the
+    /// caller passed in, so the frontend can match each placed reference back to its geometry without
+    /// needing to know how the path was actually resolved (loose vs. extracted from which archive).
+    /// </summary>
+    public static string GeoBatch(IEnumerable<string> relModelPaths)
+    {
+        var unique = relModelPaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var results = new ConcurrentDictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        var degree = Math.Max(1, Math.Min(Environment.ProcessorCount, 8));
+
+        Parallel.ForEach(unique, new ParallelOptions { MaxDegreeOfParallelism = degree }, rel =>
+        {
+            var resolved = TextureService.ResolveNif(rel);
+            if (resolved == null) { results[rel] = new { error = "Not found (loose or in any indexed archive)." }; return; }
+
+            var raw = Geo(resolved);
+            // niftool's geo command emits raw JSON on success; anything else (a "NIF not found"/
+            // "niftool.exe not found." line, a parse failure inside niftool) is plain text. Embed
+            // success as JRaw so it nests as a real object in the batch result instead of a
+            // JSON-string-inside-a-JSON-string that the frontend would have to double-parse.
+            results[rel] = raw.TrimStart().StartsWith('{')
+                ? new Newtonsoft.Json.Linq.JRaw(raw)
+                : new { error = raw };
+        });
+
+        return JsonConvert.SerializeObject(new { count = unique.Count, geometry = results });
     }
 
     public static string Verify(string nifPath)

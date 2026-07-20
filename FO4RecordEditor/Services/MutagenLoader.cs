@@ -294,6 +294,10 @@ public static class MutagenLoader
                 MasterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
             }
 
+        // Same reasoning as Mo2ProfileLoader.Load: texture/mesh lookups should search where this
+        // session's plugins actually loaded from, not a possibly-unset/stale settings.json value.
+        try { TextureService.SetSessionRoots(new[] { env.DataFolderPath.Path }); } catch { }
+
         progress?.Report(($"Found {plugins.Count} plugins.", null));
         return (env, plugins);
     }
@@ -1335,6 +1339,21 @@ public static class MutagenLoader
             if (rec != null) return rec.FormKey;
         }
         return FormKey.Null;
+    }
+
+    /// <summary>
+    /// The one accepted-id-format resolver every "id" tool parameter in this app should use: a
+    /// FormKey string ('001234:Fallout4.esm'), a resolvable link-cache identifier, or an EditorID --
+    /// in that order. Promoted from PluginToolExecutor.ResolveToFk (which now just forwards here) so
+    /// CellService and anything else needing "id" -> FormKey doesn't duplicate the chain.
+    /// </summary>
+    public static FormKey ResolveId(object? envObj, string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return FormKey.Null;
+        if (FormKey.TryFactory(id, out var fk)) return fk;
+        var cache = LinkCache;
+        if (cache != null && cache.TryResolve<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>(id, out var rec)) return rec.FormKey;
+        return ResolveEditorIdToFormKey(envObj, id);
     }
 
     private static void FlattenToText(RecordNode node, int depth, System.Text.StringBuilder sb)

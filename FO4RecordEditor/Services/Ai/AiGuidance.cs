@@ -82,6 +82,8 @@ public static class AiGuidance
         + "Archive2.exe installed (not redistributable, so not bundled -- same as compile_papyrus).\n"
         + "Mod folder triage: catalog_mod_folder (bucket an unfamiliar mod's files by category before "
         + "deciding what to inspect next).\n"
+        + "Cells: cell_get_placed_references (a CELL's placed references -- position/rotation/scale + "
+        + "base object model path -- unioned across the whole load order, not just the winning record).\n"
         + "Audio (works out of the box against bundled ffmpeg/xWMAEncode/BmlFuzTools, no setup needed): "
         + "audio_convert_to_xwm (any audio/video, OR A WHOLE FOLDER of them recursed -> Fallout 4's xwm), "
         + "audio_convert_from_xwm (xwm -> wav or another format), audio_make_fuz (audio + optional lip -> "

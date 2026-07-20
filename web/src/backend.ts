@@ -283,6 +283,43 @@ export interface SettingsHost {
   TestClaude(path: string): Promise<string>; // verifies the Claude Code CLI
 }
 
+/** One placed reference from CellService.GetPlacedReferencesJson. modelPath is null for reference
+ * types/base objects with no Model subrecord (actors, traps, etc.) -- the viewer draws a marker. */
+export interface CellPlacedReference {
+  formKey: string;
+  editorId?: string;
+  recordType: string;
+  baseFormKey: string;
+  baseEditorId?: string;
+  modelPath: string | null;
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
+  scale: number;
+}
+export interface CellReferencesResult {
+  cellFormKey?: string;
+  cellEditorId?: string;
+  cellName?: string;
+  interior?: boolean;
+  referenceCount?: number;
+  withModelCount?: number;
+  references?: CellPlacedReference[];
+  error?: string;
+}
+/** GeoBatch's per-model result: either niftool's raw geo JSON (NifGeo shape, see NifViewport.tsx)
+ * or { error }, e.g. "Not found" or a Next-Gen-archive decompression failure. */
+export interface CellGeoBatchResult {
+  count: number;
+  geometry: Record<string, unknown>;
+}
+
+/** The "cell" bridge (FO4RecordEditor.Services.CellInterop) — the Cell Viewer panel. */
+export interface CellHost {
+  GetPlacedReferences(cellId: string): Promise<string>;          // JSON: CellReferencesResult
+  // relModelPathsJson: JSON array of unique modelPath strings from GetPlacedReferences.
+  GetGeometryBatch(relModelPathsJson: string): Promise<string>;  // JSON: CellGeoBatchResult
+}
+
 declare global {
   interface Window {
     chrome?: {
@@ -298,6 +335,7 @@ declare global {
           masters?: MastersHost;
           archive?: ArchiveHost;
           audio?: AudioHost;
+          cell?: CellHost;
         };
       };
     };
@@ -327,3 +365,6 @@ export const getArchive = (): ArchiveHost | undefined =>
 
 export const getAudio = (): AudioHost | undefined =>
   window.chrome?.webview?.hostObjects?.audio;
+
+export const getCell = (): CellHost | undefined =>
+  window.chrome?.webview?.hostObjects?.cell;

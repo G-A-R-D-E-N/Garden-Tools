@@ -85,6 +85,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AppWebView.CoreWebView2.AddHostObjectToScript("archive", new Services.ArchiveInterop());
         // Audio panel: convert to/from xWMA, merge/split .fuz.
         AppWebView.CoreWebView2.AddHostObjectToScript("audio", new Services.AudioInterop());
+        // Cell Viewer panel: read a cell's placed references + batch-convert their meshes to geometry.
+        AppWebView.CoreWebView2.AddHostObjectToScript("cell", new Services.CellInterop(_shell));
 
 #if DEBUG
         AppWebView.Source = new Uri("http://localhost:5173/#/main");

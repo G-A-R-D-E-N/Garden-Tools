@@ -1130,6 +1130,21 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "source_paths", "output_ba2", "root_dir" }
             }),
+        new("cell_get_placed_references",
+            "List a CELL's placed references (position/rotation/scale + base object model path), " +
+            "unioned across the whole load order -- not just the winning record, since a plugin can " +
+            "'win' a CELL with an empty reference list while every other plugin's own placed objects " +
+            "still load in-game. Powers the Cell Viewer panel; useful for an AI agent to inspect what's " +
+            "actually placed in a cell without opening the UI.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    cell_id = new { type = "string", description = "A FormKey ('001234:Fallout4.esm') or an EditorID." }
+                },
+                required = new[] { "cell_id" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -1308,6 +1323,7 @@ public sealed class PluginToolExecutor
             "scan_conflicts"      => "scan all conflicts",
             "scan_broken_refs"    => $"scan broken refs in {plugin}",
             "scan_all_plugins"    => "scan entire modlist for broken refs",
+            "cell_get_placed_references" => $"placed refs in {ShortId(Str("cell_id"))}",
             _                     => toolName.Replace('_', ' '),
         };
 
@@ -1398,6 +1414,8 @@ public sealed class PluginToolExecutor
                 return MutagenLoader.ScanBrokenRefs(env, Str("plugin"));
             case "scan_all_plugins":
                 return MutagenLoader.ScanAllPluginsForBrokenRefs(env);
+            case "cell_get_placed_references":
+                return CellService.GetPlacedReferencesJson(Str("cell_id"), env);
 
             // ---- write tools ----
             case "open_plugin":
@@ -1575,14 +1593,8 @@ public sealed class PluginToolExecutor
 
     // Resolve a FormKey ('001234:Plugin.esp') or an EditorID to a FormKey, using the load order's
     // link cache (resolves both, globally) with a fallback to the per-mod index.
-    private static Mutagen.Bethesda.Plugins.FormKey ResolveToFk(object? env, string id)
-    {
-        if (string.IsNullOrWhiteSpace(id)) return Mutagen.Bethesda.Plugins.FormKey.Null;
-        if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(id, out var fk)) return fk;
-        var cache = MutagenLoader.LinkCache;
-        if (cache != null && cache.TryResolve<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>(id, out var rec)) return rec.FormKey;
-        return MutagenLoader.ResolveEditorIdToFormKey(env, id);
-    }
+    private static Mutagen.Bethesda.Plugins.FormKey ResolveToFk(object? env, string id) =>
+        MutagenLoader.ResolveId(env, id);
 
     private static string GetConflicts(object? env, string id)
     {
