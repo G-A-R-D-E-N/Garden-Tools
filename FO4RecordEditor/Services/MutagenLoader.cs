@@ -150,7 +150,7 @@ public static class MutagenLoader
     // ---- per-mod record index (built once, reused for every group/record load) ----
     // Without this, every group expansion re-enumerated the ENTIRE mod (O(allRecords)
     // per group), which hangs on large masters like Fallout4.esm.
-    private sealed class ModIndex
+    internal sealed class ModIndex
     {
         public readonly Dictionary<string, List<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>> BySig =
             new(StringComparer.Ordinal);
@@ -163,9 +163,22 @@ public static class MutagenLoader
         // check_plugin (which enumerates directly) correctly saw them. Rebuilding when Source no
         // longer matches the resolved mod makes the cache self-healing across every replace path.
         public object? Source;
+        // Monotonic tick of the last serve/build, for LRU eviction. Set via StoreModIndex / on hit.
+        public long LastAccess;
     }
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ModIndex> _modIndexCache = new(StringComparer.OrdinalIgnoreCase);
+    private static long _modIndexAccessTick;
+    private static readonly object _modIndexEvictLock = new();
+
+    // Cap on how many per-mod indexes stay resident. Each index pins a reference to every record in
+    // its mod, so without a bound a broad sweep (search_all / scan_conflicts / list_records across a
+    // 650+-plugin load order) caches every plugin's full index and never releases it -- the measured
+    // multi-GB long-session growth in bd f4se_og-ths. LRU by last access keeps the active working set
+    // warm while bounding the total; actively-edited plugins are never evicted (see EvictModIndexLru).
+    // internal so tests can lower it. A generous default: the realistic burst of plugins a user juggles
+    // is well under this, so normal editing never evicts, but a full-load-order sweep is capped.
+    internal static int MaxCachedModIndexes = 64;
 
     // Resolve a mod by file name. Editable (mutable) copies win so the AI's in-progress
     // edits are what everything reads (hot loading), then the env load order, then loose ESPs.
@@ -214,7 +227,10 @@ public static class MutagenLoader
         // A name-only hit would hand back a stale index after the backing instance was replaced
         // (reload_plugin, open_plugin, env refresh, or an editable copy superseding the env copy).
         if (_modIndexCache.TryGetValue(modName, out var cached) && ReferenceEquals(cached.Source, mod))
+        {
+            cached.LastAccess = System.Threading.Interlocked.Increment(ref _modIndexAccessTick);
             return cached;
+        }
 
         var idx = new ModIndex { Source = mod };
         if (mod is Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod)
@@ -229,11 +245,54 @@ public static class MutagenLoader
                 if (++count % 5000 == 0) progress?.Invoke($"Indexing {modName}: {count} records...");
             }
         }
+        return StoreModIndex(modName, idx);
+    }
+
+    // Insert (or replace) a mod's index, stamp its access tick, and evict LRU overflow past the cap.
+    private static ModIndex StoreModIndex(string modName, ModIndex idx)
+    {
+        idx.LastAccess = System.Threading.Interlocked.Increment(ref _modIndexAccessTick);
         _modIndexCache[modName] = idx;
+        if (_modIndexCache.Count > MaxCachedModIndexes) EvictModIndexLru();
         return idx;
     }
 
+    // Evict least-recently-used indexes down to MaxCachedModIndexes. NEVER evicts an index for a
+    // plugin currently in EditableMods: that is the actively-edited working set, and get_winning_record
+    // / ResolveEditorIdToFormKey filter on "is this mod already indexed" (to avoid re-enumerating the
+    // whole load order), so dropping an in-edit plugin's index there could make a live override or an
+    // EditorID silently stop resolving. Removing a cache entry never invalidates a reference a caller
+    // already holds -- GetModIndex returns the object and callers use it locally -- so eviction mid-use,
+    // even during a parallel sweep, is safe; the worst case is a later rebuild.
+    private static void EvictModIndexLru()
+    {
+        lock (_modIndexEvictLock)
+        {
+            while (_modIndexCache.Count > MaxCachedModIndexes)
+            {
+                string? victim = null;
+                long oldest = long.MaxValue;
+                foreach (var kv in _modIndexCache)
+                {
+                    if (EditableMods.ContainsKey(kv.Key)) continue;   // protect the active working set
+                    if (kv.Value.LastAccess < oldest) { oldest = kv.Value.LastAccess; victim = kv.Key; }
+                }
+                if (victim == null) break;   // everything left is protected -- stop rather than spin
+                _modIndexCache.TryRemove(victim, out _);
+            }
+        }
+    }
+
     public static void InvalidateModIndex(string modName) => _modIndexCache.TryRemove(modName, out _);
+
+    // ---- test seams for the LRU cache (InternalsVisibleTo FO4RecordEditor.Tests) ----
+    internal static int ModIndexCacheCount => _modIndexCache.Count;
+    internal static bool ModIndexCacheContains(string modName) => _modIndexCache.ContainsKey(modName);
+    internal static void ClearModIndexCacheForTest() => _modIndexCache.Clear();
+    // Seed a synthetic (empty) index through the real store/evict path so LRU behavior can be tested
+    // without enumerating a real mod; `source` stands in for the backing mod instance.
+    internal static void SeedModIndexForTest(string modName, object source)
+        => StoreModIndex(modName, new ModIndex { Source = source });
 
     public static RecordNode LoadEsp(string espPath, IProgress<(string message, double? percent)>? progress = null)
     {
