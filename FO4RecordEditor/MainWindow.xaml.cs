@@ -79,6 +79,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AppWebView.CoreWebView2.AddHostObjectToScript("nif", new Services.NifInterop());
         // Materials tab (lives inside the NIF panel): inspect/edit .bgsm shader fields.
         AppWebView.CoreWebView2.AddHostObjectToScript("material", new Services.MaterialInterop());
+        // Masters panel: inspect/reorder a plugin's master table + toggle its ESL flag.
+        AppWebView.CoreWebView2.AddHostObjectToScript("masters", new Services.MastersInterop(_shell));
+        // Archive panel: list/extract BA2/BSA contents.
+        AppWebView.CoreWebView2.AddHostObjectToScript("archive", new Services.ArchiveInterop());
 
 #if DEBUG
         AppWebView.Source = new Uri("http://localhost:5173/#/main");

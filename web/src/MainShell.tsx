@@ -2,9 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
+  Link2, Archive as ArchiveIcon,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
+import MastersPanel from './MastersPanel';
+import ArchivePanel from './ArchivePanel';
 
 interface McpLiveMsg {
   Tool: string;
@@ -89,6 +92,8 @@ export default function MainShell() {
   const [showSettings, setShowSettings] = useState(false);
   const [showPapyrus, setShowPapyrus] = useState(false);
   const [showNif, setShowNif] = useState(false);
+  const [showMasters, setShowMasters] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -502,6 +507,12 @@ export default function MainShell() {
           <button className={`activity-btn ${showNif ? 'active' : ''}`} onClick={() => setShowNif(true)} title="NIF (author / inspect / verify / fix)">
             <Box size={22} strokeWidth={1.5} />
           </button>
+          <button className={`activity-btn ${showMasters ? 'active' : ''}`} onClick={() => setShowMasters(true)} title="Masters (inspect / reorder / ESL flag)">
+            <Link2 size={22} strokeWidth={1.5} />
+          </button>
+          <button className={`activity-btn ${showArchive ? 'active' : ''}`} onClick={() => setShowArchive(true)} title="Archive (BA2/BSA browse / extract)">
+            <ArchiveIcon size={22} strokeWidth={1.5} />
+          </button>
         </div>
       </div>
 
@@ -730,6 +741,8 @@ export default function MainShell() {
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showPapyrus && <PapyrusPanel onClose={() => setShowPapyrus(false)} />}
       {showNif && <NifPanel onClose={() => setShowNif(false)} />}
+      {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
+      {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}
     </div>
   );
 }

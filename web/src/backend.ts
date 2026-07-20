@@ -161,6 +161,53 @@ export interface NifHost {
   StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
 }
 
+/** One row in a MastersListResult (matches WriteService.ListMastersJson's anonymous shape). */
+export interface MasterRow {
+  index: number;
+  name: string;
+  size: number | null;   // null = not found on disk / not in the loaded environment
+  used: boolean;          // false = save_plugin's Iterate would drop this master
+}
+export interface MastersListResult {
+  pluginName?: string;
+  masters?: MasterRow[];
+  light?: boolean;        // current ESL/Small header flag
+  error?: string;
+}
+
+/** The "masters" bridge (FO4RecordEditor.Services.MastersInterop) — master table + ESL flag. */
+export interface MastersHost {
+  GetPlugins(): Promise<string>;                       // JSON: string[] of plugin names
+  List(plugin: string): Promise<string>;                // JSON: MastersListResult
+  // orderJson: JSON array of master names in the new order (must be an exact permutation). Writes immediately.
+  Reorder(plugin: string, orderJson: string): Promise<string>;
+  SetLight(plugin: string, light: boolean): Promise<string>;   // in memory until SavePlugin
+  SavePlugin(plugin: string): Promise<string>;
+}
+
+/** One entry in an ArchiveListResult (matches ArchiveService.ListArchiveJson's anonymous shape). */
+export interface ArchiveEntry { path: string; size: number; }
+export interface ArchiveListResult {
+  archiveName?: string;
+  totalCount?: number;
+  shownCount?: number;
+  truncated?: boolean;
+  entries?: ArchiveEntry[];
+  error?: string;
+}
+
+/** The "archive" bridge (FO4RecordEditor.Services.ArchiveInterop) — list/extract BA2/BSA contents. */
+export interface ArchiveHost {
+  BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
+  BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
+  List(archivePath: string, filter: string, limit: number): Promise<string>;   // JSON: ArchiveListResult
+  ExtractFile(archivePath: string, innerPath: string, outPath: string): Promise<string>;
+  // innerPathsJson: JSON array of the panel's selected entry paths.
+  ExtractSelected(archivePath: string, innerPathsJson: string, outDir: string): Promise<string>;
+  ExtractAll(archivePath: string, outDir: string, filter: string, limit: number): Promise<string>;
+  OpenFolder(path: string): Promise<string>;   // reveal in Explorer; "" on success
+}
+
 /** One field in a MaterialField list (matches MaterialService.CollectFields' anonymous shape). */
 export interface MaterialField {
   name: string;
@@ -205,6 +252,8 @@ declare global {
           papyrus?: PapyrusHost;
           nif?: NifHost;
           material?: MaterialHost;
+          masters?: MastersHost;
+          archive?: ArchiveHost;
         };
       };
     };
@@ -225,3 +274,9 @@ export const getNif = (): NifHost | undefined =>
 
 export const getMaterial = (): MaterialHost | undefined =>
   window.chrome?.webview?.hostObjects?.material;
+
+export const getMasters = (): MastersHost | undefined =>
+  window.chrome?.webview?.hostObjects?.masters;
+
+export const getArchive = (): ArchiveHost | undefined =>
+  window.chrome?.webview?.hostObjects?.archive;

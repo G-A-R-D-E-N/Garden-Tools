@@ -1,6 +1,7 @@
 using System.IO;
 using FluentAssertions;
 using FO4RecordEditor.Services;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace FO4RecordEditor.Tests;
@@ -211,6 +212,46 @@ public class WriteServiceTests
         result.Should().Contain("UsedMaster.esm").And.Contain("UnusedMaster.esm");
         result.Split('\n').First(l => l.Contains("UsedMaster.esm")).Should().Contain("used").And.NotContain("UNUSED");
         result.Split('\n').First(l => l.Contains("UnusedMaster.esm")).Should().Contain("UNUSED");
+    }
+
+    [Fact]
+    public void ListMastersJson_ReturnsStructuredRowsAndLightFlag()
+    {
+        var plugin = $"ListMastersJsonTest_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(plugin);
+        var mod = WriteService.GetMutable(plugin)!;
+        var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
+
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "UsedMaster.esm" });
+        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = "UnusedMaster.esm" });
+        var gun = new Mutagen.Bethesda.Fallout4.Weapon(new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x800), rel) { EditorID = "Lmj_Gun" };
+        gun.Keywords = new()
+        {
+            new Mutagen.Bethesda.Plugins.FormLink<Mutagen.Bethesda.Fallout4.IKeywordGetter>(
+                new Mutagen.Bethesda.Plugins.FormKey("UsedMaster.esm", 0x001234))
+        };
+        mod.Weapons.Add(gun);
+        mod.ModHeader.Flags |= Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small;
+
+        var json = Newtonsoft.Json.Linq.JObject.Parse(WriteService.ListMastersJson(plugin, null));
+        json["light"]!.Value<bool>().Should().BeTrue();
+        var masters = (Newtonsoft.Json.Linq.JArray)json["masters"]!;
+        masters.Should().HaveCount(2);
+
+        var used = masters.First(m => m["name"]!.Value<string>() == "UsedMaster.esm");
+        used["used"]!.Value<bool>().Should().BeTrue();
+        used["index"]!.Value<int>().Should().Be(0);
+
+        var unused = masters.First(m => m["name"]!.Value<string>() == "UnusedMaster.esm");
+        unused["used"]!.Value<bool>().Should().BeFalse();
+        unused["index"]!.Value<int>().Should().Be(1);
+    }
+
+    [Fact]
+    public void ListMastersJson_PluginNotOpen_ReturnsJsonError()
+    {
+        var json = Newtonsoft.Json.Linq.JObject.Parse(WriteService.ListMastersJson("NoSuchPlugin.esp", null));
+        json["error"].Should().NotBeNull();
     }
 
     [Fact]

@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using FluentAssertions;
 using FO4RecordEditor.Services;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace FO4RecordEditor.Tests;
@@ -151,6 +154,87 @@ public class ArchiveServiceTests
             Directory.Exists(outDir).Should().BeFalse("a refusal must not create the output directory");
         }
         finally { try { Directory.Delete(outDir, true); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_ReturnsStructuredEntriesAndCounts()
+    {
+        var archive = BuildTestBa2(
+            (@"Meshes\A.txt", Encoding.ASCII.GetBytes("aa")),
+            (@"Textures\B.txt", Encoding.ASCII.GetBytes("bbb")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, filter: null, limit: 100));
+            json["totalCount"]!.Value<int>().Should().Be(2);
+            json["shownCount"]!.Value<int>().Should().Be(2);
+            json["truncated"]!.Value<bool>().Should().BeFalse();
+            var entries = (JArray)json["entries"]!;
+            entries.First(e => e["path"]!.Value<string>() == @"Meshes\A.txt")["size"]!.Value<int>().Should().Be(2);
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_Truncates_AndReportsIt()
+    {
+        var archive = BuildTestBa2(
+            (@"A.txt", Encoding.ASCII.GetBytes("a")),
+            (@"B.txt", Encoding.ASCII.GetBytes("b")),
+            (@"C.txt", Encoding.ASCII.GetBytes("c")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, filter: null, limit: 2));
+            json["totalCount"]!.Value<int>().Should().Be(3);
+            json["shownCount"]!.Value<int>().Should().Be(2);
+            json["truncated"]!.Value<bool>().Should().BeTrue();
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_MissingArchive_ReturnsJsonError()
+    {
+        var json = JObject.Parse(ArchiveService.ListArchiveJson(@"C:\does\not\exist.ba2", null, 100));
+        json["error"].Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ExtractSelected_ExtractsOnlyChosenEntries()
+    {
+        var content = Encoding.ASCII.GetBytes("payload");
+        var archive = BuildTestBa2(
+            (@"Meshes\A.txt", content),
+            (@"Meshes\B.txt", Encoding.ASCII.GetBytes("skip me")),
+            (@"Meshes\C.txt", Encoding.ASCII.GetBytes("skip me too")));
+        var outDir = Path.Combine(Path.GetTempPath(), $"ArchiveExtractSelected_{Guid.NewGuid():N}");
+        try
+        {
+            var result = ArchiveService.ExtractSelected(archive, new List<string> { @"Meshes\A.txt" }, outDir);
+            result.Should().Contain("Extracted 1 of 1 selected");
+
+            var extracted = Path.Combine(outDir, "Meshes", "A.txt");
+            File.Exists(extracted).Should().BeTrue();
+            File.ReadAllBytes(extracted).Should().Equal(content);
+            File.Exists(Path.Combine(outDir, "Meshes", "B.txt")).Should().BeFalse();
+            File.Exists(Path.Combine(outDir, "Meshes", "C.txt")).Should().BeFalse();
+        }
+        finally
+        {
+            try { File.Delete(archive); } catch { }
+            try { Directory.Delete(outDir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ExtractSelected_NoneMatch_ReturnsError()
+    {
+        var archive = BuildTestBa2((@"Meshes\A.txt", Encoding.ASCII.GetBytes("x")));
+        try
+        {
+            ArchiveService.ExtractSelected(archive, new List<string> { @"Meshes\NotHere.txt" }, Path.GetTempPath())
+                .Should().Contain("None of the selected files");
+        }
+        finally { try { File.Delete(archive); } catch { } }
     }
 
     [Fact]

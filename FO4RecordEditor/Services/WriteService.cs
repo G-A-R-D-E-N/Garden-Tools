@@ -7,6 +7,9 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
+// Only ever call JsonConvert.SerializeObject from Newtonsoft here, never a bare JsonSerializer.* --
+// System.Text.Json.JsonSerializer is already used throughout this file and the two types collide.
+using JsonConvert = Newtonsoft.Json.JsonConvert;
 
 namespace FO4RecordEditor.Services;
 
@@ -896,6 +899,40 @@ public static partial class WriteService
             lines.Add($"{i}: {m}  ({sizeStr}, {usedStr})");
         }
         return $"Masters of '{name}' ({masters.Count}):\n" + string.Join("\n", lines);
+    }
+
+    /// <summary>JSON variant of <see cref="ListMasters"/> for the GUI Masters panel: structured
+    /// per-master rows (index/name/size/used) PLUS the plugin's current ESL/Small flag, so the panel
+    /// can render its "Light plugin" checkbox from the same call instead of a second round trip.</summary>
+    public static string ListMastersJson(string plugin, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg);
+        if (mod == null) return JsonConvert.SerializeObject(new { error = msg });
+        var (name, _) = NormalizePlugin(plugin);
+
+        var masters = mod.MasterReferences.Select(m => m.Master.FileName.String).ToList();
+
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rec in mod.EnumerateMajorRecords())
+            foreach (var link in rec.EnumerateFormLinks())
+            {
+                if (link.FormKey.IsNull) continue;
+                used.Add(link.FormKey.ModKey.FileName.String);
+            }
+
+        var rows = new List<object>(masters.Count);
+        for (int i = 0; i < masters.Count; i++)
+        {
+            var m = masters[i];
+            var path = FindPluginPath(m, env);
+            long? size = null;
+            if (path != null && File.Exists(path))
+                try { size = new FileInfo(path).Length; } catch { }
+            rows.Add(new { index = i, name = m, size, used = used.Contains(m) });
+        }
+
+        var light = mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small);
+        return JsonConvert.SerializeObject(new { pluginName = name, masters = rows, light });
     }
 
     /// <summary>
