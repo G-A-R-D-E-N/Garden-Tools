@@ -47,6 +47,19 @@ build noise reduction so a first `dotnet build` after cloning is not a wall of u
 Only the two Perk/EnumBinaryTranslation files above are functional patches. Everything else in
 `Mutagen/` is an unmodified copy of the upstream source at the point this fork was vendored.
 
+## Offline Creation Kit Wiki mirror
+
+`tools\ckwiki\fallout4\` bundles a static HTML mirror of the community-run Creation Kit Wiki
+(creationkit.com/fallout4), used by `papyrus_function_lookup`/`papyrus_script_info` so those tools
+work without a network call. It is **not** Bethesda content — it's wiki text written by the FO4
+modding community, originally packaged for reuse as a Nexus "Modder's Resource":
+
+- **Title:** Offline Fallout 4 Creation Kit Wiki
+- **Content by:** FO4 CK Wiki Editors
+- **Mirror packaged by:** tondabayashi (Nexus Mods)
+- **Version bundled:** 21.05.20 (matches this package's `tools\ckwiki\fallout4\` exactly)
+- **Tags on the source page:** Modder's Resource, Non-Playable Resource, Utilities for Modders
+
 ## What is not here
 
 This package contains **no Bethesda assets** — no game files, no vanilla scripts, no Creation Kit
