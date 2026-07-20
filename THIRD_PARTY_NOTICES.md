@@ -30,7 +30,7 @@ that obligation is satisfied; there is no separate location to also track.
 
 ## Our Mutagen is patched
 
-The vendored Mutagen (`Mutagen/`) is a fork with three functional fixes that upstream does not have.
+The vendored Mutagen (`Mutagen/`) is a fork with four functional fixes that upstream does not have.
 Without them the editor writes broken perk data or misreads Next-Gen archives, so a clean upstream
 Mutagen is **not** a drop-in replacement:
 
@@ -45,6 +45,14 @@ Mutagen is **not** a drop-in replacement:
   already uses, which is empirically correct for Next-Gen too (confirmed identical in upstream
   Mutagen's own `dev` branch before this fix -- not a stale-fork issue). See
   `docs/Code Notes/FO4RecordEditor.md` for the verification.
+- `Mutagen.Bethesda.Core/Archives/Ba2/Ba2Reader.cs` (`Ba2Reader` + `BA2FileEntry`) -- fixes the BA2
+  **version-7** GNRL entry layout. v7 is the classic v1 36-byte layout, but Mutagen read two phantom
+  `uint32`s for it (one after the header's `nameTableOffset`, one after each entry's `nameHash`) and
+  skipped the trailing `0xBAADF00D` align field, so the whole entry table was mis-strided and every
+  file resolved to the wrong data. Hex-verified against the real `DLCRobot - Voices_en.ba2` (6,112
+  `.fuz` entries all decode with `ext="fuz"` + correct align, and `24 + count*36` hits the first data
+  offset exactly). Distinct from the v8 fix above though in the same file. See
+  `docs/Code Notes/FO4RecordEditor.md` for the full byte-level verification.
 
 `Mutagen/Directory.Build.targets` additionally carries one build-configuration-only local change,
 clearly marked in a comment at the top of that file: NuGet packaging is turned off (we compile and

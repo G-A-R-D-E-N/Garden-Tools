@@ -45,7 +45,12 @@ class Ba2Reader : IArchiveReader
         var numFiles = reader.ReadUInt32();
         _nameTableOffset = reader.ReadUInt64();
 
-        if (Version > 1 && Version <= 7)
+        // v7 excluded, same as the per-entry layout below: the real v7 GNRL header is exactly 24 bytes
+        // (magic+version+fourcc+numFiles+nameTableOffset) with NO extra field -- hex-verified, the
+        // entry table starts at byte 24 and 24 + numFiles*36 lands on the first file's data offset.
+        // Reading a phantom uint32 here shifted the whole entry table by 4 bytes, corrupting every
+        // entry. Left in place for 2..6 (which don't occur as GNRL in FO4).
+        if (Version > 1 && Version < 7)
         {
             var unknown = reader.ReadUInt32();
         }
@@ -370,7 +375,16 @@ class BA2FileEntry : IArchiveFile
         _version = version;
         _nameHash = reader.ReadUInt32();
         Path = _nameHash.ToString("X");
-        if (version > 1 && version <= 7)
+        // NOTE: version 7 is NOT included here. A real v7 GNRL archive (DLCRobot - Voices_en.ba2,
+        // 6112 .fuz entries) was hex-verified to use the classic v1 36-byte entry layout exactly --
+        // there is NO extra field after nameHash, and it DOES carry the trailing 0xBAADF00D align
+        // field (read below). Proof: all 6112 entries decode with ext="fuz" and align==0xBAADF00D at
+        // the v1 offsets, and 24 + 6112*36 lands exactly on the first file's data offset. Mutagen's
+        // old `<= 7` read this phantom uint32 (really the ext field) AND skipped align, making each
+        // entry 40 bytes and drifting cumulatively into garbage. Kept for 2..6 (which don't occur as
+        // GNRL in FO4 -- higher-version archives are DX10/texture, a separate entry path) rather than
+        // assert something unverified there.
+        if (version > 1 && version < 7)
         {
             var unknown = reader.ReadUInt32();
         }
@@ -397,8 +411,9 @@ class BA2FileEntry : IArchiveFile
         }
         _size = reader.ReadUInt32();
         _realSize = reader.ReadUInt32();
-        if (version <= 1)
+        if (version <= 1 || version == 7)
         {
+            // v1 and (verified above) v7 both carry the trailing align/0xBAADF00D field. v8 does not.
             _align = reader.ReadUInt32();
         }
 
@@ -409,13 +424,10 @@ class BA2FileEntry : IArchiveFile
         }
         else
         {
-            // Version <= 7 (including Xbox's version 7): unverified against a real archive as
-            // thoroughly as v8 above -- only one v7 GNRL archive exists in the test modlist this was
-            // checked against (DLCRobot - Voices_en.ba2), and its per-entry layout didn't fully match
-            // either the classic v1 fields or v8's extra field on a full pass. Falls back to the
-            // original v1 rule (size!=0 => compressed, _realSize as read) rather than guess further --
-            // no worse than what shipped before, and scoped to a single archive in real-world testing
-            // so far. See docs/Code Notes/FO4RecordEditor.md for the open item.
+            // Version <= 7 (including v7): the classic v1 rule. `_size` is the packed size (0 => the
+            // data is stored uncompressed, so AsStream reads `_realSize` = the unpacked length raw);
+            // nonzero => zlib-compressed. Verified for v7 against the real DLCRobot - Voices_en.ba2
+            // now that its entry layout is read correctly (see the align note above).
             Compressed = _size != 0;
         }
     }
