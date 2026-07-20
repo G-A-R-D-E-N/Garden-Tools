@@ -32,11 +32,12 @@ public class ArchiveInterop
         return dlg.ShowDialog() == true ? dlg.FolderName : "";
     }
 
-    /// <summary>Structured entry list (JSON) for the panel's table. See ArchiveService.ListArchiveJson.</summary>
-    public Task<string> List(string archivePath, string filter, int limit) =>
+    /// <summary>Structured entry list (JSON) for the panel's table. filterMode: "simple" (default) |
+    /// "wildcard" | "regex". See ArchiveService.ListArchiveJson.</summary>
+    public Task<string> List(string archivePath, string filter, int limit, string filterMode) =>
         Task.Run(() =>
         {
-            try { return ArchiveService.ListArchiveJson(archivePath, string.IsNullOrWhiteSpace(filter) ? null : filter, limit); }
+            try { return ArchiveService.ListArchiveJson(archivePath, string.IsNullOrWhiteSpace(filter) ? null : filter, limit, filterMode); }
             catch (Exception ex)
             {
                 DebugLog.Exception("Archive.List", ex);
@@ -63,11 +64,24 @@ public class ArchiveInterop
             catch (Exception ex) { DebugLog.Exception("Archive.ExtractSelected", ex); return "Error: " + ex.Message; }
         });
 
-    public Task<string> ExtractAll(string archivePath, string outDir, string filter, int limit) =>
+    public Task<string> ExtractAll(string archivePath, string outDir, string filter, int limit, string filterMode) =>
         Task.Run(() =>
         {
-            try { return ArchiveService.ExtractAll(archivePath, outDir, string.IsNullOrWhiteSpace(filter) ? null : filter, limit); }
+            try { return ArchiveService.ExtractAll(archivePath, outDir, string.IsNullOrWhiteSpace(filter) ? null : filter, limit, filterMode); }
             catch (Exception ex) { DebugLog.Exception("Archive.ExtractAll", ex); return "Error: " + ex.Message; }
+        });
+
+    /// <summary>Compare two archives: added/removed/changed/identical entries. See
+    /// ArchiveService.CompareArchivesJson.</summary>
+    public Task<string> Compare(string archivePathA, string archivePathB) =>
+        Task.Run(() =>
+        {
+            try { return ArchiveService.CompareArchivesJson(archivePathA, archivePathB); }
+            catch (Exception ex)
+            {
+                DebugLog.Exception("Archive.Compare", ex);
+                return JsonConvert.SerializeObject(new { error = "Error: " + ex.Message });
+            }
         });
 
     /// <summary>Open a folder (or the folder containing a file) in Windows Explorer. Returns "" on success.</summary>

@@ -237,6 +237,129 @@ public class ArchiveServiceTests
         finally { try { File.Delete(archive); } catch { } }
     }
 
+    // ---- filterMode: wildcard/regex (ported from AlexxEG/BSA_Browser's filter design) ----
+
+    [Fact]
+    public void ListArchiveJson_WildcardFilter_MatchesExtension()
+    {
+        var archive = BuildTestBa2(
+            (@"Meshes\gun.nif", Encoding.ASCII.GetBytes("a")),
+            (@"Textures\gun_d.dds", Encoding.ASCII.GetBytes("b")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, "*.nif", 100, "wildcard"));
+            var entries = (JArray)json["entries"]!;
+            entries.Should().HaveCount(1);
+            entries[0]["path"]!.Value<string>().Should().Be(@"Meshes\gun.nif");
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_RegexFilter_Matches()
+    {
+        var archive = BuildTestBa2(
+            (@"Meshes\gun01.nif", Encoding.ASCII.GetBytes("a")),
+            (@"Meshes\gunXX.nif", Encoding.ASCII.GetBytes("b")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, @"gun\d+\.nif", 100, "regex"));
+            var entries = (JArray)json["entries"]!;
+            entries.Should().HaveCount(1);
+            entries[0]["path"]!.Value<string>().Should().Be(@"Meshes\gun01.nif");
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_InvalidRegex_ReturnsJsonErrorNotException()
+    {
+        var archive = BuildTestBa2((@"Meshes\A.txt", Encoding.ASCII.GetBytes("x")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, "[unterminated", 100, "regex"));
+            json["error"].Should().NotBeNull();
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_SimpleFilterIsUnchanged_PlainSubstring()
+    {
+        // 'simple' mode (the default, and what the AI-facing MCP tools use) must still be a plain
+        // substring match, NOT wildcard/regex -- '*' has no special meaning in this mode.
+        var archive = BuildTestBa2((@"Meshes\gun*special.nif", Encoding.ASCII.GetBytes("a")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, "gun*special", 100, "simple"));
+            ((JArray)json["entries"]!).Should().HaveCount(1);
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    // ---- CompareArchivesJson (ported from AlexxEG/BSA_Browser's CompareForm.CompareAsync) ----
+
+    [Fact]
+    public void CompareArchivesJson_ClassifiesAddedRemovedChangedIdentical()
+    {
+        var archiveA = BuildTestBa2(
+            (@"Meshes\Same.nif", Encoding.ASCII.GetBytes("identical content")),
+            (@"Meshes\Old.nif", Encoding.ASCII.GetBytes("only in A")),
+            (@"Meshes\Different.nif", Encoding.ASCII.GetBytes("version A content")));
+        var archiveB = BuildTestBa2(
+            (@"Meshes\Same.nif", Encoding.ASCII.GetBytes("identical content")),
+            (@"Meshes\New.nif", Encoding.ASCII.GetBytes("only in B")),
+            (@"Meshes\Different.nif", Encoding.ASCII.GetBytes("version B content!")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.CompareArchivesJson(archiveA, archiveB));
+            var added = ((JArray)json["added"]!).Select(t => t.Value<string>()).ToList();
+            var removed = ((JArray)json["removed"]!).Select(t => t.Value<string>()).ToList();
+            var changed = ((JArray)json["changed"]!).Select(t => t.Value<string>()).ToList();
+
+            added.Should().ContainSingle().Which.Should().Be(@"Meshes\New.nif");
+            removed.Should().ContainSingle().Which.Should().Be(@"Meshes\Old.nif");
+            changed.Should().ContainSingle().Which.Should().Be(@"Meshes\Different.nif");
+            json["identicalCount"]!.Value<int>().Should().Be(1);
+        }
+        finally
+        {
+            try { File.Delete(archiveA); } catch { }
+            try { File.Delete(archiveB); } catch { }
+        }
+    }
+
+    [Fact]
+    public void CompareArchivesJson_SameSizeDifferentContent_IsChangedNotIdentical()
+    {
+        // Same length is not enough to call two entries identical -- must be a real byte comparison.
+        var archiveA = BuildTestBa2((@"A.txt", Encoding.ASCII.GetBytes("AAAA")));
+        var archiveB = BuildTestBa2((@"A.txt", Encoding.ASCII.GetBytes("BBBB")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.CompareArchivesJson(archiveA, archiveB));
+            ((JArray)json["changed"]!).Should().ContainSingle();
+            json["identicalCount"]!.Value<int>().Should().Be(0);
+        }
+        finally
+        {
+            try { File.Delete(archiveA); } catch { }
+            try { File.Delete(archiveB); } catch { }
+        }
+    }
+
+    [Fact]
+    public void CompareArchivesJson_MissingArchive_ReturnsJsonError()
+    {
+        var archive = BuildTestBa2((@"A.txt", Encoding.ASCII.GetBytes("x")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.CompareArchivesJson(archive, @"C:\does\not\exist.ba2"));
+            json["error"].Should().NotBeNull();
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
     [Fact]
     public void ArchiveNotFound_ReturnsFriendlyError()
     {

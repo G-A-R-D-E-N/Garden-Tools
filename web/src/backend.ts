@@ -196,15 +196,31 @@ export interface ArchiveListResult {
   error?: string;
 }
 
+/** Filter mode for ArchiveHost.List/ExtractAll's 'filter' string. 'simple' = plain substring
+ * (the default, and the only mode the AI-facing MCP tools use). 'wildcard'/'regex' are GUI-only. */
+export type ArchiveFilterMode = 'simple' | 'wildcard' | 'regex';
+
+/** Result of ArchiveHost.Compare (matches ArchiveService.CompareArchivesJson's anonymous shape). */
+export interface ArchiveCompareResult {
+  archiveA?: string;
+  archiveB?: string;
+  added?: string[];
+  removed?: string[];
+  changed?: string[];
+  identicalCount?: number;
+  error?: string;
+}
+
 /** The "archive" bridge (FO4RecordEditor.Services.ArchiveInterop) — list/extract BA2/BSA contents. */
 export interface ArchiveHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
-  List(archivePath: string, filter: string, limit: number): Promise<string>;   // JSON: ArchiveListResult
+  List(archivePath: string, filter: string, limit: number, filterMode: ArchiveFilterMode): Promise<string>;   // JSON: ArchiveListResult
   ExtractFile(archivePath: string, innerPath: string, outPath: string): Promise<string>;
   // innerPathsJson: JSON array of the panel's selected entry paths.
   ExtractSelected(archivePath: string, innerPathsJson: string, outDir: string): Promise<string>;
-  ExtractAll(archivePath: string, outDir: string, filter: string, limit: number): Promise<string>;
+  ExtractAll(archivePath: string, outDir: string, filter: string, limit: number, filterMode: ArchiveFilterMode): Promise<string>;
+  Compare(archivePathA: string, archivePathB: string): Promise<string>;   // JSON: ArchiveCompareResult
   OpenFolder(path: string): Promise<string>;   // reveal in Explorer; "" on success
 }
 

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 using JsonConvert = Newtonsoft.Json.JsonConvert;
@@ -20,6 +21,34 @@ public static class ArchiveService
         if (!File.Exists(archivePath)) { error = ToolError.Fail($"Archive not found: '{archivePath}'."); return null; }
         try { return Archive.CreateReader(GameRelease.Fallout4, new Noggog.FilePath(archivePath)); }
         catch (Exception ex) { error = ToolError.Fail($"Could not read '{archivePath}': {ex.Message}"); return null; }
+    }
+
+    /// <summary>
+    /// Builds a path matcher for the GUI Archive panel's filter box. 'simple' (default, and the only
+    /// mode the AI-facing tools/ListArchive/ExtractAll ever used before this) is a plain substring
+    /// search -- unchanged, so the shipped archive_list/archive_extract_all MCP tool contract doesn't
+    /// change underneath existing callers. 'wildcard' and 'regex' are GUI-only additions ported from
+    /// AlexxEG/BSA_Browser's filter design (GPL-3.0, reviewed directly): wildcard converts '*'/'?' to
+    /// regex (not anchored, so it matches anywhere in the path, same as their tool); regex is used
+    /// as-is via .NET's own engine (their own FilterPredicateRegex is exactly this, no PowerShell
+    /// dependency needed the way their 'simple'/wildcard mode used System.Management.Automation).
+    /// </summary>
+    private static Func<string, bool> BuildMatcher(string? filter, string? mode)
+    {
+        if (string.IsNullOrWhiteSpace(filter)) return _ => true;
+
+        if (string.Equals(mode, "regex", StringComparison.OrdinalIgnoreCase))
+        {
+            var rx = new Regex(filter, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            return s => rx.IsMatch(s);
+        }
+        if (string.Equals(mode, "wildcard", StringComparison.OrdinalIgnoreCase))
+        {
+            var pattern = Regex.Escape(filter).Replace(@"\*", ".*").Replace(@"\?", ".");
+            var rx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            return s => rx.IsMatch(s);
+        }
+        return s => s.Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string ListArchive(string archivePath, string? filter, int limit)
@@ -45,16 +74,18 @@ public static class ArchiveService
 
     /// <summary>JSON variant of <see cref="ListArchive"/> for the GUI Archive panel: structured
     /// {path,size} rows plus counts, so the panel can render a real table/tree instead of parsing
-    /// text lines.</summary>
-    public static string ListArchiveJson(string archivePath, string? filter, int limit)
+    /// text lines. filterMode: "simple" (default) | "wildcard" | "regex" -- see BuildMatcher.</summary>
+    public static string ListArchiveJson(string archivePath, string? filter, int limit, string? filterMode = null)
     {
         var reader = TryOpen(archivePath, out var err);
         if (reader == null) return JsonConvert.SerializeObject(new { error = err });
         if (limit <= 0) limit = 2000;
 
-        var files = reader.Files.AsEnumerable();
-        if (!string.IsNullOrWhiteSpace(filter))
-            files = files.Where(f => (f.Path ?? "").Contains(filter, StringComparison.OrdinalIgnoreCase));
+        Func<string, bool> matches;
+        try { matches = BuildMatcher(filter, filterMode); }
+        catch (Exception ex) { return JsonConvert.SerializeObject(new { error = ToolError.Fail($"Invalid {filterMode ?? "simple"} filter: {ex.Message}") }); }
+
+        var files = reader.Files.Where(f => matches(f.Path ?? ""));
 
         var all = files.ToList();
         var shown = all.Take(limit).ToList();
@@ -130,17 +161,18 @@ public static class ArchiveService
         return $"Extracted '{innerPath}' ({entry.Size:N0} bytes) from '{Path.GetFileName(archivePath)}' to '{outPath}'.";
     }
 
-    public static string ExtractAll(string archivePath, string outDir, string? filter, int limit)
+    public static string ExtractAll(string archivePath, string outDir, string? filter, int limit, string? filterMode = null)
     {
         var reader = TryOpen(archivePath, out var err);
         if (reader == null) return err;
         if (string.IsNullOrWhiteSpace(outDir)) return ToolError.Fail("Provide an output directory.");
         if (limit <= 0) limit = 2000;
 
-        var files = reader.Files.AsEnumerable();
-        if (!string.IsNullOrWhiteSpace(filter))
-            files = files.Where(f => (f.Path ?? "").Contains(filter, StringComparison.OrdinalIgnoreCase));
-        var all = files.ToList();
+        Func<string, bool> matches;
+        try { matches = BuildMatcher(filter, filterMode); }
+        catch (Exception ex) { return ToolError.Fail($"Invalid {filterMode ?? "simple"} filter: {ex.Message}"); }
+
+        var all = reader.Files.Where(f => matches(f.Path ?? "")).ToList();
         if (all.Count == 0)
             return $"No entries" + (string.IsNullOrWhiteSpace(filter) ? "" : $" matching '{filter}'") + $" in '{Path.GetFileName(archivePath)}'.";
 
@@ -168,5 +200,60 @@ public static class ArchiveService
         var msg = $"Extracted {written} of {all.Count} file(s) from '{Path.GetFileName(archivePath)}' to '{outDir}'.";
         if (failures.Count > 0) msg += $" {failures.Count} FAILED: " + string.Join("; ", failures.Take(10));
         return msg;
+    }
+
+    /// <summary>
+    /// Compare two archives: which entries are only in A (removed), only in B (added), in both but
+    /// byte-different (changed), or in both and byte-identical. Algorithm ported from AlexxEG/
+    /// BSA_Browser's CompareForm.CompareAsync (GPL-3.0, reviewed directly) -- match by path, then by
+    /// size, then a real byte comparison (not just size/timestamp, which can't tell two
+    /// same-size-different-content files apart). Their version streams the comparison directly
+    /// against each archive's raw stream; this reads each candidate pair fully into memory via
+    /// IArchiveFile.GetBytes() instead, since Mutagen's reader already decompresses through that call
+    /// and BA2 entries are asset-sized (not multi-GB), so streaming isn't worth the extra complexity.
+    /// </summary>
+    public static string CompareArchivesJson(string archivePathA, string archivePathB)
+    {
+        var readerA = TryOpen(archivePathA, out var errA);
+        if (readerA == null) return JsonConvert.SerializeObject(new { error = errA });
+        var readerB = TryOpen(archivePathB, out var errB);
+        if (readerB == null) return JsonConvert.SerializeObject(new { error = errB });
+
+        var filesA = readerA.Files.ToDictionary(f => (f.Path ?? "").Replace('/', '\\'), StringComparer.OrdinalIgnoreCase);
+        var filesB = readerB.Files.ToDictionary(f => (f.Path ?? "").Replace('/', '\\'), StringComparer.OrdinalIgnoreCase);
+
+        var allPaths = new HashSet<string>(filesA.Keys, StringComparer.OrdinalIgnoreCase);
+        allPaths.UnionWith(filesB.Keys);
+
+        var added = new List<string>();
+        var removed = new List<string>();
+        var changed = new List<string>();
+        int identical = 0;
+
+        foreach (var path in allPaths)
+        {
+            var inA = filesA.TryGetValue(path, out var a);
+            var inB = filesB.TryGetValue(path, out var b);
+            if (inA && !inB) { removed.Add(path); continue; }
+            if (!inA && inB) { added.Add(path); continue; }
+
+            if (a!.Size != b!.Size) { changed.Add(path); continue; }
+            if (a.GetBytes().AsSpan().SequenceEqual(b.GetBytes())) identical++;
+            else changed.Add(path);
+        }
+
+        added.Sort(StringComparer.OrdinalIgnoreCase);
+        removed.Sort(StringComparer.OrdinalIgnoreCase);
+        changed.Sort(StringComparer.OrdinalIgnoreCase);
+
+        return JsonConvert.SerializeObject(new
+        {
+            archiveA = Path.GetFileName(archivePathA),
+            archiveB = Path.GetFileName(archivePathB),
+            added,
+            removed,
+            changed,
+            identicalCount = identical,
+        });
     }
 }
