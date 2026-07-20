@@ -37,9 +37,11 @@ public static class GraphTestBuilder
 
     public static void AddLeaf(RecordNode parent, string key, string value)
     {
+        // ClearDirty() used to sit here to undo the .Value setter's dirty-tracking side effect on
+        // this freshly-built fixture node. That side effect (and RecordNode.IsDirty/ClearDirty
+        // themselves) was removed 2026-07-19 along with SpriggitLoader, its only other reader.
         var n = new RecordNode { Key = key, Parent = parent };
         n.Value = value;
-        n.ClearDirty();
         parent.Children.Add(n);
     }
 }

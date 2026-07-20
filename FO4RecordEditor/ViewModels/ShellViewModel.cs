@@ -286,23 +286,15 @@ public sealed class ShellViewModel
         }
 
         Log.Log(LogCategory.App, LogLevel.Info, $"Saving {root.Key}...");
-        var ext = System.IO.Path.GetExtension(root.FilePath).ToLowerInvariant();
 
-        if (ext is ".yaml" or ".yml" or ".json")
-        {
-            SpriggitLoader.SaveFile(root);
-            var ok = $"Saved {root.Key}.";
-            Log.Log(LogCategory.App, LogLevel.Info, ok);
-            return ok;
-        }
-
-        // Plugin binaries are NOT saved from this tree. set_field/set_components/etc. (called by the
+        // Nothing is saved from this tree, of any kind. set_field/set_components/etc. (called by the
         // React editor and the MCP tools) write straight onto the loaded Mutagen record, in memory;
         // there is no separate "dirty edits on a display tree" staging step left to flush here — that
-        // mechanism (RecordNode.IsDirty + WriteService.SaveRecordEditsToPatch) existed only to serve
-        // the WPF RecordEditorView and was deleted with it. Use save_plugin to write to disk.
-        var refuse = $"Saving a plugin binary from the tree is not supported. Use the editor's Save " +
-                     "action, or call the save_plugin tool.";
+        // mechanism (RecordNode.IsDirty + WriteService.SaveRecordEditsToPatch, and the YAML/JSON
+        // equivalent in the now-deleted SpriggitLoader) existed only to serve the WPF
+        // RecordEditorView and was deleted with it. Use save_plugin to write to disk.
+        var refuse = $"Saving from the tree is not supported. Use the editor's Save action, " +
+                     "or call the save_plugin tool.";
         Log.Log(LogCategory.App, LogLevel.Warning, refuse);
         return refuse;
     }
