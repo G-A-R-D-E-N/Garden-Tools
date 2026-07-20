@@ -62,14 +62,16 @@ public class CellInterop
 
     /// <summary>Type-ahead cell search across the whole load order (EditorID/Name/FormKey substring,
     /// de-duplicated to the winning version per FormKey) -- backs the picker dropdown so the user
-    /// browses/searches instead of typing an exact FormKey or EditorID from memory. Reuses
-    /// MutagenLoader's existing SearchAllRecords with the CELL signature filter.</summary>
+    /// browses/searches instead of typing an exact FormKey or EditorID from memory. Uses
+    /// MutagenLoader.SearchCellRecords, NOT SearchAllRecords -- the latter forces a full per-signature
+    /// index of every record type in every plugin (cached forever), which on a real modlist eagerly
+    /// grows the process by gigabytes for a search that only ever needed CELL records.</summary>
     public Task<string> SearchCells(string query, int limit) =>
         Task.Run(() =>
         {
             try
             {
-                var hits = MutagenLoader.SearchAllRecords(Env, query ?? "", "CELL", limit <= 0 ? 25 : limit);
+                var hits = MutagenLoader.SearchCellRecords(Env, query ?? "", limit <= 0 ? 25 : limit);
                 return JsonConvert.SerializeObject(hits);
             }
             catch (Exception ex)

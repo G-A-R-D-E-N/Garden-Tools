@@ -2,9 +2,9 @@
 
 A Fallout 4 plugin IDE. It is two things in one executable:
 
-- **A desktop editor** — browse, diff, and edit records across your whole load order, scan for
+- **A desktop editor** -- browse, diff, and edit records across your whole load order, scan for
   conflicts, compile and decompile Papyrus, and inspect NIFs. Think xEdit, but with a modern UI.
-- **An MCP server** — the same 74 operations, exposed to an AI assistant (Claude Code, or any other
+- **An MCP server** -- the same 75 operations, exposed to an AI assistant (Claude Code, or any other
   MCP client). This is the part most people want: you describe the edit, the AI makes it, and the
   plugin is written by [Mutagen](https://github.com/Mutagen-Modding/Mutagen) rather than by hand.
 
@@ -16,19 +16,19 @@ not go through xEdit and does not need xEdit installed.
 ## Install
 
 **1. Install the .NET 9 Desktop Runtime (x64).** This is the only prerequisite.
-   Get it here: <https://dotnet.microsoft.com/download/dotnet/9.0> — pick **".NET Desktop Runtime 9.x", x64**.
+   Get it here: <https://dotnet.microsoft.com/download/dotnet/9.0> -- pick **".NET Desktop Runtime 9.x", x64**.
 
 > The app is deliberately *not* a self-contained single-file exe. Mod Organizer 2's virtual filesystem
 > (usvfs) hooks file access, and a self-contained .NET host cannot load its bundled runtime through
-> those hooks — the process dies before any managed code runs, so the app "launches" and instantly
+> those hooks -- the process dies before any managed code runs, so the app "launches" and instantly
 > closes with no log and no error. A framework-dependent build loads the runtime from the shared
 > install instead, which usvfs handles fine. This is why the runtime is a separate install.
 
-**2. Unzip this package anywhere.** Keep the folder together — the exe loads `web\dist\` and `tools\`
+**2. Unzip this package anywhere.** Keep the folder together -- the exe loads `web\dist\` and `tools\`
    from beside itself.
 
 **3. Run `FO4RecordEditor.exe`.** That is the GUI. If you only want the AI/MCP integration, you never
-   need to open it — but it is the fastest way to confirm the install works.
+   need to open it -- but it is the fastest way to confirm the install works.
 
 ### Running it under Mod Organizer 2
 
@@ -42,7 +42,7 @@ want when you are editing a plugin that overrides mods.
 
 The editor speaks [MCP](https://modelcontextprotocol.io) over stdio. Full detail, including every
 tool and the workflow rules that keep the AI from corrupting plugins, is in
-**[docs/MCP_SETUP.md](docs/MCP_SETUP.md)** — read that one. The short version:
+**[docs/MCP_SETUP.md](docs/MCP_SETUP.md)** -- read that one. The short version:
 
 Drop a `.mcp.json` in your project folder (a sample sits next to the exe as `mcp.sample.json`):
 
@@ -60,7 +60,7 @@ Drop a `.mcp.json` in your project folder (a sample sits next to the exe as `mcp
 
 - `--mcp` runs it headless as a server. The GUI never opens.
 - `--mo2 <instance>` points it at an MO2 instance (the folder holding `mods\` and `profiles\`). It
-  reads the active profile's `plugins.txt` and reconstructs that exact load order — so the AI sees
+  reads the active profile's `plugins.txt` and reconstructs that exact load order -- so the AI sees
   what the game sees, conflicts and all.
 - `--data <folder>` is the alternative: a plain `Data` folder, for a vanilla (non-MO2) setup.
 
@@ -71,7 +71,7 @@ Use one or the other. Then restart your AI client, or run `/mcp reconnect` in Cl
 ## Configuration
 
 Settings live in `%APPDATA%\FO4RecordEditor\settings.json`, written by the GUI's settings panel. Every
-path below is optional and auto-detected when blank — set one only to override the detection.
+path below is optional and auto-detected when blank -- set one only to override the detection.
 
 | Key | What it points at | Detected from |
 |---|---|---|
@@ -90,15 +90,15 @@ path below is optional and auto-detected when blank — set one only to override
 Each also honours an environment variable, which wins over the settings file:
 `NIFTOOL_PATH`, `TEXCONV_PATH`, `PAPYRUS_COMPILER_PATH`, `PAPYRUS_BASE_IMPORTS`, `CK_WIKI_PATH`,
 `FFMPEG_PATH`, `XWMAENCODE_PATH`, `ARCHIVE2_PATH`. `BmlFuzEncode.exe`/`BmlFuzDecode.exe` (the .fuz
-packer/splitter) are bundled-only, in the same `tools\audio\` folder, with no override — there's
+packer/splitter) are bundled-only, in the same `tools\audio\` folder, with no override -- there's
 nothing to point them at.
 
 ### Papyrus compiling and BA2 packing need the Creation Kit
 
 `compile_papyrus` shells out to Bethesda's `PapyrusCompiler.exe`, and `archive_pack` shells out to
-`Archive2.exe` — both ship with the **Creation Kit** and are not redistributable, so neither is in
+`Archive2.exe` -- both ship with the **Creation Kit** and are not redistributable, so neither is in
 this package. Install the CK (it is free, on Steam) and both are found automatically. Reading archives
-(`archive_list`/`archive_extract`/`archive_extract_all`) doesn't need this — Mutagen reads BA2/BSA
+(`archive_list`/`archive_extract`/`archive_extract_all`) doesn't need this -- Mutagen reads BA2/BSA
 natively; only packing a *new* one does. Everything else in the tool works without the CK installed.
 
 ---

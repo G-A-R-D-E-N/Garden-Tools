@@ -67,7 +67,7 @@ public class PluginToolExecutorTests
             "papyrus_function_lookup", "papyrus_script_info",
             "bgsm_inspect", "bgsm_set_field", "catalog_mod_folder",
             "audio_convert_to_xwm", "audio_convert_from_xwm", "audio_make_fuz", "audio_extract_fuz",
-            "archive_pack", "cell_get_placed_references",
+            "archive_pack", "cell_get_placed_references", "cell_search",
         };
 
         var names = PluginToolExecutor.ToolDefinitions()

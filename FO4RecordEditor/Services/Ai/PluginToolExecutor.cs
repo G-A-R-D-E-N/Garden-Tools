@@ -1145,6 +1145,23 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "cell_id" }
             }),
+        new("cell_search",
+            "Type-ahead search for CELL records by EditorID/Name/FormKey substring, de-duplicated to " +
+            "the winning version. Lighter-weight than search_all with type=CELL -- this only ever " +
+            "touches CELL records instead of building a full per-signature index of every record type " +
+            "in every loaded plugin, which matters on a real modlist (measured: search_all type=CELL " +
+            "cost ~2.3 GB and 7s on a 650-plugin load order; this tool avoids that entirely). Use this " +
+            "for cell lookups instead of search_all.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Substring to match against EditorID, in-game Name, or FormKey. Empty returns the first `limit` cells encountered." },
+                    limit = new { type = "integer", description = "Max matches (default 25)." }
+                },
+                required = new[] { "query" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -1324,6 +1341,7 @@ public sealed class PluginToolExecutor
             "scan_broken_refs"    => $"scan broken refs in {plugin}",
             "scan_all_plugins"    => "scan entire modlist for broken refs",
             "cell_get_placed_references" => $"placed refs in {ShortId(Str("cell_id"))}",
+            "cell_search"                => $"cell search '{Str("query")}'",
             _                     => toolName.Replace('_', ' '),
         };
 
@@ -1416,6 +1434,12 @@ public sealed class PluginToolExecutor
                 return MutagenLoader.ScanAllPluginsForBrokenRefs(env);
             case "cell_get_placed_references":
                 return CellService.GetPlacedReferencesJson(Str("cell_id"), env);
+            case "cell_search":
+            {
+                var cellHits = MutagenLoader.SearchCellRecords(env, Str("query"), Int("limit", 25));
+                return cellHits.Count == 0 ? "No matching cells."
+                    : string.Join("\n", cellHits.Select(h => $"{h.EditorID} [{h.FormKey}] {(string.IsNullOrEmpty(h.Name) ? "" : "\"" + h.Name + "\" ")}<{h.Plugin}>"));
+            }
 
             // ---- write tools ----
             case "open_plugin":

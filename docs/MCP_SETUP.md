@@ -4,11 +4,11 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **74 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **75 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
-run a validity check — without you opening xEdit once, and without the AI ever hand-writing a binary
+run a validity check -- without you opening xEdit once, and without the AI ever hand-writing a binary
 record. Every write goes through Mutagen, so the file it produces is structurally valid or the call
 fails loudly.
 
@@ -31,7 +31,7 @@ ready-made copy sits next to the exe as `mcp.sample.json`.
 }
 ```
 
-Use **backslashes, doubled** — it is JSON, so `C:\Tools` must be written `C:\\Tools`. Use the absolute
+Use **backslashes, doubled** -- it is JSON, so `C:\Tools` must be written `C:\\Tools`. Use the absolute
 path to the exe.
 
 ### Choosing the load-order source
@@ -40,24 +40,24 @@ The server needs to know what your game sees. Pass exactly one of:
 
 | Argument | Use when | What it does |
 |---|---|---|
-| `--mo2 <instance>` | You use Mod Organizer 2 | Reads the active profile's `plugins.txt` and rebuilds that exact load order from `mods\`. This is the accurate one — conflicts and overrides resolve the way they do in game. |
+| `--mo2 <instance>` | You use Mod Organizer 2 | Reads the active profile's `plugins.txt` and rebuilds that exact load order from `mods\`. This is the accurate one -- conflicts and overrides resolve the way they do in game. |
 | `--data <folder>` | Vanilla / no mod manager | Uses a plain `Data` folder. |
 
-The MO2 instance path is the folder containing `mods\` and `profiles\` — not the MO2 program folder,
+The MO2 instance path is the folder containing `mods\` and `profiles\` -- not the MO2 program folder,
 and not a single mod.
 
 `papyrus_function_lookup` and `papyrus_script_info` read from an offline Creation Kit Wiki HTML
-mirror, and work out of the box — a copy ships bundled with the release package under
+mirror, and work out of the box -- a copy ships bundled with the release package under
 `tools\ckwiki\fallout4\`, so there's nothing to configure. Pass `--ck-wiki <folder>` only if you want
 to point at a different or newer mirror; this is independent of `--mo2`/`--data` and unrelated to
-plugin loading. In the desktop app, the same override lives under Settings -> CK Wiki Path — the tool
+plugin loading. In the desktop app, the same override lives under Settings -> CK Wiki Path -- the tool
 executor reads it live, so it takes effect immediately with no restart and no launch flag. If neither
 override is set AND the bundled copy is missing (e.g. a `-SkipCkWiki` dev build), those two tools
 return a "not configured" message instead of silently failing.
 
 ### Confirming it connected
 
-Restart the client, or in Claude Code run `/mcp reconnect`. Then ask it to call `list_plugins` — if
+Restart the client, or in Claude Code run `/mcp reconnect`. Then ask it to call `list_plugins` -- if
 you get your load order back, it works. (`ping` is a JSON-RPC method the client uses for its own
 health checks, not a tool; asking the AI to "call ping" will not work.)
 
@@ -89,7 +89,7 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 ### Cells and placed objects
 `create_cell` · `create_placed_object`
 
-`create_record` only adds **top-level** records, so it cannot make either of these — a placed object
+`create_record` only adds **top-level** records, so it cannot make either of these -- a placed object
 lives inside a cell's persistent/temporary list, and cells live in a block tree. This is the pair you
 need for map markers and for parking references you relocate at runtime.
 
@@ -97,55 +97,61 @@ need for map markers and for parking references you relocate at runtime.
 `add_leveled_entry` · `set_perk_effects` · `set_magic_effects` · `set_quest_aliases` ·
 `set_quest_stages` · `set_quest_objectives` · `set_furniture_markers` · `set_message_buttons`
 
-### Papyrus (built in — no Champollion needed)
+### Papyrus (built in -- no Champollion needed)
 `compile_papyrus` (`.psc` → `.pex`) · `decompile_papyrus` (`.pex` → `.psc`, recursive)
 
 ### NIF
 `nif_import` · `nif_inspect` · `nif_fix` · `nif_verify`
 
 ### Archives (BA2/BSA)
-`archive_list` · `archive_extract` · `archive_extract_all` — reads packed archives via Mutagen's own
-reader, no Archive2.exe needed. `archive_pack` is the other direction — packs one or more loose
+`archive_list` · `archive_extract` · `archive_extract_all` -- reads packed archives via Mutagen's own
+reader, no Archive2.exe needed. `archive_pack` is the other direction -- packs one or more loose
 folders into a new BA2. Mutagen has no BA2 *writer*, so packing shells out to the Creation Kit's
-`Archive2.exe` (not redistributable, so it isn't bundled — install the CK and it's found
+`Archive2.exe` (not redistributable, so it isn't bundled -- install the CK and it's found
 automatically, same as `compile_papyrus`). Typical flow to re-encode a mod's packed sounds:
 `archive_extract_all` its BA2 -> `audio_convert_to_xwm` on the extracted Sound folder ->
 `archive_pack` that same folder back into a new BA2.
 
 ### Cells
-`cell_get_placed_references` — list a CELL's placed references (position/rotation/scale + base object
+`cell_get_placed_references` -- list a CELL's placed references (position/rotation/scale + base object
 model path), unioned across the whole load order rather than just the winning record (a plugin can
 "win" a CELL with an empty reference list while every other plugin's own placed objects still load
 in-game). Powers the desktop app's Cell Viewer panel; useful for an AI agent to inspect what's actually
 placed in a cell without opening the UI.
 
+`cell_search` -- type-ahead search for CELL records by EditorID/Name/FormKey substring. Use this
+instead of `search_all` with `type=CELL`: `search_all` builds a full index of every record type in
+every loaded plugin (and caches it for the process's lifetime), which on a real large modlist measured
+~2.3 GB and 7 seconds for a single cell search. `cell_search` only ever touches CELL records and caches
+nothing.
+
 ### Papyrus wiki lookup
-`papyrus_function_lookup` · `papyrus_script_info` — reads an offline Creation Kit Wiki HTML mirror
+`papyrus_function_lookup` · `papyrus_script_info` -- reads an offline Creation Kit Wiki HTML mirror
 directly instead of you grepping wiki pages yourself. Works out of the box against the mirror bundled
 with the app; `--ck-wiki <folder>` at launch (headless server) or Settings -> CK Wiki Path in the
 desktop app only override which mirror is used. Also reachable by hand in the desktop app's Papyrus
 panel -> "Wiki Lookup" tab.
 
 ### Materials
-`bgsm_inspect` · `bgsm_set_field` — read and edit individual `.bgsm` shader fields (Smoothness,
+`bgsm_inspect` · `bgsm_set_field` -- read and edit individual `.bgsm` shader fields (Smoothness,
 SpecularColor, texture paths, PBR/emissive/translucency/terrain, ...) directly, no material-editor
 GUI needed. `.bgem` (effect materials) isn't supported yet.
 
 ### Mod folder triage
-`catalog_mod_folder` — bucket an unfamiliar mod's files by category (meshes/textures/materials/
+`catalog_mod_folder` -- bucket an unfamiliar mod's files by category (meshes/textures/materials/
 sounds/scripts/plugins/archives/voice/...) with per-category counts, to get oriented before deciding
 what to inspect next.
 
 ### Audio
-`audio_convert_to_xwm` · `audio_convert_from_xwm` · `audio_make_fuz` · `audio_extract_fuz` — convert
+`audio_convert_to_xwm` · `audio_convert_from_xwm` · `audio_make_fuz` · `audio_extract_fuz` -- convert
 any ffmpeg-readable audio/video to Fallout 4's xWMA format (and back), and pack/split the `.fuz` voice
-container (xwm + lip sync). `audio_convert_to_xwm` also accepts a whole folder as `source` — recursed,
+container (xwm + lip sync). `audio_convert_to_xwm` also accepts a whole folder as `source` -- recursed,
 converted in parallel, with the original structure preserved (a mod's extracted `Sound\` folder, say).
-Works out of the box against ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode bundled with the app —
+Works out of the box against ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode bundled with the app --
 nothing to configure. Also reachable by hand in the desktop app's Audio panel.
 
 ### Escape hatch
-`run_script` — executes C# against the loaded mod through Mutagen, for anything the tools above do not
+`run_script` -- executes C# against the loaded mod through Mutagen, for anything the tools above do not
 cover. `host.New(sig, editorId)` creates records from inside a script.
 
 ---
@@ -159,12 +165,12 @@ These are not style preferences. Each one is a real failure that has happened.
 the wrong form to either returns "no records of that type", which reads like a bug and is not one.
 
 **2. Check the master order after every save on a multi-master plugin.** A plugin whose masters are
-written out of load order makes the game **hang on load with no crash log** — the worst possible
+written out of load order makes the game **hang on load with no crash log** -- the worst possible
 failure mode, because there is nothing to read. After any `save_plugin`, verify the master list.
 
 **3. FormID encoding is `(masterIndex << 24) | objectId` for all masters.** Not just for ESLs.
 
-**4. A new `GLOB`'s value is set via `set_field` on `Data`** — not by a constructor argument.
+**4. A new `GLOB`'s value is set via `set_field` on `Data`** -- not by a constructor argument.
 
 **5. `.pas` is assembly, not source.** `compile_papyrus` compiles `.psc`. Feeding it the decompiler's
 assembly listing is a common and confusing mistake; the tool now detects it and tells you.

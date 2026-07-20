@@ -994,6 +994,42 @@ public static class MutagenLoader
         return hits;
     }
 
+    /// <summary>Cell-only equivalent of SearchAllRecords, for the Cell Viewer's type-ahead picker.
+    /// Deliberately does NOT go through GetModIndex/_modIndexCache: that path builds a full
+    /// per-signature index of EVERY record type in a plugin (and caches it for the rest of the
+    /// process's lifetime), which is fine for tools the user already invokes per-plugin, but a type-
+    /// ahead search fires on every keystroke across the WHOLE load order -- on a real 650+-plugin
+    /// modlist that eagerly, permanently indexes every record of every type in every plugin the first
+    /// time the box is used, which is real, measured GB-scale memory growth for a feature that only
+    /// ever needed CELL records. Mutagen's EnumerateMajorRecords&lt;T&gt;() walks the same nested
+    /// interior-Cell-group / exterior-Worldspace-SubCells structure but touches only cells, and
+    /// nothing here is cached across calls.</summary>
+    public static List<SearchHit> SearchCellRecords(object? envObj, string query, int limit = 25)
+    {
+        var hits = new List<SearchHit>();
+        if (envObj == null) return hits;
+        query ??= "";
+        var seen = new HashSet<FormKey>();
+
+        foreach (var (name, mod) in AllLoadedMods(envObj))
+        {
+            if (mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod) continue;
+            foreach (var cell in f4mod.EnumerateMajorRecords<Mutagen.Bethesda.Fallout4.ICellGetter>(throwIfUnknown: false))
+            {
+                var eid = cell.EditorID ?? "";
+                var dispName = cell.Name?.String ?? "";
+                if (query.Length > 0 &&
+                    !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                    !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                    !cell.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!seen.Add(cell.FormKey)) continue;
+                hits.Add(new SearchHit(cell.FormKey.ToString(), eid, "CELL", name, dispName));
+                if (hits.Count >= limit) return hits;
+            }
+        }
+        return hits;
+    }
+
     public static string QueryRecordFields(object? envObj, string plugin, string formKeyOrEditorId)
     {
         // Build a bounded candidate list: the named plugin first, then loose-opened ESPs and
