@@ -7,34 +7,45 @@ import { billboardMatrix, vertsCentroid } from './util/billboard';
 
 /** A geometry batch result keyed by the exact modelPath string GetPlacedReferences returned --
  * either niftool's raw geo JSON (NifGeo) or an { error } for anything that couldn't be
- * resolved/converted (not found loose or in any archive, or -- currently -- a Next-Gen-format BA2
- * whose contents Mutagen's reader can't decompress; see docs/Prisma/findings). */
+ * resolved/converted (not found loose or in any archive). */
 export type CellGeoMap = Record<string, NifGeo | { error: string }>;
 
 /**
  * Live three.js viewport for a whole cell's placed references -- many instances at their real
- * Position/Rotation/Scale, not one mesh at the origin like NifViewport. Same NIF Z-up convention.
+ * Position/Rotation/Scale, like Creation Kit's render window. Same NIF Z-up convention.
  *
- * Rotation: FO4 stores Rotation.X/Y/Z on a REFR as radians fed straight into the engine's
- * NiMatrix3::SetEulerAnglesXYZ (confirmed against Mesh-Rendering-Framework's GeoMath.h, which calls
- * exactly that with refr->GetAngle() -- not a guessed convention). three.js's 'XYZ' Euler order is
- * the matching axis-application order.
+ * Interaction (added 2026-07-20 -- the "big jumbled mess, can't click individual meshes / hide
+ * layers" feedback): click a mesh to select its reference (raycast against the InstancedMeshes,
+ * mapping the hit instanceId back to its CellPlacedReference); hide/show whole record types via
+ * `hiddenTypes`. Selection is a wireframe box hugging the picked instance so it reads regardless of
+ * the material underneath. Neither rebuilds the scene -- visibility toggles `.visible` and selection
+ * just repositions one highlight box, so toggling a layer or clicking around is instant.
  *
- * Perf: refs are grouped by modelPath and rendered with one THREE.InstancedMesh per (model, shape)
- * pair instead of one Mesh per reference -- real interior cells here run into the tens of thousands
- * of refs (28k+ observed), and a plain Mesh-per-ref scene would drop to a crawl. Same grouping makes
- * texturing cheap too: one diffuse-texture fetch per unique (model, shape), applied to the shared
- * InstancedMesh material, not one fetch per instance.
+ * Perf: refs are grouped by (model, shape) into one InstancedMesh each, not one Mesh per reference
+ * (real cells run into the tens of thousands of refs). Diffuse texture fetched once per unique
+ * (model, shape) and shared across its instances.
  */
 export default function CellViewport(
-  { references, geometry, loadTexture }: {
+  { references, geometry, loadTexture, hiddenTypes, selectedKey, onSelect }: {
     references: CellPlacedReference[];
     geometry: CellGeoMap;
     loadTexture?: (modelPath: string, relTexPath: string) => Promise<string>;
+    hiddenTypes?: ReadonlySet<string>;
+    selectedKey?: string | null;
+    onSelect?: (ref: CellPlacedReference | null) => void;
   }
 ) {
   const mountRef = useRef<HTMLDivElement>(null);
 
+  // Cross-effect handles so visibility/selection can update WITHOUT rebuilding the scene.
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const meshEntriesRef = useRef<{ mesh: THREE.Object3D; recordType: string }[]>([]);
+  const modelBBoxRef = useRef<Map<string, THREE.Box3>>(new Map());
+  const highlightRef = useRef<THREE.LineSegments | null>(null);
+  const refByKeyRef = useRef<Map<string, CellPlacedReference>>(new Map());
+
+  // ---- build the scene (only when the data actually changes) ----
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount || references.length === 0) return;
@@ -66,9 +77,14 @@ export default function CellViewport(
     const posBounds = new THREE.Box3();
     const dummy = new THREE.Object3D();
 
-    // Billboard sprites (glow/lens-flare under a NiBillboardNode) can't be baked into a static
-    // instance matrix -- they must be re-oriented toward the camera every frame. Collected here and
-    // updated in the animation loop; everything else keeps its one-time matrix.
+    // Pickable instanced meshes (each carries userData.refs so a raycast instanceId maps back to a
+    // reference) and the per-type entries the visibility effect toggles.
+    const pickables: THREE.InstancedMesh[] = [];
+    const meshEntries: { mesh: THREE.Object3D; recordType: string }[] = [];
+    const modelBBox = new Map<string, THREE.Box3>();
+    const refByKey = new Map<string, CellPlacedReference>();
+    for (const r of references) refByKey.set(r.formKey, r);
+
     const billboardGroups: {
       inst: THREE.InstancedMesh; refs: CellPlacedReference[]; centroid: THREE.Vector3; mode?: number;
     }[] = [];
@@ -93,6 +109,7 @@ export default function CellViewport(
 
     for (const [modelPath, refs] of byModel) {
       const nifGeo = geometry[modelPath] as NifGeo;
+      const modelBox = new THREE.Box3();
       for (const shape of nifGeo.shapes) {
         if (!shape.verts.length || !shape.tris.length) continue;
         const g = new THREE.BufferGeometry();
@@ -104,6 +121,8 @@ export default function CellViewport(
           g.setAttribute('normal', new THREE.Float32BufferAttribute(shape.normals, 3));
         else
           g.computeVertexNormals();
+        g.computeBoundingBox();
+        if (g.boundingBox) modelBox.union(g.boundingBox);
         disposables.push(g);
 
         const mat = new THREE.MeshStandardMaterial({
@@ -111,8 +130,7 @@ export default function CellViewport(
         });
         disposables.push(mat);
 
-        // Diffuse only (slot 0) for v1 -- normal maps would double the fetch/convert cost per
-        // unique mesh, and the flat-gray fallback already reads fine for anything still pending.
+        // Diffuse only (slot 0) for v1.
         if (hasUV && texLoader && loadTexture && shape.textures?.length) {
           const diffuse = shape.textures.find(t => t.slot === 0);
           if (diffuse) {
@@ -141,17 +159,20 @@ export default function CellViewport(
           inst.setMatrixAt(i, dummy.matrix);
         });
         inst.instanceMatrix.needsUpdate = true;
+        inst.userData.refs = refs;
         scene.add(inst);
+        pickables.push(inst);
+        meshEntries.push({ mesh: inst, recordType: refs[0]?.recordType ?? '' });
 
         if (shape.billboard) {
-          inst.frustumCulled = false; // per-frame reoriented; its baked bounds no longer bound it
+          inst.frustumCulled = false;
           billboardGroups.push({ inst, refs, centroid: vertsCentroid(shape.verts), mode: shape.billboardMode });
         }
       }
+      if (!modelBox.isEmpty()) modelBBox.set(modelPath, modelBox);
     }
 
-    // Markers for refs with no renderable mesh (actors/traps, or an unresolved/failed model) --
-    // a small sphere, colored by why, so the viewer never just silently drops a reference.
+    // Markers for refs with no renderable mesh (actors/traps, or an unresolved/failed model).
     if (markers.length > 0) {
       const markerGeo = new THREE.SphereGeometry(8, 8, 6);
       disposables.push(markerGeo);
@@ -171,9 +192,29 @@ export default function CellViewport(
           inst.setMatrixAt(i, dummy.matrix);
         });
         inst.instanceMatrix.needsUpdate = true;
+        inst.userData.refs = refs;
         scene.add(inst);
+        pickables.push(inst);
+        // Markers can mix types (actors + traps + failed statics); group them under a synthetic key so
+        // "hide markers" is one toggle rather than fragmenting the type list.
+        meshEntries.push({ mesh: inst, recordType: '(markers)' });
       }
     }
+
+    // Selection highlight: a unit wireframe box we reposition onto the picked instance.
+    const hlGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+    const hlMat = new THREE.LineBasicMaterial({ color: 0x59d0ff, depthTest: false, transparent: true });
+    const highlight = new THREE.LineSegments(hlGeo, hlMat);
+    highlight.matrixAutoUpdate = false;
+    highlight.visible = false;
+    highlight.renderOrder = 999;
+    scene.add(highlight);
+    disposables.push(hlGeo, hlMat);
+
+    meshEntriesRef.current = meshEntries;
+    modelBBoxRef.current = modelBBox;
+    refByKeyRef.current = refByKey;
+    highlightRef.current = highlight;
 
     const size = posBounds.getSize(new THREE.Vector3());
     const center = posBounds.getCenter(new THREE.Vector3());
@@ -194,6 +235,36 @@ export default function CellViewport(
     camera.updateProjectionMatrix();
     controls.update();
 
+    // ---- picking: pointerdown/up with a small move threshold so orbiting never selects ----
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let downX = 0, downY = 0, downT = 0;
+    const onPointerDown = (e: PointerEvent) => { downX = e.clientX; downY = e.clientY; downT = e.timeStamp; };
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 5 || e.timeStamp - downT > 400) return; // a drag, not a click
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndc, camera);
+      const visiblePickables = pickables.filter(m => m.visible);
+      const hits = raycaster.intersectObjects(visiblePickables, false);
+      const hit = hits.find(h => h.instanceId != null);
+      if (hit && hit.instanceId != null) {
+        const refs = hit.object.userData.refs as CellPlacedReference[] | undefined;
+        const ref = refs?.[hit.instanceId];
+        onSelectRef.current?.(ref ?? null);
+      } else {
+        onSelectRef.current?.(null); // clicked empty space -> deselect
+      }
+    };
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
+
+    // Apply the current visibility + selection immediately (props may already be set on first build).
+    applyVisibility(meshEntries, hiddenTypes);
+    applySelection(highlight, modelBBox, refByKey, selectedKey ?? null);
+
     const bbBase = new THREE.Matrix4();
     const bbOut = new THREE.Matrix4();
     const bbQuat = new THREE.Quaternion();
@@ -201,6 +272,7 @@ export default function CellViewport(
     const bbScale = new THREE.Vector3();
     const updateBillboards = () => {
       for (const grp of billboardGroups) {
+        if (!grp.inst.visible) continue;
         grp.refs.forEach((r, i) => {
           bbPos.set(r.position.x, r.position.y, r.position.z);
           bbQuat.setFromEuler(new THREE.Euler(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ'));
@@ -234,14 +306,69 @@ export default function CellViewport(
       cancelled = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointerup', onPointerUp);
       controls.dispose();
       disposables.forEach(d => d.dispose());
       textures.forEach(t => t.dispose());
       renderer.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
-      void cancelled;
+      meshEntriesRef.current = [];
+      highlightRef.current = null;
     };
-  }, [references, geometry, loadTexture]);
+  }, [references, geometry, loadTexture]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- visibility: toggle .visible per record type, no rebuild ----
+  useEffect(() => {
+    applyVisibility(meshEntriesRef.current, hiddenTypes);
+  }, [hiddenTypes]);
+
+  // ---- selection: reposition the highlight box, no rebuild ----
+  useEffect(() => {
+    if (highlightRef.current)
+      applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null);
+  }, [selectedKey]);
 
   return <div ref={mountRef} className="nif-viewport cell-viewport" />;
+}
+
+function applyVisibility(
+  entries: { mesh: THREE.Object3D; recordType: string }[],
+  hiddenTypes?: ReadonlySet<string>,
+) {
+  for (const e of entries) e.mesh.visible = !hiddenTypes || !hiddenTypes.has(e.recordType);
+}
+
+const _selMat = new THREE.Matrix4();
+const _selPos = new THREE.Vector3();
+const _selQuat = new THREE.Quaternion();
+const _selScale = new THREE.Vector3();
+const _selCenter = new THREE.Vector3();
+const _selSize = new THREE.Vector3();
+const _selLocal = new THREE.Matrix4();
+
+/** Position the highlight box onto the selected reference (model bbox at the REFR transform), or hide it. */
+function applySelection(
+  highlight: THREE.LineSegments,
+  modelBBox: Map<string, THREE.Box3>,
+  refByKey: Map<string, CellPlacedReference>,
+  selectedKey: string | null,
+) {
+  const ref = selectedKey ? refByKey.get(selectedKey) : undefined;
+  if (!ref) { highlight.visible = false; return; }
+
+  const box = ref.modelPath ? modelBBox.get(ref.modelPath) : undefined;
+  if (box) { box.getCenter(_selCenter); box.getSize(_selSize); }
+  else { _selCenter.set(0, 0, 0); _selSize.set(24, 24, 24); } // markers: a small fixed box
+  // Guard against a zero-thickness axis (flat planes) so the wireframe still shows.
+  _selSize.set(Math.max(_selSize.x, 1), Math.max(_selSize.y, 1), Math.max(_selSize.z, 1));
+
+  _selPos.set(ref.position.x, ref.position.y, ref.position.z);
+  _selQuat.setFromEuler(new THREE.Euler(ref.rotation.x, ref.rotation.y, ref.rotation.z, 'XYZ'));
+  _selScale.setScalar(ref.scale || 1);
+  _selMat.compose(_selPos, _selQuat, _selScale);                          // REFR transform
+  _selLocal.makeTranslation(_selCenter.x, _selCenter.y, _selCenter.z);    // bbox center in model space
+  _selLocal.scale(_selSize);                                              // unit box -> bbox size
+  highlight.matrix.multiplyMatrices(_selMat, _selLocal);
+  highlight.visible = true;
 }

@@ -163,3 +163,53 @@
   max-height: 160px;
   overflow-y: auto;
 }
+
+/* Selected-reference info card (click a mesh in the viewport). */
+.cell-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  margin: 4px 0;
+  border: 1px solid rgba(89, 208, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(89, 208, 255, 0.06);
+  font-size: 11px;
+}
+.cell-selected-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #59d0ff;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+.cell-selected-clear {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted, #9aa0aa); display: flex; padding: 2px;
+}
+.cell-selected-clear:hover { color: #fff; }
+.cell-selected-row { display: flex; justify-content: space-between; gap: 8px; }
+.cell-selected-row span { color: var(--muted, #9aa0aa); }
+.cell-selected-row strong { color: #e6e8ec; font-weight: 500; text-align: right; word-break: break-all; }
+
+/* Layer list -- hide/show whole record types (the CK "layers" analog). */
+.cell-layers { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.cell-layers-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;
+  color: var(--muted, #9aa0aa); padding: 2px 0;
+}
+.cell-layers-list { display: flex; flex-direction: column; gap: 1px; max-height: 200px; overflow-y: auto; }
+.cell-layer-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 6px; border-radius: 4px; cursor: pointer;
+  font-size: 11px; color: #e6e8ec; user-select: none;
+}
+.cell-layer-row:hover { background: rgba(255, 255, 255, 0.05); }
+.cell-layer-row.hidden { color: var(--muted, #6b7280); }
+.cell-layer-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-layer-count { color: var(--muted, #9aa0aa); font-variant-numeric: tabular-nums; font-size: 10px; }

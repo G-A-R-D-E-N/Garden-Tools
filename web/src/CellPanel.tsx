@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff } from 'lucide-react';
 import { getCell, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap } from './CellViewport';
 import './PapyrusPanel.css';
@@ -16,6 +16,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<CellReferencesResult | null>(null);
   const [geometry, setGeometry] = useState<CellGeoMap>({});
   const [log, setLog] = useState<string[]>([]);
+
+  // Click-to-select + per-type visibility (the "can't click meshes / hide layers like the CK" ask).
+  const [selected, setSelected] = useState<CellPlacedReference | null>(null);
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
   // Env-loaded gate: an empty plugin list means "nothing loaded yet" -- point the user at the
   // Explorer sidebar's Load Env / Open MO2 buttons instead of letting them type a cell id blind
@@ -96,6 +100,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setResult(null);
     setGeometry({});
+    setSelected(null);
+    setHiddenTypes(new Set());
     setStatus('Reading placed references…');
     try {
       const raw = await cell.GetPlacedReferences(id);
@@ -158,6 +164,27 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const references: CellPlacedReference[] = result?.references ?? [];
   const failedModelCount = Object.values(geometry).filter(g => 'error' in g).length;
   const banner = statusBanner(status, busy);
+
+  // Group references the SAME way the viewport tags its meshes: a ref with a resolved mesh groups
+  // under its record type; anything drawn as a marker (no model, or its mesh failed to resolve)
+  // groups under "(markers)". Sorted by count so the biggest clutter sources are on top.
+  const typeGroups = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of references) {
+      const geo = r.modelPath ? geometry[r.modelPath] : undefined;
+      const meshed = !!geo && 'shapes' in geo && geo.shapes.some(s => s.verts.length > 0 && s.tris.length > 0);
+      const kind = meshed ? r.recordType : '(markers)';
+      m.set(kind, (m.get(kind) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [references, geometry]);
+
+  const toggleType = (t: string) =>
+    setHiddenTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t); else next.add(t);
+      return next;
+    });
 
   return (
     <div className="papyrus-overlay" onClick={onClose}>
@@ -222,11 +249,55 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
 
+            {selected && (
+              <div className="cell-selected">
+                <div className="cell-selected-head">
+                  <span>Selected</span>
+                  <button className="cell-selected-clear" onClick={() => setSelected(null)} title="Deselect">
+                    <X size={12} />
+                  </button>
+                </div>
+                <div className="cell-selected-row"><span>Ref</span><strong>{selected.editorId || selected.formKey}</strong></div>
+                <div className="cell-selected-row"><span>Type</span><strong>{selected.recordType}</strong></div>
+                <div className="cell-selected-row"><span>Base</span><strong>{selected.baseEditorId || selected.baseFormKey}</strong></div>
+                <div className="cell-selected-row"><span>Pos</span><strong>{selected.position.x.toFixed(0)}, {selected.position.y.toFixed(0)}, {selected.position.z.toFixed(0)}</strong></div>
+              </div>
+            )}
+
+            {result && typeGroups.length > 0 && (
+              <div className="cell-layers">
+                <div className="cell-layers-head">
+                  <span>Layers ({typeGroups.length})</span>
+                  {hiddenTypes.size > 0 && (
+                    <button className="papyrus-copy" onClick={() => setHiddenTypes(new Set())}>Show all</button>
+                  )}
+                </div>
+                <div className="cell-layers-list">
+                  {typeGroups.map(([type, count]) => {
+                    const hidden = hiddenTypes.has(type);
+                    return (
+                      <div
+                        key={type}
+                        className={`cell-layer-row${hidden ? ' hidden' : ''}`}
+                        onClick={() => toggleType(type)}
+                        title={hidden ? 'Show' : 'Hide'}
+                      >
+                        {hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                        <span className="cell-layer-name">{type}</span>
+                        <span className="cell-layer-count">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="cell-legend">
               <div><span className="cell-swatch cell-swatch-mesh" /> resolved mesh</div>
               <div><span className="cell-swatch cell-swatch-nomodel" /> no model (actor/trap)</div>
               <div><span className="cell-swatch cell-swatch-failed" /> mesh unavailable</div>
             </div>
+            <div className="nif-view-hint">Click a mesh to select it · toggle a layer to hide it</div>
             <div className="nif-view-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
 
             <div className="papyrus-log-head">
@@ -257,7 +328,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
             {references.length > 0
-              ? <CellViewport references={references} geometry={geometry} loadTexture={loadTexture} />
+              ? <CellViewport
+                  references={references}
+                  geometry={geometry}
+                  loadTexture={loadTexture}
+                  hiddenTypes={hiddenTypes}
+                  selectedKey={selected?.formKey ?? null}
+                  onSelect={setSelected}
+                />
               : (
                 <div className="nif-view-empty">
                   {unavailable ? 'Cell bridge unavailable.'
