@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using FluentAssertions;
 using FO4RecordEditor.Services;
 using FO4RecordEditor.Services.Materials;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace FO4RecordEditor.Tests;
@@ -107,5 +110,77 @@ public class MaterialServiceTests
     public void FileNotFound_ReturnsFriendlyError()
     {
         MaterialService.Inspect(@"C:\does\not\exist.bgsm").Should().Contain("not found");
+    }
+
+    // ---- JSON methods (used by the GUI Materials panel, MaterialInterop) ----
+
+    [Fact]
+    public void InspectJson_ReturnsTypedFieldsGroupedBySection()
+    {
+        var path = WriteMinimalBgsm();
+        try
+        {
+            var json = JObject.Parse(MaterialService.InspectJson(path));
+            json["version"]!.Value<int>().Should().Be(2);
+            var fields = (JArray)json["fields"]!;
+
+            var smoothness = fields.First(f => f["name"]!.Value<string>() == "Smoothness");
+            smoothness["section"]!.Value<string>().Should().Be("material");
+            smoothness["type"]!.Value<string>().Should().Be("float");
+            smoothness["value"]!.Value<string>().Should().Be("0.5");
+
+            var specColor = fields.First(f => f["name"]!.Value<string>() == "SpecularColor");
+            specColor["type"]!.Value<string>().Should().Be("color");
+            specColor["value"]!.Value<string>().Should().Be("1, 1, 1");
+
+            var tileU = fields.First(f => f["name"]!.Value<string>() == "TileU");
+            tileU["section"]!.Value<string>().Should().Be("header");
+            tileU["type"]!.Value<string>().Should().Be("bool");
+
+            fields.Should().NotContain(f => f["name"]!.Value<string>() == "Header", "the nested Header object is not itself a leaf field");
+            fields.Should().NotContain(f => f["name"]!.Value<string>() == "Pbr", "version 2 doesn't carry PBR, it must be omitted not shown as false");
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
+    public void InspectJson_MissingFile_ReturnsJsonError()
+    {
+        var json = JObject.Parse(MaterialService.InspectJson(@"C:\does\not\exist.bgsm"));
+        json["error"]!.Value<string>().Should().Contain("not found");
+    }
+
+    [Fact]
+    public void SetFields_AppliesMultipleFieldsInOneSave()
+    {
+        var path = WriteMinimalBgsm();
+        try
+        {
+            var result = MaterialService.SetFields(path,
+                new Dictionary<string, string> { ["Smoothness"] = "0.7", ["ReceiveShadows"] = "false" }, null);
+            result.Should().Contain("Set 2 field(s)");
+
+            var reparsed = BgsmCodec.Parse(File.ReadAllBytes(path));
+            reparsed.Smoothness.Should().Be(0.7f);
+            reparsed.ReceiveShadows.Should().BeFalse();
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
+    public void SetFields_UnknownFieldInBatch_AbortsWithoutWritingAnyChange()
+    {
+        var path = WriteMinimalBgsm();
+        try
+        {
+            MaterialService.SetFields(path,
+                new Dictionary<string, string> { ["Smoothness"] = "0.99", ["NotReal"] = "1" }, null)
+                .Should().Contain("Unknown BGSM field");
+
+            // The valid 'Smoothness' edit must NOT have been persisted either -- all-or-nothing.
+            var reparsed = BgsmCodec.Parse(File.ReadAllBytes(path));
+            reparsed.Smoothness.Should().Be(0.5f, "a batch with one bad field must write nothing at all");
+        }
+        finally { try { File.Delete(path); } catch { } }
     }
 }

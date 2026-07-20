@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using FO4RecordEditor.Services.Materials;
+using Newtonsoft.Json;
 
 namespace FO4RecordEditor.Services;
 
@@ -62,6 +63,92 @@ public static class MaterialService
         catch (Exception ex) { return ToolError.Fail($"Write failed: {ex.Message}"); }
 
         return $"Set {field} = {value} in '{Path.GetFileName(path)}', wrote to '{dest}'.";
+    }
+
+    /// <summary>Structured field list for the Materials GUI panel (name/section/type/value per field,
+    /// omitting fields this file's BGSM version doesn't carry). bgsm_inspect (the AI tool) returns
+    /// plain text instead; this is the JSON counterpart the panel renders real controls from.</summary>
+    public static string InspectJson(string path)
+    {
+        var (data, err) = LoadBgsm(path);
+        if (data == null) return JsonConvert.SerializeObject(new { error = err });
+
+        var fields = new List<object>();
+        CollectFields(fields, "material", data);
+        CollectFields(fields, "header", data.Header);
+
+        return JsonConvert.SerializeObject(new
+        {
+            fileName = Path.GetFileName(path),
+            version = data.Header.Version,
+            fields,
+        });
+    }
+
+    /// <summary>Apply many field edits in ONE load-modify-write cycle (the panel's "Save" button --
+    /// avoids re-reading/re-writing the file once per changed field). Aborts before writing anything
+    /// to disk if any field fails to resolve or parse, so a bad edit never lands partially applied.</summary>
+    public static string SetFields(string path, Dictionary<string, string> fields, string? outPath)
+    {
+        var (data, err) = LoadBgsm(path);
+        if (data == null) return err;
+        if (fields == null || fields.Count == 0) return ToolError.Fail("No field changes to apply.");
+
+        var applied = new List<string>();
+        foreach (var (field, value) in fields)
+        {
+            var (target, prop) = ResolveField(data, field);
+            if (prop == null) return ToolError.Fail($"Unknown BGSM field '{field}'.");
+
+            object? parsed;
+            try { parsed = ParseValue(prop.PropertyType, value); }
+            catch (Exception ex) { return ToolError.Fail($"Could not parse '{value}' as {FriendlyTypeName(prop.PropertyType)} for '{field}': {ex.Message}"); }
+
+            prop.SetValue(target, parsed);
+            applied.Add(field);
+        }
+
+        byte[] written;
+        try { written = BgsmCodec.Write(data); }
+        catch (Exception ex) { return ToolError.Fail($"Re-encoding failed: {ex.Message}"); }
+
+        var dest = string.IsNullOrWhiteSpace(outPath) ? path : outPath;
+        try
+        {
+            var fullDest = Path.GetFullPath(dest);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullDest)!);
+            File.WriteAllBytes(fullDest, written);
+        }
+        catch (Exception ex) { return ToolError.Fail($"Write failed: {ex.Message}"); }
+
+        return $"Set {applied.Count} field(s) ({string.Join(", ", applied)}) in '{Path.GetFileName(path)}', wrote to '{dest}'.";
+    }
+
+    private static void CollectFields(List<object> list, string section, object obj)
+    {
+        foreach (var prop in obj.GetType().GetProperties())
+        {
+            if (prop.Name == nameof(BgsmData.Header)) continue;   // nested object, not a leaf field
+            var val = prop.GetValue(obj);
+            if (val == null) continue;
+            list.Add(new
+            {
+                name = prop.Name,
+                section,
+                type = FieldTypeName(prop.PropertyType),
+                value = FormatValue(val),
+            });
+        }
+    }
+
+    private static string FieldTypeName(Type t)
+    {
+        var u = Nullable.GetUnderlyingType(t) ?? t;
+        if (u == typeof(bool)) return "bool";
+        if (u == typeof(float)) return "float";
+        if (u == typeof(uint) || u == typeof(byte)) return "int";
+        if (u == typeof(float[])) return "color";
+        return "string";
     }
 
     private static (BgsmData? data, string error) LoadBgsm(string path)

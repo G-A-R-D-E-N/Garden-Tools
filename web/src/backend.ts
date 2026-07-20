@@ -161,6 +161,30 @@ export interface NifHost {
   StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
 }
 
+/** One field in a MaterialField list (matches MaterialService.CollectFields' anonymous shape). */
+export interface MaterialField {
+  name: string;
+  section: 'material' | 'header';
+  type: 'bool' | 'float' | 'int' | 'string' | 'color';
+  value: string;   // 'true'/'false' for bool, a number as text for float/int, 'r, g, b' for color
+}
+export interface MaterialInspectResult {
+  fileName?: string;
+  version?: number;
+  fields?: MaterialField[];
+  error?: string;
+}
+
+/** The "material" bridge (FO4RecordEditor.Services.MaterialInterop) — inspect/edit .bgsm shader fields. */
+export interface MaterialHost {
+  BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
+  Inspect(path: string): Promise<string>;    // JSON: MaterialInspectResult
+  // fieldsJson: {"FieldName":"newValue", ...}. outPath blank = overwrite in place.
+  SetFields(path: string, fieldsJson: string, outPath: string): Promise<string>;
+  OpenFolder(path: string): Promise<string>;   // reveal in Explorer; "" on success
+  StageDroppedFile(name: string, base64: string): Promise<string>;  // drag-drop helper; "ERR:" on fail
+}
+
 /** The "settings" bridge (FO4RecordEditor.Services.SettingsInterop) — the app settings panel. */
 export interface SettingsHost {
   GetSettings(): Promise<string>;            // JSON of editable settings
@@ -180,6 +204,7 @@ declare global {
           settings?: SettingsHost;
           papyrus?: PapyrusHost;
           nif?: NifHost;
+          material?: MaterialHost;
         };
       };
     };
@@ -197,3 +222,6 @@ export const getPapyrus = (): PapyrusHost | undefined =>
 
 export const getNif = (): NifHost | undefined =>
   window.chrome?.webview?.hostObjects?.nif;
+
+export const getMaterial = (): MaterialHost | undefined =>
+  window.chrome?.webview?.hostObjects?.material;

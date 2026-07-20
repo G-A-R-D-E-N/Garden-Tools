@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, type DragEvent } from 'react';
-import { Box, X, FileInput, ScanSearch, CheckCircle2, Wrench, Play, FolderOpen, AlertTriangle, XCircle, Eye, Grid3x3, Image, SlidersHorizontal } from 'lucide-react';
-import { getNif } from './backend';
+import { Box, X, FileInput, ScanSearch, CheckCircle2, Wrench, Play, FolderOpen, AlertTriangle, XCircle, Eye, Grid3x3, Image, SlidersHorizontal, Palette } from 'lucide-react';
+import { getNif, getMaterial, type MaterialField } from './backend';
 import NifViewport, { type NifGeo } from './NifViewport';
 import NifEditor, { type NifTree } from './NifEditor';
+import MaterialEditor from './MaterialEditor';
 import './PapyrusPanel.css';
 import './NifPanel.css';
 
-type Mode = 'view' | 'edit' | 'import' | 'inspect' | 'verify' | 'fix';
+type Mode = 'view' | 'edit' | 'import' | 'inspect' | 'verify' | 'fix' | 'materials';
 const LS = (k: string, d: string) => localStorage.getItem('nif.' + k) ?? d;
 const LSB = (k: string, d: boolean) => { const v = localStorage.getItem('nif.' + k); return v === null ? d : v === '1'; };
 const setLS = (k: string, v: string | boolean) => localStorage.setItem('nif.' + k, typeof v === 'boolean' ? (v ? '1' : '0') : v);
@@ -38,6 +39,12 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   const [nifPath, setNifPath] = useState(() => LS('nifPath', ''));
   const [fixOut, setFixOut] = useState(() => LS('fixOut', ''));
 
+  // materials mode state
+  const [matPath, setMatPath] = useState(() => LS('matPath', ''));
+  const [matFields, setMatFields] = useState<MaterialField[] | null>(null);
+  const [matFileName, setMatFileName] = useState('');
+  const [matError, setMatError] = useState('');
+
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState('');
   const [log, setLog] = useState<string[]>([]);
@@ -56,6 +63,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => { setLS('collision', collision); setLS('fromBlender', fromBlender); }, [collision, fromBlender]);
   useEffect(() => setLS('nifPath', nifPath), [nifPath]);
   useEffect(() => setLS('fixOut', fixOut), [fixOut]);
+  useEffect(() => setLS('matPath', matPath), [matPath]);
   useEffect(() => setLS('wireframe', wireframe), [wireframe]);
   useEffect(() => setLS('textured', textured), [textured]);
   useEffect(() => setLS('texRoot', texRoot), [texRoot]);
@@ -75,6 +83,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   const browseOutNif = async () => { if (nif) { const p = await nif.BrowseForSave('Save NIF as', 'NIF mesh (*.nif)|*.nif'); if (p) setOutNif(p); } };
   const browseFixOut = async () => { if (nif) { const p = await nif.BrowseForSave('Save fixed NIF as', 'NIF mesh (*.nif)|*.nif'); if (p) setFixOut(p); } };
   const browseTexRoot = async () => { if (nif) { const p = await nif.BrowseForFolder('Select a texture root (Data or Textures folder)'); if (p) setTexRoot(p); } };
+  const browseMat = async () => { const m = getMaterial(); if (m) { const p = await m.BrowseForFile('Select a BGSM material', 'BGSM material (*.bgsm)|*.bgsm|All files|*.*'); if (p) setMatPath(p); } };
 
   // drag & drop an .obj (import) or .nif (inspect/verify/fix)
   const onDrop = useCallback(async (e: DragEvent) => {
@@ -89,6 +98,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
       const path = await nif.StageDroppedFile(f.name, btoa(bin));
       if (path.startsWith('ERR:')) { appendLog('✗ drop failed — ' + path); return; }
       if (/\.obj$/i.test(f.name)) { setMode('import'); setObjPath(path); }
+      else if (/\.bgsm$/i.test(f.name)) { setMatPath(path); loadMaterial(path); }
       else if (/\.nif$/i.test(f.name)) { setNifPath(path); if (mode === 'view') loadGeo(path); else if (mode === 'edit') loadTree(path); else if (mode === 'import') setMode('inspect'); }
       appendLog('• dropped ' + f.name);
     } catch (err) {
@@ -136,10 +146,31 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
     } finally { setBusy(false); }
   };
 
+  // Materials mode: load the field list for the editor.
+  const loadMaterial = async (path?: string) => {
+    const p = (path ?? matPath).trim();
+    const m = getMaterial();
+    if (!m || !p) return;
+    setBusy(true); setMatError('');
+    try {
+      const raw = await m.Inspect(p);
+      const parsed = JSON.parse(raw) as { fileName?: string; version?: number; fields?: MaterialField[]; error?: string };
+      if (parsed.error) throw new Error(parsed.error);
+      if (!parsed.fields) throw new Error('no fields');
+      setMatFields(parsed.fields);
+      setMatFileName(parsed.fileName ? `${parsed.fileName} (BGSM v${parsed.version})` : '');
+      appendLog(`• loaded material ${baseName(p)}`);
+    } catch (e) {
+      setMatFields(null);
+      setMatError('Could not load material: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setBusy(false); }
+  };
+
   // After a save, reload the tree (refreshes values/ids) and the preview (new textures/colors).
   const onEditorSaved = () => { loadTree(nifPath); };
 
   const run = async () => {
+    if (mode === 'materials') { await loadMaterial(); return; }
     if (!nif) return;
     if (mode === 'view') { await loadGeo(); return; }
     if (mode === 'edit') { await loadTree(); return; }
@@ -175,11 +206,15 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
 
   const openOut = async () => { if (nif && lastOutDir) await nif.OpenFolder(lastOutDir); };
 
+  const matHost = getMaterial();
+  const matUnavailable = !matHost;
+
   const banner = result && result !== 'Working…' ? makeBanner(result) : null;
-  const primaryPath = mode === 'import' ? objPath : nifPath;
+  const primaryPath = mode === 'import' ? objPath : mode === 'materials' ? matPath : nifPath;
   const runLabel = mode === 'view' ? 'Load & View' : mode === 'edit' ? 'Load & Edit'
+    : mode === 'materials' ? 'Load Material'
     : mode === 'import' ? 'Author NIF' : mode === 'inspect' ? 'Inspect' : mode === 'verify' ? 'Verify' : 'Fix';
-  const wide = mode === 'view' || mode === 'edit';
+  const wide = mode === 'view' || mode === 'edit' || mode === 'materials';
 
   return (
     <div className="papyrus-overlay" onClick={onClose}>
@@ -189,6 +224,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
           <div className="papyrus-modes">
             <button className={`papyrus-mode ${mode === 'view' ? 'active' : ''}`} onClick={() => setMode('view')}><Eye size={14} /> View</button>
             <button className={`papyrus-mode ${mode === 'edit' ? 'active' : ''}`} onClick={() => setMode('edit')}><SlidersHorizontal size={14} /> Edit</button>
+            <button className={`papyrus-mode ${mode === 'materials' ? 'active' : ''}`} onClick={() => setMode('materials')}><Palette size={14} /> Materials</button>
             <button className={`papyrus-mode ${mode === 'import' ? 'active' : ''}`} onClick={() => setMode('import')}><FileInput size={14} /> Import</button>
             <button className={`papyrus-mode ${mode === 'inspect' ? 'active' : ''}`} onClick={() => setMode('inspect')}><ScanSearch size={14} /> Inspect</button>
             <button className={`papyrus-mode ${mode === 'verify' ? 'active' : ''}`} onClick={() => setMode('verify')}><CheckCircle2 size={14} /> Verify</button>
@@ -197,11 +233,27 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
-        {unavailable && <div className="papyrus-warn">NIF bridge not available — run the desktop app (not the browser dev server). niftool.exe must be built.</div>}
+        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available — run the desktop app (not the browser dev server). niftool.exe must be built.</div>}
+        {mode === 'materials' && matUnavailable && <div className="papyrus-warn">Material bridge not available — run the desktop app (not the browser dev server).</div>}
 
-        <div className={`papyrus-body ${mode === 'edit' ? 'nif-edit-body' : ''}`}>
-          <div className={`papyrus-form ${mode === 'edit' ? 'nif-edit-sidebar' : ''}`}>
-            {mode === 'edit' ? (
+        <div className={`papyrus-body ${mode === 'edit' || mode === 'materials' ? 'nif-edit-body' : ''}`}>
+          <div className={`papyrus-form ${mode === 'edit' || mode === 'materials' ? 'nif-edit-sidebar' : ''}`}>
+            {mode === 'materials' ? (
+              <div className="nif-edit-picker">
+                <div className={`papyrus-drop ${dragOver ? 'over' : ''}`}
+                     onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                     onDragLeave={() => setDragOver(false)} onDrop={onDrop}>
+                  <input value={matPath} onChange={e => setMatPath(e.target.value)} placeholder="Path, or drag a .bgsm here…" />
+                </div>
+                <div className="papyrus-input-row">
+                  <button className="sidebar-action-btn" onClick={browseMat} disabled={matUnavailable}>BGSM…</button>
+                  <button className="papyrus-run nif-load-btn" onClick={() => loadMaterial()} disabled={busy || matUnavailable || !matPath.trim()}>
+                    <Play size={13} /> {busy ? 'Loading…' : 'Load Material'}
+                  </button>
+                </div>
+                {matFileName && <span className="nif-geo-info">{matFileName}</span>}
+              </div>
+            ) : mode === 'edit' ? (
               <>
                 <div className="nif-edit-picker">
                   <div className={`papyrus-drop ${dragOver ? 'over' : ''}`}
@@ -325,7 +377,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
               </label>
             )}
 
-            {mode !== 'edit' && (
+            {mode !== 'edit' && mode !== 'materials' && (
               <button className="papyrus-run" onClick={run} disabled={busy || unavailable || !primaryPath.trim()}>
                 <Play size={14} /> {busy ? 'Working…' : runLabel}
               </button>
@@ -341,6 +393,17 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
             <div className="papyrus-output nif-view-output">
               {geo ? <NifViewport data={geo} wireframe={wireframe} textured={textured} loadTexture={loadTexture} />
                 : <div className="nif-view-empty">{unavailable ? 'NIF bridge unavailable.' : 'Load a NIF to preview it here.'}</div>}
+            </div>
+          ) : mode === 'materials' ? (
+            <div className="papyrus-output nif-view-output">
+              {matFields && matHost ? (
+                <MaterialEditor fields={matFields} path={matPath} material={matHost}
+                  onSaved={() => loadMaterial(matPath)} appendLog={appendLog} />
+              ) : (
+                <div className="nif-view-empty">
+                  {matUnavailable ? 'Material bridge unavailable.' : matError || 'Pick or drag a .bgsm, then Load Material.'}
+                </div>
+              )}
             </div>
           ) : (
           <div className="papyrus-output">

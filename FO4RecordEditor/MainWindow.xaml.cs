@@ -77,6 +77,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AppWebView.CoreWebView2.AddHostObjectToScript("papyrus", new Services.PapyrusInterop());
         // NIF panel: author / inspect / verify / repair FO4 NIFs via niftool.exe.
         AppWebView.CoreWebView2.AddHostObjectToScript("nif", new Services.NifInterop());
+        // Materials tab (lives inside the NIF panel): inspect/edit .bgsm shader fields.
+        AppWebView.CoreWebView2.AddHostObjectToScript("material", new Services.MaterialInterop());
 
 #if DEBUG
         AppWebView.Source = new Uri("http://localhost:5173/#/main");
