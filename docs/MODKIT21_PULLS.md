@@ -1,9 +1,11 @@
-# modkit21 feature-pull tracker
+# Feature-pull tracker
 
 Bryant-21/modkit21 (GPL-3.0) is a much larger FO4 modding tool built by a friend of this project's
 maintainer, who gave explicit permission to review its source and pull ideas into FO4RecordEditor.
 This doc tracks that ongoing comparison: what's been reviewed, what got pulled (as MCP tools), what
-was deliberately left out and why, and what's still open.
+was deliberately left out and why, and what's still open. It also now covers other external tools
+reviewed the same way (source read directly, features ported deliberately, license checked) — see
+"Also reviewed" below the main table for those; the name stuck from when this doc was modkit21-only.
 
 FO4RecordEditor's own scope is plugin (ESP/ESM/ESL) record editing via Mutagen, exposed to an AI
 through MCP tool calls. That scope is the filter for every decision below — modkit21 covers meshes,
@@ -85,6 +87,24 @@ Three background research passes, each scoped narrower than the last as earlier 
 3. **Pass 3b** (re-examination of "GUI-only" areas: cloth, world, swf, texture — triggered by explicit
    user pushback on the earlier dismissal) → items #8-9 promoted from "dismissed" to "real candidate,
    large/narrow", confirmed world/texture/LOD/bone_edit dismissals with source citations.
+
+## Also reviewed: AlexxEG/BSA_Browser
+
+User linked this one directly (GPL-3.0, a mature and widely-used community BSA/BA2 browser/extractor
+— not modkit21, a different source, reviewed the same way: source read directly, not skimmed from the
+README). It has both a GUI and a real CLI over a shared `Sharp.BSA.BA2` library, and format coverage
+broader than ours (Morrowind-era `.dat`/BSA variants, PS4 `GNF` textures) — but that extra coverage is
+irrelevant here (this workspace only targets modern PC Fallout 4), so nothing about the underlying
+reader needed to change. Two real capabilities it had that our Archive panel didn't:
+
+| Feature | Where | What got pulled |
+|---|---|---|
+| Wildcard/regex search filtering | `BSA Browser CLI/Filtering/FilterPredicate*.cs` | Ported the matching semantics (not the implementation — their "simple"/wildcard mode used the PowerShell SDK, `System.Management.Automation`, as a dependency; replaced with a plain regex conversion so no new package is needed). `ArchiveService.BuildMatcher` adds `wildcard` and `regex` modes; `simple` (plain substring) stays the default and is what `archive_list`/`archive_extract_all`'s MCP contract still uses unchanged — wildcard/regex are GUI-only right now. |
+| Archive comparison (added/removed/changed/identical) | `BSA Browser/Tools/CompareForm.cs::CompareAsync` | `ArchiveService.CompareArchivesJson` ports the exact algorithm: match by path, then size, then a REAL byte comparison (same-size files can still differ — a dedicated test confirms this is classified `changed`, not silently `identical`). Their version streams the comparison against each archive's raw stream directly; this reads each candidate pair fully via Mutagen's `IArchiveFile.GetBytes()` instead, since BA2 entries are asset-sized, not the multi-GB case their streaming approach exists for. |
+
+Both shipped with a GUI immediately (a filter-mode dropdown next to the existing filter box, and a
+collapsible "Compare with another archive" section in the Archive panel) since they extend a panel
+that already has one, rather than being new AI/MCP-only tools first.
 
 ## How to update this doc
 
