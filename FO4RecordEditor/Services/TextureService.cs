@@ -94,6 +94,18 @@ public static class TextureService
     private static readonly Dictionary<string, string> _index = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _scannedArchives = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _scannedRoots = new(StringComparer.OrdinalIgnoreCase);
+
+    // Where ExtractFromArchive/ConvertToPng cache their outputs. Also consulted by AddDataRoots (see
+    // its comment) to recognize when a "nifDir" is our OWN extraction cache, not a real Data tree.
+    // internal (not private) so a test can verify the climb-skip without touching real files.
+    internal static readonly string TexCacheDir = Path.Combine(Path.GetTempPath(), "FO4RE_Tex");
+
+    // Per-cache-key lock so concurrent conversions/extractions of the SAME source (very common: many
+    // meshes in a cell share one underlying rock/dirt/wood texture, or the same archive entry) don't
+    // race on the same deterministic output path. Keyed rather than one global lock so unrelated
+    // textures still convert in parallel -- the Cell Viewer fires one fetch per unique (model,shape).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> _keyLocks = new(StringComparer.Ordinal);
+    private static object LockFor(string key) => _keyLocks.GetOrAdd(key, static _ => new object());
     private static string[]? _globalRoots;   // session roots if set, else settings-derived -- cached until SetSessionRoots invalidates it
 
     private static string Norm(string p) => p.Replace('/', '\\').TrimStart('\\');
@@ -147,9 +159,24 @@ public static class TextureService
 
     // Add a folder and any "Data" ancestor of it as BA2 search roots (BA2s live in a Data folder, but
     // a mod's loose meshes may also sit beside its BA2).
-    private static void AddDataRoots(List<string> roots, string? path)
+    // internal (not private) so a test can verify the climb-skip / stop-at-Data behavior directly --
+    // it's pure string manipulation, no I/O, so this is a cheap deterministic unit test.
+    internal static void AddDataRoots(List<string> roots, string? path)
     {
         var dir = path;
+        // A NIF resolved from OUR OWN BA2-extraction temp cache (used for every mesh the Cell Viewer
+        // pulls out of an archive -- ResolveNif extracts to TexCacheDir so niftool has a real file to
+        // read) has no ancestor "Data" folder to find. Climbing from it walked all the way to a drive
+        // root (the 24-level guard), which then made EnsureRootScanned recursively enumerate the
+        // ENTIRE drive for .ba2 files -- hitting inaccessible OS junction points (C:\Config.Msi,
+        // C:\Users\Default User, C:\Users\<user>\Application Data, ...) that threw mid-enumeration and
+        // aborted the WHOLE texture resolution for whatever call triggered it (see EnsureRootScanned's
+        // now-caught foreach below for why that was fatal, not just slow). Confirmed from a real debug
+        // log: five separate UnauthorizedAccessExceptions, one per ancestor level, each one silently
+        // failing that texture and leaving its mesh flat gray. Tier 2 (GlobalRoots, the real
+        // Data/mods trees) already covers everything a temp-cache path could hope to find, so skip
+        // the climb entirely for it.
+        if (dir != null && dir.StartsWith(TexCacheDir, StringComparison.OrdinalIgnoreCase)) return;
         for (int guard = 0; dir != null && guard < 24; guard++)
         {
             roots.Add(dir);
@@ -211,27 +238,39 @@ public static class TextureService
 
         int added = 0;
         var sw = Stopwatch.StartNew();
-        foreach (var archive in archives)
+        // Directory.EnumerateFiles(..., AllDirectories) is lazy: an inaccessible subdirectory (an OS
+        // reparse-point junction like C:\Config.Msi, hit if `root` is ever a drive root or a user
+        // profile folder) throws from the enumerator's MoveNext() -- i.e. INSIDE this loop, not at the
+        // call above. Uncaught, that propagates out of EnsureRootScanned and aborts the caller's ENTIRE
+        // resolution attempt (ResolveFromArchives' try/catch stops it there, silently failing that
+        // texture). Caught here instead so one bad subdirectory only truncates THIS root's index
+        // (partial results, not a dropped call) -- defense in depth alongside the AddDataRoots fix
+        // that stops the drive-root climb from happening in the first place.
+        try
         {
-            if (!_scannedArchives.Add(archive)) continue;
-            try
+            foreach (var archive in archives)
             {
-                var reader = Archive.CreateReader(GameRelease.Fallout4, new Noggog.FilePath(archive));
-                foreach (var f in reader.Files)
+                if (!_scannedArchives.Add(archive)) continue;
+                try
                 {
-                    var p = f.Path?.ToString();
-                    // Indexed together (one scan pass over each archive) rather than two separate
-                    // dds-only / nif-only scans -- the same BA2s hold both, so a texture lookup and a
-                    // mesh lookup (ResolveNif, for the cell viewer) share this one cache.
-                    if (string.IsNullOrEmpty(p) ||
-                        !(p.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) ||
-                          p.EndsWith(".nif", StringComparison.OrdinalIgnoreCase))) continue;
-                    var key = Norm(p);
-                    if (!_index.ContainsKey(key)) { _index[key] = archive; added++; }  // first (most-local) wins
+                    var reader = Archive.CreateReader(GameRelease.Fallout4, new Noggog.FilePath(archive));
+                    foreach (var f in reader.Files)
+                    {
+                        var p = f.Path?.ToString();
+                        // Indexed together (one scan pass over each archive) rather than two separate
+                        // dds-only / nif-only scans -- the same BA2s hold both, so a texture lookup and a
+                        // mesh lookup (ResolveNif, for the cell viewer) share this one cache.
+                        if (string.IsNullOrEmpty(p) ||
+                            !(p.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) ||
+                              p.EndsWith(".nif", StringComparison.OrdinalIgnoreCase))) continue;
+                        var key = Norm(p);
+                        if (!_index.ContainsKey(key)) { _index[key] = archive; added++; }  // first (most-local) wins
+                    }
                 }
+                catch (Exception ex) { DebugLog.Exception("Texture.ReadBa2:" + Path.GetFileName(archive), ex); }
             }
-            catch (Exception ex) { DebugLog.Exception("Texture.ReadBa2:" + Path.GetFileName(archive), ex); }
         }
+        catch (Exception ex) { DebugLog.Exception("Texture.EnumBa2:" + root, ex); }
         if (added > 0)
             DebugLog.Info("Texture.Index", $"Indexed {added} DDS/NIF entries from BA2s under {root} in {sw.ElapsedMilliseconds}ms");
     }
@@ -249,18 +288,29 @@ public static class TextureService
             var key = Hash(archivePath.ToLowerInvariant() + "|" + stamp + "|" + innerKey);
             var ext = Path.GetExtension(innerKey);
             if (string.IsNullOrEmpty(ext)) ext = ".dds";
-            var cacheDir = Path.Combine(Path.GetTempPath(), "FO4RE_Tex");
-            Directory.CreateDirectory(cacheDir);
-            var outPath = Path.Combine(cacheDir, "ba2_" + key + ext);
+            Directory.CreateDirectory(TexCacheDir);
+            var outPath = Path.Combine(TexCacheDir, "ba2_" + key + ext);
             if (File.Exists(outPath)) return outPath;
 
-            var reader = Archive.CreateReader(GameRelease.Fallout4, new Noggog.FilePath(archivePath));
-            foreach (var f in reader.Files)
+            // Same deterministic-key race as ConvertToPng: two threads extracting the same archive
+            // entry (e.g. a shared texture referenced by many meshes) could both open the archive
+            // reader and write the same outPath concurrently. Lock serializes it; the write-to-temp
+            // + Move (not a direct WriteAllBytes) means a File.Exists check from another thread can
+            // never observe a partially-written file even without the lock, as defense in depth.
+            lock (LockFor(key))
             {
-                if (!string.Equals(Norm(f.Path?.ToString() ?? ""), innerKey, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                File.WriteAllBytes(outPath, f.GetBytes());
-                return outPath;
+                if (File.Exists(outPath)) return outPath;
+
+                var reader = Archive.CreateReader(GameRelease.Fallout4, new Noggog.FilePath(archivePath));
+                foreach (var f in reader.Files)
+                {
+                    if (!string.Equals(Norm(f.Path?.ToString() ?? ""), innerKey, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var tmp = outPath + ".tmp" + Guid.NewGuid().ToString("N")[..8];
+                    File.WriteAllBytes(tmp, f.GetBytes());
+                    File.Move(tmp, outPath, true);
+                    return outPath;
+                }
             }
         }
         catch (Exception ex) { DebugLog.Exception("Texture.Extract", ex); }
@@ -311,24 +361,35 @@ public static class TextureService
         var stamp = File.GetLastWriteTimeUtc(ddsPath).Ticks;
         // Salt the cache key so PNGs from before Z-reconstruction was added aren't reused.
         var key = Hash(ddsPath.ToLowerInvariant() + "|" + stamp + "|v2");
-        var cacheDir = Path.Combine(Path.GetTempPath(), "FO4RE_Tex");
-        Directory.CreateDirectory(cacheDir);
-        var pngPath = Path.Combine(cacheDir, key + ".png");
+        Directory.CreateDirectory(TexCacheDir);
+        var pngPath = Path.Combine(TexCacheDir, key + ".png");
         if (File.Exists(pngPath)) return pngPath;
 
-        var work = Path.Combine(cacheDir, "w_" + key);
-        Directory.CreateDirectory(work);
-        try
+        // Serialize conversions of the SAME source texture. `work` below is deterministic (derived
+        // only from `key`), so without this lock two threads converting the same texture (common --
+        // many meshes in a cell share one diffuse) raced: one thread's `finally` deleted the shared
+        // work directory out from under the other mid-texconv (DirectoryNotFoundException on its
+        // File.Copy), or both copied into the same pngPath at once (IOException "used by another
+        // process"). Either failure returned null silently, so the mesh fell back to flat gray.
+        // Confirmed from a real debug log showing both exact exceptions.
+        lock (LockFor(key))
         {
-            // BC5 stores only R,G (a tangent-space normal map); decoded straight to RGBA its blue is 0
-            // and three.js lights it wrong. -reconstructz rebuilds Z = sqrt(1-x²-y²). Gate it to BC5
-            // so diffuse/other maps are untouched, and fall back if an older texconv lacks the flag.
-            var produced = RunTexconv(texconv, ddsPath, work, IsBc5(ddsPath));
-            if (produced == null) return null;
-            File.Copy(produced, pngPath, true);
-            return pngPath;
+            if (File.Exists(pngPath)) return pngPath; // someone else finished while we waited for the lock
+
+            var work = Path.Combine(TexCacheDir, "w_" + key);
+            Directory.CreateDirectory(work);
+            try
+            {
+                // BC5 stores only R,G (a tangent-space normal map); decoded straight to RGBA its blue is
+                // 0 and three.js lights it wrong. -reconstructz rebuilds Z = sqrt(1-x²-y²). Gate it to
+                // BC5 so diffuse/other maps are untouched, and fall back if an older texconv lacks it.
+                var produced = RunTexconv(texconv, ddsPath, work, IsBc5(ddsPath));
+                if (produced == null) return null;
+                File.Copy(produced, pngPath, true);
+                return pngPath;
+            }
+            finally { try { Directory.Delete(work, true); } catch { } }
         }
-        finally { try { Directory.Delete(work, true); } catch { } }
     }
 
     // Run texconv into an isolated dir; returns the produced PNG path, or null. When reconstructZ is
