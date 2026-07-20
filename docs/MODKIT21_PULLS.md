@@ -12,16 +12,23 @@ headless, chat-driven tool even where it's a genuinely good feature for a GUI ar
 
 ## Shipped
 
-| # | Feature | MCP tools | Source verified from (modkit21 / py-creation-lib) | Notes |
-|---|---|---|---|---|
-| 1 | Master table inspect + reorder | `list_masters`, `reorder_masters` | `cli/esp_commands.py` (masters list/add/remove/reorder) | Building `reorder_masters` required reading Mutagen's own `ModHeaderWriteLogic.cs`: `SortMasters` runs unconditionally even under `NoCheck` content, so the tool needs `MastersListOrdering=NoCheck` explicitly or a plain reorder silently gets discarded by `save_plugin`'s load-order derivation. Documented in `docs/Code Notes/FO4RecordEditor.md` (outer workspace). |
-| 2 | ESL/Small header flag | `set_light_flag` | `cli/esp_commands.py` (`esp header --set-light`) | `compact_to_esl` never set this bit; closes a known gap from earlier work. |
-| 3 | BA2/BSA archive read | `archive_list`, `archive_extract`, `archive_extract_all` | `cli/archive_commands.py` → native Rust `bsarchive_native` | Zero new dependencies — Mutagen already vendors a full BA2/BSA reader (`Archives/Ba2`, `Archives/Bsa`), already used internally by `TextureService.cs`. |
-| 4 | Papyrus function/script lookup | `papyrus_function_lookup`, `papyrus_script_info` | `cli/data_commands.py` (function/functions/api/hierarchy) → `creation_lib.creation_data` | Built by parsing our own offline Creation Kit Wiki HTML mirror directly instead of porting modkit's Python index (we already had the source data). Needs `--ck-wiki <folder>` at launch or `CkWikiPath` in Settings. First regex draft was wrong (assumed section `id` was on `<h2>`; it's on the inner `<span>`) — caught by testing against real markup, then verified against the real mirror. |
-| 5 | BGSM material field editor | `bgsm_inspect`, `bgsm_set_field` | `native/materials/src/{base.rs,bgsm.rs}` (their own material_tools library, not even wired into their CLI) | Byte-for-byte C# port of the Rust parser/writer — Mutagen has no material-file support, so this needed real, from-source binary-format work, not just wiring up an existing capability. Verified byte-identical round-trip against all 400 real `.bgsm` files found anywhere in the workspace (versions 1-2 only; higher-version branches verified by hand-built + round-trip tests instead, no real v3+ sample found). **BGEM (effect materials) is NOT implemented yet** — same architecture, just needs its own field list ported from `native/materials/src/bgem.rs`. |
-| 6 | Mod folder catalog | `catalog_mod_folder` | `creation_lib/mod/inspector.py::catalog_assets()` | Buckets a mod folder's files by category (meshes/textures/materials/sounds/scripts/plugins/archives/voice) with per-category counts, for "what's in this unfamiliar mod" triage. |
+Every pull below started as an AI/MCP tool only — no way for a person to see or use it except by
+asking the AI. **GUI** tracks whether a point-and-click interface exists yet. Default is "no" (chat/
+MCP-only); GUI work only gets built when specifically asked for, since MCP-tool pulls and their GUI
+counterparts are separate, independently-scoped chunks of work.
+
+| # | Feature | MCP tools | GUI | Source verified from (modkit21 / py-creation-lib) | Notes |
+|---|---|---|---|---|---|
+| 1 | Master table inspect + reorder | `list_masters`, `reorder_masters` | AI/MCP only | `cli/esp_commands.py` (masters list/add/remove/reorder) | Building `reorder_masters` required reading Mutagen's own `ModHeaderWriteLogic.cs`: `SortMasters` runs unconditionally even under `NoCheck` content, so the tool needs `MastersListOrdering=NoCheck` explicitly or a plain reorder silently gets discarded by `save_plugin`'s load-order derivation. Documented in `docs/Code Notes/FO4RecordEditor.md` (outer workspace). |
+| 2 | ESL/Small header flag | `set_light_flag` | AI/MCP only | `cli/esp_commands.py` (`esp header --set-light`) | `compact_to_esl` never set this bit; closes a known gap from earlier work. |
+| 3 | BA2/BSA archive read | `archive_list`, `archive_extract`, `archive_extract_all` | AI/MCP only | `cli/archive_commands.py` → native Rust `bsarchive_native` | Zero new dependencies — Mutagen already vendors a full BA2/BSA reader (`Archives/Ba2`, `Archives/Bsa`), already used internally by `TextureService.cs`. |
+| 4 | Papyrus function/script lookup | `papyrus_function_lookup`, `papyrus_script_info` | AI/MCP only | `cli/data_commands.py` (function/functions/api/hierarchy) → `creation_lib.creation_data` | Built by parsing our own offline Creation Kit Wiki HTML mirror directly instead of porting modkit's Python index (we already had the source data). Needs `--ck-wiki <folder>` at launch or `CkWikiPath` in Settings. First regex draft was wrong (assumed section `id` was on `<h2>`; it's on the inner `<span>`) — caught by testing against real markup, then verified against the real mirror. |
+| 5 | BGSM material field editor | `bgsm_inspect`, `bgsm_set_field` | **Yes** — Materials tab in the NIF panel | `native/materials/src/{base.rs,bgsm.rs}` (their own material_tools library, not even wired into their CLI) | Byte-for-byte C# port of the Rust parser/writer — Mutagen has no material-file support, so this needed real, from-source binary-format work, not just wiring up an existing capability. Verified byte-identical round-trip against all 400 real `.bgsm` files found anywhere in the workspace (versions 1-2 only; higher-version branches verified by hand-built + round-trip tests instead, no real v3+ sample found). **BGEM (effect materials) is NOT implemented yet** — same architecture, just needs its own field list ported from `native/materials/src/bgem.rs`. GUI added as its own follow-up (see below): a "Materials" tab inside the existing NIF panel (`web/src/NifPanel.tsx`), reusing NifEditor's dirty-tracking/revert/save UX exactly — bool→switch, float/int→number, color→picker+raw value, via new `MaterialService.InspectJson`/`SetFields` (JSON, batched) and a `MaterialInterop` WebView2 bridge. |
+| 6 | Mod folder catalog | `catalog_mod_folder` | AI/MCP only | `creation_lib/mod/inspector.py::catalog_assets()` | Buckets a mod folder's files by category (meshes/textures/materials/sounds/scripts/plugins/archives/voice) with per-category counts, for "what's in this unfamiliar mod" triage. |
 
 Tool surface: 57 → 68 across these 6 pulls (see `docs/MCP_SETUP.md` for the full current list).
+Materials (#5) is the first of the six to get a real GUI; the other five remain AI/MCP-only until
+specifically asked for.
 
 ## Open — real candidates, not yet built
 
@@ -86,4 +93,7 @@ count, and note what got verified before shipping (real-file corpus, hand-built 
 match the rigor of rows #5/#1 above, not just "added it"). When a new modkit21 area gets investigated,
 add a row to whichever table it lands in with a source citation, even if the verdict is "confirmed out
 of scope" — the point of this doc is that every verdict here traces back to source someone actually
-read, not a guess from a feature name.
+read, not a guess from a feature name. When a shipped MCP tool gets a GUI built for it, update that
+row's **GUI** column ("AI/MCP only" → what was built and where) rather than treating GUI work as a
+separate, undocumented thing — a pull isn't "done for a user" until they can reach it without going
+through chat, and this doc should say honestly which pulls are and aren't at that point yet.
