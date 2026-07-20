@@ -32,6 +32,16 @@ public class ArchiveInterop
         return dlg.ShowDialog() == true ? dlg.FolderName : "";
     }
 
+    public string BrowseForSave(string title, string filter)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = string.IsNullOrWhiteSpace(title) ? "Save as" : title,
+            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
+        };
+        return dlg.ShowDialog() == true ? dlg.FileName : "";
+    }
+
     /// <summary>Structured entry list (JSON) for the panel's table. filterMode: "simple" (default) |
     /// "wildcard" | "regex". See ArchiveService.ListArchiveJson.</summary>
     public Task<string> List(string archivePath, string filter, int limit, string filterMode) =>
@@ -82,6 +92,21 @@ public class ArchiveInterop
                 DebugLog.Exception("Archive.Compare", ex);
                 return JsonConvert.SerializeObject(new { error = "Error: " + ex.Message });
             }
+        });
+
+    /// <summary>Pack one or more loose folders into a new BA2 via Archive2.exe. sourcePathsJson: a
+    /// JSON array of source folder paths. format: "General" (sounds/meshes/scripts/...) or "DDS"
+    /// (textures only). rootDir: required, the folder each entry's in-archive path is computed
+    /// relative to. See ArchiveService.Pack.</summary>
+    public Task<string> Pack(string sourcePathsJson, string outputBa2, string format, string rootDir, bool compress) =>
+        Task.Run(() =>
+        {
+            try
+            {
+                var paths = JsonConvert.DeserializeObject<List<string>>(sourcePathsJson) ?? new List<string>();
+                return ArchiveService.Pack(paths, outputBa2, format, rootDir, compress);
+            }
+            catch (Exception ex) { DebugLog.Exception("Archive.Pack", ex); return "Error: " + ex.Message; }
         });
 
     /// <summary>Open a folder (or the folder containing a file) in Windows Explorer. Returns "" on success.</summary>

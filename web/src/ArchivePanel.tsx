@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Archive as ArchiveIcon, X, FolderOpen, Download, DownloadCloud, CheckCircle2, XCircle, GitCompare, ChevronDown, ChevronRight } from 'lucide-react';
+import { Archive as ArchiveIcon, X, FolderOpen, Download, DownloadCloud, CheckCircle2, XCircle, GitCompare, ChevronDown, ChevronRight, Package as PackageIcon } from 'lucide-react';
 import { getArchive, type ArchiveEntry, type ArchiveFilterMode, type ArchiveCompareResult } from './backend';
 import './PapyrusPanel.css';
 import './ArchivePanel.css';
@@ -31,11 +31,27 @@ export default function ArchivePanel({ onClose }: { onClose: () => void }) {
   const [compareResult, setCompareResult] = useState<ArchiveCompareResult | null>(null);
   const [compareError, setCompareError] = useState('');
 
+  // Pack sub-panel
+  const [packOpen, setPackOpen] = useState(false);
+  const [packSources, setPackSources] = useState<string[]>(() => {
+    try { return JSON.parse(LS('packSources', '[]')); } catch { return []; }
+  });
+  const [packOutput, setPackOutput] = useState(() => LS('packOutput', ''));
+  const [packFormat, setPackFormat] = useState(() => LS('packFormat', 'General'));
+  const [packRoot, setPackRoot] = useState(() => LS('packRoot', ''));
+  const [packCompress, setPackCompress] = useState(true);
+  const [packBusy, setPackBusy] = useState(false);
+  const [packResult, setPackResult] = useState('');
+
   const archive = getArchive();
   const unavailable = !archive;
 
   useEffect(() => setLS('archivePath', archivePath), [archivePath]);
   useEffect(() => setLS('filterMode', filterMode), [filterMode]);
+  useEffect(() => setLS('packSources', JSON.stringify(packSources)), [packSources]);
+  useEffect(() => setLS('packOutput', packOutput), [packOutput]);
+  useEffect(() => setLS('packFormat', packFormat), [packFormat]);
+  useEffect(() => setLS('packRoot', packRoot), [packRoot]);
 
   const browseArchive = async () => {
     if (!archive) return;
@@ -120,6 +136,33 @@ export default function ArchivePanel({ onClose }: { onClose: () => void }) {
     } catch (e) {
       setCompareError('Could not compare: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setCompareBusy(false); }
+  };
+
+  const addPackSource = async () => {
+    if (!archive) return;
+    const p = await archive.BrowseForFolder('Add a source folder to pack');
+    if (p && !packSources.includes(p)) setPackSources(prev => [...prev, p]);
+  };
+  const removePackSource = (p: string) => setPackSources(prev => prev.filter(x => x !== p));
+  const browsePackOutput = async () => {
+    if (!archive) return;
+    const p = await archive.BrowseForSave('Save the new .ba2 as', 'Bethesda archive (*.ba2)|*.ba2|All files|*.*');
+    if (p) setPackOutput(p);
+  };
+  const browsePackRoot = async () => {
+    if (!archive) return;
+    const p = await archive.BrowseForFolder('Select the root folder (in-archive paths are computed relative to this)');
+    if (p) setPackRoot(p);
+  };
+  const runPack = async () => {
+    if (!archive || packSources.length === 0 || !packOutput.trim() || !packRoot.trim()) return;
+    setPackBusy(true); setPackResult('');
+    try {
+      const res = await archive.Pack(JSON.stringify(packSources), packOutput, packFormat, packRoot, packCompress);
+      setPackResult(res);
+    } catch (e) {
+      setPackResult('Error: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setPackBusy(false); }
   };
 
   return (
@@ -239,6 +282,60 @@ export default function ArchivePanel({ onClose }: { onClose: () => void }) {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="archive-compare-section">
+            <button className="archive-compare-toggle" onClick={() => setPackOpen(o => !o)}>
+              {packOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <PackageIcon size={13} /> Pack folder(s) into a new BA2
+            </button>
+            {packOpen && (
+              <div className="archive-compare-body">
+                <div className="archive-compare-row">
+                  <span className="archive-compare-label">Src:</span>
+                  <button className="sidebar-action-btn" onClick={addPackSource} disabled={unavailable}>Add folder…</button>
+                  <span className="archive-compare-path">{packSources.length === 0 ? '(none added yet)' : `${packSources.length} folder(s)`}</span>
+                </div>
+                {packSources.map(p => (
+                  <div key={p} className="archive-compare-row">
+                    <span className="archive-compare-label" />
+                    <span className="archive-compare-path">{p}</span>
+                    <button className="sidebar-action-btn" onClick={() => removePackSource(p)}>Remove</button>
+                  </div>
+                ))}
+                <div className="archive-compare-row">
+                  <span className="archive-compare-label">Out:</span>
+                  <input className="archive-path-input" value={packOutput} onChange={e => setPackOutput(e.target.value)} placeholder="Output .ba2 path…" />
+                  <button className="sidebar-action-btn" onClick={browsePackOutput} disabled={unavailable}>Save…</button>
+                </div>
+                <div className="archive-compare-row">
+                  <span className="archive-compare-label">Root:</span>
+                  <input className="archive-path-input" value={packRoot} onChange={e => setPackRoot(e.target.value)} placeholder="Folder each source's in-archive path is relative to (e.g. the mod's Data\ folder)…" />
+                  <button className="sidebar-action-btn" onClick={browsePackRoot} disabled={unavailable}>Browse…</button>
+                </div>
+                <div className="archive-compare-row">
+                  <span className="archive-compare-label">Fmt:</span>
+                  <select className="archive-filter-mode" value={packFormat} onChange={e => setPackFormat(e.target.value)}>
+                    <option value="General">General (sounds/meshes/scripts/...)</option>
+                    <option value="DDS">DDS (textures only)</option>
+                  </select>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                    <input type="checkbox" checked={packCompress} onChange={e => setPackCompress(e.target.checked)} /> Compress
+                  </label>
+                  <button className="papyrus-run" onClick={runPack}
+                          disabled={packBusy || unavailable || packSources.length === 0 || !packOutput.trim() || !packRoot.trim()}>
+                    {packBusy ? 'Packing…' : 'Pack'}
+                  </button>
+                </div>
+
+                {packResult && (
+                  <div className={`papyrus-banner ${/^RESULT: success/.test(packResult) ? 'ok' : 'error'}`}>
+                    {/^RESULT: success/.test(packResult) ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+                    <span className="papyrus-banner-text">{packResult.split('\n')[0]}</span>
                   </div>
                 )}
               </div>

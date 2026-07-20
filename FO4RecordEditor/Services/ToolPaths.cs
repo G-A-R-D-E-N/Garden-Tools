@@ -128,6 +128,35 @@ public static class ToolPaths
     }
 
     /// <summary>
+    /// The Creation Kit's Archive2.exe (BA2 packer/extractor). Same reasoning as PapyrusCompiler: it
+    /// is not redistributable, so it is never bundled -- found in the user's own Fallout 4/CK install.
+    /// archive_extract/archive_extract_all don't need this (Mutagen reads BA2/BSA natively); only
+    /// archive_pack does, since Mutagen has no BA2 writer.
+    ///
+    /// The auto-detect (Fallout4Root-derived) paths are checked LAST, not first, on purpose: verified
+    /// 2026-07-20 that both this dev box's live Steam Fallout 4 install AND its "Fallout 4 1946160"
+    /// pin (previously assumed OG-locked) have drifted to a Next-Gen Archive2.exe (reports "Version
+    /// 1.1.0.5", writes BA2 header version 8) that this project's vendored Mutagen cannot correctly
+    /// read back -- BA2FileEntry's version>=7 branch (Ba2Reader.cs) computes Compressed=false for data
+    /// that is actually still zlib-compressed on disk, so GetBytes() silently returns raw compressed
+    /// bytes instead of the real content. E:\F4SE OG\Tools\KnownModTools\BA2Packer\Archive2.exe
+    /// (reports "Version 1.1.0.4", writes header version 1) is confirmed round-trip-correct -- checked
+    /// first for exactly that reason. ArchiveService.Pack also verifies the header version of whatever
+    /// it produced and fails loudly rather than shipping a silently-corrupt archive if this drifts
+    /// again or a different machine's install resolves the same way.
+    /// </summary>
+    public static string? Archive2()
+    {
+        var root = Fallout4Root();
+        return FirstFile(
+            Env("ARCHIVE2_PATH"),
+            Settings.Archive2Path,
+            @"E:\F4SE OG\Tools\KnownModTools\BA2Packer\Archive2.exe",
+            root == null ? null : Path.Combine(root, "Tools", "Archive2", "Archive2.exe"),
+            @"E:\SteamLibrary\steamapps\common\Fallout 4 1946160\Tools\Archive2\Archive2.exe");
+    }
+
+    /// <summary>
     /// Every base-script source root that exists, highest priority first. F4SE must precede the
     /// vanilla base: its Game.psc/Actor.psc declare extra natives that the vanilla ones lack.
     /// </summary>
@@ -215,6 +244,7 @@ public static class ToolPaths
         "niftool" => "set NIFTOOL_PATH, or put niftool.exe in tools\\niftool\\ next to the exe",
         "texconv" => "set TEXCONV_PATH, or put Texconvx64.exe in tools\\texconv\\ next to the exe",
         "papyrus" => "install the Creation Kit, or set PAPYRUS_COMPILER_PATH / papyrusCompilerPath in settings.json",
+        "archive2" => "install the Creation Kit, or set ARCHIVE2_PATH / archive2Path in settings.json",
         "ckwiki" => "set CK_WIKI_PATH, or put the wiki mirror in tools\\ckwiki\\fallout4\\ next to the exe",
         "ffmpeg" => "set FFMPEG_PATH, or put ffmpeg.exe in tools\\audio\\ next to the exe",
         "xwmaencode" => "set XWMAENCODE_PATH, or put xWMAEncode.exe in tools\\audio\\ next to the exe",

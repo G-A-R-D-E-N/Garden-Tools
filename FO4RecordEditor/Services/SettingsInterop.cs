@@ -46,6 +46,7 @@ public class SettingsInterop
             s.NiftoolPath,
             s.FfmpegPath,
             s.XwmaEncodePath,
+            s.Archive2Path,
         });
     }
 
@@ -76,6 +77,7 @@ public class SettingsInterop
             if (dto.NiftoolPath != null)         s.NiftoolPath = dto.NiftoolPath.Trim();
             if (dto.FfmpegPath != null)          s.FfmpegPath = dto.FfmpegPath.Trim();
             if (dto.XwmaEncodePath != null)      s.XwmaEncodePath = dto.XwmaEncodePath.Trim();
+            if (dto.Archive2Path != null)        s.Archive2Path = dto.Archive2Path.Trim();
 
             _shell.Settings.Save();
             _shell.RebuildProvider();
@@ -165,5 +167,6 @@ public class SettingsInterop
         public string? NiftoolPath { get; set; }
         public string? FfmpegPath { get; set; }
         public string? XwmaEncodePath { get; set; }
+        public string? Archive2Path { get; set; }
     }
 }

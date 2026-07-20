@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -255,5 +256,93 @@ public static class ArchiveService
             changed,
             identicalCount = identical,
         });
+    }
+
+    /// <summary>
+    /// Pack one or more loose folders into a new BA2, via the Creation Kit's Archive2.exe -- Mutagen's
+    /// Archive reader has no writer, so unlike everything else in this file, packing has no
+    /// native-code path. 'format' is Archive2's own vocabulary: "General" (anything non-DDS --
+    /// sounds/meshes/scripts/...) or "DDS" (texture-only archives, using BA2's special
+    /// compressed-texture chunk layout -- do not use General for a textures folder or vice versa).
+    /// 'rootDir' is required and not guessed: it's what Archive2 computes each entry's in-archive
+    /// path relative to (e.g. root=".../Data", source=".../Data/Sound/..." -> entry "Sound/...");
+    /// get it wrong and the game will never find the packed files under its Data\ folder.
+    /// </summary>
+    public static string Pack(IReadOnlyList<string> sourcePaths, string outputBa2, string format, string rootDir, bool compress)
+    {
+        var archive2 = ToolPaths.Archive2();
+        if (archive2 == null) return ToolError.Fail("Archive2.exe not found. " + ToolPaths.Describe("archive2") + ".");
+
+        var sources = sourcePaths.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim().Trim('"')).ToList();
+        if (sources.Count == 0) return ToolError.Fail("Provide at least one source folder to pack.");
+        foreach (var s in sources)
+            if (!Directory.Exists(s)) return ToolError.Fail($"Source folder not found: {s}");
+
+        if (string.IsNullOrWhiteSpace(outputBa2)) return ToolError.Fail("Provide an output .ba2 path.");
+        outputBa2 = outputBa2.Trim().Trim('"');
+        if (!outputBa2.EndsWith(".ba2", StringComparison.OrdinalIgnoreCase)) outputBa2 += ".ba2";
+
+        format = string.IsNullOrWhiteSpace(format) ? "General" : format.Trim();
+        if (!string.Equals(format, "General", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(format, "DDS", StringComparison.OrdinalIgnoreCase))
+            return ToolError.Fail("format must be 'General' (sounds/meshes/scripts/...) or 'DDS' (textures only).");
+
+        if (string.IsNullOrWhiteSpace(rootDir)) return ToolError.Fail("Provide 'root_dir' -- the folder each source's in-archive path is computed relative to.");
+        rootDir = rootDir.Trim().Trim('"');
+        if (!Directory.Exists(rootDir)) return ToolError.Fail($"Root folder not found: {rootDir}");
+
+        try { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputBa2)) ?? "."); }
+        catch (Exception ex) { return ToolError.Fail($"Cannot create output dir for '{outputBa2}': {ex.Message}"); }
+
+        var psi = new ProcessStartInfo { FileName = archive2 };
+        // Archive2 wants every source folder as ONE comma-separated argument, not repeated -i flags
+        // -- confirmed against a real, actively-used community packing batch script.
+        psi.ArgumentList.Add(string.Join(",", sources));
+        psi.ArgumentList.Add($"-f={format}");
+        psi.ArgumentList.Add($"-c={outputBa2}");
+        psi.ArgumentList.Add($"-r={rootDir}");
+        if (!compress) psi.ArgumentList.Add("-compression=None");
+
+        // Large sound/texture packs (hundreds of files) can take a while; Papyrus batch compiles get
+        // 300s for a similar reason.
+        var run = ProcessRunner.Run(psi, TimeSpan.FromMinutes(10));
+        if (!run.Started) return ToolError.Fail("Failed to start Archive2.exe.");
+        if (run.TimedOut) return ToolError.Fail("Archive2.exe timed out after 10 minutes (killed).");
+        if (run.ExitCode != 0 || !File.Exists(outputBa2))
+            return ToolError.Fail($"Archive2.exe failed (exit {run.ExitCode}):\n{run.Combined}");
+
+        // Verify what actually got written, rather than trust a clean exit code. This project's
+        // vendored Mutagen cannot correctly decompress BA2 header version >= 7 (Next-Gen's format) --
+        // GetBytes() silently returns still-compressed bytes instead of throwing -- so a stale/updated
+        // Archive2.exe would otherwise ship an archive that LOOKS packed but reads back as garbage
+        // through every other tool here (archive_list/archive_extract/TextureService's own lookups).
+        // Confirmed 2026-07-20 against a real drifted install; see ToolPaths.Archive2's doc comment.
+        var headerVersion = ReadBa2HeaderVersion(outputBa2);
+        if (headerVersion is int v && v >= 7)
+            return ToolError.Fail(
+                $"Archive2.exe at '{archive2}' wrote a version {v} BA2 (Next-Gen format), which this " +
+                "tool's Mutagen reader cannot decompress correctly -- archive_extract/archive_list would " +
+                "silently return corrupt data from it. Point Archive2Path (Settings, or ARCHIVE2_PATH) " +
+                "at an OG-era Archive2.exe (writes header version 1) instead. The output file was left " +
+                $"on disk at '{outputBa2}' for inspection but should not be used.");
+
+        var count = run.Combined.Split('\n').Count(l => l.TrimStart().StartsWith("Adding \"", StringComparison.Ordinal));
+        return $"RESULT: success ({count} file(s) -> {outputBa2})\n\n{run.Combined}".TrimEnd();
+    }
+
+    // BA2 header: 4-byte "BTDX" magic, then a little-endian uint32 version. Null if the file is too
+    // short or doesn't start with the magic (Archive2 already validated it built something, so this
+    // is a format-version check, not a "did it even write a BA2" check).
+    private static int? ReadBa2HeaderVersion(string ba2Path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(ba2Path);
+            Span<byte> header = stackalloc byte[8];
+            if (fs.Read(header) < 8) return null;
+            if (header[0] != (byte)'B' || header[1] != (byte)'T' || header[2] != (byte)'D' || header[3] != (byte)'X') return null;
+            return BitConverter.ToInt32(header.Slice(4, 4));
+        }
+        catch { return null; }
     }
 }

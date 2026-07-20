@@ -25,6 +25,7 @@ public sealed class AppSettings
     public string CkWikiPath { get; set; } = "";   // offline Creation Kit Wiki HTML mirror root override (blank = use the bundled copy)
     public string FfmpegPath { get; set; } = "";   // ffmpeg.exe (blank = bundled copy next to the exe)
     public string XwmaEncodePath { get; set; } = "";   // xWMAEncode.exe (blank = bundled copy next to the exe)
+    public string Archive2Path { get; set; } = "";   // Archive2.exe (blank = auto-detect from the Fallout 4/CK install)
     public double SidePanelWidth { get; set; } = 320;
     public double AiPanelWidth { get; set; } = 420;
     public double BottomPanelHeight { get; set; } = 200;

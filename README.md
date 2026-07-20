@@ -4,7 +4,7 @@ A Fallout 4 plugin IDE. It is two things in one executable:
 
 - **A desktop editor** — browse, diff, and edit records across your whole load order, scan for
   conflicts, compile and decompile Papyrus, and inspect NIFs. Think xEdit, but with a modern UI.
-- **An MCP server** — the same 72 operations, exposed to an AI assistant (Claude Code, or any other
+- **An MCP server** — the same 73 operations, exposed to an AI assistant (Claude Code, or any other
   MCP client). This is the part most people want: you describe the edit, the AI makes it, and the
   plugin is written by [Mutagen](https://github.com/Mutagen-Modding/Mutagen) rather than by hand.
 
@@ -83,20 +83,23 @@ path below is optional and auto-detected when blank — set one only to override
 | `ckWikiPath` | Offline Creation Kit Wiki HTML mirror | The bundled copy in `tools\ckwiki\fallout4\` |
 | `ffmpegPath` | `ffmpeg.exe` | The bundled copy in `tools\audio\` |
 | `xwmaEncodePath` | `xWMAEncode.exe` | The bundled copy in `tools\audio\` |
+| `archive2Path` | The Creation Kit's `Archive2.exe` (BA2 packer, used by `archive_pack`) | `<Fallout 4>\Tools\Archive2\` |
 | `mo2InstancePath` | MO2 instance | The `--mo2` argument |
 | `dataFolder` | A plain `Data` folder | The `--data` argument |
 
 Each also honours an environment variable, which wins over the settings file:
 `NIFTOOL_PATH`, `TEXCONV_PATH`, `PAPYRUS_COMPILER_PATH`, `PAPYRUS_BASE_IMPORTS`, `CK_WIKI_PATH`,
-`FFMPEG_PATH`, `XWMAENCODE_PATH`. `BmlFuzEncode.exe`/`BmlFuzDecode.exe` (the .fuz packer/splitter) are
-bundled-only, in the same `tools\audio\` folder, with no override — there's nothing to point them at.
+`FFMPEG_PATH`, `XWMAENCODE_PATH`, `ARCHIVE2_PATH`. `BmlFuzEncode.exe`/`BmlFuzDecode.exe` (the .fuz
+packer/splitter) are bundled-only, in the same `tools\audio\` folder, with no override — there's
+nothing to point them at.
 
-### Papyrus compiling needs the Creation Kit
+### Papyrus compiling and BA2 packing need the Creation Kit
 
-`compile_papyrus` shells out to Bethesda's `PapyrusCompiler.exe`, which ships with the **Creation
-Kit** and is not redistributable — so it is not in this package. Install the CK (it is free, on Steam)
-and the compiler and its base scripts are found automatically. Everything else in the tool works
-without it.
+`compile_papyrus` shells out to Bethesda's `PapyrusCompiler.exe`, and `archive_pack` shells out to
+`Archive2.exe` — both ship with the **Creation Kit** and are not redistributable, so neither is in
+this package. Install the CK (it is free, on Steam) and both are found automatically. Reading archives
+(`archive_list`/`archive_extract`/`archive_extract_all`) doesn't need this — Mutagen reads BA2/BSA
+natively; only packing a *new* one does. Everything else in the tool works without the CK installed.
 
 ---
 

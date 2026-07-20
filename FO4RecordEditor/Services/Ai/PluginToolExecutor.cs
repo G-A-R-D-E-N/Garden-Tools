@@ -1048,17 +1048,19 @@ public sealed class PluginToolExecutor
                 required = new[] { "mod_path" }
             }),
         new("audio_convert_to_xwm",
-            "Convert an audio or video file to Fallout 4's xWMA (.xwm) format. Any ffmpeg-readable input " +
-            "works (wav/mp3/flac/ogg/m4a/wma/mp4/...); non-PCM-WAV sources are decoded through ffmpeg first, " +
-            "then encoded with Microsoft's xWMAEncode. Works out of the box against the bundled ffmpeg/" +
-            "xWMAEncode; no setup needed.",
+            "Convert an audio or video file (or a WHOLE FOLDER of them, recursed, converted in parallel " +
+            "with the original folder structure preserved) to Fallout 4's xWMA (.xwm) format. Any " +
+            "ffmpeg-readable input works (wav/mp3/flac/ogg/m4a/wma/mp4/...); non-PCM-WAV sources are " +
+            "decoded through ffmpeg first, then encoded with Microsoft's xWMAEncode. Works out of the box " +
+            "against the bundled ffmpeg/xWMAEncode; no setup needed. Use this before archive_pack when " +
+            "repacking a mod's extracted BA2 with re-encoded audio.",
             new
             {
                 type = "object",
                 properties = new
                 {
-                    source = new { type = "string", description = "Full path to the source audio/video file." },
-                    output = new { type = "string", description = "Output .xwm path. Optional -- defaults to the source path with a .xwm extension." },
+                    source = new { type = "string", description = "Full path to the source audio/video file, OR a folder to convert every audio/video file under (recursively)." },
+                    output = new { type = "string", description = "Output path. For a single-file source: the .xwm path (optional, defaults to the source path with a .xwm extension). For a folder source: the output folder to mirror the structure into (optional, defaults to converting in place, alongside each original file)." },
                     bitrate_bps = new { type = "integer", description = "One of xWMAEncode's supported bitrates: 20000, 32000, 48000, 64000, 96000, 160000, 192000. Omit for its default (48000)." }
                 },
                 required = new[] { "source" }
@@ -1107,6 +1109,26 @@ public sealed class PluginToolExecutor
                     also_wav = new { type = "boolean", description = "Also decode the extracted xwm to a .wav alongside it." }
                 },
                 required = new[] { "fuz_path" }
+            }),
+        new("archive_pack",
+            "Pack one or more loose folders into a new BA2 archive, via the Creation Kit's Archive2.exe -- " +
+            "the counterpart to archive_extract_all (Mutagen can read BA2/BSA natively, but has no writer, " +
+            "so packing needs the Creation Kit installed; Archive2.exe is not redistributable so it isn't " +
+            "bundled, same as compile_papyrus). Typical flow to re-encode a mod's sounds: archive_extract_all " +
+            "the mod's BA2, audio_convert_to_xwm on the extracted Sound folder, then archive_pack that same " +
+            "folder tree back into a new BA2.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_paths = new { type = "array", items = new { type = "string" }, description = "One or more source folders to pack (e.g. a single 'Sound' folder, or ['meshes','materials'] together)." },
+                    output_ba2 = new { type = "string", description = "Full path for the new .ba2 file." },
+                    format = new { type = "string", description = "'General' (sounds/meshes/scripts/anything non-texture) or 'DDS' (texture-only archives -- do not mix)." },
+                    root_dir = new { type = "string", description = "REQUIRED. The folder each source's in-archive path is computed relative to -- e.g. root='...\\Data', source='...\\Data\\Sound\\...' produces the in-archive entry 'Sound\\...'. Get this wrong and the game won't find the packed files." },
+                    compress = new { type = "boolean", description = "Default true. Set false for -compression=None (some mods ship sound BA2s uncompressed)." }
+                },
+                required = new[] { "source_paths", "output_ba2", "root_dir" }
             }),
     ];
 
@@ -1231,7 +1253,8 @@ public sealed class PluginToolExecutor
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
             "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all" or
-            "bgsm_set_field" or "audio_convert_to_xwm" or "audio_convert_from_xwm" or "audio_make_fuz" or "audio_extract_fuz";
+            "bgsm_set_field" or "audio_convert_to_xwm" or "audio_convert_from_xwm" or "audio_make_fuz" or "audio_extract_fuz" or
+            "archive_pack";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
@@ -1268,6 +1291,7 @@ public sealed class PluginToolExecutor
             "audio_convert_from_xwm" => $"{System.IO.Path.GetFileName(Str("source"))} -> {(Str("target_ext") is { Length: > 0 } te ? te : "wav")}",
             "audio_make_fuz"      => $"{System.IO.Path.GetFileName(Str("audio_source"))} -> {System.IO.Path.GetFileName(Str("fuz_output"))}",
             "audio_extract_fuz"   => $"extract {System.IO.Path.GetFileName(Str("fuz_path"))}",
+            "archive_pack"        => $"pack -> {System.IO.Path.GetFileName(Str("output_ba2"))}",
             "check_plugin"        => $"check {plugin}",
             "clean_plugin"        => $"clean UDRs in {plugin}",
             "compact_to_esl"      => $"compact {plugin} to ESL",
@@ -1535,6 +1559,14 @@ public sealed class PluginToolExecutor
                 return AudioService.MakeFuz(Str("audio_source"), StrOrNull("lip_path") ?? "", Str("fuz_output"), Bool("no_lip"));
             case "audio_extract_fuz":
                 return AudioService.ExtractFuz(Str("fuz_path"), StrOrNull("xwm_output") ?? "", StrOrNull("lip_output") ?? "", Bool("also_wav"));
+
+            case "archive_pack":
+            {
+                var sourcePaths = root.TryGetProperty("source_paths", out var spEl) && spEl.ValueKind == JsonValueKind.Array
+                    ? spEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToArray()
+                    : Array.Empty<string>();
+                return ArchiveService.Pack(sourcePaths, Str("output_ba2"), StrOrNull("format") ?? "General", Str("root_dir"), BoolOr("compress", true));
+            }
 
             default:
                 return ToolError.Fail($"Unknown tool: {toolName}");

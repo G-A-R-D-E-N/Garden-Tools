@@ -220,12 +220,15 @@ export interface ArchiveCompareResult {
 export interface ArchiveHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
+  BrowseForSave(title: string, filter: string): Promise<string>;   // native save picker; "" if cancelled
   List(archivePath: string, filter: string, limit: number, filterMode: ArchiveFilterMode): Promise<string>;   // JSON: ArchiveListResult
   ExtractFile(archivePath: string, innerPath: string, outPath: string): Promise<string>;
   // innerPathsJson: JSON array of the panel's selected entry paths.
   ExtractSelected(archivePath: string, innerPathsJson: string, outDir: string): Promise<string>;
   ExtractAll(archivePath: string, outDir: string, filter: string, limit: number, filterMode: ArchiveFilterMode): Promise<string>;
   Compare(archivePathA: string, archivePathB: string): Promise<string>;   // JSON: ArchiveCompareResult
+  // sourcePathsJson: JSON array of source folder paths. format: "General" | "DDS". rootDir: required.
+  Pack(sourcePathsJson: string, outputBa2: string, format: string, rootDir: string, compress: boolean): Promise<string>;
   OpenFolder(path: string): Promise<string>;   // reveal in Explorer; "" on success
 }
 

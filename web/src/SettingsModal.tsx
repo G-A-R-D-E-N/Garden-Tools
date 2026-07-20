@@ -21,6 +21,7 @@ interface Settings {
   NiftoolPath: string;
   FfmpegPath: string;
   XwmaEncodePath: string;
+  Archive2Path: string;
 }
 
 const host = () => window.chrome?.webview?.hostObjects?.settings;
@@ -253,6 +254,14 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <div className="settings-input-row">
                   <input value={s.PapyrusCompilerPath} onChange={e => set('PapyrusCompilerPath', e.target.value)} placeholder="…\Papyrus Compiler\PapyrusCompiler.exe" />
                   <button className="settings-btn" onClick={() => browseFile('PapyrusCompilerPath', 'Select PapyrusCompiler.exe', 'PapyrusCompiler|PapyrusCompiler.exe|Executables|*.exe')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>Archive2 Path <em>(blank = auto-detect from the Fallout 4/Creation Kit install)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.Archive2Path} onChange={e => set('Archive2Path', e.target.value)} placeholder="…\Tools\Archive2\Archive2.exe" />
+                  <button className="settings-btn" onClick={() => browseFile('Archive2Path', 'Select Archive2.exe', 'Archive2|Archive2.exe|Executables|*.exe')}>Browse</button>
                 </div>
               </label>
 

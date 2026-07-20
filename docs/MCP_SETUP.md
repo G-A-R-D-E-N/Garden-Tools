@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **72 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **73 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -104,8 +104,13 @@ need for map markers and for parking references you relocate at runtime.
 `nif_import` · `nif_inspect` · `nif_fix` · `nif_verify`
 
 ### Archives (BA2/BSA)
-`archive_list` · `archive_extract` · `archive_extract_all` — read-only access to packed archives via
-Mutagen's own reader, no Archive2.exe needed.
+`archive_list` · `archive_extract` · `archive_extract_all` — reads packed archives via Mutagen's own
+reader, no Archive2.exe needed. `archive_pack` is the other direction — packs one or more loose
+folders into a new BA2. Mutagen has no BA2 *writer*, so packing shells out to the Creation Kit's
+`Archive2.exe` (not redistributable, so it isn't bundled — install the CK and it's found
+automatically, same as `compile_papyrus`). Typical flow to re-encode a mod's packed sounds:
+`archive_extract_all` its BA2 -> `audio_convert_to_xwm` on the extracted Sound folder ->
+`archive_pack` that same folder back into a new BA2.
 
 ### Papyrus wiki lookup
 `papyrus_function_lookup` · `papyrus_script_info` — reads an offline Creation Kit Wiki HTML mirror
@@ -127,8 +132,10 @@ what to inspect next.
 ### Audio
 `audio_convert_to_xwm` · `audio_convert_from_xwm` · `audio_make_fuz` · `audio_extract_fuz` — convert
 any ffmpeg-readable audio/video to Fallout 4's xWMA format (and back), and pack/split the `.fuz` voice
-container (xwm + lip sync). Works out of the box against ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode
-bundled with the app — nothing to configure. Also reachable by hand in the desktop app's Audio panel.
+container (xwm + lip sync). `audio_convert_to_xwm` also accepts a whole folder as `source` — recursed,
+converted in parallel, with the original structure preserved (a mod's extracted `Sound\` folder, say).
+Works out of the box against ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode bundled with the app —
+nothing to configure. Also reachable by hand in the desktop app's Audio panel.
 
 ### Escape hatch
 `run_script` — executes C# against the loaded mod through Mutagen, for anything the tools above do not
