@@ -45,14 +45,16 @@ Mutagen is **not** a drop-in replacement:
   already uses, which is empirically correct for Next-Gen too (confirmed identical in upstream
   Mutagen's own `dev` branch before this fix -- not a stale-fork issue). See
   `docs/Code Notes/FO4RecordEditor.md` for the verification.
-- `Mutagen.Bethesda.Core/Archives/Ba2/Ba2Reader.cs` (`Ba2Reader` + `BA2FileEntry`) -- fixes the BA2
-  **version-7** GNRL entry layout. v7 is the classic v1 36-byte layout, but Mutagen read two phantom
-  `uint32`s for it (one after the header's `nameTableOffset`, one after each entry's `nameHash`) and
-  skipped the trailing `0xBAADF00D` align field, so the whole entry table was mis-strided and every
-  file resolved to the wrong data. Hex-verified against the real `DLCRobot - Voices_en.ba2` (6,112
-  `.fuz` entries all decode with `ext="fuz"` + correct align, and `24 + count*36` hits the first data
-  offset exactly). Distinct from the v8 fix above though in the same file. See
-  `docs/Code Notes/FO4RecordEditor.md` for the full byte-level verification.
+- `Mutagen.Bethesda.Core/Archives/Ba2/Ba2Reader.cs` (`Ba2Reader`, `BA2FileEntry`, `BA2DX10Entry`,
+  `BA2TextureChunk`) -- fixes the BA2 **version-7** entry layout, for BOTH the GNRL (general) and DX10
+  (texture) archive classes. v7 is the classic v1 layout in both, but Mutagen read phantom `uint32`s
+  and skipped the trailing `0xBAADF00D` align field, mis-striding the whole entry table so every file
+  resolved to the wrong data. For GNRL that made general archives (e.g. `DLCRobot - Voices_en.ba2`,
+  `.fuz` voice lines) unreadable; for DX10 it threw `Unsupported DDS header format` / arithmetic
+  overflow on every vanilla texture (all of which live in the v7 `Fallout4 - Textures*.ba2`) -- i.e.
+  the Cell Viewer showed no textures at all. Hex-verified against both `DLCRobot - Voices_en.ba2` and
+  `Fallout4 - Textures1.ba2`. Scoped strictly to v7 (v8 already handled above, v8 DX10 left untouched).
+  See `docs/Code Notes/FO4RecordEditor.md` for the full byte-level verification.
 
 `Mutagen/Directory.Build.targets` additionally carries one build-configuration-only local change,
 clearly marked in a comment at the top of that file: NuGet packaging is turned off (we compile and
