@@ -289,6 +289,7 @@ export interface CellPlacedReference {
   formKey: string;
   editorId?: string;
   recordType: string;
+  baseType?: string;      // base object's record type (Static/Light/Furniture/...) -- the useful layer grouping
   baseFormKey: string;
   baseEditorId?: string;
   modelPath: string | null;

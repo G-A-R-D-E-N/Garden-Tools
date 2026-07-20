@@ -72,6 +72,10 @@ public static class CellService
             string? modelPath = null;
             string? baseEditorId = null;
             string baseFormKey = "";
+            // The base object's record type (Static/Light/Furniture/MoveableStatic/...) -- the useful
+            // grouping for the viewer's layer list. `recordType` below is the PLACED record type, which
+            // is "PlacedObject" for nearly every reference, so grouping on it collapses to ~2 groups.
+            string? baseType = null;
             float scale = 1f;
 
             if (placed is IPlacedObjectGetter po)
@@ -83,6 +87,7 @@ public static class CellService
                     if (cache.TryResolve<IMajorRecordGetter>(po.Base.FormKey, out var baseRec))
                     {
                         baseEditorId = baseRec.EditorID;
+                        baseType = baseRec.GetType().Name;
                         if (baseRec is IModeledGetter modeled) modelPath = modeled.Model?.File;
                     }
                 }
@@ -95,6 +100,7 @@ public static class CellService
                 formKey = placed.FormKey.ToString(),
                 editorId = placed.EditorID,
                 recordType = placed.GetType().Name,
+                baseType,
                 baseFormKey,
                 baseEditorId,
                 modelPath,

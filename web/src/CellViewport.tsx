@@ -181,7 +181,7 @@ export default function CellViewport(
         inst.userData.refs = refs;
         scene.add(inst);
         pickables.push(inst);
-        meshEntries.push({ mesh: inst, recordType: refs[0]?.recordType ?? '' });
+        meshEntries.push({ mesh: inst, recordType: refs[0]?.baseType ?? refs[0]?.recordType ?? '' });
         refs.forEach((r, i) => addInstance(inst, i, r, !!shape.billboard));
 
         if (shape.billboard) {

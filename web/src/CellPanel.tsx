@@ -175,7 +175,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     for (const r of references) {
       const geo = r.modelPath ? geometry[r.modelPath] : undefined;
       const meshed = !!geo && 'shapes' in geo && geo.shapes.some(s => s.verts.length > 0 && s.tris.length > 0);
-      const kind = meshed ? r.recordType : '(markers)';
+      const kind = meshed ? (r.baseType || r.recordType) : '(markers)';
       m.set(kind, (m.get(kind) ?? 0) + 1);
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -268,7 +268,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   </button>
                 </div>
                 <div className="cell-selected-row"><span>Ref</span><strong>{selected.editorId || selected.formKey}</strong></div>
-                <div className="cell-selected-row"><span>Type</span><strong>{selected.recordType}</strong></div>
+                <div className="cell-selected-row"><span>Type</span><strong>{selected.baseType || selected.recordType}</strong></div>
                 <div className="cell-selected-row"><span>Base</span><strong>{selected.baseEditorId || selected.baseFormKey}</strong></div>
                 <div className="cell-selected-row"><span>Pos</span><strong>{selected.position.x.toFixed(0)}, {selected.position.y.toFixed(0)}, {selected.position.z.toFixed(0)}</strong></div>
                 <button className="cell-hide-btn" onClick={hideSelected}>
