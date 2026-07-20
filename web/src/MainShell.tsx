@@ -2,13 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, FolderSearch,
+  Link2, Archive as ArchiveIcon,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
 import MastersPanel from './MastersPanel';
 import ArchivePanel from './ArchivePanel';
-import ModCatalogPanel from './ModCatalogPanel';
 
 interface McpLiveMsg {
   Tool: string;
@@ -95,7 +94,6 @@ export default function MainShell() {
   const [showNif, setShowNif] = useState(false);
   const [showMasters, setShowMasters] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
-  const [showModCatalog, setShowModCatalog] = useState(false);
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -515,9 +513,6 @@ export default function MainShell() {
           <button className={`activity-btn ${showArchive ? 'active' : ''}`} onClick={() => setShowArchive(true)} title="Archive (BA2/BSA browse / extract)">
             <ArchiveIcon size={22} strokeWidth={1.5} />
           </button>
-          <button className={`activity-btn ${showModCatalog ? 'active' : ''}`} onClick={() => setShowModCatalog(true)} title="Mod Catalog (summarize an unfamiliar mod folder)">
-            <FolderSearch size={22} strokeWidth={1.5} />
-          </button>
         </div>
       </div>
 
@@ -748,7 +743,6 @@ export default function MainShell() {
       {showNif && <NifPanel onClose={() => setShowNif(false)} />}
       {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
       {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}
-      {showModCatalog && <ModCatalogPanel onClose={() => setShowModCatalog(false)} />}
     </div>
   );
 }
