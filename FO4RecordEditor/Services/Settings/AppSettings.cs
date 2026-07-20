@@ -22,6 +22,7 @@ public sealed class AppSettings
     public string TexconvPath { get; set; } = "";   // Texconvx64.exe (blank = bundled copy next to the exe)
     public string PapyrusCompilerPath { get; set; } = "";   // CK PapyrusCompiler.exe (blank = from the FO4 install)
     public string PapyrusBaseImports { get; set; } = "";   // extra base-script roots, ';'-separated, highest first
+    public string CkWikiPath { get; set; } = "";   // offline Creation Kit Wiki HTML mirror root (blank = papyrus_* tools disabled)
     public double SidePanelWidth { get; set; } = 320;
     public double AiPanelWidth { get; set; } = 420;
     public double BottomPanelHeight { get; set; } = 200;

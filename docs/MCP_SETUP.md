@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **60 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **65 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -45,6 +45,11 @@ The server needs to know what your game sees. Pass exactly one of:
 
 The MO2 instance path is the folder containing `mods\` and `profiles\` — not the MO2 program folder,
 and not a single mod.
+
+Optionally, also pass `--ck-wiki <folder>` pointing at an offline Creation Kit Wiki HTML mirror (a full
+export of creationkit.com/fallout4) to enable `papyrus_function_lookup` and `papyrus_script_info`. This
+is independent of `--mo2`/`--data` and unrelated to plugin loading — without it those two tools just
+return a "not configured" message; nothing else is affected.
 
 ### Confirming it connected
 
@@ -93,6 +98,15 @@ need for map markers and for parking references you relocate at runtime.
 
 ### NIF
 `nif_import` · `nif_inspect` · `nif_fix` · `nif_verify`
+
+### Archives (BA2/BSA)
+`archive_list` · `archive_extract` · `archive_extract_all` — read-only access to packed archives via
+Mutagen's own reader, no Archive2.exe needed.
+
+### Papyrus wiki lookup (needs `--ck-wiki`)
+`papyrus_function_lookup` · `papyrus_script_info` — reads an offline Creation Kit Wiki HTML mirror
+directly instead of you grepping wiki pages yourself. Disabled (returns a clear message, not an error)
+until `--ck-wiki <folder>` is passed at launch.
 
 ### Escape hatch
 `run_script` — executes C# against the loaded mod through Mutagen, for anything the tools above do not

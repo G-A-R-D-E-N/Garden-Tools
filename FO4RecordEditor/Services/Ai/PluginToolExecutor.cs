@@ -11,11 +11,14 @@ public sealed class PluginToolExecutor
 {
     private readonly Func<object?> _envProvider;
     private readonly Func<string?>? _mo2PathProvider;
+    private readonly Func<string?>? _ckWikiPathProvider;
 
-    public PluginToolExecutor(Func<object?> envProvider, Func<string?>? mo2PathProvider = null)
+    public PluginToolExecutor(Func<object?> envProvider, Func<string?>? mo2PathProvider = null,
+        Func<string?>? ckWikiPathProvider = null)
     {
         _envProvider = envProvider;
         _mo2PathProvider = mo2PathProvider;
+        _ckWikiPathProvider = ckWikiPathProvider;
     }
 
     public sealed record ToolSpec(string Name, string Description, object Schema);
@@ -932,6 +935,77 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "nif_path", "out_nif" }
             }),
+        new("archive_list",
+            "List the entries inside a Fallout 4 BA2 (or BSA) archive: each file's in-archive path and " +
+            "uncompressed size. Reads the real archive via Mutagen's own reader, no Archive2.exe needed. " +
+            "Use 'filter' (a path substring) to narrow a large archive before extracting.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    archive_path = new { type = "string", description = "Full path to the .ba2/.bsa file." },
+                    filter = new { type = "string", description = "Optional path substring filter, e.g. 'Meshes\\\\mymod\\\\'." },
+                    limit = new { type = "integer", description = "Max entries to list (default 500)." }
+                },
+                required = new[] { "archive_path" }
+            }),
+        new("archive_extract",
+            "Extract ONE file out of a BA2/BSA archive to disk. Call archive_list first to get the exact " +
+            "in-archive path.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    archive_path = new { type = "string", description = "Full path to the .ba2/.bsa file." },
+                    inner_path = new { type = "string", description = "The file's path INSIDE the archive, as shown by archive_list." },
+                    out_path = new { type = "string", description = "Full path to write the extracted file to." }
+                },
+                required = new[] { "archive_path", "inner_path", "out_path" }
+            }),
+        new("archive_extract_all",
+            "Extract ALL (or filter-matched) files from a BA2/BSA archive into a folder, preserving the " +
+            "archive's internal folder structure. Refuses rather than silently truncating if the match count " +
+            "exceeds 'limit' — narrow with 'filter' first for a big archive.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    archive_path = new { type = "string", description = "Full path to the .ba2/.bsa file." },
+                    out_dir = new { type = "string", description = "Folder to extract into (created if missing)." },
+                    filter = new { type = "string", description = "Optional path substring filter, e.g. 'Scripts\\\\Source\\\\'." },
+                    limit = new { type = "integer", description = "Max entries to extract before refusing (default 2000)." }
+                },
+                required = new[] { "archive_path", "out_dir" }
+            }),
+        new("papyrus_function_lookup",
+            "Look up a Papyrus function's signature (Syntax/Parameters/Return Value) from an offline " +
+            "Creation Kit Wiki HTML mirror, instead of reading whole wiki pages yourself. Requires the " +
+            "server to have been launched with '--ck-wiki <folder>' (or CkWikiPath set in Settings). " +
+            "Pass 'script' when the function name alone is ambiguous across multiple script types.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    function = new { type = "string", description = "Function name, e.g. 'GetBaseObject'." },
+                    script = new { type = "string", description = "Owning script, e.g. 'ActiveMagicEffect' (optional but disambiguates)." }
+                },
+                required = new[] { "function" }
+            }),
+        new("papyrus_script_info",
+            "Get a Papyrus script's overview from the offline Creation Kit Wiki mirror: what it Extends, " +
+            "its Global Functions, Member Functions, and Events (name + one-line description each). Requires " +
+            "'--ck-wiki <folder>' at launch (or CkWikiPath in Settings). Use this to see a script's full " +
+            "function list before calling papyrus_function_lookup on a specific one.",
+            new
+            {
+                type = "object",
+                properties = new { script = new { type = "string", description = "Script name, e.g. 'ObjectReference' or 'Actor'." } },
+                required = new[] { "script" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -1054,7 +1128,7 @@ public sealed class PluginToolExecutor
             "delete_record" or "copy_as_override" or "clean_plugin" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
-            "run_script" or "reorder_masters" or "set_light_flag";
+            "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
@@ -1079,6 +1153,11 @@ public sealed class PluginToolExecutor
             "list_masters"        => $"list masters of {plugin}",
             "reorder_masters"     => $"reorder masters of {plugin}",
             "set_light_flag"      => $"set_light_flag({plugin}, {Str("light")})",
+            "archive_list"        => $"list {System.IO.Path.GetFileName(Str("archive_path"))}",
+            "archive_extract"     => $"extract {Str("inner_path")} <- {System.IO.Path.GetFileName(Str("archive_path"))}",
+            "archive_extract_all" => $"extract all <- {System.IO.Path.GetFileName(Str("archive_path"))}",
+            "papyrus_function_lookup" => $"papyrus lookup {Str("function")}",
+            "papyrus_script_info" => $"papyrus script {Str("script")}",
             "check_plugin"        => $"check {plugin}",
             "clean_plugin"        => $"clean UDRs in {plugin}",
             "compact_to_esl"      => $"compact {plugin} to ESL",
@@ -1316,6 +1395,17 @@ public sealed class PluginToolExecutor
                 return NifService.Verify(Str("nif_path"));
             case "nif_fix":
                 return NifService.Fix(Str("nif_path"), Str("out_nif"));
+
+            case "archive_list":
+                return ArchiveService.ListArchive(Str("archive_path"), StrOrNull("filter"), Int("limit", 500));
+            case "archive_extract":
+                return ArchiveService.ExtractFile(Str("archive_path"), Str("inner_path"), Str("out_path"));
+            case "archive_extract_all":
+                return ArchiveService.ExtractAll(Str("archive_path"), Str("out_dir"), StrOrNull("filter"), Int("limit", 2000));
+            case "papyrus_function_lookup":
+                return PapyrusWikiService.LookupFunction(_ckWikiPathProvider?.Invoke() ?? "", Str("script"), Str("function"));
+            case "papyrus_script_info":
+                return PapyrusWikiService.LookupScriptInfo(_ckWikiPathProvider?.Invoke() ?? "", Str("script"));
 
             default:
                 return ToolError.Fail($"Unknown tool: {toolName}");

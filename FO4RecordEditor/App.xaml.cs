@@ -87,11 +87,15 @@ public partial class App : Application
     /// <item>neither — the default Fallout 4 install (vanilla + DLC + CC only).</item>
     /// </list>
     /// </para>
+    /// <c>--ck-wiki &lt;folder&gt;</c> is independent of the above: points papyrus_function_lookup /
+    /// papyrus_script_info at an offline Creation Kit Wiki HTML mirror. Those two tools return a
+    /// "not configured" error if this is omitted; nothing else depends on it.
     /// </summary>
     private static void RunMcpHeadless(string[] args)
     {
         string? dataOverride = ArgValue(args, "--data");
         string? mo2Instance = ArgValue(args, "--mo2");
+        string? ckWikiPath = ArgValue(args, "--ck-wiki");
 
         object? env = null;
         bool tried = false;
@@ -118,7 +122,7 @@ public partial class App : Application
             return env;
         };
 
-        var executor = new Services.PluginToolExecutor(envProvider, () => mo2Instance);
+        var executor = new Services.PluginToolExecutor(envProvider, () => mo2Instance, () => ckWikiPath);
         try { Services.StdioMcpServer.Run(executor); }
         catch (Exception ex) { Trace($"--mcp loop ended with error: {ex.Message}"); }
         Environment.Exit(0);

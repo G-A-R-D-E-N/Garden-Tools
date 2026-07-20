@@ -63,6 +63,8 @@ public class PluginToolExecutorTests
             "compile_papyrus", "decompile_papyrus", "revert_overrides", "batch_patch_records",
             "run_script", "reload_plugin", "strip_masters_clean", "list_masters", "reorder_masters",
             "set_light_flag", "nif_import", "nif_inspect", "nif_verify", "nif_fix",
+            "archive_list", "archive_extract", "archive_extract_all",
+            "papyrus_function_lookup", "papyrus_script_info",
         };
 
         var names = PluginToolExecutor.ToolDefinitions()
