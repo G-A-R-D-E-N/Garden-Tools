@@ -39,6 +39,7 @@ public class SettingsInterop
                 : s.OutputFolder,
             s.DataFolder,
             s.Mo2InstancePath,
+            s.CkWikiPath,
         });
     }
 
@@ -62,6 +63,7 @@ public class SettingsInterop
             if (dto.OllamaModel != null)     s.OllamaModel = dto.OllamaModel;
             if (dto.OutputFolder != null)    s.OutputFolder = dto.OutputFolder.Trim();
             if (dto.DataFolder != null)      s.DataFolder = dto.DataFolder.Trim();
+            if (dto.CkWikiPath != null)      s.CkWikiPath = dto.CkWikiPath.Trim();
 
             _shell.Settings.Save();
             _shell.RebuildProvider();
@@ -126,5 +128,6 @@ public class SettingsInterop
         public string? OllamaModel { get; set; }
         public string? OutputFolder { get; set; }
         public string? DataFolder { get; set; }
+        public string? CkWikiPath { get; set; }
     }
 }

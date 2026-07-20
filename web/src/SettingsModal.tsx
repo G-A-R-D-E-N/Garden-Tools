@@ -14,6 +14,7 @@ interface Settings {
   OutputFolder: string;
   DataFolder: string;
   Mo2InstancePath?: string;
+  CkWikiPath: string;
 }
 
 const host = () => window.chrome?.webview?.hostObjects?.settings;
@@ -191,6 +192,14 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <div className="settings-input-row">
                   <input value={s.DataFolder} onChange={e => set('DataFolder', e.target.value)} />
                   <button className="settings-btn" onClick={() => browse('DataFolder', 'Choose the game Data folder to load plugins from')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>CK Wiki Path <em>(offline Creation Kit Wiki mirror — blank = Papyrus lookup disabled)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.CkWikiPath} onChange={e => set('CkWikiPath', e.target.value)} placeholder="…\Creation Kit Wiki\fallout4" />
+                  <button className="settings-btn" onClick={() => browse('CkWikiPath', 'Select the offline Creation Kit Wiki mirror folder')}>Browse</button>
                 </div>
               </label>
             </div>

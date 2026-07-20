@@ -3,18 +3,25 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using FO4RecordEditor.ViewModels;
 
 namespace FO4RecordEditor.Services;
 
-// WebView2 host object for the Papyrus panel: compile .psc -> .pex (CK compiler) and decompile
-// .pex -> .psc (our in-process decompiler). Same COM rules as AppInterop: AutoDual, ComVisible,
-// only string/bool params and string/Task<string> returns. Native file pickers run on the UI thread
-// (host-object calls are dispatched there); compile/decompile run on a background task so the long
-// process call never blocks the UI.
+// WebView2 host object for the Papyrus panel: compile .psc -> .pex (CK compiler), decompile
+// .pex -> .psc (our in-process decompiler), and look up functions/scripts in the offline CK Wiki
+// mirror. Same COM rules as AppInterop: AutoDual, ComVisible, only string/bool params and
+// string/Task<string> returns. Native file pickers run on the UI thread (host-object calls are
+// dispatched there); compile/decompile/lookup run on a background task so the long process call
+// (or a big wiki directory scan) never blocks the UI. The wiki root is read live from Settings on
+// each lookup call (MastersInterop's pattern) rather than captured at construction, so changing it
+// in the Settings panel takes effect on the next lookup with no restart.
 [ClassInterface(ClassInterfaceType.AutoDual)]
 [ComVisible(true)]
 public class PapyrusInterop
 {
+    private readonly ShellViewModel _shell;
+    public PapyrusInterop(ShellViewModel shell) => _shell = shell;
+
     public string BrowseForFile(string title, string filter)
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
@@ -47,6 +54,24 @@ public class PapyrusInterop
         {
             try { return PapyrusService.Decompile(source, N(output), assembly, write); }
             catch (Exception ex) { DebugLog.Exception("Papyrus.Decompile", ex); return "Error: " + ex.Message; }
+        });
+
+    /// <summary>Look up a function's Syntax/Parameters/Return Value from the offline CK Wiki mirror
+    /// (Settings -> CK Wiki Path). See PapyrusWikiService.LookupFunction.</summary>
+    public Task<string> LookupFunction(string script, string functionName) =>
+        Task.Run(() =>
+        {
+            try { return PapyrusWikiService.LookupFunction(_shell.Settings.Current.CkWikiPath, script, functionName); }
+            catch (Exception ex) { DebugLog.Exception("Papyrus.LookupFunction", ex); return "Error: " + ex.Message; }
+        });
+
+    /// <summary>Look up a script's Extends/Global Functions/Member Functions/Events from the offline
+    /// CK Wiki mirror. See PapyrusWikiService.LookupScriptInfo.</summary>
+    public Task<string> LookupScriptInfo(string script) =>
+        Task.Run(() =>
+        {
+            try { return PapyrusWikiService.LookupScriptInfo(_shell.Settings.Current.CkWikiPath, script); }
+            catch (Exception ex) { DebugLog.Exception("Papyrus.LookupScriptInfo", ex); return "Error: " + ex.Message; }
         });
 
     /// <summary>Open a folder (or the folder containing a file) in Windows Explorer. Returns "" on success.</summary>

@@ -73,8 +73,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 AppWebView.CoreWebView2?.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(payload)))));
         // React Settings panel (replaces the WPF SettingsDialog).
         AppWebView.CoreWebView2.AddHostObjectToScript("settings", new Services.SettingsInterop(_shell));
-        // Papyrus panel: compile (.psc -> .pex) + decompile (.pex -> .psc).
-        AppWebView.CoreWebView2.AddHostObjectToScript("papyrus", new Services.PapyrusInterop());
+        // Papyrus panel: compile (.psc -> .pex) + decompile (.pex -> .psc) + CK wiki lookup.
+        AppWebView.CoreWebView2.AddHostObjectToScript("papyrus", new Services.PapyrusInterop(_shell));
         // NIF panel: author / inspect / verify / repair FO4 NIFs via niftool.exe.
         AppWebView.CoreWebView2.AddHostObjectToScript("nif", new Services.NifInterop());
         // Materials tab (lives inside the NIF panel): inspect/edit .bgsm shader fields.
@@ -83,6 +83,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AppWebView.CoreWebView2.AddHostObjectToScript("masters", new Services.MastersInterop(_shell));
         // Archive panel: list/extract BA2/BSA contents.
         AppWebView.CoreWebView2.AddHostObjectToScript("archive", new Services.ArchiveInterop());
+        // Mod Catalog panel: summarize an unfamiliar mod folder's contents by category.
+        AppWebView.CoreWebView2.AddHostObjectToScript("modcatalog", new Services.ModCatalogInterop());
 
 #if DEBUG
         AppWebView.Source = new Uri("http://localhost:5173/#/main");

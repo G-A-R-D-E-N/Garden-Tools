@@ -137,6 +137,11 @@ export interface PapyrusHost {
   OpenFolder(path: string): Promise<string>;
   // Write a dropped file's bytes to a temp path and return it (drag-and-drop helper). "ERR:" on fail.
   StageDroppedFile(name: string, base64: string): Promise<string>;
+  // Look up a function's Syntax/Parameters/Return Value from the CK wiki mirror (see Settings ->
+  // CK Wiki Path). script disambiguates when the function name alone is ambiguous.
+  LookupFunction(script: string, functionName: string): Promise<string>;
+  // Look up a script's Extends/Global Functions/Member Functions/Events from the CK wiki mirror.
+  LookupScriptInfo(script: string): Promise<string>;
 }
 
 /** The "nif" bridge (FO4RecordEditor.Services.NifInterop) — author/inspect/verify/repair FO4 NIFs. */
@@ -256,6 +261,15 @@ export interface SettingsHost {
   TestClaude(path: string): Promise<string>; // verifies the Claude Code CLI
 }
 
+/** The "modcatalog" bridge (FO4RecordEditor.Services.ModCatalogInterop) — summarize an unfamiliar
+ * mod folder's contents by category (meshes/textures/materials/sounds/scripts/plugins/archives/...).
+ * See ModInspectService.CatalogFolder. */
+export interface ModCatalogHost {
+  BrowseForFolder(title: string): Promise<string>;   // native folder picker; "" if cancelled
+  Catalog(modPath: string): Promise<string>;         // plain-text category summary
+  OpenFolder(path: string): Promise<string>;         // reveal in Explorer; "" on success
+}
+
 declare global {
   interface Window {
     chrome?: {
@@ -270,6 +284,7 @@ declare global {
           material?: MaterialHost;
           masters?: MastersHost;
           archive?: ArchiveHost;
+          modcatalog?: ModCatalogHost;
         };
       };
     };
@@ -296,3 +311,6 @@ export const getMasters = (): MastersHost | undefined =>
 
 export const getArchive = (): ArchiveHost | undefined =>
   window.chrome?.webview?.hostObjects?.archive;
+
+export const getModCatalog = (): ModCatalogHost | undefined =>
+  window.chrome?.webview?.hostObjects?.modcatalog;

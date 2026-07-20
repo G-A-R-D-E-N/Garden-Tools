@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, type DragEvent, type ReactNode } from 'react';
-import { ScrollText, X, FileCode2, Hammer, Play, FolderOpen, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { ScrollText, X, FileCode2, Hammer, BookOpen, Play, FolderOpen, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { getPapyrus } from './backend';
 import './PapyrusPanel.css';
 
-type Mode = 'decompile' | 'compile';
+type Mode = 'decompile' | 'compile' | 'lookup';
+type LookupKind = 'function' | 'script';
 const LS = (k: string, d: string) => localStorage.getItem('papyrus.' + k) ?? d;
 const LSB = (k: string, d: boolean) => { const v = localStorage.getItem('papyrus.' + k); return v === null ? d : v === '1'; };
 const setLS = (k: string, v: string | boolean) => localStorage.setItem('papyrus.' + k, typeof v === 'boolean' ? (v ? '1' : '0') : v);
@@ -30,6 +31,11 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   const [release, setRelease] = useState(() => LSB('release', false));
   const [compilerPath, setCompilerPath] = useState(() => LS('compilerPath', ''));
 
+  // wiki lookup options
+  const [lookupKind, setLookupKind] = useState<LookupKind>(() => (LS('lookupKind', 'function') as LookupKind));
+  const [lookupScript, setLookupScript] = useState(() => LS('lookupScript', ''));
+  const [lookupFunction, setLookupFunction] = useState(() => LS('lookupFunction', ''));
+
   const papyrus = getPapyrus();
   const unavailable = !papyrus;
 
@@ -43,6 +49,9 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => setLS('flags', flags), [flags]);
   useEffect(() => { setLS('all', all); setLS('optimize', optimize); setLS('release', release); }, [all, optimize, release]);
   useEffect(() => setLS('compilerPath', compilerPath), [compilerPath]);
+  useEffect(() => setLS('lookupKind', lookupKind), [lookupKind]);
+  useEffect(() => setLS('lookupScript', lookupScript), [lookupScript]);
+  useEffect(() => setLS('lookupFunction', lookupFunction), [lookupFunction]);
 
   const appendLog = (line: string) =>
     setLog(prev => [`[${new Date().toLocaleTimeString()}] ${line}`, ...prev].slice(0, 200));
@@ -85,7 +94,25 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     }
   }, [papyrus]);
 
+  const runLookup = async () => {
+    if (!papyrus) return;
+    const query = lookupKind === 'function' ? lookupFunction.trim() : lookupScript.trim();
+    if (!query) return;
+    setBusy(true); setResult('Looking up…');
+    try {
+      const text = lookupKind === 'function'
+        ? await papyrus.LookupFunction(lookupScript.trim(), lookupFunction.trim())
+        : await papyrus.LookupScriptInfo(lookupScript.trim());
+      setResult(text || '(no result)');
+      appendLog(`${isLookupError(text) ? '✗' : '✓'} wiki lookup — ${query}`);
+    } catch (e) {
+      const msg = 'Error: ' + (e instanceof Error ? e.message : String(e));
+      setResult(msg); appendLog(`✗ wiki lookup ${query} — ${msg}`);
+    } finally { setBusy(false); }
+  };
+
   const run = async () => {
+    if (mode === 'lookup') { await runLookup(); return; }
     if (!papyrus || !source.trim()) return;
     setBusy(true); setResult('Working…');
     const name = baseName(source);
@@ -117,7 +144,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
 
   const openOut = async () => { if (papyrus && lastOutDir) await papyrus.OpenFolder(lastOutDir); };
 
-  const banner = result ? makeBanner(result, mode) : null;
+  const banner = result ? (mode === 'lookup' ? makeLookupBanner(result) : makeBanner(result, mode)) : null;
 
   return (
     <div className="papyrus-overlay" onClick={onClose}>
@@ -127,6 +154,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
           <div className="papyrus-modes">
             <button className={`papyrus-mode ${mode === 'decompile' ? 'active' : ''}`} onClick={() => setMode('decompile')}><FileCode2 size={14} /> Decompile</button>
             <button className={`papyrus-mode ${mode === 'compile' ? 'active' : ''}`} onClick={() => setMode('compile')}><Hammer size={14} /> Compile</button>
+            <button className={`papyrus-mode ${mode === 'lookup' ? 'active' : ''}`} onClick={() => setMode('lookup')}><BookOpen size={14} /> Wiki Lookup</button>
           </div>
           <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
@@ -135,31 +163,56 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
 
         <div className="papyrus-body">
           <div className="papyrus-form">
-            <label className="papyrus-field">
-              <span>{mode === 'decompile' ? 'Source .pex (file, folder, or whole mod)' : 'Source .psc (file or folder)'}</span>
-              <div
-                className={`papyrus-drop ${dragOver ? 'over' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onDrop}
-              >
-                <input value={source} onChange={e => setSource(e.target.value)} placeholder="Path, or drag a .pex/.psc file here…" />
-              </div>
-              <div className="papyrus-input-row">
-                <button className="sidebar-action-btn" onClick={browseSourceFile} disabled={unavailable}>File…</button>
-                <button className="sidebar-action-btn" onClick={browseSourceFolder} disabled={unavailable}>Folder…</button>
-              </div>
-            </label>
+            {mode !== 'lookup' && (
+              <>
+                <label className="papyrus-field">
+                  <span>{mode === 'decompile' ? 'Source .pex (file, folder, or whole mod)' : 'Source .psc (file or folder)'}</span>
+                  <div
+                    className={`papyrus-drop ${dragOver ? 'over' : ''}`}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={onDrop}
+                  >
+                    <input value={source} onChange={e => setSource(e.target.value)} placeholder="Path, or drag a .pex/.psc file here…" />
+                  </div>
+                  <div className="papyrus-input-row">
+                    <button className="sidebar-action-btn" onClick={browseSourceFile} disabled={unavailable}>File…</button>
+                    <button className="sidebar-action-btn" onClick={browseSourceFolder} disabled={unavailable}>Folder…</button>
+                  </div>
+                </label>
 
-            <label className="papyrus-field">
-              <span>Output folder {mode === 'decompile' ? '(saving on by default)' : '(default: source folder)'}</span>
-              <div className="papyrus-input-row">
-                <input value={output} onChange={e => setOutput(e.target.value)} placeholder="(default: alongside the source)" />
-                <button className="sidebar-action-btn" onClick={browseOutput} disabled={unavailable}>Folder…</button>
-              </div>
-            </label>
+                <label className="papyrus-field">
+                  <span>Output folder {mode === 'decompile' ? '(saving on by default)' : '(default: source folder)'}</span>
+                  <div className="papyrus-input-row">
+                    <input value={output} onChange={e => setOutput(e.target.value)} placeholder="(default: alongside the source)" />
+                    <button className="sidebar-action-btn" onClick={browseOutput} disabled={unavailable}>Folder…</button>
+                  </div>
+                </label>
+              </>
+            )}
 
-            {mode === 'decompile' ? (
+            {mode === 'lookup' ? (
+              <>
+                <div className="papyrus-opts">
+                  <label><input type="radio" checked={lookupKind === 'function'} onChange={() => setLookupKind('function')} /> Function</label>
+                  <label><input type="radio" checked={lookupKind === 'script'} onChange={() => setLookupKind('script')} /> Script overview</label>
+                </div>
+                <label className="papyrus-field">
+                  <span>Script {lookupKind === 'function' ? '(optional — disambiguates a function defined on several scripts)' : ''}</span>
+                  <input value={lookupScript} onChange={e => setLookupScript(e.target.value)}
+                         placeholder="e.g. ActiveMagicEffect, ObjectReference…"
+                         onKeyDown={e => { if (e.key === 'Enter' && lookupKind === 'script') run(); }} />
+                </label>
+                {lookupKind === 'function' && (
+                  <label className="papyrus-field">
+                    <span>Function</span>
+                    <input value={lookupFunction} onChange={e => setLookupFunction(e.target.value)}
+                           placeholder="e.g. GetBaseObject"
+                           onKeyDown={e => { if (e.key === 'Enter') run(); }} />
+                  </label>
+                )}
+              </>
+            ) : mode === 'decompile' ? (
               <div className="papyrus-opts">
                 <label><input type="checkbox" checked={write} onChange={e => setWrite(e.target.checked)} /> Write files to disk</label>
                 <label><input type="checkbox" checked={assembly} onChange={e => setAssembly(e.target.checked)} /> Assembly listing (.pas, inspect-only)</label>
@@ -189,8 +242,11 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
               </>
             )}
 
-            <button className="papyrus-run" onClick={run} disabled={busy || unavailable || !source.trim()}>
-              <Play size={14} /> {busy ? 'Working…' : mode === 'decompile' ? 'Decompile' : 'Compile'}
+            <button className="papyrus-run" onClick={run} disabled={
+              busy || unavailable ||
+              (mode === 'lookup' ? !(lookupKind === 'function' ? lookupFunction.trim() : lookupScript.trim()) : !source.trim())
+            }>
+              <Play size={14} /> {busy ? 'Working…' : mode === 'decompile' ? 'Decompile' : mode === 'compile' ? 'Compile' : 'Look Up'}
             </button>
           </div>
 
@@ -203,10 +259,12 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className="papyrus-output-head">
-              <span>OUTPUT — {mode === 'decompile' ? (assembly ? 'assembly (.pas)' : 'decompiled source (.psc)') : 'compiler'}</span>
+              <span>OUTPUT — {mode === 'lookup' ? 'CK wiki' : mode === 'decompile' ? (assembly ? 'assembly (.pas)' : 'decompiled source (.psc)') : 'compiler'}</span>
               {result && <button className="papyrus-copy" onClick={() => navigator.clipboard.writeText(result)}>Copy</button>}
             </div>
-            <pre className="papyrus-output-body">{result ? renderHighlighted(result, mode, assembly) : 'Pick a script (or drag one in) and run.'}</pre>
+            <pre className="papyrus-output-body">
+              {result ? (mode === 'lookup' ? result : renderHighlighted(result, mode, assembly)) : (mode === 'lookup' ? 'Enter a function or script name and Look Up.' : 'Pick a script (or drag one in) and run.')}
+            </pre>
             <div className="papyrus-log-head">
               <span>LOG ({log.length})</span>
               {log.length > 0 && <button className="papyrus-copy" onClick={() => setLog([])}>Clear</button>}
@@ -220,6 +278,20 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+// ---- wiki lookup banner ----
+// PapyrusWikiService marks failures with an invisible sentinel char (U+0091, ToolError.Fail),
+// stripped for the AI tool-call path but left as-is here, same as every other GUI panel's error
+// text. The wording checks are a backstop for the plain "Error: ..." string PapyrusInterop returns
+// on a caught exception, which never goes through ToolError.Fail.
+function isLookupError(text: string): boolean {
+  if (!text) return false;
+  if (text.charCodeAt(0) === 0x91) return true;
+  return /^(No CK wiki|No .* found for|Provide a|Error:)/i.test(text) || /is defined on multiple scripts/.test(text);
+}
+function makeLookupBanner(text: string): { kind: 'ok' | 'error'; text: string } {
+  return isLookupError(text) ? { kind: 'error', text: 'Lookup failed — see output' } : { kind: 'ok', text: 'Done' };
 }
 
 // ---- result banner ----
