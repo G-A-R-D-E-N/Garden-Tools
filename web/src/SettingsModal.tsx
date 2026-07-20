@@ -15,6 +15,9 @@ interface Settings {
   DataFolder: string;
   Mo2InstancePath?: string;
   CkWikiPath: string;
+  TexconvPath: string;
+  PapyrusCompilerPath: string;
+  PapyrusBaseImports: string;
 }
 
 const host = () => window.chrome?.webview?.hostObjects?.settings;
@@ -60,6 +63,13 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     const h = host();
     if (!h || !s) return;
     const path = await h.BrowseFolder(title, (s[key] as string) || '');
+    if (path) set(key, path);
+  };
+
+  const browseFile = async (key: keyof Settings, title: string, filter: string) => {
+    const h = host();
+    if (!h || !s) return;
+    const path = await h.BrowseFile(title, filter, (s[key] as string) || '');
     if (path) set(key, path);
   };
 
@@ -200,6 +210,35 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <div className="settings-input-row">
                   <input value={s.CkWikiPath} onChange={e => set('CkWikiPath', e.target.value)} placeholder="…\Creation Kit Wiki\fallout4" />
                   <button className="settings-btn" onClick={() => browse('CkWikiPath', 'Select the offline Creation Kit Wiki mirror folder')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>Texconv Path <em>(blank = bundled copy / xEdit Edit Scripts auto-detect)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.TexconvPath} onChange={e => set('TexconvPath', e.target.value)} placeholder="…\Texconvx64.exe" />
+                  <button className="settings-btn" onClick={() => browseFile('TexconvPath', 'Select Texconv.exe', 'Texconv|Texconvx64.exe;Texconv.exe|Executables|*.exe')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>Papyrus Compiler Path <em>(blank = auto-detect from the Fallout 4 install)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.PapyrusCompilerPath} onChange={e => set('PapyrusCompilerPath', e.target.value)} placeholder="…\Papyrus Compiler\PapyrusCompiler.exe" />
+                  <button className="settings-btn" onClick={() => browseFile('PapyrusCompilerPath', 'Select PapyrusCompiler.exe', 'PapyrusCompiler|PapyrusCompiler.exe|Executables|*.exe')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>Papyrus Base Imports <em>(extra script source roots, ';'-separated, highest priority first)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.PapyrusBaseImports} onChange={e => set('PapyrusBaseImports', e.target.value)} placeholder="C:\Framework\Scripts\Source;C:\OtherFramework\Scripts\Source" />
+                  <button className="settings-btn" onClick={async () => {
+                    const h = host();
+                    if (!h) return;
+                    const dir = await h.BrowseFolder('Add a Papyrus source root', '');
+                    if (dir) set('PapyrusBaseImports', s.PapyrusBaseImports ? `${s.PapyrusBaseImports};${dir}` : dir);
+                  }}>Add folder…</button>
                 </div>
               </label>
             </div>

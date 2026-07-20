@@ -40,6 +40,9 @@ public class SettingsInterop
             s.DataFolder,
             s.Mo2InstancePath,
             s.CkWikiPath,
+            s.TexconvPath,
+            s.PapyrusCompilerPath,
+            s.PapyrusBaseImports,
         });
     }
 
@@ -64,9 +67,16 @@ public class SettingsInterop
             if (dto.OutputFolder != null)    s.OutputFolder = dto.OutputFolder.Trim();
             if (dto.DataFolder != null)      s.DataFolder = dto.DataFolder.Trim();
             if (dto.CkWikiPath != null)      s.CkWikiPath = dto.CkWikiPath.Trim();
+            if (dto.TexconvPath != null)         s.TexconvPath = dto.TexconvPath.Trim();
+            if (dto.PapyrusCompilerPath != null) s.PapyrusCompilerPath = dto.PapyrusCompilerPath.Trim();
+            if (dto.PapyrusBaseImports != null)  s.PapyrusBaseImports = dto.PapyrusBaseImports.Trim();
 
             _shell.Settings.Save();
             _shell.RebuildProvider();
+            // ToolPaths caches AppSettings in a static field it never invalidated on its own -- without
+            // this, editing these three here would silently require an app restart to take effect,
+            // unlike every other field on this panel.
+            ToolPaths.Invalidate();
             return "Settings saved.";
         }
         catch (Exception ex)
@@ -86,6 +96,20 @@ public class SettingsInterop
         if (!string.IsNullOrWhiteSpace(current) && System.IO.Directory.Exists(current))
             dlg.InitialDirectory = current;
         return dlg.ShowDialog() == true ? dlg.FolderName : "";
+    }
+
+    /// <summary>Native file picker for the .exe path fields (texconv, PapyrusCompiler). Returns the
+    /// chosen path, or "" if cancelled.</summary>
+    public string BrowseFile(string title, string filter, string current)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = string.IsNullOrWhiteSpace(title) ? "Select a file" : title,
+            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
+        };
+        if (!string.IsNullOrWhiteSpace(current) && System.IO.File.Exists(current))
+            dlg.InitialDirectory = System.IO.Path.GetDirectoryName(current);
+        return dlg.ShowDialog() == true ? dlg.FileName : "";
     }
 
     /// <summary>Run `&lt;path&gt; --version` to verify the Claude Code CLI is reachable.</summary>
@@ -129,5 +153,8 @@ public class SettingsInterop
         public string? OutputFolder { get; set; }
         public string? DataFolder { get; set; }
         public string? CkWikiPath { get; set; }
+        public string? TexconvPath { get; set; }
+        public string? PapyrusCompilerPath { get; set; }
+        public string? PapyrusBaseImports { get; set; }
     }
 }

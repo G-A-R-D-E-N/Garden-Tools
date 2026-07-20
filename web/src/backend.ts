@@ -258,6 +258,7 @@ export interface SettingsHost {
   GetSettings(): Promise<string>;            // JSON of editable settings
   SaveSettings(json: string): Promise<string>;  // persists + rebuilds AI provider; returns status
   BrowseFolder(title: string, current: string): Promise<string>;  // native folder picker; "" if cancelled
+  BrowseFile(title: string, filter: string, current: string): Promise<string>;  // native file picker; "" if cancelled
   TestClaude(path: string): Promise<string>; // verifies the Claude Code CLI
 }
 
