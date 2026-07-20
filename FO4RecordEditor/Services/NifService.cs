@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using JsonConvert = Newtonsoft.Json.JsonConvert;
 
@@ -51,6 +52,13 @@ public static class NifService
         return Run(new List<string> { "geo", nifPath });
     }
 
+    /// <summary>Live progress for an in-flight GeoBatch call -- polled by CellInterop.
+    /// GetGeometryBatchProgress so the UI can show a real N/total bar instead of a spinner. Reset at
+    /// the start of each batch; safe for a single Cell Viewer session (the only current caller), not
+    /// designed for multiple concurrent batches.</summary>
+    public static int GeoBatchDone;
+    public static int GeoBatchTotal;
+
     /// <summary>
     /// Batch-resolve+convert unique Data-relative NIF paths (e.g. "Clutter\Rock01.nif") to geometry
     /// JSON, for the cell viewer. One resolve+niftool call per UNIQUE path, not per placed reference
@@ -70,10 +78,18 @@ public static class NifService
         var results = new ConcurrentDictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         var degree = Math.Max(1, Math.Min(Environment.ProcessorCount, 8));
 
+        GeoBatchDone = 0;
+        GeoBatchTotal = unique.Count;
+
         Parallel.ForEach(unique, new ParallelOptions { MaxDegreeOfParallelism = degree }, rel =>
         {
             var resolved = TextureService.ResolveNif(rel);
-            if (resolved == null) { results[rel] = new { error = "Not found (loose or in any indexed archive)." }; return; }
+            if (resolved == null)
+            {
+                results[rel] = new { error = "Not found (loose or in any indexed archive)." };
+                Interlocked.Increment(ref GeoBatchDone);
+                return;
+            }
 
             var raw = Geo(resolved);
             // niftool's geo command emits raw JSON on success; anything else (a "NIF not found"/
@@ -83,6 +99,7 @@ public static class NifService
             results[rel] = raw.TrimStart().StartsWith('{')
                 ? new Newtonsoft.Json.Linq.JRaw(raw)
                 : new { error = raw };
+            Interlocked.Increment(ref GeoBatchDone);
         });
 
         return JsonConvert.SerializeObject(new { count = unique.Count, geometry = results });

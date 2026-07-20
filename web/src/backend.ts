@@ -330,6 +330,10 @@ export interface CellHost {
   GetGeometryBatch(relModelPathsJson: string): Promise<string>;  // JSON: CellGeoBatchResult
   GetPlugins(): Promise<string>;                                  // JSON: string[] -- empty = nothing loaded
   SearchCells(query: string, limit: number): Promise<string>;    // JSON: CellSearchHit[]
+  // Same TextureService pipeline NifPanel's "View" mode uses; "" if unresolved/unconvertible.
+  GetTexture(relModelPath: string, relTexPath: string): Promise<string>;  // "data:image/png;base64,..." or ""
+  // Poll while a GetGeometryBatch call is in flight for a real N/total readout.
+  GetGeometryBatchProgress(): Promise<string>;                    // JSON: { done: number; total: number }
 }
 
 declare global {

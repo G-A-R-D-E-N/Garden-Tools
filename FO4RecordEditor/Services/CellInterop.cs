@@ -80,4 +80,28 @@ public class CellInterop
                 return "[]";
             }
         });
+
+    /// <summary>Resolve+convert a texture slot for one of the cell's placed meshes to a PNG data URL --
+    /// same TextureService pipeline the NIF panel's own "View" mode already uses successfully for
+    /// BA2-packed vanilla textures (loose file search, then archive extraction, Texconv DDS->PNG,
+    /// cached by source path + write time). relModelPath is the SAME Data-relative path
+    /// GetPlacedReferences/GetGeometryBatch use (e.g. "Meshes\Furniture\ParkBench01.nif"); re-resolved
+    /// here rather than threading the resolved path through GeoBatch's response, to avoid a schema
+    /// change -- ResolveNif is a cheap lookup, not a conversion.</summary>
+    public Task<string> GetTexture(string relModelPath, string relTexPath) =>
+        Task.Run(() =>
+        {
+            try
+            {
+                var resolved = TextureService.ResolveNif(relModelPath);
+                if (resolved == null) return "";
+                return TextureService.GetTexturePngDataUrl(resolved, relTexPath, "");
+            }
+            catch (Exception ex) { DebugLog.Exception("Cell.GetTexture", ex); return ""; }
+        });
+
+    /// <summary>Poll during an in-flight GetGeometryBatch call for a real N/total progress readout,
+    /// instead of an indeterminate spinner -- see NifService's GeoBatchDone/GeoBatchTotal.</summary>
+    public string GetGeometryBatchProgress() =>
+        JsonConvert.SerializeObject(new { done = NifService.GeoBatchDone, total = NifService.GeoBatchTotal });
 }

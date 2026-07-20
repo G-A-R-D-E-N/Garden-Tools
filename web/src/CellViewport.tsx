@@ -21,10 +21,16 @@ export type CellGeoMap = Record<string, NifGeo | { error: string }>;
  *
  * Perf: refs are grouped by modelPath and rendered with one THREE.InstancedMesh per (model, shape)
  * pair instead of one Mesh per reference -- real interior cells here run into the tens of thousands
- * of refs (28k+ observed), and a plain Mesh-per-ref scene would drop to a crawl.
+ * of refs (28k+ observed), and a plain Mesh-per-ref scene would drop to a crawl. Same grouping makes
+ * texturing cheap too: one diffuse-texture fetch per unique (model, shape), applied to the shared
+ * InstancedMesh material, not one fetch per instance.
  */
 export default function CellViewport(
-  { references, geometry }: { references: CellPlacedReference[]; geometry: CellGeoMap }
+  { references, geometry, loadTexture }: {
+    references: CellPlacedReference[];
+    geometry: CellGeoMap;
+    loadTexture?: (modelPath: string, relTexPath: string) => Promise<string>;
+  }
 ) {
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -74,12 +80,17 @@ export default function CellViewport(
       }
     }
 
+    const texLoader = loadTexture ? new THREE.TextureLoader() : null;
+    const textures: THREE.Texture[] = [];
+
     for (const [modelPath, refs] of byModel) {
       const nifGeo = geometry[modelPath] as NifGeo;
       for (const shape of nifGeo.shapes) {
         if (!shape.verts.length || !shape.tris.length) continue;
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.Float32BufferAttribute(shape.verts, 3));
+        const hasUV = shape.uvs.length > 0;
+        if (hasUV) g.setAttribute('uv', new THREE.Float32BufferAttribute(shape.uvs, 2));
         g.setIndex(shape.tris);
         if (shape.normals.length === shape.verts.length)
           g.setAttribute('normal', new THREE.Float32BufferAttribute(shape.normals, 3));
@@ -91,6 +102,27 @@ export default function CellViewport(
           color: 0x9aa0aa, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide,
         });
         disposables.push(mat);
+
+        // Diffuse only (slot 0) for v1 -- normal maps would double the fetch/convert cost per
+        // unique mesh, and the flat-gray fallback already reads fine for anything still pending.
+        if (hasUV && texLoader && loadTexture && shape.textures?.length) {
+          const diffuse = shape.textures.find(t => t.slot === 0);
+          if (diffuse) {
+            loadTexture(modelPath, diffuse.path).then(url => {
+              if (cancelled || !url) return;
+              texLoader.load(url, tex => {
+                if (cancelled) { tex.dispose(); return; }
+                tex.flipY = false;
+                tex.colorSpace = THREE.SRGBColorSpace;
+                tex.anisotropy = 4;
+                mat.map = tex;
+                mat.color.setHex(0xffffff);
+                mat.needsUpdate = true;
+                textures.push(tex);
+              }, undefined, () => {});
+            });
+          }
+        }
 
         const inst = new THREE.InstancedMesh(g, mat, refs.length);
         refs.forEach((r, i) => {
@@ -167,11 +199,12 @@ export default function CellViewport(
       ro.disconnect();
       controls.dispose();
       disposables.forEach(d => d.dispose());
+      textures.forEach(t => t.dispose());
       renderer.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
       void cancelled;
     };
-  }, [references, geometry]);
+  }, [references, geometry, loadTexture]);
 
   return <div ref={mountRef} className="nif-viewport cell-viewport" />;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search } from 'lucide-react';
 import { getCell, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap } from './CellViewport';
@@ -31,8 +31,19 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [matchesLoading, setMatchesLoading] = useState(false);
   const searchSeq = useRef(0);
 
+  // Real N/total progress for the geometry-conversion phase (niftool runs one real child process
+  // per unique mesh -- polled from NifService.GeoBatchDone/Total while the batch call is in flight,
+  // not an indeterminate spinner).
+  const [geoProgress, setGeoProgress] = useState<{ done: number; total: number } | null>(null);
+
   const cell = getCell();
   const unavailable = !cell;
+
+  const loadTexture = useCallback(async (modelPath: string, relTexPath: string): Promise<string> => {
+    const c = getCell();
+    if (!c) return '';
+    try { return await c.GetTexture(modelPath, relTexPath); } catch { return ''; }
+  }, []);
 
   const appendLog = (line: string) =>
     setLog(prev => [`[${new Date().toLocaleTimeString()}] ${line}`, ...prev].slice(0, 200));
@@ -102,7 +113,20 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       if (uniqueModels.length === 0) { setStatus('Loaded -- no placeable meshes in this cell.'); return; }
 
       setStatus(`Resolving + converting ${uniqueModels.length} unique mesh(es)…`);
-      const geoRaw = await cell.GetGeometryBatch(JSON.stringify(uniqueModels));
+      setGeoProgress({ done: 0, total: uniqueModels.length });
+      const pollTimer = setInterval(async () => {
+        try {
+          const raw = await cell.GetGeometryBatchProgress();
+          setGeoProgress(JSON.parse(raw) as { done: number; total: number });
+        } catch { /* a missed poll tick isn't worth surfacing */ }
+      }, 200);
+      let geoRaw: string;
+      try {
+        geoRaw = await cell.GetGeometryBatch(JSON.stringify(uniqueModels));
+      } finally {
+        clearInterval(pollTimer);
+        setGeoProgress(null);
+      }
       const geoParsed = JSON.parse(geoRaw) as { count?: number; geometry?: CellGeoMap; error?: string };
       if (geoParsed.error) {
         appendLog('✗ geometry batch: ' + geoParsed.error);
@@ -216,14 +240,24 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="papyrus-output nif-view-output">
-            {banner && (
+            {geoProgress ? (
+              <div className="cell-progress">
+                <div className="cell-progress-label">
+                  <span>Converting meshes…</span>
+                  <span>{geoProgress.done}/{geoProgress.total}</span>
+                </div>
+                <div className="cell-progress-track">
+                  <div className="cell-progress-fill" style={{ width: `${geoProgress.total > 0 ? (geoProgress.done / geoProgress.total) * 100 : 0}%` }} />
+                </div>
+              </div>
+            ) : banner && (
               <div className={`papyrus-banner ${banner.kind}`}>
                 {banner.kind === 'ok' ? <CheckCircle2 size={15} /> : banner.kind === 'warn' ? <AlertTriangle size={15} /> : <XCircle size={15} />}
                 <span className="papyrus-banner-text">{status}</span>
               </div>
             )}
             {references.length > 0
-              ? <CellViewport references={references} geometry={geometry} />
+              ? <CellViewport references={references} geometry={geometry} loadTexture={loadTexture} />
               : (
                 <div className="nif-view-empty">
                   {unavailable ? 'Cell bridge unavailable.'
