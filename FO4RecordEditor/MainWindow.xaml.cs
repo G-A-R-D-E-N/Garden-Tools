@@ -87,58 +87,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 #endif
     }
 
-    private async void OpenRecordTab(RecordNode record)
-    {
-        // For now, let's just log it. React will handle the UI tabs eventually,
-        // but if C# needs to open a record, we can send a message to React.
-        if (record.GetValue("_HasData") == "False")
-        {
-            var env = _shell.GameEnvironment;
-            var plugin = record.Parent?.Parent?.Key ?? "";
-            var fkStr = record.GetValue("FormKey") ?? "";
-            try
-            {
-                var fields = await Task.Run(() =>
-                    Services.MutagenLoader.BuildPopulatedFields(fkStr, env, plugin));
-
-                var flag = record.GetChild("_HasData");
-                if (flag != null) record.Children.Remove(flag);
-                foreach (var child in fields)
-                {
-                    if (record.GetChild(child.Key) != null) continue;
-                    child.Parent = record;
-                    record.Children.Add(child);
-                }
-            }
-            catch (Exception ex)
-            {
-                _shell.Log.Log(LogCategory.App, LogLevel.Error, "Record load failed", ex.Message);
-            }
-        }
-        
-        // Notify React to open the tab via WebMessage
-        var msg = new { Type = "OpenRecord", FormKey = record.GetValue("FormKey"), EditorID = record.GetValue("EditorID") };
-        AppWebView.CoreWebView2.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(msg));
-    }
-
     private void RegisterCommands()
     {
         var c = _shell.Commands;
         c.Register("scan.errors", "Run Error Scan", "Errors", async () => await _shell.RunErrorScanAsync());
         c.Register("settings", "Open Settings", "App", () => new Views.SettingsDialog(_shell) { Owner = this }.ShowDialog());
         c.Register("save", "Save Plugin", "File", () => SetStatus(_shell.SaveSelectedPlugin()));
-        c.Register("undo", "Undo", "Edit", () => _shell.Undo.Undo());
-        c.Register("redo", "Redo", "Edit", () => _shell.Undo.Redo());
     }
 
+    // Ctrl+Z/Ctrl+Y (undo/redo) used to be handled here, but the only code that ever populated the
+    // undo stack was ViewModels/RecordTabViewModel.EditField, and RecordTabViewModel was only ever
+    // constructed by ShellViewModel.OpenRecord, which had zero callers. Both were dead code -- the
+    // undo stack could never receive a change in the live app -- so both keybindings were guaranteed
+    // no-ops. Deleted together with the rest of the dead WPF view layer on 2026-07-19, rather than
+    // kept bound to a capability the app cannot provide.
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.P && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
             { TogglePalette(); e.Handled = true; }
-        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control)
-            { _shell.Undo.Undo(); e.Handled = true; }
-        else if (e.Key == Key.Y && Keyboard.Modifiers == ModifierKeys.Control)
-            { _shell.Undo.Redo(); e.Handled = true; }
         else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
             { SetStatus(_shell.SaveSelectedPlugin()); e.Handled = true; }
         else if (e.Key == Key.Escape)

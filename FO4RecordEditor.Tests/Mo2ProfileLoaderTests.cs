@@ -148,58 +148,12 @@ public class Mo2ProfileLoaderTests
         }
     }
 
-    [Fact]
-    public void EditingComponentCountWritesToPatch()
-    {
-        if (!Available) return;
-        var info = Mo2ProfileLoader.ReadInstanceInfo(Instance);
-        var (env, _) = Mo2ProfileLoader.Load(Instance, info.Profile, info.GameDataFolder);
-        var cache = MutagenLoader.LinkCache!;
-
-        // A constructible object (crafting recipe) with at least one component (Count to edit).
-        var cobj = cache.PriorityOrder
-            .SelectMany(m => m.EnumerateMajorRecords())
-            .OfType<Mutagen.Bethesda.Fallout4.IConstructibleObjectGetter>()
-            .FirstOrDefault(c => c.Components != null && c.Components.Count > 0);
-        if (cobj == null) return;
-
-        var fk = cobj.FormKey;
-        var winner = cache.ResolveAllSimpleContexts(fk).First().ModKey.FileName.String;
-        var originalCount = cobj.Components![0].Count;
-        var newCount = originalCount == 7u ? 8u : 7u;   // guaranteed different
-
-        // Build the display node the way the UI does, then simulate a grid edit of [0].Count.
-        var node = new Models.RecordNode { Key = cobj.EditorID ?? fk.ToString() };
-        var fkLeaf = new Models.RecordNode { Key = "FormKey", Parent = node };
-        fkLeaf.Values[""] = fk.ToString();
-        node.Children.Add(fkLeaf);
-        MutagenLoader.PopulateNodeAllVersions(node, env);
-
-        var countLeaf = node.GetChild("Components")?.GetChild("[0]")?.GetChild("Count");
-        countLeaf.Should().NotBeNull("the component should expose a Count leaf");
-        countLeaf!.Value = newCount.ToString();   // marks the leaf dirty
-
-        var outDir = Path.Combine(Path.GetTempPath(), "FO4RE_patchtest_" + Guid.NewGuid().ToString("N"));
-        WriteService.OutputFolderOverride = outDir;
-        var patchName = "TestPatch.esp";
-        try
-        {
-            var result = WriteService.SaveRecordEditsToPatch(env, node, winner, patchName);
-            result.Should().Contain("saved");
-
-            // Read the written patch back from disk and confirm the new Count persisted.
-            var patchPath = Path.Combine(outDir, patchName);
-            File.Exists(patchPath).Should().BeTrue();
-            var patchMod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinary(
-                Mutagen.Bethesda.Plugins.ModPath.FromPath(patchPath),
-                Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-            var written = patchMod.ConstructibleObjects.First(c => c.FormKey == fk);
-            written.Components![0].Count.Should().Be(newCount);
-        }
-        finally
-        {
-            WriteService.OutputFolderOverride = null;
-            try { Directory.Delete(outDir, true); } catch { }
-        }
-    }
+    // EditingComponentCountWritesToPatch used to live here: it built a RecordNode display tree,
+    // simulated a grid edit (setting a leaf's .Value to mark it dirty), and called
+    // WriteService.SaveRecordEditsToPatch to flush the dirty diff into a patch. Removed 2026-07-19
+    // together with SaveRecordEditsToPatch itself -- its only real-app caller was
+    // ViewModels/RecordTabViewModel.SaveToPatch, and RecordTabViewModel was only ever constructed by
+    // ShellViewModel.OpenRecord, which had zero callers. The live edit path (React editor ->
+    // BackendInterop.SetField -> WriteService.SetField) writes fields directly onto the loaded
+    // Mutagen record and was never covered by this test to begin with.
 }

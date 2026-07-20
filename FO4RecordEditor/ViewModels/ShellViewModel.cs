@@ -7,12 +7,10 @@ namespace FO4RecordEditor.ViewModels;
 public sealed class ShellViewModel
 {
     public ObservableCollection<RecordNode> Plugins { get; } = [];
-    public ObservableCollection<RecordTabViewModel> OpenTabs { get; } = [];
 
     public KnowledgeGraph Graph { get; } = new();
     public LogService Log { get; } = new();
     public SettingsService Settings { get; } = new();
-    public UndoStack Undo { get; } = new();
     public CommandRegistry Commands { get; } = new();
     public ErrorScanner Scanner { get; } = new();
     public DiffEngine Diff { get; } = new();
@@ -143,8 +141,9 @@ public sealed class ShellViewModel
 
     // Build the environment and return its plugin list; the caller picks which to load.
     // Replace the Explorer tree with a lazy node per plugin. The React frontend reads this via
-    // AppInterop.GetPlugins(); without this the env loads but the tree stays empty (the old WPF
-    // ExplorerPanel used to do this from the returned list, but the WebView2 shell discards it).
+    // AppInterop.GetPlugins(); without this the env loads but the tree stays empty. (The WPF
+    // ExplorerPanel used to populate the tree from this same list, but it was deleted 2026-07-19 —
+    // it was never mounted by the WebView2 shell, so it could not have been doing this either.)
     // Runs on the UI thread (callers await Task.Run, resuming on the WPF SynchronizationContext).
     // Point new-patch saves at the MO2 instance's overwrite folder (from ModOrganizer.ini) so MO2
     // auto-loads them — correct for both portable and global instances.
@@ -259,26 +258,19 @@ public sealed class ShellViewModel
         }
     }
 
-    public RecordTabViewModel OpenRecord(RecordNode record)
-    {
-        var existing = OpenTabs.FirstOrDefault(t => ReferenceEquals(t.Record, record));
-        if (existing != null) return existing;
-        var tab = new RecordTabViewModel(record, Undo, GameEnvironment);
-        OpenTabs.Add(tab);
-        return tab;
-    }
-
     /// <summary>
     /// Save from the WPF tree selection. Reachable from Ctrl+S and the "save" command, but
-    /// <see cref="SelectedNode"/> is only ever assigned by <c>ExplorerPanel</c>, which the WebView2
-    /// shell no longer mounts — so in practice this reports that there is nothing selected.
+    /// <see cref="SelectedNode"/> is only ever assigned by <c>ExplorerPanel</c> — deleted 2026-07-19
+    /// as dead code, since the WebView2 shell never mounted it — so in practice this reports that
+    /// there is nothing selected. The real save surfaces are the React record editor's own Save
+    /// action (over the <c>backend</c> WebView2 host object) and the MCP <c>save_plugin</c> tool.
     /// </summary>
     public string SaveSelectedPlugin()
     {
         if (SelectedNode == null)
         {
-            const string msg = "Nothing selected to save. Use the record editor's \"Save edits to " +
-                               "patch\" button, or the save_plugin tool.";
+            const string msg = "Nothing selected to save. Use the editor's Save action, or the " +
+                               "save_plugin tool.";
             Log.Log(LogCategory.App, LogLevel.Warning, msg);
             return msg;
         }
@@ -304,14 +296,13 @@ public sealed class ShellViewModel
             return ok;
         }
 
-        // Plugin binaries are NOT saved from this tree. MutagenLoader.SaveEsp used to sit here: it
-        // never wrote anything (the write was commented out, the field-mapping loop was empty) but
-        // called ClearDirty() and logged "Saved", so edits looked persisted and were lost. Deleted
-        // rather than implemented — the tree's edits live in RecordNode, and the only code that maps
-        // them back onto Mutagen records is WriteService.SaveRecordEditsToPatch, which the record
-        // editor's "Save edits to patch" button already drives.
-        var refuse = $"Saving a plugin binary from the tree is not supported. Open {root.Key} in the " +
-                     "record editor and use \"Save edits to patch\", or call the save_plugin tool.";
+        // Plugin binaries are NOT saved from this tree. set_field/set_components/etc. (called by the
+        // React editor and the MCP tools) write straight onto the loaded Mutagen record, in memory;
+        // there is no separate "dirty edits on a display tree" staging step left to flush here — that
+        // mechanism (RecordNode.IsDirty + WriteService.SaveRecordEditsToPatch) existed only to serve
+        // the WPF RecordEditorView and was deleted with it. Use save_plugin to write to disk.
+        var refuse = $"Saving a plugin binary from the tree is not supported. Use the editor's Save " +
+                     "action, or call the save_plugin tool.";
         Log.Log(LogCategory.App, LogLevel.Warning, refuse);
         return refuse;
     }

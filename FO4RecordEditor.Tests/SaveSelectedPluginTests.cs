@@ -33,8 +33,10 @@ public class SaveSelectedPluginTests
         var result = shell.SaveSelectedPlugin();
 
         result.Should().Contain("not supported");
-        // Must name a route that actually works, not just fail.
-        result.Should().Contain("Save edits to patch").And.Contain("save_plugin");
+        // Must name a route that actually works, not just fail. "Save edits to patch" was the WPF
+        // RecordEditorView button; that view was deleted 2026-07-19, so the message now points at
+        // the live routes instead (the editor's own Save action, and the save_plugin tool).
+        result.Should().Contain("Save action").And.Contain("save_plugin");
         result.Should().NotContain("Saved ");
     }
 
