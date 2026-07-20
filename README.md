@@ -104,6 +104,7 @@ tools\niftool\             NIF authoring/repair CLI (nif_* tools)
 tools\texconv\             DDS conversion, for texture previews
 mcp.sample.json            copy-paste MCP config
 docs\MCP_SETUP.md          the MCP wiring, the tool surface, and the rules
+docs\MODKIT21_PULLS.md     tracker for features reviewed/pulled from a comparable tool, and what's still open
 ```
 
 ---
