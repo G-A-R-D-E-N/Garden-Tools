@@ -53,6 +53,33 @@ public static class ToolPaths
     }
 
     /// <summary>
+    /// Auto-detect an executable on the system PATH -- the standard "found it because it's installed"
+    /// fallback for tools we don't bundle (ffmpeg is commonly on PATH; a user may keep niftool/texconv/
+    /// xWMAEncode there too). Slots into each tool's chain AFTER the bundled copy and BEFORE any
+    /// machine-specific install probe, so an explicit setting or a bundled copy still wins.
+    /// </summary>
+    private static string? WhichOnPath(params string[] exeNames)
+    {
+        var pathVar = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathVar)) return null;
+        foreach (var dir in pathVar.Split(Path.PathSeparator, System.StringSplitOptions.RemoveEmptyEntries))
+        {
+            var d = dir.Trim().Trim('"');
+            if (d.Length == 0) continue;
+            foreach (var name in exeNames)
+            {
+                try
+                {
+                    var candidate = Path.Combine(d, name);
+                    if (File.Exists(candidate)) return candidate;
+                }
+                catch { /* a malformed PATH entry -- skip it */ }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// The Fallout 4 install root, from settings, then the registry key the game's installer writes,
     /// then the default Steam library location. Null when Fallout 4 is not installed.
     /// </summary>
@@ -101,6 +128,7 @@ public static class ToolPaths
         Settings.NiftoolPath,
         App("tools", "niftool", "niftool.exe"),
         App("niftool", "niftool.exe"),
+        WhichOnPath("niftool.exe"),
         @"E:\F4SE OG\Tools\PluginEditTool\niftool\build\windows\x64\release\niftool.exe");
 
     /// <summary>texconv -- ships inside xEdit's Edit Scripts folder; also bundled in the release.</summary>
@@ -109,6 +137,7 @@ public static class ToolPaths
         Settings.TexconvPath,
         App("tools", "texconv", "Texconvx64.exe"),
         App("tools", "texconv", "Texconv.exe"),
+        WhichOnPath("Texconvx64.exe", "Texconv.exe"),
         @"E:\F4SE OG\Tools\PluginEditTool\FO4RecordEditor\TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconvx64.exe",
         @"E:\F4SE OG\Tools\PluginEditTool\FO4RecordEditor\TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconv.exe");
 
@@ -213,6 +242,7 @@ public static class ToolPaths
         Env("FFMPEG_PATH"),
         Settings.FfmpegPath,
         App("tools", "audio", "ffmpeg.exe"),
+        WhichOnPath("ffmpeg.exe"),
         @"E:\F4SE OG\Tools\Audio Converter\bin\ffmpeg.exe");
 
     /// <summary>Microsoft's xWMAEncode.exe -- the only thing that actually reads/writes xWMA. Encodes
@@ -222,6 +252,7 @@ public static class ToolPaths
         Env("XWMAENCODE_PATH"),
         Settings.XwmaEncodePath,
         App("tools", "audio", "xWMAEncode.exe"),
+        WhichOnPath("xWMAEncode.exe"),
         @"E:\F4SE OG\Tools\Audio Converter\bin\xWMAEncode.exe");
 
     /// <summary>BmlFuzEncode.exe (BowmoreLover) -- packs an xwm + a lip file into a .fuz voice
