@@ -31,6 +31,19 @@ public static class Mo2ProfileLoader
         public required ILoadOrderGetter<IModListingGetter<IFallout4ModGetter>> LoadOrder { get; init; }
         public required ILinkCache LinkCache { get; init; }
         public required DirectoryPath DataFolderPath { get; init; }
+
+        /// <summary>
+        /// Plugin file name -> the REAL on-disk path each one was actually loaded from (an MO2 mod
+        /// folder, the overwrite folder, or the game Data folder -- whichever won by priority). The
+        /// standard Mutagen ModListing this env's LoadOrder entries wrap has no Path property, and
+        /// DataFolderPath here is just the vanilla game Data folder, so without this map
+        /// WriteService.FindPluginPath had no way to re-locate an MO2-resolved plugin for
+        /// open_plugin/save_plugin/the Masters panel -- every one of them failed with "could not
+        /// locate on disk" for every MO2-managed mod, which is effectively all of them. Read-only
+        /// browsing (list_plugins/get_record/...) never hit this: it only needs the mod already
+        /// loaded into memory, which the LoadOrder entries do carry correctly.
+        /// </summary>
+        public required IReadOnlyDictionary<string, string> PluginPaths { get; init; }
     }
 
     public sealed record Mo2Info(string InstancePath, string Profile, string GameDataFolder, string OverwriteFolder);
@@ -179,6 +192,7 @@ public static class Mo2ProfileLoader
         var listings = new List<IModListingGetter<IFallout4ModGetter>>();
         var loaded = new List<string>();
         var missing = new List<string>();
+        var pluginPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < loadOrder.Count; i++)
         {
             var name = loadOrder[i];
@@ -198,6 +212,7 @@ public static class Mo2ProfileLoader
 
                 listings.Add(new ModListing<IFallout4ModGetter>(modKey, mod, enabled: true, ghostSuffix: string.Empty));
                 loaded.Add(name);
+                pluginPaths[name] = path;
             }
             catch
             {
@@ -226,6 +241,7 @@ public static class Mo2ProfileLoader
             LoadOrder = lo,
             LinkCache = linkCache,
             DataFolderPath = new DirectoryPath(gameDataFolder),
+            PluginPaths = pluginPaths,
         };
         return (env, loaded);
     }

@@ -45,6 +45,7 @@ public class ConflictScannerTests
             LoadOrder = lo,
             LinkCache = lc,
             DataFolderPath = new DirectoryPath(System.IO.Path.GetTempPath()),
+            PluginPaths = new Dictionary<string, string>(),
         };
     }
 

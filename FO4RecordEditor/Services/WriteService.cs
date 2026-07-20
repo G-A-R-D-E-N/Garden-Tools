@@ -99,9 +99,25 @@ public static partial class WriteService
         if (MutagenLoader.LooseModPaths.TryGetValue(plugin, out var loosePath))
             return loosePath;
 
-        // 2. Game environment load order
         if (env != null)
         {
+            // 2. MO2 environment (Mo2ProfileLoader.Mo2GameEnvironment) -- its LoadOrder entries are
+            // plain Mutagen ModListing objects with no Path property, and DataFolderPath here is only
+            // the vanilla game Data folder, so neither of the two checks below can ever find a plugin
+            // that actually lives in an MO2 mods\ or overwrite\ folder (i.e. almost anything in a real
+            // modlist). PluginPaths is the loader's own record of where it actually read each plugin
+            // from; check it first. Wrapped in try/catch because a non-MO2 env (plain GameEnvironmentState
+            // from Load Env) has no such property and dynamic dispatch throws on the miss.
+            try
+            {
+                dynamic dynEnv = env;
+                IReadOnlyDictionary<string, string> pluginPaths = dynEnv.PluginPaths;
+                if (pluginPaths.TryGetValue(plugin, out var mo2Path)) return mo2Path;
+            }
+            catch { }
+
+            // 3. Game environment load order (the vanilla Load Env / GameEnvironmentState path --
+            // ListedOrder entries here DO carry a real Path).
             try
             {
                 dynamic dynEnv = env;

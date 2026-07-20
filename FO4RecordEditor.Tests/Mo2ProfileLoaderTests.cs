@@ -10,7 +10,14 @@ namespace FO4RecordEditor.Tests;
 // instance isn't present, so it won't fail on other machines/CI.
 public class Mo2ProfileLoaderTests
 {
-    private const string Instance = @"D:\Games\ModlistDownloads";
+    private readonly Xunit.Abstractions.ITestOutputHelper _out;
+    public Mo2ProfileLoaderTests(Xunit.Abstractions.ITestOutputHelper o) => _out = o;
+
+    // Was D:\Games\ModlistDownloads -- that instance's profiles\/ModOrganizer.ini are gone from this
+    // dev box (confirmed 2026-07-20; only its mods\ folder remains), so Available silently evaluated
+    // false and every test in this file had been no-op-passing rather than actually testing anything.
+    // Pointed at the modlist actually in active use this session instead.
+    private const string Instance = @"E:\Modlists\Fallen World Alpha 2";
 
     private static bool Available =>
         Directory.Exists(Path.Combine(Instance, "profiles")) &&
@@ -146,6 +153,35 @@ public class Mo2ProfileLoaderTests
             foreach (var v in row.Values)
                 v.Should().NotContainAny(".dll", "System.Private.CoreLib", "PublicKeyToken", "mscorlib");
         }
+    }
+
+    [Fact]
+    public void OpenPlugin_ResolvesAnMo2SourcedPlugin_NotJustVanillaMasters()
+    {
+        _out.WriteLine($"Available={Available}");
+        if (!Available) return;
+        var info = Mo2ProfileLoader.ReadInstanceInfo(Instance);
+        var (env, plugins) = Mo2ProfileLoader.Load(Instance, info.Profile, info.GameDataFolder);
+
+        // Vanilla masters (Fallout4.esm/DLCs) AND Creation Club content (cc*.esl -- ships inside the
+        // base install's Data folder, not a mods\ folder) both happen to also physically live in the
+        // game Data folder, so BOTH resolve even with the old DataFolderPath-only fallback and don't
+        // exercise the bug (confirmed empirically: a first pass of this test picked a CC .esl and
+        // passed even with the fix disabled). Need an ordinary mod plugin, which only ever lives in
+        // an MO2 mods\ or overwrite\ folder -- prefer the exact plugin from the user's original bug
+        // report if this instance has it, otherwise the first non-master non-CC plugin.
+        var implicitMasters = new HashSet<string>(
+            Mutagen.Bethesda.Plugins.Implicits.Get(Mutagen.Bethesda.GameRelease.Fallout4).Listings.Select(m => m.FileName.String),
+            System.StringComparer.OrdinalIgnoreCase);
+        var modPlugin = plugins.FirstOrDefault(p => string.Equals(p, "HD LOD Textures.esp", System.StringComparison.OrdinalIgnoreCase))
+            ?? plugins.FirstOrDefault(p => !implicitMasters.Contains(p) && !p.StartsWith("cc", System.StringComparison.OrdinalIgnoreCase));
+        if (modPlugin == null) return;   // this instance's profile is somehow vanilla-only
+
+        var result = WriteService.OpenPlugin(modPlugin, env);
+        _out.WriteLine($"picked plugin: {modPlugin}");
+        _out.WriteLine($"result: {result}");
+        result.Should().NotContain("Could not locate",
+            $"'{modPlugin}' was reported loaded by Mo2ProfileLoader.Load, so WriteService must be able to re-locate it on disk");
     }
 
     // EditingComponentCountWritesToPatch used to live here: it built a RecordNode display tree,
