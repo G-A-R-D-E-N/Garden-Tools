@@ -7,26 +7,54 @@
    so that auto margin would blow a huge gap open above it -- cancel it here. */
 .cell-load-btn { margin-top: 0; }
 
-/* Type-ahead cell picker */
-.cell-search-box { position: relative; }
-.cell-search-box .papyrus-input-row { align-items: center; }
-.cell-search-icon { color: var(--muted, #6f747c); flex: 0 0 auto; margin-left: 2px; }
-
-.cell-suggest {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  max-height: 260px;
-  overflow-y: auto;
-  background: var(--panel-bg, #1c1d22);
+/* Persistent dropdown: search input on top, a fixed-height list underneath that's ALWAYS rendered
+   (not an absolutely-positioned overlay that appears/disappears while typing -- that read as
+   flashing/flickering on every keystroke pause, which is exactly what this layout fixes). */
+.cell-dropdown {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-color, #2b2b2b);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  z-index: 20;
+  overflow: hidden;
 }
+.cell-dropdown-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border-color, #2b2b2b);
+  background: rgba(255, 255, 255, 0.02);
+}
+.cell-dropdown-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-color, #ddd);
+  font-size: 12px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+.cell-dropdown-search input:focus { outline: none; }
+.cell-search-icon { color: var(--muted, #6f747c); flex: 0 0 auto; }
+.cell-dropdown-spinner {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 168, 168, 0.25);
+  border-top-color: #00a8a8;
+  flex: 0 0 auto;
+  animation: cell-spin 0.7s linear infinite;
+}
+@keyframes cell-spin { to { transform: rotate(360deg); } }
+
+/* Fixed height so the panel never resizes/jumps as results change -- only the ROWS inside change,
+   the list's own footprint stays put. */
+.cell-dropdown-list {
+  height: 260px;
+  overflow-y: auto;
+}
+
 .cell-suggest-empty {
-  padding: 8px 10px;
+  padding: 10px;
   font-size: 12px;
   color: var(--muted, #7f858e);
 }

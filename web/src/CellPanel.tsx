@@ -22,12 +22,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   // into a panel that can't possibly resolve anything yet.
   const [pluginCount, setPluginCount] = useState<number | null>(null);   // null = still checking
 
-  // Type-ahead cell picker: debounced search-as-you-type, dropdown of matches under the input.
-  const [suggestions, setSuggestions] = useState<CellSearchHit[] | null>(null);
-  const [suggestOpen, setSuggestOpen] = useState(false);
-  const [suggestBusy, setSuggestBusy] = useState(false);
+  // Persistent dropdown: search bar on top, a list underneath that's ALWAYS rendered once a
+  // modlist is loaded (never appears/disappears based on typing). A new search REPLACES the list
+  // only when its results actually arrive -- the previous list stays put (just dimmed) while a
+  // query is in flight, so typing never blanks-then-repopulates the panel. That flash-on-every-
+  // keystroke was the direct complaint that led to this rewrite.
+  const [matches, setMatches] = useState<CellSearchHit[] | null>(null);  // null = not loaded yet
+  const [matchesLoading, setMatchesLoading] = useState(false);
   const searchSeq = useRef(0);
-  const boxRef = useRef<HTMLDivElement>(null);
 
   const cell = getCell();
   const unavailable = !cell;
@@ -55,32 +57,22 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
   const noEnv = pluginCount === 0;
 
-  // Close the dropdown on an outside click.
+  // Debounced search-as-you-type against the loaded load order. Empty query still searches (limit
+  // cells in whatever order the load order returns them) so the panel reads as a real, immediately
+  // browsable dropdown the moment a modlist is loaded, not an empty box waiting for input.
   useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setSuggestOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, []);
-
-  // Debounced search-as-you-type against the loaded load order.
-  useEffect(() => {
-    if (!cell || noEnv) { setSuggestions(null); return; }
-    const q = cellId.trim();
-    if (q.length < 2) { setSuggestions(null); return; }
+    if (!cell || noEnv) { setMatches(null); return; }
     const mySeq = ++searchSeq.current;
-    setSuggestBusy(true);
+    setMatchesLoading(true);
     const t = setTimeout(async () => {
       try {
-        const raw = await cell.SearchCells(q, 20);
+        const raw = await cell.SearchCells(cellId.trim(), 30);
         if (searchSeq.current !== mySeq) return; // a newer keystroke superseded this search
-        setSuggestions(JSON.parse(raw) as CellSearchHit[]);
-        setSuggestOpen(true);
+        setMatches(JSON.parse(raw) as CellSearchHit[]);
       } catch {
-        if (searchSeq.current === mySeq) setSuggestions([]);
+        if (searchSeq.current === mySeq) setMatches([]);
       } finally {
-        if (searchSeq.current === mySeq) setSuggestBusy(false);
+        if (searchSeq.current === mySeq) setMatchesLoading(false);
       }
     }, 250);
     return () => clearTimeout(t);
@@ -89,7 +81,6 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const load = async (idOverride?: string) => {
     const id = (idOverride ?? cellId).trim();
     if (!cell || !id) return;
-    setSuggestOpen(false);
     setLS('cellId', id);
     setBusy(true);
     setResult(null);
@@ -135,9 +126,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const pickSuggestion = (hit: CellSearchHit) => {
+  const pickMatch = (hit: CellSearchHit) => {
     setCellId(hit.FormKey);
-    setSuggestOpen(false);
     load(hit.FormKey);
   };
 
@@ -162,39 +152,36 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
         <div className="papyrus-body">
           <div className="papyrus-form">
-            <label className="papyrus-field">
-              <span>Cell -- search by name/EditorID, or paste a FormKey</span>
-              <div className="cell-search-box" ref={boxRef}>
-                <div className="papyrus-input-row">
-                  <Search size={13} className="cell-search-icon" />
-                  <input
-                    value={cellId}
-                    onChange={e => setCellId(e.target.value)}
-                    onFocus={() => { if (suggestions && suggestions.length > 0) setSuggestOpen(true); }}
-                    placeholder={noEnv ? 'Load a modlist first…' : 'e.g. Sanctuary, or SanctuaryExt'}
-                    disabled={unavailable || noEnv}
-                    onKeyDown={e => { if (e.key === 'Enter') load(); if (e.key === 'Escape') setSuggestOpen(false); }}
-                  />
-                </div>
-                {suggestOpen && (
-                  <div className="cell-suggest">
-                    {suggestBusy ? (
-                      <div className="cell-suggest-empty">Searching…</div>
-                    ) : !suggestions || suggestions.length === 0 ? (
-                      <div className="cell-suggest-empty">No matching cells.</div>
-                    ) : (
-                      suggestions.map((h, i) => (
-                        <div key={`${h.FormKey}:${i}`} className="cell-suggest-row" onClick={() => pickSuggestion(h)}>
-                          <span className="cell-suggest-id">{h.EditorID || h.FormKey}</span>
-                          {h.Name && <span className="cell-suggest-name">"{h.Name}"</span>}
-                          <span className="cell-suggest-plugin">{h.Plugin}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
+            <div className="cell-dropdown">
+              <div className="cell-dropdown-search">
+                <Search size={13} className="cell-search-icon" />
+                <input
+                  value={cellId}
+                  onChange={e => setCellId(e.target.value)}
+                  placeholder={noEnv ? 'Load a modlist first…' : 'Search cells by name, EditorID, or FormKey…'}
+                  disabled={unavailable || noEnv}
+                  onKeyDown={e => { if (e.key === 'Enter') load(); }}
+                />
+                {matchesLoading && <span className="cell-dropdown-spinner" title="Updating…" />}
+              </div>
+              <div className="cell-dropdown-list">
+                {noEnv || unavailable ? (
+                  <div className="cell-suggest-empty">{unavailable ? 'Cell bridge unavailable.' : 'Load a modlist to browse cells.'}</div>
+                ) : matches === null ? (
+                  <div className="cell-suggest-empty">Loading…</div>
+                ) : matches.length === 0 ? (
+                  <div className="cell-suggest-empty">No matching cells.</div>
+                ) : (
+                  matches.map((h, i) => (
+                    <div key={`${h.FormKey}:${i}`} className="cell-suggest-row" onClick={() => pickMatch(h)}>
+                      <span className="cell-suggest-id">{h.EditorID || h.FormKey}</span>
+                      {h.Name && <span className="cell-suggest-name">"{h.Name}"</span>}
+                      <span className="cell-suggest-plugin">{h.Plugin}</span>
+                    </div>
+                  ))
                 )}
               </div>
-            </label>
+            </div>
             <button className="papyrus-run cell-load-btn" onClick={() => load()} disabled={busy || unavailable || noEnv || !cellId.trim()}>
               <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
             </button>
@@ -240,8 +227,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
               : (
                 <div className="nif-view-empty">
                   {unavailable ? 'Cell bridge unavailable.'
-                    : noEnv ? 'Load a modlist first, then search for a cell.'
-                    : 'Search for a cell above, or paste a FormKey/EditorID and press Load Cell.'}
+                    : noEnv ? 'Load a modlist first, then pick a cell from the list.'
+                    : 'Pick a cell from the list, or paste a FormKey/EditorID and press Load Cell.'}
                 </div>
               )}
           </div>
