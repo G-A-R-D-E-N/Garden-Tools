@@ -1650,47 +1650,6 @@ public static class MutagenLoader
 
     // ---- helpers --------------------------------------------------------
 
-    public static void SaveEsp(RecordNode root, object envObj)
-    {
-        if (root.FilePath == null || !root.AnyDirty) return;
-
-        try
-        {
-            var modPath = ModPath.FromPath(root.FilePath);
-            // In a real app we'd want to use the environment's specific mod, 
-            // but for a simple "Save" we can reload and apply changes if it's a standalone ESP.
-            // If it's part of an environment, we should use the mutable version from the environment.
-            
-            dynamic env = envObj;
-            var modKey = ModKey.FromNameAndExtension(Path.GetFileName(root.FilePath));
-            
-            // Try to find the mod in the environment
-            IFallout4Mod? mod = null;
-            try {
-                mod = env.LoadOrder[modKey].Mod;
-            } catch { }
-
-            if (mod == null) {
-                // Standalone load
-                var disposable = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-                // In a real implementation we would apply changes here
-                root.ClearDirty();
-                return;
-            }
-
-            foreach (var node in root.Descendants().Where(n => n.IsDirty && n.IsLeaf))
-            {
-                // To properly save back to Mutagen, we need to map RecordNode paths back to Mutagen properties.
-                // This is complex for a generic walker. For now, we'll log that saving is partially implemented.
-                // A full implementation would require a two-way mapping or using Mutagen's patch system.
-            }
-
-            // mod.WriteToBinary(modPath);
-            root.ClearDirty();
-        }
-        catch { }
-    }
-
     private static void AddLeafInit(RecordNode parent, string key, string value, string pluginName = "")
     {
         var node = new RecordNode { Key = key, Parent = parent };

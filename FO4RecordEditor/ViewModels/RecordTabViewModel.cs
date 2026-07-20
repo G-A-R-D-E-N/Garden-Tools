@@ -37,7 +37,7 @@ public sealed class RecordTabViewModel
     {
         var del = FO4RecordEditor.Services.WriteService.DeleteRecord(SourcePlugin, FormKey, _env);
         if (!del.StartsWith("Removed", System.StringComparison.OrdinalIgnoreCase)) return del;
-        return del + " " + FO4RecordEditor.Services.WriteService.SavePlugin(SourcePlugin, null);
+        return del + " " + FO4RecordEditor.Services.WriteService.SavePlugin(SourcePlugin, null, _env);
     }
 
     /// <summary>True when more than one plugin overrides this record (a real conflict set).</summary>

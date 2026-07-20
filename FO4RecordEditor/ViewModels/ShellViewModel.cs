@@ -268,22 +268,51 @@ public sealed class ShellViewModel
         return tab;
     }
 
-    public void SaveSelectedPlugin()
+    /// <summary>
+    /// Save from the WPF tree selection. Reachable from Ctrl+S and the "save" command, but
+    /// <see cref="SelectedNode"/> is only ever assigned by <c>ExplorerPanel</c>, which the WebView2
+    /// shell no longer mounts — so in practice this reports that there is nothing selected.
+    /// </summary>
+    public string SaveSelectedPlugin()
     {
-        if (SelectedNode == null) return;
+        if (SelectedNode == null)
+        {
+            const string msg = "Nothing selected to save. Use the record editor's \"Save edits to " +
+                               "patch\" button, or the save_plugin tool.";
+            Log.Log(LogCategory.App, LogLevel.Warning, msg);
+            return msg;
+        }
+
         var root = SelectedNode;
         while (root.Parent != null) root = root.Parent;
 
-        if (root.FilePath != null)
+        if (root.FilePath == null)
         {
-            Log.Log(LogCategory.App, LogLevel.Info, $"Saving {root.Key}...");
-            var ext = System.IO.Path.GetExtension(root.FilePath).ToLowerInvariant();
-            if (ext is ".yaml" or ".yml" or ".json")
-                SpriggitLoader.SaveFile(root);
-            else if (ext is ".esp" or ".esm" or ".esl")
-                MutagenLoader.SaveEsp(root, GameEnvironment!);
-            
-            Log.Log(LogCategory.App, LogLevel.Info, $"Saved {root.Key}.");
+            const string msg = "That node has no backing file to save.";
+            Log.Log(LogCategory.App, LogLevel.Warning, msg);
+            return msg;
         }
+
+        Log.Log(LogCategory.App, LogLevel.Info, $"Saving {root.Key}...");
+        var ext = System.IO.Path.GetExtension(root.FilePath).ToLowerInvariant();
+
+        if (ext is ".yaml" or ".yml" or ".json")
+        {
+            SpriggitLoader.SaveFile(root);
+            var ok = $"Saved {root.Key}.";
+            Log.Log(LogCategory.App, LogLevel.Info, ok);
+            return ok;
+        }
+
+        // Plugin binaries are NOT saved from this tree. MutagenLoader.SaveEsp used to sit here: it
+        // never wrote anything (the write was commented out, the field-mapping loop was empty) but
+        // called ClearDirty() and logged "Saved", so edits looked persisted and were lost. Deleted
+        // rather than implemented — the tree's edits live in RecordNode, and the only code that maps
+        // them back onto Mutagen records is WriteService.SaveRecordEditsToPatch, which the record
+        // editor's "Save edits to patch" button already drives.
+        var refuse = $"Saving a plugin binary from the tree is not supported. Open {root.Key} in the " +
+                     "record editor and use \"Save edits to patch\", or call the save_plugin tool.";
+        Log.Log(LogCategory.App, LogLevel.Warning, refuse);
+        return refuse;
     }
 }

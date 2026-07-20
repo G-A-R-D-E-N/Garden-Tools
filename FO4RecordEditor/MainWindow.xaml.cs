@@ -126,7 +126,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var c = _shell.Commands;
         c.Register("scan.errors", "Run Error Scan", "Errors", async () => await _shell.RunErrorScanAsync());
         c.Register("settings", "Open Settings", "App", () => new Views.SettingsDialog(_shell) { Owner = this }.ShowDialog());
-        c.Register("save", "Save Plugin", "File", () => _shell.SaveSelectedPlugin());
+        c.Register("save", "Save Plugin", "File", () => SetStatus(_shell.SaveSelectedPlugin()));
         c.Register("undo", "Undo", "Edit", () => _shell.Undo.Undo());
         c.Register("redo", "Redo", "Edit", () => _shell.Undo.Redo());
     }
@@ -140,7 +140,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         else if (e.Key == Key.Y && Keyboard.Modifiers == ModifierKeys.Control)
             { _shell.Undo.Redo(); e.Handled = true; }
         else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
-            { _shell.SaveSelectedPlugin(); e.Handled = true; }
+            { SetStatus(_shell.SaveSelectedPlugin()); e.Handled = true; }
         else if (e.Key == Key.Escape)
             PaletteOverlay.Visibility = Visibility.Collapsed;
     }

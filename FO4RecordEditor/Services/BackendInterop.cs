@@ -140,10 +140,10 @@ public class BackendInterop
         DebugLog.Guard(nameof(ResolveConflict), () => WriteService.ResolveConflict(Env, formKey, winner, patch),
             $"{formKey} winner={winner} patch={patch}");
     public string SavePatch(string patch) =>
-        DebugLog.Guard(nameof(SavePatch), () => WriteService.SavePlugin(patch, null), patch);
+        DebugLog.Guard(nameof(SavePatch), () => WriteService.SavePlugin(patch, null, Env), patch);
     public string SavePlugin(string plugin, string path) =>
         DebugLog.Guard(nameof(SavePlugin), () =>
-            WriteService.SavePlugin(plugin, string.IsNullOrWhiteSpace(path) ? null : path), $"{plugin} {path}");
+            WriteService.SavePlugin(plugin, string.IsNullOrWhiteSpace(path) ? null : path, Env), $"{plugin} {path}");
 
     // Return JSON (not string[]): a raw array comes back over the WebView2 bridge as a remote proxy,
     // which the JS caller can't reliably spread/iterate. Every other method returns JSON for this reason.
