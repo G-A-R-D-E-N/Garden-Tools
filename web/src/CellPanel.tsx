@@ -17,9 +17,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [geometry, setGeometry] = useState<CellGeoMap>({});
   const [log, setLog] = useState<string[]>([]);
 
-  // Click-to-select + per-type visibility (the "can't click meshes / hide layers like the CK" ask).
+  // Click-to-select + per-type visibility + per-reference hide (CK "1" cycle -> hidden).
   const [selected, setSelected] = useState<CellPlacedReference | null>(null);
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const [hiddenRefs, setHiddenRefs] = useState<Set<string>>(new Set());
 
   // Env-loaded gate: an empty plugin list means "nothing loaded yet" -- point the user at the
   // Explorer sidebar's Load Env / Open MO2 buttons instead of letting them type a cell id blind
@@ -102,6 +103,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setGeometry({});
     setSelected(null);
     setHiddenTypes(new Set());
+    setHiddenRefs(new Set());
     setStatus('Reading placed references…');
     try {
       const raw = await cell.GetPlacedReferences(id);
@@ -186,6 +188,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       return next;
     });
 
+  // CK-hotkey actions (the viewport calls these; the sidebar buttons reuse them).
+  const hideSelected = () => {
+    if (!selected) return;
+    setHiddenRefs(prev => new Set(prev).add(selected.formKey));
+  };
+  const unhideAll = () => setHiddenRefs(new Set());
+  const toggleMarkers = () => toggleType('(markers)');
+
   return (
     <div className="papyrus-overlay" onClick={onClose}>
       <div className="papyrus-modal glass-panel nif-modal-wide" onClick={e => e.stopPropagation()}>
@@ -261,6 +271,16 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                 <div className="cell-selected-row"><span>Type</span><strong>{selected.recordType}</strong></div>
                 <div className="cell-selected-row"><span>Base</span><strong>{selected.baseEditorId || selected.baseFormKey}</strong></div>
                 <div className="cell-selected-row"><span>Pos</span><strong>{selected.position.x.toFixed(0)}, {selected.position.y.toFixed(0)}, {selected.position.z.toFixed(0)}</strong></div>
+                <button className="cell-hide-btn" onClick={hideSelected}>
+                  <EyeOff size={12} /> Hide this mesh <kbd>1</kbd>
+                </button>
+              </div>
+            )}
+
+            {hiddenRefs.size > 0 && (
+              <div className="cell-hidden-bar">
+                <span>{hiddenRefs.size} mesh{hiddenRefs.size === 1 ? '' : 'es'} hidden</span>
+                <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>
               </div>
             )}
 
@@ -297,7 +317,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
               <div><span className="cell-swatch cell-swatch-nomodel" /> no model (actor/trap)</div>
               <div><span className="cell-swatch cell-swatch-failed" /> mesh unavailable</div>
             </div>
-            <div className="nif-view-hint">Click a mesh to select it · toggle a layer to hide it</div>
+            <div className="cell-hotkeys">
+              <div><kbd>Click</kbd> select · <kbd>1</kbd> hide · <kbd>Alt+1</kbd> unhide all</div>
+              <div><kbd>Shift+F</kbd> focus · <kbd>T</kbd> top-down · <kbd>M</kbd> markers · <kbd>D</kbd> deselect</div>
+            </div>
             <div className="nif-view-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
 
             <div className="papyrus-log-head">
@@ -333,8 +356,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   geometry={geometry}
                   loadTexture={loadTexture}
                   hiddenTypes={hiddenTypes}
+                  hiddenRefs={hiddenRefs}
                   selectedKey={selected?.formKey ?? null}
                   onSelect={setSelected}
+                  onHideSelected={hideSelected}
+                  onUnhideAll={unhideAll}
+                  onToggleMarkers={toggleMarkers}
                 />
               : (
                 <div className="nif-view-empty">

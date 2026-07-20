@@ -25,25 +25,38 @@ export type CellGeoMap = Record<string, NifGeo | { error: string }>;
  * (real cells run into the tens of thousands of refs). Diffuse texture fetched once per unique
  * (model, shape) and shared across its instances.
  */
+type InstanceRef = { mesh: THREE.InstancedMesh; id: number; ref: CellPlacedReference; billboard: boolean };
+
 export default function CellViewport(
-  { references, geometry, loadTexture, hiddenTypes, selectedKey, onSelect }: {
+  { references, geometry, loadTexture, hiddenTypes, hiddenRefs, selectedKey, onSelect,
+    onHideSelected, onUnhideAll, onToggleMarkers }: {
     references: CellPlacedReference[];
     geometry: CellGeoMap;
     loadTexture?: (modelPath: string, relTexPath: string) => Promise<string>;
     hiddenTypes?: ReadonlySet<string>;
+    hiddenRefs?: ReadonlySet<string>;              // per-reference hide (CK "1" cycle -> hidden)
     selectedKey?: string | null;
     onSelect?: (ref: CellPlacedReference | null) => void;
+    onHideSelected?: () => void;                   // CK "1"
+    onUnhideAll?: () => void;                       // CK "ALT+1"
+    onToggleMarkers?: () => void;                   // CK "M"
   }
 ) {
   const mountRef = useRef<HTMLDivElement>(null);
 
-  // Cross-effect handles so visibility/selection can update WITHOUT rebuilding the scene.
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+  // Cross-effect handles so visibility/selection/hotkeys update WITHOUT rebuilding the scene.
+  const onSelectRef = useRef(onSelect); onSelectRef.current = onSelect;
+  const onHideSelectedRef = useRef(onHideSelected); onHideSelectedRef.current = onHideSelected;
+  const onUnhideAllRef = useRef(onUnhideAll); onUnhideAllRef.current = onUnhideAll;
+  const onToggleMarkersRef = useRef(onToggleMarkers); onToggleMarkersRef.current = onToggleMarkers;
+  const selectedKeyRef = useRef(selectedKey); selectedKeyRef.current = selectedKey;
+  const hiddenRefsRef = useRef(hiddenRefs); hiddenRefsRef.current = hiddenRefs;
   const meshEntriesRef = useRef<{ mesh: THREE.Object3D; recordType: string }[]>([]);
   const modelBBoxRef = useRef<Map<string, THREE.Box3>>(new Map());
   const highlightRef = useRef<THREE.LineSegments | null>(null);
   const refByKeyRef = useRef<Map<string, CellPlacedReference>>(new Map());
+  const keyToInstancesRef = useRef<Map<string, InstanceRef[]>>(new Map());
+  const cameraApiRef = useRef<{ focus: (key: string | null) => void; topDown: (key: string | null) => void } | null>(null);
 
   // ---- build the scene (only when the data actually changes) ----
   useEffect(() => {
@@ -83,7 +96,13 @@ export default function CellViewport(
     const meshEntries: { mesh: THREE.Object3D; recordType: string }[] = [];
     const modelBBox = new Map<string, THREE.Box3>();
     const refByKey = new Map<string, CellPlacedReference>();
+    const keyToInstances = new Map<string, InstanceRef[]>();
     for (const r of references) refByKey.set(r.formKey, r);
+    const addInstance = (inst: THREE.InstancedMesh, id: number, r: CellPlacedReference, billboard: boolean) => {
+      const entry: InstanceRef = { mesh: inst, id, ref: r, billboard };
+      const arr = keyToInstances.get(r.formKey);
+      if (arr) arr.push(entry); else keyToInstances.set(r.formKey, [entry]);
+    };
 
     const billboardGroups: {
       inst: THREE.InstancedMesh; refs: CellPlacedReference[]; centroid: THREE.Vector3; mode?: number;
@@ -163,6 +182,7 @@ export default function CellViewport(
         scene.add(inst);
         pickables.push(inst);
         meshEntries.push({ mesh: inst, recordType: refs[0]?.recordType ?? '' });
+        refs.forEach((r, i) => addInstance(inst, i, r, !!shape.billboard));
 
         if (shape.billboard) {
           inst.frustumCulled = false;
@@ -195,6 +215,7 @@ export default function CellViewport(
         inst.userData.refs = refs;
         scene.add(inst);
         pickables.push(inst);
+        refs.forEach((r, i) => addInstance(inst, i, r, false));
         // Markers can mix types (actors + traps + failed statics); group them under a synthetic key so
         // "hide markers" is one toggle rather than fragmenting the type list.
         meshEntries.push({ mesh: inst, recordType: '(markers)' });
@@ -215,6 +236,7 @@ export default function CellViewport(
     modelBBoxRef.current = modelBBox;
     refByKeyRef.current = refByKey;
     highlightRef.current = highlight;
+    keyToInstancesRef.current = keyToInstances;
 
     const size = posBounds.getSize(new THREE.Vector3());
     const center = posBounds.getCenter(new THREE.Vector3());
@@ -261,19 +283,67 @@ export default function CellViewport(
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
     renderer.domElement.addEventListener('pointerup', onPointerUp);
 
-    // Apply the current visibility + selection immediately (props may already be set on first build).
+    // Camera framing for the CK hotkeys (SHIFT+F anchor on selection, T top-down of selection).
+    const _v = new THREE.Vector3();
+    const radiusOf = (r: CellPlacedReference) => {
+      const box = r.modelPath ? modelBBox.get(r.modelPath) : undefined;
+      const rad = box ? box.getSize(_v).length() * 0.5 * (r.scale || 1) : 60;
+      return Math.max(rad, 30);
+    };
+    const focusOn = (k: string | null) => {
+      const r = k ? refByKey.get(k) : undefined;
+      if (!r) return;
+      const c = new THREE.Vector3(r.position.x, r.position.y, r.position.z);
+      const dist = radiusOf(r) * 3;
+      controls.target.copy(c);
+      camera.position.set(c.x + dist * 0.8, c.y - dist, c.z + dist * 0.6);
+      camera.near = Math.max(dist / 500, 0.05); camera.far = dist * 200;
+      camera.updateProjectionMatrix(); controls.update();
+    };
+    const topDownOn = (k: string | null) => {
+      const r = k ? refByKey.get(k) : undefined;
+      if (!r) return;
+      const c = new THREE.Vector3(r.position.x, r.position.y, r.position.z);
+      const dist = radiusOf(r) * 3;
+      controls.target.copy(c);
+      camera.position.set(c.x, c.y - 0.001, c.z + dist);
+      camera.updateProjectionMatrix(); controls.update();
+    };
+    cameraApiRef.current = { focus: focusOn, topDown: topDownOn };
+
+    // CK render-window hotkeys (verified against the offline CK wiki's Keyboard Mapping page):
+    //   1 = cycle selected visibility -> hidden here, ALT+1 = unhide all, D = clear selection,
+    //   SHIFT+F = anchor camera on selection, T = top-down of selection, M = toggle markers.
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack the search box
+      const k = e.key.toLowerCase();
+      if (k === '1' && e.altKey) { onUnhideAllRef.current?.(); e.preventDefault(); }
+      else if (k === '1') { onHideSelectedRef.current?.(); e.preventDefault(); }
+      else if (k === 'd' && !e.ctrlKey && !e.altKey && !e.shiftKey) { onSelectRef.current?.(null); e.preventDefault(); }
+      else if (k === 'f' && e.shiftKey) { focusOn(selectedKeyRef.current ?? null); e.preventDefault(); }
+      else if (k === 't' && !e.ctrlKey && !e.altKey && !e.shiftKey) { topDownOn(selectedKeyRef.current ?? null); e.preventDefault(); }
+      else if (k === 'm' && !e.ctrlKey && !e.altKey) { onToggleMarkersRef.current?.(); e.preventDefault(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    // Apply the current visibility + selection + per-ref hide immediately (props may already be set).
     applyVisibility(meshEntries, hiddenTypes);
     applySelection(highlight, modelBBox, refByKey, selectedKey ?? null);
+    applyHidden(keyToInstances, hiddenRefs);
 
     const bbBase = new THREE.Matrix4();
     const bbOut = new THREE.Matrix4();
     const bbQuat = new THREE.Quaternion();
     const bbPos = new THREE.Vector3();
     const bbScale = new THREE.Vector3();
+    const bbZero = new THREE.Matrix4().makeScale(0, 0, 0);
     const updateBillboards = () => {
+      const hidden = hiddenRefsRef.current;
       for (const grp of billboardGroups) {
         if (!grp.inst.visible) continue;
         grp.refs.forEach((r, i) => {
+          if (hidden?.has(r.formKey)) { grp.inst.setMatrixAt(i, bbZero); return; }
           bbPos.set(r.position.x, r.position.y, r.position.z);
           bbQuat.setFromEuler(new THREE.Euler(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ'));
           bbScale.setScalar(r.scale || 1);
@@ -308,6 +378,7 @@ export default function CellViewport(
       ro.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('keydown', onKeyDown);
       controls.dispose();
       disposables.forEach(d => d.dispose());
       textures.forEach(t => t.dispose());
@@ -329,7 +400,41 @@ export default function CellViewport(
       applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null);
   }, [selectedKey]);
 
+  // ---- per-reference hide (CK "1"): zero-scale hidden instances, no rebuild ----
+  useEffect(() => {
+    applyHidden(keyToInstancesRef.current, hiddenRefs);
+  }, [hiddenRefs]);
+
   return <div ref={mountRef} className="nif-viewport cell-viewport" />;
+}
+
+const _zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
+const _hidePos = new THREE.Vector3();
+const _hideQuat = new THREE.Quaternion();
+const _hideScale = new THREE.Vector3();
+const _hideM = new THREE.Matrix4();
+
+/** Collapse hidden references' instances to zero scale (invisible + unpickable), restore the rest.
+ * Billboard instances are left to the per-frame loop, which reads the same hidden set. */
+function applyHidden(keyToInstances: Map<string, InstanceRef[]>, hidden?: ReadonlySet<string>) {
+  const dirty = new Set<THREE.InstancedMesh>();
+  for (const [formKey, entries] of keyToInstances) {
+    const isHidden = hidden?.has(formKey) ?? false;
+    for (const e of entries) {
+      if (e.billboard) { continue; } // the animate loop zeroes/places billboard instances
+      if (isHidden) {
+        e.mesh.setMatrixAt(e.id, _zeroM);
+      } else {
+        _hidePos.set(e.ref.position.x, e.ref.position.y, e.ref.position.z);
+        _hideQuat.setFromEuler(new THREE.Euler(e.ref.rotation.x, e.ref.rotation.y, e.ref.rotation.z, 'XYZ'));
+        _hideScale.setScalar(e.ref.scale || 1);
+        _hideM.compose(_hidePos, _hideQuat, _hideScale);
+        e.mesh.setMatrixAt(e.id, _hideM);
+      }
+      dirty.add(e.mesh);
+    }
+  }
+  for (const m of dirty) m.instanceMatrix.needsUpdate = true;
 }
 
 function applyVisibility(
