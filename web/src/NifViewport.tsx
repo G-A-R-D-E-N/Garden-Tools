@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { billboardMatrix, vertsCentroid } from './util/billboard';
 
 export interface NifTexRef { slot: number; path: string; }
 export interface NifShapeGeo {
@@ -11,6 +12,8 @@ export interface NifShapeGeo {
   uvs: number[];      // flat u,v (may be empty)
   textures?: NifTexRef[];
   skinned?: boolean;
+  billboard?: boolean;     // shape has a NiBillboardNode ancestor (glow sprite / lens flare)
+  billboardMode?: number;  // nifly::BillboardMode; 1/8/9 = rotate-about-up, else face-camera
 }
 export interface NifGeo { fo4: boolean; shapes: NifShapeGeo[]; }
 
@@ -63,6 +66,8 @@ export default function NifViewport(
     const geos: THREE.BufferGeometry[] = [];
     const texes: THREE.Texture[] = [];
     const pairs: { mat: THREE.MeshStandardMaterial; shape: NifShapeGeo; hasUV: boolean }[] = [];
+    // Glow/lens-flare shapes under a NiBillboardNode -- re-oriented to face the camera each frame.
+    const billboards: { mesh: THREE.Mesh; centroid: THREE.Vector3; mode?: number }[] = [];
 
     for (const shape of data.shapes) {
       if (!shape.verts.length || !shape.tris.length) continue;
@@ -82,7 +87,13 @@ export default function NifViewport(
         color: 0x9aa0aa, metalness: 0.1, roughness: 0.75,
         side: THREE.DoubleSide, wireframe, flatShading: false,
       });
-      group.add(new THREE.Mesh(g, mat));
+      const mesh = new THREE.Mesh(g, mat);
+      group.add(mesh);
+      if (shape.billboard) {
+        mesh.matrixAutoUpdate = false; // matrix is driven per-frame by the billboard update
+        mesh.frustumCulled = false;
+        billboards.push({ mesh, centroid: vertsCentroid(shape.verts), mode: shape.billboardMode });
+      }
       mats.push(mat);
       geos.push(g);
       pairs.push({ mat, shape, hasUV });
@@ -142,8 +153,14 @@ export default function NifViewport(
     camera.updateProjectionMatrix();
     controls.update();
 
+    const identity = new THREE.Matrix4();
     let raf = 0;
-    const animate = () => { controls.update(); renderer.render(scene, camera); raf = requestAnimationFrame(animate); };
+    const animate = () => {
+      controls.update();
+      for (const b of billboards) billboardMatrix(b.mesh.matrix, identity, b.centroid, camera, b.mode);
+      renderer.render(scene, camera);
+      raf = requestAnimationFrame(animate);
+    };
     animate();
 
     const onResize = () => {

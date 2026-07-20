@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { NifGeo } from './NifViewport';
 import type { CellPlacedReference } from './backend';
+import { billboardMatrix, vertsCentroid } from './util/billboard';
 
 /** A geometry batch result keyed by the exact modelPath string GetPlacedReferences returned --
  * either niftool's raw geo JSON (NifGeo) or an { error } for anything that couldn't be
@@ -64,6 +65,13 @@ export default function CellViewport(
     const disposables: { dispose: () => void }[] = [];
     const posBounds = new THREE.Box3();
     const dummy = new THREE.Object3D();
+
+    // Billboard sprites (glow/lens-flare under a NiBillboardNode) can't be baked into a static
+    // instance matrix -- they must be re-oriented toward the camera every frame. Collected here and
+    // updated in the animation loop; everything else keeps its one-time matrix.
+    const billboardGroups: {
+      inst: THREE.InstancedMesh; refs: CellPlacedReference[]; centroid: THREE.Vector3; mode?: number;
+    }[] = [];
 
     // Group refs by modelPath so each unique mesh becomes one (or a few, if multi-shape) InstancedMesh.
     const byModel = new Map<string, CellPlacedReference[]>();
@@ -134,6 +142,11 @@ export default function CellViewport(
         });
         inst.instanceMatrix.needsUpdate = true;
         scene.add(inst);
+
+        if (shape.billboard) {
+          inst.frustumCulled = false; // per-frame reoriented; its baked bounds no longer bound it
+          billboardGroups.push({ inst, refs, centroid: vertsCentroid(shape.verts), mode: shape.billboardMode });
+        }
       }
     }
 
@@ -181,8 +194,32 @@ export default function CellViewport(
     camera.updateProjectionMatrix();
     controls.update();
 
+    const bbBase = new THREE.Matrix4();
+    const bbOut = new THREE.Matrix4();
+    const bbQuat = new THREE.Quaternion();
+    const bbPos = new THREE.Vector3();
+    const bbScale = new THREE.Vector3();
+    const updateBillboards = () => {
+      for (const grp of billboardGroups) {
+        grp.refs.forEach((r, i) => {
+          bbPos.set(r.position.x, r.position.y, r.position.z);
+          bbQuat.setFromEuler(new THREE.Euler(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ'));
+          bbScale.setScalar(r.scale || 1);
+          bbBase.compose(bbPos, bbQuat, bbScale);
+          billboardMatrix(bbOut, bbBase, grp.centroid, camera, grp.mode);
+          grp.inst.setMatrixAt(i, bbOut);
+        });
+        grp.inst.instanceMatrix.needsUpdate = true;
+      }
+    };
+
     let raf = 0;
-    const animate = () => { controls.update(); renderer.render(scene, camera); raf = requestAnimationFrame(animate); };
+    const animate = () => {
+      controls.update();
+      if (billboardGroups.length) updateBillboards();
+      renderer.render(scene, camera);
+      raf = requestAnimationFrame(animate);
+    };
     animate();
 
     const onResize = () => {
