@@ -57,20 +57,20 @@ public class PapyrusInterop
         });
 
     /// <summary>Look up a function's Syntax/Parameters/Return Value from the offline CK Wiki mirror
-    /// (Settings -> CK Wiki Path). See PapyrusWikiService.LookupFunction.</summary>
+    /// (bundled with the app; Settings -> CK Wiki Path overrides it). See PapyrusWikiService.LookupFunction.</summary>
     public Task<string> LookupFunction(string script, string functionName) =>
         Task.Run(() =>
         {
-            try { return PapyrusWikiService.LookupFunction(_shell.Settings.Current.CkWikiPath, script, functionName); }
+            try { return PapyrusWikiService.LookupFunction(ToolPaths.CkWiki() ?? "", script, functionName); }
             catch (Exception ex) { DebugLog.Exception("Papyrus.LookupFunction", ex); return "Error: " + ex.Message; }
         });
 
     /// <summary>Look up a script's Extends/Global Functions/Member Functions/Events from the offline
-    /// CK Wiki mirror. See PapyrusWikiService.LookupScriptInfo.</summary>
+    /// CK Wiki mirror (bundled with the app). See PapyrusWikiService.LookupScriptInfo.</summary>
     public Task<string> LookupScriptInfo(string script) =>
         Task.Run(() =>
         {
-            try { return PapyrusWikiService.LookupScriptInfo(_shell.Settings.Current.CkWikiPath, script); }
+            try { return PapyrusWikiService.LookupScriptInfo(ToolPaths.CkWiki() ?? "", script); }
             catch (Exception ex) { DebugLog.Exception("Papyrus.LookupScriptInfo", ex); return "Error: " + ex.Message; }
         });
 

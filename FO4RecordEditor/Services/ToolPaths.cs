@@ -43,6 +43,9 @@ public static class ToolPaths
     private static string? FirstFile(params string?[] candidates) =>
         candidates.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p));
 
+    private static string? FirstDir(params string?[] candidates) =>
+        candidates.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p));
+
     private static string? Env(string name)
     {
         var v = Environment.GetEnvironmentVariable(name);
@@ -161,12 +164,25 @@ public static class ToolPaths
         return roots;
     }
 
+    /// <summary>
+    /// The offline Creation Kit Wiki HTML mirror root that papyrus_function_lookup / papyrus_script_info
+    /// read from. Ships bundled with the release package (package.ps1) under tools\ckwiki\fallout4\, so
+    /// this resolves out of the box with no launch flag or Settings edit needed; CkWikiPath/CK_WIKI_PATH
+    /// only matter if you want to point at a different or newer mirror.
+    /// </summary>
+    public static string? CkWiki() => FirstDir(
+        Env("CK_WIKI_PATH"),
+        Settings.CkWikiPath,
+        App("tools", "ckwiki", "fallout4"),
+        @"E:\F4SE OG\docs\Knowledge Materials\Creation Kit Wiki\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4");
+
     /// <summary>A one-line "here is where I looked" for the not-found errors the AI reads back.</summary>
     public static string Describe(string tool) => tool switch
     {
         "niftool" => "set NIFTOOL_PATH, or put niftool.exe in tools\\niftool\\ next to the exe",
         "texconv" => "set TEXCONV_PATH, or put Texconvx64.exe in tools\\texconv\\ next to the exe",
         "papyrus" => "install the Creation Kit, or set PAPYRUS_COMPILER_PATH / papyrusCompilerPath in settings.json",
+        "ckwiki" => "set CK_WIKI_PATH, or put the wiki mirror in tools\\ckwiki\\fallout4\\ next to the exe",
         _ => "",
     };
 }

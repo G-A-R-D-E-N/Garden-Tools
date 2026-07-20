@@ -46,13 +46,14 @@ The server needs to know what your game sees. Pass exactly one of:
 The MO2 instance path is the folder containing `mods\` and `profiles\` — not the MO2 program folder,
 and not a single mod.
 
-Optionally, also pass `--ck-wiki <folder>` pointing at an offline Creation Kit Wiki HTML mirror (a full
-export of creationkit.com/fallout4) to enable `papyrus_function_lookup` and `papyrus_script_info`. This
-is independent of `--mo2`/`--data` and unrelated to plugin loading — without it those two tools just
-return a "not configured" message; nothing else is affected. **This flag is only needed for the
-headless/stdio MCP server** (no GUI to read from). In the desktop app, set the same path once under
-Settings -> CK Wiki Path instead — the tool executor reads `Settings.Current.CkWikiPath` live, so it
-takes effect immediately with no restart and no launch flag.
+`papyrus_function_lookup` and `papyrus_script_info` read from an offline Creation Kit Wiki HTML
+mirror, and work out of the box — a copy ships bundled with the release package under
+`tools\ckwiki\fallout4\`, so there's nothing to configure. Pass `--ck-wiki <folder>` only if you want
+to point at a different or newer mirror; this is independent of `--mo2`/`--data` and unrelated to
+plugin loading. In the desktop app, the same override lives under Settings -> CK Wiki Path — the tool
+executor reads it live, so it takes effect immediately with no restart and no launch flag. If neither
+override is set AND the bundled copy is missing (e.g. a `-SkipCkWiki` dev build), those two tools
+return a "not configured" message instead of silently failing.
 
 ### Confirming it connected
 

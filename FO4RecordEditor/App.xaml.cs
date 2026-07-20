@@ -88,8 +88,9 @@ public partial class App : Application
     /// </list>
     /// </para>
     /// <c>--ck-wiki &lt;folder&gt;</c> is independent of the above: points papyrus_function_lookup /
-    /// papyrus_script_info at an offline Creation Kit Wiki HTML mirror. Those two tools return a
-    /// "not configured" error if this is omitted; nothing else depends on it.
+    /// papyrus_script_info at an offline Creation Kit Wiki HTML mirror. Optional -- a copy ships bundled
+    /// with the app (see ToolPaths.CkWiki), so those two tools work out of the box; pass this only to
+    /// point at a different or newer mirror. Nothing else depends on it.
     /// </summary>
     private static void RunMcpHeadless(string[] args)
     {
@@ -122,7 +123,9 @@ public partial class App : Application
             return env;
         };
 
-        var executor = new Services.PluginToolExecutor(envProvider, () => mo2Instance, () => ckWikiPath);
+        // --ck-wiki wins if given explicitly; otherwise fall through to ToolPaths' own chain, which
+        // resolves to the bundled mirror shipped under tools\ckwiki\fallout4\ with no flag needed.
+        var executor = new Services.PluginToolExecutor(envProvider, () => mo2Instance, () => ckWikiPath ?? Services.ToolPaths.CkWiki());
         try { Services.StdioMcpServer.Run(executor); }
         catch (Exception ex) { Trace($"--mcp loop ended with error: {ex.Message}"); }
         Environment.Exit(0);

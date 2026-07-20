@@ -16,6 +16,11 @@
 .PARAMETER SkipWeb
   Skip the npm build of the web UI. Only safe if web\dist\ is already current.
 
+.PARAMETER SkipCkWiki
+  Skip bundling the offline Creation Kit Wiki mirror (~160MB). Bundled by default so
+  papyrus_function_lookup / papyrus_script_info work out of the box for recipients with no setup.
+  Use this for a fast local iteration build; never for a build you're actually handing to someone.
+
 .PARAMETER IncludeBaseScripts
   Bundle the vanilla Papyrus base scripts from ..\papyrus\Base.
 
@@ -32,6 +37,7 @@
 param(
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
     [switch] $SkipWeb,
+    [switch] $SkipCkWiki,
     [switch] $IncludeBaseScripts
 )
 
@@ -48,6 +54,7 @@ $ZipPath   = Join-Path $Root "dist\FO4RecordEditor-$Version.zip"
 $Niftool   = Join-Path $Root '..\niftool\build\windows\x64\release\niftool.exe'
 $Texconv   = Join-Path $Root 'TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconvx64.exe'
 $BaseScripts = Join-Path $Root '..\papyrus\Base'
+$CkWiki    = 'E:\F4SE OG\docs\Knowledge Materials\Creation Kit Wiki\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4'
 
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
@@ -107,6 +114,20 @@ if (Test-Path $Texconv) {
     Write-Host '    Texconvx64.exe'
 } else {
     Warn "Texconvx64.exe not found — texture previews will not render."
+}
+
+if (-not $SkipCkWiki) {
+    if (Test-Path $CkWiki) {
+        $dest = Join-Path $Staging 'tools\ckwiki\fallout4'
+        New-Item -ItemType Directory -Path $dest -Force | Out-Null
+        Copy-Item "$CkWiki\*" $dest -Recurse -Force
+        $count = (Get-ChildItem $dest -Filter '*.html' -Recurse -File).Count
+        Write-Host "    CK Wiki mirror ($count pages)"
+    } else {
+        Warn "CK wiki mirror not found at $CkWiki — papyrus_function_lookup/papyrus_script_info will be dead in this package unless the recipient sets CkWikiPath themselves."
+    }
+} else {
+    Warn 'Skipping the CK Wiki mirror (-SkipCkWiki). Fine for a local iteration build, not for one you hand to someone.'
 }
 
 if ($IncludeBaseScripts) {

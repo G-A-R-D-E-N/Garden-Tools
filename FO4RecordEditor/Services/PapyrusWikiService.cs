@@ -7,11 +7,12 @@ namespace FO4RecordEditor.Services;
 
 /// <summary>
 /// Looks up Papyrus function signatures and script overviews directly from an offline Creation Kit
-/// Wiki HTML mirror (the same kind of mirror many FO4 workspaces keep locally) instead of the AI
-/// having to grep/read whole wiki pages itself. The wiki mirror is external content, not part of this
-/// repo, so the root is caller-supplied: the '--ck-wiki &lt;folder&gt;' launch flag (headless MCP) or
-/// the CkWikiPath setting (GUI). Parses the wiki's actual exported MediaWiki HTML structure -- one
-/// page per function (e.g. "GetBaseObject_-_ActiveMagicEffect.html") and one page per script
+/// Wiki HTML mirror instead of the AI having to grep/read whole wiki pages itself. The root is always
+/// caller-supplied (this class never resolves a path itself) -- see ToolPaths.CkWiki for the actual
+/// resolution chain: an explicit override (CK_WIKI_PATH env var, '--ck-wiki &lt;folder&gt;' launch
+/// flag, or the CkWikiPath Settings field) beats the copy bundled with the release package under
+/// tools\ckwiki\fallout4\. Parses the wiki's actual exported MediaWiki HTML structure -- one page per
+/// function (e.g. "GetBaseObject_-_ActiveMagicEffect.html") and one page per script
 /// ("ActiveMagicEffect_Script.html") -- verified against real pages before writing this, not guessed.
 /// </summary>
 public static class PapyrusWikiService

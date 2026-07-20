@@ -43,6 +43,7 @@ public class SettingsInterop
             s.TexconvPath,
             s.PapyrusCompilerPath,
             s.PapyrusBaseImports,
+            s.NiftoolPath,
         });
     }
 
@@ -70,6 +71,7 @@ public class SettingsInterop
             if (dto.TexconvPath != null)         s.TexconvPath = dto.TexconvPath.Trim();
             if (dto.PapyrusCompilerPath != null) s.PapyrusCompilerPath = dto.PapyrusCompilerPath.Trim();
             if (dto.PapyrusBaseImports != null)  s.PapyrusBaseImports = dto.PapyrusBaseImports.Trim();
+            if (dto.NiftoolPath != null)         s.NiftoolPath = dto.NiftoolPath.Trim();
 
             _shell.Settings.Save();
             _shell.RebuildProvider();
@@ -156,5 +158,6 @@ public class SettingsInterop
         public string? TexconvPath { get; set; }
         public string? PapyrusCompilerPath { get; set; }
         public string? PapyrusBaseImports { get; set; }
+        public string? NiftoolPath { get; set; }
     }
 }

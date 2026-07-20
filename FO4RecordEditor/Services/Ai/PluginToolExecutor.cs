@@ -982,8 +982,9 @@ public sealed class PluginToolExecutor
             }),
         new("papyrus_function_lookup",
             "Look up a Papyrus function's signature (Syntax/Parameters/Return Value) from an offline " +
-            "Creation Kit Wiki HTML mirror, instead of reading whole wiki pages yourself. Requires the " +
-            "server to have been launched with '--ck-wiki <folder>' (or CkWikiPath set in Settings). " +
+            "Creation Kit Wiki HTML mirror, instead of reading whole wiki pages yourself. Works out of the " +
+            "box against the mirror bundled with the app; pass '--ck-wiki <folder>' at launch (or set " +
+            "CkWikiPath in Settings) only to point at a different or newer mirror. " +
             "Pass 'script' when the function name alone is ambiguous across multiple script types.",
             new
             {
@@ -997,8 +998,9 @@ public sealed class PluginToolExecutor
             }),
         new("papyrus_script_info",
             "Get a Papyrus script's overview from the offline Creation Kit Wiki mirror: what it Extends, " +
-            "its Global Functions, Member Functions, and Events (name + one-line description each). Requires " +
-            "'--ck-wiki <folder>' at launch (or CkWikiPath in Settings). Use this to see a script's full " +
+            "its Global Functions, Member Functions, and Events (name + one-line description each). Works " +
+            "out of the box against the bundled mirror; '--ck-wiki <folder>' at launch (or CkWikiPath in " +
+            "Settings) only overrides which mirror is used. Use this to see a script's full " +
             "function list before calling papyrus_function_lookup on a specific one.",
             new
             {
