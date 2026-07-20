@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff } from 'lucide-react';
 import { getCell, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap } from './CellViewport';
+import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import './PapyrusPanel.css';
 import './NifPanel.css';
 import './CellPanel.css';
@@ -173,9 +174,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const typeGroups = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of references) {
-      const geo = r.modelPath ? geometry[r.modelPath] : undefined;
-      const meshed = !!geo && 'shapes' in geo && geo.shapes.some(s => s.verts.length > 0 && s.tris.length > 0);
-      const kind = meshed ? (r.baseType || r.recordType) : '(markers)';
+      const kind = cellLayerOf(r, r.modelPath ? geometry[r.modelPath] : undefined);
       m.set(kind, (m.get(kind) ?? 0) + 1);
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -194,7 +193,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setHiddenRefs(prev => new Set(prev).add(selected.formKey));
   };
   const unhideAll = () => setHiddenRefs(new Set());
-  const toggleMarkers = () => toggleType('(markers)');
+  const toggleMarkers = () => toggleType(MARKER_LAYER);
 
   return (
     <div className="papyrus-overlay" onClick={onClose}>

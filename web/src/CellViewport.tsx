@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { NifGeo } from './NifViewport';
 import type { CellPlacedReference } from './backend';
 import { billboardMatrix, vertsCentroid } from './util/billboard';
+import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 
 /** A geometry batch result keyed by the exact modelPath string GetPlacedReferences returned --
  * either niftool's raw geo JSON (NifGeo) or an { error } for anything that couldn't be
@@ -181,7 +182,7 @@ export default function CellViewport(
         inst.userData.refs = refs;
         scene.add(inst);
         pickables.push(inst);
-        meshEntries.push({ mesh: inst, recordType: refs[0]?.baseType ?? refs[0]?.recordType ?? '' });
+        meshEntries.push({ mesh: inst, recordType: cellLayerOf(refs[0], nifGeo) });
         refs.forEach((r, i) => addInstance(inst, i, r, !!shape.billboard));
 
         if (shape.billboard) {
@@ -218,7 +219,7 @@ export default function CellViewport(
         refs.forEach((r, i) => addInstance(inst, i, r, false));
         // Markers can mix types (actors + traps + failed statics); group them under a synthetic key so
         // "hide markers" is one toggle rather than fragmenting the type list.
-        meshEntries.push({ mesh: inst, recordType: '(markers)' });
+        meshEntries.push({ mesh: inst, recordType: MARKER_LAYER });
       }
     }
 

@@ -14,6 +14,7 @@ export interface NifShapeGeo {
   skinned?: boolean;
   billboard?: boolean;     // shape has a NiBillboardNode ancestor (glow sprite / lens flare)
   billboardMode?: number;  // nifly::BillboardMode; 1/8/9 = rotate-about-up, else face-camera
+  effectShader?: boolean;  // BSEffectShaderProperty (fog/mist/glow/decal FX) vs BSLightingShaderProperty
 }
 export interface NifGeo { fo4: boolean; shapes: NifShapeGeo[]; }
 
