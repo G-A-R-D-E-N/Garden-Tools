@@ -171,7 +171,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                     value={cellId}
                     onChange={e => setCellId(e.target.value)}
                     onFocus={() => { if (suggestions && suggestions.length > 0) setSuggestOpen(true); }}
-                    placeholder={noEnv ? 'Load a modlist first…' : 'e.g. Sanctuary, or SanctuaryHouse01'}
+                    placeholder={noEnv ? 'Load a modlist first…' : 'e.g. Sanctuary, or SanctuaryExt'}
                     disabled={unavailable || noEnv}
                     onKeyDown={e => { if (e.key === 'Enter') load(); if (e.key === 'Escape') setSuggestOpen(false); }}
                   />
