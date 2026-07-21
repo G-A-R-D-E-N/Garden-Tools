@@ -293,6 +293,12 @@ export interface CellPlacedReference {
   baseFormKey: string;
   baseEditorId?: string;
   modelPath: string | null;
+  // Ground decal: the base is a TextureSet (TXST), which has no Model at all -- the engine projects
+  // its Diffuse texture directly, no dedicated mesh. modelPath stays null for these; decalDiffuse +
+  // decalWidth/decalHeight (world units, from the TXST's ObjectBounds) are set instead.
+  decalDiffuse?: string | null;
+  decalWidth?: number | null;
+  decalHeight?: number | null;
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: number;

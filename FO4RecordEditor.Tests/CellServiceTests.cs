@@ -72,4 +72,40 @@ public class CellServiceTests
         var parsed = JObject.Parse(json);
         parsed["error"].Should().NotBeNull();
     }
+
+    // Regression for the ground-decal fix (2026-07-20). Ref 1D515B:Fallout4.esm in
+    // SanctuaryBasementJahani is a REAL PlacedObject whose Base resolves to a TextureSet
+    // (DecalGroundDefault01, 078966:Fallout4.esm) with a genuine Decal subrecord -- verified by hand
+    // via get_record before writing this fix, not guessed. Before the fix, TextureSet bases (no Model
+    // field at all) fell through to modelPath=null with nothing else to show; the viewer drew a
+    // generic "no model" marker for what's actually a real, textured ground decal. Also regression-
+    // tests the recordType fix: Mutagen's lazy binary-overlay wrapper reported this ref's runtime type
+    // as "TextureSetBinaryOverlay" (the TextureSet MAJOR RECORD's own overlay class, not a placement
+    // kind -- confirmed no such placed-record type exists in Mutagen.Fallout4 at all), which is
+    // corrected to the real semantic kind via an interface check, same pattern already used for
+    // baseType.
+    [Fact]
+    public void GetPlacedReferences_ATextureSetBase_ReportsDecalFields_NotAModelPath()
+    {
+        if (!Available) return;
+        var info = Mo2ProfileLoader.ReadInstanceInfo(Instance);
+        var (env, _) = Mo2ProfileLoader.Load(Instance, info.Profile, info.GameDataFolder);
+
+        var json = CellService.GetPlacedReferencesJson("SanctuaryBasementJahani", env);
+        var parsed = JObject.Parse(json);
+        parsed["error"].Should().BeNull(json);
+
+        var refs = (JArray)parsed["references"]!;
+        var decalRef = refs.FirstOrDefault(r => (string?)r["formKey"] == "1D515B:Fallout4.esm");
+        decalRef.Should().NotBeNull("this specific reference is a known real ground decal");
+
+        decalRef!["modelPath"]!.Type.Should().Be(Newtonsoft.Json.Linq.JTokenType.Null,
+            "a TextureSet base has no Model field -- there is genuinely no mesh to show");
+        ((string?)decalRef["recordType"]).Should().Be("PlacedObject",
+            "the interface-based check must correct Mutagen's misleading overlay-wrapper type name");
+        ((string?)decalRef["baseType"]).Should().Be("TextureSet");
+        ((string?)decalRef["decalDiffuse"]).Should().Be("Landscape/Ground/CommonwealthDefault01Decal_d.DDS");
+        ((float?)decalRef["decalWidth"]).Should().BeApproximately(15f, 0.5f, "ObjectBounds X-extent (7 - -8)");
+        ((float?)decalRef["decalHeight"]).Should().BeApproximately(60f, 0.5f, "ObjectBounds Y-extent (30 - -30)");
+    }
 }

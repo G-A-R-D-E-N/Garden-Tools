@@ -117,8 +117,16 @@ export default function CellViewport(
     // Group refs by modelPath so each unique mesh becomes one (or a few, if multi-shape) InstancedMesh.
     const byModel = new Map<string, CellPlacedReference[]>();
     const markers: CellPlacedReference[] = [];       // no model, or model resolve/convert failed
+    // Ground decals (TXST-based base, no Model at all) grouped by their diffuse texture path -- one
+    // InstancedMesh of a shared unit plane per unique texture, same instancing pattern as byModel.
+    const byDecal = new Map<string, CellPlacedReference[]>();
     for (const r of references) {
       posBounds.expandByPoint(new THREE.Vector3(r.position.x, r.position.y, r.position.z));
+      if (r.decalDiffuse) {
+        const list = byDecal.get(r.decalDiffuse);
+        if (list) list.push(r); else byDecal.set(r.decalDiffuse, [r]);
+        continue;
+      }
       const geo = r.modelPath ? geometry[r.modelPath] : undefined;
       const ok = geo && 'shapes' in geo && geo.shapes.some(s => s.verts.length > 0 && s.tris.length > 0);
       if (r.modelPath && ok) {
@@ -213,6 +221,59 @@ export default function CellViewport(
         }
       }
       if (!modelBox.isEmpty()) modelBBox.set(modelPath, modelBox);
+    }
+
+    // Ground decals: a real FO4 ground decal has no mesh at all (its base is a TextureSet, not
+    // anything with a Model) -- the engine projects the TXST's diffuse texture directly onto whatever
+    // geometry sits underneath it. This viewer approximates that with a flat plane, using the ref's
+    // own Position/Rotation (the SAME transform convention as every other placed reference -- a real
+    // decal's rotation already orients it flush to its surface, confirmed against a real record: a
+    // ground decal's rotation was ~90 degrees about X, which is exactly what rotates a default
+    // XY-facing plane to lie flat pointing up). Width/Height come from the TXST's ObjectBounds
+    // (CellService.cs), in the same world-unit convention as everything else already rendering
+    // correctly here -- baked as a non-uniform instance scale on a shared 1x1 unit plane, the same
+    // instancing pattern as byModel, rather than one geometry per decal size.
+    const decalGeo = new THREE.PlaneGeometry(1, 1);
+    disposables.push(decalGeo);
+    for (const [texPath, refs] of byDecal) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff, side: THREE.DoubleSide, transparent: true, depthWrite: false,
+      });
+      disposables.push(mat);
+
+      if (texLoader && loadTexture) {
+        // No NIF anchors a decal texture -- pass "" for modelPath; TextureService's archive-search
+        // Tier 2 (the configured Data/mods roots) resolves a Data-relative path independent of any
+        // NIF-local anchor, same as every other diffuse fetch here.
+        loadTexture('', texPath).then(url => {
+          if (cancelled || !url) return;
+          texLoader.load(url, tex => {
+            if (cancelled) { tex.dispose(); return; }
+            tex.flipY = false;
+            tex.colorSpace = THREE.SRGBColorSpace;
+            mat.map = tex;
+            mat.needsUpdate = true;
+            textures.push(tex);
+          }, undefined, () => {});
+        });
+      }
+
+      const inst = new THREE.InstancedMesh(decalGeo, mat, refs.length);
+      refs.forEach((r, i) => {
+        dummy.position.set(r.position.x, r.position.y, r.position.z);
+        dummy.rotation.set(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ');
+        const w = (r.decalWidth || 32) * (r.scale || 1);
+        const h = (r.decalHeight || 32) * (r.scale || 1);
+        dummy.scale.set(w, h, 1);
+        dummy.updateMatrix();
+        inst.setMatrixAt(i, dummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      inst.userData.refs = refs;
+      scene.add(inst);
+      pickables.push(inst);
+      meshEntries.push({ mesh: inst, recordType: cellLayerOf(refs[0], undefined) });
+      refs.forEach((r, i) => addInstance(inst, i, r, false));
     }
 
     // Markers for refs with no renderable mesh (actors/traps, or an unresolved/failed model).

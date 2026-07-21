@@ -73,10 +73,20 @@ public static class CellService
             string? baseEditorId = null;
             string baseFormKey = "";
             // The base object's record type (Static/Light/Furniture/MoveableStatic/...) -- the useful
-            // grouping for the viewer's layer list. `recordType` below is the PLACED record type, which
-            // is "PlacedObject" for nearly every reference, so grouping on it collapses to ~2 groups.
+            // grouping for the viewer's layer list. `recordType` below is the PLACED record's own kind
+            // (PlacedObject/PlacedNpc/PlacedTrap), NOT the base -- a PlacedObject is "PlacedObject"
+            // regardless of what it's placed as, so grouping on baseType is what actually matters.
             string? baseType = null;
             float scale = 1f;
+            // A shape with no texture of its own can render via a ground decal instead: the base is a
+            // TextureSet (TXST), not anything with a Model at all -- confirmed via get_record on a real
+            // decal reference ("Type: PlacedObject", Base resolves to a genuine TXST with its own
+            // Decal subrecord: Diffuse texture + Width/Height/Depth/Flags). Emitted alongside modelPath
+            // (which stays null for these -- TXST has no Model field) so the viewer can draw a real
+            // textured decal plane instead of a generic "no model" marker.
+            string? decalDiffuse = null;
+            float? decalWidth = null;
+            float? decalHeight = null;
 
             if (placed is IPlacedObjectGetter po)
             {
@@ -87,23 +97,56 @@ public static class CellService
                     if (cache.TryResolve<IMajorRecordGetter>(po.Base.FormKey, out var baseRec))
                     {
                         baseEditorId = baseRec.EditorID;
+                        // Mutagen's lazy binary-overlay wrapper class is named "<RealType>BinaryOverlay"
+                        // (confirmed: a real TextureSet base's runtime type reported "TextureSetBinaryOverlay",
+                        // caught by CellServiceTests against a known real record, not assumed) -- strip it
+                        // so the layer list groups by the real record kind ("Static", "TextureSet", ...)
+                        // instead of every layer label carrying this internal loading-detail suffix.
                         baseType = baseRec.GetType().Name;
+                        if (baseType.EndsWith("BinaryOverlay", StringComparison.Ordinal))
+                            baseType = baseType[..^"BinaryOverlay".Length];
                         if (baseRec is IModeledGetter modeled) modelPath = modeled.Model?.File;
+                        else if (baseRec is ITextureSetGetter txst && !string.IsNullOrWhiteSpace(txst.Diffuse))
+                        {
+                            decalDiffuse = txst.Diffuse;
+                            // ObjectBounds is in the same world-unit convention as everything else this
+                            // viewer already renders (unlike the Decal subrecord's own MinWidth/MaxWidth,
+                            // whose unit convention wasn't confirmed against a known-good real-world
+                            // reference) -- X/Y extent of the bounding box is a reasonable stand-in for
+                            // the decal's real footprint. Falls back to the Decal subrecord's own
+                            // Width/Height only if ObjectBounds is degenerate (both zero).
+                            var b = baseRec is IObjectBoundedGetter ob ? ob.ObjectBounds : null;
+                            var bw = b != null ? Math.Abs(b.Second.X - b.First.X) : 0f;
+                            var bh = b != null ? Math.Abs(b.Second.Y - b.First.Y) : 0f;
+                            if (bw > 0.01f && bh > 0.01f) { decalWidth = bw; decalHeight = bh; }
+                            else if (txst.Decal != null) { decalWidth = txst.Decal.MinWidth; decalHeight = txst.Decal.MinHeight; }
+                        }
                     }
                 }
             }
 
             if (modelPath != null) withModel++;
 
+            string recordType = placed switch
+            {
+                IPlacedObjectGetter => "PlacedObject",
+                IPlacedNpcGetter => "PlacedNpc",
+                IAPlacedTrapGetter => "PlacedTrap",
+                _ => placed.GetType().Name,
+            };
+
             refs.Add(new
             {
                 formKey = placed.FormKey.ToString(),
                 editorId = placed.EditorID,
-                recordType = placed.GetType().Name,
+                recordType,
                 baseType,
                 baseFormKey,
                 baseEditorId,
                 modelPath,
+                decalDiffuse,
+                decalWidth,
+                decalHeight,
                 position = new { x = posRot.Position.X, y = posRot.Position.Y, z = posRot.Position.Z },
                 rotation = new { x = posRot.Rotation.X, y = posRot.Rotation.Y, z = posRot.Rotation.Z },
                 scale,
