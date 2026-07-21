@@ -108,4 +108,37 @@ public class CellServiceTests
         ((float?)decalRef["decalWidth"]).Should().BeApproximately(15f, 0.5f, "ObjectBounds X-extent (7 - -8)");
         ((float?)decalRef["decalHeight"]).Should().BeApproximately(60f, 0.5f, "ObjectBounds Y-extent (30 - -30)");
     }
+
+    // Regression for the SCOL member-static fallback (2026-07-20). Switchboard has a real Static
+    // Collection reference whose precombined modelPath (SCOL\SwitchBoard_Reborn.esp\CM000000EA.NIF)
+    // can NEVER resolve -- confirmed by hand: SwitchBoard_Reborn's own BA2 has zero SCOL entries in
+    // its file table at all, so the mod never shipped that mesh. scolParts is the fix: each member
+    // static's own resolvable model path plus every local placement, so the viewer can render the
+    // exploded pieces instead of a "mesh unavailable" marker for what's a real chunk of the cell's
+    // own structure (the user's report: "the floor and wall are still failing to load").
+    [Fact]
+    public void GetPlacedReferences_SwitchboardScol_FallsBackToMemberStatics()
+    {
+        if (!Available) return;
+        var info = Mo2ProfileLoader.ReadInstanceInfo(Instance);
+        var (env, _) = Mo2ProfileLoader.Load(Instance, info.Profile, info.GameDataFolder);
+
+        var json = CellService.GetPlacedReferencesJson("Switchboard", env);
+        var parsed = JObject.Parse(json);
+        parsed["error"].Should().BeNull(json);
+
+        var refs = (JArray)parsed["references"]!;
+        var scolRefs = refs.Where(r => r["scolParts"] is JArray parts && parts.Count > 0).ToList();
+        scolRefs.Should().NotBeEmpty("Switchboard has at least one un-precombined SCOL reference");
+
+        var firstParts = (JArray)scolRefs[0]["scolParts"]!;
+        var firstPart = (JObject)firstParts[0];
+        ((string?)firstPart["modelPath"]).Should().NotBeNullOrWhiteSpace("each part must carry the MEMBER static's own resolvable model, not the SCOL's dead precombine path");
+
+        var placements = (JArray)firstPart["placements"]!;
+        placements.Should().NotBeEmpty();
+        var firstPlacement = (JObject)placements[0];
+        foreach (var field in new[] { "x", "y", "z", "rx", "ry", "rz", "scale" })
+            firstPlacement[field].Should().NotBeNull($"placement.{field} must be present");
+    }
 }

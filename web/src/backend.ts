@@ -299,6 +299,15 @@ export interface CellPlacedReference {
   decalDiffuse?: string | null;
   decalWidth?: number | null;
   decalHeight?: number | null;
+  // Static Collection (SCOL) fallback: the SCOL's own precombined modelPath often doesn't exist as a
+  // real file (a lot of mods ship the record without ever baking precombines -- confirmed on a real
+  // case, see CellService.cs's doc comment). scolParts lists each member static's own model path and
+  // every local placement (position/rotation/scale relative to THIS reference's own transform) so the
+  // viewer can render the exploded member statics instead of a "mesh unavailable" marker.
+  scolParts?: {
+    modelPath: string;
+    placements: { x: number; y: number; z: number; rx: number; ry: number; rz: number; scale: number }[];
+  }[] | null;
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: number;

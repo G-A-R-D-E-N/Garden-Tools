@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff } from 'lucide-react';
+import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
 import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap } from './CellViewport';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
@@ -17,6 +17,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<CellReferencesResult | null>(null);
   const [geometry, setGeometry] = useState<CellGeoMap>({});
   const [log, setLog] = useState<string[]>([]);
+
+  // Dedicated Info/Log tabs -- the log used to be squeezed into a fixed 160px strip at the bottom of
+  // the same scrolling column as stats/layers/hotkeys, which on a cell with a lot of layers meant
+  // scrolling past everything else just to read it (2026-07-20 feedback). hasUnseenError flags the
+  // Log tab button when something failed while the user was looking at Info, instead of silently
+  // relying on them to think to switch tabs and scroll down.
+  const [sidebarTab, setSidebarTab] = useState<'info' | 'log'>('info');
+  const [hasUnseenError, setHasUnseenError] = useState(false);
 
   // Click-to-select + per-type visibility + per-reference hide (CK "1" cycle -> hidden).
   const [selected, setSelected] = useState<CellPlacedReference | null>(null);
@@ -87,8 +95,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     try { return await c.GetTexture(modelPath, relTexPath); } catch { return ''; }
   }, []);
 
-  const appendLog = (line: string) =>
+  const appendLog = (line: string) => {
     setLog(prev => [`[${new Date().toLocaleTimeString()}] ${line}`, ...prev].slice(0, 200));
+    if (line.includes('✗') && sidebarTab !== 'log') setHasUnseenError(true);
+  };
 
   const checkPlugins = async () => {
     if (!cell) { setPluginCount(0); return; }
@@ -155,7 +165,11 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const refs = parsed.references ?? [];
       appendLog(`• loaded ${parsed.cellEditorId || parsed.cellFormKey} -- ${refs.length} reference(s), ${parsed.withModelCount ?? 0} with a model`);
 
-      const uniqueModels = Array.from(new Set(refs.map(r => r.modelPath).filter((p): p is string => !!p)));
+      // Include SCOL member statics' own model paths -- these need converting too, whether or not the
+      // SCOL's own precombined modelPath above resolves (the viewport picks whichever actually worked).
+      const scolModels = refs.flatMap(r => (r.scolParts ?? []).map(p => p.modelPath));
+      const uniqueModels = Array.from(new Set(
+        [...refs.map(r => r.modelPath).filter((p): p is string => !!p), ...scolModels]));
       if (uniqueModels.length === 0) { setStatus('Loaded -- no placeable meshes in this cell.'); return; }
 
       setStatus(`Resolving + converting ${uniqueModels.length} unique mesh(es)…`);
@@ -294,135 +308,157 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="papyrus-body">
-          <div className="papyrus-form">
-            <div className="cell-dropdown">
-              <div className="cell-dropdown-search">
-                <Search size={13} className="cell-search-icon" />
-                <input
-                  value={cellId}
-                  onChange={e => setCellId(e.target.value)}
-                  placeholder={noEnv ? 'Load a modlist first…' : 'Search cells by name, EditorID, or FormKey…'}
-                  disabled={unavailable || noEnv}
-                  onKeyDown={e => { if (e.key === 'Enter') load(); }}
-                />
-                {matchesLoading && <span className="cell-dropdown-spinner" title="Updating…" />}
-              </div>
-              <div className="cell-dropdown-list">
-                {noEnv || unavailable ? (
-                  <div className="cell-suggest-empty">{unavailable ? 'Cell bridge unavailable.' : 'Load a modlist to browse cells.'}</div>
-                ) : matches === null ? (
-                  <div className="cell-suggest-empty">Loading…</div>
-                ) : matches.length === 0 ? (
-                  <div className="cell-suggest-empty">No matching cells.</div>
-                ) : (
-                  matches.map((h, i) => (
-                    <div key={`${h.FormKey}:${i}`} className="cell-suggest-row" onClick={() => pickMatch(h)}>
-                      <span className="cell-suggest-id">{h.EditorID || h.FormKey}</span>
-                      {h.Name && <span className="cell-suggest-name">"{h.Name}"</span>}
-                      <span className="cell-suggest-plugin">{h.Plugin}</span>
-                    </div>
-                  ))
-                )}
-              </div>
+          <div className="papyrus-form cell-sidebar">
+            <div className="cell-sidebar-tabs">
+              <button
+                className={`cell-sidebar-tab${sidebarTab === 'info' ? ' active' : ''}`}
+                onClick={() => setSidebarTab('info')}
+              >
+                <Info size={13} /> Info
+              </button>
+              <button
+                className={`cell-sidebar-tab${sidebarTab === 'log' ? ' active' : ''}`}
+                onClick={() => { setSidebarTab('log'); setHasUnseenError(false); }}
+              >
+                <ScrollText size={13} /> Log ({log.length})
+                {hasUnseenError && <span className="cell-sidebar-tab-dot" title="Something failed" />}
+              </button>
             </div>
-            <button className="papyrus-run cell-load-btn" onClick={() => load()} disabled={busy || unavailable || noEnv || !cellId.trim()}>
-              <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
-            </button>
 
-            {result && (
-              <div className="cell-stats">
-                <div className="cell-stat"><span>Cell</span><strong>{result.cellEditorId || result.cellFormKey}</strong></div>
-                <div className="cell-stat"><span>Interior</span><strong>{result.interior ? 'Yes' : 'No'}</strong></div>
-                <div className="cell-stat"><span>References</span><strong>{result.referenceCount ?? references.length}</strong></div>
-                <div className="cell-stat"><span>With model</span><strong>{result.withModelCount ?? 0}</strong></div>
-                {failedModelCount > 0 && (
-                  <div className="cell-stat cell-stat-warn"><span>Meshes unavailable</span><strong>{failedModelCount}</strong></div>
-                )}
-              </div>
-            )}
-
-            {selected && (
-              <div className="cell-selected">
-                <div className="cell-selected-head">
-                  <span>Selected</span>
-                  <button className="cell-selected-clear" onClick={() => setSelected(null)} title="Deselect">
-                    <X size={12} />
-                  </button>
+            {sidebarTab === 'info' ? (
+              <div className="cell-sidebar-pane">
+                <div className="cell-dropdown">
+                  <div className="cell-dropdown-search">
+                    <Search size={13} className="cell-search-icon" />
+                    <input
+                      value={cellId}
+                      onChange={e => setCellId(e.target.value)}
+                      placeholder={noEnv ? 'Load a modlist first…' : 'Search cells by name, EditorID, or FormKey…'}
+                      disabled={unavailable || noEnv}
+                      onKeyDown={e => { if (e.key === 'Enter') load(); }}
+                    />
+                    {matchesLoading && <span className="cell-dropdown-spinner" title="Updating…" />}
+                  </div>
+                  <div className="cell-dropdown-list">
+                    {noEnv || unavailable ? (
+                      <div className="cell-suggest-empty">{unavailable ? 'Cell bridge unavailable.' : 'Load a modlist to browse cells.'}</div>
+                    ) : matches === null ? (
+                      <div className="cell-suggest-empty">Loading…</div>
+                    ) : matches.length === 0 ? (
+                      <div className="cell-suggest-empty">No matching cells.</div>
+                    ) : (
+                      matches.map((h, i) => (
+                        <div key={`${h.FormKey}:${i}`} className="cell-suggest-row" onClick={() => pickMatch(h)}>
+                          <span className="cell-suggest-id">{h.EditorID || h.FormKey}</span>
+                          {h.Name && <span className="cell-suggest-name">"{h.Name}"</span>}
+                          <span className="cell-suggest-plugin">{h.Plugin}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-                <div className="cell-selected-row"><span>Ref</span><strong>{selected.editorId || selected.formKey}</strong></div>
-                <div className="cell-selected-row"><span>Type</span><strong>{selected.baseType || selected.recordType}</strong></div>
-                <div className="cell-selected-row"><span>Base</span><strong>{selected.baseEditorId || selected.baseFormKey}</strong></div>
-                <div className="cell-selected-row"><span>Pos</span><strong>{selected.position.x.toFixed(0)}, {selected.position.y.toFixed(0)}, {selected.position.z.toFixed(0)}</strong></div>
-                <button className="cell-hide-btn" onClick={hideSelected}>
-                  <EyeOff size={12} /> Hide this mesh <kbd>1</kbd>
+                <button className="papyrus-run cell-load-btn" onClick={() => load()} disabled={busy || unavailable || noEnv || !cellId.trim()}>
+                  <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
                 </button>
-              </div>
-            )}
 
-            {(hiddenRefs.size > 0 || undoStackRef.current.length > 0 || redoStackRef.current.length > 0) && (
-              <div className="cell-hidden-bar">
-                <span>{hiddenRefs.size > 0 ? `${hiddenRefs.size} mesh${hiddenRefs.size === 1 ? '' : 'es'} hidden` : ''}</span>
-                <div className="cell-hidden-actions">
-                  <button className="papyrus-copy" onClick={undoVisibility} disabled={undoStackRef.current.length === 0} title="Undo last hide/show">
-                    Undo <kbd>Ctrl+Z</kbd>
-                  </button>
-                  <button className="papyrus-copy" onClick={redoVisibility} disabled={redoStackRef.current.length === 0} title="Redo">
-                    Redo <kbd>Ctrl+Y</kbd>
-                  </button>
-                  {hiddenRefs.size > 0 && <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>}
+                {result && (
+                  <div className="cell-stats">
+                    <div className="cell-stat"><span>Cell</span><strong>{result.cellEditorId || result.cellFormKey}</strong></div>
+                    <div className="cell-stat"><span>Interior</span><strong>{result.interior ? 'Yes' : 'No'}</strong></div>
+                    <div className="cell-stat"><span>References</span><strong>{result.referenceCount ?? references.length}</strong></div>
+                    <div className="cell-stat"><span>With model</span><strong>{result.withModelCount ?? 0}</strong></div>
+                    {failedModelCount > 0 && (
+                      <div className="cell-stat cell-stat-warn"><span>Meshes unavailable</span><strong>{failedModelCount}</strong></div>
+                    )}
+                  </div>
+                )}
+
+                {selected && (
+                  <div className="cell-selected">
+                    <div className="cell-selected-head">
+                      <span>Selected</span>
+                      <button className="cell-selected-clear" onClick={() => setSelected(null)} title="Deselect">
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <div className="cell-selected-row"><span>Ref</span><strong>{selected.editorId || selected.formKey}</strong></div>
+                    <div className="cell-selected-row"><span>Type</span><strong>{selected.baseType || selected.recordType}</strong></div>
+                    <div className="cell-selected-row"><span>Base</span><strong>{selected.baseEditorId || selected.baseFormKey}</strong></div>
+                    <div className="cell-selected-row"><span>Pos</span><strong>{selected.position.x.toFixed(0)}, {selected.position.y.toFixed(0)}, {selected.position.z.toFixed(0)}</strong></div>
+                    <button className="cell-hide-btn" onClick={hideSelected}>
+                      <EyeOff size={12} /> Hide this mesh <kbd>1</kbd>
+                    </button>
+                  </div>
+                )}
+
+                {(hiddenRefs.size > 0 || undoStackRef.current.length > 0 || redoStackRef.current.length > 0) && (
+                  <div className="cell-hidden-bar">
+                    <span>{hiddenRefs.size > 0 ? `${hiddenRefs.size} mesh${hiddenRefs.size === 1 ? '' : 'es'} hidden` : ''}</span>
+                    <div className="cell-hidden-actions">
+                      <button className="papyrus-copy" onClick={undoVisibility} disabled={undoStackRef.current.length === 0} title="Undo last hide/show">
+                        Undo <kbd>Ctrl+Z</kbd>
+                      </button>
+                      <button className="papyrus-copy" onClick={redoVisibility} disabled={redoStackRef.current.length === 0} title="Redo">
+                        Redo <kbd>Ctrl+Y</kbd>
+                      </button>
+                      {hiddenRefs.size > 0 && <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>}
+                    </div>
+                  </div>
+                )}
+
+                {result && typeGroups.length > 0 && (
+                  <div className="cell-layers">
+                    <div className="cell-layers-head">
+                      <span>Layers ({typeGroups.length})</span>
+                      {hiddenTypes.size > 0 && (
+                        <button className="papyrus-copy" onClick={showAllTypes}>Show all</button>
+                      )}
+                    </div>
+                    <div className="cell-layers-list">
+                      {typeGroups.map(([type, count]) => {
+                        const hidden = hiddenTypes.has(type);
+                        return (
+                          <div
+                            key={type}
+                            className={`cell-layer-row${hidden ? ' hidden' : ''}`}
+                            onClick={() => toggleType(type)}
+                            title={hidden ? 'Show' : 'Hide'}
+                          >
+                            {hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                            <span className="cell-layer-name">{type}</span>
+                            <span className="cell-layer-count">{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="cell-legend">
+                  <div><span className="cell-swatch cell-swatch-mesh" /> resolved mesh</div>
+                  <div><span className="cell-swatch cell-swatch-nomodel" /> no model (actor/trap)</div>
+                  <div><span className="cell-swatch cell-swatch-failed" /> mesh unavailable</div>
+                </div>
+                <div className="cell-hotkeys">
+                  <div><kbd>Click</kbd> select · <kbd>1</kbd> hide · <kbd>Alt+1</kbd> unhide all</div>
+                  <div><kbd>Shift+F</kbd> focus · <kbd>T</kbd> top-down · <kbd>M</kbd> markers · <kbd>D</kbd> deselect</div>
+                  <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Y</kbd> redo</div>
+                  <div><kbd>G</kbd> move gizmo · <kbd>R</kbd> rotate gizmo (drag a selected reference)</div>
+                </div>
+                <div className="nif-view-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
+              </div>
+            ) : (
+              <div className="cell-sidebar-pane cell-log-pane">
+                <div className="papyrus-log-head">
+                  <span>LOG ({log.length})</span>
+                  {log.length > 0 && <button className="papyrus-copy" onClick={() => setLog([])}>Clear</button>}
+                </div>
+                <div className="papyrus-log-body cell-log-body">
+                  {log.length === 0 ? <div className="papyrus-log-empty">No runs yet.</div>
+                    : log.map((l, i) => <div key={i} className={`papyrus-log-row ${l.includes('✗') ? 'err' : 'ok'}`}>{l}</div>)}
                 </div>
               </div>
             )}
-
-            {result && typeGroups.length > 0 && (
-              <div className="cell-layers">
-                <div className="cell-layers-head">
-                  <span>Layers ({typeGroups.length})</span>
-                  {hiddenTypes.size > 0 && (
-                    <button className="papyrus-copy" onClick={showAllTypes}>Show all</button>
-                  )}
-                </div>
-                <div className="cell-layers-list">
-                  {typeGroups.map(([type, count]) => {
-                    const hidden = hiddenTypes.has(type);
-                    return (
-                      <div
-                        key={type}
-                        className={`cell-layer-row${hidden ? ' hidden' : ''}`}
-                        onClick={() => toggleType(type)}
-                        title={hidden ? 'Show' : 'Hide'}
-                      >
-                        {hidden ? <EyeOff size={13} /> : <Eye size={13} />}
-                        <span className="cell-layer-name">{type}</span>
-                        <span className="cell-layer-count">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="cell-legend">
-              <div><span className="cell-swatch cell-swatch-mesh" /> resolved mesh</div>
-              <div><span className="cell-swatch cell-swatch-nomodel" /> no model (actor/trap)</div>
-              <div><span className="cell-swatch cell-swatch-failed" /> mesh unavailable</div>
-            </div>
-            <div className="cell-hotkeys">
-              <div><kbd>Click</kbd> select · <kbd>1</kbd> hide · <kbd>Alt+1</kbd> unhide all</div>
-              <div><kbd>Shift+F</kbd> focus · <kbd>T</kbd> top-down · <kbd>M</kbd> markers · <kbd>D</kbd> deselect</div>
-              <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Y</kbd> redo</div>
-              <div><kbd>G</kbd> move gizmo · <kbd>R</kbd> rotate gizmo (drag a selected reference)</div>
-            </div>
-            <div className="nif-view-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
-
-            <div className="papyrus-log-head">
-              <span>LOG ({log.length})</span>
-              {log.length > 0 && <button className="papyrus-copy" onClick={() => setLog([])}>Clear</button>}
-            </div>
-            <div className="papyrus-log-body cell-log-body">
-              {log.length === 0 ? <div className="papyrus-log-empty">No runs yet.</div>
-                : log.map((l, i) => <div key={i} className={`papyrus-log-row ${l.includes('✗') ? 'err' : 'ok'}`}>{l}</div>)}
-            </div>
           </div>
 
           <div className="papyrus-output nif-view-output">

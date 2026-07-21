@@ -28,7 +28,16 @@ export type CellGeoMap = Record<string, NifGeo | { error: string }>;
  * (real cells run into the tens of thousands of refs). Diffuse texture fetched once per unique
  * (model, shape) and shared across its instances.
  */
-type InstanceRef = { mesh: THREE.InstancedMesh; id: number; ref: CellPlacedReference; billboard: boolean };
+type InstanceRef = {
+  mesh: THREE.InstancedMesh; id: number; ref: CellPlacedReference; billboard: boolean;
+  // Static Collection (SCOL) member instances only: this instance's fixed offset from its PARENT
+  // ref's own transform (the member static's placement within the collection). undefined for every
+  // normal (non-SCOL-member) instance, whose world matrix is just the ref's own transform. Recompute
+  // sites (applyHidden's restore path, the gizmo's live-drag update) must compose ref-transform *
+  // local, not just use the ref-transform alone, or a moved/hidden SCOL's member pieces would all
+  // collapse onto the parent's single origin instead of keeping their authored layout.
+  local?: THREE.Matrix4;
+};
 
 export default function CellViewport(
   { references, geometry, loadTexture, hiddenTypes, hiddenRefs, selectedKey, onSelect,
@@ -65,6 +74,7 @@ export default function CellViewport(
   const hiddenRefsRef = useRef(hiddenRefs); hiddenRefsRef.current = hiddenRefs;
   const meshEntriesRef = useRef<{ mesh: THREE.Object3D; recordType: string }[]>([]);
   const modelBBoxRef = useRef<Map<string, THREE.Box3>>(new Map());
+  const scolBBoxRef = useRef<Map<string, THREE.Box3>>(new Map());
   const highlightRef = useRef<THREE.LineSegments | null>(null);
   const refByKeyRef = useRef<Map<string, CellPlacedReference>>(new Map());
   const keyToInstancesRef = useRef<Map<string, InstanceRef[]>>(new Map());
@@ -117,8 +127,10 @@ export default function CellViewport(
     const refByKey = new Map<string, CellPlacedReference>();
     const keyToInstances = new Map<string, InstanceRef[]>();
     for (const r of references) refByKey.set(r.formKey, r);
-    const addInstance = (inst: THREE.InstancedMesh, id: number, r: CellPlacedReference, billboard: boolean) => {
-      const entry: InstanceRef = { mesh: inst, id, ref: r, billboard };
+    const addInstance = (
+      inst: THREE.InstancedMesh, id: number, r: CellPlacedReference, billboard: boolean, local?: THREE.Matrix4,
+    ) => {
+      const entry: InstanceRef = { mesh: inst, id, ref: r, billboard, local };
       const arr = keyToInstances.get(r.formKey);
       if (arr) arr.push(entry); else keyToInstances.set(r.formKey, [entry]);
     };
@@ -133,6 +145,17 @@ export default function CellViewport(
     // Ground decals (TXST-based base, no Model at all) grouped by their diffuse texture path -- one
     // InstancedMesh of a shared unit plane per unique texture, same instancing pattern as byModel.
     const byDecal = new Map<string, CellPlacedReference[]>();
+    // Static Collection (SCOL) fallback: when the SCOL's own precombined modelPath failed to resolve
+    // (see backend.ts's CellPlacedReference.scolParts doc), explode it into its member statics instead
+    // of a "mesh unavailable" marker. Grouped by the MEMBER's own modelPath -- a distinct InstancedMesh
+    // bucket from byModel, kept separate rather than merged so a shared base static used both normally
+    // and inside a SCOL doesn't mix two different recordType classifications into one mesh's layer tag.
+    type ScolPlacement = { x: number; y: number; z: number; rx: number; ry: number; rz: number; scale: number };
+    const byScolModel = new Map<string, { parent: CellPlacedReference; placement: ScolPlacement }[]>();
+    const goodGeo = (path: string | null | undefined) => {
+      const g = path ? geometry[path] : undefined;
+      return g && 'shapes' in g && g.shapes.some(s => s.verts.length > 0 && s.tris.length > 0);
+    };
     for (const r of references) {
       posBounds.expandByPoint(new THREE.Vector3(r.position.x, r.position.y, r.position.z));
       if (r.decalDiffuse) {
@@ -140,14 +163,20 @@ export default function CellViewport(
         if (list) list.push(r); else byDecal.set(r.decalDiffuse, [r]);
         continue;
       }
-      const geo = r.modelPath ? geometry[r.modelPath] : undefined;
-      const ok = geo && 'shapes' in geo && geo.shapes.some(s => s.verts.length > 0 && s.tris.length > 0);
-      if (r.modelPath && ok) {
+      if (r.modelPath && goodGeo(r.modelPath)) {
         const list = byModel.get(r.modelPath);
         if (list) list.push(r); else byModel.set(r.modelPath, [r]);
-      } else {
-        markers.push(r);
+        continue;
       }
+      let anyPartOk = false;
+      for (const part of r.scolParts ?? []) {
+        if (!goodGeo(part.modelPath)) continue;
+        anyPartOk = true;
+        const list = byScolModel.get(part.modelPath);
+        const entries = part.placements.map(placement => ({ parent: r, placement }));
+        if (list) list.push(...entries); else byScolModel.set(part.modelPath, entries);
+      }
+      if (!anyPartOk) markers.push(r);
     }
 
     // Recenter the whole scene around the cell's own bounding-box center instead of using REFR
@@ -168,65 +197,73 @@ export default function CellViewport(
     const texLoader = loadTexture ? new THREE.TextureLoader() : null;
     const textures: THREE.Texture[] = [];
 
+    // Shared by the byModel loop below AND the SCOL-member loop that follows it -- both need the exact
+    // same per-shape BufferGeometry/material/texture-loading logic, just with different INSTANCING
+    // (a plain ref transform vs. a ref transform composed with a fixed member-placement offset).
+    const buildShapeMesh = (shape: NifGeo['shapes'][number], modelPath: string) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(shape.verts, 3));
+      const hasUV = shape.uvs.length > 0;
+      if (hasUV) g.setAttribute('uv', new THREE.Float32BufferAttribute(shape.uvs, 2));
+      g.setIndex(shape.tris);
+      if (shape.normals.length === shape.verts.length)
+        g.setAttribute('normal', new THREE.Float32BufferAttribute(shape.normals, 3));
+      else
+        g.computeVertexNormals();
+      g.computeBoundingBox();
+      disposables.push(g);
+
+      // Effect-shaded shapes (fog/mist/glow/decal FX) get a real unlit/blended material built from
+      // the shape's actual NiAlphaProperty + BSEffectShaderProperty params -- NOT the same opaque lit
+      // MeshStandardMaterial every structural shape gets, which is why FX used to render as hard
+      // "circular planes" instead of soft glowing effects.
+      const mat = shape.effectShader
+        ? makeEffectMaterial(shape.effect, true)
+        : new THREE.MeshStandardMaterial({ color: 0x9aa0aa, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide });
+      applyVertexColors(g, mat, shape.vertexColors);
+      disposables.push(mat);
+
+      // Diffuse only (slot 0) for v1. Fall back to the shape's linked .bgsm material (bgsmPath)
+      // when it has no texture of its own -- common for shared/template materials; TextureService
+      // resolves+parses the .bgsm transparently given the same (modelPath, path) call.
+      if (hasUV && texLoader && loadTexture && (shape.textures?.length || shape.bgsmPath)) {
+        const diffuse = shape.textures?.find(t => t.slot === 0)
+          ?? (shape.bgsmPath ? { slot: 0, path: shape.bgsmPath } : undefined);
+        if (diffuse) {
+          loadTexture(modelPath, diffuse.path).then(url => {
+            if (cancelled || !url) return;
+            texLoader.load(url, tex => {
+              if (cancelled) { tex.dispose(); return; }
+              tex.flipY = false;
+              tex.colorSpace = THREE.SRGBColorSpace;
+              // FO4 terrain/rock/floor meshes tile their diffuse (UVs run 0..N, not 0..1). Without
+              // RepeatWrapping three.js clamps to the edge texel, smearing it across the whole
+              // surface -- the "warped/streaky dirt" look. Small props (UVs in 0..1) are unaffected.
+              tex.wrapS = THREE.RepeatWrapping;
+              tex.wrapT = THREE.RepeatWrapping;
+              tex.anisotropy = 4;
+              mat.map = tex;
+              // Structural shapes: the flat-gray placeholder color must reset to white so the real
+              // texture shows unmodified. Effect shapes: KEEP the tint -- baseColor*baseColorScale is
+              // the actual glow color the diffuse texture is meant to be multiplied by, not a
+              // placeholder to discard.
+              if (!shape.effectShader) mat.color.setHex(0xffffff);
+              mat.needsUpdate = true;
+              textures.push(tex);
+            }, undefined, () => {});
+          });
+        }
+      }
+      return { geometry: g, material: mat };
+    };
+
     for (const [modelPath, refs] of byModel) {
       const nifGeo = geometry[modelPath] as NifGeo;
       const modelBox = new THREE.Box3();
       for (const shape of nifGeo.shapes) {
         if (!shape.verts.length || !shape.tris.length) continue;
-        const g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.Float32BufferAttribute(shape.verts, 3));
-        const hasUV = shape.uvs.length > 0;
-        if (hasUV) g.setAttribute('uv', new THREE.Float32BufferAttribute(shape.uvs, 2));
-        g.setIndex(shape.tris);
-        if (shape.normals.length === shape.verts.length)
-          g.setAttribute('normal', new THREE.Float32BufferAttribute(shape.normals, 3));
-        else
-          g.computeVertexNormals();
-        g.computeBoundingBox();
+        const { geometry: g, material: mat } = buildShapeMesh(shape, modelPath);
         if (g.boundingBox) modelBox.union(g.boundingBox);
-        disposables.push(g);
-
-        // Effect-shaded shapes (fog/mist/glow/decal FX) get a real unlit/blended material built from
-        // the shape's actual NiAlphaProperty + BSEffectShaderProperty params -- NOT the same opaque lit
-        // MeshStandardMaterial every structural shape gets, which is why FX used to render as hard
-        // "circular planes" instead of soft glowing effects.
-        const mat = shape.effectShader
-          ? makeEffectMaterial(shape.effect, true)
-          : new THREE.MeshStandardMaterial({ color: 0x9aa0aa, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide });
-        applyVertexColors(g, mat, shape.vertexColors);
-        disposables.push(mat);
-
-        // Diffuse only (slot 0) for v1. Fall back to the shape's linked .bgsm material (bgsmPath)
-        // when it has no texture of its own -- common for shared/template materials; TextureService
-        // resolves+parses the .bgsm transparently given the same (modelPath, path) call.
-        if (hasUV && texLoader && loadTexture && (shape.textures?.length || shape.bgsmPath)) {
-          const diffuse = shape.textures?.find(t => t.slot === 0)
-            ?? (shape.bgsmPath ? { slot: 0, path: shape.bgsmPath } : undefined);
-          if (diffuse) {
-            loadTexture(modelPath, diffuse.path).then(url => {
-              if (cancelled || !url) return;
-              texLoader.load(url, tex => {
-                if (cancelled) { tex.dispose(); return; }
-                tex.flipY = false;
-                tex.colorSpace = THREE.SRGBColorSpace;
-                // FO4 terrain/rock/floor meshes tile their diffuse (UVs run 0..N, not 0..1). Without
-                // RepeatWrapping three.js clamps to the edge texel, smearing it across the whole
-                // surface -- the "warped/streaky dirt" look. Small props (UVs in 0..1) are unaffected.
-                tex.wrapS = THREE.RepeatWrapping;
-                tex.wrapT = THREE.RepeatWrapping;
-                tex.anisotropy = 4;
-                mat.map = tex;
-                // Structural shapes: the flat-gray placeholder color must reset to white so the real
-                // texture shows unmodified. Effect shapes: KEEP the tint -- baseColor*baseColorScale is
-                // the actual glow color the diffuse texture is meant to be multiplied by, not a
-                // placeholder to discard.
-                if (!shape.effectShader) mat.color.setHex(0xffffff);
-                mat.needsUpdate = true;
-                textures.push(tex);
-              }, undefined, () => {});
-            });
-          }
-        }
 
         const inst = new THREE.InstancedMesh(g, mat, refs.length);
         refs.forEach((r, i) => {
@@ -249,6 +286,60 @@ export default function CellViewport(
         }
       }
       if (!modelBox.isEmpty()) modelBBox.set(modelPath, modelBox);
+    }
+
+    // SCOL member statics (see byScolModel's own comment above for why these are separate from
+    // byModel). Each instance's world matrix is the PARENT reference's own transform composed with
+    // the member's fixed local placement -- moving/hiding the parent moves the whole rigid group.
+    // Billboard shapes inside a SCOL member aren't specially handled (real-world case not seen yet):
+    // they render as a static instance, never re-facing the camera, rather than being left out.
+    const scolBBox = new Map<string, THREE.Box3>();   // combined member bbox, keyed by the PARENT's formKey
+    const _scolRefPos = new THREE.Vector3();
+    const _scolRefQuat = new THREE.Quaternion();
+    const _scolRefScale = new THREE.Vector3();
+    const _scolRefM = new THREE.Matrix4();
+    const _scolLocPos = new THREE.Vector3();
+    const _scolLocQuat = new THREE.Quaternion();
+    const _scolLocScale = new THREE.Vector3();
+    for (const [modelPath, entries] of byScolModel) {
+      const nifGeo = geometry[modelPath] as NifGeo;
+      for (const shape of nifGeo.shapes) {
+        if (!shape.verts.length || !shape.tris.length) continue;
+        const { geometry: g, material: mat } = buildShapeMesh(shape, modelPath);
+
+        const inst = new THREE.InstancedMesh(g, mat, entries.length);
+        const locals: THREE.Matrix4[] = [];
+        entries.forEach(({ parent, placement }, i) => {
+          _scolRefPos.set(parent.position.x - worldCenter.x, parent.position.y - worldCenter.y, parent.position.z - worldCenter.z);
+          _scolRefQuat.setFromEuler(new THREE.Euler(parent.rotation.x, parent.rotation.y, parent.rotation.z, 'XYZ'));
+          _scolRefScale.setScalar(parent.scale || 1);
+          _scolRefM.compose(_scolRefPos, _scolRefQuat, _scolRefScale);
+
+          _scolLocPos.set(placement.x, placement.y, placement.z);
+          _scolLocQuat.setFromEuler(new THREE.Euler(placement.rx, placement.ry, placement.rz, 'XYZ'));
+          _scolLocScale.setScalar(placement.scale || 1);
+          const local = new THREE.Matrix4().compose(_scolLocPos, _scolLocQuat, _scolLocScale);
+          locals.push(local);
+
+          dummy.matrix.multiplyMatrices(_scolRefM, local);
+          inst.setMatrixAt(i, dummy.matrix);
+
+          // This shape's own bbox mapped into the PARENT's local space via the placement offset --
+          // same "local-space AABB to compose with the ref's world transform later" convention
+          // modelBBox already uses, so applySelection's existing math works unmodified.
+          if (g.boundingBox) {
+            const box = g.boundingBox.clone().applyMatrix4(local);
+            const existing = scolBBox.get(parent.formKey);
+            if (existing) existing.union(box); else scolBBox.set(parent.formKey, box);
+          }
+        });
+        inst.instanceMatrix.needsUpdate = true;
+        inst.userData.refs = entries.map(e => e.parent);
+        scene.add(inst);
+        pickables.push(inst);
+        meshEntries.push({ mesh: inst, recordType: cellLayerOf(entries[0].parent, nifGeo) });
+        entries.forEach(({ parent }, i) => addInstance(inst, i, parent, false, locals[i]));
+      }
     }
 
     // Ground decals: a real FO4 ground decal has no mesh at all (its base is a TextureSet, not
@@ -346,6 +437,7 @@ export default function CellViewport(
 
     meshEntriesRef.current = meshEntries;
     modelBBoxRef.current = modelBBox;
+    scolBBoxRef.current = scolBBox;
     refByKeyRef.current = refByKey;
     highlightRef.current = highlight;
     keyToInstancesRef.current = keyToInstances;
@@ -391,6 +483,7 @@ export default function CellViewport(
     const _giCurScale = new THREE.Vector3();
     const _giNewPos = new THREE.Vector3();
     const _giNewQuat = new THREE.Quaternion();
+    const _giRefScale = new THREE.Vector3();
     const _giNewM = new THREE.Matrix4();
     const applyGizmoTransformToMesh = (formKey: string) => {
       const entries = keyToInstances.get(formKey);
@@ -401,14 +494,23 @@ export default function CellViewport(
       const dirty = new Set<THREE.InstancedMesh>();
       for (const e of entries) {
         if (e.billboard) continue;
-        e.mesh.getMatrixAt(e.id, _giCurM);
-        _giCurM.decompose(_giCurPos, _giCurQuat, _giCurScale);
-        _giNewM.compose(_giNewPos, _giNewQuat, _giCurScale);
+        if (e.local) {
+          // SCOL member: the parent's own scale is uniform (ref.scale), unlike a decal's baked
+          // non-uniform scale below -- the member's OWN scale already lives inside e.local and never
+          // changes, so there's nothing to read back off the current instance matrix here.
+          _giRefScale.setScalar(r.scale || 1);
+          _giNewM.compose(_giNewPos, _giNewQuat, _giRefScale);
+          _giNewM.multiply(e.local);
+        } else {
+          e.mesh.getMatrixAt(e.id, _giCurM);
+          _giCurM.decompose(_giCurPos, _giCurQuat, _giCurScale);
+          _giNewM.compose(_giNewPos, _giNewQuat, _giCurScale);
+        }
         e.mesh.setMatrixAt(e.id, _giNewM);
         dirty.add(e.mesh);
       }
       for (const m of dirty) m.instanceMatrix.needsUpdate = true;
-      applySelection(highlight, modelBBox, refByKey, formKey, worldCenter);
+      applySelection(highlight, modelBBox, refByKey, formKey, worldCenter, scolBBox);
     };
 
     // Fires continuously while dragging -- write the anchor's live transform back onto the selected
@@ -472,7 +574,7 @@ export default function CellViewport(
     // Camera framing for the CK hotkeys (SHIFT+F anchor on selection, T top-down of selection).
     const _v = new THREE.Vector3();
     const radiusOf = (r: CellPlacedReference) => {
-      const box = r.modelPath ? modelBBox.get(r.modelPath) : undefined;
+      const box = (r.modelPath ? modelBBox.get(r.modelPath) : undefined) ?? scolBBox.get(r.formKey);
       const rad = box ? box.getSize(_v).length() * 0.5 * (r.scale || 1) : 60;
       return Math.max(rad, 30);
     };
@@ -522,7 +624,7 @@ export default function CellViewport(
 
     // Apply the current visibility + selection + per-ref hide immediately (props may already be set).
     applyVisibility(meshEntries, hiddenTypes);
-    applySelection(highlight, modelBBox, refByKey, selectedKey ?? null, worldCenter);
+    applySelection(highlight, modelBBox, refByKey, selectedKey ?? null, worldCenter, scolBBox);
     applyHidden(keyToInstances, hiddenRefs, worldCenter);
     attachGizmoTo(selectedKey ?? null);
 
@@ -582,6 +684,7 @@ export default function CellViewport(
       meshEntriesRef.current = [];
       highlightRef.current = null;
       gizmoAttachRef.current = null;
+      scolBBoxRef.current = new Map();
     };
   }, [references, geometry, loadTexture]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -593,7 +696,8 @@ export default function CellViewport(
   // ---- selection: reposition the highlight box + gizmo, no rebuild ----
   useEffect(() => {
     if (highlightRef.current)
-      applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null, worldCenterRef.current);
+      applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null,
+        worldCenterRef.current, scolBBoxRef.current);
     gizmoAttachRef.current?.(selectedKey ?? null);
   }, [selectedKey]);
 
@@ -628,6 +732,9 @@ function applyHidden(keyToInstances: Map<string, InstanceRef[]>, hidden: Readonl
         _hideQuat.setFromEuler(new THREE.Euler(e.ref.rotation.x, e.ref.rotation.y, e.ref.rotation.z, 'XYZ'));
         _hideScale.setScalar(e.ref.scale || 1);
         _hideM.compose(_hidePos, _hideQuat, _hideScale);
+        // SCOL member: compose the parent's transform with this instance's own fixed placement offset,
+        // or every member piece would snap back onto the parent's single origin instead of its own spot.
+        if (e.local) _hideM.multiply(e.local);
         e.mesh.setMatrixAt(e.id, _hideM);
       }
       dirty.add(e.mesh);
@@ -653,18 +760,21 @@ const _selLocal = new THREE.Matrix4();
 
 /** Position the highlight box onto the selected reference (model bbox at the REFR transform), or hide
  * it. worldCenter must be the SAME point the scene was built recentered around, or the highlight box
- * lands at the wrong (un-recentered) position relative to everything else. */
+ * lands at the wrong (un-recentered) position relative to everything else. scolBBox is the combined
+ * member-static bbox for a SCOL fallback reference (see the byScolModel build loop) -- tried when the
+ * ref has no own modelPath bbox. */
 function applySelection(
   highlight: THREE.LineSegments,
   modelBBox: Map<string, THREE.Box3>,
   refByKey: Map<string, CellPlacedReference>,
   selectedKey: string | null,
   worldCenter: THREE.Vector3,
+  scolBBox?: Map<string, THREE.Box3>,
 ) {
   const ref = selectedKey ? refByKey.get(selectedKey) : undefined;
   if (!ref) { highlight.visible = false; return; }
 
-  const box = ref.modelPath ? modelBBox.get(ref.modelPath) : undefined;
+  const box = (ref.modelPath ? modelBBox.get(ref.modelPath) : undefined) ?? scolBBox?.get(ref.formKey);
   if (box) { box.getCenter(_selCenter); box.getSize(_selSize); }
   else { _selCenter.set(0, 0, 0); _selSize.set(24, 24, 24); } // markers: a small fixed box
   // Guard against a zero-thickness axis (flat planes) so the wireframe still shows.

@@ -1,3 +1,4 @@
+using System.Linq;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -87,6 +88,15 @@ public static class CellService
             string? decalDiffuse = null;
             float? decalWidth = null;
             float? decalHeight = null;
+            // Static Collections (SCOL) bake a precombined Model.File, but a LOT of mods ship the
+            // SCOL record without ever running the CK's "generate precombine" step -- confirmed on a
+            // real case (SwitchBoard_Reborn.esp's SCOL\SwitchBoard_Reborn.esp\CM000000EA.NIF): the
+            // mod's own BA2 has zero SCOL entries at all, so that path can NEVER resolve, loose or
+            // archived. The game engine's own fallback in that case is to render each of the SCOL's
+            // member statics individually at their own local placement -- this is that fallback,
+            // exposed so the viewer can do the same instead of showing a "mesh unavailable" marker
+            // for what's often a large chunk of a cell's own structure (floors/walls built from SCOL).
+            List<object>? scolParts = null;
 
             if (placed is IPlacedObjectGetter po)
             {
@@ -106,7 +116,30 @@ public static class CellService
                         if (baseType.EndsWith("BinaryOverlay", StringComparison.Ordinal))
                             baseType = baseType[..^"BinaryOverlay".Length];
                         if (baseRec is IModeledGetter modeled) modelPath = modeled.Model?.File;
-                        else if (baseRec is ITextureSetGetter txst && !string.IsNullOrWhiteSpace(txst.Diffuse))
+                        if (baseRec is IStaticCollectionGetter scol)
+                        {
+                            var parts = new List<object>();
+                            foreach (var part in scol.Parts)
+                            {
+                                if (part.Static.IsNull) continue;
+                                if (!cache.TryResolve<IMajorRecordGetter>(part.Static.FormKey, out var partRec)) continue;
+                                if (partRec is not IModeledGetter partModeled || string.IsNullOrWhiteSpace(partModeled.Model?.File)) continue;
+                                var placements = part.Placements;
+                                if (placements == null || placements.Count == 0) continue;
+                                parts.Add(new
+                                {
+                                    modelPath = partModeled.Model!.File,
+                                    placements = placements.Select(p => new
+                                    {
+                                        x = p.Position.X, y = p.Position.Y, z = p.Position.Z,
+                                        rx = p.Rotation.X, ry = p.Rotation.Y, rz = p.Rotation.Z,
+                                        scale = p.Scale,
+                                    }).ToList(),
+                                });
+                            }
+                            if (parts.Count > 0) scolParts = parts;
+                        }
+                        if (baseRec is ITextureSetGetter txst && !string.IsNullOrWhiteSpace(txst.Diffuse))
                         {
                             decalDiffuse = txst.Diffuse;
                             // ObjectBounds is in the same world-unit convention as everything else this
@@ -147,6 +180,7 @@ public static class CellService
                 decalDiffuse,
                 decalWidth,
                 decalHeight,
+                scolParts,
                 position = new { x = posRot.Position.X, y = posRot.Position.Y, z = posRot.Position.Z },
                 rotation = new { x = posRot.Rotation.X, y = posRot.Rotation.Y, z = posRot.Rotation.Z },
                 scale,
