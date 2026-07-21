@@ -63,6 +63,9 @@ export default function CellViewport(
   const refByKeyRef = useRef<Map<string, CellPlacedReference>>(new Map());
   const keyToInstancesRef = useRef<Map<string, InstanceRef[]>>(new Map());
   const cameraApiRef = useRef<{ focus: (key: string | null) => void; topDown: (key: string | null) => void } | null>(null);
+  // The whole scene is built with every position relative to this point (the cell's own bounding-box
+  // center), not absolute REFR world coordinates -- see the long comment where it's computed for why.
+  const worldCenterRef = useRef(new THREE.Vector3());
 
   // ---- build the scene (only when the data actually changes) ----
   useEffect(() => {
@@ -137,6 +140,21 @@ export default function CellViewport(
       }
     }
 
+    // Recenter the whole scene around the cell's own bounding-box center instead of using REFR
+    // world coordinates directly. A cell far from the game's own world origin (e.g. an exterior
+    // industrial complex at REFR positions in the thousands, like Switchboard) puts every vertex/
+    // instance-matrix position at a large absolute magnitude; WebGL stores that in 32-bit floats,
+    // which only carry ~7 significant decimal digits, so a position of "6767.xxx" leaves very
+    // little headroom for sub-unit precision -- the classic "orbiting camera makes geometry jitter/
+    // swim" artifact, worst exactly during rotation (reported: "with rotation I can not rotate
+    // properly"). Subtracting a fixed per-cell center keeps every GPU-side coordinate within the
+    // cell's own extent (its SIZE, not its distance from world 0,0,0), which is what actually
+    // matters for float32 precision. Camera/controls/grid/axes are recentered to match (target
+    // becomes (0,0,0) instead of the world-space center) so the visual result is identical, just
+    // computed in a numerically-safer coordinate space.
+    const worldCenter = posBounds.getCenter(new THREE.Vector3());
+    worldCenterRef.current.copy(worldCenter);
+
     const texLoader = loadTexture ? new THREE.TextureLoader() : null;
     const textures: THREE.Texture[] = [];
 
@@ -202,7 +220,7 @@ export default function CellViewport(
 
         const inst = new THREE.InstancedMesh(g, mat, refs.length);
         refs.forEach((r, i) => {
-          dummy.position.set(r.position.x, r.position.y, r.position.z);
+          dummy.position.set(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
           dummy.rotation.set(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ');
           dummy.scale.setScalar(r.scale || 1);
           dummy.updateMatrix();
@@ -260,7 +278,7 @@ export default function CellViewport(
 
       const inst = new THREE.InstancedMesh(decalGeo, mat, refs.length);
       refs.forEach((r, i) => {
-        dummy.position.set(r.position.x, r.position.y, r.position.z);
+        dummy.position.set(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
         dummy.rotation.set(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ');
         const w = (r.decalWidth || 32) * (r.scale || 1);
         const h = (r.decalHeight || 32) * (r.scale || 1);
@@ -289,7 +307,7 @@ export default function CellViewport(
         if (refs.length === 0) continue;
         const inst = new THREE.InstancedMesh(markerGeo, mat, refs.length);
         refs.forEach((r, i) => {
-          dummy.position.set(r.position.x, r.position.y, r.position.z);
+          dummy.position.set(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
           dummy.rotation.set(0, 0, 0);
           dummy.scale.setScalar(1);
           dummy.updateMatrix();
@@ -323,21 +341,20 @@ export default function CellViewport(
     keyToInstancesRef.current = keyToInstances;
 
     const size = posBounds.getSize(new THREE.Vector3());
-    const center = posBounds.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z, 50);
 
+    // Everything below is relative to worldCenter now, so the cell's own center sits at local (0,0,0).
     const grid = new THREE.GridHelper(radius * 2.5, 24, 0x3a5a80, 0x2a2a30);
     grid.rotation.x = Math.PI / 2;
-    grid.position.set(center.x, center.y, posBounds.min.z);
+    grid.position.set(0, 0, posBounds.min.z - worldCenter.z);
     scene.add(grid);
     const axes = new THREE.AxesHelper(radius * 0.5);
-    axes.position.copy(center);
     scene.add(axes);
 
-    controls.target.copy(center);
+    controls.target.set(0, 0, 0);
     camera.near = Math.max(radius / 500, 0.1);
     camera.far = radius * 50;
-    camera.position.set(center.x + radius * 1.2, center.y - radius * 1.4, center.z + radius * 0.9);
+    camera.position.set(radius * 1.2, -radius * 1.4, radius * 0.9);
     camera.updateProjectionMatrix();
     controls.update();
 
@@ -377,7 +394,7 @@ export default function CellViewport(
     const focusOn = (k: string | null) => {
       const r = k ? refByKey.get(k) : undefined;
       if (!r) return;
-      const c = new THREE.Vector3(r.position.x, r.position.y, r.position.z);
+      const c = new THREE.Vector3(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
       const dist = radiusOf(r) * 3;
       controls.target.copy(c);
       camera.position.set(c.x + dist * 0.8, c.y - dist, c.z + dist * 0.6);
@@ -387,7 +404,7 @@ export default function CellViewport(
     const topDownOn = (k: string | null) => {
       const r = k ? refByKey.get(k) : undefined;
       if (!r) return;
-      const c = new THREE.Vector3(r.position.x, r.position.y, r.position.z);
+      const c = new THREE.Vector3(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
       const dist = radiusOf(r) * 3;
       controls.target.copy(c);
       camera.position.set(c.x, c.y - 0.001, c.z + dist);
@@ -416,8 +433,8 @@ export default function CellViewport(
 
     // Apply the current visibility + selection + per-ref hide immediately (props may already be set).
     applyVisibility(meshEntries, hiddenTypes);
-    applySelection(highlight, modelBBox, refByKey, selectedKey ?? null);
-    applyHidden(keyToInstances, hiddenRefs);
+    applySelection(highlight, modelBBox, refByKey, selectedKey ?? null, worldCenter);
+    applyHidden(keyToInstances, hiddenRefs, worldCenter);
 
     const bbBase = new THREE.Matrix4();
     const bbOut = new THREE.Matrix4();
@@ -431,7 +448,7 @@ export default function CellViewport(
         if (!grp.inst.visible) continue;
         grp.refs.forEach((r, i) => {
           if (hidden?.has(r.formKey)) { grp.inst.setMatrixAt(i, bbZero); return; }
-          bbPos.set(r.position.x, r.position.y, r.position.z);
+          bbPos.set(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
           bbQuat.setFromEuler(new THREE.Euler(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ'));
           bbScale.setScalar(r.scale || 1);
           bbBase.compose(bbPos, bbQuat, bbScale);
@@ -484,12 +501,12 @@ export default function CellViewport(
   // ---- selection: reposition the highlight box, no rebuild ----
   useEffect(() => {
     if (highlightRef.current)
-      applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null);
+      applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null, worldCenterRef.current);
   }, [selectedKey]);
 
   // ---- per-reference hide (CK "1"): zero-scale hidden instances, no rebuild ----
   useEffect(() => {
-    applyHidden(keyToInstancesRef.current, hiddenRefs);
+    applyHidden(keyToInstancesRef.current, hiddenRefs, worldCenterRef.current);
   }, [hiddenRefs]);
 
   return <div ref={mountRef} className="nif-viewport cell-viewport" />;
@@ -502,8 +519,10 @@ const _hideScale = new THREE.Vector3();
 const _hideM = new THREE.Matrix4();
 
 /** Collapse hidden references' instances to zero scale (invisible + unpickable), restore the rest.
- * Billboard instances are left to the per-frame loop, which reads the same hidden set. */
-function applyHidden(keyToInstances: Map<string, InstanceRef[]>, hidden?: ReadonlySet<string>) {
+ * Billboard instances are left to the per-frame loop, which reads the same hidden set. worldCenter
+ * must be the SAME point the scene was built recentered around (see where it's computed in the main
+ * effect) or a restored instance snaps to the wrong place. */
+function applyHidden(keyToInstances: Map<string, InstanceRef[]>, hidden: ReadonlySet<string> | undefined, worldCenter: THREE.Vector3) {
   const dirty = new Set<THREE.InstancedMesh>();
   for (const [formKey, entries] of keyToInstances) {
     const isHidden = hidden?.has(formKey) ?? false;
@@ -512,7 +531,7 @@ function applyHidden(keyToInstances: Map<string, InstanceRef[]>, hidden?: Readon
       if (isHidden) {
         e.mesh.setMatrixAt(e.id, _zeroM);
       } else {
-        _hidePos.set(e.ref.position.x, e.ref.position.y, e.ref.position.z);
+        _hidePos.set(e.ref.position.x - worldCenter.x, e.ref.position.y - worldCenter.y, e.ref.position.z - worldCenter.z);
         _hideQuat.setFromEuler(new THREE.Euler(e.ref.rotation.x, e.ref.rotation.y, e.ref.rotation.z, 'XYZ'));
         _hideScale.setScalar(e.ref.scale || 1);
         _hideM.compose(_hidePos, _hideQuat, _hideScale);
@@ -539,12 +558,15 @@ const _selCenter = new THREE.Vector3();
 const _selSize = new THREE.Vector3();
 const _selLocal = new THREE.Matrix4();
 
-/** Position the highlight box onto the selected reference (model bbox at the REFR transform), or hide it. */
+/** Position the highlight box onto the selected reference (model bbox at the REFR transform), or hide
+ * it. worldCenter must be the SAME point the scene was built recentered around, or the highlight box
+ * lands at the wrong (un-recentered) position relative to everything else. */
 function applySelection(
   highlight: THREE.LineSegments,
   modelBBox: Map<string, THREE.Box3>,
   refByKey: Map<string, CellPlacedReference>,
   selectedKey: string | null,
+  worldCenter: THREE.Vector3,
 ) {
   const ref = selectedKey ? refByKey.get(selectedKey) : undefined;
   if (!ref) { highlight.visible = false; return; }
@@ -555,7 +577,7 @@ function applySelection(
   // Guard against a zero-thickness axis (flat planes) so the wireframe still shows.
   _selSize.set(Math.max(_selSize.x, 1), Math.max(_selSize.y, 1), Math.max(_selSize.z, 1));
 
-  _selPos.set(ref.position.x, ref.position.y, ref.position.z);
+  _selPos.set(ref.position.x - worldCenter.x, ref.position.y - worldCenter.y, ref.position.z - worldCenter.z);
   _selQuat.setFromEuler(new THREE.Euler(ref.rotation.x, ref.rotation.y, ref.rotation.z, 'XYZ'));
   _selScale.setScalar(ref.scale || 1);
   _selMat.compose(_selPos, _selQuat, _selScale);                          // REFR transform
