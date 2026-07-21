@@ -160,9 +160,12 @@ export default function CellViewport(
         applyVertexColors(g, mat, shape.vertexColors);
         disposables.push(mat);
 
-        // Diffuse only (slot 0) for v1.
-        if (hasUV && texLoader && loadTexture && shape.textures?.length) {
-          const diffuse = shape.textures.find(t => t.slot === 0);
+        // Diffuse only (slot 0) for v1. Fall back to the shape's linked .bgsm material (bgsmPath)
+        // when it has no texture of its own -- common for shared/template materials; TextureService
+        // resolves+parses the .bgsm transparently given the same (modelPath, path) call.
+        if (hasUV && texLoader && loadTexture && (shape.textures?.length || shape.bgsmPath)) {
+          const diffuse = shape.textures?.find(t => t.slot === 0)
+            ?? (shape.bgsmPath ? { slot: 0, path: shape.bgsmPath } : undefined);
           if (diffuse) {
             loadTexture(modelPath, diffuse.path).then(url => {
               if (cancelled || !url) return;

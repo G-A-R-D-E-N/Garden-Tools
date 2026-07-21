@@ -5,6 +5,7 @@ using System.Text;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 using Newtonsoft.Json;
+using FO4RecordEditor.Services.Materials;
 
 namespace FO4RecordEditor.Services;
 
@@ -31,6 +32,26 @@ public static class TextureService
             relTexPath = (relTexPath ?? "").Trim().Trim('"');
             textureRoot = (textureRoot ?? "").Trim().Trim('"');
             if (string.IsNullOrWhiteSpace(relTexPath)) return "";
+
+            // A shape with no texture in its own BSShaderTextureSet can still have a real diffuse via
+            // a linked .bgsm material file (BSLightingShaderProperty.rootMaterialName) -- the frontend
+            // passes that path here indistinguishable from a normal texture request except by
+            // extension, when the shape's own "textures" array came up empty. Resolve + parse it and
+            // fall through to the same DDS pipeline below using its DiffuseTexture.
+            if (relTexPath.EndsWith(".bgsm", StringComparison.OrdinalIgnoreCase))
+            {
+                var bgsmFile = ResolveMaterialFile(nifPath, relTexPath, textureRoot);
+                if (bgsmFile == null) return "";
+                BgsmData mat;
+                try { mat = BgsmCodec.Parse(File.ReadAllBytes(bgsmFile)); }
+                catch (Exception ex) { DebugLog.Exception("Texture.BgsmParse", ex); return ""; }
+                // BGSM texture-path strings are length-prefixed AND null-terminated (an empty slot is
+                // len=1,byte=0x00 -- see BgsmCodec's WriteBgsmString note); strip the trailing NUL
+                // before treating this as a filesystem path.
+                var diffuse = (mat.DiffuseTexture ?? "").TrimEnd('\0');
+                if (string.IsNullOrWhiteSpace(diffuse)) return ""; // the material genuinely has no diffuse
+                relTexPath = diffuse;
+            }
 
             var dds = ResolveDds(nifPath, relTexPath, textureRoot);
             if (dds == null) return "";
@@ -83,6 +104,42 @@ public static class TextureService
         return ResolveFromArchives(rel, nifDir, textureRoot);
     }
 
+    // Same search strategy as ResolveDds, but for a shape's linked .bgsm material (real path
+    // "Materials\<rootMaterialName>", verified against a real archive -- not assumed) instead of a
+    // texture. Kept as a separate method rather than parameterizing ResolveDds: the loose-file
+    // fallback subfolder name ("Textures" vs "Materials") differs and threading that through every
+    // call site would be noisier than one small mirror function.
+    private static string? ResolveMaterialFile(string nifPath, string rel, string textureRoot = "")
+    {
+        rel = rel.Replace('/', '\\').TrimStart('\\');
+        if (Path.IsPathRooted(rel) && File.Exists(rel)) return rel;
+
+        string? nifDir = null;
+        try { nifDir = Path.GetDirectoryName(Path.GetFullPath(nifPath)); } catch { }
+
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(textureRoot) && Directory.Exists(textureRoot))
+        {
+            candidates.Add(Path.Combine(textureRoot, rel));
+            if (rel.StartsWith("materials\\", StringComparison.OrdinalIgnoreCase))
+                candidates.Add(Path.Combine(textureRoot, rel.Substring("materials\\".Length)));
+            candidates.Add(Path.Combine(textureRoot, "Materials", rel));
+        }
+
+        var dir = nifDir;
+        while (dir != null)
+        {
+            candidates.Add(Path.Combine(dir, rel));
+            candidates.Add(Path.Combine(dir, "Materials", rel));
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        foreach (var c in candidates)
+            if (File.Exists(c)) return c;
+
+        return ResolveFromArchives(rel, nifDir, textureRoot, "materials");
+    }
+
     // ---- BA2 archive resolution ------------------------------------------------------------------
     //
     // Lazy, session-cached, tiered: scan cheap NIF-local / user-root archives first (a mod's own BA2
@@ -111,10 +168,15 @@ public static class TextureService
     private static string Norm(string p) => p.Replace('/', '\\').TrimStart('\\');
 
     private static string? ResolveFromArchives(string rel, string? nifDir, string textureRoot)
+        => ResolveFromArchives(rel, nifDir, textureRoot, "textures");
+
+    // topFolder generalizes this for the .bgsm lookup (ResolveMaterialFile passes "materials") the
+    // same way LookupKeys already generalizes for ResolveNif's "meshes".
+    private static string? ResolveFromArchives(string rel, string? nifDir, string textureRoot, string topFolder)
     {
         try
         {
-            var keys = LookupKeys(rel);
+            var keys = LookupKeys(rel, topFolder);
 
             // Tier 1 -- cheap, NIF-local / user-root archives.
             var cheap = new List<string>();
@@ -257,12 +319,15 @@ public static class TextureService
                     foreach (var f in reader.Files)
                     {
                         var p = f.Path?.ToString();
-                        // Indexed together (one scan pass over each archive) rather than two separate
-                        // dds-only / nif-only scans -- the same BA2s hold both, so a texture lookup and a
-                        // mesh lookup (ResolveNif, for the cell viewer) share this one cache.
+                        // Indexed together (one scan pass over each archive) rather than three separate
+                        // scans -- the same BA2s hold all three, so a texture lookup, a mesh lookup
+                        // (ResolveNif, for the cell viewer), and a linked-material lookup (a shape with
+                        // no embedded texture whose BSLightingShaderProperty points at a .bgsm instead)
+                        // share this one cache.
                         if (string.IsNullOrEmpty(p) ||
                             !(p.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) ||
-                              p.EndsWith(".nif", StringComparison.OrdinalIgnoreCase))) continue;
+                              p.EndsWith(".nif", StringComparison.OrdinalIgnoreCase) ||
+                              p.EndsWith(".bgsm", StringComparison.OrdinalIgnoreCase))) continue;
                         var key = Norm(p);
                         if (!_index.ContainsKey(key)) { _index[key] = archive; added++; }  // first (most-local) wins
                     }

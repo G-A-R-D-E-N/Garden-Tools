@@ -16,6 +16,11 @@ export interface NifShapeGeo {
   billboard?: boolean;     // shape has a NiBillboardNode ancestor (glow sprite / lens flare)
   billboardMode?: number;  // nifly::BillboardMode; 1/8/9 = rotate-about-up, else face-camera
   effectShader?: boolean;  // BSEffectShaderProperty (fog/mist/glow/decal FX) vs BSLightingShaderProperty
+  bgsmPath?: string;       // BSLightingShaderProperty.rootMaterialName -- a shape with no texture of
+                           // its own can still have a real diffuse via this linked .bgsm material.
+                           // Pass it to loadTexture same as a normal texture path; TextureService
+                           // resolves+parses it transparently (by the .bgsm extension) and returns the
+                           // material's DiffuseTexture, or "" if that material genuinely has none.
   effect?: NifEffectParams;
   vertexColors?: number[]; // flat r,g,b,a per vertex (SLSF2_VERTEX_COLORS) -- mist edge-fade lives here
 }
@@ -142,11 +147,14 @@ export default function NifViewport(
           texLoader.load(url, t => res(t), undefined, () => res(null));
         });
       for (const { mat, shape, hasUV } of pairs) {
-        if (!hasUV || !shape.textures?.length) continue;
-        const diffuse = shape.textures.find(t => t.slot === 0);
+        if (!hasUV || !(shape.textures?.length || shape.bgsmPath)) continue;
+        // Fall back to the shape's linked .bgsm material when it has no texture of its own --
+        // TextureService resolves+parses it transparently given the same (relPath) call.
+        const diffuse = shape.textures?.find(t => t.slot === 0)
+          ?? (shape.bgsmPath ? { slot: 0, path: shape.bgsmPath } : undefined);
         // Effect shaders don't use slot 1 as a lighting normal map (it's a distortion map, and the
         // material is unlit anyway) -- MeshBasicMaterial has no normalMap slot either. Skip for FX.
-        const normal = shape.effectShader ? undefined : shape.textures.find(t => t.slot === 1);
+        const normal = shape.effectShader ? undefined : shape.textures?.find(t => t.slot === 1);
         if (diffuse) {
           loadTexture(diffuse.path).then(applyUrl).then(tex => {
             if (cancelled || !tex) return;
