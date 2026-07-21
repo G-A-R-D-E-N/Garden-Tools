@@ -1,6 +1,9 @@
 using System.IO;
+using System.Linq;
 using FluentAssertions;
 using FO4RecordEditor.Services;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -440,6 +443,79 @@ public class WriteServiceTests
 
         WriteService.RenumberFormId(plugin, "Dup_A", "000802", null)
             .Should().Contain("already used");
+    }
+
+    [Fact]
+    public void SetPlacedReferenceTransform_MovesReferenceIntoOverrideInPatchPlugin()
+    {
+        // The reference lives in a "source" plugin (like a real cell would in a vanilla/mod master);
+        // the move is saved into a SEPARATE patch plugin, the same shape as the real Cell Viewer
+        // gizmo scenario (moves never write directly into the plugin that defines the reference).
+        var srcPlugin = $"GizmoSrc_{Guid.NewGuid():N}.esp";
+        var patchPlugin = $"GizmoPatch_{Guid.NewGuid():N}.esp";
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("create_plugin", $"{{\"name\":\"{srcPlugin}\"}}");
+        exec.Execute("create_record", $"{{\"plugin\":\"{srcPlugin}\",\"type\":\"STAT\",\"editorId\":\"Gizmo_Base\"}}");
+        exec.Execute("create_cell", $"{{\"plugin\":\"{srcPlugin}\",\"editorId\":\"Gizmo_Cell\"}}");
+        var placeResult = exec.Execute("create_placed_object",
+            $"{{\"plugin\":\"{srcPlugin}\",\"cell\":\"Gizmo_Cell\",\"baseObject\":\"Gizmo_Base\"," +
+            "\"x\":100,\"y\":200,\"z\":300,\"rotZ\":0}");
+        placeResult.Should().Contain("Created REFR");
+
+        var src = WriteService.GetMutable(srcPlugin)!;
+        var refr = src.EnumerateMajorRecords().OfType<IPlacedObjectGetter>().First();
+        var fk = refr.FormKey;
+
+        var savedCache = MutagenLoader.LinkCache;
+        try
+        {
+            MutagenLoader.LinkCache = ((IFallout4ModGetter)src).ToMutableLinkCache<IFallout4Mod, IFallout4ModGetter>();
+
+            var result = WriteService.SetPlacedReferenceTransform(
+                null, fk.ToString(), patchPlugin, 111f, 222f, 333f, 0.1f, 0.2f, 0.3f);
+            result.Should().Contain("Moved").And.Contain(patchPlugin);
+
+            // The SOURCE plugin's own copy must be untouched -- the move only exists as an override.
+            var srcRefr = src.EnumerateMajorRecords().OfType<IPlacedObjectGetter>().First(r => r.FormKey == fk);
+            srcRefr.Position.X.Should().Be(100f);
+
+            var patch = WriteService.GetMutable(patchPlugin)!;
+            var ovr = patch.EnumerateMajorRecords().OfType<IPlacedObjectGetter>().First(r => r.FormKey == fk);
+            ovr.Position.X.Should().Be(111f);
+            ovr.Position.Y.Should().Be(222f);
+            ovr.Position.Z.Should().Be(333f);
+            ovr.Rotation.X.Should().BeApproximately(0.1f, 0.0001f);
+            ovr.Rotation.Y.Should().BeApproximately(0.2f, 0.0001f);
+            ovr.Rotation.Z.Should().BeApproximately(0.3f, 0.0001f);
+
+            // Save + reload the patch, prove it round-trips through a real ESP, not just in memory.
+            var outPath = Path.Combine(Path.GetTempPath(), patchPlugin);
+            WriteService.SavePlugin(patchPlugin, outPath, null);
+            using var reload = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+                Mutagen.Bethesda.Plugins.ModPath.FromPath(outPath), Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+            var reloadedRefr = reload.EnumerateMajorRecords().OfType<IPlacedObjectGetter>().First(r => r.FormKey == fk);
+            reloadedRefr.Position.X.Should().Be(111f);
+
+            try { File.Delete(outPath); } catch { }
+        }
+        finally
+        {
+            MutagenLoader.LinkCache = savedCache;
+        }
+    }
+
+    [Fact]
+    public void SetPlacedReferenceTransform_NoLinkCache_ReturnsFriendlyError()
+    {
+        var savedCache = MutagenLoader.LinkCache;
+        try
+        {
+            MutagenLoader.LinkCache = null;
+            WriteService.SetPlacedReferenceTransform(null, "000801:Fallout4.esm", "AnyPatch.esp",
+                0, 0, 0, 0, 0, 0).Should().Contain("No environment loaded");
+        }
+        finally { MutagenLoader.LinkCache = savedCache; }
     }
 
     [Fact]

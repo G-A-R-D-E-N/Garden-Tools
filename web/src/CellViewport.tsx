@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import type { NifGeo } from './NifViewport';
 import type { CellPlacedReference } from './backend';
 import { billboardMatrix, vertsCentroid } from './util/billboard';
@@ -31,7 +32,7 @@ type InstanceRef = { mesh: THREE.InstancedMesh; id: number; ref: CellPlacedRefer
 
 export default function CellViewport(
   { references, geometry, loadTexture, hiddenTypes, hiddenRefs, selectedKey, onSelect,
-    onHideSelected, onUnhideAll, onToggleMarkers, onUndo, onRedo }: {
+    onHideSelected, onUnhideAll, onToggleMarkers, onUndo, onRedo, onMoveEnd }: {
     references: CellPlacedReference[];
     geometry: CellGeoMap;
     loadTexture?: (modelPath: string, relTexPath: string) => Promise<string>;
@@ -44,6 +45,10 @@ export default function CellViewport(
     onToggleMarkers?: () => void;                   // CK "M"
     onUndo?: () => void;                            // CK "Ctrl+Z"
     onRedo?: () => void;                            // CK "Ctrl+Y"
+    // Fires once per completed gizmo drag (mouse-up), not per frame. `ref` is the SAME object held
+    // in this component's internal maps, already mutated in place with the final REFR-space
+    // position/rotation -- the caller reads ref.formKey/position/rotation to persist it.
+    onMoveEnd?: (ref: CellPlacedReference) => void;
   }
 ) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -55,6 +60,7 @@ export default function CellViewport(
   const onToggleMarkersRef = useRef(onToggleMarkers); onToggleMarkersRef.current = onToggleMarkers;
   const onUndoRef = useRef(onUndo); onUndoRef.current = onUndo;
   const onRedoRef = useRef(onRedo); onRedoRef.current = onRedo;
+  const onMoveEndRef = useRef(onMoveEnd); onMoveEndRef.current = onMoveEnd;
   const selectedKeyRef = useRef(selectedKey); selectedKeyRef.current = selectedKey;
   const hiddenRefsRef = useRef(hiddenRefs); hiddenRefsRef.current = hiddenRefs;
   const meshEntriesRef = useRef<{ mesh: THREE.Object3D; recordType: string }[]>([]);
@@ -63,6 +69,10 @@ export default function CellViewport(
   const refByKeyRef = useRef<Map<string, CellPlacedReference>>(new Map());
   const keyToInstancesRef = useRef<Map<string, InstanceRef[]>>(new Map());
   const cameraApiRef = useRef<{ focus: (key: string | null) => void; topDown: (key: string | null) => void } | null>(null);
+  // Set once per scene build (inside the main effect, where the gizmo/TransformControls actually
+  // live) so the separate selection-change effect below can attach/detach the gizmo without needing
+  // its own copy of the TransformControls instance.
+  const gizmoAttachRef = useRef<((key: string | null) => void) | null>(null);
   // The whole scene is built with every position relative to this point (the cell's own bounding-box
   // center), not absolute REFR world coordinates -- see the long comment where it's computed for why.
   const worldCenterRef = useRef(new THREE.Vector3());
@@ -358,12 +368,87 @@ export default function CellViewport(
     camera.updateProjectionMatrix();
     controls.update();
 
+    // ---- gizmo: move/rotate the selected reference ("a full gyro" -- 2026-07-20) ----
+    // A dedicated anchor object, NOT the highlight box above -- the highlight's matrix bakes in the
+    // model bbox's own center/size offset (see applySelection), which is the wrong pivot to drag
+    // around. The anchor always sits exactly at the REFR's own position/rotation (bbox-center-free),
+    // matching what Position/Rotation actually mean on the record.
+    const transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.size = 0.9;
+    scene.add(transformControls.getHelper());
+    const gizmoAnchor = new THREE.Object3D();
+    scene.add(gizmoAnchor);
+
+    // Recompute one reference's live instances from its (just-mutated) position/rotation, preserving
+    // each instance's ALREADY-BAKED scale -- decal instances carry a non-uniform (width, height, 1)
+    // scale from build time (see the byDecal loop above), not ref.scale, so scale must be read back
+    // off the existing matrix rather than recomputed from ref.scale like applyHidden's restore path
+    // does. Billboard instances aren't touched here -- the per-frame updateBillboards() loop below
+    // already reads r.position/r.rotation live every frame, so mutating the ref is enough for those.
+    const _giCurM = new THREE.Matrix4();
+    const _giCurPos = new THREE.Vector3();
+    const _giCurQuat = new THREE.Quaternion();
+    const _giCurScale = new THREE.Vector3();
+    const _giNewPos = new THREE.Vector3();
+    const _giNewQuat = new THREE.Quaternion();
+    const _giNewM = new THREE.Matrix4();
+    const applyGizmoTransformToMesh = (formKey: string) => {
+      const entries = keyToInstances.get(formKey);
+      const r = refByKey.get(formKey);
+      if (!entries || !r) return;
+      _giNewPos.set(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
+      _giNewQuat.setFromEuler(new THREE.Euler(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ'));
+      const dirty = new Set<THREE.InstancedMesh>();
+      for (const e of entries) {
+        if (e.billboard) continue;
+        e.mesh.getMatrixAt(e.id, _giCurM);
+        _giCurM.decompose(_giCurPos, _giCurQuat, _giCurScale);
+        _giNewM.compose(_giNewPos, _giNewQuat, _giCurScale);
+        e.mesh.setMatrixAt(e.id, _giNewM);
+        dirty.add(e.mesh);
+      }
+      for (const m of dirty) m.instanceMatrix.needsUpdate = true;
+      applySelection(highlight, modelBBox, refByKey, formKey, worldCenter);
+    };
+
+    // Fires continuously while dragging -- write the anchor's live transform back onto the selected
+    // ref (REFR-space: undo the worldCenter recenter) and push it into the live meshes immediately.
+    transformControls.addEventListener('objectChange', () => {
+      const key = selectedKeyRef.current;
+      const r = key ? refByKey.get(key) : undefined;
+      if (!key || !r) return;
+      r.position.x = gizmoAnchor.position.x + worldCenter.x;
+      r.position.y = gizmoAnchor.position.y + worldCenter.y;
+      r.position.z = gizmoAnchor.position.z + worldCenter.z;
+      const e = new THREE.Euler().setFromQuaternion(gizmoAnchor.quaternion, 'XYZ');
+      r.rotation.x = e.x; r.rotation.y = e.y; r.rotation.z = e.z;
+      applyGizmoTransformToMesh(key);
+    });
+    // OrbitControls must not fight the gizmo drag for the same mouse input.
+    transformControls.addEventListener('mouseDown', () => { controls.enabled = false; });
+    transformControls.addEventListener('mouseUp', () => {
+      controls.enabled = true;
+      const key = selectedKeyRef.current;
+      const r = key ? refByKey.get(key) : undefined;
+      if (r) onMoveEndRef.current?.(r);
+    });
+
+    const attachGizmoTo = (key: string | null) => {
+      const r = key ? refByKey.get(key) : undefined;
+      if (!r) { transformControls.detach(); return; }
+      gizmoAnchor.position.set(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
+      gizmoAnchor.quaternion.setFromEuler(new THREE.Euler(r.rotation.x, r.rotation.y, r.rotation.z, 'XYZ'));
+      transformControls.attach(gizmoAnchor);
+    };
+    gizmoAttachRef.current = attachGizmoTo;
+
     // ---- picking: pointerdown/up with a small move threshold so orbiting never selects ----
     const raycaster = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
     let downX = 0, downY = 0, downT = 0;
     const onPointerDown = (e: PointerEvent) => { downX = e.clientX; downY = e.clientY; downT = e.timeStamp; };
     const onPointerUp = (e: PointerEvent) => {
+      if (transformControls.dragging) return; // a gizmo drag, not a selection click
       if (e.button !== 0) return;
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 5 || e.timeStamp - downT > 400) return; // a drag, not a click
       const rect = renderer.domElement.getBoundingClientRect();
@@ -412,10 +497,12 @@ export default function CellViewport(
     };
     cameraApiRef.current = { focus: focusOn, topDown: topDownOn };
 
-    // CK render-window hotkeys (verified against the offline CK wiki's Keyboard Mapping page):
+    // CK render-window hotkeys (verified against the offline CK wiki's Keyboard Mapping page), plus
+    // G/R for the gizmo (Blender-style move/rotate; CK's own move/rotate keys weren't free to reuse
+    // without colliding with 1/D/T/M above):
     //   1 = cycle selected visibility -> hidden here, ALT+1 = unhide all, D = clear selection,
     //   SHIFT+F = anchor camera on selection, T = top-down of selection, M = toggle markers,
-    //   CTRL+Z = undo (last hide/show), CTRL+Y = redo.
+    //   CTRL+Z = undo (last hide/show), CTRL+Y = redo, G = move gizmo, R = rotate gizmo.
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack the search box
@@ -428,6 +515,8 @@ export default function CellViewport(
       else if (k === 'm' && !e.ctrlKey && !e.altKey) { onToggleMarkersRef.current?.(); e.preventDefault(); }
       else if (k === 'z' && e.ctrlKey) { onUndoRef.current?.(); e.preventDefault(); }
       else if (k === 'y' && e.ctrlKey) { onRedoRef.current?.(); e.preventDefault(); }
+      else if (k === 'g' && !e.ctrlKey && !e.altKey) { transformControls.setMode('translate'); e.preventDefault(); }
+      else if (k === 'r' && !e.ctrlKey && !e.altKey) { transformControls.setMode('rotate'); e.preventDefault(); }
     };
     window.addEventListener('keydown', onKeyDown);
 
@@ -435,6 +524,7 @@ export default function CellViewport(
     applyVisibility(meshEntries, hiddenTypes);
     applySelection(highlight, modelBBox, refByKey, selectedKey ?? null, worldCenter);
     applyHidden(keyToInstances, hiddenRefs, worldCenter);
+    attachGizmoTo(selectedKey ?? null);
 
     const bbBase = new THREE.Matrix4();
     const bbOut = new THREE.Matrix4();
@@ -483,6 +573,7 @@ export default function CellViewport(
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('keydown', onKeyDown);
+      transformControls.dispose();
       controls.dispose();
       disposables.forEach(d => d.dispose());
       textures.forEach(t => t.dispose());
@@ -490,6 +581,7 @@ export default function CellViewport(
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
       meshEntriesRef.current = [];
       highlightRef.current = null;
+      gizmoAttachRef.current = null;
     };
   }, [references, geometry, loadTexture]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -498,10 +590,11 @@ export default function CellViewport(
     applyVisibility(meshEntriesRef.current, hiddenTypes);
   }, [hiddenTypes]);
 
-  // ---- selection: reposition the highlight box, no rebuild ----
+  // ---- selection: reposition the highlight box + gizmo, no rebuild ----
   useEffect(() => {
     if (highlightRef.current)
       applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null, worldCenterRef.current);
+    gizmoAttachRef.current?.(selectedKey ?? null);
   }, [selectedKey]);
 
   // ---- per-reference hide (CK "1"): zero-scale hidden instances, no rebuild ----

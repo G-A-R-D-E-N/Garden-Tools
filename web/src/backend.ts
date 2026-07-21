@@ -341,6 +341,12 @@ export interface CellHost {
   GetTexture(relModelPath: string, relTexPath: string): Promise<string>;  // "data:image/png;base64,..." or ""
   // Poll while a GetGeometryBatch call is in flight for a real N/total readout.
   GetGeometryBatchProgress(): Promise<string>;                    // JSON: { done: number; total: number }
+  // Gizmo drag-end save: writes the moved/rotated reference into an override in patchPlugin (created
+  // if new) and leaves it open in memory -- still needs backend.SavePlugin(patchPlugin, "") to persist
+  // to disk. x/y/z/rx/ry/rz are in the SAME REFR-space units GetPlacedReferences reports (not the
+  // viewport's recentered world-space -- undo the worldCenter offset before calling this).
+  SetPlacedReferenceTransform(formKey: string, patchPlugin: string,
+    x: number, y: number, z: number, rx: number, ry: number, rz: number): Promise<string>;
 }
 
 declare global {

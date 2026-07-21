@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff } from 'lucide-react';
-import { getCell, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
+import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap } from './CellViewport';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import './PapyrusPanel.css';
@@ -236,6 +236,45 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const unhideAll = () => { pushUndo(); setHiddenRefs(new Set()); };
   const toggleMarkers = () => toggleType(MARKER_LAYER);
 
+  // Gizmo drag-end save (the "full gyro" move/rotate feature). Design confirmed with the user:
+  // prompt for a patch plugin name the first time a reference is moved this session, then auto-save
+  // every subsequent move into the same patch -- no repeated prompts per drag.
+  const gizmoPatchRef = useRef<string | null>(null);
+  const moveEnd = useCallback(async (ref: CellPlacedReference) => {
+    const c = getCell();
+    const backend = getBackend();
+    if (!c || !backend) return;
+    let patch = gizmoPatchRef.current;
+    if (!patch) {
+      const entered = window.prompt(
+        'Save this move (and any further moves this session) into which patch plugin?',
+        LS('gizmoPatch', 'CellEdits.esp'));
+      if (!entered || !entered.trim()) { appendLog('✗ move not saved -- no patch plugin chosen.'); return; }
+      patch = entered.trim();
+      gizmoPatchRef.current = patch;
+      setLS('gizmoPatch', patch);
+    }
+    try {
+      const msg = await c.SetPlacedReferenceTransform(
+        ref.formKey, patch,
+        ref.position.x, ref.position.y, ref.position.z,
+        ref.rotation.x, ref.rotation.y, ref.rotation.z);
+      if (/error|fail|invalid|could not|choose/i.test(msg)) { appendLog(`✗ move: ${msg}`); return; }
+      const saveMsg = await backend.SavePlugin(patch, '');
+      appendLog(`• moved ${ref.editorId || ref.formKey} -> ${patch}`);
+      if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
+    } catch (e) {
+      appendLog('✗ move failed: ' + (e instanceof Error ? e.message : String(e)));
+      return;
+    }
+    // Refresh the sidebar's live Pos readout for the moved reference (the underlying ref object was
+    // already mutated in place by the viewport, so this just copies the current values into a fresh
+    // object to trigger a re-render -- see CellViewport's onMoveEnd doc comment).
+    setSelected(prev => prev && prev.formKey === ref.formKey
+      ? { ...prev, position: { ...ref.position }, rotation: { ...ref.rotation } }
+      : prev);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // No click-outside-to-close: a Cell Viewer session (selection, hidden meshes/layers, undo
   // history) is easy to lose to a stray click on a huge cell like Switchboard. Only the explicit
   // X button closes it now.
@@ -372,6 +411,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
               <div><kbd>Click</kbd> select · <kbd>1</kbd> hide · <kbd>Alt+1</kbd> unhide all</div>
               <div><kbd>Shift+F</kbd> focus · <kbd>T</kbd> top-down · <kbd>M</kbd> markers · <kbd>D</kbd> deselect</div>
               <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Y</kbd> redo</div>
+              <div><kbd>G</kbd> move gizmo · <kbd>R</kbd> rotate gizmo (drag a selected reference)</div>
             </div>
             <div className="nif-view-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
 
@@ -416,6 +456,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   onToggleMarkers={toggleMarkers}
                   onUndo={undoVisibility}
                   onRedo={redoVisibility}
+                  onMoveEnd={moveEnd}
                 />
               : (
                 <div className="nif-view-empty">

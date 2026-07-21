@@ -104,4 +104,14 @@ public class CellInterop
     /// instead of an indeterminate spinner -- see NifService's GeoBatchDone/GeoBatchTotal.</summary>
     public string GetGeometryBatchProgress() =>
         JsonConvert.SerializeObject(new { done = NifService.GeoBatchDone, total = NifService.GeoBatchTotal });
+
+    /// <summary>Gizmo drag-end save: write a moved/rotated placed reference's new Position/Rotation
+    /// into an override in patchPlugin (created if it doesn't exist yet) and leave it open in memory --
+    /// the caller still has to call backend.SavePlugin(patchPlugin, "") to write it to disk, same as
+    /// every other patch-plugin edit in this app. See WriteService.SetPlacedReferenceTransform.</summary>
+    public Task<string> SetPlacedReferenceTransform(
+        string formKey, string patchPlugin, float x, float y, float z, float rx, float ry, float rz) =>
+        Task.Run(() => DebugLog.Guard(nameof(SetPlacedReferenceTransform),
+            () => WriteService.SetPlacedReferenceTransform(Env, formKey, patchPlugin, x, y, z, rx, ry, rz),
+            $"{formKey} -> {patchPlugin}"));
 }
