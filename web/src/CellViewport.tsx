@@ -31,7 +31,7 @@ type InstanceRef = { mesh: THREE.InstancedMesh; id: number; ref: CellPlacedRefer
 
 export default function CellViewport(
   { references, geometry, loadTexture, hiddenTypes, hiddenRefs, selectedKey, onSelect,
-    onHideSelected, onUnhideAll, onToggleMarkers }: {
+    onHideSelected, onUnhideAll, onToggleMarkers, onUndo, onRedo }: {
     references: CellPlacedReference[];
     geometry: CellGeoMap;
     loadTexture?: (modelPath: string, relTexPath: string) => Promise<string>;
@@ -42,6 +42,8 @@ export default function CellViewport(
     onHideSelected?: () => void;                   // CK "1"
     onUnhideAll?: () => void;                       // CK "ALT+1"
     onToggleMarkers?: () => void;                   // CK "M"
+    onUndo?: () => void;                            // CK "Ctrl+Z"
+    onRedo?: () => void;                            // CK "Ctrl+Y"
   }
 ) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -51,6 +53,8 @@ export default function CellViewport(
   const onHideSelectedRef = useRef(onHideSelected); onHideSelectedRef.current = onHideSelected;
   const onUnhideAllRef = useRef(onUnhideAll); onUnhideAllRef.current = onUnhideAll;
   const onToggleMarkersRef = useRef(onToggleMarkers); onToggleMarkersRef.current = onToggleMarkers;
+  const onUndoRef = useRef(onUndo); onUndoRef.current = onUndo;
+  const onRedoRef = useRef(onRedo); onRedoRef.current = onRedo;
   const selectedKeyRef = useRef(selectedKey); selectedKeyRef.current = selectedKey;
   const hiddenRefsRef = useRef(hiddenRefs); hiddenRefsRef.current = hiddenRefs;
   const meshEntriesRef = useRef<{ mesh: THREE.Object3D; recordType: string }[]>([]);
@@ -329,7 +333,8 @@ export default function CellViewport(
 
     // CK render-window hotkeys (verified against the offline CK wiki's Keyboard Mapping page):
     //   1 = cycle selected visibility -> hidden here, ALT+1 = unhide all, D = clear selection,
-    //   SHIFT+F = anchor camera on selection, T = top-down of selection, M = toggle markers.
+    //   SHIFT+F = anchor camera on selection, T = top-down of selection, M = toggle markers,
+    //   CTRL+Z = undo (last hide/show), CTRL+Y = redo.
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack the search box
@@ -340,6 +345,8 @@ export default function CellViewport(
       else if (k === 'f' && e.shiftKey) { focusOn(selectedKeyRef.current ?? null); e.preventDefault(); }
       else if (k === 't' && !e.ctrlKey && !e.altKey && !e.shiftKey) { topDownOn(selectedKeyRef.current ?? null); e.preventDefault(); }
       else if (k === 'm' && !e.ctrlKey && !e.altKey) { onToggleMarkersRef.current?.(); e.preventDefault(); }
+      else if (k === 'z' && e.ctrlKey) { onUndoRef.current?.(); e.preventDefault(); }
+      else if (k === 'y' && e.ctrlKey) { onRedoRef.current?.(); e.preventDefault(); }
     };
     window.addEventListener('keydown', onKeyDown);
 

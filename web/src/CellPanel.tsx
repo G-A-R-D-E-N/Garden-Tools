@@ -23,6 +23,42 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
   const [hiddenRefs, setHiddenRefs] = useState<Set<string>>(new Set());
 
+  // Undo/redo for visibility changes (CK "Ctrl+Z"/"Ctrl+Y"). A single combined snapshot of BOTH
+  // hiddenTypes and hiddenRefs -- so Ctrl+Z sensibly reverses the last visibility action regardless
+  // of whether it was a per-mesh hide, a layer toggle, or "unhide all"/"show all". Capped so an
+  // extended hide/show session can't grow the stack unbounded.
+  type VisSnapshot = { types: Set<string>; refs: Set<string> };
+  const HISTORY_CAP = 50;
+  const undoStackRef = useRef<VisSnapshot[]>([]);
+  const redoStackRef = useRef<VisSnapshot[]>([]);
+  // The stacks are plain refs (not reactive); bumping this state is just what forces a re-render so
+  // JSX reading undoStackRef.current.length (to enable/disable a button) reflects the latest push/pop.
+  const [, setHistoryTick] = useState(0);
+
+  const snapshotVisibility = (): VisSnapshot => ({ types: new Set(hiddenTypes), refs: new Set(hiddenRefs) });
+  const pushUndo = () => {
+    undoStackRef.current.push(snapshotVisibility());
+    if (undoStackRef.current.length > HISTORY_CAP) undoStackRef.current.shift();
+    redoStackRef.current = []; // a new action invalidates any pending redo
+    setHistoryTick(t => t + 1);
+  };
+  const applySnapshot = (s: VisSnapshot) => { setHiddenTypes(s.types); setHiddenRefs(s.refs); };
+  const undoVisibility = () => {
+    const prev = undoStackRef.current.pop();
+    if (!prev) return;
+    redoStackRef.current.push(snapshotVisibility());
+    applySnapshot(prev);
+    setHistoryTick(t => t + 1);
+  };
+  const redoVisibility = () => {
+    const next = redoStackRef.current.pop();
+    if (!next) return;
+    undoStackRef.current.push(snapshotVisibility());
+    applySnapshot(next);
+    setHistoryTick(t => t + 1);
+  };
+  const resetVisibilityHistory = () => { undoStackRef.current = []; redoStackRef.current = []; };
+
   // Env-loaded gate: an empty plugin list means "nothing loaded yet" -- point the user at the
   // Explorer sidebar's Load Env / Open MO2 buttons instead of letting them type a cell id blind
   // into a panel that can't possibly resolve anything yet.
@@ -105,6 +141,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setSelected(null);
     setHiddenTypes(new Set());
     setHiddenRefs(new Set());
+    resetVisibilityHistory();
     setStatus('Reading placed references…');
     try {
       const raw = await cell.GetPlacedReferences(id);
@@ -180,19 +217,23 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [references, geometry]);
 
-  const toggleType = (t: string) =>
+  const toggleType = (t: string) => {
+    pushUndo();
     setHiddenTypes(prev => {
       const next = new Set(prev);
       if (next.has(t)) next.delete(t); else next.add(t);
       return next;
     });
+  };
+  const showAllTypes = () => { pushUndo(); setHiddenTypes(new Set()); };
 
   // CK-hotkey actions (the viewport calls these; the sidebar buttons reuse them).
   const hideSelected = () => {
     if (!selected) return;
+    pushUndo();
     setHiddenRefs(prev => new Set(prev).add(selected.formKey));
   };
-  const unhideAll = () => setHiddenRefs(new Set());
+  const unhideAll = () => { pushUndo(); setHiddenRefs(new Set()); };
   const toggleMarkers = () => toggleType(MARKER_LAYER);
 
   return (
@@ -276,10 +317,18 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
 
-            {hiddenRefs.size > 0 && (
+            {(hiddenRefs.size > 0 || undoStackRef.current.length > 0 || redoStackRef.current.length > 0) && (
               <div className="cell-hidden-bar">
-                <span>{hiddenRefs.size} mesh{hiddenRefs.size === 1 ? '' : 'es'} hidden</span>
-                <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>
+                <span>{hiddenRefs.size > 0 ? `${hiddenRefs.size} mesh${hiddenRefs.size === 1 ? '' : 'es'} hidden` : ''}</span>
+                <div className="cell-hidden-actions">
+                  <button className="papyrus-copy" onClick={undoVisibility} disabled={undoStackRef.current.length === 0} title="Undo last hide/show">
+                    Undo <kbd>Ctrl+Z</kbd>
+                  </button>
+                  <button className="papyrus-copy" onClick={redoVisibility} disabled={redoStackRef.current.length === 0} title="Redo">
+                    Redo <kbd>Ctrl+Y</kbd>
+                  </button>
+                  {hiddenRefs.size > 0 && <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>}
+                </div>
               </div>
             )}
 
@@ -288,7 +337,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                 <div className="cell-layers-head">
                   <span>Layers ({typeGroups.length})</span>
                   {hiddenTypes.size > 0 && (
-                    <button className="papyrus-copy" onClick={() => setHiddenTypes(new Set())}>Show all</button>
+                    <button className="papyrus-copy" onClick={showAllTypes}>Show all</button>
                   )}
                 </div>
                 <div className="cell-layers-list">
@@ -319,6 +368,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
             <div className="cell-hotkeys">
               <div><kbd>Click</kbd> select · <kbd>1</kbd> hide · <kbd>Alt+1</kbd> unhide all</div>
               <div><kbd>Shift+F</kbd> focus · <kbd>T</kbd> top-down · <kbd>M</kbd> markers · <kbd>D</kbd> deselect</div>
+              <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Y</kbd> redo</div>
             </div>
             <div className="nif-view-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
 
@@ -361,6 +411,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   onHideSelected={hideSelected}
                   onUnhideAll={unhideAll}
                   onToggleMarkers={toggleMarkers}
+                  onUndo={undoVisibility}
+                  onRedo={redoVisibility}
                 />
               : (
                 <div className="nif-view-empty">
