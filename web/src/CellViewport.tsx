@@ -78,7 +78,10 @@ export default function CellViewport(
   const highlightRef = useRef<THREE.LineSegments | null>(null);
   const refByKeyRef = useRef<Map<string, CellPlacedReference>>(new Map());
   const keyToInstancesRef = useRef<Map<string, InstanceRef[]>>(new Map());
-  const cameraApiRef = useRef<{ focus: (key: string | null) => void; topDown: (key: string | null) => void } | null>(null);
+  const cameraApiRef = useRef<{
+    focus: (key: string | null) => void; topDown: (key: string | null) => void;
+    setOrbitTarget: (key: string | null) => void;
+  } | null>(null);
   // Set once per scene build (inside the main effect, where the gizmo/TransformControls actually
   // live) so the separate selection-change effect below can attach/detach the gizmo without needing
   // its own copy of the TransformControls instance.
@@ -597,7 +600,21 @@ export default function CellViewport(
       camera.position.set(c.x, c.y - 0.001, c.z + dist);
       camera.updateProjectionMatrix(); controls.update();
     };
-    cameraApiRef.current = { focus: focusOn, topDown: topDownOn };
+    // Re-pivot the orbit around whatever's selected, Unreal-Editor-style, instead of always orbiting
+    // around the cell's own center regardless of what's clicked (the actual bug behind "rotation still
+    // isn't working properly" -- SHIFT+F already re-pivoted+repositioned the camera, but plain
+    // drag-to-orbit never did, so the pivot silently stayed wherever it last was, usually the cell
+    // center). Only moves controls.target, not camera.position -- OrbitControls' next update() then
+    // reapplies the SAME viewing angle/distance around the new target, so the camera slides smoothly
+    // onto the new pivot instead of snapping to a fixed framing distance like SHIFT+F does.
+    const setOrbitTarget = (k: string | null) => {
+      const r = k ? refByKey.get(k) : undefined;
+      if (r) controls.target.set(r.position.x - worldCenter.x, r.position.y - worldCenter.y, r.position.z - worldCenter.z);
+      else controls.target.set(0, 0, 0);
+      controls.update();
+    };
+    cameraApiRef.current = { focus: focusOn, topDown: topDownOn, setOrbitTarget };
+    setOrbitTarget(selectedKey ?? null);
 
     // CK render-window hotkeys (verified against the offline CK wiki's Keyboard Mapping page), plus
     // G/R for the gizmo (Blender-style move/rotate; CK's own move/rotate keys weren't free to reuse
@@ -693,12 +710,13 @@ export default function CellViewport(
     applyVisibility(meshEntriesRef.current, hiddenTypes);
   }, [hiddenTypes]);
 
-  // ---- selection: reposition the highlight box + gizmo, no rebuild ----
+  // ---- selection: reposition the highlight box + gizmo + orbit pivot, no rebuild ----
   useEffect(() => {
     if (highlightRef.current)
       applySelection(highlightRef.current, modelBBoxRef.current, refByKeyRef.current, selectedKey ?? null,
         worldCenterRef.current, scolBBoxRef.current);
     gizmoAttachRef.current?.(selectedKey ?? null);
+    cameraApiRef.current?.setOrbitTarget(selectedKey ?? null);
   }, [selectedKey]);
 
   // ---- per-reference hide (CK "1"): zero-scale hidden instances, no rebuild ----
