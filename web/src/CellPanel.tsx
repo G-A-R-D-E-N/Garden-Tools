@@ -236,10 +236,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const unhideAll = () => { pushUndo(); setHiddenRefs(new Set()); };
   const toggleMarkers = () => toggleType(MARKER_LAYER);
 
+  // No click-outside-to-close: a Cell Viewer session (selection, hidden meshes/layers, undo
+  // history) is easy to lose to a stray click on a huge cell like Switchboard. Only the explicit
+  // X button closes it now.
   return (
-    {/* No click-outside-to-close: a Cell Viewer session (selection, hidden meshes/layers, undo
-        history) is easy to lose to a stray click on a huge cell like Switchboard. Only the explicit
-        X button closes it now. */}
     <div className="papyrus-overlay">
       <div className="papyrus-modal glass-panel nif-modal-wide">
         <div className="papyrus-header">
