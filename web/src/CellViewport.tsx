@@ -5,6 +5,7 @@ import type { NifGeo } from './NifViewport';
 import type { CellPlacedReference } from './backend';
 import { billboardMatrix, vertsCentroid } from './util/billboard';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
+import { makeEffectMaterial, applyVertexColors } from './util/effectMaterial';
 
 /** A geometry batch result keyed by the exact modelPath string GetPlacedReferences returned --
  * either niftool's raw geo JSON (NifGeo) or an { error } for anything that couldn't be
@@ -145,9 +146,14 @@ export default function CellViewport(
         if (g.boundingBox) modelBox.union(g.boundingBox);
         disposables.push(g);
 
-        const mat = new THREE.MeshStandardMaterial({
-          color: 0x9aa0aa, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide,
-        });
+        // Effect-shaded shapes (fog/mist/glow/decal FX) get a real unlit/blended material built from
+        // the shape's actual NiAlphaProperty + BSEffectShaderProperty params -- NOT the same opaque lit
+        // MeshStandardMaterial every structural shape gets, which is why FX used to render as hard
+        // "circular planes" instead of soft glowing effects.
+        const mat = shape.effectShader
+          ? makeEffectMaterial(shape.effect, true)
+          : new THREE.MeshStandardMaterial({ color: 0x9aa0aa, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide });
+        applyVertexColors(g, mat, shape.vertexColors);
         disposables.push(mat);
 
         // Diffuse only (slot 0) for v1.
@@ -167,7 +173,11 @@ export default function CellViewport(
                 tex.wrapT = THREE.RepeatWrapping;
                 tex.anisotropy = 4;
                 mat.map = tex;
-                mat.color.setHex(0xffffff);
+                // Structural shapes: the flat-gray placeholder color must reset to white so the real
+                // texture shows unmodified. Effect shapes: KEEP the tint -- baseColor*baseColorScale is
+                // the actual glow color the diffuse texture is meant to be multiplied by, not a
+                // placeholder to discard.
+                if (!shape.effectShader) mat.color.setHex(0xffffff);
                 mat.needsUpdate = true;
                 textures.push(tex);
               }, undefined, () => {});
