@@ -86,6 +86,11 @@ public static class NifService
             var resolved = TextureService.ResolveNif(rel);
             if (resolved == null)
             {
+                // Previously silent -- a batch of hundreds of unique meshes with a handful of
+                // failures gave no way to find WHICH ones without a debugger attached. A single
+                // widely-reused failed mesh (a common wall/floor tile in a big cell) can look like
+                // "many walls just don't show" even when the batch's own failure count is tiny.
+                DebugLog.Info("Nif.GeoBatch", $"Not found (loose or in any indexed archive): {rel}");
                 results[rel] = new { error = "Not found (loose or in any indexed archive)." };
                 Interlocked.Increment(ref GeoBatchDone);
                 return;
@@ -96,9 +101,9 @@ public static class NifService
             // "niftool.exe not found." line, a parse failure inside niftool) is plain text. Embed
             // success as JRaw so it nests as a real object in the batch result instead of a
             // JSON-string-inside-a-JSON-string that the frontend would have to double-parse.
-            results[rel] = raw.TrimStart().StartsWith('{')
-                ? new Newtonsoft.Json.Linq.JRaw(raw)
-                : new { error = raw };
+            var ok = raw.TrimStart().StartsWith('{');
+            if (!ok) DebugLog.Info("Nif.GeoBatch", $"niftool geo failed for {rel} (resolved: {resolved}): {raw}");
+            results[rel] = ok ? new Newtonsoft.Json.Linq.JRaw(raw) : new { error = raw };
             Interlocked.Increment(ref GeoBatchDone);
         });
 
