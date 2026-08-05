@@ -433,10 +433,12 @@ export default function RecordView(
     return set;
   }, [matrix.Rows]);
 
-  // Conditions live under a "Conditions" path segment, whether the click landed on the list itself
-  // or on one of its entries.
-  const conditionsPathOf = (field: string) =>
-    /(^|\.)Conditions(\[|$|\.)/.test(field) ? field.slice(0, field.indexOf('Conditions') + 'Conditions'.length) : null;
+  // The editor writes through SetConditions, which replaces the RECORD's own Conditions list, so it
+  // only applies to a top-level Conditions path -- the click may land on the list itself or on one
+  // of its entries. Conditions nested inside an effect (Effects[0].Conditions) belong to that
+  // effect, not the record, and are rewritten by set_magic_effects / set_perk_effects instead.
+  const isTopLevelConditions = (field: string) =>
+    field === 'Conditions' || field.startsWith('Conditions[') || field.startsWith('Conditions.');
 
   const addListItem = async (r: ConflictFieldRow, col: number) => {
     setMenu(null);
@@ -544,6 +546,7 @@ export default function RecordView(
             <td
               className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
               onDoubleClick={() => r.HasChildren && toggle(r)}
+              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
             >
               <span className="rv-prop-inner" style={{ paddingLeft: r.Level * 14 }}>
                 {r.HasChildren ? (
@@ -720,7 +723,10 @@ export default function RecordView(
                           </tr>
                           {!collapsed && g.rows.map((r, ri) => (
                             <tr key={ri} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
-                              <td className="rv-prop-col rv-sticky">
+                              <td
+                                className="rv-prop-col rv-sticky"
+                                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
+                              >
                                 <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
                               </td>
                               {matrix.Plugins.map((_, ci) => {
@@ -914,7 +920,7 @@ export default function RecordView(
           )}
 
           {/* Structured-list editing: the xEdit "Add"/"Remove" you get on an array element. */}
-          {conditionsPathOf(menu.row.Field) && (
+          {isTopLevelConditions(menu.row.Field) && (
             <button onClick={() => {
               const plug = matrix.Plugins[menu.col];
               setMenu(null);
