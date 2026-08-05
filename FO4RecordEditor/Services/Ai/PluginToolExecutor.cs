@@ -1139,6 +1139,24 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin" }
             }),
+        new("set_localized_flag",
+            "Set or clear a plugin's header Localized flag -- the bit that makes Mutagen automatically " +
+            "read/write this plugin's translated text (FULL/DESC/etc) through Strings\\<plugin>_<lang>." +
+            "STRINGS/.DLSTRINGS/.ILSTRINGS instead of storing it inline. Reading and writing through those " +
+            "files already works transparently once this flag is set (get_record/set_field/save_plugin need " +
+            "no special handling) -- this is just the one missing piece, flipping the bit itself. Setting it " +
+            "with no Strings\\ folder next to the plugin yet means every translated field reads back empty " +
+            "until save_plugin (or an added Strings\\ folder) produces one.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    localized = new { type = "boolean", description = "true = set the Localized flag, false = clear it. Default true." }
+                },
+                required = new[] { "plugin" }
+            }),
         new("nif_import",
             "Author a game-ready Fallout 4 static NIF from a Blender-exported OBJ mesh (no NifSkope, no " +
             "Creation Kit). Builds a BSTriShape with a BSLightingShaderProperty, texture slots, computed " +
@@ -1547,7 +1565,7 @@ public sealed class PluginToolExecutor
             "renumber_plugin_formids" or "create_seq_file" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
-            "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all" or
+            "run_script" or "reorder_masters" or "set_light_flag" or "set_localized_flag" or "archive_extract" or "archive_extract_all" or
             "bgsm_set_field" or "audio_convert_to_xwm" or "audio_convert_from_xwm" or "audio_make_fuz" or "audio_extract_fuz" or
             "archive_pack";
 
@@ -1592,6 +1610,7 @@ public sealed class PluginToolExecutor
             "list_masters"        => $"list masters of {plugin}",
             "reorder_masters"     => $"reorder masters of {plugin}",
             "set_light_flag"      => $"set_light_flag({plugin}, {Str("light")})",
+            "set_localized_flag"  => $"set_localized_flag({plugin}, {Str("localized")})",
             "archive_list"        => $"list {System.IO.Path.GetFileName(Str("archive_path"))}",
             "archive_extract"     => $"extract {Str("inner_path")} <- {System.IO.Path.GetFileName(Str("archive_path"))}",
             "archive_extract_all" => $"extract all <- {System.IO.Path.GetFileName(Str("archive_path"))}",
@@ -1886,6 +1905,8 @@ public sealed class PluginToolExecutor
             }
             case "set_light_flag":
                 return WriteService.SetLightFlag(Str("plugin"), BoolOr("light", true), env);
+            case "set_localized_flag":
+                return WriteService.SetLocalizedFlag(Str("plugin"), BoolOr("localized", true), env);
 
             case "nif_import":
                 return NifService.Import(Str("obj_path"), Str("out_nif"), Str("material"),

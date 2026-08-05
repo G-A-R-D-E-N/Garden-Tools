@@ -483,6 +483,45 @@ public static partial class WriteService
     }
 
     /// <summary>
+    /// Set or clear a plugin's header Localized flag -- the bit that makes Mutagen automatically read/
+    /// write this plugin's translated text through Strings\&lt;plugin&gt;_&lt;lang&gt;.STRINGS/.DLSTRINGS/
+    /// .ILSTRINGS instead of storing it inline (Fallout4Mod_Generated.cs's CreateFromBinary and its write
+    /// path both key off this exact flag; see the #56 investigation for the full trace). Same shape as
+    /// SetLightFlag above, minus the FormID-range warning: there is no numeric precondition here, but
+    /// setting the flag with no Strings\ folder next to the plugin means every TranslatedString field
+    /// will read back empty until one exists, so that case is warned rather than silently shipped.
+    /// </summary>
+    public static string SetLocalizedFlag(string plugin, bool localized, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var (name, path) = NormalizePlugin(plugin);
+
+        bool wasLocalized = mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Localized);
+        if (localized == wasLocalized)
+            return $"'{name}' already {(localized ? "has" : "does not have")} the Localized flag set.";
+
+        if (localized)
+        {
+            mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Localized;
+            MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+
+            string? pluginDir = null;
+            try { pluginDir = System.IO.Path.GetDirectoryName(path ?? FindPluginPath(name, env)); } catch { }
+            bool hasStringsFolder = pluginDir != null &&
+                System.IO.Directory.Exists(System.IO.Path.Combine(pluginDir, "Strings"));
+            var warn = hasStringsFolder ? "" :
+                $" WARNING: no Strings\\ folder found next to '{name}' yet -- every TranslatedString field " +
+                "will read back empty until save_plugin writes one (or you add it manually before reloading).";
+            return $"Set the Localized flag on '{name}'.{warn} In memory until save_plugin.";
+        }
+
+        mod.ModHeader.Flags &= ~Fallout4ModHeader.HeaderFlag.Localized;
+        MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+        return $"Cleared the Localized flag on '{name}': translated text now stores inline instead of via " +
+               "Strings files. In memory until save_plugin.";
+    }
+
+    /// <summary>
     /// Change one record's FormID within its plugin (xEdit "Change FormID") and (by default) repoint
     /// every reference to it that lives in the SAME plugin. References in OTHER plugins are not
     /// rewritten (that needs a patch); the message notes they may exist so the caller / AI can fix them.
