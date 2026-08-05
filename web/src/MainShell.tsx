@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes,
+  Link2, Archive as ArchiveIcon, Music, Boxes, ListTree,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
@@ -28,7 +28,13 @@ import ChatPanel from './ChatPanel';
 import TopBar, { type ShellTab } from './Shell/TopBar';
 import DetailRail from './Shell/DetailRail';
 import StatusBar from './Shell/StatusBar';
-import type { ConflictMatrix, SearchHit, ConflictEntry } from './backend';
+import FileBrowser from './Navigator/FileBrowser';
+import RecordNavigator from './Navigator/RecordNavigator';
+import NavigatorFilters from './Navigator/NavigatorFilters';
+import { EMPTY_FILTERS, type NavigatorFilterState } from './Navigator/filters';
+import type {
+  ConflictMatrix, SearchHit, ConflictEntry, ActivePlugin, RecordTypeEntry, LoadOrderSummary,
+} from './backend';
 import type { RecordTab } from './RecordView';
 
 interface RecordNode {
@@ -90,7 +96,7 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
 };
 
 export default function MainShell() {
-  const [activeTab, setActiveTab] = useState('explorer');
+  const [activeTab, setActiveTab] = useState('navigator');
   const [showSettings, setShowSettings] = useState(false);
   const [showPapyrus, setShowPapyrus] = useState(false);
   const [showNif, setShowNif] = useState(false);
@@ -161,6 +167,44 @@ export default function MainShell() {
   // Explorer search: filters the plugin list by name and searches records across the load order.
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
+
+  // Navigator (type-first tree) state. Kept here rather than in the components so the file
+  // selection, the filters and the tree all agree on one source of truth.
+  const [activePlugins, setActivePlugins] = useState<ActivePlugin[]>([]);
+  const [recordTypes, setRecordTypes] = useState<RecordTypeEntry[]>([]);
+  const [typesLoading, setTypesLoading] = useState(false);
+  const [navFilters, setNavFilters] = useState<NavigatorFilterState>(EMPTY_FILTERS);
+  const [fileSelection, setFileSelection] = useState<Set<string>>(new Set());
+  const [loadOrderSummary, setLoadOrderSummary] = useState<LoadOrderSummary | null>(null);
+
+  /** Refresh everything the navigator and status bar read from the load order. */
+  const refreshNavigator = useCallback(async () => {
+    const b = window.chrome?.webview?.hostObjects?.backend;
+    if (!b) return;
+    setTypesLoading(true);
+    try {
+      // Kick all three off together: the type index is the slow one and there is no reason for
+      // the file list or the status-bar totals to queue behind it.
+      const [pluginsJson, typesJson, summaryJson] = await Promise.all([
+        b.GetActivePlugins(), b.GetRecordTypeIndex(), b.GetLoadOrderSummary(),
+      ]);
+      setActivePlugins(JSON.parse(pluginsJson));
+      setRecordTypes(JSON.parse(typesJson));
+      setLoadOrderSummary(JSON.parse(summaryJson));
+    } catch (e) {
+      setErrorStr(`Navigator load failed: ${e}`);
+    } finally {
+      setTypesLoading(false);
+    }
+  }, []);
+
+  const toggleFileSelection = useCallback((name: string) => {
+    setFileSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const handleRejection = (event: PromiseRejectionEvent) => {
@@ -248,6 +292,8 @@ export default function MainShell() {
     const json = await b.GetPlugins();
     setPlugins(JSON.parse(json));
     setErrorStr("");
+    // The navigator reads the load order independently of the plugin tree, so it has to be told.
+    await refreshNavigator();
   };
 
   const handleLoadEnv = async () => {
@@ -286,6 +332,7 @@ export default function MainShell() {
     try {
       const json = await b.RefreshTree();
       setPlugins(JSON.parse(json));
+      await refreshNavigator();
       if (openRecord) await reloadMatrix();   // refresh the open record's values too
       setStatus('Refreshed.');
     } catch (err: any) {
@@ -493,7 +540,10 @@ export default function MainShell() {
       <div className="shell-left">
       <div className="activity-bar">
         <div className="activity-top">
-          <button className={`activity-btn ${activeTab === 'explorer' ? 'active' : ''}`} onClick={() => setActiveTab('explorer')} title="Explorer">
+          <button className={`activity-btn ${activeTab === 'navigator' ? 'active' : ''}`} onClick={() => setActiveTab('navigator')} title="Records (by type, across the load order)">
+            <ListTree size={22} strokeWidth={1.5} />
+          </button>
+          <button className={`activity-btn ${activeTab === 'explorer' ? 'active' : ''}`} onClick={() => setActiveTab('explorer')} title="Explorer (by plugin)">
             <Files size={22} strokeWidth={1.5} />
           </button>
           <button className={`activity-btn ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')} title="Search">
@@ -529,7 +579,7 @@ export default function MainShell() {
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-header">
-          <h2>{activeTab === 'compare' ? 'CONFLICTS' : 'EXPLORER'}</h2>
+          <h2>{activeTab === 'compare' ? 'CONFLICTS' : activeTab === 'navigator' ? 'RECORDS' : 'EXPLORER'}</h2>
         </div>
         <div className="sidebar-actions">
           <button className="sidebar-action-btn" onClick={handleLoadEnv}>Load Env</button>
@@ -540,6 +590,7 @@ export default function MainShell() {
           </button>
           <button className="sidebar-action-btn" onClick={handleRefresh}>Refresh</button>
         </div>
+        {activeTab !== 'navigator' && (
         <div className="sidebar-search">
           <Search size={13} />
           <input
@@ -549,7 +600,32 @@ export default function MainShell() {
           />
           {search && <button className="sidebar-search-clear" onClick={() => setSearch('')} title="Clear"><X size={13} /></button>}
         </div>
-        {activeTab !== 'compare' && (
+        )}
+
+        {/* Type-first navigator: files, filters, then records grouped by record type. */}
+        {activeTab === 'navigator' && (
+          <div className="navigator-pane">
+            <FileBrowser
+              plugins={activePlugins}
+              selected={fileSelection}
+              onToggleSelected={toggleFileSelection}
+              onClearSelection={() => setFileSelection(new Set())}
+              onAddFile={handleLoadMo2}
+            />
+            <NavigatorFilters types={recordTypes} value={navFilters} onChange={setNavFilters} />
+            <RecordNavigator
+              backend={backend ?? undefined}
+              types={recordTypes}
+              loadingTypes={typesLoading}
+              filters={navFilters}
+              pluginFilter={fileSelection}
+              onOpenRecord={openByFormKey}
+              selectedFormKey={openRecord?.matrix.FormKey ?? ''}
+            />
+          </div>
+        )}
+
+        {activeTab !== 'compare' && activeTab !== 'navigator' && (
         <div className="sidebar-tree">
           {errorStr && <div className="sidebar-empty" style={{ color: '#f44747' }}>{errorStr}</div>}
           {plugins.length === 0 && !errorStr ? (
@@ -718,10 +794,15 @@ export default function MainShell() {
       <StatusBar
         status={status}
         progress={progress}
-        recordCount={plugins.length}
-        visibleCount={plugins.length}
+        recordCount={loadOrderSummary?.TotalRecords ?? 0}
+        visibleCount={
+          // What the navigator is currently showing: the selected type's count, or everything.
+          navFilters.type
+            ? (recordTypes.find(t => t.Type === navFilters.type)?.Count ?? 0)
+            : recordTypes.reduce((n, t) => n + t.Count, 0)
+        }
         selectedCount={openRecord ? 1 : 0}
-        loadOrder={plugins.map(p => p.Key)}
+        loadOrder={loadOrderSummary?.Plugins ?? plugins.map(p => p.Key)}
       />
 
       {brokenRefsReport !== null && (

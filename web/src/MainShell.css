@@ -745,3 +745,12 @@
 [data-theme="light"] .broken-refs-modal { background: #ffffff; border-color: #ddd; }
 [data-theme="light"] .broken-refs-header { border-color: #ddd; }
 [data-theme="light"] .broken-refs-body { color: #1e1e1e; }
+
+/* Type-first navigator pane: three stacked sections filling the sidebar. */
+.navigator-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
