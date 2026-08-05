@@ -61,6 +61,8 @@ public static class AiGuidance
         + "create_cell, create_placed_object (CELL/REFR -- create_record cannot make these).\n"
         + "Edit fields & FormLink lists: set_field, add_list_item, remove_list_item, set_components, "
         + "get_conditions (READ the list first -- set_conditions REPLACES it), set_conditions, "
+        + "set_conditions_at (conditions nested in an effect: 'Effects[0].Conditions' for a magic effect, "
+        + "'Effects[0].Conditions[0].Conditions' for a perk -- get_conditions takes the same path), "
         + "copy_as_override, copy_as_new_record (duplicate under a fresh FormID instead of overriding), "
         + "delete_record, clean_plugin.\n"
         + "Whole-plugin xEdit passes: remove_identical_to_master (the ITM half of a cleaning pass; "

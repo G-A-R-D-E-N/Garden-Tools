@@ -19,8 +19,9 @@ type PickTarget = { index: number; key: 'param1' | 'param2' | 'reference' | 'com
  * genuinely cancels, since nothing is sent until Save.
  */
 export default function ConditionsEditor(
-  { plugin, record, label, onClose, onSaved }:
-  { plugin: string; record: string; label: string; onClose: () => void; onSaved: (msg: string) => void }
+  { plugin, record, path, label, onClose, onSaved }:
+  { plugin: string; record: string; path: string; label: string;
+    onClose: () => void; onSaved: (msg: string) => void }
 ) {
   const [rows, setRows] = useState<ConditionDto[] | null>(null);
   const [functions, setFunctions] = useState<string[]>([]);
@@ -34,7 +35,7 @@ export default function ConditionsEditor(
     if (!b) { setError('No backend bridge.'); setRows([]); return; }
     (async () => {
       try {
-        const raw = await b.GetConditions(plugin, record);
+        const raw = await b.GetConditionsAt(plugin, record, path);
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) setRows(parsed);
         else { setError(String(raw)); setRows([]); }
@@ -42,7 +43,7 @@ export default function ConditionsEditor(
       try { setFunctions(JSON.parse(await b.GetConditionFunctions())); } catch { setFunctions([]); }
       try { setRunOns(JSON.parse(await b.GetConditionRunOnTypes())); } catch { setRunOns(['Subject']); }
     })();
-  }, [plugin, record]);
+  }, [plugin, record, path]);
 
   const patch = (i: number, change: Partial<ConditionDto>) =>
     setRows(rs => (rs ?? []).map((r, ri) => (ri === i ? { ...r, ...change } : r)));
@@ -62,7 +63,7 @@ export default function ConditionsEditor(
     if (!b || !rows) return;
     setSaving(true);
     try {
-      const msg = await b.SetConditions(plugin, record, JSON.stringify(rows));
+      const msg = await b.SetConditionsAt(plugin, record, path, JSON.stringify(rows));
       onSaved(msg);
       onClose();
     } catch (e: any) {
@@ -75,7 +76,7 @@ export default function ConditionsEditor(
     <div className="ce-overlay" onClick={onClose}>
       <div className="ce-modal" onClick={e => e.stopPropagation()}>
         <div className="ce-header">
-          <span>Conditions -- {label} in {plugin}</span>
+          <span>Conditions -- {label} in {plugin}{path === 'Conditions' ? '' : ` (${path})`}</span>
           <button onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 

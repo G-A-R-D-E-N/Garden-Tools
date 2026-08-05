@@ -31,6 +31,8 @@ export interface Backend {
 
   // ---- xEdit parity ----
   GetConditions(plugin: string, record: string): Promise<string>;   // JSON: ConditionDto[]
+  GetConditionsAt(plugin: string, record: string, path: string): Promise<string>;
+  SetConditionsAt(plugin: string, record: string, path: string, conditionsJson: string): Promise<string>;
   GetConditionFunctions(): Promise<string>;                         // JSON: string[]
   GetConditionRunOnTypes(): Promise<string>;                        // JSON: string[]
   CopyAsNewRecord(sourcePlugin: string, id: string, targetPlugin: string,

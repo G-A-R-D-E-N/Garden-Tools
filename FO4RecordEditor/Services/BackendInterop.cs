@@ -209,6 +209,12 @@ public class BackendInterop
     public string GetConditions(string plugin, string record) =>
         DebugLog.Guard(nameof(GetConditions), () => WriteService.GetConditionsJson(Env, plugin, record),
             $"{plugin} {record}");
+    public string GetConditionsAt(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(GetConditionsAt), () => WriteService.GetConditionsAtPath(Env, plugin, record, path),
+            $"{plugin} {record} {path}");
+    public string SetConditionsAt(string plugin, string record, string path, string conditionsJson) =>
+        DebugLog.Guard(nameof(SetConditionsAt), () => WriteService.SetConditionsAtPath(plugin, record, path, conditionsJson, Env),
+            $"{plugin} {record} {path}");
     public string GetConditionFunctions() =>
         DebugLog.Guard(nameof(GetConditionFunctions), WriteService.ConditionFunctionNames);
     public string GetConditionRunOnTypes() =>

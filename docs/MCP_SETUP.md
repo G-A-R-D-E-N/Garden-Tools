@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **83 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **84 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -84,12 +84,19 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 ### Writing records
 `create_record` · `set_field` · `get_conditions` · `set_conditions` · `set_components` ·
 `add_list_item` · `remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` ·
-`copy_as_new_record` · `delete_record` · `renumber_formid` · `compact_to_esl` · `set_light_flag` ·
+`copy_as_new_record` · `set_conditions_at` · `delete_record` · `renumber_formid` · `compact_to_esl` · `set_light_flag` ·
 `batch_patch_records` · `revert_overrides`
 
 `set_conditions` REPLACES the whole Conditions list, so to add or change one condition read the
 current list with `get_conditions` first, edit that array, and hand it back. `get_conditions` returns
 exactly the schema `set_conditions` accepts.
+
+Conditions are not always the record's own list. A magic effect keeps its own at
+`Effects[0].Conditions`; a perk keeps them two deep at `Effects[0].Conditions[0].Conditions`, where
+the outer list holds the run-on tab wrapper rather than conditions. Pass that path to
+`get_conditions` and write it back with `set_conditions_at`. The resolver accepts the list itself,
+one entry in it, or a perk tab wrapper, and refuses the tab list with a message saying which level
+to use.
 
 `copy_as_new_record` is the other half of xEdit's copy menu: it duplicates a record into the target
 plugin under a **brand new FormID** rather than overriding the original, which is how you make a

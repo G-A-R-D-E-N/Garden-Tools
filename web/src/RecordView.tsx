@@ -118,7 +118,7 @@ export default function RecordView(
   const [edit, setEdit] = useState<Edit | null>(null);
   const [editVal, setEditVal] = useState('');
   const [picker, setPicker] = useState<{ row: ConflictFieldRow; col: number } | null>(null);
-  const [conditions, setConditions] = useState<{ plugin: string; label: string } | null>(null);
+  const [conditions, setConditions] = useState<{ plugin: string; path: string; label: string } | null>(null);
   const [status, setStatus] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
 
@@ -433,12 +433,11 @@ export default function RecordView(
     return set;
   }, [matrix.Rows]);
 
-  // The editor writes through SetConditions, which replaces the RECORD's own Conditions list, so it
-  // only applies to a top-level Conditions path -- the click may land on the list itself or on one
-  // of its entries. Conditions nested inside an effect (Effects[0].Conditions) belong to that
-  // effect, not the record, and are rewritten by set_magic_effects / set_perk_effects instead.
-  const isTopLevelConditions = (field: string) =>
-    field === 'Conditions' || field.startsWith('Conditions[') || field.startsWith('Conditions.');
+  // Conditions are not always the record's own list: a magic effect keeps its own at
+  // Effects[0].Conditions, and a perk two deep at Effects[0].Conditions[0].Conditions (the outer
+  // list holds the run-on tab wrapper). Any row under a Conditions segment opens the editor; the
+  // backend resolves the path down to the one editable Condition list.
+  const conditionsPathOf = (field: string) => (/(^|\.)Conditions(\[|$)/.test(field) ? field : null);
 
   const addListItem = async (r: ConflictFieldRow, col: number) => {
     setMenu(null);
@@ -920,11 +919,12 @@ export default function RecordView(
           )}
 
           {/* Structured-list editing: the xEdit "Add"/"Remove" you get on an array element. */}
-          {isTopLevelConditions(menu.row.Field) && (
+          {conditionsPathOf(menu.row.Field) && (
             <button onClick={() => {
               const plug = matrix.Plugins[menu.col];
+              const p = conditionsPathOf(menu.row.Field)!;
               setMenu(null);
-              setConditions({ plugin: plug, label: matrix.EditorID || matrix.FormKey });
+              setConditions({ plugin: plug, path: p, label: matrix.EditorID || matrix.FormKey });
             }}><ListFilter size={13} /> Edit conditions…</button>
           )}
           {listRowIndexed.has(menu.row.Field) && menu.row.Level === 0 && (
@@ -982,6 +982,7 @@ export default function RecordView(
         <ConditionsEditor
           plugin={conditions.plugin}
           record={matrix.FormKey}
+          path={conditions.path}
           label={conditions.label}
           onClose={() => setConditions(null)}
           onSaved={async msg => { setStatus(msg); await onReload(); }}

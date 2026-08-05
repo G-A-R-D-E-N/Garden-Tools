@@ -539,9 +539,27 @@ public sealed class PluginToolExecutor
                 properties = new
                 {
                     plugin = new { type = "string", description = "Plugin whose version to read. Omit for the winning version." },
-                    record = new { type = "string", description = "FormKey or EditorID of the record." }
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    path = new { type = "string", description = "Optional nested list, e.g. 'Effects[0].Conditions'. Omit for the record's own Conditions." }
                 },
                 required = new[] { "record" }
+            }),
+        new("set_conditions_at",
+            "Replace the Condition list at a nested path (xEdit's per-effect conditions). set_conditions only " +
+            "reaches a record's OWN Conditions; a magic effect keeps its own at 'Effects[0].Conditions' and a " +
+            "perk two deep at 'Effects[0].Conditions[0].Conditions', where the outer list is the run-on tab " +
+            "wrapper. Read the current list with get_conditions first (it takes the same path).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    path = new { type = "string", description = "e.g. 'Effects[0].Conditions' or 'Effects[0].Conditions[0].Conditions'." },
+                    conditions = new { type = "string", description = "JSON array in set_conditions' schema. Replaces the whole list." }
+                },
+                required = new[] { "plugin", "record", "path", "conditions" }
             }),
         new("add_masters",
             "Declare one or more plugins as masters of this plugin (xEdit 'Add Masters...'). Needed BEFORE " +
@@ -1401,7 +1419,7 @@ public sealed class PluginToolExecutor
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
             "create_record" or "create_cell" or "create_placed_object" or
             "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
-            "remove_identical_to_master" or "create_merged_patch" or "add_masters" or
+            "remove_identical_to_master" or "create_merged_patch" or "add_masters" or "set_conditions_at" or
             "renumber_plugin_formids" or "create_seq_file" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
@@ -1433,6 +1451,7 @@ public sealed class PluginToolExecutor
             "remove_identical_to_master" => $"{(Applying() ? "remove" : "list")} ITMs in {plugin}",
             "create_merged_patch" => $"{(Applying() ? "build" : "preview")} merged patch {Str("patch_plugin")}",
             "get_conditions"      => $"read conditions of {ShortId(record)}",
+            "set_conditions_at"   => $"{ShortId(record)}: conditions rebuilt at {Str("path")}",
             "add_masters"         => $"add master(s) to {plugin}",
             "renumber_plugin_formids" => $"{(Applying() ? "renumber" : "preview renumber of")} every record in {plugin}",
             "create_seq_file"     => $"write {plugin}.seq",
@@ -1620,7 +1639,11 @@ public sealed class PluginToolExecutor
             case "create_merged_patch":
                 return WriteService.CreateMergedPatch(env, Str("plugins"), Str("patch_plugin"), Bool("apply"));
             case "get_conditions":
-                return WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
+                return Str("path") is { Length: > 0 } condPath
+                    ? WriteService.GetConditionsAtPath(env, Str("plugin"), Str("record"), condPath)
+                    : WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
+            case "set_conditions_at":
+                return WriteService.SetConditionsAtPath(Str("plugin"), Str("record"), Str("path"), Str("conditions"), env);
             case "add_masters":
             {
                 var masters = root.TryGetProperty("masters", out var mEl) && mEl.ValueKind == JsonValueKind.Array
