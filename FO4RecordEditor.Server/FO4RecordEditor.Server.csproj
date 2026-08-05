@@ -33,6 +33,9 @@
     <ProjectReference Include="..\FO4RecordEditor.Core\FO4RecordEditor.Core.csproj" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.14.0" />
+    <!-- The native window: WebKitGTK on Linux, the OS webview elsewhere. This is the counterpart of
+         the WPF shell's WebView2 control, so the app is a real window and not a browser tab. -->
+    <PackageReference Include="Photino.NET" Version="4.0.16" />
   </ItemGroup>
 
   <!-- Shared app layer, compiled from the WPF project's tree. Views/ and the .xaml code-behind are

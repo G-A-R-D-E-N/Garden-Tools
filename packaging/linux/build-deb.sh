@@ -58,7 +58,8 @@ Priority: optional
 Architecture: amd64
 Maintainer: PRISMA User Interface Framework <noreply@users.noreply.github.com>
 Installed-Size: ${INSTALLED_KB}
-Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6, zlib1g
+Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6, zlib1g,
+         libwebkit2gtk-4.1-0, libgtk-3-0
 Recommends: zenity, wine
 Homepage: https://github.com/PRISMA-USER-INTERFACE-FRAMEWORK/PluginEditTool
 Description: Fallout 4 plugin editor and conflict resolver
@@ -67,8 +68,9 @@ Description: Fallout 4 plugin editor and conflict resolver
  BA2/BSA archives, compile and decompile Papyrus, and drive all of it from an AI
  assistant over MCP.
  .
- The interface runs in your browser, served by a local process that exits when you
- close it. Nothing is sent anywhere.
+ The interface is a WebKitGTK window driven by a local process; nothing is sent
+ anywhere. Run with --browser to use a browser window instead, or --headless to
+ serve the UI without opening anything.
  .
  A few bundled helpers (niftool, texconv, Archive2, PapyrusCompiler, xWMAEncode)
  exist only as Windows binaries; install wine to use the panels that drive them.

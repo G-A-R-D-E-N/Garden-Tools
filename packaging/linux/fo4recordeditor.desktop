@@ -9,3 +9,4 @@ Terminal=false
 Categories=Development;Utility;
 Keywords=Fallout;Bethesda;esp;esm;esl;modding;Mutagen;
 StartupNotify=true
+StartupWMClass=FO4RecordEditor.Server

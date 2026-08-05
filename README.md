@@ -51,9 +51,10 @@ fo4recordeditor
 The .deb is self-contained, so there is no runtime to install first. Build it with
 `packaging/linux/build-deb.sh`.
 
-Same app, same code: the WPF shell hosts the React UI in WebView2, and the Linux build serves it
-from a local process and opens it in an app window. The interop layer, the record editing, and the
-MCP server (`fo4recordeditor --mcp --mo2 <instance>`) are all the identical compiled sources.
+It opens in its own WebKitGTK window, not a browser tab, the same way the Windows build hosts the UI
+in WebView2. Same app, same code: the interop layer, the record editing, and the MCP server
+(`fo4recordeditor --mcp --mo2 <instance>`) are all the identical compiled sources. Pass `--browser`
+to use a browser window instead, or `--headless` to serve without opening anything.
 
 A few helper tools (niftool, texconv, Archive2, PapyrusCompiler, xWMAEncode) only exist as Windows
 binaries; installing `wine` makes the panels that drive them work. Everything else is native.

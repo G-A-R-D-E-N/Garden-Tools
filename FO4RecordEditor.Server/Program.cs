@@ -140,8 +140,19 @@ var url = $"http://{host}:{port}/#/main";
 Console.WriteLine($"FO4RecordEditor is running at {url}");
 Console.WriteLine($"Log: {DebugLog.Path}");
 
-if (!HasFlag("--no-browser")) OpenUi(url);
-app.Run();
+if (HasFlag("--headless"))
+{
+    // Serve only. Useful for attaching a browser from elsewhere, or for running under a debugger.
+    app.Run();
+    return;
+}
+
+await app.StartAsync();
+
+if (HasFlag("--browser")) { OpenInBrowser(url); await app.WaitForShutdownAsync(); }
+else OpenNativeWindow(url);
+
+await app.StopAsync();
 return;
 
 // ---------------------------------------------------------------------------
@@ -157,10 +168,36 @@ static int FreePort(string host)
 }
 
 /// <summary>
-/// Prefer a chromium/firefox app window so this looks like an application rather than a browser
-/// tab. Falls back to the desktop's default handler.
+/// The app's own window: WebKitGTK on Linux, WebView2 on Windows, WKWebView on macOS. This is the
+/// counterpart of the WPF shell's WebView2 control, so the app gets a real titlebar, its own
+/// taskbar entry and its own icon rather than being a page inside somebody's browser.
+/// <para>
+/// Must run on the main thread, and blocks until the window closes, which is what ends the process.
+/// </para>
 /// </summary>
-static void OpenUi(string url)
+static void OpenNativeWindow(string url)
+{
+    // WebKitGTK's DMA-BUF renderer is the usual cause of a blank or black window on proprietary
+    // drivers and on some compositors. Opt out unless the user has already made a choice.
+    if (OperatingSystem.IsLinux() &&
+        Environment.GetEnvironmentVariable("WEBKIT_DISABLE_DMABUF_RENDERER") == null)
+        Environment.SetEnvironmentVariable("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+
+    new Photino.NET.PhotinoWindow()
+        .SetTitle("FO4RecordEditor")
+        .SetUseOsDefaultSize(false)
+        .SetSize(1600, 1000)
+        .SetUseOsDefaultLocation(true)
+        .SetContextMenuEnabled(false)
+        .Load(new Uri(url))
+        .WaitForClose();
+}
+
+/// <summary>
+/// The `--browser` fallback: an app-mode browser window. Kept for machines with no working
+/// WebKitGTK, and for debugging with real devtools.
+/// </summary>
+static void OpenInBrowser(string url)
 {
     string[][] candidates =
     [
