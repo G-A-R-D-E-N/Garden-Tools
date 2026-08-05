@@ -39,12 +39,24 @@ type InstanceRef = {
   local?: THREE.Matrix4;
 };
 
+// Texture resolution is a fire-and-forget async side path: a shape whose diffuse never resolves, or
+// resolves to bytes three.js cannot decode, simply stays flat grey with nothing reported anywhere.
+// These counters are what turn that silence into a line the user can act on.
+export type CellTextureStats = {
+  ok: number;
+  noPath: number;        // shape has UVs but neither a texture slot nor a bgsm to fall back to
+  resolveFail: number;   // TextureService returned no path (missing from every data root/archive)
+  decodeFail: number;    // path resolved but three.js could not load the image
+  firstFailure: string | null;
+};
+
 export default function CellViewport(
   { references, geometry, loadTexture, hiddenTypes, hiddenRefs, selectedKey, onSelect,
-    onHideSelected, onUnhideAll, onToggleMarkers, onUndo, onRedo, onMoveEnd }: {
+    onHideSelected, onUnhideAll, onToggleMarkers, onUndo, onRedo, onMoveEnd, onTextureStats }: {
     references: CellPlacedReference[];
     geometry: CellGeoMap;
     loadTexture?: (modelPath: string, relTexPath: string) => Promise<string>;
+    onTextureStats?: (stats: CellTextureStats) => void;
     hiddenTypes?: ReadonlySet<string>;
     hiddenRefs?: ReadonlySet<string>;              // per-reference hide (CK "1" cycle -> hidden)
     selectedKey?: string | null;
@@ -200,6 +212,21 @@ export default function CellViewport(
     const texLoader = loadTexture ? new THREE.TextureLoader() : null;
     const textures: THREE.Texture[] = [];
 
+    const texStats: CellTextureStats = { ok: 0, noPath: 0, resolveFail: 0, decodeFail: 0, firstFailure: null };
+    let texStatsTimer: ReturnType<typeof setTimeout> | undefined;
+    // Every texture settles on its own promise, so reporting per-settle would fire thousands of
+    // renders on a real cell. Coalesce into one update per quiet period instead.
+    const reportTexStats = () => {
+      if (!onTextureStats || texStatsTimer) return;
+      texStatsTimer = setTimeout(() => {
+        texStatsTimer = undefined;
+        if (!cancelled) onTextureStats({ ...texStats });
+      }, 300);
+    };
+    const noteTexFailure = (relTexPath: string, modelPath: string) => {
+      texStats.firstFailure ??= modelPath ? `${relTexPath} (nif: ${modelPath})` : relTexPath;
+    };
+
     // Shared by the byModel loop below AND the SCOL-member loop that follows it -- both need the exact
     // same per-shape BufferGeometry/material/texture-loading logic, just with different INSTANCING
     // (a plain ref transform vs. a ref transform composed with a fixed member-placement offset).
@@ -229,12 +256,22 @@ export default function CellViewport(
       // Diffuse only (slot 0) for v1. Fall back to the shape's linked .bgsm material (bgsmPath)
       // when it has no texture of its own -- common for shared/template materials; TextureService
       // resolves+parses the .bgsm transparently given the same (modelPath, path) call.
+      if (hasUV && texLoader && loadTexture && !(shape.textures?.length || shape.bgsmPath)) {
+        texStats.noPath++;
+        reportTexStats();
+      }
       if (hasUV && texLoader && loadTexture && (shape.textures?.length || shape.bgsmPath)) {
         const diffuse = shape.textures?.find(t => t.slot === 0)
           ?? (shape.bgsmPath ? { slot: 0, path: shape.bgsmPath } : undefined);
         if (diffuse) {
           loadTexture(modelPath, diffuse.path).then(url => {
-            if (cancelled || !url) return;
+            if (cancelled) return;
+            if (!url) {
+              texStats.resolveFail++;
+              noteTexFailure(diffuse.path, modelPath);
+              reportTexStats();
+              return;
+            }
             texLoader.load(url, tex => {
               if (cancelled) { tex.dispose(); return; }
               tex.flipY = false;
@@ -253,7 +290,13 @@ export default function CellViewport(
               if (!shape.effectShader) mat.color.setHex(0xffffff);
               mat.needsUpdate = true;
               textures.push(tex);
-            }, undefined, () => {});
+              texStats.ok++;
+              reportTexStats();
+            }, undefined, () => {
+              texStats.decodeFail++;
+              noteTexFailure(diffuse.path, modelPath);
+              reportTexStats();
+            });
           });
         }
       }
@@ -368,7 +411,13 @@ export default function CellViewport(
         // Tier 2 (the configured Data/mods roots) resolves a Data-relative path independent of any
         // NIF-local anchor, same as every other diffuse fetch here.
         loadTexture('', texPath).then(url => {
-          if (cancelled || !url) return;
+          if (cancelled) return;
+          if (!url) {
+            texStats.resolveFail++;
+            noteTexFailure(texPath, '');
+            reportTexStats();
+            return;
+          }
           texLoader.load(url, tex => {
             if (cancelled) { tex.dispose(); return; }
             tex.flipY = false;
@@ -376,7 +425,13 @@ export default function CellViewport(
             mat.map = tex;
             mat.needsUpdate = true;
             textures.push(tex);
-          }, undefined, () => {});
+            texStats.ok++;
+            reportTexStats();
+          }, undefined, () => {
+            texStats.decodeFail++;
+            noteTexFailure(texPath, '');
+            reportTexStats();
+          });
         });
       }
 
@@ -692,6 +747,7 @@ export default function CellViewport(
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('keydown', onKeyDown);
+      if (texStatsTimer) clearTimeout(texStatsTimer);
       transformControls.dispose();
       controls.dispose();
       disposables.forEach(d => d.dispose());
