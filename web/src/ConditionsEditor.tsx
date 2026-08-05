@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { X, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, Plus, Trash2, ArrowUp, ArrowDown, Search } from 'lucide-react';
 import type { ConditionDto } from './backend';
 import RecordPicker from './RecordPicker';
 import './ConditionsEditor.css';
@@ -7,16 +7,22 @@ import './ConditionsEditor.css';
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
 const OPERATORS = ['==', '!=', '>', '>=', '<', '<='];
-
 const BLANK: ConditionDto = { function: 'GetItemCount', operator: '==', value: 1, runOn: 'Subject' };
 
-/** Which field a record picker is currently filling in. */
-type PickTarget = { index: number; key: 'param1' | 'param2' | 'reference' | 'compareGlobal' };
+/** One parameter slot of a condition function, from xEdit's own function table. */
+interface ParamSlot { label: string; kind: 'record' | 'number' | 'text'; types: string; }
+type ParamTable = Record<string, ParamSlot[]>;
+
+type PickTarget = { index: number; key: 'param1' | 'param2' | 'reference' | 'compareGlobal'; types: string };
 
 /**
- * xEdit's condition editor. SetConditions replaces the whole list, so this reads the current one
- * back with GetConditions, edits it locally, and writes it in one call -- which also means Cancel
- * genuinely cancels, since nothing is sent until Save.
+ * The condition editor. Which fields a row shows is driven by xEdit's condition-function table
+ * (transcribed in ConditionFunctions.cs): 259 of the 479 functions take no parameters at all, and
+ * most of the rest take exactly one of a specific record type -- so showing two blank FormKey boxes
+ * on every row, as the first cut did, was noise on almost every condition.
+ *
+ * Writes go through SetConditionsAt, which replaces the whole list, so the list is edited locally
+ * and sent once. Cancel genuinely cancels.
  */
 export default function ConditionsEditor(
   { plugin, record, path, label, onClose, onSaved }:
@@ -26,9 +32,12 @@ export default function ConditionsEditor(
   const [rows, setRows] = useState<ConditionDto[] | null>(null);
   const [functions, setFunctions] = useState<string[]>([]);
   const [runOns, setRunOns] = useState<string[]>([]);
+  const [paramTable, setParamTable] = useState<ParamTable>({});
+  const [labels, setLabels] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [pick, setPick] = useState<PickTarget | null>(null);
+  const [fnFilter, setFnFilter] = useState('');
 
   useEffect(() => {
     const b = back();
@@ -42,8 +51,35 @@ export default function ConditionsEditor(
       } catch (e: any) { setError('Could not read conditions: ' + (e?.message || e)); setRows([]); }
       try { setFunctions(JSON.parse(await b.GetConditionFunctions())); } catch { setFunctions([]); }
       try { setRunOns(JSON.parse(await b.GetConditionRunOnTypes())); } catch { setRunOns(['Subject']); }
+      try { setParamTable(JSON.parse(await b.GetConditionFunctionParams())); } catch { setParamTable({}); }
     })();
   }, [plugin, record, path]);
+
+  // Resolve every FormKey on screen to "EditorID [key]" in one round trip, so a parameter reads as
+  // a name the way it does in the grid rather than a raw id.
+  useEffect(() => {
+    const b = back();
+    if (!b || !rows) return;
+    const keys = new Set<string>();
+    for (const r of rows) {
+      for (const v of [r.param1, r.param2, r.reference, r.compareGlobal])
+        if (typeof v === 'string' && /^[0-9A-Fa-f]{6}:/.test(v)) keys.add(v);
+    }
+    const missing = [...keys].filter(k => !(k in labels));
+    if (missing.length === 0) return;
+    (async () => {
+      try {
+        const got = JSON.parse(await b.ResolveFormKeyLabels(missing.join(',')));
+        setLabels(prev => ({ ...prev, ...got }));
+      } catch { /* names are a nicety; the raw key still works */ }
+    })();
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const slotsFor = (fn: string): ParamSlot[] => paramTable[fn] ?? [];
+  const shownFunctions = useMemo(() => {
+    const q = fnFilter.trim().toLowerCase();
+    return q ? functions.filter(f => f.toLowerCase().includes(q)) : functions;
+  }, [functions, fnFilter]);
 
   const patch = (i: number, change: Partial<ConditionDto>) =>
     setRows(rs => (rs ?? []).map((r, ri) => (ri === i ? { ...r, ...change } : r)));
@@ -63,8 +99,7 @@ export default function ConditionsEditor(
     if (!b || !rows) return;
     setSaving(true);
     try {
-      const msg = await b.SetConditionsAt(plugin, record, path, JSON.stringify(rows));
-      onSaved(msg);
+      onSaved(await b.SetConditionsAt(plugin, record, path, JSON.stringify(rows)));
       onClose();
     } catch (e: any) {
       setError('Save failed: ' + (e?.message || e));
@@ -72,100 +107,141 @@ export default function ConditionsEditor(
     }
   };
 
+  const shown = (v: unknown) => {
+    const s = String(v ?? '');
+    return labels[s] ?? s;
+  };
+
+  const renderParam = (r: ConditionDto, i: number, slot: ParamSlot, key: 'param1' | 'param2') => (
+    <label className="ce-field" key={key}>
+      <span>{slot.label}</span>
+      {slot.kind === 'record' ? (
+        <button className="ce-ref" onClick={() => setPick({ index: i, key, types: slot.types })}
+          title={String(r[key] ?? '')}>
+          {r[key] ? shown(r[key]) : 'pick a record…'}
+        </button>
+      ) : (
+        <input
+          type={slot.kind === 'number' ? 'number' : 'text'}
+          value={String(r[key] ?? '')}
+          onChange={e => patch(i, { [key]: slot.kind === 'number' ? Number(e.target.value) : e.target.value } as Partial<ConditionDto>)}
+        />
+      )}
+    </label>
+  );
+
   return (
     <div className="ce-overlay" onClick={onClose}>
       <div className="ce-modal" onClick={e => e.stopPropagation()}>
         <div className="ce-header">
-          <span>Conditions -- {label} in {plugin}{path === 'Conditions' ? '' : ` (${path})`}</span>
-          <button onClick={onClose} title="Close"><X size={16} /></button>
+          <div className="ce-title">
+            <span className="ce-title-main">Conditions</span>
+            <span className="ce-title-sub">{label} · {plugin}{path === 'Conditions' ? '' : ` · ${path}`}</span>
+          </div>
+          <button className="ce-icon" onClick={onClose} title="Close"><X size={16} /></button>
         </div>
 
         {error && <div className="ce-error">{error}</div>}
+
+        <div className="ce-search">
+          <Search size={13} />
+          <input value={fnFilter} onChange={e => setFnFilter(e.target.value)}
+            placeholder="Filter the function list…" />
+        </div>
 
         <div className="ce-rows">
           {rows === null ? (
             <div className="ce-note">Reading…</div>
           ) : rows.length === 0 ? (
-            <div className="ce-note">No conditions. Add one below -- an empty list means the record always applies.</div>
-          ) : rows.map((r, i) => (
-            <div className="ce-row" key={i}>
-              <div className="ce-row-head">
-                <span className="ce-index">{i + 1}</span>
-                <select value={r.function} onChange={e => patch(i, { function: e.target.value })}>
-                  {(functions.includes(r.function) ? functions : [r.function, ...functions]).map(f => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
-                <select className="ce-op" value={r.operator} onChange={e => patch(i, { operator: e.target.value })}>
-                  {OPERATORS.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-                {r.compareGlobal !== undefined ? (
-                  <button className="ce-link" onClick={() => setPick({ index: i, key: 'compareGlobal' })}>
-                    {r.compareGlobal || 'pick global…'}
+            <div className="ce-note">No conditions. An empty list means the record always applies.</div>
+          ) : rows.map((r, i) => {
+            const slots = slotsFor(r.function);
+            const usesGlobal = r.compareGlobal !== undefined;
+            return (
+              <div className="ce-row" key={i}>
+                <div className="ce-line">
+                  <span className="ce-index">{i + 1}</span>
+
+                  <select className="ce-fn" value={r.function} onChange={e => patch(i, { function: e.target.value })}>
+                    {(shownFunctions.includes(r.function) ? shownFunctions : [r.function, ...shownFunctions])
+                      .map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+
+                  <select className="ce-op" value={r.operator} onChange={e => patch(i, { operator: e.target.value })}>
+                    {OPERATORS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+
+                  {usesGlobal ? (
+                    <button className="ce-ref ce-cmp" onClick={() => setPick({ index: i, key: 'compareGlobal', types: 'Global' })}>
+                      {r.compareGlobal ? shown(r.compareGlobal) : 'pick a global…'}
+                    </button>
+                  ) : (
+                    <input className="ce-cmp" type="number" step="any" value={r.value ?? 0}
+                      onChange={e => patch(i, { value: Number(e.target.value) })} />
+                  )}
+
+                  <button className="ce-toggle"
+                    title={usesGlobal ? 'Compare against a number instead' : 'Compare against a global variable instead'}
+                    onClick={() => patch(i, usesGlobal
+                      ? { compareGlobal: undefined, value: r.value ?? 1 }
+                      : { compareGlobal: '', value: undefined })}>
+                    {usesGlobal ? 'global' : 'number'}
                   </button>
-                ) : (
-                  <input
-                    className="ce-value"
-                    type="number"
-                    step="any"
-                    value={r.value ?? 0}
-                    onChange={e => patch(i, { value: Number(e.target.value) })}
-                  />
+
+                  <span className="ce-grow" />
+                  <button className="ce-icon" title="Move up" disabled={i === 0}
+                    onClick={() => move(i, -1)}><ArrowUp size={13} /></button>
+                  <button className="ce-icon" title="Move down" disabled={i === rows.length - 1}
+                    onClick={() => move(i, 1)}><ArrowDown size={13} /></button>
+                  <button className="ce-icon ce-danger" title="Remove"
+                    onClick={() => setRows(rs => (rs ?? []).filter((_, ri) => ri !== i))}><Trash2 size={13} /></button>
+                </div>
+
+                {(slots.length > 0 || r.runOn !== 'Subject') && (
+                  <div className="ce-args">
+                    {slots[0] && renderParam(r, i, slots[0], 'param1')}
+                    {slots[1] && renderParam(r, i, slots[1], 'param2')}
+
+                    <label className="ce-field">
+                      <span>Run on</span>
+                      <select value={r.runOn ?? 'Subject'} onChange={e => patch(i, { runOn: e.target.value })}>
+                        {(runOns.length ? runOns : ['Subject']).map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </label>
+
+                    {r.runOn === 'Reference' && (
+                      <label className="ce-field">
+                        <span>Reference</span>
+                        <button className="ce-ref"
+                          onClick={() => setPick({ index: i, key: 'reference', types: 'PlacedObject,PlacedNpc' })}>
+                          {r.reference ? shown(r.reference) : 'pick a reference…'}
+                        </button>
+                      </label>
+                    )}
+                  </div>
                 )}
-                <button
-                  className="ce-toggle"
-                  title={r.compareGlobal !== undefined ? 'Compare against a constant instead' : 'Compare against a global variable instead'}
-                  onClick={() => patch(i, r.compareGlobal !== undefined
-                    ? { compareGlobal: undefined, value: r.value ?? 1 }
-                    : { compareGlobal: '', value: undefined })}
-                >
-                  {r.compareGlobal !== undefined ? 'vs global' : 'vs value'}
-                </button>
-                <span className="ce-spacer" />
-                <button title="Move up" onClick={() => move(i, -1)}><ArrowUp size={13} /></button>
-                <button title="Move down" onClick={() => move(i, 1)}><ArrowDown size={13} /></button>
-                <button className="ce-danger" title="Remove"
-                  onClick={() => setRows(rs => (rs ?? []).filter((_, ri) => ri !== i))}>
-                  <Trash2 size={13} />
-                </button>
-              </div>
-              <div className="ce-row-args">
-                <label>Param 1</label>
-                <input value={String(r.param1 ?? '')} placeholder="FormKey, EditorID or number"
-                  onChange={e => patch(i, { param1: e.target.value })} />
-                <button className="ce-link" onClick={() => setPick({ index: i, key: 'param1' })}>pick…</button>
 
-                <label>Param 2</label>
-                <input value={String(r.param2 ?? '')} placeholder="FormKey, EditorID or number"
-                  onChange={e => patch(i, { param2: e.target.value })} />
-                <button className="ce-link" onClick={() => setPick({ index: i, key: 'param2' })}>pick…</button>
-
-                <label>Run on</label>
-                <select value={r.runOn ?? 'Subject'} onChange={e => patch(i, { runOn: e.target.value })}>
-                  {(runOns.length ? runOns : ['Subject']).map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-
-                {r.runOn === 'Reference' && (
-                  <>
-                    <label>Reference</label>
-                    <input value={r.reference ?? ''} placeholder="e.g. PlayerRef"
-                      onChange={e => patch(i, { reference: e.target.value })} />
-                    <button className="ce-link" onClick={() => setPick({ index: i, key: 'reference' })}>pick…</button>
-                  </>
+                {slots.length === 0 && (r.runOn ?? 'Subject') === 'Subject' && (
+                  <div className="ce-args ce-args-empty">
+                    <span>Takes no parameters.</span>
+                    <button className="ce-linkish" onClick={() => patch(i, { runOn: 'Reference' })}>
+                      run it on a reference instead
+                    </button>
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="ce-footer">
           <button onClick={() => setRows(rs => [...(rs ?? []), { ...BLANK }])}>
             <Plus size={13} /> Add condition
           </button>
-          <span className="ce-spacer" />
+          <span className="ce-grow" />
           <button onClick={onClose}>Cancel</button>
           <button className="ce-primary" disabled={rows === null || saving} onClick={save}>
-            {saving ? 'Saving…' : 'Save conditions'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
@@ -173,8 +249,8 @@ export default function ConditionsEditor(
       {pick && (
         <RecordPicker
           title={pick.key}
-          refType={null}
-          refTypes={null}
+          refType={pick.types.split(',')[0] || null}
+          refTypes={pick.types || null}
           onPick={fk => { patch(pick.index, { [pick.key]: fk } as Partial<ConditionDto>); setPick(null); }}
           onClose={() => setPick(null)}
         />

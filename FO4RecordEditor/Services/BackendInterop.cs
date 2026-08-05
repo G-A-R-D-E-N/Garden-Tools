@@ -217,6 +217,16 @@ public class BackendInterop
             $"{plugin} {record} {path}");
     public string GetConditionFunctions() =>
         DebugLog.Guard(nameof(GetConditionFunctions), WriteService.ConditionFunctionNames);
+    public string GetConditionFunctionParams() =>
+        DebugLog.Guard(nameof(GetConditionFunctionParams), ConditionFunctions.AsJson);
+    /// <summary>"EditorID [FormKey]" for each FormKey passed in, so the editor can show names
+    /// instead of raw ids. Unresolvable keys come back as themselves.</summary>
+    public string ResolveFormKeyLabels(string formKeysCsv) =>
+        DebugLog.Guard(nameof(ResolveFormKeyLabels), () =>
+            Newtonsoft.Json.JsonConvert.SerializeObject(
+                (formKeysCsv ?? "").Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries)
+                    .Distinct()
+                    .ToDictionary(k => k, k => MutagenLoader.DescribeFormKey(Env, k))), formKeysCsv);
     public string GetConditionRunOnTypes() =>
         DebugLog.Guard(nameof(GetConditionRunOnTypes), WriteService.ConditionRunOnNames);
     public string CopyAsNewRecord(string sourcePlugin, string id, string targetPlugin, string newEditorId) =>

@@ -66,6 +66,25 @@ public static partial class MutagenLoader
     /// target through the load order's link cache. Falls back to the raw FormKey when the
     /// target can't be resolved (no env loaded, or a dangling/unmastered reference).
     /// </summary>
+    /// <summary>A FormKey string rendered the way the grid renders links -- "EditorID [key]" -- so a
+    /// condition parameter can show a name instead of a raw id. Returns the input when unresolvable.</summary>
+    public static string DescribeFormKey(object? envObj, string formKeyStr)
+    {
+        if (!Mutagen.Bethesda.Plugins.FormKey.TryFactory(formKeyStr, out var fk)) return formKeyStr;
+        if (fk.IsNull) return "Null";
+        try
+        {
+            var cache = LinkCache;
+            if (cache != null && cache.TryResolve<IMajorRecordGetter>(fk, out var rec))
+            {
+                var eid = rec.EditorID ?? "";
+                if (eid.Length > 0) return $"{eid} [{fk}]";
+            }
+        }
+        catch { }
+        return formKeyStr;
+    }
+
     public static string FormatFormLink(Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli)
     {
         var fk = fli.FormKey;

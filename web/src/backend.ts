@@ -40,6 +40,8 @@ export interface Backend {
   SetConditionsAt(plugin: string, record: string, path: string, conditionsJson: string): Promise<string>;
   GetConditionFunctions(): Promise<string>;                         // JSON: string[]
   GetConditionRunOnTypes(): Promise<string>;                        // JSON: string[]
+  GetConditionFunctionParams(): Promise<string>;                    // JSON: fn -> ParamSlot[]
+  ResolveFormKeyLabels(formKeysCsv: string): Promise<string>;       // JSON: key -> "EditorID [key]"
   CopyAsNewRecord(sourcePlugin: string, id: string, targetPlugin: string,
                   newEditorId: string): Promise<string>;
   RemoveIdenticalToMaster(plugin: string, apply: boolean): Promise<string>;
