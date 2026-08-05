@@ -3,13 +3,18 @@ import {
   Folder, ChevronRight, ChevronDown, Filter, EyeOff, Pencil, Copy, Save, Trash2,
   Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network,
 } from 'lucide-react';
-import type { ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem } from './backend';
+import type {
+  ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry,
+} from './backend';
 import RecordPicker from './RecordPicker';
+import WorkspaceHeader from './Workspace/WorkspaceHeader';
+import { buildActions } from './Workspace/actions';
+import ConflictsView, { type ConflictLayout } from './Workspace/ConflictsView';
 import './RecordView.css';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
-export type RecordTab = 'grid' | 'conflicts' | 'references' | 'history' | 'dependencies';
+export type RecordTab = 'grid' | 'fields' | 'conflicts' | 'references' | 'history' | 'dependencies';
 
 const defaultExpanded = (r: ConflictFieldRow) => !(r.IsSummary || r.DisplayLabel.startsWith('['));
 
@@ -101,6 +106,18 @@ export default function RecordView(
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [refBy, setRefBy] = useState<RefByEntry[] | null>(null);
   const [problems, setProblems] = useState<RecordProblem[] | null>(null);
+  const [deps, setDeps] = useState<Dependency[] | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[] | null>(null);
+
+  // Which two plugin columns the compare is anchored to; null means base against the winner.
+  const [anchors, setAnchors] = useState<[string, string] | null>(null);
+  const [compareOnly, setCompareOnly] = useState(false);
+  const [conflictLayout, setConflictLayout] = useState<ConflictLayout>(
+    () => (localStorage.getItem('conflictLayout') as ConflictLayout) || 'cards');
+  const changeLayout = (next: ConflictLayout) => {
+    setConflictLayout(next);
+    localStorage.setItem('conflictLayout', next);
+  };
 
   useEffect(() => {
     const close = () => setMenu(null);
@@ -113,9 +130,12 @@ export default function RecordView(
     const b = back();
     if (!b) return;
     setRefBy(null); setProblems(null); setCollapsedGroups({});
+    setDeps(null); setHistory(null); setAnchors(null);
     (async () => {
       try { setProblems(JSON.parse(await b.GetProblems(matrix.FormKey))); } catch { setProblems([]); }
       try { setRefBy(JSON.parse(await b.GetReferencedBy(matrix.FormKey))); } catch { setRefBy([]); }
+      try { setDeps(JSON.parse(await b.GetDependencies(matrix.FormKey))); } catch { setDeps([]); }
+      try { setHistory(JSON.parse(await b.GetHistory(matrix.FormKey))); } catch { setHistory([]); }
     })();
   }, [matrix.FormKey]);
 
@@ -177,11 +197,6 @@ export default function RecordView(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [matrix.Rows]
   );
-  const conflictStats = useMemo(() => {
-    const changedFormIds = conflictLeafRows.filter(r => r.EditKind === 'Ref').length;
-    const values = conflictLeafRows.filter(r => r.EditKind !== 'Ref').length;
-    return { total: conflictLeafRows.length, values, changedFormIds };
-  }, [conflictLeafRows]);
 
   // Group conflicting leaf rows by their nearest Level-1 container ancestor.
   const conflictGroups = useMemo(() => {
@@ -294,6 +309,25 @@ export default function RecordView(
     catch (e: any) { setStatus('Clean failed: ' + (e?.message || e)); }
   };
 
+  // The Actions menu operates on the winning plugin, which is the one a record-level action
+  // almost always means. Per-column variants stay on the cell context menu.
+  const winnerCol = Math.max(0, matrix.Plugins.lastIndexOf(matrix.Winner));
+  const headerActions = useMemo(() => buildActions({
+    copyAsOverride: () => {
+      const target = window.prompt(
+        'Copy as override into which plugin?',
+        editablePlugins[0] ?? '');
+      if (target) void copyInto(winnerCol, target);
+    },
+    changeFormId: () => void renumberFormId(winnerCol),
+    compactToEsl: () => void compactEsl(winnerCol),
+    cleanUdr: () => void cleanPlugin(winnerCol),
+    deleteRecord: () => void deleteRecord(winnerCol),
+  // These handlers close over matrix/state that changes on every reload; rebuilding the list each
+  // render is cheaper than memoising every handler.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [matrix.FormKey, matrix.Winner, editablePlugins]);
+
   const askImpact = () => {
     setMenu(null);
     const id = matrix.EditorID || matrix.FormKey;
@@ -397,6 +431,7 @@ export default function RecordView(
       {/* ── Tab bar ───────────────────────────────────────────────── */}
       <div className="rv-tab-bar">
         <TabBtn id="grid" current={recordTab} set={setRecordTab}>Record View</TabBtn>
+        <TabBtn id="fields" current={recordTab} set={setRecordTab} count={matrix.Rows.length}>Field View</TabBtn>
         <TabBtn id="conflicts" current={recordTab} set={setRecordTab} count={conflictCount}>Conflicts</TabBtn>
         <TabBtn id="references" current={recordTab} set={setRecordTab} count={refByCount}>
           <Link2 size={12} /> References
@@ -409,14 +444,21 @@ export default function RecordView(
         </TabBtn>
       </div>
 
-      {/* ── Breadcrumb (always visible) ───────────────────────────── */}
-      <div className="rv-breadcrumb">
+      {/* ── Workspace header: compare pills, breadcrumb, actions ──── */}
+      <WorkspaceHeader
+        matrix={matrix}
+        anchors={anchors}
+        onAnchorsChange={setAnchors}
+        compareOnly={compareOnly}
+        onCompareOnlyChange={setCompareOnly}
+        actions={headerActions}
+        onOpenRecord={(fk, pl) => onOpenRecord?.(fk, pl)}
+      />
+      <div className="rv-breadcrumb rv-breadcrumb-slim">
         <Folder size={13} />
         <span>{plugin}</span>
         <ChevronRight size={11} />
         <span className="rv-bc-cat">{matrix.Type}</span>
-        <ChevronRight size={11} />
-        <span className="rv-bc-rec">{matrix.EditorID || matrix.FormKey}</span>
         {(() => {
           const badge = LEVEL_BADGES[matrix.Level];
           return badge ? <span className={`rv-lvl-badge ${badge.cls}`}>{badge.label}</span> : null;
@@ -455,20 +497,14 @@ export default function RecordView(
 
       {/* ── CONFLICTS tab ─────────────────────────────────────────── */}
       {recordTab === 'conflicts' && (
-        <div className="rv-conflicts-tab">
-          {conflictCount === 0 ? (
-            <div className="rv-tab-empty">No conflicts in this record.</div>
-          ) : (
-            <>
-              {/* Stat bar */}
-              <div className="rv-conflict-stats-bar">
-                <span className="rv-cs-total">{conflictCount} conflict{conflictCount !== 1 ? 's' : ''} found in this record</span>
-                <div className="rv-cs-pills">
-                  <span className="rv-cs-pill rv-cs-values">{conflictStats.values} Modified Values</span>
-                  <span className="rv-cs-pill rv-cs-formids">{conflictStats.changedFormIds} Changed FormIDs</span>
-                </div>
-              </div>
-
+        <ConflictsView
+          matrix={matrix}
+          rows={conflictLeafRows}
+          layout={conflictLayout}
+          onLayoutChange={changeLayout}
+          anchors={anchors}
+          matrixView={
+            <div className="rv-conflicts-tab">
               {/* Single unified table -- xEdit style with group separator rows */}
               <div className="rv-conflict-groups">
                 <table className="rv-grid rv-cg-table" style={{ minWidth: 280 + matrix.Plugins.length * 200 }}>
@@ -530,9 +566,9 @@ export default function RecordView(
                   </tbody>
                 </table>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          }
+        />
       )}
 
       {/* ── REFERENCES tab ────────────────────────────────────────── */}
@@ -564,11 +600,105 @@ export default function RecordView(
         </div>
       )}
 
-      {/* ── HISTORY / DEPENDENCIES stubs ──────────────────────────── */}
-      {(recordTab === 'history' || recordTab === 'dependencies') && (
-        <div className="rv-tab-empty rv-tab-stub">
-          <Clock size={28} />
-          <span>{recordTab === 'history' ? 'Change history' : 'Record dependencies'} -- coming soon.</span>
+      {/* ── FIELD VIEW tab ────────────────────────────────────────── */}
+      {recordTab === 'fields' && (
+        <div className="rv-list-tab">
+          <div className="rv-tab-note">
+            Every field of the winning version as a flat list, without the tree. Useful for reading
+            or copying a whole record at once; edit from Record View.
+          </div>
+          <table className="rv-flat-table">
+            <thead>
+              <tr><th>Field</th><th>Value</th><th>Kind</th><th>Group</th></tr>
+            </thead>
+            <tbody>
+              {matrix.Rows.map(r => (
+                <tr key={r.Field} className={r.Differs ? 'rv-row-diff' : ''}>
+                  <td className="rv-mono" title={r.Field}>{r.DisplayLabel || r.Field}</td>
+                  <td>{r.Values[winnerIdx] ?? <em>not set</em>}</td>
+                  <td className="rv-dim">{r.Kind ?? 'Value'}</td>
+                  <td className="rv-dim">{r.GroupLabel || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── HISTORY tab ───────────────────────────────────────────── */}
+      {recordTab === 'history' && (
+        <div className="rv-list-tab">
+          {history === null ? (
+            <div className="rv-tab-loading">Reading the override chain…</div>
+          ) : history.length === 0 ? (
+            <div className="rv-tab-empty">No plugin carries this record.</div>
+          ) : (
+            <>
+              {/* A plugin file has no real version history, so this is the override chain in load
+                  order, which is the honest thing the data can support. */}
+              <div className="rv-tab-note">
+                Override chain in load order. Plugin files carry no edit history, so this is who
+                touched the record, not when it was changed.
+              </div>
+              <table className="rv-flat-table">
+                <thead>
+                  <tr><th>#</th><th>Plugin</th><th>Action</th><th>Changed fields</th><th>File modified</th></tr>
+                </thead>
+                <tbody>
+                  {history.map(h => (
+                    <tr key={`${h.LoadOrder}:${h.Plugin}`}>
+                      <td className="rv-num">{h.LoadOrder}</td>
+                      <td>{h.Plugin}</td>
+                      <td><span className={`rv-tag rv-tag-${h.Action.split(' ')[0]}`}>{h.Action}</span></td>
+                      <td className="rv-num">{h.ChangedFields}</td>
+                      <td className="rv-dim">{h.LastModified || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── DEPENDENCIES tab ──────────────────────────────────────── */}
+      {recordTab === 'dependencies' && (
+        <div className="rv-list-tab">
+          {deps === null ? (
+            <div className="rv-tab-loading">Resolving outgoing references…</div>
+          ) : deps.length === 0 ? (
+            <div className="rv-tab-empty">This record does not reference anything.</div>
+          ) : (
+            <>
+              <div className="rv-tab-note">
+                What the winning version needs in order to load. A row marked missing is a dangling
+                FormLink, which is a crash risk rather than a cosmetic problem.
+              </div>
+              <table className="rv-flat-table">
+                <thead>
+                  <tr><th>FormID</th><th>Editor ID</th><th>Type</th><th>Provided by</th></tr>
+                </thead>
+                <tbody>
+                  {deps.map(d => (
+                    <tr
+                      key={d.FormKey}
+                      className={d.Kind === 'missing' ? 'rv-row-bad' : 'rv-row-link'}
+                      onClick={() => d.Kind === 'link' && onOpenRecord?.(d.FormKey, d.Plugin)}
+                    >
+                      <td className="rv-mono">{d.FormKey}</td>
+                      <td>{d.EditorId || <em>unnamed</em>}</td>
+                      <td>{d.Type || '-'}</td>
+                      <td>
+                        {d.Kind === 'missing'
+                          ? <span className="rv-tag rv-tag-missing">unresolved</span>
+                          : d.Plugin}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </div>
       )}
 

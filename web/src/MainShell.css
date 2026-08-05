@@ -745,3 +745,30 @@
 [data-theme="light"] .broken-refs-modal { background: #ffffff; border-color: #ddd; }
 [data-theme="light"] .broken-refs-header { border-color: #ddd; }
 [data-theme="light"] .broken-refs-body { color: #1e1e1e; }
+
+/* Type-first navigator pane: three stacked sections filling the sidebar. */
+.navigator-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Sidebar splitter (Task 1.4). Matches the chat resizer's feel on the other side. */
+.sidebar-resizer {
+  flex: 0 0 auto;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.sidebar-resizer:hover { background: var(--accent-color); }
+
+/* Record tab strip: one tab per open record. */
+.editor-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
