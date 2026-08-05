@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Pencil, Copy, Save, Trash2,
-  Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network,
+  Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network, HelpCircle,
 } from 'lucide-react';
 import type {
   ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry,
@@ -55,6 +55,26 @@ const LEVEL_BADGES: Record<string, { label: string; cls: string }> = {
   onlyone:    { label: 'Single Record', cls: 'rv-lvl-onlyone' },
 };
 
+/** Row shading, keyed by ConflictAll severity. */
+const LEGEND_ROWS: { cls: string; label: string }[] = [
+  { cls: 'rv-s-none', label: 'No conflict' },
+  { cls: 'rv-s-benign', label: 'Benign conflict' },
+  { cls: 'rv-s-override', label: 'Override without conflict' },
+  { cls: 'rv-s-conflict', label: 'Conflict' },
+  { cls: 'rv-s-critical', label: 'Critical conflict' },
+];
+
+/** Cell states, keyed by ConflictThis. */
+const LEGEND_CELLS: { cls: string; label: string }[] = [
+  { cls: 'rv-c-notdefined', label: 'Not defined' },
+  { cls: 'rv-c-identical', label: 'Identical to master' },
+  { cls: 'rv-c-only', label: 'Single record' },
+  { cls: 'rv-c-master', label: 'Master' },
+  { cls: 'rv-c-override', label: 'Override without conflict' },
+  { cls: 'rv-c-win', label: 'Conflict winner (what the game uses)' },
+  { cls: 'rv-c-lose', label: 'Conflict loser' },
+];
+
 const SEV_ORDER: Record<string, number> = { none: 0, benign: 1, override: 2, conflict: 3, critical: 4 };
 
 interface Menu { x: number; y: number; row: ConflictFieldRow; col: number; }
@@ -88,6 +108,7 @@ export default function RecordView(
 
   const [filter, setFilter] = useState('');
   const [valueFilter, setValueFilter] = useState('');
+  const [legendOpen, setLegendOpen] = useState(false);
   const [onlyDiffing, setOnlyDiffing] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
@@ -391,7 +412,7 @@ export default function RecordView(
         {gridRows.length === 0 ? (
           <tr><td className="rv-empty" colSpan={matrix.Plugins.length + 1}>No fields match.</td></tr>
         ) : gridRows.map((r, ri) => (
-          <tr key={ri} className={[r.Differs ? 'rv-diff' : '', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
+          <tr key={ri} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
             <td
               className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
               onDoubleClick={() => r.HasChildren && toggle(r)}
@@ -493,6 +514,31 @@ export default function RecordView(
             })()}
             <span className="rv-tb-src" title={`Opened from ${plugin}`}>{plugin}</span>
             {status && <span className="rv-status">{status}</span>}
+            <button
+              className="rv-legend-btn"
+              onClick={() => setLegendOpen(o => !o)}
+              title="What the colours mean"
+            >
+              <HelpCircle size={12} /> Legend
+            </button>
+            {legendOpen && (
+              <div className="rv-legend">
+                <h4>Row: record state</h4>
+                {LEGEND_ROWS.map(l => (
+                  <div key={l.cls} className="rv-legend-row">
+                    <span className={`rv-legend-swatch ${l.cls}`} />
+                    <span>{l.label}</span>
+                  </div>
+                ))}
+                <h4>Value: per plugin</h4>
+                {LEGEND_CELLS.map(l => (
+                  <div key={l.cls} className="rv-legend-row">
+                    <span className="rv-legend-swatch" />
+                    <span className={l.cls}>{l.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="rv-grid-scroll">
             {renderGrid(rows)}
@@ -545,7 +591,7 @@ export default function RecordView(
                             </td>
                           </tr>
                           {!collapsed && g.rows.map((r, ri) => (
-                            <tr key={ri} className={['rv-diff', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
+                            <tr key={ri} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
                               <td className="rv-prop-col rv-sticky">
                                 <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
                               </td>
