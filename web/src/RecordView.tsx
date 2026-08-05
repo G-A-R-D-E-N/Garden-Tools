@@ -2,10 +2,10 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Pencil, Copy, Save, Trash2,
   Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network, HelpCircle,
-  Plus, Minus, ListFilter, ClipboardCopy, FilePlus2,
+  Plus, Minus, ListFilter, ClipboardCopy, FilePlus2, ArrowUp, ArrowDown, Eraser as EraserIcon,
 } from 'lucide-react';
 import type {
-  ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry,
+  ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry, ElementActions,
 } from './backend';
 import RecordPicker from './RecordPicker';
 import ConditionsEditor from './ConditionsEditor';
@@ -121,6 +121,7 @@ export default function RecordView(
   const [conditions, setConditions] = useState<{ plugin: string; path: string; label: string } | null>(null);
   const [status, setStatus] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
+  const [elementActions, setElementActions] = useState<ElementActions | null>(null);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Record<number, boolean>>({});
 
@@ -273,7 +274,16 @@ export default function RecordView(
     if (!menu) return;
     const b = back();
     if (!b) return;
-    (async () => { try { setEditablePlugins(JSON.parse(await b.GetEditablePlugins())); } catch { setEditablePlugins([]); } })();
+    setElementActions(null);
+    (async () => {
+      try { setEditablePlugins(JSON.parse(await b.GetEditablePlugins())); } catch { setEditablePlugins([]); }
+      try {
+        setElementActions(JSON.parse(
+          await b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field)));
+      } catch { setElementActions(null); }
+    })();
+  // Re-asking on every open is what keeps the menu honest after an add/remove changes the counts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menu]);
 
   const copyInto = async (col: number, target: string) => {
@@ -423,45 +433,37 @@ export default function RecordView(
     setStatus(`Copied ${what}: ${text}`);
   };
 
-  // A row is a list container when some other row hangs off it as an indexed entry.
-  const listRowIndexed = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of matrix.Rows) {
-      const br = r.Field.lastIndexOf('[');
-      if (br > 0) set.add(r.Field.slice(0, br));
-    }
-    return set;
-  }, [matrix.Rows]);
-
   // Conditions are not always the record's own list: a magic effect keeps its own at
   // Effects[0].Conditions, and a perk two deep at Effects[0].Conditions[0].Conditions (the outer
   // list holds the run-on tab wrapper). Any row under a Conditions segment opens the editor; the
   // backend resolves the path down to the one editable Condition list.
   const conditionsPathOf = (field: string) => (/(^|\.)Conditions(\[|$)/.test(field) ? field : null);
 
-  const addListItem = async (r: ConflictFieldRow, col: number) => {
+  // xEdit's element menu, per xeMainForm.pas. Add constructs a default entry at the clicked row's
+  // position and leaves you to edit it in the grid -- it never asks for a value up front, and the
+  // menu only offers what the element actually supports.
+  const elementAction = async (
+    kind: 'add' | 'remove' | 'up' | 'down' | 'clear',
+    r: ConflictFieldRow, col: number, template = '',
+  ) => {
     setMenu(null);
     const b = back();
     if (!b) return;
-    const value = window.prompt(`Add to ${r.DisplayLabel || r.Field} -- FormKey or EditorID:`, '');
-    if (!value) return;
-    setStatus('Adding…');
-    try { setStatus(await b.AddListItem(matrix.Plugins[col], matrix.FormKey, r.Field, value)); await onReload(); }
-    catch (e: any) { setStatus('Add failed: ' + (e?.message || e)); }
-  };
-
-  const removeListEntry = async (r: ConflictFieldRow, col: number) => {
-    setMenu(null);
-    const b = back();
-    if (!b) return;
-    const br = r.Field.lastIndexOf('[');
-    const parent = br > 0 ? r.Field.slice(0, br) : r.Field;
-    const value = r.Values[col] ?? '';
-    if (!value) { setStatus('That column has no value to remove.'); return; }
-    if (!window.confirm(`Remove ${value} from ${parent} in ${matrix.Plugins[col]}?`)) return;
-    setStatus('Removing…');
-    try { setStatus(await b.RemoveListItem(matrix.Plugins[col], matrix.FormKey, parent, value)); await onReload(); }
-    catch (e: any) { setStatus('Remove failed: ' + (e?.message || e)); }
+    const plug = matrix.Plugins[col];
+    try {
+      let msg: string;
+      switch (kind) {
+        case 'add':    msg = await b.AddElement(plug, matrix.FormKey, r.Field, template); break;
+        case 'remove': msg = await b.RemoveElement(plug, matrix.FormKey, r.Field); break;
+        case 'up':     msg = await b.MoveElement(plug, matrix.FormKey, r.Field, -1); break;
+        case 'down':   msg = await b.MoveElement(plug, matrix.FormKey, r.Field, 1); break;
+        case 'clear':
+          if (!window.confirm(`Clear every entry from ${r.DisplayLabel || r.Field} in ${plug}?`)) return;
+          msg = await b.ClearElement(plug, matrix.FormKey, r.Field); break;
+      }
+      setStatus(msg);
+      await onReload();
+    } catch (e: any) { setStatus('Failed: ' + (e?.message || e)); }
   };
 
   // The Actions menu operates on the winning plugin, which is the one a record-level action
@@ -927,12 +929,39 @@ export default function RecordView(
               setConditions({ plugin: plug, path: p, label: matrix.EditorID || matrix.FormKey });
             }}><ListFilter size={13} /> Edit conditions…</button>
           )}
-          {listRowIndexed.has(menu.row.Field) && menu.row.Level === 0 && (
-            <button onClick={() => addListItem(menu.row, menu.col)}><Plus size={13} /> Add to {menu.row.DisplayLabel || menu.row.Field}…</button>
+          {/* xEdit's element menu: only what this element actually supports. Add with one accepted
+              type reads Add "Type"; with several it lists them, the way GetAssignTemplates does. */}
+          {elementActions?.canAdd && elementActions.templates.length === 1 && (
+            <button onClick={() => elementAction('add', menu.row, menu.col, elementActions.templates[0])}>
+              <Plus size={13} /> Add "{elementActions.templates[0]}"
+            </button>
           )}
-          {menu.row.Field.endsWith(']') && (
-            <button className="rv-danger" onClick={() => removeListEntry(menu.row, menu.col)}>
-              <Minus size={13} /> Remove this entry
+          {elementActions?.canAdd && elementActions.templates.length > 1 && (
+            <>
+              <div className="rv-context-label">Add</div>
+              {elementActions.templates.map(t => (
+                <button key={t} onClick={() => elementAction('add', menu.row, menu.col, t)}>
+                  <Plus size={13} /> {t}
+                </button>
+              ))}
+            </>
+          )}
+          {elementActions?.canRemove && (
+            <button className="rv-danger" onClick={() => elementAction('remove', menu.row, menu.col)}>
+              <Minus size={13} /> Remove
+            </button>
+          )}
+          {(elementActions?.canMoveUp || elementActions?.canMoveDown) && (
+            <>
+              <button disabled={!elementActions?.canMoveUp}
+                onClick={() => elementAction('up', menu.row, menu.col)}><ArrowUp size={13} /> Move up</button>
+              <button disabled={!elementActions?.canMoveDown}
+                onClick={() => elementAction('down', menu.row, menu.col)}><ArrowDown size={13} /> Move down</button>
+            </>
+          )}
+          {elementActions?.canClear && (
+            <button className="rv-danger" onClick={() => elementAction('clear', menu.row, menu.col)}>
+              <EraserIcon size={13} /> Clear ({elementActions.count})
             </button>
           )}
 

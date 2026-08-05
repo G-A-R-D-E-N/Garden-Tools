@@ -227,6 +227,23 @@ public class BackendInterop
     public string RemoveIdenticalToMaster(string plugin, bool apply) =>
         DebugLog.Guard(nameof(RemoveIdenticalToMaster), () => WriteService.RemoveIdenticalToMaster(Env, plugin, apply),
             $"{plugin} apply={apply}");
+    // ---- xEdit element menu (Add / Remove / Move / Clear on a list row) ----
+    public string DescribeElement(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(DescribeElement), () => ElementService.DescribeElement(Env, plugin, record, path),
+            $"{plugin} {record} {path}");
+    public string AddElement(string plugin, string record, string path, string template) =>
+        DebugLog.Guard(nameof(AddElement), () => ElementService.AddElement(plugin, record, path,
+            string.IsNullOrWhiteSpace(template) ? null : template, Env), $"{plugin} {record} {path} <{template}>");
+    public string RemoveElement(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(RemoveElement), () => ElementService.RemoveElement(plugin, record, path, Env),
+            $"{plugin} {record} {path}");
+    public string MoveElement(string plugin, string record, string path, int delta) =>
+        DebugLog.Guard(nameof(MoveElement), () => ElementService.MoveElement(plugin, record, path, delta, Env),
+            $"{plugin} {record} {path} {delta:+#;-#;0}");
+    public string ClearElement(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(ClearElement), () => ElementService.ClearElement(plugin, record, path, Env),
+            $"{plugin} {record} {path}");
+
     public string AddMasters(string plugin, string mastersCsv) =>
         DebugLog.Guard(nameof(AddMasters), () => WriteService.AddMasters(plugin,
             (mastersCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), Env),

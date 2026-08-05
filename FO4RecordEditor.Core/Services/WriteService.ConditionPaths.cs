@@ -169,4 +169,26 @@ public static partial class WriteService
                 return typeof(T).IsAssignableFrom(iface.GetGenericArguments()[0]);
         return list.Count > 0 && list[0] is T;
     }
+
+    // ── shims for ElementService ────────────────────────────────────────────────────────────────
+    // ElementService needs the same open/find/notify plumbing every write path here uses. These
+    // expose it without widening the private helpers themselves.
+
+    /// <summary>Open the plugin for editing and hand back the mutable mod (null with a reason).</summary>
+    public static Mutagen.Bethesda.Fallout4.IFallout4Mod? GetMutableFor(string plugin, object? env, out string msg) =>
+        EnsureOpen(plugin, env, out msg);
+
+    /// <summary>Find a record by FormKey or EditorID inside an already-open mutable mod.</summary>
+    public static Mutagen.Bethesda.Fallout4.IFallout4MajorRecord? FindRecordIn(
+        Mutagen.Bethesda.Fallout4.IFallout4Mod mod, string recordId) => FindMutableRecord(mod, recordId);
+
+    /// <summary>Split "MyMod.esp" or a full path into (name, explicitPath).</summary>
+    public static (string name, string? path) SplitPlugin(string plugin) => NormalizePlugin(plugin);
+
+    /// <summary>Fire the PluginChanged notification so the UI and caches see the edit.</summary>
+    public static void RaiseChanged(string name) => NotifyChanged(name);
+
+    /// <summary>Resolve a FormKey string or EditorID against the load order.</summary>
+    public static bool TryResolveFormKey(object? env, string value, out Mutagen.Bethesda.Plugins.FormKey fk) =>
+        ResolveFk(env, value, out fk);
 }

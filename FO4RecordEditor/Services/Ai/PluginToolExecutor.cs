@@ -544,6 +544,80 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "record" }
             }),
+        new("element_add",
+            "xEdit's element 'Add': insert a NEW default-constructed entry into a list at a path, then edit its " +
+            "fields with set_field. Unlike add_list_item (FormLinks only), this works for STRUCT lists -- " +
+            "conditions, effects, leveled entries, components. Call element_describe first to learn which types " +
+            "the list accepts when it holds an abstract type (e.g. a Conditions list takes ConditionFloat or " +
+            "ConditionGlobal).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID." },
+                    path = new { type = "string", description = "The list ('Conditions') to append to, or an entry ('Conditions[1]') to insert before." },
+                    template = new { type = "string", description = "Which type to create, when the list accepts more than one. Defaults to the first." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_remove",
+            "xEdit's element 'Remove': drop one entry from a list. The path must name the ENTRY, e.g. " +
+            "'Conditions[1]', not the list.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string" },
+                    path = new { type = "string", description = "e.g. 'Effects[0].Conditions[2]'." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_move",
+            "xEdit's element 'Move up'/'Move down': reorder an entry within its list. Order is meaningful for " +
+            "conditions, leveled entries and effects, so this is a real edit.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string" },
+                    path = new { type = "string", description = "The entry to move, e.g. 'Conditions[2]'." },
+                    delta = new { type = "integer", description = "-1 to move up, 1 to move down." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_clear",
+            "xEdit's element 'Clear': empty a list without removing the field itself.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string" },
+                    path = new { type = "string", description = "The list to empty, e.g. 'Conditions'." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_describe",
+            "Which element actions are legal at a path, and which types the list accepts. Returns " +
+            "{canAdd, templates, elementType, canRemove, canMoveUp, canMoveDown, canClear, count}. Read-only.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string", description = "Omit for the winning version." },
+                    record = new { type = "string" },
+                    path = new { type = "string" }
+                },
+                required = new[] { "record", "path" }
+            }),
         new("set_conditions_at",
             "Replace the Condition list at a nested path (xEdit's per-effect conditions). set_conditions only " +
             "reaches a record's OWN Conditions; a magic effect keeps its own at 'Effects[0].Conditions' and a " +
@@ -1420,6 +1494,7 @@ public sealed class PluginToolExecutor
             "create_record" or "create_cell" or "create_placed_object" or
             "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
             "remove_identical_to_master" or "create_merged_patch" or "add_masters" or "set_conditions_at" or
+            "element_add" or "element_remove" or "element_move" or "element_clear" or
             "renumber_plugin_formids" or "create_seq_file" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
@@ -1452,6 +1527,11 @@ public sealed class PluginToolExecutor
             "create_merged_patch" => $"{(Applying() ? "build" : "preview")} merged patch {Str("patch_plugin")}",
             "get_conditions"      => $"read conditions of {ShortId(record)}",
             "set_conditions_at"   => $"{ShortId(record)}: conditions rebuilt at {Str("path")}",
+            "element_add"         => $"{ShortId(record)}: add to {Str("path")}",
+            "element_remove"      => $"{ShortId(record)}: remove {Str("path")}",
+            "element_move"        => $"{ShortId(record)}: move {Str("path")}",
+            "element_clear"       => $"{ShortId(record)}: clear {Str("path")}",
+            "element_describe"    => $"{ShortId(record)}: actions at {Str("path")}",
             "add_masters"         => $"add master(s) to {plugin}",
             "renumber_plugin_formids" => $"{(Applying() ? "renumber" : "preview renumber of")} every record in {plugin}",
             "create_seq_file"     => $"write {plugin}.seq",
@@ -1642,6 +1722,17 @@ public sealed class PluginToolExecutor
                 return Str("path") is { Length: > 0 } condPath
                     ? WriteService.GetConditionsAtPath(env, Str("plugin"), Str("record"), condPath)
                     : WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
+            case "element_add":
+                return ElementService.AddElement(Str("plugin"), Str("record"), Str("path"),
+                    Str("template") is { Length: > 0 } tpl ? tpl : null, env);
+            case "element_remove":
+                return ElementService.RemoveElement(Str("plugin"), Str("record"), Str("path"), env);
+            case "element_move":
+                return ElementService.MoveElement(Str("plugin"), Str("record"), Str("path"), Int("delta", 1), env);
+            case "element_clear":
+                return ElementService.ClearElement(Str("plugin"), Str("record"), Str("path"), env);
+            case "element_describe":
+                return ElementService.DescribeElement(env, Str("plugin"), Str("record"), Str("path"));
             case "set_conditions_at":
                 return WriteService.SetConditionsAtPath(Str("plugin"), Str("record"), Str("path"), Str("conditions"), env);
             case "add_masters":

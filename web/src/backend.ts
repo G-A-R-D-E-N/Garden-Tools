@@ -30,6 +30,11 @@ export interface Backend {
   RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;
 
   // ---- xEdit parity ----
+  DescribeElement(plugin: string, record: string, path: string): Promise<string>;  // JSON: ElementActions
+  AddElement(plugin: string, record: string, path: string, template: string): Promise<string>;
+  RemoveElement(plugin: string, record: string, path: string): Promise<string>;
+  MoveElement(plugin: string, record: string, path: string, delta: number): Promise<string>;
+  ClearElement(plugin: string, record: string, path: string): Promise<string>;
   GetConditions(plugin: string, record: string): Promise<string>;   // JSON: ConditionDto[]
   GetConditionsAt(plugin: string, record: string, path: string): Promise<string>;
   SetConditionsAt(plugin: string, record: string, path: string, conditionsJson: string): Promise<string>;
@@ -125,6 +130,19 @@ export interface ConflictFieldRow {
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }
 export interface RecordProblem { Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
+/** Which xEdit element actions are legal at a grid row, from DescribeElement. */
+export interface ElementActions {
+  canAdd: boolean;
+  templates: string[];     // types the list accepts; >1 means Add is a submenu, as in xEdit
+  elementType: string;
+  canRemove: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  canClear: boolean;
+  count: number;
+  error?: string;
+}
+
 /** One row of a record's Conditions list, in the shape SetConditions round-trips. */
 export interface ConditionDto {
   function: string;

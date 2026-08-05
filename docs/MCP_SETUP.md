@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **84 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **89 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -101,6 +101,33 @@ to use.
 `copy_as_new_record` is the other half of xEdit's copy menu: it duplicates a record into the target
 plugin under a **brand new FormID** rather than overriding the original, which is how you make a
 variant of an existing item.
+
+### The element menu (xEdit's Add / Remove / Move / Clear on a list row)
+`element_describe` · `element_add` · `element_remove` · `element_move` · `element_clear`
+
+This is xEdit's element menu as it actually behaves, read out of
+`xeMainForm.pas` (`pmuViewPopup`, `mniViewAddClick`, `mniViewRemoveClick`, `mniViewMoveUpClick`):
+
+- **Add never asks for a value.** xEdit calls `TargetElement.Assign(TargetIndex, template, False)`,
+  which constructs an empty element of the container's own type and then focuses it for editing.
+  `element_add` does the same: it creates the entry, you fill it in with `set_field`.
+- **Add inserts at the clicked row's position.** `GetAddElement` walks up from the focused node
+  keeping its index, so right-clicking `Conditions[2]` inserts *before* entry 2. Pass the list path
+  instead (`Conditions`) to append.
+- **Add offers a choice when the list accepts more than one type.** That is xEdit's
+  `GetAssignTemplates`; here it is the concrete subclasses of an abstract element type. A
+  `Conditions` list holds the abstract `Condition`, so the templates are `ConditionFloat` and
+  `ConditionGlobal`; a perk's `Effects` list offers all twelve `APerkEffect` types.
+- `element_describe` reports which of these are legal at a path, so a UI can show only what applies,
+  the way xEdit enables each item from `IsRemovable` / `CanMoveUp` / `CanMoveDown` / `IsClearable`.
+
+Unlike `add_list_item`, which only ever appends a FormLink, these work on STRUCT lists: conditions,
+effects, leveled entries, components. A FormLink list still works too, and adds an empty link for
+you to point somewhere.
+
+Not implemented, because they depend on xEdit's multi-record selection and sibling compare, which
+this editor does not have: Copy to selected records, Remove from selected, Compare referenced row,
+Sort, Stick, and member switching for unions.
 
 ### Whole-plugin xEdit passes
 `remove_identical_to_master` · `create_merged_patch` · `add_masters` · `renumber_plugin_formids` ·
