@@ -13,3 +13,6 @@ web/dist/
 
 # Release output from package.ps1
 dist/
+
+# Linux packaging output (staged tree, publish dir and the built .deb)
+packaging/linux/out/

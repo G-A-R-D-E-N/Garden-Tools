@@ -11,9 +11,12 @@ A Fallout 4 plugin IDE. It is two things in one executable:
 It is built on a patched Mutagen, so it reads and writes real `.esp`/`.esm`/`.esl` binaries. It does
 not go through xEdit and does not need xEdit installed.
 
+It runs natively on **Windows and Linux** from one codebase. See
+[Linux](#linux) below, or [RUNNING_ON_LINUX.md](../RUNNING_ON_LINUX.md) for the detail.
+
 ---
 
-## Install
+## Install (Windows)
 
 **1. Install the .NET 9 Desktop Runtime (x64).** This is the only prerequisite.
    Get it here: <https://dotnet.microsoft.com/download/dotnet/9.0> -- pick **".NET Desktop Runtime 9.x", x64**.
@@ -35,6 +38,25 @@ not go through xEdit and does not need xEdit installed.
 Add `FO4RecordEditor.exe` as an executable in MO2 (Settings → Executables → `+` → Add from file).
 Launching it *through* MO2 is what lets it see your modlist's virtual Data folder, which is what you
 want when you are editing a plugin that overrides mods.
+
+---
+
+## Linux
+
+```bash
+sudo apt install ./packaging/linux/out/fo4recordeditor_1.0.0_amd64.deb
+fo4recordeditor
+```
+
+The .deb is self-contained, so there is no runtime to install first. Build it with
+`packaging/linux/build-deb.sh`.
+
+Same app, same code: the WPF shell hosts the React UI in WebView2, and the Linux build serves it
+from a local process and opens it in an app window. The interop layer, the record editing, and the
+MCP server (`fo4recordeditor --mcp --mo2 <instance>`) are all the identical compiled sources.
+
+A few helper tools (niftool, texconv, Archive2, PapyrusCompiler, xWMAEncode) only exist as Windows
+binaries; installing `wine` makes the panels that drive them work. Everything else is native.
 
 ---
 

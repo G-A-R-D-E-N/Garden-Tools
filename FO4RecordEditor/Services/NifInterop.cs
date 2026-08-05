@@ -16,32 +16,19 @@ public class NifInterop
 {
     public string BrowseForFile(string title, string filter)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a file" : title,
-            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
-        };
-        return dlg.ShowDialog() == true ? dlg.FileName : "";
+        return HostServices.PickFile(title, filter);
     }
 
     public string BrowseForFolder(string title)
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a folder" : title,
-        };
-        return dlg.ShowDialog() == true ? dlg.FolderName : "";
+        return HostServices.PickFolder(title);
     }
 
     /// <summary>Pick a save path for the output .nif.</summary>
     public string BrowseForSave(string title, string filter)
     {
-        var dlg = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Save as" : title,
-            Filter = string.IsNullOrWhiteSpace(filter) ? "NIF mesh|*.nif|All files|*.*" : filter,
-        };
-        return dlg.ShowDialog() == true ? dlg.FileName : "";
+        return HostServices.PickSavePath(title,
+            string.IsNullOrWhiteSpace(filter) ? "NIF mesh|*.nif|All files|*.*" : filter);
     }
 
     public Task<string> Import(string objPath, string outNif, string material,

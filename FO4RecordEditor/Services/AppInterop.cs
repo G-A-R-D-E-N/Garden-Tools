@@ -37,18 +37,15 @@ public class AppInterop
     /// 'profiles'). Returns the chosen path, or "" if cancelled or not a valid MO2 instance.</summary>
     public string BrowseForMo2Folder()
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = "Select your Mod Organizer 2 instance folder (the one containing 'mods' and 'profiles')",
-        };
         var last = _shell.Settings.Current.Mo2InstancePath;
-        if (!string.IsNullOrWhiteSpace(last) && System.IO.Directory.Exists(last)) dlg.InitialDirectory = last;
-        if (dlg.ShowDialog() != true) return "";
+        var seed = !string.IsNullOrWhiteSpace(last) && System.IO.Directory.Exists(last) ? last : "";
+        var instance = HostServices.PickFolder(
+            "Select your Mod Organizer 2 instance folder (the one containing 'mods' and 'profiles')", seed);
+        if (string.IsNullOrWhiteSpace(instance)) return "";
 
-        var instance = dlg.FolderName;
         if (!System.IO.Directory.Exists(System.IO.Path.Combine(instance, "profiles")))
         {
-            System.Windows.MessageBox.Show(
+            HostServices.ShowMessage(
                 "That folder doesn't look like an MO2 instance -- it has no 'profiles' subfolder. " +
                 "Pick the instance folder that contains 'mods', 'profiles', and 'ModOrganizer.ini'.");
             return "";

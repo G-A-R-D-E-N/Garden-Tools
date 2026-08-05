@@ -15,31 +15,17 @@ public class ArchiveInterop
 {
     public string BrowseForFile(string title, string filter)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a file" : title,
-            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
-        };
-        return dlg.ShowDialog() == true ? dlg.FileName : "";
+        return HostServices.PickFile(title, filter);
     }
 
     public string BrowseForFolder(string title)
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a folder" : title,
-        };
-        return dlg.ShowDialog() == true ? dlg.FolderName : "";
+        return HostServices.PickFolder(title);
     }
 
     public string BrowseForSave(string title, string filter)
     {
-        var dlg = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Save as" : title,
-            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
-        };
-        return dlg.ShowDialog() == true ? dlg.FileName : "";
+        return HostServices.PickSavePath(title, filter);
     }
 
     /// <summary>Structured entry list (JSON) for the panel's table. filterMode: "simple" (default) |

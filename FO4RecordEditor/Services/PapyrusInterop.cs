@@ -24,21 +24,12 @@ public class PapyrusInterop
 
     public string BrowseForFile(string title, string filter)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a file" : title,
-            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
-        };
-        return dlg.ShowDialog() == true ? dlg.FileName : "";
+        return HostServices.PickFile(title, filter);
     }
 
     public string BrowseForFolder(string title)
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a folder" : title,
-        };
-        return dlg.ShowDialog() == true ? dlg.FolderName : "";
+        return HostServices.PickFolder(title);
     }
 
     public Task<string> Compile(string source, string output, string imports, string flags,
