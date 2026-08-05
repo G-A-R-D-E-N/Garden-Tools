@@ -209,10 +209,16 @@ public static partial class MutagenLoader
             OverrideCount: Math.Max(0, contexts.Count - 1));
     }
 
+    /// <summary>
+    /// The record's type name. Registration.Name is the same source BuildConflictMatrix uses for
+    /// ConflictMatrix.Type, so the rail and the grid agree. The obvious-looking
+    /// Registration.TriggeringRecordType.Type throws on binary overlays, which silently fell back
+    /// to the CLR type name and produced "WeaponBinaryOverlay" instead of "Weapon".
+    /// </summary>
     private static string SignatureOf(IMajorRecordGetter r)
     {
-        try { return ((dynamic)r).Registration.TriggeringRecordType.Type; }
-        catch { return r.GetType().Name; }
+        try { return (string)((dynamic)r).Registration.Name; }
+        catch { return r.GetType().Name.Replace("BinaryOverlay", "").Replace("Binary", ""); }
     }
 
     /// <summary>
@@ -229,13 +235,20 @@ public static partial class MutagenLoader
         for (int col = 0; col < matrix.Plugins.Count; col++)
         {
             var plugin = matrix.Plugins[col];
+            // Two counts that cannot contradict each other: how many fields this plugin sets, and
+            // how many of those lose to a later plugin. An earlier attempt counted a "master"
+            // status as a conflict but not a change, so a base column reported more conflicts than
+            // changes, which reads as a bug even though both numbers were individually defensible.
+            int winnerCol = matrix.Plugins.Count - 1;
             int changes = 0, conflicts = 0;
             foreach (var row in matrix.Rows)
             {
                 if (col >= row.Statuses.Count) continue;
-                var st = row.Statuses[col];
-                if (st is "win" or "override" or "lose" or "only") changes++;
-                if (row.Differs && st is not ("notdefined" or "identical")) conflicts++;
+                if (row.Statuses[col] == "notdefined") continue;
+                changes++;
+                var mine = col < row.Values.Count ? row.Values[col] : "";
+                var winning = winnerCol < row.Values.Count ? row.Values[winnerCol] : "";
+                if (row.Differs && CanonValue(mine) != CanonValue(winning)) conflicts++;
             }
 
             string mtime = "";
