@@ -51,8 +51,10 @@ public static partial class WriteService
     {
         _mutable[name] = mod;
         MutagenLoader.EditableMods[name] = mod;  // prioritized for ALL reads (hot loading)
-        MutagenLoader.LooseMods[name] = mod;      // so list_plugins / the tree still see it
-        MutagenLoader.InvalidateModIndex(name);
+        // so list_plugins / the tree still see it. Via ReplaceLooseMod because opening a plugin that
+        // was already loaded read-only displaces a memory-mapped overlay, whose file handle stays
+        // open until it is disposed -- and that handle is on the very file save_plugin writes back to.
+        MutagenLoader.ReplaceLooseMod(name, mod);
     }
 
     // Accept a bare file name ("Patch.esp") OR a full path ("D:\mods\X\Patch.esp"). Returns the file
@@ -816,8 +818,9 @@ public static partial class WriteService
         _mutable.Remove(name);
         _sourcePath.Remove(name);
         MutagenLoader.EditableMods.TryRemove(name, out _);
-        MutagenLoader.LooseMods.TryRemove(name, out _);
-        MutagenLoader.InvalidateModIndex(name);
+        // ReleaseLooseMod, not a bare TryRemove: if this plugin was loaded read-only before it was
+        // opened for editing, the entry being dropped is a memory-mapped overlay holding the file.
+        MutagenLoader.ReleaseLooseMod(name);
         return OpenPlugin(path, env);
     }
 
@@ -1899,8 +1902,9 @@ public static partial class WriteService
         _mutable.Remove(name);
         _sourcePath.Remove(name);
         MutagenLoader.EditableMods.TryRemove(name, out _);
-        MutagenLoader.LooseMods.TryRemove(name, out _);
-        MutagenLoader.InvalidateModIndex(name);
+        // ReleaseLooseMod, not a bare TryRemove: if this plugin was loaded read-only before it was
+        // opened for editing, the entry being dropped is a memory-mapped overlay holding the file.
+        MutagenLoader.ReleaseLooseMod(name);
         NotifyChanged(name);
     }
 

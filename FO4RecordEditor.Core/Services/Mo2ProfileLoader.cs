@@ -206,7 +206,15 @@ public static class Mo2ProfileLoader
                 long size = 0;
                 try { size = new FileInfo(path).Length; } catch { }
 
-                IFallout4ModGetter mod = size > 0 && size <= FullReadMaxBytes
+                // An overlay keeps an open handle on its plugin file for as long as the environment
+                // lives, and nothing tears the environment down -- which is why saving over a loaded
+                // plugin falls back to writing a .new file beside it. (Measured, not assumed: loading
+                // Fallout4.esm as an overlay shows an open fd for it in /proc/self/fd, gone after
+                // Dispose; a full read shows none.) ReadLargePluginsIntoMemory lifts the size limit so
+                // everything is read into memory instead, trading RAM for saving in place. With the
+                // setting off this evaluates to exactly the previous expression.
+                var fullReadLimit = ToolPaths.ReadLargePluginsIntoMemory ? long.MaxValue : FullReadMaxBytes;
+                IFallout4ModGetter mod = size > 0 && size <= fullReadLimit
                     ? Fallout4Mod.CreateFromBinary(ModPath.FromPath(path), Fallout4Release.Fallout4)      // unlocked, editable
                     : Fallout4Mod.CreateFromBinaryOverlay(ModPath.FromPath(path), Fallout4Release.Fallout4); // mmap, fast
 

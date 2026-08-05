@@ -47,6 +47,7 @@ public class SettingsInterop
             s.FfmpegPath,
             s.XwmaEncodePath,
             s.Archive2Path,
+            s.ReadLargePluginsIntoMemory,
         });
     }
 
@@ -78,6 +79,7 @@ public class SettingsInterop
             if (dto.FfmpegPath != null)          s.FfmpegPath = dto.FfmpegPath.Trim();
             if (dto.XwmaEncodePath != null)      s.XwmaEncodePath = dto.XwmaEncodePath.Trim();
             if (dto.Archive2Path != null)        s.Archive2Path = dto.Archive2Path.Trim();
+            if (dto.ReadLargePluginsIntoMemory.HasValue) s.ReadLargePluginsIntoMemory = dto.ReadLargePluginsIntoMemory.Value;
 
             _shell.Settings.Save();
             _shell.RebuildProvider();
@@ -168,5 +170,6 @@ public class SettingsInterop
         public string? FfmpegPath { get; set; }
         public string? XwmaEncodePath { get; set; }
         public string? Archive2Path { get; set; }
+        public bool? ReadLargePluginsIntoMemory { get; set; }
     }
 }

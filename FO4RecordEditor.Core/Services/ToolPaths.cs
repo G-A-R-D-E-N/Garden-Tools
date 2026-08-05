@@ -37,6 +37,23 @@ public static class ToolPaths
     /// <summary>Drop the cached settings so a path edited in the GUI takes effect without a restart.</summary>
     public static void Invalidate() => _settings = null;
 
+    /// <summary>
+    /// Read every plugin fully into memory rather than memory-mapping the large ones.
+    /// The env var FO4RE_FULL_PLUGIN_READS wins over the stored setting, matching the
+    /// override-beats-auto-detected ordering the tool paths above use -- and letting a test select
+    /// the path without writing to the user's real settings.json.
+    /// </summary>
+    public static bool ReadLargePluginsIntoMemory
+    {
+        get
+        {
+            var env = System.Environment.GetEnvironmentVariable("FO4RE_FULL_PLUGIN_READS");
+            if (!string.IsNullOrWhiteSpace(env))
+                return env == "1" || env.Equals("true", System.StringComparison.OrdinalIgnoreCase);
+            return Settings.ReadLargePluginsIntoMemory;
+        }
+    }
+
     private static string App(params string[] parts) =>
         Path.Combine(new[] { AppContext.BaseDirectory }.Concat(parts).ToArray());
 

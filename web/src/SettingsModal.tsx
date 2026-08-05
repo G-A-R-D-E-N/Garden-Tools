@@ -22,6 +22,7 @@ interface Settings {
   FfmpegPath: string;
   XwmaEncodePath: string;
   Archive2Path: string;
+  ReadLargePluginsIntoMemory?: boolean;
 }
 
 const host = () => window.chrome?.webview?.hostObjects?.settings;
@@ -198,6 +199,25 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <div className="settings-input-row">
                   <input value={s.OutputFolder} onChange={e => set('OutputFolder', e.target.value)} />
                   <button className="settings-btn" onClick={() => browse('OutputFolder', 'Choose output folder for AI-authored plugins')}>Browse</button>
+                </div>
+              </label>
+
+              <label className="settings-field">
+                <span>Read large plugins into memory <em>(lets you save over a loaded plugin instead of getting a .new file beside it)</em></span>
+                <div className="settings-input-row">
+                  <input
+                    type="checkbox"
+                    checked={!!s.ReadLargePluginsIntoMemory}
+                    onChange={e => set('ReadLargePluginsIntoMemory', e.target.checked as never)}
+                    style={{ width: 'auto', flex: 'none' }}
+                  />
+                  <span className="settings-hint">
+                    Off by default, and expensive. Plugins over 1&nbsp;MB are normally opened as overlays,
+                    which keeps each file open for the whole session. Reading them into memory instead
+                    cost <strong>~2.2&nbsp;GB extra</strong> on a measured 657-plugin load order (39 plugins,
+                    197&nbsp;MB on disk -- record objects run about 11x their file size). Turn this on only
+                    if you need to overwrite a loaded plugin in place.
+                  </span>
                 </div>
               </label>
 

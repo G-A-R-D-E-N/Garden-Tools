@@ -285,6 +285,49 @@ public static class MutagenLoader
 
     public static void InvalidateModIndex(string modName) => _modIndexCache.TryRemove(modName, out _);
 
+    /// <summary>
+    /// Drop a loose mod and release its plugin file if that mod was memory-mapped.
+    /// </summary>
+    /// <remarks>
+    /// A binary overlay (see <see cref="LoadEsp"/>) mmaps its file and holds the handle until it is
+    /// disposed; a mutable mod (<c>CreateFromBinary</c>) reads into memory and is not
+    /// <see cref="IDisposable"/> at all, which is what makes the type test below a safe
+    /// discriminator between the two. Two things are never released here: the instance currently
+    /// open for editing, and the mod index, which is dropped FIRST because it keeps the mod as its
+    /// <c>Source</c> and would otherwise read from a disposed overlay.
+    /// <para>
+    /// <c>LooseModPaths</c> is deliberately left alone -- it is the "where did this plugin come
+    /// from" lookup that <c>FindPluginPath</c>/<c>EnsureOpen</c> depend on, and it is about the
+    /// file, not about any particular loaded instance of it.
+    /// </para>
+    /// <para>
+    /// Scope: this covers mods THIS class and WriteService put in <see cref="LooseMods"/>. Overlays
+    /// the game environment owns (Mo2ProfileLoader's load-order listings) are a separate lifetime
+    /// and are not touched here -- they are reachable from <see cref="LinkCache"/> and can only be
+    /// released by tearing the environment down.
+    /// </para>
+    /// </remarks>
+    public static void ReleaseLooseMod(string modName)
+    {
+        InvalidateModIndex(modName);
+        if (!LooseMods.TryRemove(modName, out var mod)) return;
+        if (EditableMods.TryGetValue(modName, out var editable) && ReferenceEquals(editable, mod)) return;
+        (mod as IDisposable)?.Dispose();
+    }
+
+    /// <summary>
+    /// Install a loose mod, releasing whatever instance it displaces. Overwriting the dictionary
+    /// entry directly is what leaked a file handle per reload: the previous overlay became
+    /// unreachable while its mmap stayed open for the rest of the process.
+    /// </summary>
+    public static void ReplaceLooseMod(string modName, object mod)
+    {
+        if (LooseMods.TryGetValue(modName, out var prev) && !ReferenceEquals(prev, mod))
+            ReleaseLooseMod(modName);
+        LooseMods[modName] = mod;
+        InvalidateModIndex(modName);
+    }
+
     // ---- test seams for the LRU cache (InternalsVisibleTo FO4RecordEditor.Tests) ----
     public static int ModIndexCacheCount => _modIndexCache.Count;
     public static bool ModIndexCacheContains(string modName) => _modIndexCache.ContainsKey(modName);
@@ -303,10 +346,11 @@ public static class MutagenLoader
         var modPath = ModPath.FromPath(espPath);
         var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
 
-        // Store the loose mod so it can be queried by GetGroups and PopulateNode
-        LooseMods[fileName] = mod;
+        // Store the loose mod so it can be queried by GetGroups and PopulateNode. Reloading the same
+        // file goes through ReplaceLooseMod so the previous overlay's mmap is released rather than
+        // left open for the rest of the session; it also drops the stale index for this file.
+        ReplaceLooseMod(fileName, mod);
         LooseModPaths[fileName] = espPath;
-        InvalidateModIndex(fileName);   // drop any stale index from a prior load of this file
 
         var dummy = new RecordNode { Key = "Loading...", Parent = root };
         AddLeafInit(dummy, "_NeedsGroups", fileName);
