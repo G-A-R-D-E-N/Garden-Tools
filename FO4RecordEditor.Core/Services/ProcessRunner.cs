@@ -77,8 +77,40 @@ public static class ProcessRunner
         return new ProcessResult(true, false, p.ExitCode, TextOf(so), TextOf(se));
     }
 
+    /// <summary>
+    /// Re-points a Windows-only helper at wine when running on Linux or macOS.
+    ///
+    /// The record editor itself is native everywhere, but several helpers it drives (niftool,
+    /// texconv, Archive2, PapyrusCompiler, xWMAEncode) only ship as Windows binaries and have no
+    /// Linux equivalent. They are non-interactive console tools, which wine handles well. Set
+    /// FO4RE_WINE to name a different wine binary, or to an empty value to disable the shim.
+    /// </summary>
+    private static void ShimWindowsExe(ProcessStartInfo psi)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        if (!psi.FileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return;
+
+        var wine = Environment.GetEnvironmentVariable("FO4RE_WINE");
+        if (wine != null && wine.Length == 0) return;
+        if (string.IsNullOrWhiteSpace(wine)) wine = "wine";
+
+        // ProcessStartInfo allows Arguments or ArgumentList, never both, so match whichever the
+        // caller populated.
+        if (!string.IsNullOrEmpty(psi.Arguments))
+            psi.Arguments = Quote(psi.FileName) + " " + psi.Arguments;
+        else
+            psi.ArgumentList.Insert(0, psi.FileName);
+
+        psi.FileName = wine;
+        // A DOTNET_ROOT pointing at the Linux runtime makes wine's loader look for hostfxr.dll there.
+        psi.Environment.Remove("DOTNET_ROOT");
+    }
+
+    private static string Quote(string s) => s.Contains(' ') ? "\"" + s + "\"" : s;
+
     private static void PrepareForCapture(ProcessStartInfo psi)
     {
+        ShimWindowsExe(psi);
         psi.RedirectStandardOutput = true;
         psi.RedirectStandardError = true;
         psi.UseShellExecute = false;

@@ -17,12 +17,7 @@ public class MaterialInterop
 {
     public string BrowseForFile(string title, string filter)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a file" : title,
-            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
-        };
-        return dlg.ShowDialog() == true ? dlg.FileName : "";
+        return HostServices.PickFile(title, filter);
     }
 
     /// <summary>Structured field list (JSON) for the panel to render editable controls from.</summary>

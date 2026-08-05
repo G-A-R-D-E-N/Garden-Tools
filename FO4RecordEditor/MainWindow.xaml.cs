@@ -21,6 +21,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     public MainWindow()
     {
+        Services.WpfHostServices.Install();
         InitializeComponent();
         DataContext = _shell;
 

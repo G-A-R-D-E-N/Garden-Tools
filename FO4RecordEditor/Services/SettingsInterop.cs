@@ -99,27 +99,17 @@ public class SettingsInterop
     /// <summary>Native folder picker for the path fields. Returns the chosen path, or "" if cancelled.</summary>
     public string BrowseFolder(string title, string current)
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Choose a folder" : title,
-        };
-        if (!string.IsNullOrWhiteSpace(current) && System.IO.Directory.Exists(current))
-            dlg.InitialDirectory = current;
-        return dlg.ShowDialog() == true ? dlg.FolderName : "";
+        var seed = !string.IsNullOrWhiteSpace(current) && System.IO.Directory.Exists(current) ? current : "";
+        return HostServices.PickFolder(string.IsNullOrWhiteSpace(title) ? "Choose a folder" : title, seed);
     }
 
     /// <summary>Native file picker for the .exe path fields (texconv, PapyrusCompiler). Returns the
     /// chosen path, or "" if cancelled.</summary>
     public string BrowseFile(string title, string filter, string current)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = string.IsNullOrWhiteSpace(title) ? "Select a file" : title,
-            Filter = string.IsNullOrWhiteSpace(filter) ? "All files|*.*" : filter,
-        };
-        if (!string.IsNullOrWhiteSpace(current) && System.IO.File.Exists(current))
-            dlg.InitialDirectory = System.IO.Path.GetDirectoryName(current);
-        return dlg.ShowDialog() == true ? dlg.FileName : "";
+        var seed = !string.IsNullOrWhiteSpace(current) && System.IO.File.Exists(current)
+            ? System.IO.Path.GetDirectoryName(current) ?? "" : "";
+        return HostServices.PickFile(title, filter, seed);
     }
 
     /// <summary>Run `&lt;path&gt; --version` to verify the Claude Code CLI is reachable.</summary>

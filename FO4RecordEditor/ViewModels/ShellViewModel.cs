@@ -75,8 +75,6 @@ public sealed class ShellViewModel
     private void OnWritePluginChanged(string name)
     {
         ConflictScanner.InvalidateCache();   // an edit can change who wins -> stale conflict cache
-        var app = System.Windows.Application.Current;
-        if (app == null) return;
         var env = GameEnvironment;
 
         _ = Task.Run(() =>
@@ -85,7 +83,7 @@ public sealed class ShellViewModel
             {
                 // Find or create the tree node on the UI thread.
                 RecordNode node = null!;
-                app.Dispatcher.Invoke(() =>
+                HostServices.InvokeOnUiThread(() =>
                 {
                     node = Plugins.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase))!;
                     if (node == null) { node = new RecordNode { Key = name }; Plugins.Add(node); }
@@ -94,7 +92,7 @@ public sealed class ShellViewModel
                 // Load the groups (reads the live editable mod) off the UI thread.
                 var groups = MutagenLoader.GetGroups(name, env, node, null);
 
-                app.Dispatcher.Invoke(() =>
+                HostServices.InvokeOnUiThread(() =>
                 {
                     node.Children.Clear();
                     foreach (var g in groups) { g.Parent = node; node.Children.Add(g); }
