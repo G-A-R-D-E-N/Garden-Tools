@@ -125,6 +125,25 @@ export default function RecordView(
 
   const [collapsedGroups, setCollapsedGroups] = useState<Record<number, boolean>>({});
 
+  // xEdit's four column-width modes, ported as CSS layout strategies (Delphi's VirtualStringTree
+  // exposes per-column MinWidth/AutoFitColumns that CSS has no equivalent primitive for, so this is
+  // an honest re-implementation of the same four *intents*, not a line-for-line port):
+  //   standard  -- each plugin column a fixed pixel width, independent of the container (xEdit's
+  //                actual default; can need horizontal scroll with many plugins)
+  //   fitAll    -- plugin columns stretch to exactly fill the available width, evenly (this was the
+  //                tool's ONLY behaviour before this control existed, hence the original complaint:
+  //                a long model-path column and a short boolean column got the same width)
+  //   fitText   -- table-layout:auto; each column sized to its own longest visible value
+  //   fitSmart  -- fitText, but no column may exceed a share of the viewport, so one huge value
+  //                cannot push every other column into a horizontal scrollbar
+  type ColumnWidthMode = 'standard' | 'fitAll' | 'fitText' | 'fitSmart';
+  const [columnWidthMode, setColumnWidthMode] = useState<ColumnWidthMode>(
+    () => (localStorage.getItem('rvColumnWidthMode') as ColumnWidthMode) || 'fitAll');
+  const changeColumnWidthMode = (m: ColumnWidthMode) => {
+    setColumnWidthMode(m);
+    localStorage.setItem('rvColumnWidthMode', m);
+  };
+
   // Field path flashing from AI write events (highlightField prop → local flashedField state).
   const [flashedField, setFlashedField] = useState('');
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -383,7 +402,7 @@ export default function RecordView(
     } catch (e: any) { setStatus('Deep copy failed: ' + (e?.message || e)); }
   };
 
-  const changeReferencingRecords = async (col: number) => {
+  const changeReferencingRecords = async () => {
     setMenu(null);
     const b = back();
     if (!b) return;
@@ -567,7 +586,10 @@ export default function RecordView(
 
   // Shared grid table used by both Record View tab and Conflicts tab.
   const renderGrid = (gridRows: ConflictFieldRow[]) => (
-    <table className="rv-grid" style={{ minWidth: 320 + matrix.Plugins.length * 240 }}>
+    <table
+      className={`rv-grid rv-cw-${columnWidthMode}`}
+      style={columnWidthMode === 'standard' ? { minWidth: 320 + matrix.Plugins.length * 240 } : undefined}
+    >
       <thead>
         <tr>
           <th className="rv-prop-col rv-sticky">Record Property</th>
@@ -679,6 +701,17 @@ export default function RecordView(
               <option value="override">Conflicts (override+)</option>
               <option value="conflict">Real conflicts (conflict+)</option>
               <option value="critical">Critical only</option>
+            </select>
+            <select
+              className="rv-status-filter"
+              value={columnWidthMode}
+              onChange={e => changeColumnWidthMode(e.target.value as ColumnWidthMode)}
+              title="How plugin columns share the available width"
+            >
+              <option value="standard">Column width: Standard</option>
+              <option value="fitAll">Column width: Fit All</option>
+              <option value="fitText">Column width: Fit Text</option>
+              <option value="fitSmart">Column width: Fit Smart</option>
             </select>
             {(() => {
               const badge = LEVEL_BADGES[matrix.Level];
@@ -1012,7 +1045,7 @@ export default function RecordView(
           ))}
           <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into…</button>
           <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into…</button>
-          <button onClick={() => changeReferencingRecords(menu.col)}><Link2 size={13} /> Change referencing records…</button>
+          <button onClick={() => changeReferencingRecords()}><Link2 size={13} /> Change referencing records…</button>
           <div className="rv-context-sep" />
           <div className="rv-context-label">Copy to clipboard</div>
           <button onClick={() => copyText('path', menu.row.Field)}><ClipboardCopy size={13} /> Path</button>
