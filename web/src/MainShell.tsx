@@ -781,6 +781,11 @@ export default function MainShell() {
         <DetailRail
           matrix={openRecord?.matrix ?? null}
           onOpenConflictsTab={() => { setRecordTab('conflicts'); setShellTab('record'); }}
+          onOpenRecord={openByFormKey}
+          onAddToFilter={needle => {
+            setNavFilters(f => ({ ...f, needle }));
+            setActiveTab('navigator');
+          }}
         />
       )}
 
