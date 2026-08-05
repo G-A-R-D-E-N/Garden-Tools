@@ -620,3 +620,108 @@ td.rv-section {
   font-size: 11.5px;
   white-space: nowrap;
 }
+
+/* ---- Conflict palette, rebuilt ----
+   The row carries the conflict state and the cells stop painting their own blocks. Previously every
+   cell tinted itself by status, so a conflicting record showed a purple master column beside an
+   amber winner column beside red losers: a wall of colour with no focal point. xEdit tints the ROW
+   by its state and leaves the cells nearly plain, which is why most of its grid reads as calm and
+   the few rows that matter jump out.
+
+   Status names follow xEdit's own vocabulary (TConflictThis in its sources): Not Defined, Identical
+   To Master, Single Record, Master, Override Without Conflict, Conflict Winner, Conflict Loser.
+   The hues are ours: xEdit's default colour table is not vendored here, so these are chosen to read
+   on this dark surface rather than claimed to match its exact values. */
+
+.rv-s-none      { background: transparent; }
+.rv-s-benign    { background: color-mix(in srgb, var(--status-base) 5%, transparent); }
+.rv-s-override  { background: color-mix(in srgb, var(--status-base) 9%, transparent); }
+.rv-s-conflict  { background: color-mix(in srgb, var(--status-warning) 11%, transparent); }
+.rv-s-critical  { background: color-mix(in srgb, var(--status-changed) 13%, transparent); }
+
+/* A thin edge on the field name is enough to find a conflicting row while scrolling. */
+.rv-s-conflict .rv-prop-col { box-shadow: inset 2px 0 0 var(--status-warning); }
+.rv-s-critical .rv-prop-col { box-shadow: inset 2px 0 0 var(--status-changed); }
+
+/* Cells: text does the work now. Only the winner keeps a mark, because "what does the game
+   actually use" is the one question the grid must answer instantly. */
+.rv-grid td.rv-cell { background: none; }
+
+.rv-c-notdefined, .rv-c-none { color: var(--text-muted); }
+.rv-c-identical              { color: var(--text-muted); }
+.rv-c-only                   { color: var(--text-secondary); }
+.rv-c-master                 { color: var(--text-secondary); }
+.rv-c-override               { color: var(--status-base); }
+.rv-c-lose                   { color: var(--status-changed); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--status-changed) 55%, transparent); }
+
+.rv-grid td.rv-c-win {
+  color: var(--text-primary);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--status-warning);
+}
+
+/* Hover must still win over the row tint or the pointer loses its row. */
+.rv-grid tr:hover td { background: var(--bg-hover); }
+.rv-grid tr:hover td.rv-c-win { background: color-mix(in srgb, var(--status-warning) 22%, transparent); }
+
+/* ---- Legend ---- */
+
+.rv-legend-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.rv-legend-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+
+.rv-legend {
+  position: absolute;
+  right: 10px;
+  top: 100%;
+  z-index: 60;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  box-shadow: var(--shadow-panel);
+  min-width: 260px;
+}
+
+.rv-legend h4 {
+  margin: 0 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.rv-legend h4 + h4 { margin-top: 10px; }
+
+.rv-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.rv-legend-swatch {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+}
+
+.rv-toolbar { position: relative; }
