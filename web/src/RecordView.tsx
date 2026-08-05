@@ -14,7 +14,7 @@ import './RecordView.css';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
-export type RecordTab = 'grid' | 'conflicts' | 'references' | 'history' | 'dependencies';
+export type RecordTab = 'grid' | 'fields' | 'conflicts' | 'references' | 'history' | 'dependencies';
 
 const defaultExpanded = (r: ConflictFieldRow) => !(r.IsSummary || r.DisplayLabel.startsWith('['));
 
@@ -431,6 +431,7 @@ export default function RecordView(
       {/* ── Tab bar ───────────────────────────────────────────────── */}
       <div className="rv-tab-bar">
         <TabBtn id="grid" current={recordTab} set={setRecordTab}>Record View</TabBtn>
+        <TabBtn id="fields" current={recordTab} set={setRecordTab} count={matrix.Rows.length}>Field View</TabBtn>
         <TabBtn id="conflicts" current={recordTab} set={setRecordTab} count={conflictCount}>Conflicts</TabBtn>
         <TabBtn id="references" current={recordTab} set={setRecordTab} count={refByCount}>
           <Link2 size={12} /> References
@@ -596,6 +597,31 @@ export default function RecordView(
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── FIELD VIEW tab ────────────────────────────────────────── */}
+      {recordTab === 'fields' && (
+        <div className="rv-list-tab">
+          <div className="rv-tab-note">
+            Every field of the winning version as a flat list, without the tree. Useful for reading
+            or copying a whole record at once; edit from Record View.
+          </div>
+          <table className="rv-flat-table">
+            <thead>
+              <tr><th>Field</th><th>Value</th><th>Kind</th><th>Group</th></tr>
+            </thead>
+            <tbody>
+              {matrix.Rows.map(r => (
+                <tr key={r.Field} className={r.Differs ? 'rv-row-diff' : ''}>
+                  <td className="rv-mono" title={r.Field}>{r.DisplayLabel || r.Field}</td>
+                  <td>{r.Values[winnerIdx] ?? <em>not set</em>}</td>
+                  <td className="rv-dim">{r.Kind ?? 'Value'}</td>
+                  <td className="rv-dim">{r.GroupLabel || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

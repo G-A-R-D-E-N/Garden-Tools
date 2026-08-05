@@ -565,3 +565,6 @@ td.rv-section {
 .rv-tag-missing { color: var(--status-changed); }
 
 .rv-breadcrumb-slim { padding-top: 4px; padding-bottom: 4px; }
+
+/* A field that differs across plugins, marked in the flat Field View. */
+.rv-row-diff td:first-child { border-left: 2px solid var(--status-warning); }

@@ -754,3 +754,21 @@
   min-height: 0;
   overflow: hidden;
 }
+
+/* Sidebar splitter (Task 1.4). Matches the chat resizer's feel on the other side. */
+.sidebar-resizer {
+  flex: 0 0 auto;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.sidebar-resizer:hover { background: var(--accent-color); }
+
+/* Record tab strip: one tab per open record. */
+.editor-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}

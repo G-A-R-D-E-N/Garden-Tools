@@ -132,6 +132,31 @@ export default function MainShell() {
     document.body.style.userSelect = 'none';
   }, [chatWidth]);
 
+  // Sidebar width, persisted like the chat width. Task 1.4 asked for resizable splitters; the
+  // chat already had one, so this is the same mechanism on the other side.
+  const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem('sidebarWidth') || 280));
+
+  const onSidebarResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebarWidth;
+    const onMove = (mv: MouseEvent) => {
+      const w = Math.max(200, Math.min(620, startW + (mv.clientX - startX)));
+      setSidebarWidth(w);
+      localStorage.setItem('sidebarWidth', String(w));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [sidebarWidth]);
+
   // Theme: dark by default; persisted in localStorage.
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light');
   useEffect(() => {
@@ -147,9 +172,38 @@ export default function MainShell() {
   const [status, setStatus] = useState<string>("");
   const [progress, setProgress] = useState<number | null>(null);   // 0-100, or null = hidden
 
-  // The record currently shown in the center viewport (null = welcome screen).
-  const [openRecord, setOpenRecord] = useState<{ title: string; plugin: string; matrix: ConflictMatrix } | null>(null);
+  // Open records, one per tab. The active one is what the centre viewport and the rail show;
+  // keeping them in an array rather than a single slot is what lets a jump to a referenced record
+  // leave the record you came from open behind you.
+  interface OpenRec { title: string; plugin: string; matrix: ConflictMatrix }
+  const [openRecords, setOpenRecords] = useState<OpenRec[]>([]);
+  const [activeKey, setActiveKey] = useState<string>('');
   const [recordLoading, setRecordLoading] = useState(false);
+
+  const openRecord = openRecords.find(r => r.matrix.FormKey === activeKey) ?? null;
+
+  /** Add or focus a record tab. Re-opening an already-open record refreshes it in place. */
+  const putRecord = useCallback((rec: OpenRec) => {
+    setOpenRecords(prev => {
+      const at = prev.findIndex(r => r.matrix.FormKey === rec.matrix.FormKey);
+      if (at === -1) return [...prev, rec];
+      const next = [...prev];
+      next[at] = rec;
+      return next;
+    });
+    setActiveKey(rec.matrix.FormKey);
+  }, []);
+
+  const closeRecordTab = useCallback((formKey: string) => {
+    setOpenRecords(prev => {
+      const at = prev.findIndex(r => r.matrix.FormKey === formKey);
+      if (at === -1) return prev;
+      const next = prev.filter(r => r.matrix.FormKey !== formKey);
+      // Focus the neighbour rather than dumping the user on the welcome screen.
+      setActiveKey(cur => (cur !== formKey ? cur : (next[at] ?? next[at - 1])?.matrix.FormKey ?? ''));
+      return next;
+    });
+  }, []);
 
   // MCP live feed -- updated by tool-call events pushed from C# via PostWebMessageAsJson.
   const [mcpFeed, setMcpFeed] = useState<McpLiveMsg[]>([]);
@@ -386,7 +440,7 @@ export default function MainShell() {
       const plugin = path.split(/[\\/]/)[0];
       // xEdit-style conflict matrix: every plugin that touches this record becomes a column.
       const matrix: ConflictMatrix = JSON.parse(await back.GetConflictMatrix(formKey));
-      setOpenRecord({ title: node.Key, plugin, matrix });
+      putRecord({ title: node.Key, plugin, matrix });
     } catch (err: any) {
       setErrorStr(err?.message || String(err));
     } finally {
@@ -453,7 +507,7 @@ export default function MainShell() {
       const json = await back.GetConflictMatrix(hit.FormKey);
       const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
       if (!matrix) { setErrorStr(`No record for ${hit.FormKey}.`); return; }
-      setOpenRecord({ title: hit.EditorID || hit.FormKey, plugin: hit.Plugin, matrix });
+      putRecord({ title: hit.EditorID || hit.FormKey, plugin: hit.Plugin, matrix });
     } catch (err: any) {
       setErrorStr(err?.message || String(err));
     } finally {
@@ -470,7 +524,7 @@ export default function MainShell() {
       const json = await b.GetConflictMatrix(formKey);
       const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
       if (!matrix) { setErrorStr(`No record for ${formKey}.`); return; }
-      setOpenRecord({ title: matrix.EditorID || formKey, plugin: pluginName || matrix.Winner, matrix });
+      putRecord({ title: matrix.EditorID || formKey, plugin: pluginName || matrix.Winner, matrix });
     } catch (err: any) {
       setErrorStr(err?.message || String(err));
     } finally {
@@ -485,9 +539,9 @@ export default function MainShell() {
     try {
       const json = await b.GetConflictMatrix(openRecord.matrix.FormKey);
       const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
-      // Record gone (e.g. deleted from its only plugin) -> close the editor pane.
-      if (!matrix || !matrix.Plugins || matrix.Plugins.length === 0) setOpenRecord(null);
-      else setOpenRecord(o => (o ? { ...o, matrix } : o));
+      // Record gone (e.g. deleted from its only plugin) -> close that tab.
+      if (!matrix || !matrix.Plugins || matrix.Plugins.length === 0) closeRecordTab(openRecord.matrix.FormKey);
+      else setOpenRecords(prev => prev.map(r => (r.matrix.FormKey === matrix.FormKey ? { ...r, matrix } : r)));
     } catch (err: any) {
       setErrorStr(err?.message || String(err));
     }
@@ -513,7 +567,13 @@ export default function MainShell() {
     catch { return []; }
   }, []);
 
-  const closeRecord = () => { setOpenRecord(null); setShellTab('home'); };
+  /** The top bar's close button acts on the active tab; Home is only reached when none remain. */
+  const closeRecord = () => {
+    if (!openRecord) { setShellTab('home'); return; }
+    const remaining = openRecords.length - 1;
+    closeRecordTab(openRecord.matrix.FormKey);
+    if (remaining === 0) setShellTab('home');
+  };
 
   return (
     <div
@@ -577,7 +637,7 @@ export default function MainShell() {
       </div>
 
       {/* Sidebar */}
-      <div className="sidebar">
+      <div className="sidebar" style={{ width: sidebarWidth }}>
         <div className="sidebar-header">
           <h2>{activeTab === 'compare' ? 'CONFLICTS' : activeTab === 'navigator' ? 'RECORDS' : 'EXPLORER'}</h2>
         </div>
@@ -699,6 +759,7 @@ export default function MainShell() {
           </div>
         )}
       </div>
+      <div className="sidebar-resizer" onMouseDown={onSidebarResizeStart} />
       </div>{/* /shell-left */}
 
       {/* CENTER pane: Home placeholder or the record workspace */}
@@ -719,14 +780,28 @@ export default function MainShell() {
         ) : (
           <>
             <div className="editor-tabs">
-              <div className="editor-tab active">
-                {openRecord
-                  ? <><Database size={14} color="#569CD6"/> {openRecord.title}</>
-                  : <><Zap size={14} color="#F44747"/> Welcome</>}
-                {openRecord && (
-                  <button className="tab-close" onClick={closeRecord} title="Close"><X size={14} /></button>
-                )}
-              </div>
+              {openRecords.length === 0 ? (
+                <div className="editor-tab active">
+                  <Zap size={14} color="#F44747"/> Welcome
+                </div>
+              ) : openRecords.map(r => (
+                <div
+                  key={r.matrix.FormKey}
+                  className={`editor-tab ${r.matrix.FormKey === activeKey ? 'active' : ''}`}
+                  onClick={() => setActiveKey(r.matrix.FormKey)}
+                  title={`${r.matrix.FormKey} - ${r.plugin}`}
+                >
+                  <Database size={14} color="#569CD6"/>
+                  <span className="editor-tab-label">{r.title}</span>
+                  <button
+                    className="tab-close"
+                    title="Close"
+                    onClick={e => { e.stopPropagation(); closeRecordTab(r.matrix.FormKey); }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
 
             <div className={`editor-content ${openRecord && !recordLoading ? 'has-record' : ''}`}>
