@@ -624,13 +624,25 @@ public static partial class MutagenLoader
         if (rec.IsDeleted)
             result.Add(new ProblemDto("Error", "Record is flagged DELETED -- prefer a disable/override; deletions can crash the game."));
 
-        var cache = LinkCache;
+        // Only a link into a plugin that is NOT in the load order is provably dangling.
+        //
+        // This used to report every link the cache could not resolve, which put 19 errors on a
+        // vanilla Knife: PickUpSound, PreviewTransform, Model.MaterialSwap, ObjectEffect and the
+        // like, all pointing at records that plainly exist in Fallout4.esm. Those record types are
+        // not resolvable through TryResolveIdentifier<IMajorRecordGetter> here, so a failed resolve
+        // means "we could not check", not "the target is missing". Reporting it as a crash risk
+        // trained the drawer to be ignored, which is worse than saying nothing.
+        var loaded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, _) in AllLoadedMods(envObj)) loaded.Add(name);
+
         var seen = new HashSet<FormKey>();
         foreach (var link in rec.EnumerateFormLinks())
         {
             if (link.FormKey.IsNull || !seen.Add(link.FormKey)) continue;
-            if (cache != null && !cache.TryResolveIdentifier<IMajorRecordGetter>(link.FormKey, out _))
-                result.Add(new ProblemDto("Error", $"Unresolved reference {link.FormKey} -- target not found in the load order (crash risk)."));
+            var owner = link.FormKey.ModKey.FileName.String;
+            if (!loaded.Contains(owner))
+                result.Add(new ProblemDto("Error",
+                    $"Reference {link.FormKey} points into {owner}, which is not in the load order (crash risk)."));
         }
         return result;
     }

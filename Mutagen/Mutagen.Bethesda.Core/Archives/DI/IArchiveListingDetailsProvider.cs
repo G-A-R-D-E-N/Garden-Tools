@@ -117,7 +117,17 @@ public class CachedArchiveListingDetailsProvider : IArchiveListingDetailsProvide
                 return int.MaxValue;
             }
             
-            return _d._payload.Value.ListedPriority[strippedFileName];
+            // PATCHED: an archive whose owning plugin is not in the load order used to throw
+            // KeyNotFoundException here, which the sort surfaced as "Failed to compare two elements
+            // in the array" and took down anything that touched the environment. A Data folder can
+            // legitimately hold archives for plugins that are not enabled, so this is normal input,
+            // not corruption. Unowned archives sort last (comparisons are descending by index, and
+            // int.MaxValue above means "belongs to the mod being asked about").
+            if (_d._payload.Value.ListedPriority.TryGetValue(strippedFileName, out var fallback))
+            {
+                return fallback;
+            }
+            return int.MinValue;
         }
         
         public int Compare(FileName x, FileName y)
@@ -142,7 +152,13 @@ public class CachedArchiveListingDetailsProvider : IArchiveListingDetailsProvide
                 return listedY.CompareTo(listedX);
             }
 
-            if (suffixX == suffixY) throw new NotImplementedException();
+            // PATCHED: two archives at the same priority with the same suffix used to throw. That is
+            // reachable now that unowned archives share int.MinValue, and a comparer must return a
+            // total order regardless, so fall back to the file name.
+            if (suffixX == suffixY)
+            {
+                return String.Compare(x.String, y.String, StringComparison.InvariantCultureIgnoreCase);
+            }
             if (suffixX == null) return -1;
             if (suffixY == null) return 1;
             return String.Compare(suffixY, suffixX, StringComparison.InvariantCulture);
