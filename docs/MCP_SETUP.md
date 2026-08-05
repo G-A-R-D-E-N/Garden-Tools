@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **75 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **79 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -82,9 +82,33 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 `get_conflicts` · `scan_conflicts` · `scan_all_plugins` · `scan_broken_refs`
 
 ### Writing records
-`create_record` · `set_field` · `set_conditions` · `set_components` · `add_list_item` ·
-`remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` · `delete_record` ·
-`renumber_formid` · `compact_to_esl` · `set_light_flag` · `batch_patch_records` · `revert_overrides`
+`create_record` · `set_field` · `get_conditions` · `set_conditions` · `set_components` ·
+`add_list_item` · `remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` ·
+`copy_as_new_record` · `delete_record` · `renumber_formid` · `compact_to_esl` · `set_light_flag` ·
+`batch_patch_records` · `revert_overrides`
+
+`set_conditions` REPLACES the whole Conditions list, so to add or change one condition read the
+current list with `get_conditions` first, edit that array, and hand it back. `get_conditions` returns
+exactly the schema `set_conditions` accepts.
+
+`copy_as_new_record` is the other half of xEdit's copy menu: it duplicates a record into the target
+plugin under a **brand new FormID** rather than overriding the original, which is how you make a
+variant of an existing item.
+
+### Whole-plugin xEdit passes
+`remove_identical_to_master` · `create_merged_patch`
+
+`remove_identical_to_master` is the ITM half of the standard cleaning pass (`clean_plugin` does the
+UDR half). An ITM is an override whose every field equals the version it overrides, so it costs a
+conflict row and a load-order slot while changing nothing. Comparison is Mutagen's generated
+structural equality over the whole record, and it includes the record header's version control
+bytes, so the check errs toward keeping a record: a false "not identical" is harmless, a false
+"identical" would delete real edits.
+
+`create_merged_patch` builds a patch carrying the winning version of every record two or more of the
+selected plugins touch.
+
+Both default to a **dry run** that reports what they would do; pass `apply: true` to write.
 
 ### Cells and placed objects
 `create_cell` · `create_placed_object`

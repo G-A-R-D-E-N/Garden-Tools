@@ -29,6 +29,15 @@ export interface Backend {
   CleanPlugin(plugin: string): Promise<string>;
   RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;
 
+  // ---- xEdit parity ----
+  GetConditions(plugin: string, record: string): Promise<string>;   // JSON: ConditionDto[]
+  GetConditionFunctions(): Promise<string>;                         // JSON: string[]
+  GetConditionRunOnTypes(): Promise<string>;                        // JSON: string[]
+  CopyAsNewRecord(sourcePlugin: string, id: string, targetPlugin: string,
+                  newEditorId: string): Promise<string>;
+  RemoveIdenticalToMaster(plugin: string, apply: boolean): Promise<string>;
+  CreateMergedPatch(plugins: string, patchPlugin: string, apply: boolean): Promise<string>;
+
   // ---- navigator / workspace / detail rail ----
   GetActivePlugins(): Promise<string>;                       // JSON: ActivePlugin[]
   GetRecordTypeIndex(): Promise<string>;                     // JSON: RecordTypeEntry[]
@@ -110,6 +119,18 @@ export interface ConflictFieldRow {
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }
 export interface RecordProblem { Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
+/** One row of a record's Conditions list, in the shape SetConditions round-trips. */
+export interface ConditionDto {
+  function: string;
+  operator: string;
+  value?: number;
+  compareGlobal?: string;
+  param1?: string | number;
+  param2?: string | number;
+  runOn?: string;
+  reference?: string;
+  flags?: string;
+}
 export interface ConflictMatrix {
   FormKey: string;
   EditorID: string;

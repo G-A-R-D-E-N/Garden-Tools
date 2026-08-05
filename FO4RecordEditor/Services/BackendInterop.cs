@@ -205,6 +205,26 @@ public class BackendInterop
         DebugLog.Guard(nameof(RenumberFormId), () => WriteService.RenumberFormId(plugin, record, newId, Env),
             $"{plugin} {record}->{newId}");
 
+    // ---- xEdit parity ----
+    public string GetConditions(string plugin, string record) =>
+        DebugLog.Guard(nameof(GetConditions), () => WriteService.GetConditionsJson(Env, plugin, record),
+            $"{plugin} {record}");
+    public string GetConditionFunctions() =>
+        DebugLog.Guard(nameof(GetConditionFunctions), WriteService.ConditionFunctionNames);
+    public string GetConditionRunOnTypes() =>
+        DebugLog.Guard(nameof(GetConditionRunOnTypes), WriteService.ConditionRunOnNames);
+    public string CopyAsNewRecord(string sourcePlugin, string id, string targetPlugin, string newEditorId) =>
+        DebugLog.Guard(nameof(CopyAsNewRecord),
+            () => WriteService.CopyAsNewRecord(Env, sourcePlugin, id, targetPlugin,
+                string.IsNullOrWhiteSpace(newEditorId) ? null : newEditorId),
+            $"{id} {sourcePlugin}->{targetPlugin}");
+    public string RemoveIdenticalToMaster(string plugin, bool apply) =>
+        DebugLog.Guard(nameof(RemoveIdenticalToMaster), () => WriteService.RemoveIdenticalToMaster(Env, plugin, apply),
+            $"{plugin} apply={apply}");
+    public string CreateMergedPatch(string plugins, string patchPlugin, bool apply) =>
+        DebugLog.Guard(nameof(CreateMergedPatch), () => WriteService.CreateMergedPatch(Env, plugins, patchPlugin, apply),
+            $"{plugins}->{patchPlugin} apply={apply}");
+
     // ---- save ----
     public string ResolveConflict(string formKey, string winner, string patch) =>
         DebugLog.Guard(nameof(ResolveConflict), () => WriteService.ResolveConflict(Env, formKey, winner, patch),

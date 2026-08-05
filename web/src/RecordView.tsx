@@ -2,11 +2,13 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Pencil, Copy, Save, Trash2,
   Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network, HelpCircle,
+  Plus, Minus, ListFilter, ClipboardCopy, FilePlus2,
 } from 'lucide-react';
 import type {
   ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry,
 } from './backend';
 import RecordPicker from './RecordPicker';
+import ConditionsEditor from './ConditionsEditor';
 import WorkspaceHeader from './Workspace/WorkspaceHeader';
 import { buildActions } from './Workspace/actions';
 import ConflictsView, { type ConflictLayout } from './Workspace/ConflictsView';
@@ -116,6 +118,7 @@ export default function RecordView(
   const [edit, setEdit] = useState<Edit | null>(null);
   const [editVal, setEditVal] = useState('');
   const [picker, setPicker] = useState<{ row: ConflictFieldRow; col: number } | null>(null);
+  const [conditions, setConditions] = useState<{ plugin: string; label: string } | null>(null);
   const [status, setStatus] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
 
@@ -335,6 +338,84 @@ export default function RecordView(
     catch (e: any) { setStatus('Clean failed: ' + (e?.message || e)); }
   };
 
+  // ── xEdit parity actions ───────────────────────────────────────────────────
+  const copyAsNewRecord = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const target = window.prompt('Copy as NEW record into which plugin?', editablePlugins[0] ?? '');
+    if (!target) return;
+    const edid = window.prompt('EditorID for the new record:', (matrix.EditorID || 'NewRecord') + 'DUP');
+    if (edid === null) return;
+    setStatus('Duplicating…');
+    try { setStatus(await b.CopyAsNewRecord(matrix.Plugins[col], matrix.FormKey, target, edid)); await onReload(); }
+    catch (e: any) { setStatus('Copy as new record failed: ' + (e?.message || e)); }
+  };
+
+  // Dry run first, then a confirm carrying the real count: removing an override that is not truly
+  // identical would silently drop real edits, so the user always sees what is going before it goes.
+  const removeItm = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    setStatus('Scanning for identical-to-master records…');
+    try {
+      const preview = await b.RemoveIdenticalToMaster(plug, false);
+      setStatus(preview);
+      if (!preview.startsWith('DRY RUN')) return;
+      if (!window.confirm(`${preview}\n\nRemove them from ${plug}?`)) return;
+      setStatus(await b.RemoveIdenticalToMaster(plug, true));
+      await onReload();
+    } catch (e: any) { setStatus('Remove ITM failed: ' + (e?.message || e)); }
+  };
+
+  const copyText = (what: string, text: string) => {
+    setMenu(null);
+    void navigator.clipboard?.writeText(text);
+    setStatus(`Copied ${what}: ${text}`);
+  };
+
+  // A row is a list container when some other row hangs off it as an indexed entry.
+  const listRowIndexed = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of matrix.Rows) {
+      const br = r.Field.lastIndexOf('[');
+      if (br > 0) set.add(r.Field.slice(0, br));
+    }
+    return set;
+  }, [matrix.Rows]);
+
+  // Conditions live under a "Conditions" path segment, whether the click landed on the list itself
+  // or on one of its entries.
+  const conditionsPathOf = (field: string) =>
+    /(^|\.)Conditions(\[|$|\.)/.test(field) ? field.slice(0, field.indexOf('Conditions') + 'Conditions'.length) : null;
+
+  const addListItem = async (r: ConflictFieldRow, col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const value = window.prompt(`Add to ${r.DisplayLabel || r.Field} -- FormKey or EditorID:`, '');
+    if (!value) return;
+    setStatus('Adding…');
+    try { setStatus(await b.AddListItem(matrix.Plugins[col], matrix.FormKey, r.Field, value)); await onReload(); }
+    catch (e: any) { setStatus('Add failed: ' + (e?.message || e)); }
+  };
+
+  const removeListEntry = async (r: ConflictFieldRow, col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const br = r.Field.lastIndexOf('[');
+    const parent = br > 0 ? r.Field.slice(0, br) : r.Field;
+    const value = r.Values[col] ?? '';
+    if (!value) { setStatus('That column has no value to remove.'); return; }
+    if (!window.confirm(`Remove ${value} from ${parent} in ${matrix.Plugins[col]}?`)) return;
+    setStatus('Removing…');
+    try { setStatus(await b.RemoveListItem(matrix.Plugins[col], matrix.FormKey, parent, value)); await onReload(); }
+    catch (e: any) { setStatus('Remove failed: ' + (e?.message || e)); }
+  };
+
   // The Actions menu operates on the winning plugin, which is the one a record-level action
   // almost always means. Per-column variants stay on the cell context menu.
   const winnerCol = Math.max(0, matrix.Plugins.lastIndexOf(matrix.Winner));
@@ -434,7 +515,7 @@ export default function RecordView(
                   key={ci}
                   className={`rv-cell rv-c-${st}`}
                   onDoubleClick={() => !r.HasChildren && startEdit(r, ci)}
-                  onContextMenu={e => { if (!r.HasChildren) { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); } }}
+                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                 >
                   {st === 'win' && <Crown size={10} className="rv-win-icon" />}
                   {editing ? renderEditor(r, ci) : r.Values[ci]}
@@ -781,12 +862,39 @@ export default function RecordView(
       {/* ── Right-click context menu ──────────────────────────────── */}
       {menu && (
         <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
-          <button onClick={() => startEdit(menu.row, menu.col)}><Pencil size={13} /> Edit value <span className="rv-key">F2</span></button>
+          {!menu.row.HasChildren && (
+            <button onClick={() => startEdit(menu.row, menu.col)}><Pencil size={13} /> Edit value <span className="rv-key">F2</span></button>
+          )}
+
+          {/* Structured-list editing: the xEdit "Add"/"Remove" you get on an array element. */}
+          {conditionsPathOf(menu.row.Field) && (
+            <button onClick={() => {
+              const plug = matrix.Plugins[menu.col];
+              setMenu(null);
+              setConditions({ plugin: plug, label: matrix.EditorID || matrix.FormKey });
+            }}><ListFilter size={13} /> Edit conditions…</button>
+          )}
+          {listRowIndexed.has(menu.row.Field) && menu.row.Level === 0 && (
+            <button onClick={() => addListItem(menu.row, menu.col)}><Plus size={13} /> Add to {menu.row.DisplayLabel || menu.row.Field}…</button>
+          )}
+          {menu.row.Field.endsWith(']') && (
+            <button className="rv-danger" onClick={() => removeListEntry(menu.row, menu.col)}>
+              <Minus size={13} /> Remove this entry
+            </button>
+          )}
+
           <div className="rv-context-sep" />
           <div className="rv-context-label">Copy as Override into</div>
           {(editablePlugins.includes('ConflictPatch.esp') ? editablePlugins : [...editablePlugins, 'ConflictPatch.esp']).map(p => (
             <button key={p} onClick={() => copyInto(menu.col, p)}><Copy size={13} /> {p}</button>
           ))}
+          <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into…</button>
+          <div className="rv-context-sep" />
+          <div className="rv-context-label">Copy to clipboard</div>
+          <button onClick={() => copyText('path', menu.row.Field)}><ClipboardCopy size={13} /> Path</button>
+          <button onClick={() => copyText('value', menu.row.Values[menu.col] ?? '')}><ClipboardCopy size={13} /> Value</button>
+          <button onClick={() => copyText('FormKey', matrix.FormKey)}><ClipboardCopy size={13} /> FormKey</button>
+          <button onClick={() => copyText('signature', matrix.Type)}><ClipboardCopy size={13} /> Signature</button>
           <div className="rv-context-sep" />
           <button onClick={() => savePlugin(menu.col)}><Save size={13} /> Save "{matrix.Plugins[menu.col]}"</button>
           <button className="rv-danger" onClick={() => deleteRecord(menu.col)}><Trash2 size={13} /> Delete from "{matrix.Plugins[menu.col]}"</button>
@@ -795,6 +903,7 @@ export default function RecordView(
           <button onClick={() => renumberFormId(menu.col)}><Hash size={13} /> Change FormID…</button>
           <button onClick={() => compactEsl(menu.col)}><Minimize2 size={13} /> Compact to ESL</button>
           <button onClick={() => cleanPlugin(menu.col)}><Eraser size={13} /> Clean (UDR)</button>
+          <button onClick={() => removeItm(menu.col)}><Eraser size={13} /> Remove identical to master…</button>
           <div className="rv-context-sep" />
           <button onClick={askImpact}><Brain size={13} /> Ask AI: what breaks?</button>
         </div>
@@ -808,6 +917,17 @@ export default function RecordView(
           refTypes={picker.row.RefTypes}
           onPick={fk => { const p = picker; setPicker(null); commitEdit(p.row, p.col, fk); }}
           onClose={() => setPicker(null)}
+        />
+      )}
+
+      {/* ── Conditions editor ─────────────────────────────────────── */}
+      {conditions && (
+        <ConditionsEditor
+          plugin={conditions.plugin}
+          record={matrix.FormKey}
+          label={conditions.label}
+          onClose={() => setConditions(null)}
+          onSaved={async msg => { setStatus(msg); await onReload(); }}
         />
       )}
     </div>

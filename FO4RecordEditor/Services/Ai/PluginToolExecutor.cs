@@ -483,6 +483,66 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "source_plugin", "id", "patch_plugin" }
             }),
+        new("copy_as_new_record",
+            "Duplicate a record into a plugin under a BRAND NEW FormID (xEdit 'Copy as new record into'), rather " +
+            "than overriding the original the way copy_as_override does. This is how you make a variant of an " +
+            "existing item. The target plugin is opened/created automatically.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_plugin = new { type = "string", description = "Plugin to copy the record FROM. Omit to take the winning version." },
+                    id = new { type = "string", description = "FormKey ('00008E:MAIM.esp') or EditorID of the record to duplicate." },
+                    target_plugin = new { type = "string", description = "Plugin the new record is created in." },
+                    new_editor_id = new { type = "string", description = "EditorID for the copy. Defaults to the source EditorID with 'DUP' appended." }
+                },
+                required = new[] { "id", "target_plugin" }
+            }),
+        new("remove_identical_to_master",
+            "Remove Identical-to-Master (ITM) records from a plugin -- the other half of the standard cleaning " +
+            "pass that clean_plugin's UDR handling does not cover. An ITM is an override whose every field equals " +
+            "the version it overrides, so it costs a conflict row and changes nothing. DRY RUN by default: it " +
+            "lists what it would remove. Pass apply=true to actually remove, then save_plugin.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (dry run). True actually removes the records." }
+                },
+                required = new[] { "plugin" }
+            }),
+        new("create_merged_patch",
+            "Build a patch plugin carrying the WINNING version of every record two or more of the selected plugins " +
+            "touch (xEdit 'Create Merged Patch'). DRY RUN by default, reporting how many records each plugin wins. " +
+            "Pass apply=true to write them, then make the patch load last and save_plugin.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugins = new { type = "string", description = "Comma-separated plugin filenames to merge. Omit for the whole load order." },
+                    patch_plugin = new { type = "string", description = "Patch plugin the merged records are written into." },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "patch_plugin" }
+            }),
+        new("get_conditions",
+            "Read a record's Conditions list back in exactly the JSON shape set_conditions accepts. set_conditions " +
+            "REPLACES the whole list, so call this first when adding or changing one condition, edit the array, " +
+            "and hand it back.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string", description = "Plugin whose version to read. Omit for the winning version." },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." }
+                },
+                required = new[] { "record" }
+            }),
         new("delete_record",
             "Remove a record entirely from a plugin (xEdit 'Remove') -- e.g. delete an incomplete stub record, " +
             "or drop an unwanted override from a patch.",
@@ -1281,7 +1341,8 @@ public sealed class PluginToolExecutor
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
             "create_record" or "create_cell" or "create_placed_object" or
-            "delete_record" or "copy_as_override" or "clean_plugin" or
+            "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
+            "remove_identical_to_master" or "create_merged_patch" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
             "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all" or
@@ -1290,6 +1351,8 @@ public sealed class PluginToolExecutor
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
+
+        bool Applying() => root.TryGetProperty("apply", out var av) && av.ValueKind == JsonValueKind.True;
 
         string summary = toolName switch
         {
@@ -1306,6 +1369,10 @@ public sealed class PluginToolExecutor
             "create_placed_object" => $"place {ShortId(Str("baseObject"))} in cell '{Str("cell")}' of {plugin}",
             "delete_record"       => $"delete {ShortId(record)} from {plugin}",
             "copy_as_override"    => $"{ShortId(Str("id"))} -> {Str("patch_plugin")}",
+            "copy_as_new_record"  => $"{ShortId(Str("id"))} -> new record in {Str("target_plugin")}",
+            "remove_identical_to_master" => $"{(Applying() ? "remove" : "list")} ITMs in {plugin}",
+            "create_merged_patch" => $"{(Applying() ? "build" : "preview")} merged patch {Str("patch_plugin")}",
+            "get_conditions"      => $"read conditions of {ShortId(record)}",
             "reload_plugin"       => $"reload {plugin}",
             "strip_masters_clean" => $"strip masters: {System.IO.Path.GetFileName(Str("source_path"))}",
             "list_masters"        => $"list masters of {plugin}",
@@ -1481,6 +1548,15 @@ public sealed class PluginToolExecutor
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null, env);
             case "copy_as_override":
                 return WriteService.CopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"));
+            case "copy_as_new_record":
+                return WriteService.CopyAsNewRecord(env, Str("source_plugin"), Str("id"), Str("target_plugin"),
+                    Str("new_editor_id") is { Length: > 0 } nedid ? nedid : null);
+            case "remove_identical_to_master":
+                return WriteService.RemoveIdenticalToMaster(env, Str("plugin"), Bool("apply"));
+            case "create_merged_patch":
+                return WriteService.CreateMergedPatch(env, Str("plugins"), Str("patch_plugin"), Bool("apply"));
+            case "get_conditions":
+                return WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
             case "delete_record":
                 return WriteService.DeleteRecord(Str("plugin"), Str("id"), env);
             case "remove_list_item":
