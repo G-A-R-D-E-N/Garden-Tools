@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
 import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
-import CellViewport, { type CellGeoMap } from './CellViewport';
+import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import './PapyrusPanel.css';
 import './NifPanel.css';
@@ -86,6 +86,13 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   // not an indeterminate spinner).
   const [geoProgress, setGeoProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // A shape whose diffuse never resolves just renders flat grey, which is indistinguishable from a
+  // mesh that genuinely has no texture -- so an entire missing texture root used to look like a
+  // rendering quirk rather than a setup problem. Reported per load, same summary the Godot cell
+  // editor prints.
+  const [texStats, setTexStats] = useState<CellTextureStats | null>(null);
+  const texStatsLoggedRef = useRef('');
+
   const cell = getCell();
   const unavailable = !cell;
 
@@ -99,6 +106,20 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setLog(prev => [`[${new Date().toLocaleTimeString()}] ${line}`, ...prev].slice(0, 200));
     if (line.includes('✗') && sidebarTab !== 'log') setHasUnseenError(true);
   };
+
+  // Logged once per distinct tally so the coalesced updates during a load don't spam the log; the
+  // final tally for a cell is the one that sticks.
+  const onTextureStats = useCallback((s: CellTextureStats) => {
+    setTexStats(s);
+    const failed = s.resolveFail + s.decodeFail;
+    if (failed === 0 && s.noPath === 0) return;
+    const line = `Textures: ${s.ok} loaded, ${s.resolveFail} not found, ${s.decodeFail} failed to decode, `
+      + `${s.noPath} shape${s.noPath === 1 ? '' : 's'} with no texture path`
+      + (s.firstFailure ? `. First failure: ${s.firstFailure}` : '');
+    if (texStatsLoggedRef.current === line) return;
+    texStatsLoggedRef.current = line;
+    appendLog(`${failed > 0 ? '✗' : 'ℹ'} ${line}`);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkPlugins = async () => {
     if (!cell) { setPluginCount(0); return; }
@@ -148,6 +169,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setResult(null);
     setGeometry({});
+    setTexStats(null);
+    texStatsLoggedRef.current = '';
     setSelected(null);
     setHiddenTypes(new Set());
     setHiddenRefs(new Set());
@@ -391,6 +414,19 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
 
+                {texStats && (texStats.resolveFail > 0 || texStats.decodeFail > 0) && (
+                  <div className="cell-hidden-bar" title={texStats.firstFailure ?? undefined}>
+                    <span>
+                      <AlertTriangle size={12} /> {texStats.resolveFail + texStats.decodeFail} texture
+                      {texStats.resolveFail + texStats.decodeFail === 1 ? '' : 's'} missing
+                      {texStats.ok > 0 ? ` (${texStats.ok} loaded)` : ''}
+                    </span>
+                    <div className="cell-hidden-actions">
+                      <button className="papyrus-copy" onClick={() => setSidebarTab('log')}>Details</button>
+                    </div>
+                  </div>
+                )}
+
                 {(hiddenRefs.size > 0 || undoStackRef.current.length > 0 || redoStackRef.current.length > 0) && (
                   <div className="cell-hidden-bar">
                     <span>{hiddenRefs.size > 0 ? `${hiddenRefs.size} mesh${hiddenRefs.size === 1 ? '' : 'es'} hidden` : ''}</span>
@@ -493,6 +529,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   onUndo={undoVisibility}
                   onRedo={redoVisibility}
                   onMoveEnd={moveEnd}
+                  onTextureStats={onTextureStats}
                 />
               : (
                 <div className="nif-view-empty">

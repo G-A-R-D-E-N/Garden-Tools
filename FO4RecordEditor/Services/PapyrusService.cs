@@ -9,8 +9,10 @@ namespace FO4RecordEditor.Services;
 /// Compiles Papyrus source (.psc -> .pex) by shelling out to the Creation Kit PapyrusCompiler.exe,
 /// so the AI can author a script's records AND compile the script in one workflow. Defaults to the
 /// CK compiler, falling back to the workspace's patched compiler. The compiler implicitly adds its
-/// working directory as an import folder, so we always run from a clean dir (the script's own folder)
-/// to avoid the compiler aborting on an unrelated broken path under the host's CWD.
+/// working directory as an import folder, so we always run from the compile's own work dir (the
+/// script's folder, or the namespace root when the file's layout genuinely matches its ScriptName)
+/// rather than the host's CWD. Never point that at a large tree: the compiler walks every import
+/// root recursively.
 /// </summary>
 public static class PapyrusService
 {
@@ -61,12 +63,28 @@ public static class PapyrusService
             string fileDir = Path.GetDirectoryName(full)!;
             string objName = "";
             try { objName = ExtractScriptName(File.ReadAllText(full)); } catch { }
-            if (objName.Contains(':'))
+            // Ascend one folder per namespace segment to reach the import root -- but ONLY while the
+            // folder being left is actually named after that segment. The declared ScriptName drives
+            // the depth, so an unbounded ascent walks up as many levels as the script cares to claim
+            // and hands the result to the compiler as both an import root and its working directory:
+            // the same whole-tree enumeration the parent-folder import root used to cause, reachable
+            // through a differently-shaped path. A layout that doesn't match was never going to
+            // resolve anyway (the compiler looks for <root>\A\B\Foo.psc), so it failed after the
+            // enumeration rather than instead of it -- this just fails fast and stays put.
+            var segments = objName.Split(':', StringSplitOptions.RemoveEmptyEntries);
+            int depth = segments.Length - 1;
+            string root = fileDir;
+            bool layoutMatches = depth > 0;
+            for (int i = 0; i < depth; i++)
             {
-                // ascend (namespaceDepth) folders from the file's dir to the import root
-                string root = fileDir;
-                int depth = objName.Split(':').Length - 1;
-                for (int i = 0; i < depth; i++) { var up = Directory.GetParent(root)?.FullName; if (up == null) break; root = up; }
+                if (!string.Equals(Path.GetFileName(root), segments[depth - 1 - i], StringComparison.OrdinalIgnoreCase))
+                { layoutMatches = false; break; }
+                var up = Directory.GetParent(root)?.FullName;
+                if (up == null) { layoutMatches = false; break; }
+                root = up;
+            }
+            if (layoutMatches)
+            {
                 workDir = root;
                 target = objName;
             }
@@ -77,15 +95,19 @@ public static class PapyrusService
             }
         }
 
-        // Import roots: caller-supplied + base game scripts + the work dir + its parent.
+        // Import roots: caller-supplied + base game scripts + the work dir.
+        // The work dir's PARENT is deliberately NOT an import root. The compiler walks every import
+        // root recursively, so a single .psc sitting anywhere shallow made it enumerate the parent's
+        // whole tree -- for a script near the workspace root that is ~695k files, and it either
+        // stalls or dies on a >260-char path long before it compiles anything. Sibling-folder
+        // imports that used to work by accident now have to be passed explicitly via `imports`
+        // (the tool's own parameter) or configured once in Settings > Papyrus base imports.
         var imp = new List<string>();
         if (!string.IsNullOrWhiteSpace(imports))
             imp.AddRange(imports.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                 .Select(s => s.Trim('"')));
         foreach (var b in ToolPaths.PapyrusBaseImports()) imp.Add(b);
         imp.Add(workDir);
-        var parent = Directory.GetParent(workDir)?.FullName;
-        if (parent != null) imp.Add(parent);
         var importArg = string.Join(";", imp.Distinct(StringComparer.OrdinalIgnoreCase));
 
         // Default output: the ORIGINAL source folder for a dir compile (not the temp staging dir).
