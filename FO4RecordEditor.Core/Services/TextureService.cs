@@ -26,12 +26,27 @@ public static class TextureService
     /// is a user-picked Data/Textures folder tried first.</summary>
     public static string GetTexturePngDataUrl(string nifPath, string relTexPath, string textureRoot = "")
     {
+        var png = GetTexturePngPath(nifPath, relTexPath, textureRoot);
+        if (png == null) return "";
+        try
+        {
+            var bytes = File.ReadAllBytes(png);
+            return "data:image/png;base64," + Convert.ToBase64String(bytes);
+        }
+        catch (Exception ex) { DebugLog.Exception("Texture.GetPng", ex); return ""; }
+    }
+
+    /// <summary>Same resolution as <see cref="GetTexturePngDataUrl"/> but returns the cached PNG's
+    /// file path directly, for non-web consumers (e.g. the Godot prototype loading an Image straight
+    /// off disk) that don't need a base64 data URL. Null if it can't be resolved/converted.</summary>
+    public static string? GetTexturePngPath(string nifPath, string relTexPath, string textureRoot = "")
+    {
         try
         {
             nifPath = (nifPath ?? "").Trim().Trim('"');
             relTexPath = (relTexPath ?? "").Trim().Trim('"');
             textureRoot = (textureRoot ?? "").Trim().Trim('"');
-            if (string.IsNullOrWhiteSpace(relTexPath)) return "";
+            if (string.IsNullOrWhiteSpace(relTexPath)) return null;
 
             // A shape with no texture in its own BSShaderTextureSet can still have a real diffuse via
             // a linked .bgsm material file (BSLightingShaderProperty.rootMaterialName) -- the frontend
@@ -40,29 +55,35 @@ public static class TextureService
             // fall through to the same DDS pipeline below using its DiffuseTexture.
             if (relTexPath.EndsWith(".bgsm", StringComparison.OrdinalIgnoreCase))
             {
-                var bgsmFile = ResolveMaterialFile(nifPath, relTexPath, textureRoot);
-                if (bgsmFile == null) return "";
-                BgsmData mat;
-                try { mat = BgsmCodec.Parse(File.ReadAllBytes(bgsmFile)); }
-                catch (Exception ex) { DebugLog.Exception("Texture.BgsmParse", ex); return ""; }
-                // BGSM texture-path strings are length-prefixed AND null-terminated (an empty slot is
-                // len=1,byte=0x00 -- see BgsmCodec's WriteBgsmString note); strip the trailing NUL
-                // before treating this as a filesystem path.
-                var diffuse = (mat.DiffuseTexture ?? "").TrimEnd('\0');
-                if (string.IsNullOrWhiteSpace(diffuse)) return ""; // the material genuinely has no diffuse
+                var mat = ResolveAndParseBgsm(nifPath, relTexPath, textureRoot);
+                if (mat == null) return null;
+                var diffuse = (mat.DiffuseTexture ?? "").TrimEnd('\0'); // BGSM strings are NUL-terminated; an empty slot is "\0"
+                if (string.IsNullOrWhiteSpace(diffuse)) return null;
                 relTexPath = diffuse;
             }
 
             var dds = ResolveDds(nifPath, relTexPath, textureRoot);
-            if (dds == null) return "";
+            if (dds == null) return null;
 
             var png = ConvertToPng(dds);
-            if (png == null || !File.Exists(png)) return "";
-
-            var bytes = File.ReadAllBytes(png);
-            return "data:image/png;base64," + Convert.ToBase64String(bytes);
+            return png != null && File.Exists(png) ? png : null;
         }
-        catch (Exception ex) { DebugLog.Exception("Texture.GetPng", ex); return ""; }
+        catch (Exception ex) { DebugLog.Exception("Texture.GetPngPath", ex); return null; }
+    }
+
+    /// <summary>Resolve and parse a shape's linked .bgsm, exposing every material field (normal map,
+    /// glow map, emission flags/color) beyond just the diffuse texture <see cref="GetTexturePngPath"/>
+    /// uses internally. Null if the file can't be found or fails to parse.</summary>
+    public static BgsmData? ResolveBgsm(string nifPath, string bgsmRelPath, string textureRoot = "")
+        => ResolveAndParseBgsm((nifPath ?? "").Trim().Trim('"'), (bgsmRelPath ?? "").Trim().Trim('"'),
+            (textureRoot ?? "").Trim().Trim('"'));
+
+    private static BgsmData? ResolveAndParseBgsm(string nifPath, string bgsmRelPath, string textureRoot)
+    {
+        var bgsmFile = ResolveMaterialFile(nifPath, bgsmRelPath, textureRoot);
+        if (bgsmFile == null) return null;
+        try { return BgsmCodec.Parse(File.ReadAllBytes(bgsmFile)); }
+        catch (Exception ex) { DebugLog.Exception("Texture.BgsmParse", ex); return null; }
     }
 
     // Find the DDS: a user-picked texture root first, then absolute path, then game-relative under any
@@ -155,7 +176,7 @@ public static class TextureService
     // Where ExtractFromArchive/ConvertToPng cache their outputs. Also consulted by AddDataRoots (see
     // its comment) to recognize when a "nifDir" is our OWN extraction cache, not a real Data tree.
     // internal (not private) so a test can verify the climb-skip without touching real files.
-    internal static readonly string TexCacheDir = Path.Combine(Path.GetTempPath(), "FO4RE_Tex");
+    public static readonly string TexCacheDir = Path.Combine(Path.GetTempPath(), "FO4RE_Tex");
 
     // Per-cache-key lock so concurrent conversions/extractions of the SAME source (very common: many
     // meshes in a cell share one underlying rock/dirt/wood texture, or the same archive entry) don't
@@ -223,7 +244,7 @@ public static class TextureService
     // a mod's loose meshes may also sit beside its BA2).
     // internal (not private) so a test can verify the climb-skip / stop-at-Data behavior directly --
     // it's pure string manipulation, no I/O, so this is a cheap deterministic unit test.
-    internal static void AddDataRoots(List<string> roots, string? path)
+    public static void AddDataRoots(List<string> roots, string? path)
     {
         var dir = path;
         // A NIF resolved from OUR OWN BA2-extraction temp cache (used for every mesh the Cell Viewer
