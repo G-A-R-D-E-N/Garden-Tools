@@ -96,7 +96,13 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
 };
 
 export default function MainShell() {
-  const [activeTab, setActiveTab] = useState('navigator');
+  const [activeTab, setActiveTab] = useState('explorer');
+  // Records (by type, load-order wide) and Files (by plugin) are two views of one thing, so they
+  // are a switch inside Explorer rather than two activity-bar entries. Search and Errors were
+  // separate entries that rendered the identical pane, which is why they are gone.
+  const [treeMode, setTreeMode] = useState<'records' | 'files'>(
+    () => (localStorage.getItem('treeMode') as 'records' | 'files') || 'records');
+  useEffect(() => { localStorage.setItem('treeMode', treeMode); }, [treeMode]);
   const [showSettings, setShowSettings] = useState(false);
   const [showPapyrus, setShowPapyrus] = useState(false);
   const [showNif, setShowNif] = useState(false);
@@ -600,17 +606,8 @@ export default function MainShell() {
       <div className="shell-left">
       <div className="activity-bar">
         <div className="activity-top">
-          <button className={`activity-btn ${activeTab === 'navigator' ? 'active' : ''}`} onClick={() => setActiveTab('navigator')} title="Records (by type, across the load order)">
-            <ListTree size={22} strokeWidth={1.5} />
-          </button>
-          <button className={`activity-btn ${activeTab === 'explorer' ? 'active' : ''}`} onClick={() => setActiveTab('explorer')} title="Explorer (by plugin)">
+          <button className={`activity-btn ${activeTab === 'explorer' ? 'active' : ''}`} onClick={() => setActiveTab('explorer')} title="Explorer: records, files, search and errors">
             <Files size={22} strokeWidth={1.5} />
-          </button>
-          <button className={`activity-btn ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')} title="Search">
-            <Search size={22} strokeWidth={1.5} />
-          </button>
-          <button className={`activity-btn ${activeTab === 'errors' ? 'active' : ''}`} onClick={() => setActiveTab('errors')} title="Errors">
-            <AlertCircle size={22} strokeWidth={1.5} />
           </button>
           <button className={`activity-btn ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => setActiveTab('compare')} title="Conflicts">
             <GitCompare size={22} strokeWidth={1.5} />
@@ -639,7 +636,25 @@ export default function MainShell() {
       {/* Sidebar */}
       <div className="sidebar" style={{ width: sidebarWidth }}>
         <div className="sidebar-header">
-          <h2>{activeTab === 'compare' ? 'CONFLICTS' : activeTab === 'navigator' ? 'RECORDS' : 'EXPLORER'}</h2>
+          <h2>{activeTab === 'compare' ? 'CONFLICTS' : 'EXPLORER'}</h2>
+          {activeTab === 'explorer' && (
+            <div className="tree-mode">
+              <button
+                className={treeMode === 'records' ? 'on' : ''}
+                onClick={() => setTreeMode('records')}
+                title="Group by record type, across the whole load order"
+              >
+                <ListTree size={12} /> Records
+              </button>
+              <button
+                className={treeMode === 'files' ? 'on' : ''}
+                onClick={() => setTreeMode('files')}
+                title="Group by plugin, as the files are on disk"
+              >
+                <Files size={12} /> Files
+              </button>
+            </div>
+          )}
         </div>
         <div className="sidebar-actions">
           <button className="sidebar-action-btn" onClick={handleLoadEnv}>Load Env</button>
@@ -650,7 +665,7 @@ export default function MainShell() {
           </button>
           <button className="sidebar-action-btn" onClick={handleRefresh}>Refresh</button>
         </div>
-        {activeTab !== 'navigator' && (
+        {activeTab !== 'compare' && (
         <div className="sidebar-search">
           <Search size={13} />
           <input
@@ -662,8 +677,18 @@ export default function MainShell() {
         </div>
         )}
 
+        {activeTab === 'explorer' && errorStr && (
+          <div className="sidebar-error">
+            <AlertCircle size={13} />
+            <span className="sidebar-error-text">{errorStr}</span>
+            <button className="sidebar-error-clear" onClick={() => setErrorStr('')} title="Dismiss">
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         {/* Type-first navigator: files, filters, then records grouped by record type. */}
-        {activeTab === 'navigator' && (
+        {activeTab === 'explorer' && treeMode === 'records' && (
           <div className="navigator-pane">
             <FileBrowser
               plugins={activePlugins}
@@ -685,9 +710,8 @@ export default function MainShell() {
           </div>
         )}
 
-        {activeTab !== 'compare' && activeTab !== 'navigator' && (
+        {activeTab === 'explorer' && treeMode === 'files' && (
         <div className="sidebar-tree">
-          {errorStr && <div className="sidebar-empty" style={{ color: '#f44747' }}>{errorStr}</div>}
           {plugins.length === 0 && !errorStr ? (
             <div className="sidebar-empty">
               No plugins loaded. Click "Load Env" or "Open MO2".
