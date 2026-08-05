@@ -317,18 +317,38 @@ public static partial class WriteService
         if (remap.Count == 0)
             return $"'{plugin}' is already ESL-compatible (all native FormIDs within 0x800-0xFFF).";
 
-        // The groups the re-key loop below can actually reach.
+        if (!TryRekeyRecords(mod, remap, "compact_to_esl", plugin,
+                "Compact in xEdit instead, or keep cell-placed records within 0x800-0xFFF when authoring them.",
+                out var rekeyError))
+            return rekeyError;
+
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"Compacted {plugin}: remapped {remap.Count} record(s) into the ESL range (0x800-0xFFF) and fixed " +
+               $"all references. Now save_plugin to a path ending in .esl (and the plugin can be a light master). " +
+               $"This is in memory until you save.";
+    }
+
+    /// <summary>
+    /// Give a set of the plugin's own records new FormKeys and repoint every reference onto them.
+    /// Shared by compact_to_esl and renumber_plugin_formids, which differ only in how they choose
+    /// the new ids.
+    ///
+    /// Two failure modes are checked in a specific order, and both matter:
+    /// - A record that no top-level group can reach (cells / placed objects / worldspace sub-cells,
+    ///   because Cells is a Fallout4ListGroup&lt;CellBlock&gt; and does not implement IGroup) is
+    ///   refused BEFORE anything is mutated, or RemapLinks would repoint references onto FormKeys
+    ///   that no record owns.
+    /// - A duplicate that could not have its original removed aborts BEFORE RemapLinks, because the
+    ///   plugin then holds duplicate FormKeys and repointing would scatter references across them.
+    /// </summary>
+    private static bool TryRekeyRecords(IFallout4Mod mod, Dictionary<FormKey, FormKey> remap,
+        string opName, string plugin, string refusalHint, out string error)
+    {
         var topLevelGroups = mod.GetType().GetProperties()
             .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType))
             .Select(p => p.GetValue(mod) as Mutagen.Bethesda.Plugins.Records.IGroup)
             .Where(g => g != null).Select(g => g!).ToList();
 
-        // 'remap' comes from a DEEP EnumerateMajorRecords() walk, but the loop below only sees
-        // top-level IGroup properties. Cells are Fallout4ListGroup<CellBlock>, which does NOT
-        // implement IGroup (verified by reflection -- see CellCompactionTests), so CELLs, their
-        // PlacedObjects and worldspace sub-cells are skipped silently rather than throwing, and
-        // RemapLinks would then repoint references onto FormKeys that no record owns.
-        // Checked up front so nothing has been mutated when we refuse.
         var reachable = new HashSet<FormKey>(topLevelGroups
             .SelectMany(g => ((System.Collections.IEnumerable)g)
                 .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>())
@@ -336,17 +356,17 @@ public static partial class WriteService
         var unreachable = remap.Keys.Where(k => !reachable.Contains(k)).ToList();
         if (unreachable.Count > 0)
         {
-            var byType = string.Join(", ", native.Where(r => unreachable.Contains(r.FormKey))
+            var unreachableSet = new HashSet<FormKey>(unreachable);
+            var byType = string.Join(", ", mod.EnumerateMajorRecords()
+                .Where(r => unreachableSet.Contains(r.FormKey))
                 .GroupBy(r => r.GetType().Name).Select(g => $"{g.Key} x{g.Count()}"));
-            return ToolError.Fail(
-                $"compact_to_esl cannot compact '{plugin}': {unreachable.Count} out-of-range record(s) live in " +
-                "nested groups (cells / placed objects / worldspace sub-cells) that this tool cannot re-key " +
-                $"[{byType}]. Nothing was modified -- references were NOT repointed, so the plugin is unchanged. " +
-                "Compact in xEdit instead, or keep cell-placed records within 0x800-0xFFF when authoring them.");
+            error = ToolError.Fail(
+                $"{opName} cannot renumber '{plugin}': {unreachable.Count} record(s) live in nested groups " +
+                $"(cells / placed objects / worldspace sub-cells) that this tool cannot re-key [{byType}]. " +
+                "Nothing was modified -- references were NOT repointed, so the plugin is unchanged. " + refusalHint);
+            return false;
         }
 
-        // Re-key each out-of-range record (duplicate into its group with the new FormKey,
-        // then remove the old).
         var rekeyFailures = new List<string>();
         foreach (var group in topLevelGroups)
         {
@@ -359,23 +379,20 @@ public static partial class WriteService
             }
         }
 
-        // Abort BEFORE RemapLinks. Each failure left the original next to its duplicate; repointing
-        // references now would scatter them across a plugin that already has duplicate FormKeys.
         if (rekeyFailures.Count > 0)
-            return ToolError.Fail(
-                $"compact_to_esl FAILED on '{plugin}': {rekeyFailures.Count} record(s) were duplicated but the " +
+        {
+            error = ToolError.Fail(
+                $"{opName} FAILED on '{plugin}': {rekeyFailures.Count} record(s) were duplicated but the " +
                 "original could not be removed, so the plugin now holds duplicate FormKeys in memory. " +
                 "It was NOT saved and references were NOT repointed -- run reload_plugin to discard these " +
                 "in-memory changes before doing anything else.\n  " +
                 string.Join("\n  ", rekeyFailures.Take(10)));
+            return false;
+        }
 
-        // Repoint every reference in the plugin to the new FormKeys.
         mod.RemapLinks(remap);
-
-        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
-        return $"Compacted {plugin}: remapped {remap.Count} record(s) into the ESL range (0x800-0xFFF) and fixed " +
-               $"all references. Now save_plugin to a path ending in .esl (and the plugin can be a light master). " +
-               $"This is in memory until you save.";
+        error = "";
+        return true;
     }
 
     /// <summary>

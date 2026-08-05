@@ -370,6 +370,53 @@ export default function RecordView(
     } catch (e: any) { setStatus('Remove ITM failed: ' + (e?.message || e)); }
   };
 
+  const addMasters = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    const list = window.prompt(`Declare master(s) on ${plug} -- comma separated plugin filenames:`, '');
+    if (!list) return;
+    try { setStatus(await b.AddMasters(plug, list)); await onReload(); }
+    catch (e: any) { setStatus('Add masters failed: ' + (e?.message || e)); }
+  };
+
+  // Same dry-run-then-confirm shape as removeItm: this rewrites every FormID in the plugin and
+  // breaks any other plugin's references into it, so the count is shown before anything happens.
+  const renumberPlugin = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    const start = window.prompt(`Renumber every record in ${plug}, starting at which hex object id?`, '001000');
+    if (!start) return;
+    try {
+      const preview = await b.RenumberPluginFormIds(plug, start, false);
+      setStatus(preview);
+      if (!preview.startsWith('DRY RUN')) return;
+      if (!window.confirm(`${preview}\n\nProceed?`)) return;
+      setStatus(await b.RenumberPluginFormIds(plug, start, true));
+      await onReload();
+    } catch (e: any) { setStatus('Renumber failed: ' + (e?.message || e)); }
+  };
+
+  const createSeq = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    try { setStatus(await b.CreateSeqFile(matrix.Plugins[col], '')); }
+    catch (e: any) { setStatus('Create SEQ failed: ' + (e?.message || e)); }
+  };
+
+  const checkCircularLeveled = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    setStatus('Checking leveled lists…');
+    try { setStatus(await b.CheckCircularLeveledLists(matrix.Plugins[col])); }
+    catch (e: any) { setStatus('Check failed: ' + (e?.message || e)); }
+  };
+
   const copyText = (what: string, text: string) => {
     setMenu(null);
     void navigator.clipboard?.writeText(text);
@@ -904,6 +951,10 @@ export default function RecordView(
           <button onClick={() => compactEsl(menu.col)}><Minimize2 size={13} /> Compact to ESL</button>
           <button onClick={() => cleanPlugin(menu.col)}><Eraser size={13} /> Clean (UDR)</button>
           <button onClick={() => removeItm(menu.col)}><Eraser size={13} /> Remove identical to master…</button>
+          <button onClick={() => addMasters(menu.col)}><Plus size={13} /> Add masters…</button>
+          <button onClick={() => renumberPlugin(menu.col)}><Hash size={13} /> Renumber all FormIDs…</button>
+          <button onClick={() => createSeq(menu.col)}><FilePlus2 size={13} /> Create SEQ file</button>
+          <button onClick={() => checkCircularLeveled(menu.col)}><ListFilter size={13} /> Check circular leveled lists</button>
           <div className="rv-context-sep" />
           <button onClick={askImpact}><Brain size={13} /> Ask AI: what breaks?</button>
         </div>

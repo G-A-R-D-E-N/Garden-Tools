@@ -221,6 +221,18 @@ public class BackendInterop
     public string RemoveIdenticalToMaster(string plugin, bool apply) =>
         DebugLog.Guard(nameof(RemoveIdenticalToMaster), () => WriteService.RemoveIdenticalToMaster(Env, plugin, apply),
             $"{plugin} apply={apply}");
+    public string AddMasters(string plugin, string mastersCsv) =>
+        DebugLog.Guard(nameof(AddMasters), () => WriteService.AddMasters(plugin,
+            (mastersCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), Env),
+            $"{plugin} += {mastersCsv}");
+    public string RenumberPluginFormIds(string plugin, string start, bool apply) =>
+        DebugLog.Guard(nameof(RenumberPluginFormIds), () => WriteService.RenumberPluginFormIds(plugin, start, apply, Env),
+            $"{plugin} from {start} apply={apply}");
+    public string CreateSeqFile(string plugin, string outputDir) =>
+        DebugLog.Guard(nameof(CreateSeqFile), () => WriteService.CreateSeqFile(Env, plugin,
+            string.IsNullOrWhiteSpace(outputDir) ? null : outputDir), plugin);
+    public string CheckCircularLeveledLists(string plugin) =>
+        DebugLog.Guard(nameof(CheckCircularLeveledLists), () => WriteService.CheckCircularLeveledLists(Env, plugin), plugin);
     public string CreateMergedPatch(string plugins, string patchPlugin, bool apply) =>
         DebugLog.Guard(nameof(CreateMergedPatch), () => WriteService.CreateMergedPatch(Env, plugins, patchPlugin, apply),
             $"{plugins}->{patchPlugin} apply={apply}");

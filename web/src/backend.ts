@@ -37,6 +37,10 @@ export interface Backend {
                   newEditorId: string): Promise<string>;
   RemoveIdenticalToMaster(plugin: string, apply: boolean): Promise<string>;
   CreateMergedPatch(plugins: string, patchPlugin: string, apply: boolean): Promise<string>;
+  AddMasters(plugin: string, mastersCsv: string): Promise<string>;
+  RenumberPluginFormIds(plugin: string, start: string, apply: boolean): Promise<string>;
+  CreateSeqFile(plugin: string, outputDir: string): Promise<string>;
+  CheckCircularLeveledLists(plugin: string): Promise<string>;
 
   // ---- navigator / workspace / detail rail ----
   GetActivePlugins(): Promise<string>;                       // JSON: ActivePlugin[]

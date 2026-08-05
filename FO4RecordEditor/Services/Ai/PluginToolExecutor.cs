@@ -543,6 +543,65 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "record" }
             }),
+        new("add_masters",
+            "Declare one or more plugins as masters of this plugin (xEdit 'Add Masters...'). Needed BEFORE " +
+            "authoring a reference into a file the plugin does not already master -- the reference has nowhere " +
+            "valid to point otherwise. save_plugin re-derives the master list from actual references, so write " +
+            "the reference before saving or the added master will not survive.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    masters = new { type = "array", items = new { type = "string" }, description = "Plugin filenames to declare, e.g. ['DLCCoast.esm']. Each must be loaded." }
+                },
+                required = new[] { "plugin", "masters" }
+            }),
+        new("renumber_plugin_formids",
+            "Renumber EVERY record in a plugin consecutively from a base object id, repointing all in-plugin " +
+            "references (xEdit 'Renumber FormIDs from...'). Use to resolve a FormID collision with another mod. " +
+            "renumber_formid does one record. DRY RUN by default. References from OTHER plugins into this one " +
+            "will break -- they still point at the old ids.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    start = new { type = "string", description = "Hex object id to start from, e.g. '000800' or '001000'." },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "plugin", "start" }
+            }),
+        new("create_seq_file",
+            "Write the .seq file a plugin's start-game-enabled quests need (xEdit 'Create SEQ File'). Without it " +
+            "those quests silently never start on an existing save, so this is a required build step for quest " +
+            "mods. Skips quests whose previous version already starts at game start.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    output_dir = new { type = "string", description = "Folder to write into. Defaults to <Output>/Seq. Deploy as Data/Seq/<plugin>.seq." }
+                },
+                required = new[] { "plugin" }
+            }),
+        new("check_circular_leveled_lists",
+            "Find leveled lists that contain themselves, directly or through another list (xEdit 'Check for " +
+            "Circular Leveled Lists'). The engine hangs or crashes resolving one. Read-only; walks the winning " +
+            "version of every LVLI/LVLN across the load order.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string", description = "Optional: only report cycles mentioning this plugin." },
+                    limit = new { type = "integer", description = "Max cycles to report (default 200)." }
+                },
+                required = Array.Empty<string>()
+            }),
         new("delete_record",
             "Remove a record entirely from a plugin (xEdit 'Remove') -- e.g. delete an incomplete stub record, " +
             "or drop an unwanted override from a patch.",
@@ -1342,7 +1401,8 @@ public sealed class PluginToolExecutor
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
             "create_record" or "create_cell" or "create_placed_object" or
             "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
-            "remove_identical_to_master" or "create_merged_patch" or
+            "remove_identical_to_master" or "create_merged_patch" or "add_masters" or
+            "renumber_plugin_formids" or "create_seq_file" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
             "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all" or
@@ -1373,6 +1433,10 @@ public sealed class PluginToolExecutor
             "remove_identical_to_master" => $"{(Applying() ? "remove" : "list")} ITMs in {plugin}",
             "create_merged_patch" => $"{(Applying() ? "build" : "preview")} merged patch {Str("patch_plugin")}",
             "get_conditions"      => $"read conditions of {ShortId(record)}",
+            "add_masters"         => $"add master(s) to {plugin}",
+            "renumber_plugin_formids" => $"{(Applying() ? "renumber" : "preview renumber of")} every record in {plugin}",
+            "create_seq_file"     => $"write {plugin}.seq",
+            "check_circular_leveled_lists" => "check for circular leveled lists",
             "reload_plugin"       => $"reload {plugin}",
             "strip_masters_clean" => $"strip masters: {System.IO.Path.GetFileName(Str("source_path"))}",
             "list_masters"        => $"list masters of {plugin}",
@@ -1557,6 +1621,20 @@ public sealed class PluginToolExecutor
                 return WriteService.CreateMergedPatch(env, Str("plugins"), Str("patch_plugin"), Bool("apply"));
             case "get_conditions":
                 return WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
+            case "add_masters":
+            {
+                var masters = root.TryGetProperty("masters", out var mEl) && mEl.ValueKind == JsonValueKind.Array
+                    ? mEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToArray()
+                    : Array.Empty<string>();
+                return WriteService.AddMasters(Str("plugin"), masters, env);
+            }
+            case "renumber_plugin_formids":
+                return WriteService.RenumberPluginFormIds(Str("plugin"), Str("start"), Bool("apply"), env);
+            case "create_seq_file":
+                return WriteService.CreateSeqFile(env, Str("plugin"),
+                    Str("output_dir") is { Length: > 0 } seqDir ? seqDir : null);
+            case "check_circular_leveled_lists":
+                return WriteService.CheckCircularLeveledLists(env, Str("plugin"), Int("limit", 200));
             case "delete_record":
                 return WriteService.DeleteRecord(Str("plugin"), Str("id"), env);
             case "remove_list_item":

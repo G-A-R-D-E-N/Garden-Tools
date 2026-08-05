@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **79 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **83 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -96,7 +96,8 @@ plugin under a **brand new FormID** rather than overriding the original, which i
 variant of an existing item.
 
 ### Whole-plugin xEdit passes
-`remove_identical_to_master` · `create_merged_patch`
+`remove_identical_to_master` · `create_merged_patch` · `add_masters` · `renumber_plugin_formids` ·
+`create_seq_file` · `check_circular_leveled_lists`
 
 `remove_identical_to_master` is the ITM half of the standard cleaning pass (`clean_plugin` does the
 UDR half). An ITM is an override whose every field equals the version it overrides, so it costs a
@@ -108,7 +109,26 @@ bytes, so the check errs toward keeping a record: a false "not identical" is har
 `create_merged_patch` builds a patch carrying the winning version of every record two or more of the
 selected plugins touch.
 
-Both default to a **dry run** that reports what they would do; pass `apply: true` to write.
+`add_masters` declares a plugin as a master. Needed BEFORE authoring a reference into a file the
+plugin does not already master, since the reference has nowhere valid to point otherwise.
+`save_plugin` re-derives the master list from actual references, so write the reference before
+saving or the added master will not survive.
+
+`renumber_plugin_formids` renumbers every record in a plugin consecutively from a base object id and
+repoints all in-plugin references (`renumber_formid` does one record). References from OTHER plugins
+into this one will break: they still point at the old ids.
+
+`create_seq_file` writes the `.seq` a plugin's start-game-enabled quests need. Without it those
+quests silently never start on an existing save, so it is a required build step for quest mods. The
+file is a bare array of little-endian 4-byte FormIDs written with the plugin's own file-local index,
+which is what the Creation Kit produces; output was verified byte-identical to a CK-generated SEQ
+file from a real modlist. Deploy it as `Data/Seq/<plugin>.seq`.
+
+`check_circular_leveled_lists` finds leveled lists that contain themselves, directly or through
+another list. The engine hangs or crashes resolving one. Read-only.
+
+`remove_identical_to_master`, `create_merged_patch` and `renumber_plugin_formids` default to a
+**dry run** that reports what they would do; pass `apply: true` to write.
 
 ### Cells and placed objects
 `create_cell` · `create_placed_object`
