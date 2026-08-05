@@ -68,6 +68,15 @@ public static class Mo2ProfileLoader
 
         // gamePath points at the game install root; plugins live in its Data subfolder.
         var dataFolder = string.IsNullOrWhiteSpace(gamePath) ? "" : Path.Combine(gamePath, "Data");
+
+        // A portable MO2 instance keeps the game beside itself, and an instance copied between
+        // machines or drives keeps the old gamePath. Falling back to that layout means a moved
+        // instance still finds its base masters instead of loading mods against nothing.
+        if (dataFolder.Length == 0 || !Directory.Exists(dataFolder))
+        {
+            var portable = Path.Combine(instancePath, "Stock Folder", "Data");
+            if (Directory.Exists(portable)) dataFolder = portable;
+        }
         return new Mo2Info(instancePath, profile, dataFolder, ResolveOverwriteFolder(instancePath));
     }
 
@@ -109,7 +118,34 @@ public static class Mo2ProfileLoader
         const string prefix = "@ByteArray(";
         if (v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && v.EndsWith(")"))
             v = v[prefix.Length..^1];
-        return v.Replace("\\\\", "\\");
+        return NativePath(v.Replace("\\\\", "\\"));
+    }
+
+    /// <summary>
+    /// Turn a Windows or Wine path from ModOrganizer.ini into one this OS can open.
+    ///
+    /// MO2 writes gamePath as a Windows path. Read on Linux, "Z:\media\user\..." is not a path at
+    /// all, so the game install never resolved and the base masters silently never loaded: the whole
+    /// of Fallout4.esm and the DLCs were absent from the load order while 651 mod plugins loaded
+    /// fine. Everything downstream inherited that: references into the base game looked dangling,
+    /// conflict matrices omitted the originating master, and searches missed vanilla FormIDs.
+    ///
+    /// Wine maps Z: to the filesystem root; other drive letters live under the prefix's drive_&lt;x&gt;.
+    /// </summary>
+    private static string NativePath(string p)
+    {
+        if (string.IsNullOrWhiteSpace(p) || OperatingSystem.IsWindows()) return p;
+
+        if (p.Length >= 2 && char.IsLetter(p[0]) && p[1] == ':')
+        {
+            var rest = p[2..].Replace('\\', '/').TrimStart('/');
+            var drive = char.ToLowerInvariant(p[0]);
+            if (drive == 'z') return "/" + rest;
+            var prefix = Environment.GetEnvironmentVariable("WINEPREFIX")
+                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".wine");
+            return Path.Combine(prefix, "drive_" + drive, rest);
+        }
+        return p.Replace('\\', '/');
     }
 
     /// <summary>

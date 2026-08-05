@@ -30,7 +30,7 @@ that obligation is satisfied; there is no separate location to also track.
 
 ## Our Mutagen is patched
 
-The vendored Mutagen (`Mutagen/`) is a fork with four functional fixes that upstream does not have.
+The vendored Mutagen (`Mutagen/`) is a fork with five functional fixes that upstream does not have.
 Without them the editor writes broken perk data or misreads Next-Gen archives, so a clean upstream
 Mutagen is **not** a drop-in replacement:
 
@@ -56,6 +56,16 @@ Mutagen is **not** a drop-in replacement:
   `Fallout4 - Textures1.ba2`. Scoped strictly to v7 (v8 already handled above, v8 DX10 left untouched).
   See `docs/Code Notes/FO4RecordEditor.md` for the full byte-level verification.
 
+- `Mutagen.Bethesda.Core/Archives/DI/IArchiveListingDetailsProvider.cs` (`Comparer`) -- an archive
+  whose owning plugin is not in the load order threw `KeyNotFoundException` from an unguarded
+  dictionary index in `FindListedIndex`, which the sort surfaced as `InvalidOperationException:
+  Failed to compare two elements in the array` and took down every call that touched the game
+  environment. A Data folder can legitimately hold archives for plugins that are not enabled, so
+  this is ordinary input rather than corruption. Unowned archives now sort last. `Compare` also threw
+  `NotImplementedException` when two archives shared both priority and suffix, which is reachable
+  once unowned archives share a sentinel priority, and a comparer has to return a total order
+  regardless; it now falls back to comparing file names.
+
 `Mutagen/Directory.Build.targets` additionally carries one build-configuration-only local change,
 clearly marked in a comment at the top of that file: NuGet packaging is turned off (we compile and
 link this directly, we never `dotnet pack` it) and a set of warning codes are suppressed. Every one of
@@ -64,7 +74,7 @@ comments, a few harmless member-hiding patterns, and similar), confirmed to be z
 warnings by checking attribution on every one before suppressing it -- not a functional change, only
 build noise reduction so a first `dotnet build` after cloning is not a wall of unrelated warnings.
 
-Only the three files above are functional patches. Everything else in `Mutagen/` is an unmodified
+Only the files listed above are functional patches. Everything else in `Mutagen/` is an unmodified
 copy of the upstream source at the point this fork was vendored.
 
 ## Offline Creation Kit Wiki mirror
