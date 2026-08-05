@@ -51,6 +51,18 @@ public sealed class ConflictFieldRow
     /// <summary>Dropdown options when EditKind == "Enum".</summary>
     public IReadOnlyList<string>? EnumOptions { get; init; }
 
+    /// <summary>What kind of change this row represents: "Value" | "Flag" | "FormID".
+    /// Classified here rather than inferred in the UI, so the Conflicts view's sub-tab counts and
+    /// the donut cannot drift from what the grid actually shows.</summary>
+    public string Kind { get; init; } = "Value";
+
+    /// <summary>The top-level subrecord this row belongs under (its first path segment), used as
+    /// the collapsible group header in the Conflicts view. Empty for top-level rows.</summary>
+    public string Group { get; init; } = "";
+
+    /// <summary>Friendly form of <see cref="Group"/> for the group header.</summary>
+    public string GroupLabel { get; init; } = "";
+
     /// <summary>Short display label for the picker chip when EditKind == "Ref" (e.g. "Keyword").</summary>
     public string? RefType { get; init; }
     /// <summary>Comma-separated concrete record types the link may target (the picker's filter set).</summary>

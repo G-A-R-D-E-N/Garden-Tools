@@ -14,7 +14,7 @@ namespace FO4RecordEditor.Services;
 /// Loads an ESP/ESM/ESL directly via Mutagen -- no Spriggit step needed.
 /// Uses a generic reflection walker so it's not tied to specific Mutagen API shapes.
 /// </summary>
-public static class MutagenLoader
+public static partial class MutagenLoader
 {
     // Properties to skip at any depth (noisy / internal / circular)
     private static readonly HashSet<string> _skipProps = new(StringComparer.OrdinalIgnoreCase)
@@ -778,6 +778,33 @@ public static class MutagenLoader
         return Rendering.FriendlyNames.Label(key);
     }
 
+    /// <summary>The first path segment, which is the subrecord a row hangs off. "" for a top-level
+    /// field, since those are their own group.</summary>
+    private static string GroupOf(string path)
+    {
+        int dot = path.IndexOf('.');
+        int brk = path.IndexOf('[');
+        int cut = dot < 0 ? brk : brk < 0 ? dot : Math.Min(dot, brk);
+        return cut <= 0 ? "" : path[..cut];
+    }
+
+    /// <summary>
+    /// Value / Flag / FormID, for the Conflicts view's sub-tabs and donut.
+    /// EditKind is authoritative where it is specific (Bool is a flag, Ref is a FormID); the value
+    /// shape only breaks ties, because a plain "Text" field holding "[STAT:0001F1A2]" is a form
+    /// link the walker did not type.
+    /// </summary>
+    private static string ClassifyKind(string editKind, string key, IReadOnlyList<string> values)
+    {
+        if (editKind == "Bool") return "Flag";
+        if (editKind == "Ref") return "FormID";
+        if (key.EndsWith("Flags", StringComparison.OrdinalIgnoreCase) ||
+            key.EndsWith("Flag", StringComparison.OrdinalIgnoreCase)) return "Flag";
+        foreach (var v in values)
+            if (v.Length > 2 && v[0] == '[' && v.Contains(':')) return "FormID";
+        return "Value";
+    }
+
     private static void FlattenConflictRows(RecordNode node, string path, int depth, List<string> plugins, List<ConflictFieldRow> rows)
     {
         foreach (var child in node.Children)
@@ -798,12 +825,15 @@ public static class MutagenLoader
                 bool differs = present.Select(CanonValue).Distinct().Count() > 1 || (present.Count > 0 && anyMissing);
                 var editKindString = child.EditKind.ToString();
                 var (statuses, severity) = ClassifyRow(vals, editKindString);
+                var group = GroupOf(p);
                 rows.Add(new ConflictFieldRow
                 {
                     Field = p, DisplayLabel = MakeDisplayLabel(child.Key, node.Key), Level = depth, Values = vals, Differs = differs,
                     Statuses = statuses, Severity = severity,
                     IsSummary = child.IsSummary, HasChildren = hasKids,
                     EditKind = editKindString, EnumOptions = child.EnumOptions,
+                    Kind = ClassifyKind(editKindString, child.Key, present),
+                    Group = group, GroupLabel = group.Length == 0 ? "" : Rendering.FriendlyNames.Label(group),
                     RefType = child.RefType, RefTypes = child.RefTypes,
                 });
             }

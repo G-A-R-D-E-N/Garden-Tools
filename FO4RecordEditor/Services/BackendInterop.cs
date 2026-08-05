@@ -95,6 +95,76 @@ public class BackendInterop
         children = n.Children.Select(NodeDto).ToArray(),
     };
 
+    // ---- navigator / workspace / detail rail ----
+    // Anything that scans the whole load order runs on a background thread: these are called on
+    // every navigator expand and record open, and the UI thread owns the window.
+
+    /// <summary>Load order for the File Browser: name, kind (master/plugin/light), index, editable.</summary>
+    public string GetActivePlugins() =>
+        DebugLog.Guard(nameof(GetActivePlugins), () =>
+            JsonConvert.SerializeObject(MutagenLoader.GetActivePlugins(Env)));
+
+    /// <summary>Record types present across the load order, with counts, for the type-first tree.</summary>
+    public System.Threading.Tasks.Task<string> GetRecordTypeIndex() =>
+        DebugLog.GuardAsync(nameof(GetRecordTypeIndex), async () =>
+        {
+            if (Env == null) return "[]";
+            var types = await System.Threading.Tasks.Task.Run(() => MutagenLoader.GetRecordTypeIndex(Env));
+            return JsonConvert.SerializeObject(types);
+        });
+
+    /// <summary>Winning records of one type across the load order (the navigator's lazy expand).</summary>
+    public System.Threading.Tasks.Task<string> GetRecordsOfType(string signature, string filter, int limit, int offset) =>
+        DebugLog.GuardAsync(nameof(GetRecordsOfType), async () =>
+        {
+            if (Env == null) return "[]";
+            var hits = await System.Threading.Tasks.Task.Run(() =>
+                MutagenLoader.GetRecordsOfTypeAcrossLoadOrder(Env, signature, filter, limit <= 0 ? 500 : limit, offset));
+            return JsonConvert.SerializeObject(hits);
+        }, $"{signature} [{filter}] {offset}+{limit}");
+
+    /// <summary>Worldspace/cell breadcrumb for the workspace header.</summary>
+    public string GetContainmentPath(string formKey) =>
+        DebugLog.Guard(nameof(GetContainmentPath), () =>
+            JsonConvert.SerializeObject(MutagenLoader.GetContainmentPath(Env, formKey)), formKey);
+
+    /// <summary>Header fields for the detail rail (FormID, EditorID, base form, class, file).</summary>
+    public string GetRecordDetails(string formKey) =>
+        DebugLog.Guard(nameof(GetRecordDetails), () =>
+            JsonConvert.SerializeObject(MutagenLoader.GetRecordDetails(Env, formKey)), formKey);
+
+    /// <summary>"Plugins Affecting This Record": per-plugin changed/conflicting field counts.</summary>
+    public System.Threading.Tasks.Task<string> GetRecordPluginMatrix(string formKey) =>
+        DebugLog.GuardAsync(nameof(GetRecordPluginMatrix), async () =>
+        {
+            var rows = await System.Threading.Tasks.Task.Run(() => MutagenLoader.GetRecordPluginMatrix(Env, formKey));
+            return JsonConvert.SerializeObject(rows);
+        }, formKey);
+
+    /// <summary>Outgoing FormLinks of the winning version; unresolved ones are reported, not dropped.</summary>
+    public System.Threading.Tasks.Task<string> GetDependencies(string formKey) =>
+        DebugLog.GuardAsync(nameof(GetDependencies), async () =>
+        {
+            var deps = await System.Threading.Tasks.Task.Run(() => MutagenLoader.GetDependencies(Env, formKey));
+            return JsonConvert.SerializeObject(deps);
+        }, formKey);
+
+    /// <summary>Override timeline: one entry per plugin carrying the record, in load order.</summary>
+    public System.Threading.Tasks.Task<string> GetHistory(string formKey) =>
+        DebugLog.GuardAsync(nameof(GetHistory), async () =>
+        {
+            var entries = await System.Threading.Tasks.Task.Run(() => MutagenLoader.GetHistory(Env, formKey));
+            return JsonConvert.SerializeObject(entries);
+        }, formKey);
+
+    /// <summary>Status-bar totals. The record count is the real total, not the plugin count.</summary>
+    public System.Threading.Tasks.Task<string> GetLoadOrderSummary() =>
+        DebugLog.GuardAsync(nameof(GetLoadOrderSummary), async () =>
+        {
+            var summary = await System.Threading.Tasks.Task.Run(() => MutagenLoader.GetLoadOrderSummary(Env));
+            return JsonConvert.SerializeObject(summary);
+        });
+
     // ---- edit ---- (every result is logged so we can see what the UI changed and why a save failed)
     public string OpenPlugin(string plugin) =>
         DebugLog.Guard(nameof(OpenPlugin), () => WriteService.OpenPlugin(plugin, Env), plugin);

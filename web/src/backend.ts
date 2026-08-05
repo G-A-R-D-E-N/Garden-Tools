@@ -29,10 +29,49 @@ export interface Backend {
   CleanPlugin(plugin: string): Promise<string>;
   RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;
 
+  // ---- navigator / workspace / detail rail ----
+  GetActivePlugins(): Promise<string>;                       // JSON: ActivePlugin[]
+  GetRecordTypeIndex(): Promise<string>;                     // JSON: RecordTypeEntry[]
+  GetRecordsOfType(signature: string, filter: string,
+                   limit: number, offset: number): Promise<string>;   // JSON: SearchHit[]
+  GetContainmentPath(formKey: string): Promise<string>;      // JSON: BreadcrumbNode[]
+  GetRecordDetails(formKey: string): Promise<string>;        // JSON: RecordDetails | null
+  GetRecordPluginMatrix(formKey: string): Promise<string>;   // JSON: PluginMatrixRow[]
+  GetDependencies(formKey: string): Promise<string>;         // JSON: Dependency[]
+  GetHistory(formKey: string): Promise<string>;              // JSON: HistoryEntry[]
+  GetLoadOrderSummary(): Promise<string>;                    // JSON: LoadOrderSummary
+
   // ---- save ----
   ResolveConflict(formKey: string, winner: string, patch: string): Promise<string>;
   SavePatch(patch: string): Promise<string>;
   SavePlugin(plugin: string, path: string): Promise<string>;
+}
+
+/** A plugin's kind comes from its header flags, not its extension: an .esp with the Master flag
+ *  really is a master, and the ESL/light flag is stored as "Small". */
+export type PluginKind = 'master' | 'plugin' | 'light';
+
+export interface ActivePlugin {
+  Name: string; Kind: PluginKind; LoadOrder: number; Editable: boolean; Size: number;
+}
+export interface RecordTypeEntry { Type: string; FriendlyName: string; Count: number; }
+export interface BreadcrumbNode { Kind: string; Label: string; FormKey: string; }
+export interface RecordDetails {
+  FormKey: string; FormId: string; EditorId: string; Signature: string; ClassName: string;
+  BaseForm: string; BaseFormKey: string; File: string; Winner: string; OverrideCount: number;
+}
+export interface PluginMatrixRow {
+  Plugin: string; LoadOrder: number; Kind: PluginKind; Changes: number; Conflicts: number;
+  IsOverride: boolean; IsWinner: boolean; LastModified: string;
+}
+export interface Dependency {
+  Kind: 'link' | 'missing'; FormKey: string; EditorId: string; Type: string; Plugin: string;
+}
+export interface HistoryEntry {
+  Plugin: string; LoadOrder: number; Action: string; ChangedFields: number; LastModified: string;
+}
+export interface LoadOrderSummary {
+  TotalRecords: number; PluginCount: number; Plugins: string[];
 }
 
 /** The "appInterop" bridge (FO4RecordEditor.Services.AppInterop) -- explorer tree + env loading. */
@@ -57,6 +96,9 @@ export interface ConflictFieldRow {
   Differs: boolean;
   Statuses: string[];    // per-plugin status parallel to Values: notdefined|master|identical|win|override|lose|only
   Severity: string;      // row severity: none|override|conflict|critical
+  Kind: 'Value' | 'Flag' | 'FormID';   // classified server-side, drives the sub-tabs and donut
+  Group: string;         // first path segment: the subrecord this row groups under ("" = top level)
+  GroupLabel: string;    // friendly form of Group, used as the group header
   IsSummary: boolean;    // a condition/component entry: collapse its sub-fields by default
   HasChildren: boolean;  // deeper rows belong to this one (show an expand chevron)
   EditKind: 'Text' | 'Bool' | 'Enum' | 'Ref';   // how a value cell edits ('Ref' = record picker)
