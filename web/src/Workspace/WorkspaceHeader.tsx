@@ -13,13 +13,16 @@ interface WorkspaceHeaderProps {
   /** Collapse every non-anchored column into "Other Plugins (N)". */
   compareOnly: boolean;
   onCompareOnlyChange: (next: boolean) => void;
+  /** Compare anchors only mean something on the Conflicts tab; elsewhere the pills are noise. */
+  showCompare: boolean;
   actions: WorkspaceAction[];
   onOpenRecord: (formKey: string, plugin: string) => void;
 }
 
 /** Plugin compare pills, containment breadcrumb, and the record's action menu. */
 export default function WorkspaceHeader({
-  matrix, anchors, onAnchorsChange, compareOnly, onCompareOnlyChange, actions, onOpenRecord,
+  matrix, anchors, onAnchorsChange, compareOnly, onCompareOnlyChange, showCompare, actions,
+  onOpenRecord,
 }: WorkspaceHeaderProps) {
   const [path, setPath] = useState<BreadcrumbNode[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -61,35 +64,38 @@ export default function WorkspaceHeader({
   return (
     <div className="ws-header">
       <div className="ws-row ws-compare">
-        <PluginPill name={left} label="Base" onClick={() => setPicking(0)} />
-        <span className="ws-vs">vs</span>
-        <PluginPill name={right} label="Compare" onClick={() => setPicking(1)} />
-
-        {others.length > 0 && (
-          <button
-            className="ws-add"
-            title={`Also touched by: ${others.join(', ')}`}
-            onClick={() => setPicking(1)}
-          >
-            <Plus size={12} /> {others.length} more
-          </button>
+        {showCompare && (
+          <>
+            <PluginPill name={left} label="Base" onClick={() => setPicking(0)} />
+            <span className="ws-vs">vs</span>
+            <PluginPill name={right} label="Compare" onClick={() => setPicking(1)} />
+            {others.length > 0 && (
+              <button
+                className="ws-add"
+                title={`Also touched by: ${others.join(', ')}`}
+                onClick={() => setPicking(1)}
+              >
+                <Plus size={12} /> {others.length} more
+              </button>
+            )}
+            <button
+              className={`ws-btn ${compareOnly ? 'on' : ''}`}
+              onClick={() => onCompareOnlyChange(!compareOnly)}
+              title="Show only the two anchored plugins, collapsing the rest"
+            >
+              Compare
+            </button>
+            {anchors && (
+              <button className="ws-btn" onClick={() => onAnchorsChange(null)} title="Reset the compare anchors">
+                <X size={12} />
+              </button>
+            )}
+          </>
         )}
+
+        <Breadcrumb path={path} matrix={matrix} onOpenRecord={onOpenRecord} />
 
         <div className="ws-spacer" />
-
-        <button
-          className={`ws-btn ${compareOnly ? 'on' : ''}`}
-          onClick={() => onCompareOnlyChange(!compareOnly)}
-          title="Show only the two anchored plugins, collapsing the rest"
-        >
-          Compare
-        </button>
-
-        {anchors && (
-          <button className="ws-btn" onClick={() => onAnchorsChange(null)} title="Reset the compare anchors">
-            <X size={12} />
-          </button>
-        )}
 
         <div className="ws-actions" ref={menuRef}>
           <button className="ws-btn ws-btn-primary" onClick={() => setMenuOpen(o => !o)}>
@@ -126,29 +132,39 @@ export default function WorkspaceHeader({
         </div>
       )}
 
-      <div className="ws-row ws-breadcrumb">
-        <Home size={12} />
-        {path.length === 0 ? (
-          <>
+    </div>
+  );
+}
+
+/** Containment chain, inline in the header's single row. */
+function Breadcrumb({ path, matrix, onOpenRecord }: {
+  path: BreadcrumbNode[];
+  matrix: ConflictMatrix;
+  onOpenRecord: (formKey: string, plugin: string) => void;
+}) {
+  return (
+    <div className="ws-breadcrumb">
+      <Home size={12} />
+      {path.length === 0 ? (
+        <>
+          <ChevronRight size={11} />
+          <span className="ws-bc-leaf">{matrix.EditorID || matrix.FormKey}</span>
+        </>
+      ) : (
+        path.map((n, i) => (
+          <span key={`${n.FormKey}:${i}`} className="ws-bc-seg">
             <ChevronRight size={11} />
-            <span className="ws-bc-leaf">{matrix.EditorID || matrix.FormKey}</span>
-          </>
-        ) : (
-          path.map((n, i) => (
-            <span key={`${n.FormKey}:${i}`} className="ws-bc-seg">
-              <ChevronRight size={11} />
-              <button
-                className={`ws-bc-btn ${i === path.length - 1 ? 'leaf' : ''}`}
-                title={`${n.Kind} ${n.FormKey}`}
-                onClick={() => i < path.length - 1 && onOpenRecord(n.FormKey, matrix.Winner)}
-                disabled={i === path.length - 1}
-              >
-                {n.Label}
-              </button>
-            </span>
-          ))
-        )}
-      </div>
+            <button
+              className={`ws-bc-btn ${i === path.length - 1 ? 'leaf' : ''}`}
+              title={`${n.Kind} ${n.FormKey}`}
+              onClick={() => i < path.length - 1 && onOpenRecord(n.FormKey, matrix.Winner)}
+              disabled={i === path.length - 1}
+            >
+              {n.Label}
+            </button>
+          </span>
+        ))
+      )}
     </div>
   );
 }

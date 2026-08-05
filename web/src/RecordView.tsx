@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Folder, ChevronRight, ChevronDown, Filter, EyeOff, Pencil, Copy, Save, Trash2,
+  ChevronRight, ChevronDown, EyeOff, Pencil, Copy, Save, Trash2,
   Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network,
 } from 'lucide-react';
 import type {
@@ -87,6 +87,7 @@ export default function RecordView(
   const setRecordTab = (t: RecordTab) => { setInternalTab(t); onTabChange?.(t); };
 
   const [filter, setFilter] = useState('');
+  const [valueFilter, setValueFilter] = useState('');
   const [onlyDiffing, setOnlyDiffing] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
@@ -159,14 +160,18 @@ export default function RecordView(
     setOv(prev => ({ ...prev, [r.Field]: r.Field in prev ? !prev[r.Field] : !defaultExpanded(r) }));
 
   const f = filter.trim().toLowerCase();
-  const filtering = f.length > 0;
+  const vf = valueFilter.trim().toLowerCase();
+  // Either filter flattens the tree, since a match can sit at any depth and hiding its ancestors
+  // would hide the match itself.
+  const filtering = f.length > 0 || vf.length > 0;
 
   const matched = useMemo(() => matrix.Rows.filter(r => {
     if (onlyDiffing && !r.Differs) return false;
     if (f && !(r.DisplayLabel || r.Field).toLowerCase().includes(f)) return false;
+    if (vf && !r.Values.some(v => v.toLowerCase().includes(vf))) return false;
     if (severityFilter !== 'all' && !SEVERITY_SETS[severityFilter].has(r.Severity ?? 'none')) return false;
     return true;
-  }), [matrix, f, onlyDiffing, severityFilter]);
+  }), [matrix, f, vf, onlyDiffing, severityFilter]);
 
   const rows = useMemo(() => {
     if (filtering) return matched;
@@ -451,28 +456,22 @@ export default function RecordView(
         onAnchorsChange={setAnchors}
         compareOnly={compareOnly}
         onCompareOnlyChange={setCompareOnly}
+        showCompare={recordTab === 'conflicts'}
         actions={headerActions}
         onOpenRecord={(fk, pl) => onOpenRecord?.(fk, pl)}
       />
-      <div className="rv-breadcrumb rv-breadcrumb-slim">
-        <Folder size={13} />
-        <span>{plugin}</span>
-        <ChevronRight size={11} />
-        <span className="rv-bc-cat">{matrix.Type}</span>
-        {(() => {
-          const badge = LEVEL_BADGES[matrix.Level];
-          return badge ? <span className={`rv-lvl-badge ${badge.cls}`}>{badge.label}</span> : null;
-        })()}
-        {status && <span className="rv-status">{status}</span>}
-      </div>
 
       {/* ── RECORD VIEW tab ───────────────────────────────────────── */}
       {recordTab === 'grid' && (
         <>
           <div className="rv-toolbar">
+            <span className="rv-tb-label">Filter by name</span>
             <div className="rv-filter">
-              <Filter size={12} />
-              <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter fields…" />
+              <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="field name…" />
+            </div>
+            <span className="rv-tb-label">by value</span>
+            <div className="rv-filter">
+              <input value={valueFilter} onChange={e => setValueFilter(e.target.value)} placeholder="any value…" />
             </div>
             <button className={`rv-toggle-btn ${onlyDiffing ? 'on' : ''}`} onClick={() => setOnlyDiffing(v => !v)}>
               <EyeOff size={12} /> Only conflicts
@@ -488,6 +487,12 @@ export default function RecordView(
               <option value="conflict">Real conflicts (conflict+)</option>
               <option value="critical">Critical only</option>
             </select>
+            {(() => {
+              const badge = LEVEL_BADGES[matrix.Level];
+              return badge ? <span className={`rv-lvl-badge ${badge.cls}`}>{badge.label}</span> : null;
+            })()}
+            <span className="rv-tb-src" title={`Opened from ${plugin}`}>{plugin}</span>
+            {status && <span className="rv-status">{status}</span>}
           </div>
           <div className="rv-grid-scroll">
             {renderGrid(rows)}
