@@ -1324,6 +1324,24 @@ public sealed class PluginToolExecutor
                 properties = new { mod_path = new { type = "string", description = "Full path to the mod's folder." } },
                 required = new[] { "mod_path" }
             }),
+        new("audit_asset_usage",
+            "xEdit's 'List used meshes' / 'Output used assets filenames': walks every one of a plugin's own " +
+            "(native) records for string fields shaped like an asset path (.nif/.dds/.wav/.xwm/.fuz/.bgsm/" +
+            ".bgem/.hkx/.swf/.pex/.seq), then diffs that set against what the plugin's own on-disk folder " +
+            "actually ships (loose files + any BA2 beside it). Reports ORPHANED files (shipped, nothing in " +
+            "this plugin references them -- trim candidates for a repack) and DANGLING references " +
+            "(referenced, not found in this plugin's own folder -- may just be a base-game/shared asset, " +
+            "not necessarily broken; full load-order resolution needs the not-yet-built resolve_asset tool).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record_limit = new { type = "integer", description = "Cap on native records walked. Default 3000." }
+                },
+                required = new[] { "plugin" }
+            }),
         new("audio_convert_to_xwm",
             "Convert an audio or video file (or a WHOLE FOLDER of them, recursed, converted in parallel " +
             "with the original folder structure preserved) to Fallout 4's xWMA (.xwm) format. Any " +
@@ -1935,6 +1953,8 @@ public sealed class PluginToolExecutor
                 return MaterialService.SetField(Str("path"), Str("field"), Str("value"), StrOrNull("out_path"));
             case "catalog_mod_folder":
                 return ModInspectService.CatalogFolder(Str("mod_path"));
+            case "audit_asset_usage":
+                return WriteService.AuditAssetUsage(Str("plugin"), env, Int("record_limit", 3000));
 
             case "audio_convert_to_xwm":
             {
