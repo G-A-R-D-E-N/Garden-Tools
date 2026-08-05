@@ -77,15 +77,19 @@ public static class PapyrusService
             }
         }
 
-        // Import roots: caller-supplied + base game scripts + the work dir + its parent.
+        // Import roots: caller-supplied + base game scripts + the work dir.
+        // The work dir's PARENT is deliberately NOT an import root. The compiler walks every import
+        // root recursively, so a single .psc sitting anywhere shallow made it enumerate the parent's
+        // whole tree -- for a script near the workspace root that is ~695k files, and it either
+        // stalls or dies on a >260-char path long before it compiles anything. Sibling-folder
+        // imports that used to work by accident now have to be passed explicitly via `imports`
+        // (the tool's own parameter) or configured once in Settings > Papyrus base imports.
         var imp = new List<string>();
         if (!string.IsNullOrWhiteSpace(imports))
             imp.AddRange(imports.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                 .Select(s => s.Trim('"')));
         foreach (var b in ToolPaths.PapyrusBaseImports()) imp.Add(b);
         imp.Add(workDir);
-        var parent = Directory.GetParent(workDir)?.FullName;
-        if (parent != null) imp.Add(parent);
         var importArg = string.Join(";", imp.Distinct(StringComparer.OrdinalIgnoreCase));
 
         // Default output: the ORIGINAL source folder for a dir compile (not the temp staging dir).
