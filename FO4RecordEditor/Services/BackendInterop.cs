@@ -237,6 +237,15 @@ public class BackendInterop
     public string RemoveIdenticalToMaster(string plugin, bool apply) =>
         DebugLog.Guard(nameof(RemoveIdenticalToMaster), () => WriteService.RemoveIdenticalToMaster(Env, plugin, apply),
             $"{plugin} apply={apply}");
+    public string DeepCopyAsOverride(string sourcePlugin, string id, string patchPlugin, bool apply) =>
+        DebugLog.Guard(nameof(DeepCopyAsOverride),
+            () => WriteService.DeepCopyAsOverride(Env, sourcePlugin, id, patchPlugin, apply),
+            $"{id} {sourcePlugin}->{patchPlugin} apply={apply}");
+    public string ChangeReferencingRecords(string from, string to, string patchPlugin, bool apply) =>
+        DebugLog.Guard(nameof(ChangeReferencingRecords),
+            () => WriteService.ChangeReferencingRecords(Env, from, to, patchPlugin, apply),
+            $"{from}->{to} patch={patchPlugin} apply={apply}");
+
     // ---- xEdit element menu (Add / Remove / Move / Clear on a list row) ----
     public string DescribeElement(string plugin, string record, string path) =>
         DebugLog.Guard(nameof(DescribeElement), () => ElementService.DescribeElement(Env, plugin, record, path),

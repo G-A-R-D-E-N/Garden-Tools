@@ -50,6 +50,8 @@ export interface Backend {
   RenumberPluginFormIds(plugin: string, start: string, apply: boolean): Promise<string>;
   CreateSeqFile(plugin: string, outputDir: string): Promise<string>;
   CheckCircularLeveledLists(plugin: string): Promise<string>;
+  DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean): Promise<string>;
+  ChangeReferencingRecords(from: string, to: string, patchPlugin: string, apply: boolean): Promise<string>;
 
   // ---- navigator / workspace / detail rail ----
   GetActivePlugins(): Promise<string>;                       // JSON: ActivePlugin[]

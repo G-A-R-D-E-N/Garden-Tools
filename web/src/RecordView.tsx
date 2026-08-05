@@ -362,6 +362,46 @@ export default function RecordView(
     catch (e: any) { setStatus('Copy as new record failed: ' + (e?.message || e)); }
   };
 
+  const deepCopyAsOverride = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    if (matrix.Type === 'Cell' || matrix.Type === 'Worldspace') {
+      setStatus(`${matrix.Type} does not support deep copy here -- copy it with Copy as Override and its placed objects individually.`);
+      return;
+    }
+    const target = window.prompt('Deep copy (record + its own referenced content) as override into which plugin?', editablePlugins[0] ?? 'ConflictPatch.esp');
+    if (!target) return;
+    setStatus('Scanning references…');
+    try {
+      const preview = await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, false);
+      setStatus(preview);
+      if (!preview.startsWith('DRY RUN')) return;
+      if (!window.confirm(`${preview}\n\nProceed?`)) return;
+      setStatus(await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true));
+      await onReload();
+    } catch (e: any) { setStatus('Deep copy failed: ' + (e?.message || e)); }
+  };
+
+  const changeReferencingRecords = async (col: number) => {
+    setMenu(null);
+    const b = back();
+    if (!b) return;
+    const to = window.prompt(`Point every record that references ${matrix.EditorID || matrix.FormKey} at which record instead (FormKey or EditorID)?`, '');
+    if (!to) return;
+    const target = window.prompt('Write the repointed records into which patch plugin?', editablePlugins[0] ?? 'ConflictPatch.esp');
+    if (!target) return;
+    setStatus('Finding referencing records…');
+    try {
+      const preview = await b.ChangeReferencingRecords(matrix.FormKey, to, target, false);
+      setStatus(preview);
+      if (!preview.startsWith('DRY RUN')) return;
+      if (!window.confirm(`${preview}\n\nProceed?`)) return;
+      setStatus(await b.ChangeReferencingRecords(matrix.FormKey, to, target, true));
+      await onReload();
+    } catch (e: any) { setStatus('Change referencing records failed: ' + (e?.message || e)); }
+  };
+
   // Dry run first, then a confirm carrying the real count: removing an override that is not truly
   // identical would silently drop real edits, so the user always sees what is going before it goes.
   const removeItm = async (col: number) => {
@@ -971,6 +1011,8 @@ export default function RecordView(
             <button key={p} onClick={() => copyInto(menu.col, p)}><Copy size={13} /> {p}</button>
           ))}
           <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into…</button>
+          <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into…</button>
+          <button onClick={() => changeReferencingRecords(menu.col)}><Link2 size={13} /> Change referencing records…</button>
           <div className="rv-context-sep" />
           <div className="rv-context-label">Copy to clipboard</div>
           <button onClick={() => copyText('path', menu.row.Field)}><ClipboardCopy size={13} /> Path</button>

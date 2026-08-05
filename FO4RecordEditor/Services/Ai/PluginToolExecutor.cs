@@ -544,6 +544,42 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "record" }
             }),
+        new("deep_copy_as_override",
+            "Copy a record into a patch as an override, ALONG WITH every record it references that is owned by " +
+            "the SAME source plugin, so the copy is self-contained instead of dangling. Only follows links owned " +
+            "by the source plugin (a link into Fallout4.esm or another already-loaded master is left alone -- " +
+            "that record already exists everywhere). Refuses CELL and WRLD: xEdit's deep copy for those means " +
+            "something this tool cannot reproduce (their placed-reference/cell-block tree), so copy those with " +
+            "copy_as_override plus create_placed_object instead. DRY RUN by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_plugin = new { type = "string", description = "Plugin to copy FROM. Omit to take the winning version." },
+                    id = new { type = "string", description = "FormKey or EditorID of the root record." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "id", "patch_plugin" }
+            }),
+        new("change_referencing_records",
+            "Point every record that references 'from' at 'to' instead (xEdit 'Change Referencing Records'), by " +
+            "copying each referencing record into the patch as an override and rewriting its FormLinks. Use this " +
+            "to retire a duplicate record without leaving dangling links: repoint everything at the record " +
+            "you're keeping, then delete_record the duplicate. DRY RUN by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    from = new { type = "string", description = "FormKey or EditorID of the record being retired." },
+                    to = new { type = "string", description = "FormKey or EditorID of the record to point at instead." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "from", "to", "patch_plugin" }
+            }),
         new("element_add",
             "xEdit's element 'Add': insert a NEW default-constructed entry into a list at a path, then edit its " +
             "fields with set_field. Unlike add_list_item (FormLinks only), this works for STRUCT lists -- " +
@@ -1495,6 +1531,7 @@ public sealed class PluginToolExecutor
             "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
             "remove_identical_to_master" or "create_merged_patch" or "add_masters" or "set_conditions_at" or
             "element_add" or "element_remove" or "element_move" or "element_clear" or
+            "deep_copy_as_override" or "change_referencing_records" or
             "renumber_plugin_formids" or "create_seq_file" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
@@ -1527,6 +1564,8 @@ public sealed class PluginToolExecutor
             "create_merged_patch" => $"{(Applying() ? "build" : "preview")} merged patch {Str("patch_plugin")}",
             "get_conditions"      => $"read conditions of {ShortId(record)}",
             "set_conditions_at"   => $"{ShortId(record)}: conditions rebuilt at {Str("path")}",
+            "deep_copy_as_override" => $"{(Applying() ? "deep copy" : "preview deep copy")} {ShortId(Str("id"))} -> {Str("patch_plugin")}",
+            "change_referencing_records" => $"{(Applying() ? "repoint" : "preview repoint")} {ShortId(Str("from"))} -> {ShortId(Str("to"))}",
             "element_add"         => $"{ShortId(record)}: add to {Str("path")}",
             "element_remove"      => $"{ShortId(record)}: remove {Str("path")}",
             "element_move"        => $"{ShortId(record)}: move {Str("path")}",
@@ -1722,6 +1761,10 @@ public sealed class PluginToolExecutor
                 return Str("path") is { Length: > 0 } condPath
                     ? WriteService.GetConditionsAtPath(env, Str("plugin"), Str("record"), condPath)
                     : WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
+            case "deep_copy_as_override":
+                return WriteService.DeepCopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"), Bool("apply"));
+            case "change_referencing_records":
+                return WriteService.ChangeReferencingRecords(env, Str("from"), Str("to"), Str("patch_plugin"), Bool("apply"));
             case "element_add":
                 return ElementService.AddElement(Str("plugin"), Str("record"), Str("path"),
                     Str("template") is { Length: > 0 } tpl ? tpl : null, env);
