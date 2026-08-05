@@ -26,6 +26,18 @@ public sealed class AppSettings
     public string FfmpegPath { get; set; } = "";   // ffmpeg.exe (blank = bundled copy next to the exe)
     public string XwmaEncodePath { get; set; } = "";   // xWMAEncode.exe (blank = bundled copy next to the exe)
     public string Archive2Path { get; set; } = "";   // Archive2.exe (blank = auto-detect from the Fallout 4/CK install)
+    // Read every plugin fully into memory instead of opening the large ones as binary overlays.
+    // OFF by default: overlays are faster and keep record data off the managed heap, and that is what
+    // the tool has always done. Turn it on when saving over a loaded plugin fails with the ".new file
+    // beside it" message -- an overlay keeps an OPEN FILE HANDLE for as long as the environment lives
+    // (verified on the real Fallout4.esm via /proc/self/fd), and on Windows an open handle is what
+    // blocks an in-place overwrite.
+    //
+    // Measured cost, so the default is not a guess: on a real 657-plugin load order the 39 plugins
+    // over 1 MB are 197 MB on disk but ~2.2 GB once read into managed record objects (about 11x).
+    // That is why this defaults OFF rather than on.
+    public bool ReadLargePluginsIntoMemory { get; set; } = false;
+
     public double SidePanelWidth { get; set; } = 320;
     public double AiPanelWidth { get; set; } = 420;
     public double BottomPanelHeight { get; set; } = 200;
