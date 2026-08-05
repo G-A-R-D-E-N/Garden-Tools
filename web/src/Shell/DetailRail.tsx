@@ -176,8 +176,8 @@ export default function DetailRail({
             <thead>
               <tr>
                 <th>Plugin</th>
-                <th title="Changed fields">Chg</th>
-                <th title="Conflicting fields">Cfl</th>
+                <th title="Fields this plugin sets">Sets</th>
+                <th title="Fields where this plugin loses to a later one">Lost</th>
               </tr>
             </thead>
             <tbody>
