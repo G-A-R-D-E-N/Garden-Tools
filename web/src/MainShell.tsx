@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, ListTree,
+  Link2, Archive as ArchiveIcon, Music, Boxes,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
@@ -28,12 +28,8 @@ import ChatPanel from './ChatPanel';
 import TopBar, { type ShellTab } from './Shell/TopBar';
 import DetailRail from './Shell/DetailRail';
 import StatusBar from './Shell/StatusBar';
-import FileBrowser from './Navigator/FileBrowser';
-import RecordNavigator from './Navigator/RecordNavigator';
-import NavigatorFilters from './Navigator/NavigatorFilters';
-import { EMPTY_FILTERS, type NavigatorFilterState } from './Navigator/filters';
 import type {
-  ConflictMatrix, SearchHit, ConflictEntry, ActivePlugin, RecordTypeEntry, LoadOrderSummary,
+  ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary,
 } from './backend';
 import type { RecordTab } from './RecordView';
 
@@ -97,11 +93,10 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
 
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
-  // Records (by type, load-order wide) and Files (by plugin) are two views of one thing, so they
-  // are a switch inside Explorer rather than two activity-bar entries. Search and Errors were
-  // separate entries that rendered the identical pane, which is why they are gone.
-  const [treeMode, setTreeMode] = useState<'records' | 'files'>(
-    () => (localStorage.getItem('treeMode') as 'records' | 'files') || 'records');
+  // Everything the left pane does lives under Explorer: the plugin tree, search, errors and the
+  // conflict list. Separate activity-bar entries for these rendered the same pane or nearly so.
+  const [treeMode, setTreeMode] = useState<'files' | 'conflicts'>(
+    () => (localStorage.getItem('treeMode') as 'files' | 'conflicts') || 'files');
   useEffect(() => { localStorage.setItem('treeMode', treeMode); }, [treeMode]);
   const [showSettings, setShowSettings] = useState(false);
   const [showPapyrus, setShowPapyrus] = useState(false);
@@ -228,42 +223,24 @@ export default function MainShell() {
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
 
-  // Navigator (type-first tree) state. Kept here rather than in the components so the file
-  // selection, the filters and the tree all agree on one source of truth.
-  const [activePlugins, setActivePlugins] = useState<ActivePlugin[]>([]);
+  // Load-order totals for the status bar. The type index is what the Visible count is computed
+  // from; it is not a tree of its own any more.
   const [recordTypes, setRecordTypes] = useState<RecordTypeEntry[]>([]);
-  const [typesLoading, setTypesLoading] = useState(false);
-  const [navFilters, setNavFilters] = useState<NavigatorFilterState>(EMPTY_FILTERS);
-  const [fileSelection, setFileSelection] = useState<Set<string>>(new Set());
   const [loadOrderSummary, setLoadOrderSummary] = useState<LoadOrderSummary | null>(null);
 
-  /** Refresh everything the navigator and status bar read from the load order. */
+  /** Refresh the load-order totals the status bar reads. */
   const refreshNavigator = useCallback(async () => {
     const b = window.chrome?.webview?.hostObjects?.backend;
     if (!b) return;
-    setTypesLoading(true);
     try {
-      // Kick all three off together: the type index is the slow one and there is no reason for
-      // the file list or the status-bar totals to queue behind it.
-      const [pluginsJson, typesJson, summaryJson] = await Promise.all([
-        b.GetActivePlugins(), b.GetRecordTypeIndex(), b.GetLoadOrderSummary(),
+      const [typesJson, summaryJson] = await Promise.all([
+        b.GetRecordTypeIndex(), b.GetLoadOrderSummary(),
       ]);
-      setActivePlugins(JSON.parse(pluginsJson));
       setRecordTypes(JSON.parse(typesJson));
       setLoadOrderSummary(JSON.parse(summaryJson));
     } catch (e) {
-      setErrorStr(`Navigator load failed: ${e}`);
-    } finally {
-      setTypesLoading(false);
+      setErrorStr(`Load-order summary failed: ${e}`);
     }
-  }, []);
-
-  const toggleFileSelection = useCallback((name: string) => {
-    setFileSelection(prev => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
   }, []);
 
   useEffect(() => {
@@ -482,9 +459,9 @@ export default function MainShell() {
 
   // Load the conflict list the first time the Conflicts tab is opened.
   useEffect(() => {
-    if (activeTab === 'compare' && conflicts === null) loadConflicts();
+    if (activeTab === 'explorer' && treeMode === 'conflicts' && conflicts === null) loadConflicts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, treeMode]);
 
   const batchCopyAsOverride = async () => {
     const b = window.chrome?.webview?.hostObjects?.backend;
@@ -609,9 +586,6 @@ export default function MainShell() {
           <button className={`activity-btn ${activeTab === 'explorer' ? 'active' : ''}`} onClick={() => setActiveTab('explorer')} title="Explorer: records, files, search and errors">
             <Files size={22} strokeWidth={1.5} />
           </button>
-          <button className={`activity-btn ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => setActiveTab('compare')} title="Conflicts">
-            <GitCompare size={22} strokeWidth={1.5} />
-          </button>
           <button className={`activity-btn ${showPapyrus ? 'active' : ''}`} onClick={() => setShowPapyrus(true)} title="Papyrus (compile / decompile)">
             <ScrollText size={22} strokeWidth={1.5} />
           </button>
@@ -636,22 +610,22 @@ export default function MainShell() {
       {/* Sidebar */}
       <div className="sidebar" style={{ width: sidebarWidth }}>
         <div className="sidebar-header">
-          <h2>{activeTab === 'compare' ? 'CONFLICTS' : 'EXPLORER'}</h2>
+          <h2>EXPLORER</h2>
           {activeTab === 'explorer' && (
             <div className="tree-mode">
               <button
-                className={treeMode === 'records' ? 'on' : ''}
-                onClick={() => setTreeMode('records')}
-                title="Group by record type, across the whole load order"
-              >
-                <ListTree size={12} /> Records
-              </button>
-              <button
                 className={treeMode === 'files' ? 'on' : ''}
                 onClick={() => setTreeMode('files')}
-                title="Group by plugin, as the files are on disk"
+                title="The load order, plugin by plugin"
               >
                 <Files size={12} /> Files
+              </button>
+              <button
+                className={treeMode === 'conflicts' ? 'on' : ''}
+                onClick={() => setTreeMode('conflicts')}
+                title="Records more than one plugin touches"
+              >
+                <GitCompare size={12} /> Conflicts
               </button>
             </div>
           )}
@@ -665,7 +639,7 @@ export default function MainShell() {
           </button>
           <button className="sidebar-action-btn" onClick={handleRefresh}>Refresh</button>
         </div>
-        {activeTab !== 'compare' && (
+        {treeMode === 'files' && (
         <div className="sidebar-search">
           <Search size={13} />
           <input
@@ -684,29 +658,6 @@ export default function MainShell() {
             <button className="sidebar-error-clear" onClick={() => setErrorStr('')} title="Dismiss">
               <X size={12} />
             </button>
-          </div>
-        )}
-
-        {/* Type-first navigator: files, filters, then records grouped by record type. */}
-        {activeTab === 'explorer' && treeMode === 'records' && (
-          <div className="navigator-pane">
-            <FileBrowser
-              plugins={activePlugins}
-              selected={fileSelection}
-              onToggleSelected={toggleFileSelection}
-              onClearSelection={() => setFileSelection(new Set())}
-              onAddFile={handleLoadMo2}
-            />
-            <NavigatorFilters types={recordTypes} value={navFilters} onChange={setNavFilters} />
-            <RecordNavigator
-              backend={backend ?? undefined}
-              types={recordTypes}
-              loadingTypes={typesLoading}
-              filters={navFilters}
-              pluginFilter={fileSelection}
-              onOpenRecord={openByFormKey}
-              selectedFormKey={openRecord?.matrix.FormKey ?? ''}
-            />
           </div>
         )}
 
@@ -750,7 +701,7 @@ export default function MainShell() {
           )}
         </div>
         )}
-        {activeTab === 'compare' && (
+        {activeTab === 'explorer' && treeMode === 'conflicts' && (
           <div className="conflicts-panel">
             <div className="conflicts-actions">
               <button className="sidebar-action-btn" onClick={loadConflicts}>Rescan</button>
@@ -882,8 +833,9 @@ export default function MainShell() {
           onOpenConflictsTab={() => { setRecordTab('conflicts'); setShellTab('record'); }}
           onOpenRecord={openByFormKey}
           onAddToFilter={needle => {
-            setNavFilters(f => ({ ...f, needle }));
-            setActiveTab('navigator');
+            setSearch(needle);
+            setActiveTab('explorer');
+            setTreeMode('files');
           }}
         />
       )}
@@ -899,12 +851,7 @@ export default function MainShell() {
         status={status}
         progress={progress}
         recordCount={loadOrderSummary?.TotalRecords ?? 0}
-        visibleCount={
-          // What the navigator is currently showing: the selected type's count, or everything.
-          navFilters.type
-            ? (recordTypes.find(t => t.Type === navFilters.type)?.Count ?? 0)
-            : recordTypes.reduce((n, t) => n + t.Count, 0)
-        }
+        visibleCount={recordTypes.reduce((n, t) => n + t.Count, 0)}
         selectedCount={openRecord ? 1 : 0}
         loadOrder={loadOrderSummary?.Plugins ?? plugins.map(p => p.Key)}
       />
