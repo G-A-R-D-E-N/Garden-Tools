@@ -413,6 +413,18 @@ public sealed class PluginToolExecutor
                 properties = new { plugin = new { type = "string" } },
                 required = new[] { "plugin" }
             }),
+        new("check_esl_eligibility",
+            "Read-only precheck for compact_to_esl: reports whether a plugin's native records would fit the " +
+            "ESL/Small range (0x800-0xFFF) and flags anything that would make compact_to_esl fail (too many " +
+            "records, or out-of-range records living in nested groups like cells/placed objects that can't be " +
+            "re-keyed) -- all WITHOUT mutating the plugin. Use this before compact_to_esl to rule out its two " +
+            "failure modes ahead of the destructive renumber, especially across a folder of candidate plugins.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string" } },
+                required = new[] { "plugin" }
+            }),
         new("renumber_formid",
             "Change one record's FormID within its plugin (xEdit 'Change FormID') and repoint every " +
             "reference to it in the SAME plugin. References in OTHER plugins are NOT rewritten. Call " +
@@ -1739,6 +1751,8 @@ public sealed class PluginToolExecutor
                 return MutagenLoader.CheckPlugin(env, Str("plugin"));
             case "compact_to_esl":
                 return WriteService.CompactToEsl(Str("plugin"), env);
+            case "check_esl_eligibility":
+                return WriteService.CheckEslEligibility(Str("plugin"), env);
             case "renumber_formid":
                 return WriteService.RenumberFormId(Str("plugin"), Str("record"), Str("new_id"), env,
                     repointRefs: !(root.TryGetProperty("repoint_references", out var rr) && rr.ValueKind == JsonValueKind.False));

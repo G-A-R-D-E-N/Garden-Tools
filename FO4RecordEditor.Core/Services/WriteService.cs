@@ -329,6 +329,55 @@ public static partial class WriteService
     }
 
     /// <summary>
+    /// Read-only precursor to CompactToEsl: reports whether a plugin would fit the ESL/Small range
+    /// and what compaction would need to do, without mutating anything. Runs the same record-count
+    /// arithmetic as CompactToEsl (lines above) plus the reachability check CompactToEsl only
+    /// discovers mid-mutation via TryRekeyRecords, so a caller can rule out both failure modes before
+    /// deciding to run the destructive operation.
+    /// </summary>
+    public static string CheckEslEligibility(string plugin, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+
+        var native = mod.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == mod.ModKey).ToList();
+        var inRange = new HashSet<uint>(native.Select(r => r.FormKey.ID).Where(id => id is >= 0x800 and <= 0xFFF));
+        var outOfRange = native.Where(r => r.FormKey.ID > 0xFFF).ToList();
+
+        if (outOfRange.Count == 0)
+            return $"'{plugin}' is already ESL-compatible: all {native.Count} native record(s) sit within 0x800-0xFFF. " +
+                   "compact_to_esl would be a no-op; save_plugin to a path ending in .esl directly.";
+
+        var capacity = 0xFFF - 0x800 + 1;
+        if (native.Count > capacity)
+            return $"'{plugin}' CANNOT fit the ESL range: {native.Count} native record(s) exceed the " +
+                   $"{capacity}-slot capacity (0x800-0xFFF). compact_to_esl would refuse this plugin.";
+
+        // Same reachability check TryRekeyRecords performs, run here read-only against every
+        // out-of-range record instead of just the ones a specific remap dict happens to touch.
+        var topLevelGroups = mod.GetType().GetProperties()
+            .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType))
+            .Select(p => p.GetValue(mod) as Mutagen.Bethesda.Plugins.Records.IGroup)
+            .Where(g => g != null).Select(g => g!).ToList();
+        var reachable = new HashSet<FormKey>(topLevelGroups
+            .SelectMany(g => ((System.Collections.IEnumerable)g)
+                .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>())
+            .Select(r => r.FormKey));
+        var unreachable = outOfRange.Where(r => !reachable.Contains(r.FormKey)).ToList();
+        if (unreachable.Count > 0)
+        {
+            var byType = string.Join(", ", unreachable.GroupBy(r => r.GetType().Name).Select(g => $"{g.Key} x{g.Count()}"));
+            return $"'{plugin}' would BLOCK on compact_to_esl: {unreachable.Count} out-of-range record(s) live in " +
+                   $"nested groups this tool cannot re-key [{byType}] (cells / placed objects / worldspace sub-cells). " +
+                   $"{outOfRange.Count - unreachable.Count} other out-of-range record(s) are otherwise fine. " +
+                   "Keep cell-placed records within 0x800-0xFFF when authoring them, or compact in xEdit instead.";
+        }
+
+        return $"'{plugin}' is ESL-ELIGIBLE: {outOfRange.Count} of {native.Count} native record(s) sit outside " +
+               $"0x800-0xFFF and would be remapped by compact_to_esl (dry, no failure modes detected). " +
+               "Run compact_to_esl to actually perform the remap.";
+    }
+
+    /// <summary>
     /// Give a set of the plugin's own records new FormKeys and repoint every reference onto them.
     /// Shared by compact_to_esl and renumber_plugin_formids, which differ only in how they choose
     /// the new ids.

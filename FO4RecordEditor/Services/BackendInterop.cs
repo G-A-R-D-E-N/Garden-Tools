@@ -199,6 +199,8 @@ public class BackendInterop
             apply, limit <= 0 ? 50 : limit), $"{badPlugin}->{patchPlugin} apply={apply}");
     public string CompactToEsl(string plugin) =>
         DebugLog.Guard(nameof(CompactToEsl), () => WriteService.CompactToEsl(plugin, Env), plugin);
+    public string CheckEslEligibility(string plugin) =>
+        DebugLog.Guard(nameof(CheckEslEligibility), () => WriteService.CheckEslEligibility(plugin, Env), plugin);
     public string CleanPlugin(string plugin) =>
         DebugLog.Guard(nameof(CleanPlugin), () => WriteService.CleanPlugin(plugin, Env), plugin);
     public string RenumberFormId(string plugin, string record, string newId) =>
