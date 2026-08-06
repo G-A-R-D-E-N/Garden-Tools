@@ -59,6 +59,7 @@ export interface Backend {
   GetRecordTypeIndex(): Promise<string>;                     // JSON: RecordTypeEntry[]
   GetRecordsOfType(signature: string, filter: string,
                    limit: number, offset: number): Promise<string>;   // JSON: SearchHit[]
+  GetRecordsGrid(plugin: string, type: string, limit: number, offset: number): Promise<string>; // JSON: { columns, rows, total, offset }
   GetContainmentPath(formKey: string): Promise<string>;      // JSON: BreadcrumbNode[]
   GetRecordDetails(formKey: string): Promise<string>;        // JSON: RecordDetails | null
   GetRecordPluginMatrix(formKey: string): Promise<string>;   // JSON: PluginMatrixRow[]

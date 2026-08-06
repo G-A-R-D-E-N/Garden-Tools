@@ -123,6 +123,13 @@ public class BackendInterop
             return JsonConvert.SerializeObject(hits);
         }, $"{signature} [{filter}] {offset}+{limit}");
 
+    /// <summary>Structured grid data for the Spreadsheet panel (#51): columns + rows for every
+    /// record of one type in a plugin, for the editable bulk-edit table.</summary>
+    public string GetRecordsGrid(string plugin, string type, int limit, int offset) =>
+        DebugLog.Guard(nameof(GetRecordsGrid),
+            () => MutagenLoader.GetRecordsGridJson(Env, plugin, type, limit <= 0 ? 100 : limit, offset),
+            $"{plugin} {type} {offset}+{limit}");
+
     /// <summary>Worldspace/cell breadcrumb for the workspace header.</summary>
     public string GetContainmentPath(string formKey) =>
         DebugLog.Guard(nameof(GetContainmentPath), () =>

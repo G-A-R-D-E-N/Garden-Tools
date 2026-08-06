@@ -1007,22 +1007,7 @@ public static partial class MutagenLoader
         // Discover output columns from the first record (all same-type records share identical
         // property lists in Mutagen). Keep only scalar/enum/FormLink/collection properties.
         var rec0 = take[0];
-        var colProps = new List<PropertyInfo>();
-        foreach (var prop in rec0.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            if (_skipProps.Contains(prop.Name)) continue;
-            if (prop.Name is "EditorID" or "FormKey") continue;
-            if (prop.GetIndexParameters().Length > 0) continue;
-            object? v; try { v = prop.GetValue(rec0); } catch { continue; }
-            if (v == null) continue;
-            var vt = v.GetType();
-            bool keep = _leafTypes.Contains(vt) || vt.IsEnum
-                || v is Mutagen.Bethesda.Plugins.IFormLinkIdentifier
-                || (v is IEnumerable && vt != typeof(string));
-            if (!keep) continue;
-            colProps.Add(prop);
-            if (colProps.Count >= 8) break;
-        }
+        var colProps = DiscoverGridColumns(rec0, 8);
 
         // Budget-bound the output so the AI executor's ~8 KB hard cap never blind-truncates the
         // table mid-row (which would leave a misleading "N of M shown" header above a cut body).
@@ -1070,6 +1055,30 @@ public static partial class MutagenLoader
                           "or get_record for one record's full dump; raise 'limit' only if you truly need more rows.");
 
         return sb.ToString();
+    }
+
+    // Shared by QueryRecordSummaries (AI-facing text table) and GetRecordsGridJson (GUI spreadsheet
+    // panel, #51): which properties of a record type are worth showing as a column. Same
+    // scalar/enum/FormLink/collection filter either way -- only the caller's requested column count differs.
+    private static List<PropertyInfo> DiscoverGridColumns(object rec0, int max)
+    {
+        var colProps = new List<PropertyInfo>();
+        foreach (var prop in rec0.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (_skipProps.Contains(prop.Name)) continue;
+            if (prop.Name is "EditorID" or "FormKey") continue;
+            if (prop.GetIndexParameters().Length > 0) continue;
+            object? v; try { v = prop.GetValue(rec0); } catch { continue; }
+            if (v == null) continue;
+            var vt = v.GetType();
+            bool keep = _leafTypes.Contains(vt) || vt.IsEnum
+                || v is Mutagen.Bethesda.Plugins.IFormLinkIdentifier
+                || (v is IEnumerable && vt != typeof(string));
+            if (!keep) continue;
+            colProps.Add(prop);
+            if (colProps.Count >= max) break;
+        }
+        return colProps;
     }
 
     private static string SumTrunc(string? s, int max) =>
