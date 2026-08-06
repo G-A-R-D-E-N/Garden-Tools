@@ -1481,6 +1481,33 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "query" }
             }),
+        new("cleanup_placed_references",
+            "xEdit's 'Remove duplicate references' / 'Remove excess references' (#60), for a single cell (by " +
+            "cell_id, or worldspace+grid_x+grid_y for an exterior cell -- see cell_get_placed_references). " +
+            "Scoped to PlacedObject (REFR) specifically, the large majority of real duplicate-clutter cases. " +
+            "mode 'dedupe': two refs sharing the same base record (or base model if by_model=true), rounded " +
+            "position/rotation, and scale are duplicates; keeps whichever carries 'special' data (EditorID, " +
+            "script, enable parent, door teleport, linked ref, patrol) over one without, or the first-seen if " +
+            "neither/both are special. mode 'excess': caps TEMPORARY refs at max_count, removing the excess " +
+            "by list order (NOT random the way xEdit's own script does it -- deliberate, for reproducibility). " +
+            "Dry-run by default; writes removals into patch_plugin as an override when apply=true.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    cell_id = new { type = "string", description = "FormKey or EditorID of the cell. Omit if using worldspace+grid_x+grid_y." },
+                    worldspace = new { type = "string", description = "Worldspace FormKey or EditorID, for an exterior cell instead of cell_id." },
+                    grid_x = new { type = "integer" },
+                    grid_y = new { type = "integer" },
+                    mode = new { type = "string", description = "'dedupe' or 'excess'." },
+                    max_count = new { type = "integer", description = "For mode 'excess': the cap on temporary refs. Default 50." },
+                    by_model = new { type = "boolean", description = "For mode 'dedupe': match by base model path instead of base record. Default false." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (preview only)." }
+                },
+                required = new[] { "mode", "patch_plugin" }
+            }),
     ];
 
     /// <summary>Anthropic Messages API tool format (input_schema).</summary>
@@ -1599,7 +1626,7 @@ public sealed class PluginToolExecutor
 
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
-            "create_record" or "create_cell" or "create_placed_object" or "disable_previs" or
+            "create_record" or "create_cell" or "create_placed_object" or "disable_previs" or "cleanup_placed_references" or
             "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
             "remove_identical_to_master" or "create_merged_patch" or "add_masters" or "set_conditions_at" or
             "element_add" or "element_remove" or "element_move" or "element_clear" or
@@ -1785,6 +1812,13 @@ public sealed class PluginToolExecutor
                 var cellHits = MutagenLoader.SearchCellRecords(env, Str("query"), Int("limit", 25));
                 return cellHits.Count == 0 ? "No matching cells."
                     : string.Join("\n", cellHits.Select(h => $"{h.EditorID} [{h.FormKey}] {(string.IsNullOrEmpty(h.Name) ? "" : "\"" + h.Name + "\" ")}<{h.Plugin}>"));
+            }
+            case "cleanup_placed_references":
+            {
+                int? cgx = root.TryGetProperty("grid_x", out var cgxEl) && cgxEl.TryGetInt32(out var cgxv) ? cgxv : null;
+                int? cgy = root.TryGetProperty("grid_y", out var cgyEl) && cgyEl.TryGetInt32(out var cgyv) ? cgyv : null;
+                return CellService.CleanupPlacedReferencesJson(env, Str("cell_id"), StrOrNull("worldspace"), cgx, cgy,
+                    Str("mode"), Int("max_count", 50), Bool("by_model"), Str("patch_plugin"), Bool("apply"));
             }
 
             // ---- write tools ----

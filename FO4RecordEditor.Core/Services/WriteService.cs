@@ -167,6 +167,12 @@ public static partial class WriteService
     public static event Action<string>? PluginChanged;
     private static void NotifyChanged(string name) => PluginChanged?.Invoke(name);
 
+    /// <summary>Public entry point for NotifyChanged -- a C# event can only be raised from within its
+    /// declaring type, so a sibling class (e.g. CellService, for #60's cleanup tool) needs this to
+    /// tell the Explorer tree a patch plugin changed instead of reaching into WriteService's own
+    /// private NotifyChanged.</summary>
+    public static void NotifyPluginChanged(string name) => NotifyChanged(name);
+
     public static string CreateRecord(string plugin, string sig, string editorId, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg);
