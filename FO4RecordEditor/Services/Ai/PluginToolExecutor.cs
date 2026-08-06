@@ -331,6 +331,24 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "cell", "baseObject" }
             }),
+        new("disable_previs",
+            "xEdit's 'Fallout4 - Disable PreVis' script: for an EXTERIOR cell that has precombine data, copies it " +
+            "as an override, sets the NoPreVis record flag, and clears its previs/precombine data (the typed " +
+            "equivalents of xEdit's VISI/RVIS/PCMB/XCRI subrecords) so the engine stops using stale previs after a " +
+            "cell edit. Precombine/previs conflicts (edits silently hidden, or a cell breaking outright) are one " +
+            "of the most common real FO4 modding failures; use this on any cell you've placed/removed/moved a " +
+            "static in. Refuses interior cells and cells with no precombine data to begin with. Dry-run by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    cell = new { type = "string", description = "EditorID or FormKey of the exterior cell." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (preview only)." }
+                },
+                required = new[] { "cell", "patch_plugin" }
+            }),
         new("set_field",
             "Set a field on a record. Supports scalar/text fields (Name, Value, Weight, Description), booleans " +
             "(pass 'true'/'false' to check/UNCHECK a flag), enums (pass the value name), FormLink references " +
@@ -1575,7 +1593,7 @@ public sealed class PluginToolExecutor
 
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
-            "create_record" or "create_cell" or "create_placed_object" or
+            "create_record" or "create_cell" or "create_placed_object" or "disable_previs" or
             "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
             "remove_identical_to_master" or "create_merged_patch" or "add_masters" or "set_conditions_at" or
             "element_add" or "element_remove" or "element_move" or "element_clear" or
@@ -1775,6 +1793,8 @@ public sealed class PluginToolExecutor
                     BoolOr("persistent", true), BoolOr("initiallyDisabled", false),
                     StrOrNull("mapMarkerName"), StrOrNull("mapMarkerType"), BoolOr("mapMarkerVisible", false),
                     env);
+            case "disable_previs":
+                return WriteService.DisablePrevis(env, Str("cell"), Str("patch_plugin"), Bool("apply"));
             case "set_field":
                 return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
             case "add_list_item":
