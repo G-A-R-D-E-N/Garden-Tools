@@ -1448,15 +1448,21 @@ public sealed class PluginToolExecutor
             "unioned across the whole load order -- not just the winning record, since a plugin can " +
             "'win' a CELL with an empty reference list while every other plugin's own placed objects " +
             "still load in-game. Powers the Cell Viewer panel; useful for an AI agent to inspect what's " +
-            "actually placed in a cell without opening the UI.",
+            "actually placed in a cell without opening the UI. For an EXTERIOR cell you don't already " +
+            "have a FormKey/EditorID for, pass 'worldspace' + 'grid_x' + 'grid_y' instead of 'cell_id' -- " +
+            "resolves the cell at that grid position first (exterior cells are nested in the worldspace's " +
+            "own Block/SubBlock tree, not reachable by FormKey guesswork).",
             new
             {
                 type = "object",
                 properties = new
                 {
-                    cell_id = new { type = "string", description = "A FormKey ('001234:Fallout4.esm') or an EditorID." }
+                    cell_id = new { type = "string", description = "A FormKey ('001234:Fallout4.esm') or an EditorID. Omit if using worldspace+grid_x+grid_y instead." },
+                    worldspace = new { type = "string", description = "FormKey or EditorID of the worldspace, e.g. 'Commonwealth'. Use with grid_x/grid_y instead of cell_id." },
+                    grid_x = new { type = "integer", description = "Exterior cell grid X coordinate." },
+                    grid_y = new { type = "integer", description = "Exterior cell grid Y coordinate." }
                 },
-                required = new[] { "cell_id" }
+                required = Array.Empty<string>()
             }),
         new("cell_search",
             "Type-ahead search for CELL records by EditorID/Name/FormKey substring, de-duplicated to " +
@@ -1769,7 +1775,11 @@ public sealed class PluginToolExecutor
             case "scan_all_plugins":
                 return MutagenLoader.ScanAllPluginsForBrokenRefs(env);
             case "cell_get_placed_references":
-                return CellService.GetPlacedReferencesJson(Str("cell_id"), env);
+            {
+                int? gx = root.TryGetProperty("grid_x", out var gxEl) && gxEl.TryGetInt32(out var gxv) ? gxv : null;
+                int? gy = root.TryGetProperty("grid_y", out var gyEl) && gyEl.TryGetInt32(out var gyv) ? gyv : null;
+                return CellService.GetPlacedReferencesJson(Str("cell_id"), env, StrOrNull("worldspace"), gx, gy);
+            }
             case "cell_search":
             {
                 var cellHits = MutagenLoader.SearchCellRecords(env, Str("query"), Int("limit", 25));

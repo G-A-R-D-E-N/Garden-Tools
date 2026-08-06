@@ -33,10 +33,54 @@ namespace FO4RecordEditor.Services;
 /// </summary>
 public static class CellService
 {
-    public static string GetPlacedReferencesJson(string cellId, object? env)
+    /// <summary>
+    /// #64: resolve an EXTERIOR cell by worldspace + grid coordinate instead of by FormKey/EditorID.
+    /// Verified against Mutagen's actual Worldspace layout before writing this, not assumed: a
+    /// worldspace's exterior cells are NOT a flat list, they are nested Worldspace.SubCells
+    /// (WorldspaceBlock) -> WorldspaceBlock.Items (WorldspaceSubBlock) -> WorldspaceSubBlock.Items
+    /// (the actual Cell records), and each Cell's grid position is Cell.Grid.Point (a P2Int X/Y),
+    /// not a FormLink back to its parent worldspace -- the relationship is purely structural
+    /// (confirmed via Worldspace_Generated.cs / WorldspaceSubBlock_Generated.cs).
+    ///
+    /// Walks every plugin's own copy of the worldspace (GetRecordContexts, same reasoning as the
+    /// interior-cell reference union below: a mod adding a new exterior cell authors its own copy of
+    /// the block/subblock tree at that grid position) and returns the first cell FormKey found at
+    /// (gridX, gridY) -- every plugin's copy of the SAME logical cell shares one FormKey, so the
+    /// first hit is enough once resolved, this just widens the search past whichever plugin happens
+    /// to be resolved as the worldspace's own "winning" copy.
+    /// </summary>
+    public static string? ResolveExteriorCellFormKey(object? env, string worldspaceId, int gridX, int gridY, out string? error)
     {
+        var wsFk = MutagenLoader.ResolveId(env, worldspaceId.Trim());
+        if (wsFk.IsNull) { error = $"Could not resolve worldspace '{worldspaceId}' to a loaded WRLD record."; return null; }
+
+        foreach (var (_, rec) in MutagenLoader.GetRecordContexts(env, wsFk))
+        {
+            if (rec is not IWorldspaceGetter ws) continue;
+            foreach (var block in ws.SubCells)
+                foreach (var subBlock in block.Items)
+                    foreach (var cell in subBlock.Items)
+                        if (cell.Grid != null && cell.Grid.Point.X == gridX && cell.Grid.Point.Y == gridY)
+                        {
+                            error = null;
+                            return cell.FormKey.ToString();
+                        }
+        }
+        error = $"No exterior cell found at grid ({gridX},{gridY}) in worldspace '{worldspaceId}'.";
+        return null;
+    }
+
+    public static string GetPlacedReferencesJson(string cellId, object? env, string? worldspace = null, int? gridX = null, int? gridY = null)
+    {
+        if (string.IsNullOrWhiteSpace(cellId) && !string.IsNullOrWhiteSpace(worldspace) && gridX.HasValue && gridY.HasValue)
+        {
+            var resolved = ResolveExteriorCellFormKey(env, worldspace, gridX.Value, gridY.Value, out var gridErr);
+            if (resolved == null) return JsonConvert.SerializeObject(new { error = gridErr });
+            cellId = resolved;
+        }
+
         if (string.IsNullOrWhiteSpace(cellId))
-            return JsonConvert.SerializeObject(new { error = "Provide 'cell_id' (a FormKey like '001234:Fallout4.esm', or an EditorID)." });
+            return JsonConvert.SerializeObject(new { error = "Provide 'cell_id' (a FormKey like '001234:Fallout4.esm', or an EditorID), or 'worldspace' + 'grid_x' + 'grid_y' for an exterior cell." });
 
         var cache = MutagenLoader.LinkCache;
         if (cache == null)
