@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **101 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **102 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -191,7 +191,7 @@ another list. The engine hangs or crashes resolving one. Read-only.
 **dry run** that reports what they would do; pass `apply: true` to write.
 
 ### Cells and placed objects
-`create_cell` · `create_placed_object` · `cleanup_placed_references` · `disable_previs`
+`create_cell` · `create_placed_object` · `cleanup_placed_references` · `disable_previs` · `precombine_plan`
 
 `create_record` only adds **top-level** records, so it cannot make either of these -- a placed object
 lives inside a cell's persistent/temporary list, and cells live in a block tree. This is the pair you
@@ -200,6 +200,28 @@ need for map markers and for parking references you relocate at runtime.
 `cleanup_placed_references` is xEdit's `Remove duplicate references` / `Remove excess references`
 pass: it drops references that duplicate another at the same position with the same base object, and
 references beyond what a cell should carry. Dry run by default; pass `apply: true` to write.
+
+`precombine_plan` is phase 1 of generating precombines **without the Creation Kit**: for one interior
+cell it reports which placed references are eligible to be baked into a combined mesh, grouped by the
+model they use. Read-only -- nothing is written. It also reports why every other reference was
+skipped, with counts and examples, because on a real cell the useful question is usually "why did so
+few qualify". A real vanilla interior gives a sense of the ratio: `Vault111Cryo` has 2,385 temporary
+references, of which 710 are eligible across 108 model groups; the rest are actors and other
+non-statics, references with scripts or enable parents or links, and statics with a material swap.
+
+A reference qualifies only if it is not deleted or initially disabled, has no script, enable parent,
+teleport destination, activate parent or linked reference, belongs to this plugin rather than being
+an override of another's, and its base object is a Static with a model, no script and no material
+swap. The reference must be this plugin's own because phase 3 stamps `XCRI` from that FormID
+verbatim.
+
+This is also what closes the half of #59 that was given up on. "Filter for precombined statics"
+failed because `CellCombinedMeshReference` exposes only a bare mesh index with no link back to a
+reference, so `XCRI` cannot be read forwards; this computes the same association from the other
+direction and never touches `XCRI`.
+
+Interiors only. Exterior precombines interact with worldspace object LOD, and the tool refuses an
+exterior cell rather than producing a plan that would bake the wrong thing.
 
 `disable_previs` is xEdit's **Fallout4 - Disable PreVis** script. Editing an exterior cell without
 invalidating its previs/precombine data is one of the most common real FO4 failures -- your edit

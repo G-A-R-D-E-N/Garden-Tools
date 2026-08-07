@@ -73,6 +73,11 @@ public static class CellService
 
     // Shared by GetPlacedReferencesJson and CleanupPlacedReferencesJson (#60): resolve either a
     // direct cell_id, or (when that's blank) a worldspace+grid pair via ResolveExteriorCellFormKey.
+    /// <summary>Public wrapper so PrecombineService (#72) reaches the same cell_id / worldspace+grid
+    /// resolution the cell tools use, rather than growing a second one.</summary>
+    public static bool TryResolveCellIdPublic(object? env, ref string cellId, string? worldspace, int? gridX, int? gridY, out string? error)
+        => TryResolveCellId(env, ref cellId, worldspace, gridX, gridY, out error);
+
     private static bool TryResolveCellId(object? env, ref string cellId, string? worldspace, int? gridX, int? gridY, out string? error)
     {
         if (string.IsNullOrWhiteSpace(cellId) && !string.IsNullOrWhiteSpace(worldspace) && gridX.HasValue && gridY.HasValue)

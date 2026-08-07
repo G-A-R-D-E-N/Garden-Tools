@@ -76,7 +76,7 @@ public class PluginToolExecutorTests
             "bgsm_inspect", "bgsm_set_field", "catalog_mod_folder", "audit_asset_usage",
             "audio_convert_to_xwm", "audio_convert_from_xwm", "audio_make_fuz", "audio_extract_fuz",
             "archive_pack", "cell_get_placed_references", "cell_search",
-            "cleanup_placed_references",
+            "cleanup_placed_references", "precombine_plan",
         };
 
         var names = PluginToolExecutor.ToolDefinitions()

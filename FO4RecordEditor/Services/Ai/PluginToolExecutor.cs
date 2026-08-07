@@ -1501,6 +1501,28 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "source_paths", "output_ba2", "root_dir" }
             }),
+        new("precombine_plan",
+            "Which placed references in an INTERIOR cell are eligible to be baked into a combined mesh, " +
+            "grouped by the model they use -- phase 1 of CK-free precombine generation, and the answer " +
+            "to 'filter for precombined statics'. READ-ONLY: nothing is written. Reports the eligible " +
+            "groups AND why every other reference was skipped, since on a real cell the useful question " +
+            "is usually why so few qualified. A reference qualifies only if it is not deleted or " +
+            "initially disabled, has no script, enable parent, teleport destination, activate parent or " +
+            "linked reference, belongs to this plugin rather than being an override, and its base is a " +
+            "Static with a model, no script and no material swap.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string", description = "The plugin whose own references are being planned." },
+                    cell_id = new { type = "string", description = "CELL FormKey or EditorID. Interiors only." },
+                    min_instances = new { type = "integer", description = "Ignore model groups with fewer than this many references (default 2 -- combining one object saves nothing)." },
+                    group_limit = new { type = "integer", description = "Max model groups to list, largest first (default 40). The response reports how many were omitted." },
+                    include_instances = new { type = "boolean", description = "Default false. Include each group's per-reference transforms, capped at 25 per group. A real interior has hundreds, which overruns the result budget -- ask for these only when you need a specific group's placements." }
+                },
+                required = new[] { "plugin", "cell_id" }
+            }),
         new("cell_get_placed_references",
             "List a CELL's placed references (position/rotation/scale + base object model path), " +
             "unioned across the whole load order -- not just the winning record, since a plugin can " +
@@ -1774,6 +1796,7 @@ public sealed class PluginToolExecutor
             "scan_all_plugins"    => "scan entire modlist for broken refs",
             "cell_get_placed_references" => $"placed refs in {ShortId(Str("cell_id"))}",
             "cell_search"                => $"cell search '{Str("query")}'",
+            "precombine_plan"            => $"precombine plan for {ShortId(Str("cell_id"))}",
             _                     => toolName.Replace('_', ' '),
         };
 
@@ -1888,6 +1911,9 @@ public sealed class PluginToolExecutor
                 return MutagenLoader.ScanBrokenRefs(env, Str("plugin"));
             case "scan_all_plugins":
                 return MutagenLoader.ScanAllPluginsForBrokenRefs(env);
+            case "precombine_plan":
+                return PrecombineService.BuildPlanJson(env, Str("plugin"), Str("cell_id"), Int("min_instances", 2),
+                    includeInstances: Bool("include_instances"), groupLimit: Int("group_limit", 40));
             case "cell_get_placed_references":
             {
                 int? gx = root.TryGetProperty("grid_x", out var gxEl) && gxEl.TryGetInt32(out var gxv) ? gxv : null;
