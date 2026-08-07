@@ -106,6 +106,59 @@ Both shipped with a GUI immediately (a filter-mode dropdown next to the existing
 collapsible "Compare with another archive" section in the Archive panel) since they extend a panel
 that already has one, rather than being new AI/MCP-only tools first.
 
+## Pass 4: py-creation-lib and bacup at the LIBRARY level (2026-08-06)
+
+Every earlier pass read modkit21's Python CLI. This one read the shared native engine underneath it,
+`Bryant-21/py-creation-lib` (GPL-3.0, v1.3.0, a submodule of both modkit21 and the newer
+`Bryant-21/bacup`), plus bacup itself. That engine is 20 Rust crates, ~300k lines, and it is a very
+different proposition from the CLI: several crates do things nothing in the .NET/Mutagen ecosystem
+does at all.
+
+Not on PyPI or crates.io -- source build via maturin, needs Rust + MSVC. GPL-3.0, same as the Mutagen
+fork this repo already vendors, so no new licensing problem.
+
+| Crate | Lines | What it is | Gap it closes here |
+|---|---|---|---|
+| `bsarchive` | 15.6k | BA2 **and BSA read + write**, FO4 v1/v7/v8, GNRL and DX10, streaming packer | `archive_pack` currently shells out to the Creation Kit's `Archive2.exe`, which is not redistributable so we cannot bundle it. Also reads v7 GNRL, which our vendored `Ba2Reader.cs` cannot (bd `f4se_og-o95`). |
+| `ck/precombine` | ~4.2k | **CK-free precombine generation**: `plan` (eligible STAT-backed Temporary REFRs grouped by model), `bake` (writes the filtered `_OC.nif` with `BSPackedCombinedGeomDataExtra`), `stamp` (PCMB/XCRI + header dates). Interiors, v0. | Issue #59's blocked half and then some. **This also corrects an earlier verdict in this doc**: the "CK shell-out group" dismissal above was about modkit21's `ck` CLI group, which does launch the real Creation Kit. The `ck` CRATE is the opposite -- it exists specifically to avoid it. |
+| `papyrus_core` | 12.3k | A complete Papyrus compiler in Rust: lexer, parser, resolver, typecheck, codegen, `.pex` writer. Plus a separate `papyrus_lsp_server`. | `compile_papyrus` shells out to the CK's `PapyrusCompiler.exe`. This would compile with no CK installed, and the LSP half is real editor intelligence we have no version of. |
+| `directxtex` | 7.2k | DirectXTex bound in-process: DDS decode/encode incl. **from bytes**, mip chains, BC1-7, GPU path | `TextureService` shells out to `Texconv.exe` and round-trips through temp files for every Cell Viewer texture. Decoding straight from the BA2 bytes removes both. |
+| `materials` | 9.3k | `.bgsm` **and `.bgem`**, plus FO76/Starfield material formats and converters | `.bgem` (effect materials) is a documented gap in `bgsm_inspect`/`bgsm_set_field`. |
+| `havok` | 93.9k | HKX read/write, animation, behavior graphs and evaluation, cloth, collision, geometry | We have no Havok anything. Bigger value to `FO4AnimForge`/`ForgeStudio` than to a record editor. |
+| `nif_core` | 26.6k | NIF: io, model, skin, cloth, collision, skeleton repose, weapon attachment | Would replace `niftool.exe` (our separate C++/nifly project) rather than extend it. Note nifly's billboard gap (bd `f4se_og-7tu`) is a niftool problem, not necessarily one here. |
+| `db` | 4.1k | SQLite + FTS5 + embeddings, with record and NIF indexers | The shape of the real fix for `_modIndexCache` never evicting (bd `f4se_og-ths`) -- an on-disk index instead of an unbounded in-memory one. |
+| `lodgen` + `terrain` | 40.5k | Object/terrain/tree LOD generation, billboards, atlasing, BTD, heightmaps | xLODGen/DynDOLOD-class. Out of scope for a record editor; relevant to the modlist itself. |
+| `esp` | 70.2k | Multi-game record schemas and binary plugin I/O | Directly overlaps Mutagen, which we already vendor and have patched five times. No reason to switch. |
+| `swf`, `world_renderer`, `audio`, `fnv_script`, `scientific`, `palette` | small | Scaleform ABC/inject, offline worldspace render, audio, misc | Low relevance; `swf` is interesting for Pipboy icon work only. |
+
+`bacup` is a cross-game conversion framework (FO76 -> FO4 most mature, plus FNV/FO3 -> FO4 and
+SkyrimSE -> FO4) built on the same engine. Nothing to pull into a record editor -- it is an
+application, not a library -- but it is the proof that the engine underneath handles real
+production-scale work, and it is the most actively developed of the three repos.
+
+### Integration reality
+
+This is Rust + Python; FO4RecordEditor is C#/.NET. Three routes, cheapest first:
+
+1. **Shell out to `modkit.exe`**, exactly the way we already shell out to `niftool.exe`, `Texconv.exe`
+   and `ffmpeg`. Zero FFI risk, works with the CLI as it ships today (`build pack`, `archive extract`,
+   `build pack-hkx`/`unpack-hkx`, `cloth *`, `swf *`). Costs a large external dependency the user must
+   install, and the CLI does not expose every crate capability.
+2. **Fork, gate `python.rs` behind a cargo feature, add a thin C-ABI shim crate**, ship one native DLL,
+   P/Invoke from C#. `pyo3` is currently a hard dependency of each crate rather than an optional one,
+   so this needs a small patch upstream or in a fork. Best end state; medium effort; a second vendored
+   GPL tree to keep in sync alongside Mutagen.
+3. **Port algorithms to C#.** Only worth it for something small and self-contained. `bsarchive`'s
+   BA2 writer is the one plausible candidate.
+
+Recommended first move if this gets picked up: `bsarchive`, via route 2 with only that one crate. It
+is the smallest surface, it removes a non-redistributable external dependency, and it fixes a tracked
+bug -- so it proves the integration path on something whose value does not depend on the path working
+for everything else.
+
+Worth noting the other direction too: modkit21 still has no MCP server. Exposing that engine through
+this tool's MCP layer is a collaboration angle, not just a borrowing one.
+
 ## How to update this doc
 
 When a row in "Open" gets built: move it to "Shipped" with its tool names, update the tool-surface
