@@ -78,7 +78,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AppWebView.CoreWebView2.AddHostObjectToScript("papyrus", new Services.PapyrusInterop(_shell));
         // NIF panel: author / inspect / verify / repair FO4 NIFs via niftool.exe.
         AppWebView.CoreWebView2.AddHostObjectToScript("nif", new Services.NifInterop());
-        // Materials tab (lives inside the NIF panel): inspect/edit .bgsm shader fields.
+        // Materials tab (lives inside the NIF panel): inspect/edit .bgsm and .bgem shader fields.
         AppWebView.CoreWebView2.AddHostObjectToScript("material", new Services.MaterialInterop());
         // Masters panel: inspect/reorder a plugin's master table + toggle its ESL flag.
         AppWebView.CoreWebView2.AddHostObjectToScript("masters", new Services.MastersInterop(_shell));
