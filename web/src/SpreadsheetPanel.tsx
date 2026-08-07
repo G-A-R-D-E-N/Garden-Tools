@@ -120,7 +120,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-run" onClick={load} disabled={busy || unavailable || !plugin.trim() || !type.trim()}>
             <RefreshCw size={13} /> {busy ? 'Loading…' : 'Load'}
           </button>
-          <button className="papyrus-run spreadsheet-save-btn" onClick={save} disabled={saving || edits.size === 0}>
+          <button className="papyrus-run spreadsheet-save-btn" onClick={save} disabled={saving || busy || unavailable || edits.size === 0}>
             <Save size={13} /> {saving ? 'Saving…' : `Save Changes (${edits.size})`}
           </button>
         </div>

@@ -87,6 +87,11 @@ public static class ModGroupsService
 
             var idx = _groups!.IndexOf(g);
             var finalName = string.IsNullOrWhiteSpace(newName) ? g.Name : newName.Trim();
+            // A rename onto another group's name would make every later lookup by name ambiguous,
+            // including this method's own.
+            if (!string.Equals(finalName, g.Name, StringComparison.OrdinalIgnoreCase) &&
+                _groups.Any(o => !ReferenceEquals(o, g) && string.Equals(o.Name, finalName, StringComparison.OrdinalIgnoreCase)))
+                return ToolError.Fail($"A ModGroup named '{finalName}' already exists.");
             var finalPlugins = plugins == null
                 ? g.Plugins
                 : plugins.Select(p => p.Trim()).Where(p => p.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
