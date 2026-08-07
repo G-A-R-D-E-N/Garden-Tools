@@ -1217,6 +1217,35 @@ public static partial class MutagenLoader
         return hits.Values.Take(limit).ToList();
     }
 
+    /// <summary>Worldspace-only search, backing the Cell Viewer's exterior-cell picker (#67): an
+    /// exterior cell is reached by worldspace + grid coordinate, so the panel needs to offer the
+    /// worldspaces themselves before it can ask for an X/Y. Same no-index reasoning as
+    /// SearchCellRecords -- this must not drag the whole load order through GetModIndex. A load order
+    /// holds only a few dozen WRLD records, so the default limit is generous enough to be a plain
+    /// browsable list rather than a search that must be typed into.</summary>
+    public static List<SearchHit> SearchWorldspaceRecords(object? envObj, string query, int limit = 100)
+    {
+        if (envObj == null) return new List<SearchHit>();
+        query ??= "";
+        var hits = new Dictionary<FormKey, SearchHit>();
+
+        foreach (var (name, mod) in AllLoadedMods(envObj))
+        {
+            if (mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod) continue;
+            foreach (var ws in f4mod.EnumerateMajorRecords<Mutagen.Bethesda.Fallout4.IWorldspaceGetter>(throwIfUnknown: false))
+            {
+                var eid = ws.EditorID ?? "";
+                var dispName = ws.Name?.String ?? "";
+                if (query.Length > 0 &&
+                    !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                    !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                    !ws.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                hits[ws.FormKey] = new SearchHit(ws.FormKey.ToString(), eid, "WRLD", name, dispName);
+            }
+        }
+        return hits.Values.Take(limit).ToList();
+    }
+
     public static string QueryRecordFields(object? envObj, string plugin, string formKeyOrEditorId)
     {
         // Build a bounded candidate list: the named plugin first, then loose-opened ESPs and

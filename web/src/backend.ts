@@ -435,6 +435,9 @@ export interface CellSearchHit {
 
 export interface CellHost {
   GetPlacedReferences(cellId: string): Promise<string>;          // JSON: CellReferencesResult
+  // Exterior cells are addressed by worldspace + grid coordinate rather than by FormKey/EditorID.
+  GetPlacedReferencesAtGrid(worldspace: string, gridX: number, gridY: number): Promise<string>;
+  SearchWorldspaces(query: string, limit: number): Promise<string>;  // JSON: CellSearchHit[] (WRLD)
   // relModelPathsJson: JSON array of unique modelPath strings from GetPlacedReferences.
   GetGeometryBatch(relModelPathsJson: string): Promise<string>;  // JSON: CellGeoBatchResult
   GetPlugins(): Promise<string>;                                  // JSON: string[] -- empty = nothing loaded
