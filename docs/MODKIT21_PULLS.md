@@ -119,7 +119,7 @@ fork this repo already vendors, so no new licensing problem.
 
 | Crate | Lines | What it is | Gap it closes here |
 |---|---|---|---|
-| `bsarchive` | 15.6k | BA2 **and BSA read + write**, FO4 v1/v7/v8, GNRL and DX10, streaming packer | `archive_pack` currently shells out to the Creation Kit's `Archive2.exe`, which is not redistributable so we cannot bundle it. Also reads v7 GNRL, which our vendored `Ba2Reader.cs` cannot (bd `f4se_og-o95`). |
+| `bsarchive` | 15.6k | BA2 **and BSA read + write**, FO4 v1/v7/v8, GNRL and DX10, streaming packer | `archive_pack` currently shells out to the Creation Kit's `Archive2.exe`, which is not redistributable so we cannot bundle it. (The v7 GNRL read gap this row originally also claimed turned out to be already fixed on our side -- see #71.) |
 | `ck/precombine` | ~4.2k | **CK-free precombine generation**: `plan` (eligible STAT-backed Temporary REFRs grouped by model), `bake` (writes the filtered `_OC.nif` with `BSPackedCombinedGeomDataExtra`), `stamp` (PCMB/XCRI + header dates). Interiors, v0. | Issue #59's blocked half and then some. **This also corrects an earlier verdict in this doc**: the "CK shell-out group" dismissal above was about modkit21's `ck` CLI group, which does launch the real Creation Kit. The `ck` CRATE is the opposite -- it exists specifically to avoid it. |
 | `papyrus_core` | 12.3k | A complete Papyrus compiler in Rust: lexer, parser, resolver, typecheck, codegen, `.pex` writer. Plus a separate `papyrus_lsp_server`. | `compile_papyrus` shells out to the CK's `PapyrusCompiler.exe`. This would compile with no CK installed, and the LSP half is real editor intelligence we have no version of. |
 | `directxtex` | 7.2k | DirectXTex bound in-process: DDS decode/encode incl. **from bytes**, mip chains, BC1-7, GPU path | `TextureService` shells out to `Texconv.exe` and round-trips through temp files for every Cell Viewer texture. Decoding straight from the BA2 bytes removes both. |
@@ -159,7 +159,7 @@ separate decision, not as a quiet exception to this one.
 | Issue | Takes | Written in | Priority |
 |---|---|---|---|
 | #70 | BA2 writer -- drops the non-redistributable `Archive2.exe` dependency | C# | P1 |
-| #71 | BA2 v7 is not a distinct format; the version branch in `Ba2Reader` is the bug (closes bd `f4se_og-o95`) | C# | P2 |
+| ~~#71~~ | BA2 v7 read support. **Closed as already done** -- the fix had already landed in `Ba2Reader.cs`; the tracker note saying otherwise was stale. Verified live: all 6112 entries of `DLCRobot - Voices_en.ba2` list, and an extracted entry is a valid 29,886-byte `FUZE`. His reader confirms the current code is correct. | -- | -- |
 | #72 | CK-free precombine phase 1: the plan. Also closes the half of #59 we had closed as blocked | C# | P1 |
 | #73 | CK-free precombine phase 2: bake the filtered `_OC.nif` | C++ (`niftool`) | P2 |
 | #74 | CK-free precombine phase 3: stamp `PCMB`/`XCRI` | C# | P2 |
