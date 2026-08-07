@@ -222,13 +222,33 @@ engineering. Tracked as issue #59.
 `nif_import` · `nif_inspect` · `nif_fix` · `nif_verify`
 
 ### Archives (BA2/BSA)
-`archive_list` · `archive_extract` · `archive_extract_all` -- reads packed archives via Mutagen's own
-reader, no Archive2.exe needed. `archive_pack` is the other direction -- packs one or more loose
-folders into a new BA2. Mutagen has no BA2 *writer*, so packing shells out to the Creation Kit's
-`Archive2.exe` (not redistributable, so it isn't bundled -- install the CK and it's found
-automatically, same as `compile_papyrus`). Typical flow to re-encode a mod's packed sounds:
-`archive_extract_all` its BA2 -> `audio_convert_to_xwm` on the extracted Sound folder ->
-`archive_pack` that same folder back into a new BA2.
+`archive_list` · `archive_extract` · `archive_extract_all` -- read packed archives. `archive_pack`
+is the other direction, and it is now **written in process: the Creation Kit is not needed**.
+
+Packing used to shell out to the CK's `Archive2.exe`, which is not redistributable and therefore
+could not be bundled -- so a user without the Creation Kit installed simply could not pack. The
+writer produces General (GNRL) archives, zlib-compressed, storing any file that would grow.
+
+`format: "DDS"` still routes to `Archive2.exe`. A texture archive stores a per-file texture header
+and one chunk per mip range, which means parsing every DDS for its dimensions, mip count and DXGI
+format -- that belongs with the in-process DDS work in #76. Textures pack fine as `General`; the
+DX10 form exists so the engine can stream individual mips. `use_archive2: true` forces the old path
+for a General archive too, if you specifically need Archive2's own byte-for-byte output.
+
+The format was taken from the real archives rather than from any spec, and the writer is checked by
+rewriting every `.ba2` in a vanilla Data folder and comparing whole files: **all 79 archives, ~31 GB,
+versions 1/7/8, both General and DirectX, rewrite byte-for-byte identical.** Two things that sweep
+caught, both invisible to a sampling test:
+
+- `DLCCoast - Main.ba2` stores `Strings/DLCCoast_cn.DLSTRINGS` with a **forward slash** while hashing
+  the backslash form. Names are stored exactly as authored, never normalized.
+- Three names in `Fallout4 - Voices.ba2` are **Windows-1252, not UTF-8** (`María_F.fuz`,
+  `María_M.fuz`, `Sánchez_F.fuz`). Entries keep raw name bytes, because decoding those to a
+  string and re-encoding replaces the byte and grows the file.
+
+Typical flow to re-encode a mod's packed sounds: `archive_extract_all` its BA2 ->
+`audio_convert_to_xwm` on the extracted Sound folder -> `archive_pack` that same folder back into a
+new BA2.
 
 ### Cells
 `cell_get_placed_references` -- list a CELL's placed references (position/rotation/scale + base object

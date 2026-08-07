@@ -6,6 +6,8 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 using JsonConvert = Newtonsoft.Json.JsonConvert;
 
+using FO4RecordEditor.Services.Archives;
+
 namespace FO4RecordEditor.Services;
 
 /// <summary>
@@ -259,20 +261,25 @@ public static class ArchiveService
     }
 
     /// <summary>
-    /// Pack one or more loose folders into a new BA2, via the Creation Kit's Archive2.exe -- Mutagen's
-    /// Archive reader has no writer, so unlike everything else in this file, packing has no
-    /// native-code path. 'format' is Archive2's own vocabulary: "General" (anything non-DDS --
-    /// sounds/meshes/scripts/...) or "DDS" (texture-only archives, using BA2's special
-    /// compressed-texture chunk layout -- do not use General for a textures folder or vice versa).
-    /// 'rootDir' is required and not guessed: it's what Archive2 computes each entry's in-archive
-    /// path relative to (e.g. root=".../Data", source=".../Data/Sound/..." -> entry "Sound/...");
-    /// get it wrong and the game will never find the packed files under its Data\ folder.
+    /// Pack one or more loose folders into a new BA2. Written in process by <see cref="Ba2Packer"/>;
+    /// the Creation Kit's Archive2.exe is no longer needed and is only used if explicitly asked for.
+    /// That matters because Archive2.exe is not redistributable, so it could never be bundled and a
+    /// user without the CK installed simply could not pack.
+    ///
+    /// 'format' keeps Archive2's vocabulary: "General" (anything non-DDS -- sounds/meshes/scripts/
+    /// ...) or "DDS" (texture-only archives, using BA2's per-mip chunk layout). The in-process writer
+    /// only produces General; a DDS archive needs every texture's header parsed to fill in
+    /// height/width/mip count/DXGI format, which is issue #76's work. Ask for DDS and it falls back
+    /// to Archive2.exe, or says so if that is not installed. Textures pack fine into a General
+    /// archive; the DX10 form exists so the engine can stream individual mips.
+    ///
+    /// 'rootDir' is what each entry's in-archive path is computed relative to (e.g. root=".../Data",
+    /// source=".../Data/Sound/..." -> entry "Sound/..."); get it wrong and the game will never find
+    /// the packed files under its Data\ folder.
     /// </summary>
-    public static string Pack(IReadOnlyList<string> sourcePaths, string outputBa2, string format, string rootDir, bool compress)
+    public static string Pack(IReadOnlyList<string> sourcePaths, string outputBa2, string format, string rootDir, bool compress,
+                              bool useArchive2 = false)
     {
-        var archive2 = ToolPaths.Archive2();
-        if (archive2 == null) return ToolError.Fail("Archive2.exe not found. " + ToolPaths.Describe("archive2") + ".");
-
         var sources = sourcePaths.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim().Trim('"')).ToList();
         if (sources.Count == 0) return ToolError.Fail("Provide at least one source folder to pack.");
         foreach (var s in sources)
@@ -283,13 +290,23 @@ public static class ArchiveService
         if (!outputBa2.EndsWith(".ba2", StringComparison.OrdinalIgnoreCase)) outputBa2 += ".ba2";
 
         format = string.IsNullOrWhiteSpace(format) ? "General" : format.Trim();
-        if (!string.Equals(format, "General", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(format, "DDS", StringComparison.OrdinalIgnoreCase))
+        var dds = string.Equals(format, "DDS", StringComparison.OrdinalIgnoreCase);
+        if (!dds && !string.Equals(format, "General", StringComparison.OrdinalIgnoreCase))
             return ToolError.Fail("format must be 'General' (sounds/meshes/scripts/...) or 'DDS' (textures only).");
 
         if (string.IsNullOrWhiteSpace(rootDir)) return ToolError.Fail("Provide 'root_dir' -- the folder each source's in-archive path is computed relative to.");
         rootDir = rootDir.Trim().Trim('"');
         if (!Directory.Exists(rootDir)) return ToolError.Fail($"Root folder not found: {rootDir}");
+
+        if (!dds && !useArchive2) return PackInProcess(sources, outputBa2, rootDir, compress);
+
+        var archive2 = ToolPaths.Archive2();
+        if (archive2 == null)
+            return ToolError.Fail(
+                (dds ? "A DDS (texture) archive still needs Archive2.exe -- the in-process writer produces " +
+                       "General archives only (see #76). Pack these into a General archive instead, or "
+                     : "Archive2.exe was requested but ") +
+                "install the Creation Kit. " + ToolPaths.Describe("archive2") + ".");
 
         try { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputBa2)) ?? "."); }
         catch (Exception ex) { return ToolError.Fail($"Cannot create output dir for '{outputBa2}': {ex.Message}"); }
@@ -328,6 +345,32 @@ public static class ArchiveService
 
         var count = run.Combined.Split('\n').Count(l => l.TrimStart().StartsWith("Adding \"", StringComparison.Ordinal));
         return $"RESULT: success ({count} file(s) -> {outputBa2})\n\n{run.Combined}".TrimEnd();
+    }
+
+    /// <summary>
+    /// The in-process path. Sources are re-rooted at rootDir first so an entry's in-archive name
+    /// matches what Archive2 would have produced for the same arguments.
+    /// </summary>
+    private static string PackInProcess(List<string> sources, string outputBa2, string rootDir, bool compress)
+    {
+        var full = Path.GetFullPath(rootDir);
+        foreach (var s in sources)
+        {
+            var abs = Path.GetFullPath(s);
+            if (!abs.Equals(full, StringComparison.OrdinalIgnoreCase) &&
+                !abs.StartsWith(full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return ToolError.Fail(
+                    $"Source '{s}' is not inside root_dir '{rootDir}', so its in-archive path cannot be " +
+                    "computed. Every source folder must live under the root.");
+        }
+
+        Ba2Packer.Result result;
+        try { result = Ba2Packer.Pack(new[] { full }, outputBa2, version: 1, compress: compress); }
+        catch (Exception ex) { return ToolError.Fail($"Packing failed: {ex.Message}"); }
+
+        return $"RESULT: success ({result.FileCount} file(s) -> {outputBa2})\n" +
+               $"{result.TotalBytes:N0} bytes in, {result.ArchiveBytes:N0} bytes out, " +
+               $"{result.CompressedCount} compressed, {result.FileCount - result.CompressedCount} stored.";
     }
 
     // BA2 header: 4-byte "BTDX" magic, then a little-endian uint32 version. Null if the file is too
