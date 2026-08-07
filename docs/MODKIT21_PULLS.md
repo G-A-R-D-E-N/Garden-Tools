@@ -136,25 +136,41 @@ SkyrimSE -> FO4) built on the same engine. Nothing to pull into a record editor 
 application, not a library -- but it is the proof that the engine underneath handles real
 production-scale work, and it is the most actively developed of the three repos.
 
-### Integration reality
+### Decision: reimplement in C#/C++, do not bind to the Rust (2026-08-06)
 
-This is Rust + Python; FO4RecordEditor is C#/.NET. Three routes, cheapest first:
+An earlier draft of this section recommended forking his crates and P/Invoking one native DLL from
+C#. **That is not the route.** Decided: every capability we take gets written in C#, or in C++ inside
+the existing `niftool` project when it is genuinely mesh/native work. His code is read as a format
+and algorithm reference -- the thing being ported is the knowledge, not the binary.
 
-1. **Shell out to `modkit.exe`**, exactly the way we already shell out to `niftool.exe`, `Texconv.exe`
-   and `ffmpeg`. Zero FFI risk, works with the CLI as it ships today (`build pack`, `archive extract`,
-   `build pack-hkx`/`unpack-hkx`, `cloth *`, `swf *`). Costs a large external dependency the user must
-   install, and the CLI does not expose every crate capability.
-2. **Fork, gate `python.rs` behind a cargo feature, add a thin C-ABI shim crate**, ship one native DLL,
-   P/Invoke from C#. `pyo3` is currently a hard dependency of each crate rather than an optional one,
-   so this needs a small patch upstream or in a fork. Best end state; medium effort; a second vendored
-   GPL tree to keep in sync alongside Mutagen.
-3. **Port algorithms to C#.** Only worth it for something small and self-contained. `bsarchive`'s
-   BA2 writer is the one plausible candidate.
+Reasons this is the right call here, recorded so it is not relitigated: it avoids a second vendored
+GPL tree to keep in sync alongside Mutagen; it avoids adding a Rust + MSVC + maturin toolchain to a
+.NET build; his crates make `pyo3` a hard dependency rather than an optional feature, so a
+Python-free build needs an upstream change or a fork before it even starts; and the highest-value
+items (the BA2 writer, the BA2 v7 fix, `.bgem`, the precombine plan) are small, well-specified
+formats where a port is straightforward and a binding is disproportionate.
 
-Recommended first move if this gets picked up: `bsarchive`, via route 2 with only that one crate. It
-is the smallest surface, it removes a non-redistributable external dependency, and it fixes a tracked
-bug -- so it proves the integration path on something whose value does not depend on the path working
-for everything else.
+The one thing this costs: we do not get his Havok, NIF or LOD crates for free, and those are big
+enough that porting them is not on the table. If any of that is ever wanted, it comes back as a
+separate decision, not as a quiet exception to this one.
+
+### Filed as issues
+
+| Issue | Takes | Written in | Priority |
+|---|---|---|---|
+| #70 | BA2 writer -- drops the non-redistributable `Archive2.exe` dependency | C# | P1 |
+| #71 | BA2 v7 is not a distinct format; the version branch in `Ba2Reader` is the bug (closes bd `f4se_og-o95`) | C# | P2 |
+| #72 | CK-free precombine phase 1: the plan. Also closes the half of #59 we had closed as blocked | C# | P1 |
+| #73 | CK-free precombine phase 2: bake the filtered `_OC.nif` | C++ (`niftool`) | P2 |
+| #74 | CK-free precombine phase 3: stamp `PCMB`/`XCRI` | C# | P2 |
+| #75 | `.bgem` effect materials | C# | P2 |
+| #76 | Decode DDS in-process, drop the `Texconv.exe` shell-out per texture | C# (or C++ shim) | P2 |
+| #77 | On-disk SQLite/FTS index replacing `_modIndexCache` (bd `f4se_og-ths`) | C# | P2 |
+| #78 | Spike: a Papyrus compiler we own, so compiling needs no CK | C# | P3 |
+
+Not taken: his `esp` crate (overlaps the Mutagen fork we already vendor and have patched), `havok`,
+`nif_core`, `lodgen`, `terrain`, `world_renderer`, `swf` -- too large to port, and mostly outside a
+record editor's scope. `bacup` is an application, not a library.
 
 Worth noting the other direction too: modkit21 still has no MCP server. Exposing that engine through
 this tool's MCP layer is a collaboration angle, not just a borrowing one.
