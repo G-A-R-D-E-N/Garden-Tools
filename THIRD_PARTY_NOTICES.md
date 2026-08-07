@@ -18,6 +18,24 @@ that obligation is satisfied; there is no separate location to also track.
 |---|---|---|
 | [Mutagen](https://github.com/Mutagen-Modding/Mutagen) | GPL-3.0 | Reading and writing `.esp`/`.esm`/`.esl` records. Vendored in-repo under `Mutagen/`. **Patched** -- see below. |
 | [nifly](https://github.com/ousnius/nifly) (inside `niftool`) | GPL-3.0 | NIF parsing and repair, behind the `nif_*` tools. |
+
+### Patch carried against nifly
+
+One functional change, in the vendored checkout at `Tools/FO4AnimForge/extern/nifly` (commit
+`b05bb5b`), which `niftool` builds against:
+
+**`BSPackedGeomData::Sync` overran the block for the SHARED combined-geometry variant.** It read
+`numVertices` vertices and `triCountLod*` triangles after `vertexDesc` unconditionally. That is right
+for `BSPackedCombinedGeomDataExtra`, which embeds its geometry, and wrong for
+`BSPackedCombinedSharedGeomDataExtra`, where the geometry lives in the sibling shape block -- which is
+what "shared" means. The block ends after `vertexDesc`.
+
+The overrun desyncs the rest of the file, so the error surfaces later and elsewhere: a garbage string
+or block index in whichever block follows. Every real Fallout 4 precombined mesh
+(`Meshes\PreCombined\*_OC.NIF`) hit it.
+
+Verified against real vanilla data: across 166 such blocks in 8 real precombines, the on-disk block
+size matches the no-embedded-geometry layout exactly, zero mismatches.
 | [texconv](https://github.com/microsoft/DirectXTex) (DirectXTex) | MIT | DDS decode for texture previews. |
 | [WPF-UI](https://github.com/lepoco/wpfui) | MIT | The desktop UI theme and controls. |
 | [Markdig.Wpf](https://github.com/Kryptos-FR/markdig.wpf) | MIT | Markdown rendering in the docs panel. |

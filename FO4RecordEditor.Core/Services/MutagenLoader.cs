@@ -1190,6 +1190,10 @@ public static partial class MutagenLoader
     /// ever needed CELL records. Mutagen's EnumerateMajorRecords&lt;T&gt;() walks the same nested
     /// interior-Cell-group / exterior-Worldspace-SubCells structure but touches only cells, and
     /// nothing here is cached across calls.</summary>
+    /// <summary>Public wrapper over the internal mod lookup, for services outside this file
+    /// (PrecombineService, #72) that need the target plugin's own ModKey.</summary>
+    public static object? ResolveModPublic(string plugin, object? envObj) => ResolveMod(plugin, envObj);
+
     public static List<SearchHit> SearchCellRecords(object? envObj, string query, int limit = 25)
     {
         if (envObj == null) return new List<SearchHit>();

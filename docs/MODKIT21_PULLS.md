@@ -160,7 +160,7 @@ separate decision, not as a quiet exception to this one.
 |---|---|---|---|
 | ~~#70~~ | BA2 writer -- drops the non-redistributable `Archive2.exe` dependency. **Shipped** (General/GNRL; DDS still routes to Archive2, see #76). Verified by rewriting all 79 vanilla archives byte-for-byte, ~31 GB, versions 1/7/8, General and DirectX. | C# | P1 |
 | ~~#71~~ | BA2 v7 read support. **Closed as already done** -- the fix had already landed in `Ba2Reader.cs`; the tracker note saying otherwise was stale. Verified live: all 6112 entries of `DLCRobot - Voices_en.ba2` list, and an extracted entry is a valid 29,886-byte `FUZE`. His reader confirms the current code is correct. | -- | -- |
-| #72 | CK-free precombine phase 1: the plan. Also closes the half of #59 we had closed as blocked | C# | P1 |
+| ~~#72~~ | CK-free precombine phase 1: the plan. **Shipped**, and it closes the half of #59 we had closed as blocked. Verified on real vanilla data: `Vault111Cryo`, 2,385 temporary refs -> 710 eligible in 108 model groups, every remaining reference accounted for by a reported reason. | C# | P1 |
 | #73 | CK-free precombine phase 2: bake the filtered `_OC.nif` | C++ (`niftool`) | P2 |
 | #74 | CK-free precombine phase 3: stamp `PCMB`/`XCRI` | C# | P2 |
 | ~~#75~~ | `.bgem` effect materials. **Shipped.** | C# | P2 |
