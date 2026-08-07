@@ -9,22 +9,24 @@ using Newtonsoft.Json;
 namespace FO4RecordEditor.Services;
 
 /// <summary>
-/// Inspect and edit FO4 .bgsm material files (get/set individual shader fields -- Smoothness,
+/// Inspect and edit FO4 material files (get/set individual shader fields -- Smoothness,
 /// SpecularColor, texture paths, PBR flags, etc.) without a visual material editor. Pulled from
 /// reviewing Bryant-21/modkit21 (GPL-3.0, permission granted): their material_tools library has a
-/// full BGSM/BGEM field editor that isn't even wired into their own CLI. BgsmCodec is a byte-exact
-/// port of their Rust parser/writer -- see its header comment. BGEM (effect materials) is NOT yet
-/// implemented; only .bgsm is supported so far.
+/// full BGSM/BGEM field editor that isn't even wired into their own CLI. BgsmCodec and BgemCodec
+/// are byte-exact ports of their Rust parser/writers -- see their header comments.
+///
+/// Both .bgsm (lighting) and .bgem (effect) materials are supported, dispatched on the file's own
+/// magic rather than its extension (MaterialCodec).
 /// </summary>
 public static class MaterialService
 {
     public static string Inspect(string path)
     {
-        var (data, err) = LoadBgsm(path);
+        var (data, err) = LoadMaterial(path);
         if (data == null) return err;
 
         var sb = new StringBuilder();
-        sb.AppendLine($"{Path.GetFileName(path)} (BGSM v{data.Header.Version}):");
+        sb.AppendLine($"{Path.GetFileName(path)} ({MaterialCodec.FormatName(data)} v{data.Header.Version}):");
         sb.AppendLine("-- Header --");
         AppendFields(sb, data.Header);
         sb.AppendLine("-- Material --");
@@ -34,14 +36,14 @@ public static class MaterialService
 
     public static string SetField(string path, string field, string value, string? outPath)
     {
-        var (data, err) = LoadBgsm(path);
+        var (data, err) = LoadMaterial(path);
         if (data == null) return err;
         if (string.IsNullOrWhiteSpace(field))
             return ToolError.Fail("Provide a field name -- call bgsm_inspect first to see the exact names for this file.");
 
         var (target, prop) = ResolveField(data, field);
         if (prop == null)
-            return ToolError.Fail($"Unknown BGSM field '{field}'. Call bgsm_inspect to see this file's exact field names and current values.");
+            return ToolError.Fail($"Unknown {MaterialCodec.FormatName(data)} field '{field}'. Call bgsm_inspect to see this file's exact field names and current values.");
 
         object? parsed;
         try { parsed = ParseValue(prop.PropertyType, value); }
@@ -50,7 +52,7 @@ public static class MaterialService
         prop.SetValue(target, parsed);
 
         byte[] written;
-        try { written = BgsmCodec.Write(data); }
+        try { written = MaterialCodec.Write(data); }
         catch (Exception ex) { return ToolError.Fail($"Re-encoding failed after setting '{field}': {ex.Message}"); }
 
         var dest = string.IsNullOrWhiteSpace(outPath) ? path : outPath;
@@ -70,7 +72,7 @@ public static class MaterialService
     /// plain text instead; this is the JSON counterpart the panel renders real controls from.</summary>
     public static string InspectJson(string path)
     {
-        var (data, err) = LoadBgsm(path);
+        var (data, err) = LoadMaterial(path);
         if (data == null) return JsonConvert.SerializeObject(new { error = err });
 
         var fields = new List<object>();
@@ -80,6 +82,7 @@ public static class MaterialService
         return JsonConvert.SerializeObject(new
         {
             fileName = Path.GetFileName(path),
+            format = MaterialCodec.FormatName(data),
             version = data.Header.Version,
             fields,
         });
@@ -90,7 +93,7 @@ public static class MaterialService
     /// to disk if any field fails to resolve or parse, so a bad edit never lands partially applied.</summary>
     public static string SetFields(string path, Dictionary<string, string> fields, string? outPath)
     {
-        var (data, err) = LoadBgsm(path);
+        var (data, err) = LoadMaterial(path);
         if (data == null) return err;
         if (fields == null || fields.Count == 0) return ToolError.Fail("No field changes to apply.");
 
@@ -98,7 +101,7 @@ public static class MaterialService
         foreach (var (field, value) in fields)
         {
             var (target, prop) = ResolveField(data, field);
-            if (prop == null) return ToolError.Fail($"Unknown BGSM field '{field}'.");
+            if (prop == null) return ToolError.Fail($"Unknown {MaterialCodec.FormatName(data)} field '{field}'.");
 
             object? parsed;
             try { parsed = ParseValue(prop.PropertyType, value); }
@@ -109,7 +112,7 @@ public static class MaterialService
         }
 
         byte[] written;
-        try { written = BgsmCodec.Write(data); }
+        try { written = MaterialCodec.Write(data); }
         catch (Exception ex) { return ToolError.Fail($"Re-encoding failed: {ex.Message}"); }
 
         var dest = string.IsNullOrWhiteSpace(outPath) ? path : outPath;
@@ -128,7 +131,7 @@ public static class MaterialService
     {
         foreach (var prop in obj.GetType().GetProperties())
         {
-            if (prop.Name == nameof(BgsmData.Header)) continue;   // nested object, not a leaf field
+            if (prop.Name == nameof(IMaterialData.Header)) continue;   // nested object, not a leaf field
             var val = prop.GetValue(obj);
             if (val == null) continue;
             list.Add(new
@@ -151,17 +154,17 @@ public static class MaterialService
         return "string";
     }
 
-    private static (BgsmData? data, string error) LoadBgsm(string path)
+    private static (IMaterialData? data, string error) LoadMaterial(string path)
     {
-        if (string.IsNullOrWhiteSpace(path)) return (null, "Provide a .bgsm file path.");
+        if (string.IsNullOrWhiteSpace(path)) return (null, "Provide a .bgsm or .bgem file path.");
         if (!File.Exists(path)) return (null, ToolError.Fail($"File not found: '{path}'."));
 
         byte[] bytes;
         try { bytes = File.ReadAllBytes(path); }
         catch (Exception ex) { return (null, ToolError.Fail($"Could not read '{path}': {ex.Message}")); }
 
-        try { return (BgsmCodec.Parse(bytes), ""); }
-        catch (Exception ex) { return (null, ToolError.Fail($"Could not parse '{path}' as BGSM: {ex.Message}")); }
+        try { return (MaterialCodec.Parse(bytes), ""); }
+        catch (Exception ex) { return (null, ToolError.Fail($"Could not parse '{path}' as a material: {ex.Message}")); }
     }
 
     private static void AppendFields(StringBuilder sb, object obj)
@@ -185,11 +188,11 @@ public static class MaterialService
 
     // Header and body fields never share a name, so a case-insensitive lookup on each in turn is
     // unambiguous. 'Header' itself is excluded -- it names a nested object, not a settable field.
-    private static (object target, PropertyInfo? prop) ResolveField(BgsmData data, string field)
+    private static (object target, PropertyInfo? prop) ResolveField(IMaterialData data, string field)
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
-        var bodyProp = typeof(BgsmData).GetProperty(field, flags);
-        if (bodyProp != null && bodyProp.Name != nameof(BgsmData.Header)) return (data, bodyProp);
+        var bodyProp = data.GetType().GetProperty(field, flags);
+        if (bodyProp != null && bodyProp.Name != nameof(IMaterialData.Header)) return (data, bodyProp);
         var headerProp = typeof(MaterialHeader).GetProperty(field, flags);
         if (headerProp != null) return (data.Header, headerProp);
         return (data, null);

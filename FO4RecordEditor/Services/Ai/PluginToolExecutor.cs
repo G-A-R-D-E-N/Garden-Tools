@@ -1360,28 +1360,29 @@ public sealed class PluginToolExecutor
                 required = new[] { "script" }
             }),
         new("bgsm_inspect",
-            "Read a FO4 .bgsm material file and dump every shader field (Smoothness, SpecularColor, " +
-            "texture paths, PBR/porosity, emissive, translucency, terrain, ...). Fields absent from the " +
-            "output aren't stored by this file's BGSM version, not an error.",
+            "Read a FO4 material file -- .bgsm (lighting) OR .bgem (effect) -- and dump every shader field " +
+            "(Smoothness, SpecularColor, texture paths, PBR/porosity, emissive, translucency, terrain, " +
+            "falloff, glass, ...). The format is detected from the file's own magic, not its extension. " +
+            "Fields absent from the output aren't stored by this file's version, not an error.",
             new
             {
                 type = "object",
-                properties = new { path = new { type = "string", description = "Full path to the .bgsm file." } },
+                properties = new { path = new { type = "string", description = "Full path to the .bgsm or .bgem file." } },
                 required = new[] { "path" }
             }),
         new("bgsm_set_field",
-            "Set ONE field on a FO4 .bgsm material file and write it back -- direct structured editing, no " +
-            "material-editor GUI needed. Call bgsm_inspect first to see the exact field names and current " +
-            "values for this file. Color fields (SpecularColor, EmittanceColor, HairTintColor, " +
-            "TranslucencySubsurfaceColor) take 3 comma-separated numbers, e.g. '1.0, 0.5, 0.2'. " +
-            "BGEM (effect materials) is not supported yet, only .bgsm.",
+            "Set ONE field on a FO4 material file (.bgsm or .bgem) and write it back -- direct structured " +
+            "editing, no material-editor GUI needed. Call bgsm_inspect first to see the exact field names and " +
+            "current values for this file, since they differ by format and version. Color fields " +
+            "(SpecularColor, EmittanceColor, HairTintColor, TranslucencySubsurfaceColor, BaseColor, " +
+            "GlassFresnelColor) take 3 comma-separated numbers, e.g. '1.0, 0.5, 0.2'.",
             new
             {
                 type = "object",
                 properties = new
                 {
-                    path = new { type = "string", description = "Full path to the .bgsm file." },
-                    field = new { type = "string", description = "Exact field name from bgsm_inspect, e.g. 'Smoothness' or 'SpecularColor'." },
+                    path = new { type = "string", description = "Full path to the .bgsm or .bgem file." },
+                    field = new { type = "string", description = "Exact field name from bgsm_inspect, e.g. 'Smoothness' (bgsm) or 'FalloffStartAngle' (bgem)." },
                     value = new { type = "string", description = "New value: a number, 'true'/'false', a string, or 'r, g, b' for a color field." },
                     out_path = new { type = "string", description = "Optional output path; defaults to overwriting 'path' in place." }
                 },

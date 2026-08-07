@@ -83,7 +83,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   const browseOutNif = async () => { if (nif) { const p = await nif.BrowseForSave('Save NIF as', 'NIF mesh (*.nif)|*.nif'); if (p) setOutNif(p); } };
   const browseFixOut = async () => { if (nif) { const p = await nif.BrowseForSave('Save fixed NIF as', 'NIF mesh (*.nif)|*.nif'); if (p) setFixOut(p); } };
   const browseTexRoot = async () => { if (nif) { const p = await nif.BrowseForFolder('Select a texture root (Data or Textures folder)'); if (p) setTexRoot(p); } };
-  const browseMat = async () => { const m = getMaterial(); if (m) { const p = await m.BrowseForFile('Select a BGSM material', 'BGSM material (*.bgsm)|*.bgsm|All files|*.*'); if (p) setMatPath(p); } };
+  const browseMat = async () => { const m = getMaterial(); if (m) { const p = await m.BrowseForFile('Select a material', 'FO4 material (*.bgsm;*.bgem)|*.bgsm;*.bgem|BGSM lighting material (*.bgsm)|*.bgsm|BGEM effect material (*.bgem)|*.bgem|All files|*.*'); if (p) setMatPath(p); } };
 
   // drag & drop an .obj (import) or .nif (inspect/verify/fix)
   const onDrop = useCallback(async (e: DragEvent) => {
@@ -98,7 +98,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
       const path = await nif.StageDroppedFile(f.name, btoa(bin));
       if (path.startsWith('ERR:')) { appendLog('✗ drop failed -- ' + path); return; }
       if (/\.obj$/i.test(f.name)) { setMode('import'); setObjPath(path); }
-      else if (/\.bgsm$/i.test(f.name)) { setMatPath(path); loadMaterial(path); }
+      else if (/\.bg(sm|em)$/i.test(f.name)) { setMatPath(path); loadMaterial(path); }
       else if (/\.nif$/i.test(f.name)) { setNifPath(path); if (mode === 'view') loadGeo(path); else if (mode === 'edit') loadTree(path); else if (mode === 'import') setMode('inspect'); }
       appendLog('• dropped ' + f.name);
     } catch (err) {
@@ -243,7 +243,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
                 <div className={`papyrus-drop ${dragOver ? 'over' : ''}`}
                      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                      onDragLeave={() => setDragOver(false)} onDrop={onDrop}>
-                  <input value={matPath} onChange={e => setMatPath(e.target.value)} placeholder="Path, or drag a .bgsm here…" />
+                  <input value={matPath} onChange={e => setMatPath(e.target.value)} placeholder="Path, or drag a .bgsm/.bgem here…" />
                 </div>
                 <div className="papyrus-input-row">
                   <button className="sidebar-action-btn" onClick={browseMat} disabled={matUnavailable}>BGSM…</button>
@@ -401,7 +401,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
                   onSaved={() => loadMaterial(matPath)} appendLog={appendLog} />
               ) : (
                 <div className="nif-view-empty">
-                  {matUnavailable ? 'Material bridge unavailable.' : matError || 'Pick or drag a .bgsm, then Load Material.'}
+                  {matUnavailable ? 'Material bridge unavailable.' : matError || 'Pick or drag a .bgsm or .bgem, then Load Material.'}
                 </div>
               )}
             </div>

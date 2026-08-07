@@ -85,11 +85,15 @@ public static class BgsmCodec
 {
     public const uint Signature = 0x4D534742; // 'BGSM' little-endian
 
-    internal static MaterialHeader ParseHeader(MatReader r)
+    internal static MaterialHeader ParseHeader(MatReader r) => ParseHeader(r, Signature, "BGSM");
+
+    /// <summary>The header is shared by .bgsm and .bgem (base.rs::read_header takes the expected
+    /// signature the same way), so only the magic differs.</summary>
+    internal static MaterialHeader ParseHeader(MatReader r, uint expectedSignature, string formatName)
     {
         var h = new MaterialHeader { Signature = r.ReadU32() };
-        if (h.Signature != Signature)
-            throw new InvalidDataException($"Invalid BGSM signature: 0x{h.Signature:X8}");
+        if (h.Signature != expectedSignature)
+            throw new InvalidDataException($"Invalid {formatName} signature: 0x{h.Signature:X8}");
         h.Version = r.ReadU32();
         var tileFlags = r.ReadU32();
         h.TileU = (tileFlags & 2) != 0;

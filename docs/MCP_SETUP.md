@@ -251,9 +251,27 @@ desktop app only override which mirror is used. Also reachable by hand in the de
 panel -> "Wiki Lookup" tab.
 
 ### Materials
-`bgsm_inspect` · `bgsm_set_field` -- read and edit individual `.bgsm` shader fields (Smoothness,
-SpecularColor, texture paths, PBR/emissive/translucency/terrain, ...) directly, no material-editor
-GUI needed. `.bgem` (effect materials) isn't supported yet.
+`bgsm_inspect` · `bgsm_set_field` -- read and edit individual shader fields directly, no
+material-editor GUI needed. Both FO4 material formats are supported:
+
+- **`.bgsm`** (lighting materials): Smoothness, SpecularColor, texture paths, PBR/porosity,
+  emissive, translucency, terrain, tessellation.
+- **`.bgem`** (effect materials -- glowing, additive, refractive and animated surfaces): BaseColor
+  and scale, falloff angles and opacities, lighting influence, soft depth, glass (fresnel colour,
+  blur and refraction scales), adaptive emissive.
+
+The format is detected from the file's **own magic**, not its extension, because mods do ship
+`.bgsm`-named files that are really BGEM and the engine reads the magic. The tool names keep the
+`bgsm_` prefix for compatibility.
+
+Both codecs are byte-for-byte ports of `native/materials/src/{base.rs,bgsm.rs,bgem.rs}` from
+`Bryant-21/py-creation-lib` (GPL-3.0, permission granted), verified against every material in
+`Fallout4 - Materials.ba2`: all 6,623 `.bgsm` and all 283 `.bgem` files round-trip byte-identical,
+zero parse failures.
+
+One trap the port preserves deliberately: an empty texture slot is written as `len=1, byte=0x00`,
+never `len=0`. A zero-length string there misaligns FO4's own parser and every field after it, which
+shows up in game as a pink material rather than as an error.
 
 ### Mod folder triage
 ### Asset resolution

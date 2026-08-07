@@ -1,6 +1,16 @@
 namespace FO4RecordEditor.Services.Materials;
 
 /// <summary>
+/// What .bgsm and .bgem have in common: the shared header. Lets MaterialService inspect and edit
+/// either format through one code path, since every helper it has (reflection over properties,
+/// value parsing, field resolution) already works on a plain object.
+/// </summary>
+public interface IMaterialData
+{
+    MaterialHeader Header { get; set; }
+}
+
+/// <summary>
 /// Fields common to every FO4 material file (.bgsm/.bgem) header. Field names, types, and the
 /// version-conditional read/write branches match native/materials/src/base.rs::BaseHeader in
 /// Bryant-21/py-creation-lib (GPL-3.0, permission granted) byte-for-byte -- ported, not guessed,
@@ -45,7 +55,7 @@ public sealed class MaterialHeader
 /// from native/materials/src/bgsm.rs::BgsmData (Bryant-21/py-creation-lib, GPL-3.0) -- see
 /// BgsmCodec for the exact read/write order this depends on.
 /// </summary>
-public sealed class BgsmData
+public sealed class BgsmData : IMaterialData
 {
     public MaterialHeader Header { get; set; } = new();
 

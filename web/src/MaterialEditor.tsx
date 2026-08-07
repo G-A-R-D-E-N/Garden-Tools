@@ -17,7 +17,7 @@ const parseColor = (s: string): number[] => {
 const formatColor = (arr: number[]) => arr.map(n => Number(n.toFixed(3))).join(', ');
 
 /**
- * .bgsm shader field editor: bool -> switch, float/int -> number input, color -> picker + raw
+ * Material shader field editor (.bgsm and .bgem): bool -> switch, float/int -> number input, color -> picker + raw
  * value, everything else -> text input. Mirrors NifEditor's dirty-tracking/revert UX exactly (same
  * CSS classes) but groups fields by section (Material / Header) instead of by NIF block, and saves
  * through MaterialInterop.SetFields (one field-name -> new-value-string map per Save) instead of
