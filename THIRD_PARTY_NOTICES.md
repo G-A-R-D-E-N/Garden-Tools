@@ -36,7 +36,8 @@ or block index in whichever block follows. Every real Fallout 4 precombined mesh
 
 Verified against real vanilla data: across 166 such blocks in 8 real precombines, the on-disk block
 size matches the no-embedded-geometry layout exactly, zero mismatches.
-| [texconv](https://github.com/microsoft/DirectXTex) (DirectXTex) | MIT | DDS decode for texture previews. |
+| [bcdec.h](https://github.com/iOrange/bcdec) | MIT / Unlicense (dual) | BC1-BC7 block decoding, ported to C# as `Services/Textures/BcnDecoder.cs`. |
+| [texconv](https://github.com/microsoft/DirectXTex) (DirectXTex) | MIT | DDS conversion fallback, for the few formats `BcnDecoder` does not handle. |
 | [WPF-UI](https://github.com/lepoco/wpfui) | MIT | The desktop UI theme and controls. |
 | [Markdig.Wpf](https://github.com/Kryptos-FR/markdig.wpf) | MIT | Markdown rendering in the docs panel. |
 | [Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json) | MIT | JSON, including the MCP wire format. |
@@ -45,6 +46,17 @@ size matches the no-embedded-geometry layout exactly, zero mismatches.
 | [ffmpeg](https://ffmpeg.org/) ([BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) win64-lgpl static build) | LGPL-3.0 | Decodes/transcodes audio (and video's audio track) for the `audio_*` tools. Run as a separate process, not linked -- see below. |
 | xWMAEncode.exe (Microsoft, classic DirectX SDK, 2009) | Microsoft, unmodified redistributable | Encodes/decodes Fallout 4's xWMA (`.xwm`) format for the `audio_*` tools. |
 | BmlFuzEncode.exe / BmlFuzDecode.exe (BowmoreLover) | Freely redistributed alongside Yakitori Audio Converter | Packs/splits the `.fuz` voice container (xwm + lip) for the `audio_*` tools. |
+
+### bcdec is a port, not a copy
+
+`Services/Textures/BcnDecoder.cs` is a C# port of bcdec.h v0.97 by Sergii Kudlai. It is the same
+decoder Godot ships as `modules/bcdec`. Two things are carried across verbatim because they are
+fixed spec data and cannot be derived: the 64 two-subset and 64 three-subset BC7 partition tables,
+and the per-mode endpoint bit widths. BC6H (HDR) was not ported.
+
+The port was checked against DirectXTex's own conversion of the same files, pixel for pixel, over
+484 real mod textures covering every format: BC2, BC3, BC5, BC7 and the uncompressed layouts match
+exactly, and BC1 and BC4 differ by at most 1 in the rounding of a rare interpolated value.
 
 ## Our Mutagen is patched
 

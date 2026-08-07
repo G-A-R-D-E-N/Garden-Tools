@@ -119,10 +119,10 @@ fork this repo already vendors, so no new licensing problem.
 
 | Crate | Lines | What it is | Gap it closes here |
 |---|---|---|---|
-| `bsarchive` | 15.6k | BA2 **and BSA read + write**, FO4 v1/v7/v8, GNRL and DX10, streaming packer | Ported as `Ba2Codec`/`Ba2Packer` (#70): `archive_pack` no longer needs the Creation Kit's non-redistributable `Archive2.exe`. Layout read off the real archives and cross-checked against his `fo4/` module. DX10 writing and BSA are not taken. (The v7 GNRL read gap this row originally also claimed turned out to be already fixed on our side -- see #71.) |
+| `bsarchive` | 15.6k | BA2 **and BSA read + write**, FO4 v1/v7/v8, GNRL and DX10, streaming packer | Ported as `Ba2Codec`/`Ba2Packer` (#70): `archive_pack` no longer needs the Creation Kit's non-redistributable `Archive2.exe`. Layout read off the real archives and cross-checked against his `fo4/` module. DX10 (texture) writing followed in #76, derived from vanilla's own chunk layout rather than his packer. BSA is not taken. (The v7 GNRL read gap this row originally also claimed turned out to be already fixed on our side -- see #71.) |
 | `ck/precombine` | ~4.2k | **CK-free precombine generation**: `plan` (eligible STAT-backed Temporary REFRs grouped by model), `bake` (writes the filtered `_OC.nif` with `BSPackedCombinedGeomDataExtra`), `stamp` (PCMB/XCRI + header dates). Interiors, v0. | Issue #59's blocked half and then some. **This also corrects an earlier verdict in this doc**: the "CK shell-out group" dismissal above was about modkit21's `ck` CLI group, which does launch the real Creation Kit. The `ck` CRATE is the opposite -- it exists specifically to avoid it. |
 | `papyrus_core` | 12.3k | A complete Papyrus compiler in Rust: lexer, parser, resolver, typecheck, codegen, `.pex` writer. Plus a separate `papyrus_lsp_server`. | `compile_papyrus` shells out to the CK's `PapyrusCompiler.exe`. This would compile with no CK installed, and the LSP half is real editor intelligence we have no version of. |
-| `directxtex` | 7.2k | DirectXTex bound in-process: DDS decode/encode incl. **from bytes**, mip chains, BC1-7, GPU path | `TextureService` shells out to `Texconv.exe` and round-trips through temp files for every Cell Viewer texture. Decoding straight from the BA2 bytes removes both. |
+| `directxtex` | 7.2k | DirectXTex bound in-process: DDS decode/encode incl. **from bytes**, mip chains, BC1-7, GPU path | Closed by #76, but not by binding DirectXTex: decoding is a C# port of `bcdec.h` (`BcnDecoder`), so there is no native dependency at all. Encoding DDS is not taken. |
 | `materials` | 9.3k | `.bgsm` **and `.bgem`**, plus FO76/Starfield material formats and converters | `.bgem` was a documented gap in `bgsm_inspect`/`bgsm_set_field`; ported and shipped (#75). The FO76/Starfield formats and the converters are not taken. |
 | `havok` | 93.9k | HKX read/write, animation, behavior graphs and evaluation, cloth, collision, geometry | We have no Havok anything. Bigger value to `FO4AnimForge`/`ForgeStudio` than to a record editor. |
 | `nif_core` | 26.6k | NIF: io, model, skin, cloth, collision, skeleton repose, weapon attachment | Would replace `niftool.exe` (our separate C++/nifly project) rather than extend it. Note nifly's billboard gap (bd `f4se_og-7tu`) is a niftool problem, not necessarily one here. |
@@ -158,13 +158,13 @@ separate decision, not as a quiet exception to this one.
 
 | Issue | Takes | Written in | Priority |
 |---|---|---|---|
-| ~~#70~~ | BA2 writer -- drops the non-redistributable `Archive2.exe` dependency. **Shipped** (General/GNRL; DDS still routes to Archive2, see #76). Verified by rewriting all 79 vanilla archives byte-for-byte, ~31 GB, versions 1/7/8, General and DirectX. | C# | P1 |
+| ~~#70~~ | BA2 writer -- drops the non-redistributable `Archive2.exe` dependency. **Shipped** (General/GNRL; DDS followed in #76, so no path needs Archive2 now). Verified by rewriting all 79 vanilla archives byte-for-byte, ~31 GB, versions 1/7/8, General and DirectX. | C# | P1 |
 | ~~#71~~ | BA2 v7 read support. **Closed as already done** -- the fix had already landed in `Ba2Reader.cs`; the tracker note saying otherwise was stale. Verified live: all 6112 entries of `DLCRobot - Voices_en.ba2` list, and an extracted entry is a valid 29,886-byte `FUZE`. His reader confirms the current code is correct. | -- | -- |
 | ~~#72~~ | CK-free precombine phase 1: the plan. **Shipped**, and it closes the half of #59 we had closed as blocked. Verified on real vanilla data: `Vault111Cryo`, 2,385 temporary refs -> 710 eligible in 108 model groups, every remaining reference accounted for by a reported reason. | C# | P1 |
 | #73 | CK-free precombine phase 2: bake the filtered `_OC.nif` | C++ (`niftool`) | P2 |
 | #74 | CK-free precombine phase 3: stamp `PCMB`/`XCRI` | C# | P2 |
 | ~~#75~~ | `.bgem` effect materials. **Shipped.** | C# | P2 |
-| #76 | Decode DDS in-process, drop the `Texconv.exe` shell-out per texture | C# (or C++ shim) | P2 |
+| ~~#76~~ | Decode DDS in-process. **Shipped**, both halves: header parsing (`DdsCodec`) + the DX10 archive writer, so `archive_pack format="DDS"` needs no Archive2; and `BcnDecoder`/`PngWriter`, so the Cell Viewer needs no `Texconv.exe` launch or temp files. Ported from `bcdec.h` rather than his DirectXTex binding, since that is the decoder already vendored in this workspace via Godot. Checked against DirectXTex pixel for pixel over 484 real textures. | C# | P2 |
 | #77 | On-disk SQLite/FTS index replacing `_modIndexCache` (bd `f4se_og-ths`) | C# | P2 |
 | #78 | Spike: a Papyrus compiler we own, so compiling needs no CK | C# | P3 |
 
