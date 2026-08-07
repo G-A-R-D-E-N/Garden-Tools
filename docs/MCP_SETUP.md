@@ -251,11 +251,15 @@ Packing used to shell out to the CK's `Archive2.exe`, which is not redistributab
 could not be bundled -- so a user without the Creation Kit installed simply could not pack. The
 writer produces General (GNRL) archives, zlib-compressed, storing any file that would grow.
 
-`format: "DDS"` still routes to `Archive2.exe`. A texture archive stores a per-file texture header
-and one chunk per mip range, which means parsing every DDS for its dimensions, mip count and DXGI
-format -- that belongs with the in-process DDS work in #76. Textures pack fine as `General`; the
-DX10 form exists so the engine can stream individual mips. `use_archive2: true` forces the old path
-for a General archive too, if you specifically need Archive2's own byte-for-byte output.
+`format: "DDS"` is in process as well. A texture archive stores a per-file texture header and one
+chunk per mip range, so each DDS is read for its dimensions, mip count and DXGI format, and its
+payload split the way vanilla splits it: **a mip gets its own chunk while it is at least 512x512
+pixels, up to three such chunks, then one chunk for all the rest.** That rule reproduces the chunk
+layout of all 42,036 texture entries in the 37 vanilla DX10 archives exactly, and the mip arithmetic
+behind it reconciles every one of their stored chunk sizes with no slack. A DDS archive holds `.dds`
+files only; anything else under the source folder is an error rather than a silent skip.
+`use_archive2: true` forces the old Archive2 path, if you specifically need its own byte-for-byte
+output.
 
 The format was taken from the real archives rather than from any spec, and the writer is checked by
 rewriting every `.ba2` in a vanilla Data folder and comparing whole files: **all 79 archives, ~31 GB,

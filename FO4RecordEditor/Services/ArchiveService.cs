@@ -267,11 +267,9 @@ public static class ArchiveService
     /// user without the CK installed simply could not pack.
     ///
     /// 'format' keeps Archive2's vocabulary: "General" (anything non-DDS -- sounds/meshes/scripts/
-    /// ...) or "DDS" (texture-only archives, using BA2's per-mip chunk layout). The in-process writer
-    /// only produces General; a DDS archive needs every texture's header parsed to fill in
-    /// height/width/mip count/DXGI format, which is issue #76's work. Ask for DDS and it falls back
-    /// to Archive2.exe, or says so if that is not installed. Textures pack fine into a General
-    /// archive; the DX10 form exists so the engine can stream individual mips.
+    /// ...) or "DDS" (texture-only archives, using BA2's per-mip chunk layout). Both are written in
+    /// process; a DDS archive reads each texture's own header for its height/width/mip count/DXGI
+    /// format and splits the payload by mip range the way vanilla does (see <see cref="Ba2Texture"/>).
     ///
     /// 'rootDir' is what each entry's in-archive path is computed relative to (e.g. root=".../Data",
     /// source=".../Data/Sound/..." -> entry "Sound/..."); get it wrong and the game will never find
@@ -298,15 +296,14 @@ public static class ArchiveService
         rootDir = rootDir.Trim().Trim('"');
         if (!Directory.Exists(rootDir)) return ToolError.Fail($"Root folder not found: {rootDir}");
 
-        if (!dds && !useArchive2) return PackInProcess(sources, outputBa2, rootDir, compress);
+        if (!useArchive2)
+            return PackInProcess(sources, outputBa2, rootDir, compress, dds ? Ba2Format.DirectX : Ba2Format.General);
 
         var archive2 = ToolPaths.Archive2();
         if (archive2 == null)
             return ToolError.Fail(
-                (dds ? "A DDS (texture) archive still needs Archive2.exe -- the in-process writer produces " +
-                       "General archives only (see #76). Pack these into a General archive instead, or "
-                     : "Archive2.exe was requested but ") +
-                "install the Creation Kit. " + ToolPaths.Describe("archive2") + ".");
+                "Archive2.exe was requested but is not installed. " + ToolPaths.Describe("archive2") + ". " +
+                "Leave use_archive2 off to write the archive in process instead.");
 
         try { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputBa2)) ?? "."); }
         catch (Exception ex) { return ToolError.Fail($"Cannot create output dir for '{outputBa2}': {ex.Message}"); }
@@ -351,7 +348,7 @@ public static class ArchiveService
     /// The in-process path. Sources are re-rooted at rootDir first so an entry's in-archive name
     /// matches what Archive2 would have produced for the same arguments.
     /// </summary>
-    private static string PackInProcess(List<string> sources, string outputBa2, string rootDir, bool compress)
+    private static string PackInProcess(List<string> sources, string outputBa2, string rootDir, bool compress, Ba2Format format)
     {
         var full = Path.GetFullPath(rootDir);
         foreach (var s in sources)
@@ -365,7 +362,7 @@ public static class ArchiveService
         }
 
         Ba2Packer.Result result;
-        try { result = Ba2Packer.Pack(new[] { full }, outputBa2, version: 1, compress: compress); }
+        try { result = Ba2Packer.Pack(new[] { full }, outputBa2, version: 1, compress: compress, format: format); }
         catch (Exception ex) { return ToolError.Fail($"Packing failed: {ex.Message}"); }
 
         return $"RESULT: success ({result.FileCount} file(s) -> {outputBa2})\n" +

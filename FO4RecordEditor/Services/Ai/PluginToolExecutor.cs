@@ -1485,8 +1485,10 @@ public sealed class PluginToolExecutor
             "archive_extract_all. Written in process: the Creation Kit is NOT needed. Typical flow to " +
             "re-encode a mod's sounds: archive_extract_all the mod's BA2, audio_convert_to_xwm on the " +
             "extracted Sound folder, then archive_pack that same folder tree back into a new BA2. " +
-            "'DDS' (texture) archives still need the Creation Kit's Archive2.exe, since those store a " +
-            "per-texture header and one chunk per mip range; pack textures as 'General' to stay CK-free.",
+            "'DDS' (texture) archives are written in process too: each texture's own header supplies " +
+            "the height/width/mip count/DXGI format, and the payload is split by mip range the way " +
+            "vanilla does. A DDS archive holds .dds files only -- anything else in the source folder " +
+            "is an error, not a silent skip.",
             new
             {
                 type = "object",
@@ -1497,7 +1499,7 @@ public sealed class PluginToolExecutor
                     format = new { type = "string", description = "'General' (sounds/meshes/scripts/anything non-texture) or 'DDS' (texture-only archives -- do not mix)." },
                     root_dir = new { type = "string", description = "REQUIRED. The folder each source's in-archive path is computed relative to -- e.g. root='...\\Data', source='...\\Data\\Sound\\...' produces the in-archive entry 'Sound\\...'. Get this wrong and the game won't find the packed files." },
                     compress = new { type = "boolean", description = "Default true. Set false to store every file raw (some mods ship sound BA2s uncompressed)." },
-                    use_archive2 = new { type = "boolean", description = "Default false. Force the old Creation Kit Archive2.exe path instead of the in-process writer. Only needed to reproduce Archive2's exact output; format='DDS' uses it automatically." }
+                    use_archive2 = new { type = "boolean", description = "Default false. Force the old Creation Kit Archive2.exe path instead of the in-process writer. Only needed to reproduce Archive2's exact output." }
                 },
                 required = new[] { "source_paths", "output_ba2", "root_dir" }
             }),

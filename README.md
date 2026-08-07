@@ -106,7 +106,7 @@ path below is optional and auto-detected when blank -- set one only to override 
 | `ckWikiPath` | Offline Creation Kit Wiki HTML mirror | The bundled copy in `tools\ckwiki\fallout4\` |
 | `ffmpegPath` | `ffmpeg.exe` | The bundled copy in `tools\audio\` |
 | `xwmaEncodePath` | `xWMAEncode.exe` | The bundled copy in `tools\audio\` |
-| `archive2Path` | The Creation Kit's `Archive2.exe` (BA2 packer, used by `archive_pack`) | `<Fallout 4>\Tools\Archive2\` |
+| `archive2Path` | The Creation Kit's `Archive2.exe`; only used by `archive_pack` with `use_archive2` | `<Fallout 4>\Tools\Archive2\` |
 | `mo2InstancePath` | MO2 instance | The `--mo2` argument |
 | `dataFolder` | A plain `Data` folder | The `--data` argument |
 
@@ -116,13 +116,16 @@ Each also honours an environment variable, which wins over the settings file:
 packer/splitter) are bundled-only, in the same `tools\audio\` folder, with no override -- there's
 nothing to point them at.
 
-### Papyrus compiling and BA2 packing need the Creation Kit
+### Papyrus compiling needs the Creation Kit; BA2 packing does not
 
-`compile_papyrus` shells out to Bethesda's `PapyrusCompiler.exe`, and `archive_pack` shells out to
-`Archive2.exe` -- both ship with the **Creation Kit** and are not redistributable, so neither is in
-this package. Install the CK (it is free, on Steam) and both are found automatically. Reading archives
-(`archive_list`/`archive_extract`/`archive_extract_all`) doesn't need this -- Mutagen reads BA2/BSA
-natively; only packing a *new* one does. Everything else in the tool works without the CK installed.
+`compile_papyrus` shells out to Bethesda's `PapyrusCompiler.exe`, which ships with the **Creation
+Kit** and is not redistributable, so it is not in this package. Install the CK (it is free, on Steam)
+and it is found automatically.
+
+Archives need nothing installed, in either direction. Reading (`archive_list`/`archive_extract`/
+`archive_extract_all`) goes through Mutagen; `archive_pack` writes BA2s in process, both General
+(sounds/meshes/scripts) and DDS (textures). `Archive2.exe` is only used if you explicitly ask for it
+with `use_archive2`, to reproduce its own byte-for-byte output.
 
 ---
 
