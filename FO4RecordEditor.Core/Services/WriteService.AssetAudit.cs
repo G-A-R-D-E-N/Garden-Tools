@@ -122,13 +122,23 @@ public static partial class WriteService
         sb.AppendLine($"  Orphaned (shipped, not referenced by this plugin's own records): {orphans.Count}");
         foreach (var o in orphans.Take(30)) sb.AppendLine($"    - {o}");
         if (orphans.Count > 30) sb.AppendLine($"    ... and {orphans.Count - 30} more");
-        sb.AppendLine($"  Dangling (referenced, not found in this plugin's own folder): {dangling.Count}");
-        foreach (var d in dangling.Take(30)) sb.AppendLine($"    - {d}");
-        if (dangling.Count > 30) sb.AppendLine($"    ... and {dangling.Count - 30} more");
-        sb.AppendLine("  NOTE: 'dangling' only means not found in THIS plugin's own folder -- a base-game or " +
-                       "another mod's shared asset referenced here is expected and not a defect on its own. " +
-                       "Cross-referencing the WHOLE load order's loose+BA2 priority needs #65 (asset-resolution " +
-                       "tool), not yet built.");
+        // Split "not in this plugin's own folder" into "served by something else in the load order"
+        // (expected -- a shared base-game or other-mod asset) and "served by nothing at all" (the
+        // actually broken kind). #65's AssetResolver is what makes this distinction possible; before
+        // it, every dangling entry had to be reported with a caveat and triaged by hand.
+        var elsewhere = new List<string>();
+        var missing = new List<string>();
+        foreach (var d in dangling) (AssetResolver.Exists(d) ? elsewhere : missing).Add(d);
+
+        sb.AppendLine($"  Referenced but not shipped here, served elsewhere in the load order: {elsewhere.Count} (expected)");
+        foreach (var d in elsewhere.Take(10)) sb.AppendLine($"    - {d}");
+        if (elsewhere.Count > 10) sb.AppendLine($"    ... and {elsewhere.Count - 10} more");
+        sb.AppendLine($"  MISSING -- referenced and served by nothing, loose or packed: {missing.Count}");
+        foreach (var d in missing.Take(30)) sb.AppendLine($"    - {d}");
+        if (missing.Count > 30) sb.AppendLine($"    ... and {missing.Count - 30} more");
+        sb.AppendLine("  Load-order resolution needs a modlist loaded ('Open MO2') or a Data folder set; " +
+                       "with neither, everything lands in MISSING because there is nowhere to look. " +
+                       "resolve_asset reports which container serves any one path.");
         return sb.ToString();
     }
 }

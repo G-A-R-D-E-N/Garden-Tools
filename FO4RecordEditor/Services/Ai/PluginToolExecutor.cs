@@ -245,6 +245,23 @@ public sealed class PluginToolExecutor
         new("list_mod_groups",
             "List every declared ModGroup and its plugins.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }),
+        new("resolve_asset",
+            "Which loose file or BA2 actually serves a game-relative asset path (xEdit's ResourceExists/" +
+            "ResourceContainerList). Answers 'does Meshes\\Weapons\\x.nif exist anywhere in this load " +
+            "order, and where' WITHOUT you having to already know which archive to look in. Searches " +
+            "every mod folder in MO2 priority order plus the game Data folder, loose files before that " +
+            "root's archives. Use this to VERIFY a MODL/texture path instead of guessing one.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    path = new { type = "string", description = @"Game-relative path, e.g. 'Meshes\Clutter\Rock01.nif' or 'Textures\Sky\Clouds_d.dds'." },
+                    extract = new { type = "boolean", description = "Also materialize the winning copy as a real file on disk (extracting it from its BA2 if needed) and report the path -- so you can hand it to nif_inspect/bgsm_inspect. Default false." },
+                    limit = new { type = "integer", description = "Max providers to list (default 25)." }
+                },
+                required = new[] { "path" }
+            }),
         new("get_referenced_by",
             "List records across the load order that REFERENCE the given record (xEdit 'Referenced By') -- i.e. " +
             "what would break if you changed or removed it. Accepts a FormKey or EditorID. Use for impact " +
@@ -1750,6 +1767,7 @@ public sealed class PluginToolExecutor
             "update_mod_group"    => $"update ModGroup '{Str("name")}'",
             "delete_mod_group"    => $"delete ModGroup '{Str("name")}'",
             "list_mod_groups"     => "list ModGroups",
+            "resolve_asset"       => $"resolve asset {Str("path")}",
             "scan_broken_refs"    => $"scan broken refs in {plugin}",
             "scan_all_plugins"    => "scan entire modlist for broken refs",
             "cell_get_placed_references" => $"placed refs in {ShortId(Str("cell_id"))}",
@@ -1858,6 +1876,8 @@ public sealed class PluginToolExecutor
                 return ModGroupsService.Groups.Count == 0
                     ? "No ModGroups declared."
                     : string.Join("\n", ModGroupsService.Groups.Select(g => $"{g.Name}: [{string.Join(", ", g.Plugins)}]"));
+            case "resolve_asset":
+                return AssetResolver.ResolveText(Str("path"), Bool("extract"), Int("limit", 25));
             case "get_referenced_by":
                 return GetReferencedByText(env, Str("id"), Int("limit", 200));
             case "get_problems":

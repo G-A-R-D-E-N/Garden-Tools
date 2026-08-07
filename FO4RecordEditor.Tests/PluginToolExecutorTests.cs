@@ -53,7 +53,7 @@ public class PluginToolExecutorTests
             "search_records", "search_all", "resolve_editorid", "get_scripts", "diff_records",
             "get_record", "get_conflicts", "get_winning_record", "search_robco_configs",
             "scan_conflicts", "create_mod_group", "update_mod_group", "delete_mod_group",
-            "list_mod_groups", "get_referenced_by", "get_problems", "scan_broken_refs",
+            "list_mod_groups", "resolve_asset", "get_referenced_by", "get_problems", "scan_broken_refs",
             "scan_all_plugins", "open_plugin", "create_plugin", "create_record", "create_cell",
             "create_placed_object", "disable_previs", "set_field", "add_list_item", "attach_script",
             "set_script_property", "check_plugin", "compact_to_esl", "check_esl_eligibility",

@@ -419,6 +419,7 @@ public static partial class MutagenLoader
         // Same reasoning as Mo2ProfileLoader.Load: texture/mesh lookups should search where this
         // session's plugins actually loaded from, not a possibly-unset/stale settings.json value.
         try { TextureService.SetSessionRoots(new[] { env.DataFolderPath.Path }); } catch { }
+        try { AssetResolver.SetSessionDataRoots(new[] { env.DataFolderPath.Path }); } catch { }
 
         progress?.Report(($"Found {plugins.Count} plugins.", null));
         return (env, plugins);

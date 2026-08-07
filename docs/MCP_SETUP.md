@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **100 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **101 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -256,6 +256,22 @@ SpecularColor, texture paths, PBR/emissive/translucency/terrain, ...) directly, 
 GUI needed. `.bgem` (effect materials) isn't supported yet.
 
 ### Mod folder triage
+### Asset resolution
+`resolve_asset` -- xEdit's `ResourceExists` / `ResourceContainerList`: given a game-relative path
+(`Meshes\Clutter\Rock01.nif`), answer whether it exists anywhere in the load order and **which mod
+folder or BA2 actually serves it**, without you having to already know which archive to open. Pass
+`extract: true` to also materialize the winning copy as a real file (pulled out of its BA2 if
+needed), which is how you hand a packed mesh to `nif_inspect`.
+
+Search order is MO2's own: the overwrite folder, then every enabled mod top-to-bottom of
+`modlist.txt`, then the vanilla game Data folder; within one of those, a loose file beats that
+folder's archives. Loose lookups are a direct existence check per root, so nothing is scanned; only
+archives get indexed, and only the first time a given root is consulted.
+
+This is the tool that makes "verify the MODL path instead of recalling it" a single call. It needs a
+loaded modlist (`Open MO2`) or a configured Data folder -- with neither there is nowhere to look, and
+it says so rather than reporting "not found".
+
 `audit_asset_usage` -- walk every record in a plugin for asset paths (models, textures, materials,
 sounds, scripts) and report which of them actually exist as a loose file or inside a BA2, so a mod
 ships without dangling references.
