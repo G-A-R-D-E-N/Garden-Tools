@@ -289,10 +289,16 @@ public static class CellService
     ///
     /// mode "dedupe": two PlacedObjects sharing the same base record (or base model, if byModel),
     /// rounded position/rotation, and scale are duplicates -- xEdit's own definition, ported from the
-    /// real script, not invented. Keeps the one with "special" data over one without; if both or
-    /// neither are special, keeps the first-seen and removes the rest. Deterministic by list order,
-    /// unlike the source script's tie-breaking (it has none either -- ties just keep whichever the
-    /// scan reaches first, same as here).
+    /// real script, not invented. Keeps the one with "special" data over one without. If NEITHER is
+    /// special, keeps the first-seen and removes the rest, deterministic by list order (the source
+    /// script has no tie-breaking either -- ties just keep whichever the scan reaches first).
+    ///
+    /// If BOTH are special, neither is removed and neither is reported. "Special" means the
+    /// reference carries an EditorID, a script, an enable parent, a teleport destination, linked
+    /// references, a patrol or activate parents -- i.e. something else points at it or it does
+    /// something on its own. Deleting one of a pair like that can break whatever refers to it, and
+    /// there is no way to tell from the cell which one is safe, so this errs toward keeping both. A
+    /// human can still remove one deliberately; a bulk pass should not.
     ///
     /// mode "excess": xEdit's script removes RANDOM temporary references over a cap. That is a
     /// reasonable choice for a human clicking a button on clutter they are not inspecting individually,

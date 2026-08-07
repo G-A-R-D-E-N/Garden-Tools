@@ -97,6 +97,19 @@ export default function ConditionsEditor(
   const save = async () => {
     const b = back();
     if (!b || !rows) return;
+
+    // A row toggled to "compare against a global" starts with compareGlobal: '' as a placeholder.
+    // Saving it that way does NOT fail: the backend falls back to a numeric ConditionFloat and
+    // defaults the value to 1, so the condition silently changes meaning instead of erroring.
+    const unset = rows.findIndex(r => r.compareGlobal !== undefined && !String(r.compareGlobal).trim());
+    if (unset >= 0) {
+      setError(`Condition ${unset + 1} compares against a global but none is picked. `
+        + 'Choose one, or switch it back to comparing against a number -- saving as-is would quietly '
+        + 'turn it into a numeric comparison against 1.');
+      return;
+    }
+
+    setError('');
     setSaving(true);
     try {
       onSaved(await b.SetConditionsAt(plugin, record, path, JSON.stringify(rows)));
