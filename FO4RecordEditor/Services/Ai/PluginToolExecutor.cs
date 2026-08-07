@@ -1481,12 +1481,12 @@ public sealed class PluginToolExecutor
                 required = new[] { "fuz_path" }
             }),
         new("archive_pack",
-            "Pack one or more loose folders into a new BA2 archive, via the Creation Kit's Archive2.exe -- " +
-            "the counterpart to archive_extract_all (Mutagen can read BA2/BSA natively, but has no writer, " +
-            "so packing needs the Creation Kit installed; Archive2.exe is not redistributable so it isn't " +
-            "bundled, same as compile_papyrus). Typical flow to re-encode a mod's sounds: archive_extract_all " +
-            "the mod's BA2, audio_convert_to_xwm on the extracted Sound folder, then archive_pack that same " +
-            "folder tree back into a new BA2.",
+            "Pack one or more loose folders into a new BA2 archive -- the counterpart to " +
+            "archive_extract_all. Written in process: the Creation Kit is NOT needed. Typical flow to " +
+            "re-encode a mod's sounds: archive_extract_all the mod's BA2, audio_convert_to_xwm on the " +
+            "extracted Sound folder, then archive_pack that same folder tree back into a new BA2. " +
+            "'DDS' (texture) archives still need the Creation Kit's Archive2.exe, since those store a " +
+            "per-texture header and one chunk per mip range; pack textures as 'General' to stay CK-free.",
             new
             {
                 type = "object",
@@ -1496,7 +1496,8 @@ public sealed class PluginToolExecutor
                     output_ba2 = new { type = "string", description = "Full path for the new .ba2 file." },
                     format = new { type = "string", description = "'General' (sounds/meshes/scripts/anything non-texture) or 'DDS' (texture-only archives -- do not mix)." },
                     root_dir = new { type = "string", description = "REQUIRED. The folder each source's in-archive path is computed relative to -- e.g. root='...\\Data', source='...\\Data\\Sound\\...' produces the in-archive entry 'Sound\\...'. Get this wrong and the game won't find the packed files." },
-                    compress = new { type = "boolean", description = "Default true. Set false for -compression=None (some mods ship sound BA2s uncompressed)." }
+                    compress = new { type = "boolean", description = "Default true. Set false to store every file raw (some mods ship sound BA2s uncompressed)." },
+                    use_archive2 = new { type = "boolean", description = "Default false. Force the old Creation Kit Archive2.exe path instead of the in-process writer. Only needed to reproduce Archive2's exact output; format='DDS' uses it automatically." }
                 },
                 required = new[] { "source_paths", "output_ba2", "root_dir" }
             }),
@@ -2123,7 +2124,8 @@ public sealed class PluginToolExecutor
                 var sourcePaths = root.TryGetProperty("source_paths", out var spEl) && spEl.ValueKind == JsonValueKind.Array
                     ? spEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToArray()
                     : Array.Empty<string>();
-                return ArchiveService.Pack(sourcePaths, Str("output_ba2"), StrOrNull("format") ?? "General", Str("root_dir"), BoolOr("compress", true));
+                return ArchiveService.Pack(sourcePaths, Str("output_ba2"), StrOrNull("format") ?? "General", Str("root_dir"),
+                    BoolOr("compress", true), Bool("use_archive2"));
             }
 
             default:

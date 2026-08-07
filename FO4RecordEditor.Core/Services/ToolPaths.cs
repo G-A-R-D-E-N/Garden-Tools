@@ -176,16 +176,20 @@ public static class ToolPaths
     /// <summary>
     /// The Creation Kit's Archive2.exe (BA2 packer/extractor). Same reasoning as PapyrusCompiler: it
     /// is not redistributable, so it is never bundled -- found in the user's own Fallout 4/CK install.
-    /// archive_extract/archive_extract_all don't need this (Mutagen reads BA2/BSA natively); only
-    /// archive_pack does, since Mutagen has no BA2 writer.
+    ///
+    /// Nothing REQUIRES this any more. Reading never did (Mutagen reads BA2/BSA natively), and
+    /// packing is now done in process by Ba2Packer; Archive2 is only reached for a DDS (texture)
+    /// archive, or when a caller explicitly asks for it with use_archive2.
     ///
     /// The auto-detect (Fallout4Root-derived) paths are checked LAST, not first, on purpose: verified
     /// 2026-07-20 that both this dev box's live Steam Fallout 4 install AND its "Fallout 4 1946160"
     /// pin (previously assumed OG-locked) have drifted to a Next-Gen Archive2.exe (reports "Version
-    /// 1.1.0.5", writes BA2 header version 8) that this project's vendored Mutagen cannot correctly
-    /// read back -- BA2FileEntry's version>=7 branch (Ba2Reader.cs) computes Compressed=false for data
-    /// that is actually still zlib-compressed on disk, so GetBytes() silently returns raw compressed
-    /// bytes instead of the real content. E:\F4SE OG\Tools\KnownModTools\BA2Packer\Archive2.exe
+    /// 1.1.0.5", writes BA2 header version 8). At the time that was unreadable: BA2FileEntry's
+    /// version>=7 branch (Ba2Reader.cs) computed Compressed=false for data still zlib-compressed on
+    /// disk, so GetBytes() returned raw compressed bytes. That reader bug has since been fixed and
+    /// verified against real v7 and v8 archives, so the version check in ArchiveService.Pack is now
+    /// belt-and-braces on an opt-in path rather than the load-bearing guard it was.
+    /// E:\F4SE OG\Tools\KnownModTools\BA2Packer\Archive2.exe
     /// (reports "Version 1.1.0.4", writes header version 1) is confirmed round-trip-correct -- checked
     /// first for exactly that reason. ArchiveService.Pack also verifies the header version of whatever
     /// it produced and fails loudly rather than shipping a silently-corrupt archive if this drifts
