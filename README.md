@@ -4,7 +4,7 @@ A Fallout 4 plugin IDE. It is two things in one executable:
 
 - **A desktop editor** -- browse, diff, and edit records across your whole load order, scan for
   conflicts, compile and decompile Papyrus, and inspect NIFs. Think xEdit, but with a modern UI.
-- **An MCP server** -- the same 75 operations, exposed to an AI assistant (Claude Code, or any other
+- **An MCP server** -- the same 102 operations, exposed to an AI assistant (Claude Code, or any other
   MCP client). This is the part most people want: you describe the edit, the AI makes it, and the
   plugin is written by [Mutagen](https://github.com/Mutagen-Modding/Mutagen) rather than by hand.
 
@@ -102,7 +102,7 @@ path below is optional and auto-detected when blank -- set one only to override 
 | `papyrusCompilerPath` | The Creation Kit's `PapyrusCompiler.exe` | `<Fallout 4>\Papyrus Compiler\` |
 | `papyrusBaseImports` | Base script roots, `;`-separated | `<Fallout 4>\Data\Scripts\Source\Base` |
 | `niftoolPath` | `niftool.exe` | The bundled copy in `tools\niftool\` |
-| `texconvPath` | `Texconvx64.exe` | The bundled copy in `tools\texconv\` |
+| `texconvPath` | `Texconvx64.exe`; only a fallback now, textures decode in process | The bundled copy in `tools\texconv\` |
 | `ckWikiPath` | Offline Creation Kit Wiki HTML mirror | The bundled copy in `tools\ckwiki\fallout4\` |
 | `ffmpegPath` | `ffmpeg.exe` | The bundled copy in `tools\audio\` |
 | `xwmaEncodePath` | `xWMAEncode.exe` | The bundled copy in `tools\audio\` |
@@ -135,7 +135,7 @@ with `use_archive2`, to reproduce its own byte-for-byte output.
 FO4RecordEditor.exe        the editor + MCP server
 web\dist\                  the editor's UI (WebView2)
 tools\niftool\             NIF authoring/repair CLI (nif_* tools)
-tools\texconv\             DDS conversion, for texture previews
+tools\texconv\             DDS conversion fallback (BC6H, signed BCn, float formats)
 tools\ckwiki\fallout4\     offline Creation Kit Wiki mirror, for papyrus_function_lookup/papyrus_script_info
 tools\audio\               ffmpeg, xWMAEncode, BmlFuzEncode/Decode, for the audio_* tools
 mcp.sample.json            copy-paste MCP config

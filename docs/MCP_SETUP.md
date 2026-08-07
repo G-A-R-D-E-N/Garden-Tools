@@ -261,6 +261,15 @@ files only; anything else under the source folder is an error rather than a sile
 `use_archive2: true` forces the old Archive2 path, if you specifically need its own byte-for-byte
 output.
 
+Textures are also **decoded in process**. The Cell Viewer used to write a temp `.dds`, launch
+`Texconv.exe` and read a temp `.png` back for every texture it showed; it now decodes BC1 through
+BC7 and the uncompressed layouts directly from the bytes. `Texconv.exe` is still the fallback for
+BC6H, the signed BCn spellings, the float formats and 24bpp uncompressed, none of which appear on a
+mesh. The decoder was checked against DirectXTex's own output pixel for pixel over 484 real mod
+textures: BC2/BC3/BC5/BC7 and the uncompressed layouts exact, BC1 and BC4 within 1 on a rounding
+tie. One deliberate difference: an sRGB-tagged texture keeps its stored values, where Texconv
+converting to `R8G8B8A8_UNORM` also converted sRGB to linear and darkened it.
+
 The format was taken from the real archives rather than from any spec, and the writer is checked by
 rewriting every `.ba2` in a vanilla Data folder and comparing whole files: **all 79 archives, ~31 GB,
 versions 1/7/8, both General and DirectX, rewrite byte-for-byte identical.** Two things that sweep

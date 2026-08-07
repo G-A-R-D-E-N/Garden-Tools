@@ -441,15 +441,19 @@ public static class TextureService
 
     private static string? ConvertToPng(string ddsPath)
     {
-        var texconv = ResolveTexconv();
-        if (texconv == null) return null;
-
         var stamp = File.GetLastWriteTimeUtc(ddsPath).Ticks;
-        // Salt the cache key so PNGs from before Z-reconstruction was added aren't reused.
-        var key = Hash(ddsPath.ToLowerInvariant() + "|" + stamp + "|v2");
+        // Salt the cache key so PNGs from before Z-reconstruction, and from before the in-process
+        // decoder replaced Texconv, aren't reused.
+        var key = Hash(ddsPath.ToLowerInvariant() + "|" + stamp + "|v3");
         Directory.CreateDirectory(TexCacheDir);
         var pngPath = Path.Combine(TexCacheDir, key + ".png");
         if (File.Exists(pngPath)) return pngPath;
+
+        var decoded = DecodeInProcess(ddsPath, pngPath, key);
+        if (decoded != null) return decoded;
+
+        var texconv = ResolveTexconv();
+        if (texconv == null) return null;
 
         // Serialize conversions of the SAME source texture. `work` below is deterministic (derived
         // only from `key`), so without this lock two threads converting the same texture (common --
@@ -475,6 +479,47 @@ public static class TextureService
                 return pngPath;
             }
             finally { try { Directory.Delete(work, true); } catch { } }
+        }
+    }
+
+    /// <summary>
+    /// Decode and encode without leaving the process: no temp .dds, no Texconv.exe launch, no temp
+    /// .png read back. That is three quarters of what showing one texture used to cost, on a panel
+    /// that fetches one per unique (mesh, shape).
+    ///
+    /// Returns null for anything the decoder does not handle -- BC6H, the signed BCn spellings, the
+    /// float formats, 24bpp uncompressed -- and the Texconv path below takes over. None of those
+    /// appear on a mesh; 24bpp is ENB/ReShade colour LUTs.
+    ///
+    /// One deliberate difference from Texconv: an sRGB-tagged texture keeps its stored values.
+    /// Texconv converting to R8G8B8A8_UNORM also converts sRGB to linear, which darkened those
+    /// textures in the viewport even though a byte-identical UNORM copy rendered correctly.
+    /// </summary>
+    private static string? DecodeInProcess(string ddsPath, string pngPath, string key)
+    {
+        try
+        {
+            var bytes = File.ReadAllBytes(ddsPath);
+            if (!Textures.DdsDecoder.CanDecode(Archives.DdsCodec.Parse(bytes, Path.GetFileName(ddsPath)).DxgiFormat))
+                return null;
+
+            var png = Textures.DdsDecoder.ToPng(bytes, reconstructZ: Textures.DdsDecoder.IsBc5(bytes));
+
+            lock (LockFor(key))
+            {
+                if (File.Exists(pngPath)) return pngPath;
+                // Write beside the target and move into place, so a reader never sees a half-written
+                // PNG if two cells ask for the same texture at once.
+                var temp = pngPath + "." + Environment.CurrentManagedThreadId + ".part";
+                File.WriteAllBytes(temp, png);
+                File.Move(temp, pngPath, overwrite: true);
+                return pngPath;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Exception("Texture.DecodeInProcess", ex);
+            return null;
         }
     }
 
