@@ -7,7 +7,8 @@ public sealed record ConflictEntry(
     string Type,
     IReadOnlyList<string> Plugins,   // every plugin that touches it, in load order
     string Winner,                   // the winning plugin (last in load order)
-    bool InvolvesMod)                // true if a non-vanilla/DLC plugin is involved
+    bool InvolvesMod,                // true if a non-vanilla/DLC plugin is involved
+    bool Suppressed = false)         // every touching plugin belongs to one declared ModGroup
 {
     public string PluginsText => string.Join(", ", Plugins);
     public int Count => Plugins.Count;

@@ -202,10 +202,49 @@ public sealed class PluginToolExecutor
                 {
                     mod_only = new { type = "boolean", description = "Only conflicts involving a non-vanilla plugin (default true)." },
                     type = new { type = "string", description = "Optional record-type filter, e.g. 'ConstructibleObject' or 'Weapon'." },
-                    limit = new { type = "integer", description = "Max records to return (default 200)." }
+                    limit = new { type = "integer", description = "Max records to return (default 200)." },
+                    hide_grouped = new { type = "boolean", description = "Default true: hide conflicts where every touching plugin belongs to one declared ModGroup (list_mod_groups / create_mod_group) -- those are the intended kind, not the accidental kind." }
                 },
                 required = Array.Empty<string>()
             }),
+        new("create_mod_group",
+            "Declare a ModGroup: a named set of two or more plugins that are meant to be used together, so " +
+            "conflicts BETWEEN them stop being reported as problems by scan_conflicts (xEdit ModGroups). Use " +
+            "for a framework plus its official patches, or a compatibility-patch bundle for one mod suite.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string" },
+                    plugins = new { type = "array", items = new { type = "string" }, description = "Two or more plugin filenames." }
+                },
+                required = new[] { "name", "plugins" }
+            }),
+        new("update_mod_group",
+            "Rename a ModGroup and/or replace its plugin list.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string", description = "The group to update." },
+                    new_name = new { type = "string", description = "Optional: rename the group." },
+                    plugins = new { type = "array", items = new { type = "string" }, description = "Optional: replace the plugin list entirely." }
+                },
+                required = new[] { "name" }
+            }),
+        new("delete_mod_group",
+            "Remove a ModGroup. The plugins themselves are untouched; only the suppression it granted goes away.",
+            new
+            {
+                type = "object",
+                properties = new { name = new { type = "string" } },
+                required = new[] { "name" }
+            }),
+        new("list_mod_groups",
+            "List every declared ModGroup and its plugins.",
+            new { type = "object", properties = new { }, required = Array.Empty<string>() }),
         new("get_referenced_by",
             "List records across the load order that REFERENCE the given record (xEdit 'Referenced By') -- i.e. " +
             "what would break if you changed or removed it. Accepts a FormKey or EditorID. Use for impact " +
@@ -1707,6 +1746,10 @@ public sealed class PluginToolExecutor
             "batch_patch_records" => $"batch patch {Str("type")} in {Str("source_plugin")} -> {Str("patch_plugin")}",
             "run_script"          => $"run script -> {Str("patch_plugin")}",
             "scan_conflicts"      => "scan all conflicts",
+            "create_mod_group"    => $"create ModGroup '{Str("name")}'",
+            "update_mod_group"    => $"update ModGroup '{Str("name")}'",
+            "delete_mod_group"    => $"delete ModGroup '{Str("name")}'",
+            "list_mod_groups"     => "list ModGroups",
             "scan_broken_refs"    => $"scan broken refs in {plugin}",
             "scan_all_plugins"    => "scan entire modlist for broken refs",
             "cell_get_placed_references" => $"placed refs in {ShortId(Str("cell_id"))}",
@@ -1792,7 +1835,29 @@ public sealed class PluginToolExecutor
                 return SearchRobcoConfigs(_mo2PathProvider?.Invoke(), Str("query"), Int("limit", 60));
             case "scan_conflicts":
                 return ScanConflicts(env, !root.TryGetProperty("mod_only", out var mo) || mo.ValueKind != JsonValueKind.False,
-                    root.TryGetProperty("type", out var tf) ? tf.GetString() : null, Int("limit", 200));
+                    root.TryGetProperty("type", out var tf) ? tf.GetString() : null, Int("limit", 200),
+                    !root.TryGetProperty("hide_grouped", out var hg) || hg.ValueKind != JsonValueKind.False);
+            case "create_mod_group":
+            {
+                var plugins = root.TryGetProperty("plugins", out var pgEl) && pgEl.ValueKind == JsonValueKind.Array
+                    ? pgEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0)
+                    : Enumerable.Empty<string>();
+                return ModGroupsService.Create(Str("name"), plugins);
+            }
+            case "update_mod_group":
+            {
+                IEnumerable<string>? plugins = null;
+                if (root.TryGetProperty("plugins", out var upEl) && upEl.ValueKind == JsonValueKind.Array)
+                    plugins = upEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0);
+                return ModGroupsService.Update(Str("name"), plugins,
+                    Str("new_name") is { Length: > 0 } nn ? nn : null);
+            }
+            case "delete_mod_group":
+                return ModGroupsService.Delete(Str("name"));
+            case "list_mod_groups":
+                return ModGroupsService.Groups.Count == 0
+                    ? "No ModGroups declared."
+                    : string.Join("\n", ModGroupsService.Groups.Select(g => $"{g.Name}: [{string.Join(", ", g.Plugins)}]"));
             case "get_referenced_by":
                 return GetReferencedByText(env, Str("id"), Int("limit", 200));
             case "get_problems":
@@ -2112,27 +2177,34 @@ public sealed class PluginToolExecutor
     private static string Trunc(string? s, int max) =>
         string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..(max - 3)] + "...";
 
-    private static string ScanConflicts(object? env, bool modOnly, string? typeFilter, int limit)
+    private static string ScanConflicts(object? env, bool modOnly, string? typeFilter, int limit, bool hideGrouped)
     {
         if (env == null) return "No environment loaded. Use 'Load Env' or 'Open MO2' first.";
 
         var all = ConflictScanner.ScanCached(env);
-        var filtered = all.Where(c =>
+        var matched = all.Where(c =>
             (!modOnly || c.InvolvesMod) &&
             (string.IsNullOrWhiteSpace(typeFilter) || string.Equals(c.Type, typeFilter, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
+        var suppressed = matched.Count(c => c.Suppressed);
+        var filtered = hideGrouped ? matched.Where(c => !c.Suppressed).ToList() : matched;
+        var groupNote = suppressed == 0 ? ""
+            : hideGrouped ? $" ({suppressed} hidden by ModGroups; pass hide_grouped=false to see them)"
+                          : $" ({suppressed} of them declared intentional by a ModGroup, shown anyway)";
+
         if (filtered.Count == 0)
             return "No conflicts found" + (modOnly ? " involving mods" : "") +
-                   (string.IsNullOrWhiteSpace(typeFilter) ? "." : $" of type {typeFilter}.");
+                   (string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}") + "." + groupNote;
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"{filtered.Count} conflicting record(s){(modOnly ? " involving mods" : "")}" +
-                      $"{(string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}")}; showing {Math.Min(limit, filtered.Count)}:");
+                      $"{(string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}")}{groupNote}; showing {Math.Min(limit, filtered.Count)}:");
         foreach (var c in filtered.Take(limit))
-            sb.AppendLine($"  {c.EditorID} [{c.FormKey}] ({c.Type}) -- {c.Plugins.Count} plugins, WINNER={c.Winner}");
+            sb.AppendLine($"  {c.EditorID} [{c.FormKey}] ({c.Type}) -- {c.Plugins.Count} plugins, WINNER={c.Winner}" +
+                          (c.Suppressed ? " [MODGROUP]" : ""));
         if (filtered.Count > limit)
-            sb.AppendLine($"…and {filtered.Count - limit} more. Filter by 'type' or raise 'limit' to see them.");
+            sb.AppendLine($"...and {filtered.Count - limit} more. Filter by 'type' or raise 'limit' to see them.");
         return sb.ToString();
     }
 

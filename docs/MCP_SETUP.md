@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **89 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **100 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -81,11 +81,32 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 ### Conflict detection
 `get_conflicts` · `scan_conflicts` · `scan_all_plugins` · `scan_broken_refs`
 
+### ModGroups (xEdit's "these plugins are meant to be used together")
+`create_mod_group` · `update_mod_group` · `delete_mod_group` · `list_mod_groups`
+
+A ModGroup names a set of two or more plugins that ship as a suite -- a framework plus its official
+patches, a compatibility-patch bundle for one mod. Conflicts where **every** plugin touching the
+record belongs to one common group are the intended kind, so `scan_conflicts` hides them by default
+(`hide_grouped: false` shows them again, tagged `[MODGROUP]`, and the header always reports how many
+were suppressed). Membership in *some* group is not enough: the group has to cover every party to
+that specific conflict, since a plugin can belong to several groups for several reasons.
+
+On a real 651-plugin load order the raw scan reports ~45,000 conflicting records; this is what makes
+that number actionable. Groups are stored as plain JSON in `%APPDATA%\FO4RecordEditor\modgroups.json`
+-- a per-installation preference, not something that travels with a plugin. xEdit's GUI half of the
+feature (group-picker dialogs, CRC staleness tracking) is deliberately not ported: it exists to
+declutter an always-on colored grid a human stares at, and there is no such grid here.
+
 ### Writing records
 `create_record` · `set_field` · `get_conditions` · `set_conditions` · `set_components` ·
 `add_list_item` · `remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` ·
-`copy_as_new_record` · `set_conditions_at` · `delete_record` · `renumber_formid` · `compact_to_esl` · `set_light_flag` ·
+`copy_as_new_record` · `set_conditions_at` · `delete_record` · `renumber_formid` · `compact_to_esl` ·
+`check_esl_eligibility` · `set_light_flag` · `set_localized_flag` ·
 `batch_patch_records` · `revert_overrides`
+
+`check_esl_eligibility` is the read-only half of `compact_to_esl`: it reports whether a plugin's
+record count and FormID range fit the ESL window before you commit to rewriting anything.
+`set_light_flag` / `set_localized_flag` toggle the two TES4 header flags directly.
 
 `set_conditions` REPLACES the whole Conditions list, so to add or change one condition read the
 current list with `get_conditions` first, edit that array, and hand it back. `get_conditions` returns
@@ -101,6 +122,11 @@ to use.
 `copy_as_new_record` is the other half of xEdit's copy menu: it duplicates a record into the target
 plugin under a **brand new FormID** rather than overriding the original, which is how you make a
 variant of an existing item.
+
+`deep_copy_as_override` is xEdit's **Deep copy as override**: for a container-type record it brings
+the children across too, not just the record you pointed at. `change_referencing_records` is xEdit's
+**Change referencing records**, which repoints every record that references one FormID at another --
+the tool you want when replacing a record rather than editing it. Both dry-run unless `apply: true`.
 
 ### The element menu (xEdit's Add / Remove / Move / Clear on a list row)
 `element_describe` · `element_add` · `element_remove` · `element_move` · `element_clear`
@@ -165,11 +191,25 @@ another list. The engine hangs or crashes resolving one. Read-only.
 **dry run** that reports what they would do; pass `apply: true` to write.
 
 ### Cells and placed objects
-`create_cell` · `create_placed_object`
+`create_cell` · `create_placed_object` · `cleanup_placed_references` · `disable_previs`
 
 `create_record` only adds **top-level** records, so it cannot make either of these -- a placed object
 lives inside a cell's persistent/temporary list, and cells live in a block tree. This is the pair you
 need for map markers and for parking references you relocate at runtime.
+
+`cleanup_placed_references` is xEdit's `Remove duplicate references` / `Remove excess references`
+pass: it drops references that duplicate another at the same position with the same base object, and
+references beyond what a cell should carry. Dry run by default; pass `apply: true` to write.
+
+`disable_previs` is xEdit's **Fallout4 - Disable PreVis** script. Editing an exterior cell without
+invalidating its previs/precombine data is one of the most common real FO4 failures -- your edit
+silently does not show, or the cell breaks. It clears `PreVisFilesTimestamp`, `InPreVisFileOf`,
+`PreCombinedFilesTimestamp` and the combined-mesh lists, and sets the cell's `NoPreVis` flag. Dry run
+by default; refuses interior cells and cells that have no precombine data, matching the script's own
+guards. The other half of that xEdit script pair (**Filter for precombined statics**) is not ported:
+Mutagen's `CellCombinedMeshReference` exposes only a bare mesh index with no FormLink back to the
+placed reference, so there is no way to map a combined mesh to its object without new reverse
+engineering. Tracked as issue #59.
 
 ### Struct lists that `add_list_item` cannot express
 `add_leveled_entry` · `set_perk_effects` · `set_magic_effects` · `set_quest_aliases` ·
@@ -216,6 +256,10 @@ SpecularColor, texture paths, PBR/emissive/translucency/terrain, ...) directly, 
 GUI needed. `.bgem` (effect materials) isn't supported yet.
 
 ### Mod folder triage
+`audit_asset_usage` -- walk every record in a plugin for asset paths (models, textures, materials,
+sounds, scripts) and report which of them actually exist as a loose file or inside a BA2, so a mod
+ships without dangling references.
+
 `catalog_mod_folder` -- bucket an unfamiliar mod's files by category (meshes/textures/materials/
 sounds/scripts/plugins/archives/voice/...) with per-category counts, to get oriented before deciding
 what to inspect next.
