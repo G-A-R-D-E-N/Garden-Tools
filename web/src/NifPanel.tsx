@@ -246,7 +246,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
                   <input value={matPath} onChange={e => setMatPath(e.target.value)} placeholder="Path, or drag a .bgsm/.bgem here…" />
                 </div>
                 <div className="papyrus-input-row">
-                  <button className="sidebar-action-btn" onClick={browseMat} disabled={matUnavailable}>BGSM…</button>
+                  <button className="sidebar-action-btn" onClick={browseMat} disabled={matUnavailable}>Browse…</button>
                   <button className="papyrus-run nif-load-btn" onClick={() => loadMaterial()} disabled={busy || matUnavailable || !matPath.trim()}>
                     <Play size={13} /> {busy ? 'Loading…' : 'Load Material'}
                   </button>

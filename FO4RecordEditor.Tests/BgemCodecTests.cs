@@ -143,6 +143,19 @@ public class BgemCodecTests
         act.Should().Throw<InvalidDataException>().WithMessage("*BGSM or BGEM*");
     }
 
+    // Header.Signature is settable (bgsm_set_field can reach it) and is 0 on a constructed object.
+    // Writing it verbatim would produce a file whose magic disagrees with its body.
+    [Fact]
+    public void WriteForcesTheSignatureTheConcreteTypeDemands()
+    {
+        var d = BgemCodec.Parse(BuildV2Reference());
+        d.Header.Signature = 0;
+
+        var bytes = MaterialCodec.Write(d);
+        MaterialCodec.Parse(bytes).Should().BeOfType<BgemData>();
+        BitConverter.ToUInt32(bytes, 0).Should().Be(BgemCodec.Signature);
+    }
+
     // Re-runs the full sweep whenever a real Data folder is reachable. Follows the same fixture
     // convention as Ba2NextGenDecompressionTests: skip with a logged reason, or hard-fail when
     // FO4RE_REQUIRE_FIXTURES is set, so a skip is never quietly recorded as a pass.

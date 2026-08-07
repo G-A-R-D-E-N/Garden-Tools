@@ -178,12 +178,26 @@ public static class MaterialCodec
             $"Not a BGSM or BGEM material: magic 0x{sig:X8} (expected 0x{BgsmCodec.Signature:X8} or 0x{BgemCodec.Signature:X8}).");
     }
 
-    public static byte[] Write(IMaterialData data) => data switch
+    /// <summary>
+    /// Writes with the signature the concrete type demands, not whatever is sitting in the header.
+    /// Header.Signature is a plain settable field reachable from bgsm_set_field, and it is 0 on a
+    /// freshly constructed object -- either way, writing it verbatim produces a file whose magic
+    /// disagrees with its body, which then fails to dispatch on the next read.
+    /// </summary>
+    public static byte[] Write(IMaterialData data)
     {
-        BgsmData b => BgsmCodec.Write(b),
-        BgemData e => BgemCodec.Write(e),
-        _ => throw new NotSupportedException($"No writer for {data.GetType().Name}."),
-    };
+        switch (data)
+        {
+            case BgsmData b:
+                b.Header.Signature = BgsmCodec.Signature;
+                return BgsmCodec.Write(b);
+            case BgemData e:
+                e.Header.Signature = BgemCodec.Signature;
+                return BgemCodec.Write(e);
+            default:
+                throw new NotSupportedException($"No writer for {data.GetType().Name}.");
+        }
+    }
 
     public static string FormatName(IMaterialData data) => data is BgemData ? "BGEM" : "BGSM";
 }
