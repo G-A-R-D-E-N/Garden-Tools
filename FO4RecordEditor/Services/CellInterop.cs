@@ -33,6 +33,39 @@ public class CellInterop
             }
         });
 
+    /// <summary>#67: the exterior half of the same lookup -- resolve a cell by worldspace + grid
+    /// coordinate, then read its placed references. A separate method rather than optional arguments
+    /// on GetPlacedReferences because this is a COM AutoDual host object, which does not expose
+    /// overloads or default parameters to the WebView2 script side.</summary>
+    public Task<string> GetPlacedReferencesAtGrid(string worldspace, int gridX, int gridY) =>
+        Task.Run(() =>
+        {
+            try { return CellService.GetPlacedReferencesJson("", Env, worldspace, gridX, gridY); }
+            catch (Exception ex)
+            {
+                DebugLog.Exception("Cell.GetPlacedReferencesAtGrid", ex);
+                return JsonConvert.SerializeObject(new { error = "Error: " + ex.Message });
+            }
+        });
+
+    /// <summary>Type-ahead worldspace search for the exterior-cell picker -- the panel has to offer a
+    /// worldspace before an X/Y grid coordinate means anything. See
+    /// MutagenLoader.SearchWorldspaceRecords.</summary>
+    public Task<string> SearchWorldspaces(string query, int limit) =>
+        Task.Run(() =>
+        {
+            try
+            {
+                var hits = MutagenLoader.SearchWorldspaceRecords(Env, query ?? "", limit <= 0 ? 100 : limit);
+                return JsonConvert.SerializeObject(hits);
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Exception("Cell.SearchWorldspaces", ex);
+                return "[]";
+            }
+        });
+
     /// <summary>Batch-resolve+convert unique Data-relative NIF paths (from GetPlacedReferences'
     /// modelPath fields) to geometry JSON, one niftool call per unique mesh. relModelPathsJson: a
     /// JSON array of strings. See NifService.GeoBatch.</summary>

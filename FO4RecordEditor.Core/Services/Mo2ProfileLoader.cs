@@ -284,6 +284,12 @@ public static class Mo2ProfileLoader
         // mods\ and overwrite\ folders, not whatever (if anything) is saved in settings.json.
         TextureService.SetSessionRoots(new[] { gameDataFolder, modsDir, ResolveOverwriteFolder(instancePath) });
 
+        // #65: the general asset resolver needs each MOD as its own data root, in modlist priority --
+        // "mods\Foo\Meshes\x.nif" is not reachable by treating the mods\ parent as a data root, which
+        // is why TextureService's roots above cannot answer a loose-file question.
+        AssetResolver.SetSessionDataRoots(AssetResolver.Mo2DataRoots(
+            instancePath, modsHighToLow, ResolveOverwriteFolder(instancePath), gameDataFolder));
+
         var env = new Mo2GameEnvironment
         {
             LoadOrder = lo,

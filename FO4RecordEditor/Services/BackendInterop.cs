@@ -123,6 +123,13 @@ public class BackendInterop
             return JsonConvert.SerializeObject(hits);
         }, $"{signature} [{filter}] {offset}+{limit}");
 
+    /// <summary>Structured grid data for the Spreadsheet panel (#51): columns + rows for every
+    /// record of one type in a plugin, for the editable bulk-edit table.</summary>
+    public string GetRecordsGrid(string plugin, string type, int limit, int offset) =>
+        DebugLog.Guard(nameof(GetRecordsGrid),
+            () => MutagenLoader.GetRecordsGridJson(Env, plugin, type, limit <= 0 ? 100 : limit, offset),
+            $"{plugin} {type} {offset}+{limit}");
+
     /// <summary>Worldspace/cell breadcrumb for the workspace header.</summary>
     public string GetContainmentPath(string formKey) =>
         DebugLog.Guard(nameof(GetContainmentPath), () =>
@@ -199,11 +206,87 @@ public class BackendInterop
             apply, limit <= 0 ? 50 : limit), $"{badPlugin}->{patchPlugin} apply={apply}");
     public string CompactToEsl(string plugin) =>
         DebugLog.Guard(nameof(CompactToEsl), () => WriteService.CompactToEsl(plugin, Env), plugin);
+    public string CheckEslEligibility(string plugin) =>
+        DebugLog.Guard(nameof(CheckEslEligibility), () => WriteService.CheckEslEligibility(plugin, Env), plugin);
     public string CleanPlugin(string plugin) =>
         DebugLog.Guard(nameof(CleanPlugin), () => WriteService.CleanPlugin(plugin, Env), plugin);
     public string RenumberFormId(string plugin, string record, string newId) =>
         DebugLog.Guard(nameof(RenumberFormId), () => WriteService.RenumberFormId(plugin, record, newId, Env),
             $"{plugin} {record}->{newId}");
+
+    // ---- xEdit parity ----
+    public string GetConditions(string plugin, string record) =>
+        DebugLog.Guard(nameof(GetConditions), () => WriteService.GetConditionsJson(Env, plugin, record),
+            $"{plugin} {record}");
+    public string GetConditionsAt(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(GetConditionsAt), () => WriteService.GetConditionsAtPath(Env, plugin, record, path),
+            $"{plugin} {record} {path}");
+    public string SetConditionsAt(string plugin, string record, string path, string conditionsJson) =>
+        DebugLog.Guard(nameof(SetConditionsAt), () => WriteService.SetConditionsAtPath(plugin, record, path, conditionsJson, Env),
+            $"{plugin} {record} {path}");
+    public string GetConditionFunctions() =>
+        DebugLog.Guard(nameof(GetConditionFunctions), WriteService.ConditionFunctionNames);
+    public string GetConditionFunctionParams() =>
+        DebugLog.Guard(nameof(GetConditionFunctionParams), ConditionFunctions.AsJson);
+    /// <summary>"EditorID [FormKey]" for each FormKey passed in, so the editor can show names
+    /// instead of raw ids. Unresolvable keys come back as themselves.</summary>
+    public string ResolveFormKeyLabels(string formKeysCsv) =>
+        DebugLog.Guard(nameof(ResolveFormKeyLabels), () =>
+            Newtonsoft.Json.JsonConvert.SerializeObject(
+                (formKeysCsv ?? "").Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries)
+                    .Distinct()
+                    .ToDictionary(k => k, k => MutagenLoader.DescribeFormKey(Env, k))), formKeysCsv);
+    public string GetConditionRunOnTypes() =>
+        DebugLog.Guard(nameof(GetConditionRunOnTypes), WriteService.ConditionRunOnNames);
+    public string CopyAsNewRecord(string sourcePlugin, string id, string targetPlugin, string newEditorId) =>
+        DebugLog.Guard(nameof(CopyAsNewRecord),
+            () => WriteService.CopyAsNewRecord(Env, sourcePlugin, id, targetPlugin,
+                string.IsNullOrWhiteSpace(newEditorId) ? null : newEditorId),
+            $"{id} {sourcePlugin}->{targetPlugin}");
+    public string RemoveIdenticalToMaster(string plugin, bool apply) =>
+        DebugLog.Guard(nameof(RemoveIdenticalToMaster), () => WriteService.RemoveIdenticalToMaster(Env, plugin, apply),
+            $"{plugin} apply={apply}");
+    public string DeepCopyAsOverride(string sourcePlugin, string id, string patchPlugin, bool apply) =>
+        DebugLog.Guard(nameof(DeepCopyAsOverride),
+            () => WriteService.DeepCopyAsOverride(Env, sourcePlugin, id, patchPlugin, apply),
+            $"{id} {sourcePlugin}->{patchPlugin} apply={apply}");
+    public string ChangeReferencingRecords(string from, string to, string patchPlugin, bool apply) =>
+        DebugLog.Guard(nameof(ChangeReferencingRecords),
+            () => WriteService.ChangeReferencingRecords(Env, from, to, patchPlugin, apply),
+            $"{from}->{to} patch={patchPlugin} apply={apply}");
+
+    // ---- xEdit element menu (Add / Remove / Move / Clear on a list row) ----
+    public string DescribeElement(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(DescribeElement), () => ElementService.DescribeElement(Env, plugin, record, path),
+            $"{plugin} {record} {path}");
+    public string AddElement(string plugin, string record, string path, string template) =>
+        DebugLog.Guard(nameof(AddElement), () => ElementService.AddElement(plugin, record, path,
+            string.IsNullOrWhiteSpace(template) ? null : template, Env), $"{plugin} {record} {path} <{template}>");
+    public string RemoveElement(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(RemoveElement), () => ElementService.RemoveElement(plugin, record, path, Env),
+            $"{plugin} {record} {path}");
+    public string MoveElement(string plugin, string record, string path, int delta) =>
+        DebugLog.Guard(nameof(MoveElement), () => ElementService.MoveElement(plugin, record, path, delta, Env),
+            $"{plugin} {record} {path} {delta:+#;-#;0}");
+    public string ClearElement(string plugin, string record, string path) =>
+        DebugLog.Guard(nameof(ClearElement), () => ElementService.ClearElement(plugin, record, path, Env),
+            $"{plugin} {record} {path}");
+
+    public string AddMasters(string plugin, string mastersCsv) =>
+        DebugLog.Guard(nameof(AddMasters), () => WriteService.AddMasters(plugin,
+            (mastersCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), Env),
+            $"{plugin} += {mastersCsv}");
+    public string RenumberPluginFormIds(string plugin, string start, bool apply) =>
+        DebugLog.Guard(nameof(RenumberPluginFormIds), () => WriteService.RenumberPluginFormIds(plugin, start, apply, Env),
+            $"{plugin} from {start} apply={apply}");
+    public string CreateSeqFile(string plugin, string outputDir) =>
+        DebugLog.Guard(nameof(CreateSeqFile), () => WriteService.CreateSeqFile(Env, plugin,
+            string.IsNullOrWhiteSpace(outputDir) ? null : outputDir), plugin);
+    public string CheckCircularLeveledLists(string plugin) =>
+        DebugLog.Guard(nameof(CheckCircularLeveledLists), () => WriteService.CheckCircularLeveledLists(Env, plugin), plugin);
+    public string CreateMergedPatch(string plugins, string patchPlugin, bool apply) =>
+        DebugLog.Guard(nameof(CreateMergedPatch), () => WriteService.CreateMergedPatch(Env, plugins, patchPlugin, apply),
+            $"{plugins}->{patchPlugin} apply={apply}");
 
     // ---- save ----
     public string ResolveConflict(string formKey, string winner, string patch) =>

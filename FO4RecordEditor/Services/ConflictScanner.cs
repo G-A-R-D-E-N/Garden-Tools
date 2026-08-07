@@ -95,8 +95,9 @@ public static class ConflictScanner
 
             var win = entries[^1];
             bool involvesMod = plugins.Any(p => !VanillaMasters.Contains(p));
+            bool suppressed = ModGroupsService.IsSuppressed(plugins);
             result.Add(new ConflictEntry(kv.Key.ToString(), win.rec.EditorID ?? "",
-                win.rec.Registration.Name, plugins, win.plugin, involvesMod));
+                win.rec.Registration.Name, plugins, win.plugin, involvesMod, suppressed));
         }
 
         return result

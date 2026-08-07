@@ -7,10 +7,19 @@
          on every build) and, combined with GenerateDocumentationFile, produced roughly 72,000 CS1591
          "missing XML doc comment" warnings across the auto-generated record code on a cold build.
 
-         Note GenerateDocumentationFile=false alone did NOT stop the doc file from being produced;
-         something else in the pack pipeline re-derives DocumentationFile independently. CS1591 is
-         suppressed directly below instead, which works regardless of why the doc file still gets
-         built.
+         GenerateDocumentationFile=false alone does NOT stop the doc file from being produced: the
+         SDK derives the actual `DocumentationFile` path from `GenerateDocumentationFile`'s value
+         earlier in its own targets (inside Microsoft.NET.Sdk's own props/targets, imported before
+         Microsoft.Common.targets, which is what pulls in THIS file, so by the time this
+         PropertyGroup runs, `DocumentationFile` already holds a concrete path and only
+         `GenerateDocumentationFile` itself gets reset here; csc still receives `/doc:<path>` because
+         nothing ever cleared `DocumentationFile`. Confirmed with
+         `dotnet msbuild -getProperty:DocumentationFile -getProperty:GenerateDocumentationFile`:
+         `GenerateDocumentationFile` read back `false` exactly as expected, while `DocumentationFile`
+         still held `obj/Release/net9.0/Mutagen.Bethesda.Core.xml`. Clearing `DocumentationFile`
+         directly below is what actually stops the file. CS1591 stays suppressed too, since a stray
+         doc file is one thing but a thousand missing-doc-comment warnings from generated code is
+         another.
 
          A genuinely cold (no incremental cache) build of the whole solution surfaces roughly 2,300
          warnings total, ALL of them here in Mutagen's own generated/upstream code, ZERO in
@@ -24,6 +33,7 @@
     <PropertyGroup>
         <IsPackable>false</IsPackable>
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <DocumentationFile></DocumentationFile>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <NoWarn>$(NoWarn);CS1591;CS1066;CS1573;CS0108;CS1574;CS1570;CS0419;CA2022;CS1711;CS8524;CS0628;CA1416;CS0219;CS0169;CS0109</NoWarn>
     </PropertyGroup>

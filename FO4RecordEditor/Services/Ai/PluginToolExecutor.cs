@@ -202,9 +202,65 @@ public sealed class PluginToolExecutor
                 {
                     mod_only = new { type = "boolean", description = "Only conflicts involving a non-vanilla plugin (default true)." },
                     type = new { type = "string", description = "Optional record-type filter, e.g. 'ConstructibleObject' or 'Weapon'." },
-                    limit = new { type = "integer", description = "Max records to return (default 200)." }
+                    limit = new { type = "integer", description = "Max records to return (default 200)." },
+                    hide_grouped = new { type = "boolean", description = "Default true: hide conflicts where every touching plugin belongs to one declared ModGroup (list_mod_groups / create_mod_group) -- those are the intended kind, not the accidental kind." }
                 },
                 required = Array.Empty<string>()
+            }),
+        new("create_mod_group",
+            "Declare a ModGroup: a named set of two or more plugins that are meant to be used together, so " +
+            "conflicts BETWEEN them stop being reported as problems by scan_conflicts (xEdit ModGroups). Use " +
+            "for a framework plus its official patches, or a compatibility-patch bundle for one mod suite.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string" },
+                    plugins = new { type = "array", items = new { type = "string" }, description = "Two or more plugin filenames." }
+                },
+                required = new[] { "name", "plugins" }
+            }),
+        new("update_mod_group",
+            "Rename a ModGroup and/or replace its plugin list.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string", description = "The group to update." },
+                    new_name = new { type = "string", description = "Optional: rename the group." },
+                    plugins = new { type = "array", items = new { type = "string" }, description = "Optional: replace the plugin list entirely." }
+                },
+                required = new[] { "name" }
+            }),
+        new("delete_mod_group",
+            "Remove a ModGroup. The plugins themselves are untouched; only the suppression it granted goes away.",
+            new
+            {
+                type = "object",
+                properties = new { name = new { type = "string" } },
+                required = new[] { "name" }
+            }),
+        new("list_mod_groups",
+            "List every declared ModGroup and its plugins.",
+            new { type = "object", properties = new { }, required = Array.Empty<string>() }),
+        new("resolve_asset",
+            "Which loose file or BA2 actually serves a game-relative asset path (xEdit's ResourceExists/" +
+            "ResourceContainerList). Answers 'does Meshes\\Weapons\\x.nif exist anywhere in this load " +
+            "order, and where' WITHOUT you having to already know which archive to look in. Searches " +
+            "every mod folder in MO2 priority order plus the game Data folder, loose files before that " +
+            "root's archives. Use this to VERIFY a MODL/texture path instead of guessing one.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    path = new { type = "string", description = @"Game-relative path, e.g. 'Meshes\Clutter\Rock01.nif' or 'Textures\Sky\Clouds_d.dds'." },
+                    extract = new { type = "boolean", description = "Also materialize the winning copy as a real file on disk (extracting it from its BA2 if needed) and report the path -- so you can hand it to nif_inspect/bgsm_inspect. Default false." },
+                    limit = new { type = "integer", description = "Max providers to list (default 25)." }
+                },
+                required = new[] { "path" }
             }),
         new("get_referenced_by",
             "List records across the load order that REFERENCE the given record (xEdit 'Referenced By') -- i.e. " +
@@ -331,6 +387,24 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin", "cell", "baseObject" }
             }),
+        new("disable_previs",
+            "xEdit's 'Fallout4 - Disable PreVis' script: for an EXTERIOR cell that has precombine data, copies it " +
+            "as an override, sets the NoPreVis record flag, and clears its previs/precombine data (the typed " +
+            "equivalents of xEdit's VISI/RVIS/PCMB/XCRI subrecords) so the engine stops using stale previs after a " +
+            "cell edit. Precombine/previs conflicts (edits silently hidden, or a cell breaking outright) are one " +
+            "of the most common real FO4 modding failures; use this on any cell you've placed/removed/moved a " +
+            "static in. Refuses interior cells and cells with no precombine data to begin with. Dry-run by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    cell = new { type = "string", description = "EditorID or FormKey of the exterior cell." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (preview only)." }
+                },
+                required = new[] { "cell", "patch_plugin" }
+            }),
         new("set_field",
             "Set a field on a record. Supports scalar/text fields (Name, Value, Weight, Description), booleans " +
             "(pass 'true'/'false' to check/UNCHECK a flag), enums (pass the value name), FormLink references " +
@@ -413,6 +487,18 @@ public sealed class PluginToolExecutor
                 properties = new { plugin = new { type = "string" } },
                 required = new[] { "plugin" }
             }),
+        new("check_esl_eligibility",
+            "Read-only precheck for compact_to_esl: reports whether a plugin's native records would fit the " +
+            "ESL/Small range (0x800-0xFFF) and flags anything that would make compact_to_esl fail (too many " +
+            "records, or out-of-range records living in nested groups like cells/placed objects that can't be " +
+            "re-keyed) -- all WITHOUT mutating the plugin. Use this before compact_to_esl to rule out its two " +
+            "failure modes ahead of the destructive renumber, especially across a folder of candidate plugins.",
+            new
+            {
+                type = "object",
+                properties = new { plugin = new { type = "string" } },
+                required = new[] { "plugin" }
+            }),
         new("renumber_formid",
             "Change one record's FormID within its plugin (xEdit 'Change FormID') and repoint every " +
             "reference to it in the SAME plugin. References in OTHER plugins are NOT rewritten. Call " +
@@ -482,6 +568,253 @@ public sealed class PluginToolExecutor
                     patch_plugin = new { type = "string", description = "Patch plugin to copy the override INTO, e.g. 'FallenWorld_CraftingFixes.esp'." }
                 },
                 required = new[] { "source_plugin", "id", "patch_plugin" }
+            }),
+        new("copy_as_new_record",
+            "Duplicate a record into a plugin under a BRAND NEW FormID (xEdit 'Copy as new record into'), rather " +
+            "than overriding the original the way copy_as_override does. This is how you make a variant of an " +
+            "existing item. The target plugin is opened/created automatically.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_plugin = new { type = "string", description = "Plugin to copy the record FROM. Omit to take the winning version." },
+                    id = new { type = "string", description = "FormKey ('00008E:MAIM.esp') or EditorID of the record to duplicate." },
+                    target_plugin = new { type = "string", description = "Plugin the new record is created in." },
+                    new_editor_id = new { type = "string", description = "EditorID for the copy. Defaults to the source EditorID with 'DUP' appended." }
+                },
+                required = new[] { "id", "target_plugin" }
+            }),
+        new("remove_identical_to_master",
+            "Remove Identical-to-Master (ITM) records from a plugin -- the other half of the standard cleaning " +
+            "pass that clean_plugin's UDR handling does not cover. An ITM is an override whose every field equals " +
+            "the version it overrides, so it costs a conflict row and changes nothing. DRY RUN by default: it " +
+            "lists what it would remove. Pass apply=true to actually remove, then save_plugin.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (dry run). True actually removes the records." }
+                },
+                required = new[] { "plugin" }
+            }),
+        new("create_merged_patch",
+            "Build a patch plugin carrying the WINNING version of every record two or more of the selected plugins " +
+            "touch (xEdit 'Create Merged Patch'). DRY RUN by default, reporting how many records each plugin wins. " +
+            "Pass apply=true to write them, then make the patch load last and save_plugin.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugins = new { type = "string", description = "Comma-separated plugin filenames to merge. Omit for the whole load order." },
+                    patch_plugin = new { type = "string", description = "Patch plugin the merged records are written into." },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "patch_plugin" }
+            }),
+        new("get_conditions",
+            "Read a record's Conditions list back in exactly the JSON shape set_conditions accepts. set_conditions " +
+            "REPLACES the whole list, so call this first when adding or changing one condition, edit the array, " +
+            "and hand it back.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string", description = "Plugin whose version to read. Omit for the winning version." },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    path = new { type = "string", description = "Optional nested list, e.g. 'Effects[0].Conditions'. Omit for the record's own Conditions." }
+                },
+                required = new[] { "record" }
+            }),
+        new("deep_copy_as_override",
+            "Copy a record into a patch as an override, ALONG WITH every record it references that is owned by " +
+            "the SAME source plugin, so the copy is self-contained instead of dangling. Only follows links owned " +
+            "by the source plugin (a link into Fallout4.esm or another already-loaded master is left alone -- " +
+            "that record already exists everywhere). Refuses CELL and WRLD: xEdit's deep copy for those means " +
+            "something this tool cannot reproduce (their placed-reference/cell-block tree), so copy those with " +
+            "copy_as_override plus create_placed_object instead. DRY RUN by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_plugin = new { type = "string", description = "Plugin to copy FROM. Omit to take the winning version." },
+                    id = new { type = "string", description = "FormKey or EditorID of the root record." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "id", "patch_plugin" }
+            }),
+        new("change_referencing_records",
+            "Point every record that references 'from' at 'to' instead (xEdit 'Change Referencing Records'), by " +
+            "copying each referencing record into the patch as an override and rewriting its FormLinks. Use this " +
+            "to retire a duplicate record without leaving dangling links: repoint everything at the record " +
+            "you're keeping, then delete_record the duplicate. DRY RUN by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    from = new { type = "string", description = "FormKey or EditorID of the record being retired." },
+                    to = new { type = "string", description = "FormKey or EditorID of the record to point at instead." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "from", "to", "patch_plugin" }
+            }),
+        new("element_add",
+            "xEdit's element 'Add': insert a NEW default-constructed entry into a list at a path, then edit its " +
+            "fields with set_field. Unlike add_list_item (FormLinks only), this works for STRUCT lists -- " +
+            "conditions, effects, leveled entries, components. Call element_describe first to learn which types " +
+            "the list accepts when it holds an abstract type (e.g. a Conditions list takes ConditionFloat or " +
+            "ConditionGlobal).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID." },
+                    path = new { type = "string", description = "The list ('Conditions') to append to, or an entry ('Conditions[1]') to insert before." },
+                    template = new { type = "string", description = "Which type to create, when the list accepts more than one. Defaults to the first." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_remove",
+            "xEdit's element 'Remove': drop one entry from a list. The path must name the ENTRY, e.g. " +
+            "'Conditions[1]', not the list.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string" },
+                    path = new { type = "string", description = "e.g. 'Effects[0].Conditions[2]'." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_move",
+            "xEdit's element 'Move up'/'Move down': reorder an entry within its list. Order is meaningful for " +
+            "conditions, leveled entries and effects, so this is a real edit.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string" },
+                    path = new { type = "string", description = "The entry to move, e.g. 'Conditions[2]'." },
+                    delta = new { type = "integer", description = "-1 to move up, 1 to move down." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_clear",
+            "xEdit's element 'Clear': empty a list without removing the field itself.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string" },
+                    path = new { type = "string", description = "The list to empty, e.g. 'Conditions'." }
+                },
+                required = new[] { "plugin", "record", "path" }
+            }),
+        new("element_describe",
+            "Which element actions are legal at a path, and which types the list accepts. Returns " +
+            "{canAdd, templates, elementType, canRemove, canMoveUp, canMoveDown, canClear, count}. Read-only.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string", description = "Omit for the winning version." },
+                    record = new { type = "string" },
+                    path = new { type = "string" }
+                },
+                required = new[] { "record", "path" }
+            }),
+        new("set_conditions_at",
+            "Replace the Condition list at a nested path (xEdit's per-effect conditions). set_conditions only " +
+            "reaches a record's OWN Conditions; a magic effect keeps its own at 'Effects[0].Conditions' and a " +
+            "perk two deep at 'Effects[0].Conditions[0].Conditions', where the outer list is the run-on tab " +
+            "wrapper. Read the current list with get_conditions first (it takes the same path).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record = new { type = "string", description = "FormKey or EditorID of the record." },
+                    path = new { type = "string", description = "e.g. 'Effects[0].Conditions' or 'Effects[0].Conditions[0].Conditions'." },
+                    conditions = new { type = "string", description = "JSON array in set_conditions' schema. Replaces the whole list." }
+                },
+                required = new[] { "plugin", "record", "path", "conditions" }
+            }),
+        new("add_masters",
+            "Declare one or more plugins as masters of this plugin (xEdit 'Add Masters...'). Needed BEFORE " +
+            "authoring a reference into a file the plugin does not already master -- the reference has nowhere " +
+            "valid to point otherwise. save_plugin re-derives the master list from actual references, so write " +
+            "the reference before saving or the added master will not survive.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    masters = new { type = "array", items = new { type = "string" }, description = "Plugin filenames to declare, e.g. ['DLCCoast.esm']. Each must be loaded." }
+                },
+                required = new[] { "plugin", "masters" }
+            }),
+        new("renumber_plugin_formids",
+            "Renumber EVERY record in a plugin consecutively from a base object id, repointing all in-plugin " +
+            "references (xEdit 'Renumber FormIDs from...'). Use to resolve a FormID collision with another mod. " +
+            "renumber_formid does one record. DRY RUN by default. References from OTHER plugins into this one " +
+            "will break -- they still point at the old ids.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    start = new { type = "string", description = "Hex object id to start from, e.g. '000800' or '001000'." },
+                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                },
+                required = new[] { "plugin", "start" }
+            }),
+        new("create_seq_file",
+            "Write the .seq file a plugin's start-game-enabled quests need (xEdit 'Create SEQ File'). Without it " +
+            "those quests silently never start on an existing save, so this is a required build step for quest " +
+            "mods. Skips quests whose previous version already starts at game start.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    output_dir = new { type = "string", description = "Folder to write into. Defaults to <Output>/Seq. Deploy as Data/Seq/<plugin>.seq." }
+                },
+                required = new[] { "plugin" }
+            }),
+        new("check_circular_leveled_lists",
+            "Find leveled lists that contain themselves, directly or through another list (xEdit 'Check for " +
+            "Circular Leveled Lists'). The engine hangs or crashes resolving one. Read-only; walks the winning " +
+            "version of every LVLI/LVLN across the load order.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string", description = "Optional: only report cycles mentioning this plugin." },
+                    limit = new { type = "integer", description = "Max cycles to report (default 200)." }
+                },
+                required = Array.Empty<string>()
             }),
         new("delete_record",
             "Remove a record entirely from a plugin (xEdit 'Remove') -- e.g. delete an incomplete stub record, " +
@@ -880,6 +1213,24 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "plugin" }
             }),
+        new("set_localized_flag",
+            "Set or clear a plugin's header Localized flag -- the bit that makes Mutagen automatically " +
+            "read/write this plugin's translated text (FULL/DESC/etc) through Strings\\<plugin>_<lang>." +
+            "STRINGS/.DLSTRINGS/.ILSTRINGS instead of storing it inline. Reading and writing through those " +
+            "files already works transparently once this flag is set (get_record/set_field/save_plugin need " +
+            "no special handling) -- this is just the one missing piece, flipping the bit itself. Setting it " +
+            "with no Strings\\ folder next to the plugin yet means every translated field reads back empty " +
+            "until save_plugin (or an added Strings\\ folder) produces one.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    localized = new { type = "boolean", description = "true = set the Localized flag, false = clear it. Default true." }
+                },
+                required = new[] { "plugin" }
+            }),
         new("nif_import",
             "Author a game-ready Fallout 4 static NIF from a Blender-exported OBJ mesh (no NifSkope, no " +
             "Creation Kit). Builds a BSTriShape with a BSLightingShaderProperty, texture slots, computed " +
@@ -1047,6 +1398,24 @@ public sealed class PluginToolExecutor
                 properties = new { mod_path = new { type = "string", description = "Full path to the mod's folder." } },
                 required = new[] { "mod_path" }
             }),
+        new("audit_asset_usage",
+            "xEdit's 'List used meshes' / 'Output used assets filenames': walks every one of a plugin's own " +
+            "(native) records for string fields shaped like an asset path (.nif/.dds/.wav/.xwm/.fuz/.bgsm/" +
+            ".bgem/.hkx/.swf/.pex/.seq), then diffs that set against what the plugin's own on-disk folder " +
+            "actually ships (loose files + any BA2 beside it). Reports ORPHANED files (shipped, nothing in " +
+            "this plugin references them -- trim candidates for a repack) and DANGLING references " +
+            "(referenced, not found in this plugin's own folder -- may just be a base-game/shared asset, " +
+            "not necessarily broken; full load-order resolution needs the not-yet-built resolve_asset tool).",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    plugin = new { type = "string" },
+                    record_limit = new { type = "integer", description = "Cap on native records walked. Default 3000." }
+                },
+                required = new[] { "plugin" }
+            }),
         new("audio_convert_to_xwm",
             "Convert an audio or video file (or a WHOLE FOLDER of them, recursed, converted in parallel " +
             "with the original folder structure preserved) to Fallout 4's xWMA (.xwm) format. Any " +
@@ -1135,15 +1504,21 @@ public sealed class PluginToolExecutor
             "unioned across the whole load order -- not just the winning record, since a plugin can " +
             "'win' a CELL with an empty reference list while every other plugin's own placed objects " +
             "still load in-game. Powers the Cell Viewer panel; useful for an AI agent to inspect what's " +
-            "actually placed in a cell without opening the UI.",
+            "actually placed in a cell without opening the UI. For an EXTERIOR cell you don't already " +
+            "have a FormKey/EditorID for, pass 'worldspace' + 'grid_x' + 'grid_y' instead of 'cell_id' -- " +
+            "resolves the cell at that grid position first (exterior cells are nested in the worldspace's " +
+            "own Block/SubBlock tree, not reachable by FormKey guesswork).",
             new
             {
                 type = "object",
                 properties = new
                 {
-                    cell_id = new { type = "string", description = "A FormKey ('001234:Fallout4.esm') or an EditorID." }
+                    cell_id = new { type = "string", description = "A FormKey ('001234:Fallout4.esm') or an EditorID. Omit if using worldspace+grid_x+grid_y instead." },
+                    worldspace = new { type = "string", description = "FormKey or EditorID of the worldspace, e.g. 'Commonwealth'. Use with grid_x/grid_y instead of cell_id." },
+                    grid_x = new { type = "integer", description = "Exterior cell grid X coordinate." },
+                    grid_y = new { type = "integer", description = "Exterior cell grid Y coordinate." }
                 },
-                required = new[] { "cell_id" }
+                required = Array.Empty<string>()
             }),
         new("cell_search",
             "Type-ahead search for CELL records by EditorID/Name/FormKey substring, de-duplicated to " +
@@ -1161,6 +1536,33 @@ public sealed class PluginToolExecutor
                     limit = new { type = "integer", description = "Max matches (default 25)." }
                 },
                 required = new[] { "query" }
+            }),
+        new("cleanup_placed_references",
+            "xEdit's 'Remove duplicate references' / 'Remove excess references' (#60), for a single cell (by " +
+            "cell_id, or worldspace+grid_x+grid_y for an exterior cell -- see cell_get_placed_references). " +
+            "Scoped to PlacedObject (REFR) specifically, the large majority of real duplicate-clutter cases. " +
+            "mode 'dedupe': two refs sharing the same base record (or base model if by_model=true), rounded " +
+            "position/rotation, and scale are duplicates; keeps whichever carries 'special' data (EditorID, " +
+            "script, enable parent, door teleport, linked ref, patrol) over one without, or the first-seen if " +
+            "neither/both are special. mode 'excess': caps TEMPORARY refs at max_count, removing the excess " +
+            "by list order (NOT random the way xEdit's own script does it -- deliberate, for reproducibility). " +
+            "Dry-run by default; writes removals into patch_plugin as an override when apply=true.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    cell_id = new { type = "string", description = "FormKey or EditorID of the cell. Omit if using worldspace+grid_x+grid_y." },
+                    worldspace = new { type = "string", description = "Worldspace FormKey or EditorID, for an exterior cell instead of cell_id." },
+                    grid_x = new { type = "integer" },
+                    grid_y = new { type = "integer" },
+                    mode = new { type = "string", description = "'dedupe' or 'excess'." },
+                    max_count = new { type = "integer", description = "For mode 'excess': the cap on temporary refs. Default 50." },
+                    by_model = new { type = "boolean", description = "For mode 'dedupe': match by base model path instead of base record. Default false." },
+                    patch_plugin = new { type = "string" },
+                    apply = new { type = "boolean", description = "Default false (preview only)." }
+                },
+                required = new[] { "mode", "patch_plugin" }
             }),
     ];
 
@@ -1280,16 +1682,22 @@ public sealed class PluginToolExecutor
 
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
-            "create_record" or "create_cell" or "create_placed_object" or
-            "delete_record" or "copy_as_override" or "clean_plugin" or
+            "create_record" or "create_cell" or "create_placed_object" or "disable_previs" or "cleanup_placed_references" or
+            "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
+            "remove_identical_to_master" or "create_merged_patch" or "add_masters" or "set_conditions_at" or
+            "element_add" or "element_remove" or "element_move" or "element_clear" or
+            "deep_copy_as_override" or "change_referencing_records" or
+            "renumber_plugin_formids" or "create_seq_file" or
             "compact_to_esl" or "renumber_formid" or "reload_plugin" or "strip_masters_clean" or
             "attach_script" or "set_script_property" or "revert_overrides" or "batch_patch_records" or
-            "run_script" or "reorder_masters" or "set_light_flag" or "archive_extract" or "archive_extract_all" or
+            "run_script" or "reorder_masters" or "set_light_flag" or "set_localized_flag" or "archive_extract" or "archive_extract_all" or
             "bgsm_set_field" or "audio_convert_to_xwm" or "audio_convert_from_xwm" or "audio_make_fuz" or "audio_extract_fuz" or
             "archive_pack";
 
         var val = Str("value");
         if (val.Length > 40) val = val[..37] + "...";
+
+        bool Applying() => root.TryGetProperty("apply", out var av) && av.ValueKind == JsonValueKind.True;
 
         string summary = toolName switch
         {
@@ -1306,11 +1714,28 @@ public sealed class PluginToolExecutor
             "create_placed_object" => $"place {ShortId(Str("baseObject"))} in cell '{Str("cell")}' of {plugin}",
             "delete_record"       => $"delete {ShortId(record)} from {plugin}",
             "copy_as_override"    => $"{ShortId(Str("id"))} -> {Str("patch_plugin")}",
+            "copy_as_new_record"  => $"{ShortId(Str("id"))} -> new record in {Str("target_plugin")}",
+            "remove_identical_to_master" => $"{(Applying() ? "remove" : "list")} ITMs in {plugin}",
+            "create_merged_patch" => $"{(Applying() ? "build" : "preview")} merged patch {Str("patch_plugin")}",
+            "get_conditions"      => $"read conditions of {ShortId(record)}",
+            "set_conditions_at"   => $"{ShortId(record)}: conditions rebuilt at {Str("path")}",
+            "deep_copy_as_override" => $"{(Applying() ? "deep copy" : "preview deep copy")} {ShortId(Str("id"))} -> {Str("patch_plugin")}",
+            "change_referencing_records" => $"{(Applying() ? "repoint" : "preview repoint")} {ShortId(Str("from"))} -> {ShortId(Str("to"))}",
+            "element_add"         => $"{ShortId(record)}: add to {Str("path")}",
+            "element_remove"      => $"{ShortId(record)}: remove {Str("path")}",
+            "element_move"        => $"{ShortId(record)}: move {Str("path")}",
+            "element_clear"       => $"{ShortId(record)}: clear {Str("path")}",
+            "element_describe"    => $"{ShortId(record)}: actions at {Str("path")}",
+            "add_masters"         => $"add master(s) to {plugin}",
+            "renumber_plugin_formids" => $"{(Applying() ? "renumber" : "preview renumber of")} every record in {plugin}",
+            "create_seq_file"     => $"write {plugin}.seq",
+            "check_circular_leveled_lists" => "check for circular leveled lists",
             "reload_plugin"       => $"reload {plugin}",
             "strip_masters_clean" => $"strip masters: {System.IO.Path.GetFileName(Str("source_path"))}",
             "list_masters"        => $"list masters of {plugin}",
             "reorder_masters"     => $"reorder masters of {plugin}",
             "set_light_flag"      => $"set_light_flag({plugin}, {Str("light")})",
+            "set_localized_flag"  => $"set_localized_flag({plugin}, {Str("localized")})",
             "archive_list"        => $"list {System.IO.Path.GetFileName(Str("archive_path"))}",
             "archive_extract"     => $"extract {Str("inner_path")} <- {System.IO.Path.GetFileName(Str("archive_path"))}",
             "archive_extract_all" => $"extract all <- {System.IO.Path.GetFileName(Str("archive_path"))}",
@@ -1338,6 +1763,11 @@ public sealed class PluginToolExecutor
             "batch_patch_records" => $"batch patch {Str("type")} in {Str("source_plugin")} -> {Str("patch_plugin")}",
             "run_script"          => $"run script -> {Str("patch_plugin")}",
             "scan_conflicts"      => "scan all conflicts",
+            "create_mod_group"    => $"create ModGroup '{Str("name")}'",
+            "update_mod_group"    => $"update ModGroup '{Str("name")}'",
+            "delete_mod_group"    => $"delete ModGroup '{Str("name")}'",
+            "list_mod_groups"     => "list ModGroups",
+            "resolve_asset"       => $"resolve asset {Str("path")}",
             "scan_broken_refs"    => $"scan broken refs in {plugin}",
             "scan_all_plugins"    => "scan entire modlist for broken refs",
             "cell_get_placed_references" => $"placed refs in {ShortId(Str("cell_id"))}",
@@ -1423,7 +1853,31 @@ public sealed class PluginToolExecutor
                 return SearchRobcoConfigs(_mo2PathProvider?.Invoke(), Str("query"), Int("limit", 60));
             case "scan_conflicts":
                 return ScanConflicts(env, !root.TryGetProperty("mod_only", out var mo) || mo.ValueKind != JsonValueKind.False,
-                    root.TryGetProperty("type", out var tf) ? tf.GetString() : null, Int("limit", 200));
+                    root.TryGetProperty("type", out var tf) ? tf.GetString() : null, Int("limit", 200),
+                    !root.TryGetProperty("hide_grouped", out var hg) || hg.ValueKind != JsonValueKind.False);
+            case "create_mod_group":
+            {
+                var plugins = root.TryGetProperty("plugins", out var pgEl) && pgEl.ValueKind == JsonValueKind.Array
+                    ? pgEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0)
+                    : Enumerable.Empty<string>();
+                return ModGroupsService.Create(Str("name"), plugins);
+            }
+            case "update_mod_group":
+            {
+                IEnumerable<string>? plugins = null;
+                if (root.TryGetProperty("plugins", out var upEl) && upEl.ValueKind == JsonValueKind.Array)
+                    plugins = upEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0);
+                return ModGroupsService.Update(Str("name"), plugins,
+                    Str("new_name") is { Length: > 0 } nn ? nn : null);
+            }
+            case "delete_mod_group":
+                return ModGroupsService.Delete(Str("name"));
+            case "list_mod_groups":
+                return ModGroupsService.Groups.Count == 0
+                    ? "No ModGroups declared."
+                    : string.Join("\n", ModGroupsService.Groups.Select(g => $"{g.Name}: [{string.Join(", ", g.Plugins)}]"));
+            case "resolve_asset":
+                return AssetResolver.ResolveText(Str("path"), Bool("extract"), Int("limit", 25));
             case "get_referenced_by":
                 return GetReferencedByText(env, Str("id"), Int("limit", 200));
             case "get_problems":
@@ -1433,12 +1887,23 @@ public sealed class PluginToolExecutor
             case "scan_all_plugins":
                 return MutagenLoader.ScanAllPluginsForBrokenRefs(env);
             case "cell_get_placed_references":
-                return CellService.GetPlacedReferencesJson(Str("cell_id"), env);
+            {
+                int? gx = root.TryGetProperty("grid_x", out var gxEl) && gxEl.TryGetInt32(out var gxv) ? gxv : null;
+                int? gy = root.TryGetProperty("grid_y", out var gyEl) && gyEl.TryGetInt32(out var gyv) ? gyv : null;
+                return CellService.GetPlacedReferencesJson(Str("cell_id"), env, StrOrNull("worldspace"), gx, gy);
+            }
             case "cell_search":
             {
                 var cellHits = MutagenLoader.SearchCellRecords(env, Str("query"), Int("limit", 25));
                 return cellHits.Count == 0 ? "No matching cells."
                     : string.Join("\n", cellHits.Select(h => $"{h.EditorID} [{h.FormKey}] {(string.IsNullOrEmpty(h.Name) ? "" : "\"" + h.Name + "\" ")}<{h.Plugin}>"));
+            }
+            case "cleanup_placed_references":
+            {
+                int? cgx = root.TryGetProperty("grid_x", out var cgxEl) && cgxEl.TryGetInt32(out var cgxv) ? cgxv : null;
+                int? cgy = root.TryGetProperty("grid_y", out var cgyEl) && cgyEl.TryGetInt32(out var cgyv) ? cgyv : null;
+                return CellService.CleanupPlacedReferencesJson(env, Str("cell_id"), StrOrNull("worldspace"), cgx, cgy,
+                    Str("mode"), Int("max_count", 50), Bool("by_model"), Str("patch_plugin"), Bool("apply"));
             }
 
             // ---- write tools ----
@@ -1457,6 +1922,8 @@ public sealed class PluginToolExecutor
                     BoolOr("persistent", true), BoolOr("initiallyDisabled", false),
                     StrOrNull("mapMarkerName"), StrOrNull("mapMarkerType"), BoolOr("mapMarkerVisible", false),
                     env);
+            case "disable_previs":
+                return WriteService.DisablePrevis(env, Str("cell"), Str("patch_plugin"), Bool("apply"));
             case "set_field":
                 return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
             case "add_list_item":
@@ -1470,6 +1937,8 @@ public sealed class PluginToolExecutor
                 return MutagenLoader.CheckPlugin(env, Str("plugin"));
             case "compact_to_esl":
                 return WriteService.CompactToEsl(Str("plugin"), env);
+            case "check_esl_eligibility":
+                return WriteService.CheckEslEligibility(Str("plugin"), env);
             case "renumber_formid":
                 return WriteService.RenumberFormId(Str("plugin"), Str("record"), Str("new_id"), env,
                     repointRefs: !(root.TryGetProperty("repoint_references", out var rr) && rr.ValueKind == JsonValueKind.False));
@@ -1481,6 +1950,48 @@ public sealed class PluginToolExecutor
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null, env);
             case "copy_as_override":
                 return WriteService.CopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"));
+            case "copy_as_new_record":
+                return WriteService.CopyAsNewRecord(env, Str("source_plugin"), Str("id"), Str("target_plugin"),
+                    Str("new_editor_id") is { Length: > 0 } nedid ? nedid : null);
+            case "remove_identical_to_master":
+                return WriteService.RemoveIdenticalToMaster(env, Str("plugin"), Bool("apply"));
+            case "create_merged_patch":
+                return WriteService.CreateMergedPatch(env, Str("plugins"), Str("patch_plugin"), Bool("apply"));
+            case "get_conditions":
+                return Str("path") is { Length: > 0 } condPath
+                    ? WriteService.GetConditionsAtPath(env, Str("plugin"), Str("record"), condPath)
+                    : WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
+            case "deep_copy_as_override":
+                return WriteService.DeepCopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"), Bool("apply"));
+            case "change_referencing_records":
+                return WriteService.ChangeReferencingRecords(env, Str("from"), Str("to"), Str("patch_plugin"), Bool("apply"));
+            case "element_add":
+                return ElementService.AddElement(Str("plugin"), Str("record"), Str("path"),
+                    Str("template") is { Length: > 0 } tpl ? tpl : null, env);
+            case "element_remove":
+                return ElementService.RemoveElement(Str("plugin"), Str("record"), Str("path"), env);
+            case "element_move":
+                return ElementService.MoveElement(Str("plugin"), Str("record"), Str("path"), Int("delta", 1), env);
+            case "element_clear":
+                return ElementService.ClearElement(Str("plugin"), Str("record"), Str("path"), env);
+            case "element_describe":
+                return ElementService.DescribeElement(env, Str("plugin"), Str("record"), Str("path"));
+            case "set_conditions_at":
+                return WriteService.SetConditionsAtPath(Str("plugin"), Str("record"), Str("path"), Str("conditions"), env);
+            case "add_masters":
+            {
+                var masters = root.TryGetProperty("masters", out var mEl) && mEl.ValueKind == JsonValueKind.Array
+                    ? mEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToArray()
+                    : Array.Empty<string>();
+                return WriteService.AddMasters(Str("plugin"), masters, env);
+            }
+            case "renumber_plugin_formids":
+                return WriteService.RenumberPluginFormIds(Str("plugin"), Str("start"), Bool("apply"), env);
+            case "create_seq_file":
+                return WriteService.CreateSeqFile(env, Str("plugin"),
+                    Str("output_dir") is { Length: > 0 } seqDir ? seqDir : null);
+            case "check_circular_leveled_lists":
+                return WriteService.CheckCircularLeveledLists(env, Str("plugin"), Int("limit", 200));
             case "delete_record":
                 return WriteService.DeleteRecord(Str("plugin"), Str("id"), env);
             case "remove_list_item":
@@ -1561,6 +2072,8 @@ public sealed class PluginToolExecutor
             }
             case "set_light_flag":
                 return WriteService.SetLightFlag(Str("plugin"), BoolOr("light", true), env);
+            case "set_localized_flag":
+                return WriteService.SetLocalizedFlag(Str("plugin"), BoolOr("localized", true), env);
 
             case "nif_import":
                 return NifService.Import(Str("obj_path"), Str("out_nif"), Str("material"),
@@ -1589,6 +2102,8 @@ public sealed class PluginToolExecutor
                 return MaterialService.SetField(Str("path"), Str("field"), Str("value"), StrOrNull("out_path"));
             case "catalog_mod_folder":
                 return ModInspectService.CatalogFolder(Str("mod_path"));
+            case "audit_asset_usage":
+                return WriteService.AuditAssetUsage(Str("plugin"), env, Int("record_limit", 3000));
 
             case "audio_convert_to_xwm":
             {
@@ -1682,27 +2197,34 @@ public sealed class PluginToolExecutor
     private static string Trunc(string? s, int max) =>
         string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..(max - 3)] + "...";
 
-    private static string ScanConflicts(object? env, bool modOnly, string? typeFilter, int limit)
+    private static string ScanConflicts(object? env, bool modOnly, string? typeFilter, int limit, bool hideGrouped)
     {
         if (env == null) return "No environment loaded. Use 'Load Env' or 'Open MO2' first.";
 
         var all = ConflictScanner.ScanCached(env);
-        var filtered = all.Where(c =>
+        var matched = all.Where(c =>
             (!modOnly || c.InvolvesMod) &&
             (string.IsNullOrWhiteSpace(typeFilter) || string.Equals(c.Type, typeFilter, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
+        var suppressed = matched.Count(c => c.Suppressed);
+        var filtered = hideGrouped ? matched.Where(c => !c.Suppressed).ToList() : matched;
+        var groupNote = suppressed == 0 ? ""
+            : hideGrouped ? $" ({suppressed} hidden by ModGroups; pass hide_grouped=false to see them)"
+                          : $" ({suppressed} of them declared intentional by a ModGroup, shown anyway)";
+
         if (filtered.Count == 0)
             return "No conflicts found" + (modOnly ? " involving mods" : "") +
-                   (string.IsNullOrWhiteSpace(typeFilter) ? "." : $" of type {typeFilter}.");
+                   (string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}") + "." + groupNote;
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"{filtered.Count} conflicting record(s){(modOnly ? " involving mods" : "")}" +
-                      $"{(string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}")}; showing {Math.Min(limit, filtered.Count)}:");
+                      $"{(string.IsNullOrWhiteSpace(typeFilter) ? "" : $" of type {typeFilter}")}{groupNote}; showing {Math.Min(limit, filtered.Count)}:");
         foreach (var c in filtered.Take(limit))
-            sb.AppendLine($"  {c.EditorID} [{c.FormKey}] ({c.Type}) -- {c.Plugins.Count} plugins, WINNER={c.Winner}");
+            sb.AppendLine($"  {c.EditorID} [{c.FormKey}] ({c.Type}) -- {c.Plugins.Count} plugins, WINNER={c.Winner}" +
+                          (c.Suppressed ? " [MODGROUP]" : ""));
         if (filtered.Count > limit)
-            sb.AppendLine($"…and {filtered.Count - limit} more. Filter by 'type' or raise 'limit' to see them.");
+            sb.AppendLine($"...and {filtered.Count - limit} more. Filter by 'type' or raise 'limit' to see them.");
         return sb.ToString();
     }
 

@@ -167,6 +167,12 @@ public static partial class WriteService
     public static event Action<string>? PluginChanged;
     private static void NotifyChanged(string name) => PluginChanged?.Invoke(name);
 
+    /// <summary>Public entry point for NotifyChanged -- a C# event can only be raised from within its
+    /// declaring type, so a sibling class (e.g. CellService, for #60's cleanup tool) needs this to
+    /// tell the Explorer tree a patch plugin changed instead of reaching into WriteService's own
+    /// private NotifyChanged.</summary>
+    public static void NotifyPluginChanged(string name) => NotifyChanged(name);
+
     public static string CreateRecord(string plugin, string sig, string editorId, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg);
@@ -317,18 +323,87 @@ public static partial class WriteService
         if (remap.Count == 0)
             return $"'{plugin}' is already ESL-compatible (all native FormIDs within 0x800-0xFFF).";
 
-        // The groups the re-key loop below can actually reach.
+        if (!TryRekeyRecords(mod, remap, "compact_to_esl", plugin,
+                "Compact in xEdit instead, or keep cell-placed records within 0x800-0xFFF when authoring them.",
+                out var rekeyError))
+            return rekeyError;
+
+        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+        return $"Compacted {plugin}: remapped {remap.Count} record(s) into the ESL range (0x800-0xFFF) and fixed " +
+               $"all references. Now save_plugin to a path ending in .esl (and the plugin can be a light master). " +
+               $"This is in memory until you save.";
+    }
+
+    /// <summary>
+    /// Read-only precursor to CompactToEsl: reports whether a plugin would fit the ESL/Small range
+    /// and what compaction would need to do, without mutating anything. Runs the same record-count
+    /// arithmetic as CompactToEsl (lines above) plus the reachability check CompactToEsl only
+    /// discovers mid-mutation via TryRekeyRecords, so a caller can rule out both failure modes before
+    /// deciding to run the destructive operation.
+    /// </summary>
+    public static string CheckEslEligibility(string plugin, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+
+        var native = mod.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == mod.ModKey).ToList();
+        var inRange = new HashSet<uint>(native.Select(r => r.FormKey.ID).Where(id => id is >= 0x800 and <= 0xFFF));
+        var outOfRange = native.Where(r => r.FormKey.ID > 0xFFF).ToList();
+
+        if (outOfRange.Count == 0)
+            return $"'{plugin}' is already ESL-compatible: all {native.Count} native record(s) sit within 0x800-0xFFF. " +
+                   "compact_to_esl would be a no-op; save_plugin to a path ending in .esl directly.";
+
+        var capacity = 0xFFF - 0x800 + 1;
+        if (native.Count > capacity)
+            return $"'{plugin}' CANNOT fit the ESL range: {native.Count} native record(s) exceed the " +
+                   $"{capacity}-slot capacity (0x800-0xFFF). compact_to_esl would refuse this plugin.";
+
+        // Same reachability check TryRekeyRecords performs, run here read-only against every
+        // out-of-range record instead of just the ones a specific remap dict happens to touch.
+        var topLevelGroups = mod.GetType().GetProperties()
+            .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType))
+            .Select(p => p.GetValue(mod) as Mutagen.Bethesda.Plugins.Records.IGroup)
+            .Where(g => g != null).Select(g => g!).ToList();
+        var reachable = new HashSet<FormKey>(topLevelGroups
+            .SelectMany(g => ((System.Collections.IEnumerable)g)
+                .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>())
+            .Select(r => r.FormKey));
+        var unreachable = outOfRange.Where(r => !reachable.Contains(r.FormKey)).ToList();
+        if (unreachable.Count > 0)
+        {
+            var byType = string.Join(", ", unreachable.GroupBy(r => r.GetType().Name).Select(g => $"{g.Key} x{g.Count()}"));
+            return $"'{plugin}' would BLOCK on compact_to_esl: {unreachable.Count} out-of-range record(s) live in " +
+                   $"nested groups this tool cannot re-key [{byType}] (cells / placed objects / worldspace sub-cells). " +
+                   $"{outOfRange.Count - unreachable.Count} other out-of-range record(s) are otherwise fine. " +
+                   "Keep cell-placed records within 0x800-0xFFF when authoring them, or compact in xEdit instead.";
+        }
+
+        return $"'{plugin}' is ESL-ELIGIBLE: {outOfRange.Count} of {native.Count} native record(s) sit outside " +
+               $"0x800-0xFFF and would be remapped by compact_to_esl (dry, no failure modes detected). " +
+               "Run compact_to_esl to actually perform the remap.";
+    }
+
+    /// <summary>
+    /// Give a set of the plugin's own records new FormKeys and repoint every reference onto them.
+    /// Shared by compact_to_esl and renumber_plugin_formids, which differ only in how they choose
+    /// the new ids.
+    ///
+    /// Two failure modes are checked in a specific order, and both matter:
+    /// - A record that no top-level group can reach (cells / placed objects / worldspace sub-cells,
+    ///   because Cells is a Fallout4ListGroup&lt;CellBlock&gt; and does not implement IGroup) is
+    ///   refused BEFORE anything is mutated, or RemapLinks would repoint references onto FormKeys
+    ///   that no record owns.
+    /// - A duplicate that could not have its original removed aborts BEFORE RemapLinks, because the
+    ///   plugin then holds duplicate FormKeys and repointing would scatter references across them.
+    /// </summary>
+    private static bool TryRekeyRecords(IFallout4Mod mod, Dictionary<FormKey, FormKey> remap,
+        string opName, string plugin, string refusalHint, out string error)
+    {
         var topLevelGroups = mod.GetType().GetProperties()
             .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType))
             .Select(p => p.GetValue(mod) as Mutagen.Bethesda.Plugins.Records.IGroup)
             .Where(g => g != null).Select(g => g!).ToList();
 
-        // 'remap' comes from a DEEP EnumerateMajorRecords() walk, but the loop below only sees
-        // top-level IGroup properties. Cells are Fallout4ListGroup<CellBlock>, which does NOT
-        // implement IGroup (verified by reflection -- see CellCompactionTests), so CELLs, their
-        // PlacedObjects and worldspace sub-cells are skipped silently rather than throwing, and
-        // RemapLinks would then repoint references onto FormKeys that no record owns.
-        // Checked up front so nothing has been mutated when we refuse.
         var reachable = new HashSet<FormKey>(topLevelGroups
             .SelectMany(g => ((System.Collections.IEnumerable)g)
                 .Cast<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>())
@@ -336,17 +411,17 @@ public static partial class WriteService
         var unreachable = remap.Keys.Where(k => !reachable.Contains(k)).ToList();
         if (unreachable.Count > 0)
         {
-            var byType = string.Join(", ", native.Where(r => unreachable.Contains(r.FormKey))
+            var unreachableSet = new HashSet<FormKey>(unreachable);
+            var byType = string.Join(", ", mod.EnumerateMajorRecords()
+                .Where(r => unreachableSet.Contains(r.FormKey))
                 .GroupBy(r => r.GetType().Name).Select(g => $"{g.Key} x{g.Count()}"));
-            return ToolError.Fail(
-                $"compact_to_esl cannot compact '{plugin}': {unreachable.Count} out-of-range record(s) live in " +
-                "nested groups (cells / placed objects / worldspace sub-cells) that this tool cannot re-key " +
-                $"[{byType}]. Nothing was modified -- references were NOT repointed, so the plugin is unchanged. " +
-                "Compact in xEdit instead, or keep cell-placed records within 0x800-0xFFF when authoring them.");
+            error = ToolError.Fail(
+                $"{opName} cannot renumber '{plugin}': {unreachable.Count} record(s) live in nested groups " +
+                $"(cells / placed objects / worldspace sub-cells) that this tool cannot re-key [{byType}]. " +
+                "Nothing was modified -- references were NOT repointed, so the plugin is unchanged. " + refusalHint);
+            return false;
         }
 
-        // Re-key each out-of-range record (duplicate into its group with the new FormKey,
-        // then remove the old).
         var rekeyFailures = new List<string>();
         foreach (var group in topLevelGroups)
         {
@@ -359,23 +434,20 @@ public static partial class WriteService
             }
         }
 
-        // Abort BEFORE RemapLinks. Each failure left the original next to its duplicate; repointing
-        // references now would scatter them across a plugin that already has duplicate FormKeys.
         if (rekeyFailures.Count > 0)
-            return ToolError.Fail(
-                $"compact_to_esl FAILED on '{plugin}': {rekeyFailures.Count} record(s) were duplicated but the " +
+        {
+            error = ToolError.Fail(
+                $"{opName} FAILED on '{plugin}': {rekeyFailures.Count} record(s) were duplicated but the " +
                 "original could not be removed, so the plugin now holds duplicate FormKeys in memory. " +
                 "It was NOT saved and references were NOT repointed -- run reload_plugin to discard these " +
                 "in-memory changes before doing anything else.\n  " +
                 string.Join("\n  ", rekeyFailures.Take(10)));
+            return false;
+        }
 
-        // Repoint every reference in the plugin to the new FormKeys.
         mod.RemapLinks(remap);
-
-        MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
-        return $"Compacted {plugin}: remapped {remap.Count} record(s) into the ESL range (0x800-0xFFF) and fixed " +
-               $"all references. Now save_plugin to a path ending in .esl (and the plugin can be a light master). " +
-               $"This is in memory until you save.";
+        error = "";
+        return true;
     }
 
     /// <summary>
@@ -414,6 +486,45 @@ public static partial class WriteService
         mod.ModHeader.Flags &= ~Fallout4ModHeader.HeaderFlag.Small;
         MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
         return $"Cleared the ESL (Small) flag on '{name}'. In memory until save_plugin.";
+    }
+
+    /// <summary>
+    /// Set or clear a plugin's header Localized flag -- the bit that makes Mutagen automatically read/
+    /// write this plugin's translated text through Strings\&lt;plugin&gt;_&lt;lang&gt;.STRINGS/.DLSTRINGS/
+    /// .ILSTRINGS instead of storing it inline (Fallout4Mod_Generated.cs's CreateFromBinary and its write
+    /// path both key off this exact flag; see the #56 investigation for the full trace). Same shape as
+    /// SetLightFlag above, minus the FormID-range warning: there is no numeric precondition here, but
+    /// setting the flag with no Strings\ folder next to the plugin means every TranslatedString field
+    /// will read back empty until one exists, so that case is warned rather than silently shipped.
+    /// </summary>
+    public static string SetLocalizedFlag(string plugin, bool localized, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var (name, path) = NormalizePlugin(plugin);
+
+        bool wasLocalized = mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Localized);
+        if (localized == wasLocalized)
+            return $"'{name}' already {(localized ? "has" : "does not have")} the Localized flag set.";
+
+        if (localized)
+        {
+            mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Localized;
+            MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+
+            string? pluginDir = null;
+            try { pluginDir = System.IO.Path.GetDirectoryName(path ?? FindPluginPath(name, env)); } catch { }
+            bool hasStringsFolder = pluginDir != null &&
+                System.IO.Directory.Exists(System.IO.Path.Combine(pluginDir, "Strings"));
+            var warn = hasStringsFolder ? "" :
+                $" WARNING: no Strings\\ folder found next to '{name}' yet -- every TranslatedString field " +
+                "will read back empty until save_plugin writes one (or you add it manually before reloading).";
+            return $"Set the Localized flag on '{name}'.{warn} In memory until save_plugin.";
+        }
+
+        mod.ModHeader.Flags &= ~Fallout4ModHeader.HeaderFlag.Localized;
+        MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+        return $"Cleared the Localized flag on '{name}': translated text now stores inline instead of via " +
+               "Strings files. In memory until save_plugin.";
     }
 
     /// <summary>

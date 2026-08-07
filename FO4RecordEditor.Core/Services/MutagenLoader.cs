@@ -66,6 +66,25 @@ public static partial class MutagenLoader
     /// target through the load order's link cache. Falls back to the raw FormKey when the
     /// target can't be resolved (no env loaded, or a dangling/unmastered reference).
     /// </summary>
+    /// <summary>A FormKey string rendered the way the grid renders links -- "EditorID [key]" -- so a
+    /// condition parameter can show a name instead of a raw id. Returns the input when unresolvable.</summary>
+    public static string DescribeFormKey(object? envObj, string formKeyStr)
+    {
+        if (!Mutagen.Bethesda.Plugins.FormKey.TryFactory(formKeyStr, out var fk)) return formKeyStr;
+        if (fk.IsNull) return "Null";
+        try
+        {
+            var cache = LinkCache;
+            if (cache != null && cache.TryResolve<IMajorRecordGetter>(fk, out var rec))
+            {
+                var eid = rec.EditorID ?? "";
+                if (eid.Length > 0) return $"{eid} [{fk}]";
+            }
+        }
+        catch { }
+        return formKeyStr;
+    }
+
     public static string FormatFormLink(Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli)
     {
         var fk = fli.FormKey;
@@ -400,6 +419,7 @@ public static partial class MutagenLoader
         // Same reasoning as Mo2ProfileLoader.Load: texture/mesh lookups should search where this
         // session's plugins actually loaded from, not a possibly-unset/stale settings.json value.
         try { TextureService.SetSessionRoots(new[] { env.DataFolderPath.Path }); } catch { }
+        try { AssetResolver.SetSessionDataRoots(new[] { env.DataFolderPath.Path }); } catch { }
 
         progress?.Report(($"Found {plugins.Count} plugins.", null));
         return (env, plugins);
@@ -988,22 +1008,7 @@ public static partial class MutagenLoader
         // Discover output columns from the first record (all same-type records share identical
         // property lists in Mutagen). Keep only scalar/enum/FormLink/collection properties.
         var rec0 = take[0];
-        var colProps = new List<PropertyInfo>();
-        foreach (var prop in rec0.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            if (_skipProps.Contains(prop.Name)) continue;
-            if (prop.Name is "EditorID" or "FormKey") continue;
-            if (prop.GetIndexParameters().Length > 0) continue;
-            object? v; try { v = prop.GetValue(rec0); } catch { continue; }
-            if (v == null) continue;
-            var vt = v.GetType();
-            bool keep = _leafTypes.Contains(vt) || vt.IsEnum
-                || v is Mutagen.Bethesda.Plugins.IFormLinkIdentifier
-                || (v is IEnumerable && vt != typeof(string));
-            if (!keep) continue;
-            colProps.Add(prop);
-            if (colProps.Count >= 8) break;
-        }
+        var colProps = DiscoverGridColumns(rec0, 8);
 
         // Budget-bound the output so the AI executor's ~8 KB hard cap never blind-truncates the
         // table mid-row (which would leave a misleading "N of M shown" header above a cut body).
@@ -1051,6 +1056,30 @@ public static partial class MutagenLoader
                           "or get_record for one record's full dump; raise 'limit' only if you truly need more rows.");
 
         return sb.ToString();
+    }
+
+    // Shared by QueryRecordSummaries (AI-facing text table) and GetRecordsGridJson (GUI spreadsheet
+    // panel, #51): which properties of a record type are worth showing as a column. Same
+    // scalar/enum/FormLink/collection filter either way -- only the caller's requested column count differs.
+    private static List<PropertyInfo> DiscoverGridColumns(object rec0, int max)
+    {
+        var colProps = new List<PropertyInfo>();
+        foreach (var prop in rec0.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (_skipProps.Contains(prop.Name)) continue;
+            if (prop.Name is "EditorID" or "FormKey") continue;
+            if (prop.GetIndexParameters().Length > 0) continue;
+            object? v; try { v = prop.GetValue(rec0); } catch { continue; }
+            if (v == null) continue;
+            var vt = v.GetType();
+            bool keep = _leafTypes.Contains(vt) || vt.IsEnum
+                || v is Mutagen.Bethesda.Plugins.IFormLinkIdentifier
+                || (v is IEnumerable && vt != typeof(string));
+            if (!keep) continue;
+            colProps.Add(prop);
+            if (colProps.Count >= max) break;
+        }
+        return colProps;
     }
 
     private static string SumTrunc(string? s, int max) =>
@@ -1184,6 +1213,35 @@ public static partial class MutagenLoader
                     !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
                     !cell.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
                 hits[cell.FormKey] = new SearchHit(cell.FormKey.ToString(), eid, "CELL", name, dispName);
+            }
+        }
+        return hits.Values.Take(limit).ToList();
+    }
+
+    /// <summary>Worldspace-only search, backing the Cell Viewer's exterior-cell picker (#67): an
+    /// exterior cell is reached by worldspace + grid coordinate, so the panel needs to offer the
+    /// worldspaces themselves before it can ask for an X/Y. Same no-index reasoning as
+    /// SearchCellRecords -- this must not drag the whole load order through GetModIndex. A load order
+    /// holds only a few dozen WRLD records, so the default limit is generous enough to be a plain
+    /// browsable list rather than a search that must be typed into.</summary>
+    public static List<SearchHit> SearchWorldspaceRecords(object? envObj, string query, int limit = 100)
+    {
+        if (envObj == null) return new List<SearchHit>();
+        query ??= "";
+        var hits = new Dictionary<FormKey, SearchHit>();
+
+        foreach (var (name, mod) in AllLoadedMods(envObj))
+        {
+            if (mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod) continue;
+            foreach (var ws in f4mod.EnumerateMajorRecords<Mutagen.Bethesda.Fallout4.IWorldspaceGetter>(throwIfUnknown: false))
+            {
+                var eid = ws.EditorID ?? "";
+                var dispName = ws.Name?.String ?? "";
+                if (query.Length > 0 &&
+                    !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                    !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                    !ws.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                hits[ws.FormKey] = new SearchHit(ws.FormKey.ToString(), eid, "WRLD", name, dispName);
             }
         }
         return hits.Values.Take(limit).ToList();

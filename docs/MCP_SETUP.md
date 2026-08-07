@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **75 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **101 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -81,17 +81,135 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 ### Conflict detection
 `get_conflicts` · `scan_conflicts` · `scan_all_plugins` · `scan_broken_refs`
 
+### ModGroups (xEdit's "these plugins are meant to be used together")
+`create_mod_group` · `update_mod_group` · `delete_mod_group` · `list_mod_groups`
+
+A ModGroup names a set of two or more plugins that ship as a suite -- a framework plus its official
+patches, a compatibility-patch bundle for one mod. Conflicts where **every** plugin touching the
+record belongs to one common group are the intended kind, so `scan_conflicts` hides them by default
+(`hide_grouped: false` shows them again, tagged `[MODGROUP]`, and the header always reports how many
+were suppressed). Membership in *some* group is not enough: the group has to cover every party to
+that specific conflict, since a plugin can belong to several groups for several reasons.
+
+On a real 651-plugin load order the raw scan reports ~45,000 conflicting records; this is what makes
+that number actionable. Groups are stored as plain JSON in `%APPDATA%\FO4RecordEditor\modgroups.json`
+-- a per-installation preference, not something that travels with a plugin. xEdit's GUI half of the
+feature (group-picker dialogs, CRC staleness tracking) is deliberately not ported: it exists to
+declutter an always-on colored grid a human stares at, and there is no such grid here.
+
 ### Writing records
-`create_record` · `set_field` · `set_conditions` · `set_components` · `add_list_item` ·
-`remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` · `delete_record` ·
-`renumber_formid` · `compact_to_esl` · `set_light_flag` · `batch_patch_records` · `revert_overrides`
+`create_record` · `set_field` · `get_conditions` · `set_conditions` · `set_components` ·
+`add_list_item` · `remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` ·
+`copy_as_new_record` · `set_conditions_at` · `delete_record` · `renumber_formid` · `compact_to_esl` ·
+`check_esl_eligibility` · `set_light_flag` · `set_localized_flag` ·
+`batch_patch_records` · `revert_overrides`
+
+`check_esl_eligibility` is the read-only half of `compact_to_esl`: it reports whether a plugin's
+record count and FormID range fit the ESL window before you commit to rewriting anything.
+`set_light_flag` / `set_localized_flag` toggle the two TES4 header flags directly.
+
+`set_conditions` REPLACES the whole Conditions list, so to add or change one condition read the
+current list with `get_conditions` first, edit that array, and hand it back. `get_conditions` returns
+exactly the schema `set_conditions` accepts.
+
+Conditions are not always the record's own list. A magic effect keeps its own at
+`Effects[0].Conditions`; a perk keeps them two deep at `Effects[0].Conditions[0].Conditions`, where
+the outer list holds the run-on tab wrapper rather than conditions. Pass that path to
+`get_conditions` and write it back with `set_conditions_at`. The resolver accepts the list itself,
+one entry in it, or a perk tab wrapper, and refuses the tab list with a message saying which level
+to use.
+
+`copy_as_new_record` is the other half of xEdit's copy menu: it duplicates a record into the target
+plugin under a **brand new FormID** rather than overriding the original, which is how you make a
+variant of an existing item.
+
+`deep_copy_as_override` is xEdit's **Deep copy as override**: for a container-type record it brings
+the children across too, not just the record you pointed at. `change_referencing_records` is xEdit's
+**Change referencing records**, which repoints every record that references one FormID at another --
+the tool you want when replacing a record rather than editing it. Both dry-run unless `apply: true`.
+
+### The element menu (xEdit's Add / Remove / Move / Clear on a list row)
+`element_describe` · `element_add` · `element_remove` · `element_move` · `element_clear`
+
+This is xEdit's element menu as it actually behaves, read out of
+`xeMainForm.pas` (`pmuViewPopup`, `mniViewAddClick`, `mniViewRemoveClick`, `mniViewMoveUpClick`):
+
+- **Add never asks for a value.** xEdit calls `TargetElement.Assign(TargetIndex, template, False)`,
+  which constructs an empty element of the container's own type and then focuses it for editing.
+  `element_add` does the same: it creates the entry, you fill it in with `set_field`.
+- **Add inserts at the clicked row's position.** `GetAddElement` walks up from the focused node
+  keeping its index, so right-clicking `Conditions[2]` inserts *before* entry 2. Pass the list path
+  instead (`Conditions`) to append.
+- **Add offers a choice when the list accepts more than one type.** That is xEdit's
+  `GetAssignTemplates`; here it is the concrete subclasses of an abstract element type. A
+  `Conditions` list holds the abstract `Condition`, so the templates are `ConditionFloat` and
+  `ConditionGlobal`; a perk's `Effects` list offers all twelve `APerkEffect` types.
+- `element_describe` reports which of these are legal at a path, so a UI can show only what applies,
+  the way xEdit enables each item from `IsRemovable` / `CanMoveUp` / `CanMoveDown` / `IsClearable`.
+
+Unlike `add_list_item`, which only ever appends a FormLink, these work on STRUCT lists: conditions,
+effects, leveled entries, components. A FormLink list still works too, and adds an empty link for
+you to point somewhere.
+
+Not implemented, because they depend on xEdit's multi-record selection and sibling compare, which
+this editor does not have: Copy to selected records, Remove from selected, Compare referenced row,
+Sort, Stick, and member switching for unions.
+
+### Whole-plugin xEdit passes
+`remove_identical_to_master` · `create_merged_patch` · `add_masters` · `renumber_plugin_formids` ·
+`create_seq_file` · `check_circular_leveled_lists`
+
+`remove_identical_to_master` is the ITM half of the standard cleaning pass (`clean_plugin` does the
+UDR half). An ITM is an override whose every field equals the version it overrides, so it costs a
+conflict row and a load-order slot while changing nothing. Comparison is Mutagen's generated
+structural equality over the whole record, and it includes the record header's version control
+bytes, so the check errs toward keeping a record: a false "not identical" is harmless, a false
+"identical" would delete real edits.
+
+`create_merged_patch` builds a patch carrying the winning version of every record two or more of the
+selected plugins touch.
+
+`add_masters` declares a plugin as a master. Needed BEFORE authoring a reference into a file the
+plugin does not already master, since the reference has nowhere valid to point otherwise.
+`save_plugin` re-derives the master list from actual references, so write the reference before
+saving or the added master will not survive.
+
+`renumber_plugin_formids` renumbers every record in a plugin consecutively from a base object id and
+repoints all in-plugin references (`renumber_formid` does one record). References from OTHER plugins
+into this one will break: they still point at the old ids.
+
+`create_seq_file` writes the `.seq` a plugin's start-game-enabled quests need. Without it those
+quests silently never start on an existing save, so it is a required build step for quest mods. The
+file is a bare array of little-endian 4-byte FormIDs written with the plugin's own file-local index,
+which is what the Creation Kit produces; output was verified byte-identical to a CK-generated SEQ
+file from a real modlist. Deploy it as `Data/Seq/<plugin>.seq`.
+
+`check_circular_leveled_lists` finds leveled lists that contain themselves, directly or through
+another list. The engine hangs or crashes resolving one. Read-only.
+
+`remove_identical_to_master`, `create_merged_patch` and `renumber_plugin_formids` default to a
+**dry run** that reports what they would do; pass `apply: true` to write.
 
 ### Cells and placed objects
-`create_cell` · `create_placed_object`
+`create_cell` · `create_placed_object` · `cleanup_placed_references` · `disable_previs`
 
 `create_record` only adds **top-level** records, so it cannot make either of these -- a placed object
 lives inside a cell's persistent/temporary list, and cells live in a block tree. This is the pair you
 need for map markers and for parking references you relocate at runtime.
+
+`cleanup_placed_references` is xEdit's `Remove duplicate references` / `Remove excess references`
+pass: it drops references that duplicate another at the same position with the same base object, and
+references beyond what a cell should carry. Dry run by default; pass `apply: true` to write.
+
+`disable_previs` is xEdit's **Fallout4 - Disable PreVis** script. Editing an exterior cell without
+invalidating its previs/precombine data is one of the most common real FO4 failures -- your edit
+silently does not show, or the cell breaks. It clears `PreVisFilesTimestamp`, `InPreVisFileOf`,
+`PreCombinedFilesTimestamp` and the combined-mesh lists, and sets the cell's `NoPreVis` flag. Dry run
+by default; refuses interior cells and cells that have no precombine data, matching the script's own
+guards. The other half of that xEdit script pair (**Filter for precombined statics**) is not ported:
+Mutagen's `CellCombinedMeshReference` exposes only a bare mesh index with no FormLink back to the
+placed reference, so there is no way to map a combined mesh to its object without new reverse
+engineering. Tracked as issue #59.
 
 ### Struct lists that `add_list_item` cannot express
 `add_leveled_entry` · `set_perk_effects` · `set_magic_effects` · `set_quest_aliases` ·
@@ -138,6 +256,26 @@ SpecularColor, texture paths, PBR/emissive/translucency/terrain, ...) directly, 
 GUI needed. `.bgem` (effect materials) isn't supported yet.
 
 ### Mod folder triage
+### Asset resolution
+`resolve_asset` -- xEdit's `ResourceExists` / `ResourceContainerList`: given a game-relative path
+(`Meshes\Clutter\Rock01.nif`), answer whether it exists anywhere in the load order and **which mod
+folder or BA2 actually serves it**, without you having to already know which archive to open. Pass
+`extract: true` to also materialize the winning copy as a real file (pulled out of its BA2 if
+needed), which is how you hand a packed mesh to `nif_inspect`.
+
+Search order is MO2's own: the overwrite folder, then every enabled mod top-to-bottom of
+`modlist.txt`, then the vanilla game Data folder; within one of those, a loose file beats that
+folder's archives. Loose lookups are a direct existence check per root, so nothing is scanned; only
+archives get indexed, and only the first time a given root is consulted.
+
+This is the tool that makes "verify the MODL path instead of recalling it" a single call. It needs a
+loaded modlist (`Open MO2`) or a configured Data folder -- with neither there is nowhere to look, and
+it says so rather than reporting "not found".
+
+`audit_asset_usage` -- walk every record in a plugin for asset paths (models, textures, materials,
+sounds, scripts) and report which of them actually exist as a loose file or inside a BA2, so a mod
+ships without dangling references.
+
 `catalog_mod_folder` -- bucket an unfamiliar mod's files by category (meshes/textures/materials/
 sounds/scripts/plugins/archives/voice/...) with per-category counts, to get oriented before deciding
 what to inspect next.

@@ -162,10 +162,57 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(t);
   }, [cellId, cell, noEnv]);
 
+  // Exterior cells (#67): a worldspace's cells are addressed by grid coordinate, not by a name you
+  // could type into the cell search above -- the interior picker only ever finds cells that HAVE an
+  // EditorID/Name, which most exterior cells do not. Kept as a second mode on the same panel rather
+  // than a second panel, since everything downstream (geometry batch, viewport, layers) is identical
+  // once a cell is resolved.
+  const [pickMode, setPickMode] = useState<'cell' | 'grid'>(() => (LS('pickMode', 'cell') === 'grid' ? 'grid' : 'cell'));
+  const [worldspace, setWorldspace] = useState(() => LS('worldspace', ''));
+  const [wsMatches, setWsMatches] = useState<CellSearchHit[] | null>(null);
+  const [wsLoading, setWsLoading] = useState(false);
+  const [gridX, setGridX] = useState(() => LS('gridX', '0'));
+  const [gridY, setGridY] = useState(() => LS('gridY', '0'));
+  const wsSeq = useRef(0);
+
+  useEffect(() => {
+    if (!cell || noEnv || pickMode !== 'grid') { setWsMatches(null); return; }
+    const mySeq = ++wsSeq.current;
+    setWsLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const raw = await cell.SearchWorldspaces(worldspace.trim(), 100);
+        if (wsSeq.current !== mySeq) return;
+        setWsMatches(JSON.parse(raw) as CellSearchHit[]);
+      } catch {
+        if (wsSeq.current === mySeq) setWsMatches([]);
+      } finally {
+        if (wsSeq.current === mySeq) setWsLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [worldspace, cell, noEnv, pickMode]);
+
   const load = async (idOverride?: string) => {
     const id = (idOverride ?? cellId).trim();
     if (!cell || !id) return;
     setLS('cellId', id);
+    await runLoad(() => cell.GetPlacedReferences(id));
+  };
+
+  const loadGrid = async (wsOverride?: string) => {
+    const ws = (wsOverride ?? worldspace).trim();
+    const x = Number.parseInt(gridX, 10);
+    const y = Number.parseInt(gridY, 10);
+    if (!cell || !ws || Number.isNaN(x) || Number.isNaN(y)) return;
+    setLS('worldspace', ws);
+    setLS('gridX', String(x));
+    setLS('gridY', String(y));
+    await runLoad(() => cell.GetPlacedReferencesAtGrid(ws, x, y));
+  };
+
+  const runLoad = async (fetchReferences: () => Promise<string>) => {
+    if (!cell) return;
     setBusy(true);
     setResult(null);
     setGeometry({});
@@ -177,7 +224,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     resetVisibilityHistory();
     setStatus('Reading placed references…');
     try {
-      const raw = await cell.GetPlacedReferences(id);
+      const raw = await fetchReferences();
       const parsed = JSON.parse(raw) as CellReferencesResult;
       if (parsed.error) {
         setStatus(parsed.error);
@@ -350,6 +397,82 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
             {sidebarTab === 'info' ? (
               <div className="cell-sidebar-pane">
+                <div className="cell-mode-tabs">
+                  <button
+                    className={`cell-mode-tab${pickMode === 'cell' ? ' active' : ''}`}
+                    onClick={() => { setPickMode('cell'); setLS('pickMode', 'cell'); }}
+                  >By name</button>
+                  <button
+                    className={`cell-mode-tab${pickMode === 'grid' ? ' active' : ''}`}
+                    onClick={() => { setPickMode('grid'); setLS('pickMode', 'grid'); }}
+                    title="Exterior cells are addressed by worldspace + grid coordinate"
+                  >Exterior grid</button>
+                </div>
+
+                {pickMode === 'grid' && (
+                  <>
+                    <div className="cell-dropdown">
+                      <div className="cell-dropdown-search">
+                        <Search size={13} className="cell-search-icon" />
+                        <input
+                          value={worldspace}
+                          onChange={e => setWorldspace(e.target.value)}
+                          placeholder={noEnv ? 'Load a modlist first…' : 'Search worldspaces…'}
+                          disabled={unavailable || noEnv}
+                          onKeyDown={e => { if (e.key === 'Enter') loadGrid(); }}
+                        />
+                        {wsLoading && <span className="cell-dropdown-spinner" title="Updating…" />}
+                      </div>
+                      <div className="cell-dropdown-list cell-dropdown-list-short">
+                        {noEnv || unavailable ? (
+                          <div className="cell-suggest-empty">{unavailable ? 'Cell bridge unavailable.' : 'Load a modlist to browse worldspaces.'}</div>
+                        ) : wsMatches === null ? (
+                          <div className="cell-suggest-empty">Loading…</div>
+                        ) : wsMatches.length === 0 ? (
+                          <div className="cell-suggest-empty">No matching worldspaces.</div>
+                        ) : (
+                          wsMatches.map((h, i) => (
+                            <div
+                              key={`${h.FormKey}:${i}`}
+                              className={`cell-suggest-row${worldspace.trim() === (h.EditorID || h.FormKey) ? ' selected' : ''}`}
+                              onClick={() => setWorldspace(h.EditorID || h.FormKey)}
+                            >
+                              <span className="cell-suggest-id">{h.EditorID || h.FormKey}</span>
+                              {h.Name && <span className="cell-suggest-name">"{h.Name}"</span>}
+                              <span className="cell-suggest-plugin">{h.Plugin}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="cell-grid-inputs">
+                      <label>X<input
+                        type="number"
+                        value={gridX}
+                        onChange={e => setGridX(e.target.value)}
+                        disabled={unavailable || noEnv}
+                        onKeyDown={e => { if (e.key === 'Enter') loadGrid(); }}
+                      /></label>
+                      <label>Y<input
+                        type="number"
+                        value={gridY}
+                        onChange={e => setGridY(e.target.value)}
+                        disabled={unavailable || noEnv}
+                        onKeyDown={e => { if (e.key === 'Enter') loadGrid(); }}
+                      /></label>
+                    </div>
+                    <button
+                      className="papyrus-run cell-load-btn"
+                      onClick={() => loadGrid()}
+                      disabled={busy || unavailable || noEnv || !worldspace.trim()
+                        || Number.isNaN(Number.parseInt(gridX, 10)) || Number.isNaN(Number.parseInt(gridY, 10))}
+                    >
+                      <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
+                    </button>
+                  </>
+                )}
+
+                {pickMode === 'cell' && (
                 <div className="cell-dropdown">
                   <div className="cell-dropdown-search">
                     <Search size={13} className="cell-search-icon" />
@@ -380,9 +503,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                     )}
                   </div>
                 </div>
+                )}
+                {pickMode === 'cell' && (
                 <button className="papyrus-run cell-load-btn" onClick={() => load()} disabled={busy || unavailable || noEnv || !cellId.trim()}>
                   <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
                 </button>
+                )}
 
                 {result && (
                   <div className="cell-stats">
@@ -535,6 +661,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                 <div className="nif-view-empty">
                   {unavailable ? 'Cell bridge unavailable.'
                     : noEnv ? 'Load a modlist first, then pick a cell from the list.'
+                    : pickMode === 'grid' ? 'Pick a worldspace, enter its grid X/Y, and press Load Cell.'
                     : 'Pick a cell from the list, or paste a FormKey/EditorID and press Load Cell.'}
                 </div>
               )}

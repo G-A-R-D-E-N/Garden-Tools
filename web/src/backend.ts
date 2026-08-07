@@ -26,14 +26,40 @@ export interface Backend {
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
+  CheckEslEligibility(plugin: string): Promise<string>;
   CleanPlugin(plugin: string): Promise<string>;
   RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;
+
+  // ---- xEdit parity ----
+  DescribeElement(plugin: string, record: string, path: string): Promise<string>;  // JSON: ElementActions
+  AddElement(plugin: string, record: string, path: string, template: string): Promise<string>;
+  RemoveElement(plugin: string, record: string, path: string): Promise<string>;
+  MoveElement(plugin: string, record: string, path: string, delta: number): Promise<string>;
+  ClearElement(plugin: string, record: string, path: string): Promise<string>;
+  GetConditions(plugin: string, record: string): Promise<string>;   // JSON: ConditionDto[]
+  GetConditionsAt(plugin: string, record: string, path: string): Promise<string>;
+  SetConditionsAt(plugin: string, record: string, path: string, conditionsJson: string): Promise<string>;
+  GetConditionFunctions(): Promise<string>;                         // JSON: string[]
+  GetConditionRunOnTypes(): Promise<string>;                        // JSON: string[]
+  GetConditionFunctionParams(): Promise<string>;                    // JSON: fn -> ParamSlot[]
+  ResolveFormKeyLabels(formKeysCsv: string): Promise<string>;       // JSON: key -> "EditorID [key]"
+  CopyAsNewRecord(sourcePlugin: string, id: string, targetPlugin: string,
+                  newEditorId: string): Promise<string>;
+  RemoveIdenticalToMaster(plugin: string, apply: boolean): Promise<string>;
+  CreateMergedPatch(plugins: string, patchPlugin: string, apply: boolean): Promise<string>;
+  AddMasters(plugin: string, mastersCsv: string): Promise<string>;
+  RenumberPluginFormIds(plugin: string, start: string, apply: boolean): Promise<string>;
+  CreateSeqFile(plugin: string, outputDir: string): Promise<string>;
+  CheckCircularLeveledLists(plugin: string): Promise<string>;
+  DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean): Promise<string>;
+  ChangeReferencingRecords(from: string, to: string, patchPlugin: string, apply: boolean): Promise<string>;
 
   // ---- navigator / workspace / detail rail ----
   GetActivePlugins(): Promise<string>;                       // JSON: ActivePlugin[]
   GetRecordTypeIndex(): Promise<string>;                     // JSON: RecordTypeEntry[]
   GetRecordsOfType(signature: string, filter: string,
                    limit: number, offset: number): Promise<string>;   // JSON: SearchHit[]
+  GetRecordsGrid(plugin: string, type: string, limit: number, offset: number): Promise<string>; // JSON: { columns, rows, total, offset }
   GetContainmentPath(formKey: string): Promise<string>;      // JSON: BreadcrumbNode[]
   GetRecordDetails(formKey: string): Promise<string>;        // JSON: RecordDetails | null
   GetRecordPluginMatrix(formKey: string): Promise<string>;   // JSON: PluginMatrixRow[]
@@ -110,6 +136,31 @@ export interface ConflictFieldRow {
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }
 export interface RecordProblem { Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
+/** Which xEdit element actions are legal at a grid row, from DescribeElement. */
+export interface ElementActions {
+  canAdd: boolean;
+  templates: string[];     // types the list accepts; >1 means Add is a submenu, as in xEdit
+  elementType: string;
+  canRemove: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  canClear: boolean;
+  count: number;
+  error?: string;
+}
+
+/** One row of a record's Conditions list, in the shape SetConditions round-trips. */
+export interface ConditionDto {
+  function: string;
+  operator: string;
+  value?: number;
+  compareGlobal?: string;
+  param1?: string | number;
+  param2?: string | number;
+  runOn?: string;
+  reference?: string;
+  flags?: string;
+}
 export interface ConflictMatrix {
   FormKey: string;
   EditorID: string;
@@ -384,6 +435,9 @@ export interface CellSearchHit {
 
 export interface CellHost {
   GetPlacedReferences(cellId: string): Promise<string>;          // JSON: CellReferencesResult
+  // Exterior cells are addressed by worldspace + grid coordinate rather than by FormKey/EditorID.
+  GetPlacedReferencesAtGrid(worldspace: string, gridX: number, gridY: number): Promise<string>;
+  SearchWorldspaces(query: string, limit: number): Promise<string>;  // JSON: CellSearchHit[] (WRLD)
   // relModelPathsJson: JSON array of unique modelPath strings from GetPlacedReferences.
   GetGeometryBatch(relModelPathsJson: string): Promise<string>;  // JSON: CellGeoBatchResult
   GetPlugins(): Promise<string>;                                  // JSON: string[] -- empty = nothing loaded

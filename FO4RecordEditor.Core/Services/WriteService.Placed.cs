@@ -65,11 +65,30 @@ public static partial class WriteService
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return openMsg;
 
-        var cell = FindCellInMod(mod, cellId);
+        ICell? cell = FindCellInMod(mod, cellId);
+        // #64: the cell isn't already a copy this plugin owns -- try to create that override on the
+        // fly. copy_as_override (ResolveConflict/AddOverrideReturning) cannot do this itself: it walks
+        // the mod's own TOP-LEVEL group properties via reflection, and Cell is nested inside
+        // CellBlock/CellSubBlock (interior) or a Worldspace's block tree (exterior), not a top-level
+        // group -- the same limitation WriteService.CellEdit.cs already documented for placed
+        // references. ILinkCache.TryResolveContext + IModContext.GetOrAddAsOverride resolves and
+        // creates the FULL parent chain regardless of interior/exterior, so this is the one fallback
+        // that actually covers both -- previously this doc comment told callers to "copy_as_override
+        // an existing cell in first," which never worked for ANY cell, not just exterior ones.
         if (cell == null)
-            return $"Cell '{cellId}' not found in {plugin}. A placed object must live in a cell this " +
-                   $"plugin owns or overrides -- create one with create_cell, or copy_as_override an " +
-                   $"existing cell into this plugin first.";
+        {
+            var cellFk = MutagenLoader.ResolveId(env, cellId);
+            if (!cellFk.IsNull &&
+                MutagenLoader.LinkCache is Mutagen.Bethesda.Plugins.Cache.ILinkCache<IFallout4Mod, IFallout4ModGetter> cache &&
+                cache.TryResolveContext<ICell, ICellGetter>(cellFk, out var ctx))
+            {
+                try { cell = ctx.GetOrAddAsOverride(mod); }
+                catch (Exception ex) { return $"Could not create an override for cell '{cellId}' in {plugin}: {ex.Message}"; }
+            }
+        }
+        if (cell == null)
+            return $"Cell '{cellId}' not found in {plugin} and could not be resolved via the load order " +
+                   $"either -- create one with create_cell, or check the FormKey/EditorID.";
 
         if (!ResolveFk(env, baseId, out var baseFk))
             return $"Base object '{baseId}' is not a FormKey and no loaded record has that EditorID.";

@@ -77,6 +77,30 @@
 }
 
 .rv-prop-col { width: 300px; max-width: 300px; }
+
+/* Column width modes (xEdit: Standard / Fit All / Fit Text / Fit Smart), applied on the .rv-grid
+   element itself. Base .rv-grid above (table-layout:fixed, no per-plugin-column width) IS Fit All --
+   the browser divides remaining space evenly across unsized columns, which was this tool's only
+   behaviour before these modes existed. The others override that. */
+.rv-cw-standard { table-layout: fixed; }
+.rv-cw-standard th:not(.rv-prop-col),
+.rv-cw-standard td:not(.rv-prop-col) { width: 200px; max-width: 200px; }
+
+.rv-cw-fitText, .rv-cw-fitSmart {
+  table-layout: auto;   /* size each column to its own content, xEdit's AutoFitColumns intent */
+}
+.rv-cw-fitText th:not(.rv-prop-col), .rv-cw-fitText td:not(.rv-prop-col),
+.rv-cw-fitSmart th:not(.rv-prop-col), .rv-cw-fitSmart td:not(.rv-prop-col) {
+  white-space: nowrap;
+}
+/* Fit Smart adds xEdit's ceiling: content sizing is fine until one huge value would blow the whole
+   grid wide, at which point that one column should wrap and clip rather than drag every other
+   column into a horizontal scrollbar with it. */
+.rv-cw-fitSmart th:not(.rv-prop-col), .rv-cw-fitSmart td:not(.rv-prop-col) {
+  white-space: normal;
+  max-width: min(480px, 40vw);
+  overflow-wrap: break-word;
+}
 /* Sticky left column -- always needs an opaque background so scrolled content doesn't show through.
    Use td.rv-sticky / th.rv-sticky specificity (0,1,1) to beat .rv-diff td (0,1,1) and
    .rv-grid tr:hover td (0,2,1) rules below. */
