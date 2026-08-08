@@ -5,7 +5,7 @@ using FluentAssertions;
 using FO4RecordEditor.Services;
 using Xunit;
 
-namespace FO4RecordEditor.Tests;
+namespace FO4RecordEditor.Core.Tests;
 
 // #87: the per-signature counts-walk retains nothing after #85, but it still reads every plugin and
 // costs 7.0 s across a real 663-plugin load order on every process start. RecordCountCache persists
