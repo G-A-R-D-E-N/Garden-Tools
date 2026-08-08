@@ -1301,7 +1301,12 @@ public static partial class MutagenLoader
     // scalar/enum/FormLink/collection filter either way -- only the caller's requested column count differs.
     private static List<PropertyInfo> DiscoverGridColumns(object rec0, int max)
     {
-        var colProps = new List<PropertyInfo>();
+        // Two passes, scalars first. A collection can only ever render as a summary ("[4 items]"),
+        // so when collections were taken in plain reflection order they crowded the real values --
+        // damage, value, weight -- out of the column budget and the grid came out mostly useless.
+        // Collections are still offered, but only with the budget the scalars did not need.
+        var scalars = new List<PropertyInfo>();
+        var collections = new List<PropertyInfo>();
         foreach (var prop in rec0.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (_skipProps.Contains(prop.Name)) continue;
@@ -1310,13 +1315,13 @@ public static partial class MutagenLoader
             object? v; try { v = prop.GetValue(rec0); } catch { continue; }
             if (v == null) continue;
             var vt = v.GetType();
-            bool keep = _leafTypes.Contains(vt) || vt.IsEnum
-                || v is Mutagen.Bethesda.Plugins.IFormLinkIdentifier
-                || (v is IEnumerable && vt != typeof(string));
-            if (!keep) continue;
-            colProps.Add(prop);
-            if (colProps.Count >= max) break;
+            if (_leafTypes.Contains(vt) || vt.IsEnum || v is Mutagen.Bethesda.Plugins.IFormLinkIdentifier)
+                scalars.Add(prop);
+            else if (v is IEnumerable && vt != typeof(string))
+                collections.Add(prop);
         }
+        var colProps = scalars.Take(max).ToList();
+        if (colProps.Count < max) colProps.AddRange(collections.Take(max - colProps.Count));
         return colProps;
     }
 

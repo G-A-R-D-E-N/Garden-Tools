@@ -300,6 +300,19 @@ public class BackendInterop
 
     // Return JSON (not string[]): a raw array comes back over the WebView2 bridge as a remote proxy,
     // which the JS caller can't reliably spread/iterate. Every other method returns JSON for this reason.
+    /// <summary>
+    /// The record types present in ONE plugin, with that plugin's own counts ("Keyword (33)").
+    /// The spreadsheet's type list used to come from the load-order-wide index, so it offered 149
+    /// types with global counts and most choices returned an empty grid for the chosen plugin.
+    /// </summary>
+    public System.Threading.Tasks.Task<string> GetPluginRecordTypes(string plugin) =>
+        DebugLog.GuardAsync(nameof(GetPluginRecordTypes), async () =>
+        {
+            if (Env == null) return "[]";
+            var types = await System.Threading.Tasks.Task.Run(() => MutagenLoader.QueryRecordTypes(Env, plugin));
+            return JsonConvert.SerializeObject(types);
+        }, plugin);
+
     public string GetEditablePlugins() =>
         DebugLog.Guard(nameof(GetEditablePlugins), () => JsonConvert.SerializeObject(WriteService.EditablePlugins().ToArray()));
 }

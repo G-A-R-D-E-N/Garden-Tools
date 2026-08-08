@@ -45,7 +45,7 @@ public static partial class MutagenLoader
                     {
                         null => "",
                         Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli => FormatFormLink(fli),
-                        IEnumerable ie when v.GetType() != typeof(string) => $"[{SumCountEnumerable(ie)} items]",
+                        IEnumerable ie when v.GetType() != typeof(string) => SummarizeEnumerable(ie),
                         _ => v.ToString() ?? "",
                     };
                 }
@@ -55,5 +55,44 @@ public static partial class MutagenLoader
         }).ToArray();
 
         return JsonSerializer.Serialize(new { columns, rows, total = recs.Count, offset });
+    }
+
+    /// <summary>
+    /// A readable summary of a list cell. "[4 items]" told the user nothing and could not be acted
+    /// on: it is the same string for four keywords and for four components. Name the first few
+    /// entries instead, and only fall back to a count once the list is too long to show.
+    /// </summary>
+    private static string SummarizeEnumerable(IEnumerable ie)
+    {
+        const int show = 3;
+        var parts = new List<string>();
+        int total = 0, rendered = 0;
+        foreach (var item in ie)
+        {
+            total++;
+            if (rendered >= show) continue;
+            try
+            {
+                string text;
+                if (item == null) continue;
+                if (item is Mutagen.Bethesda.Plugins.IFormLinkIdentifier fli) text = FormatFormLink(fli);
+                else
+                {
+                    text = item.ToString() ?? "";
+                    // A struct entry with no ToString() override yields its own class name, which is
+                    // noise ("...ConstructibleObjectComponentBinaryOverlay") and worse than a count.
+                    var t = item.GetType();
+                    if (text.Length == 0 || text == t.FullName || text == t.ToString()) continue;
+                }
+                if (text.Length == 0) continue;
+                parts.Add(text);
+                rendered++;
+            }
+            catch { /* one bad entry must not lose the whole cell */ }
+        }
+        if (total == 0) return "";
+        if (parts.Count == 0) return total == 1 ? "[1 item]" : $"[{total} items]";   // nothing renderable: a count is honest
+        var head = string.Join(", ", parts);
+        return total > parts.Count ? $"{head}, +{total - parts.Count} more" : head;
     }
 }
