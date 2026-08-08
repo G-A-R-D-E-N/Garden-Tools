@@ -40,7 +40,7 @@ The end-user documentation is `../MCP_SETUP.md`, plus `README.md`, `LICENSE` and
 
 | Doc | What it is |
 |---|---|
-| [RUNNING_ON_LINUX.md](RUNNING_ON_LINUX.md) | .NET and Wine setup, CLI flags, and the gotchas of headless MCP mode on Linux. |
+| [RUNNING_ON_LINUX.md](RUNNING_ON_LINUX.md) | The native Linux build: installing it, building the .deb, how the WebKitGTK host stands in for WebView2, and the gotchas. |
 | [MO2_SETUP.md](MO2_SETUP.md) | Using the tool with a Mod Organizer 2 instance. |
 | [SCRIPTS.md](SCRIPTS.md) | The helper scripts in the tool folder. |
 | [SPRIGGIT.md](SPRIGGIT.md) | Spriggit round-tripping notes. |
