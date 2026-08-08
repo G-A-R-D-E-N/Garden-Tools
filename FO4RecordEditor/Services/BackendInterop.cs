@@ -194,8 +194,11 @@ public class BackendInterop
             $"{plugin} {record} {field}-={value}");
     public string DeleteRecord(string plugin, string id) =>
         DebugLog.Guard(nameof(DeleteRecord), () => WriteService.DeleteRecord(plugin, id, Env), $"{plugin} {id}");
-    public string CopyAsOverride(string sourcePlugin, string id, string patchPlugin) =>
-        DebugLog.Guard(nameof(CopyAsOverride), () => WriteService.CopyAsOverride(Env, sourcePlugin, id, patchPlugin),
+    /// <summary>Copy as override. Returns a message starting with WriteService.OverwritePrompt when
+    /// the target already has this record and <paramref name="overwrite"/> was not set, so the UI can
+    /// ask before replacing it.</summary>
+    public string CopyAsOverride(string sourcePlugin, string id, string patchPlugin, bool overwrite) =>
+        DebugLog.Guard(nameof(CopyAsOverride), () => WriteService.CopyAsOverride(Env, sourcePlugin, id, patchPlugin, overwrite),
             $"{id} {sourcePlugin}->{patchPlugin}");
     public string CopyAsOverrideMany(string itemsJson, string patchPlugin) =>
         DebugLog.Guard(nameof(CopyAsOverrideMany), () => WriteService.CopyAsOverrideMany(Env, itemsJson, patchPlugin), patchPlugin);

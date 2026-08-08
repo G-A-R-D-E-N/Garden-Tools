@@ -1362,7 +1362,58 @@ public static partial class WriteService
     /// as an override. The patch plugin (loading last) then wins the conflict. The patch is opened
     /// or created automatically and held in memory until SavePlugin is called.
     /// </summary>
+    /// <summary>The sentinel a caller must recognise to offer "overwrite?". Kept as a prefix so the
+    /// existing "starts with Copied" success contract in CopyAsOverrideMany is unaffected.</summary>
+    public const string OverwritePrompt = "EXISTS:";
+
+    /// <summary>
+    /// Position of a plugin in the load order, or -1 when it is not in it (a patch about to be
+    /// created is not, and will load last, which is why -1 is treated as "after everything").
+    /// </summary>
+    private static int LoadOrderIndexOf(object? env, string pluginName)
+    {
+        if (env == null || string.IsNullOrWhiteSpace(pluginName)) return -1;
+        try
+        {
+            int i = 0;
+            foreach (var l in ((System.Collections.IEnumerable)((dynamic)env).LoadOrder.ListedOrder).Cast<dynamic>())
+            {
+                if (string.Equals((string)l.ModKey.FileName.String, pluginName, StringComparison.OrdinalIgnoreCase))
+                    return i;
+                i++;
+            }
+        }
+        catch { }
+        return -1;
+    }
+
+    /// <summary>
+    /// Declare <paramref name="master"/> on the mod if it is not already declared. Returns true when
+    /// it was actually added. Masters are recomputed on save, but xEdit shows the dependency the
+    /// moment the override exists, and so should the header the UI reads back.
+    /// </summary>
+    private static bool EnsureMaster(IFallout4Mod mod, string master, string selfName)
+    {
+        if (string.IsNullOrWhiteSpace(master)) return false;
+        if (string.Equals(master, selfName, StringComparison.OrdinalIgnoreCase)) return false;  // never itself
+        if (mod.ModHeader.MasterReferences.Any(m =>
+                string.Equals(m.Master.FileName.String, master, StringComparison.OrdinalIgnoreCase)))
+            return false;
+        mod.ModHeader.MasterReferences.Add(
+            new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = master });
+        return true;
+    }
+
     public static string ResolveConflict(object? env, string formKeyStr, string winningPlugin, string patchPlugin)
+        => ResolveConflict(env, formKeyStr, winningPlugin, patchPlugin, overwrite: false);
+
+    /// <summary>
+    /// Copy a record into a patch as an override, with xEdit's rules around it:
+    /// the target may not load before what it overrides, an existing override is not replaced
+    /// without being asked, and the origin is declared as a master so the override actually resolves.
+    /// </summary>
+    public static string ResolveConflict(object? env, string formKeyStr, string winningPlugin, string patchPlugin,
+        bool overwrite)
     {
         if (!FormKey.TryFactory(formKeyStr, out var fk)) return "Invalid FormKey.";
         if (string.IsNullOrWhiteSpace(patchPlugin)) return "Choose a patch plugin to write the resolution into.";
@@ -1407,14 +1458,60 @@ public static partial class WriteService
             }
         }
 
+        // Load order: an override only wins if it loads AFTER what it overrides. Copying into a
+        // plugin that loads earlier produces a record the game ignores, silently -- so refuse it
+        // rather than write something that looks applied and is not. A patch that is not in the load
+        // order yet (index -1) is about to be created and will load last, so it is always allowed.
+        var recordMaster = fk.ModKey.FileName.String;
+        int targetIdx = LoadOrderIndexOf(env, patchName);
+        if (targetIdx >= 0)
+        {
+            int originIdx = LoadOrderIndexOf(env, winningPlugin);
+            int masterIdx = LoadOrderIndexOf(env, recordMaster);
+            // Must sit after BOTH the record's own master and the version being copied.
+            int mustFollowIdx = Math.Max(originIdx, masterIdx);
+            var mustFollow = originIdx >= masterIdx ? winningPlugin : recordMaster;
+            if (mustFollowIdx >= 0 && targetIdx < mustFollowIdx)
+            {
+                return ToolError.Fail(
+                    $"Refused: '{patchName}' is at load order {targetIdx:X2} but '{mustFollow}' is at " +
+                    $"{mustFollowIdx:X2}. An override only takes effect when it loads AFTER the plugin it " +
+                    $"overrides, so this copy would be ignored by the game. Move '{patchName}' later in the " +
+                    $"load order, or copy into a plugin that already loads after '{mustFollow}'.");
+            }
+        }
+
+        // Overwrite protection: GetOrAddAsOverride would silently replace an override already in the
+        // patch, discarding whatever edits it carried. Ask first, exactly once, via a sentinel the
+        // caller turns into a prompt.
+        bool alreadyPresent;
+        try { alreadyPresent = patch.EnumerateMajorRecords().Any(r => r.FormKey == fk); }
+        catch { alreadyPresent = false; }
+        if (alreadyPresent && !overwrite)
+        {
+            var existingEdid = string.IsNullOrEmpty(getter.EditorID) ? fk.ToString() : getter.EditorID;
+            return $"{OverwritePrompt} '{patchName}' already contains an override for {existingEdid} ({fk}). " +
+                   $"Overwrite the existing record with {winningPlugin}'s version?";
+        }
+
         try
         {
             if (!AddOverride(patch, getter))
                 return $"This record type ({getter.Registration.Name}) cannot be overridden yet.";
+
+            // Master injection: the override references a record owned by another plugin, so that
+            // plugin has to be declared or the FormID resolves to nothing. Save recomputes the list,
+            // but the UI reads the header back immediately, and xEdit shows the dependency at once.
+            var added = new List<string>();
+            if (EnsureMaster(patch, recordMaster, patchName)) added.Add(recordMaster);
+            if (EnsureMaster(patch, winningPlugin, patchName)) added.Add(winningPlugin);
+
             MutagenLoader.InvalidateModIndex(patchName);
             NotifyChanged(patchName);
-            return $"Copied {winningPlugin}'s version of {fk} into {patchName} as an override. " +
-                   $"Ensure {patchName} loads after the conflicting plugins, then save it.";
+            return $"Copied {winningPlugin}'s version of {fk} into {patchName} as an override"
+                   + (alreadyPresent ? " (replacing the override already there)" : "")
+                   + (added.Count > 0 ? $"; declared master(s): {string.Join(", ", added)}" : "")
+                   + $". Ensure {patchName} loads after the conflicting plugins, then save it.";
         }
         catch (Exception ex)
         {
@@ -1480,11 +1577,12 @@ public static partial class WriteService
     /// plugin as an override -- the xEdit "Copy as Override Into" operation. The patch is opened or
     /// created automatically. After this, edit the override with set_field/set_components/etc.
     /// </summary>
-    public static string CopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin)
+    public static string CopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin,
+        bool overwrite = false)
     {
         if (!ResolveFk(env, id, out var fk))
             return $"'{id}' is not a FormKey and no loaded record has that EditorID.";
-        return ResolveConflict(env, fk.ToString(), sourcePlugin, patchPlugin);
+        return ResolveConflict(env, fk.ToString(), sourcePlugin, patchPlugin, overwrite);
     }
 
     /// <summary>

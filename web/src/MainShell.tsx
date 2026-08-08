@@ -921,6 +921,7 @@ export default function MainShell() {
                   activeTab={recordTab}
                   onTabChange={setRecordTab}
                   highlightField={aiHighlightField}
+                  onPluginsChanged={() => { void refreshPlugins(); }}
                 />
               ) : (
                 <div className="welcome-screen glass-panel">

@@ -97,13 +97,16 @@ function TabBtn({ id, current, set, children, count }: {
 }
 
 export default function RecordView(
-  { matrix, plugin, onReload, onOpenRecord, activeTab: externalTab, onTabChange, highlightField }: {
+  { matrix, plugin, onReload, onOpenRecord, activeTab: externalTab, onTabChange, highlightField,
+    onPluginsChanged }: {
     matrix: ConflictMatrix; plugin: string;
     onReload: () => Promise<void>;
     onOpenRecord?: (formKey: string, plugin: string) => void;
     activeTab?: RecordTab;
     onTabChange?: (t: RecordTab) => void;
     highlightField?: string;
+    /** Ask the shell to rebuild the Explorer tree: a copy can create or extend a plugin. */
+    onPluginsChanged?: () => void;
   }
 ) {
   const [internalTab, setInternalTab] = useState<RecordTab>('grid');
@@ -358,7 +361,26 @@ export default function RecordView(
     const b = back();
     if (!b) return;
     setStatus('Copying…');
-    try { setStatus(await b.CopyAsOverride(matrix.Plugins[col], matrix.FormKey, target)); await onReload(); }
+    try {
+      let msg = await b.CopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, false);
+      // The backend refuses rather than silently replacing an override the target already has.
+      // Ask, then repeat the same call with overwrite set. xEdit asks the same question.
+      if (msg.startsWith('EXISTS:')) {
+        const proceed = await askConfirm({
+          title: 'Record already exists in target plugin',
+          message: msg.slice('EXISTS:'.length).trim(),
+          confirmLabel: 'Overwrite',
+          danger: true,
+        });
+        if (!proceed) { setStatus('Copy cancelled -- the existing override was left alone.'); return; }
+        msg = await b.CopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true);
+      }
+      setStatus(msg);
+      // Reload so the new override shows as a column in the matrix immediately, and refresh the
+      // Explorer so the target plugin appears/updates there too.
+      await onReload();
+      onPluginsChanged?.();
+    }
     catch (e: any) { setStatus('Copy failed: ' + (e?.message || e)); }
   };
 
