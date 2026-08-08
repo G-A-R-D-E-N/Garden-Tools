@@ -151,6 +151,13 @@ public static class PapyrusDiagnosticCodes
     public const string InvalidCast = "PAP0043";
     public const string OverrideMismatch = "PAP0044";
     public const string ParameterOrder = "PAP0045";
+
+    // Code generator. Unlike the two layers above, these are not suppressed when sources are
+    // incomplete: a name the back end cannot resolve is a thing it cannot emit an instruction for,
+    // and emitting a guess would be worse than refusing. See PapyrusCodeGenerator.
+    public const string CannotEmit = "PAP0050";
+    public const string UnknownCallTarget = "PAP0051";
+    public const string NonConstantInitializer = "PAP0052";
 }
 
 /// <summary>Collects diagnostics and stops the parser from looping forever on hopeless input.</summary>

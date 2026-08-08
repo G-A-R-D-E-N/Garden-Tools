@@ -152,11 +152,25 @@ public static class PapyrusAnalysisService
     }
 
     /// <summary>
-    /// Parses a .psc file or a folder of them and reports syntax diagnostics.
+    /// Parses a .psc file or a folder of them and reports syntax, name and type diagnostics.
     /// </summary>
+    /// <remarks>
+    /// Syntax comes from the parser and needs nothing else. Names and types come from
+    /// <see cref="PapyrusResolver"/> and <see cref="PapyrusTypeChecker"/>, which need the scripts a
+    /// file refers to, so they are only as good as the roots they are given -- and they know it.
+    /// <para>
+    /// <b>Both stay silent when the sources were incomplete</b>, which is what makes their 100%-clean
+    /// figure over the vanilla scripts mean anything: a script whose parent the index cannot find
+    /// would otherwise report every inherited member as undefined. The summary counts those files
+    /// separately rather than folding them into "clean", so a caller can tell "nothing wrong with it"
+    /// from "could not tell".
+    /// </para>
+    /// </remarks>
     /// <param name="source">A .psc path, or a folder (recursed).</param>
     /// <param name="all">Unused for a single file; a folder is always recursed.</param>
-    public static string Check(string source, bool all = true)
+    /// <param name="semantic">Also resolve names and check types, not just parse.</param>
+    /// <param name="imports">Extra source roots, semicolon-separated. Base scripts are added automatically.</param>
+    public static string Check(string source, bool all = true, bool semantic = true, string? imports = null)
     {
         if (string.IsNullOrWhiteSpace(source)) return "No source given.";
 
@@ -164,9 +178,29 @@ public static class PapyrusAnalysisService
         if (error != null) return error;
         if (files.Count == 0) return $"No .psc files found under '{source}'.";
 
+        PapyrusScriptIndex? index = null;
+        PapyrusResolver? resolver = null;
+        PapyrusTypeChecker? checker = null;
+        if (semantic)
+        {
+            index = new PapyrusScriptIndex();
+            var start = Directory.Exists(source) ? source : Path.GetDirectoryName(Path.GetFullPath(source))!;
+            foreach (var root in NaturalRootsFor(start)) index.AddRoot(root);
+            if (!string.IsNullOrWhiteSpace(imports))
+            {
+                foreach (var root in imports!.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                    index.AddRoot(root.Trim().Trim('"'));
+            }
+            foreach (var root in ToolPaths.PapyrusBaseImports()) index.AddRoot(root);
+            resolver = new PapyrusResolver(index);
+            checker = new PapyrusTypeChecker(index);
+        }
+
         var sb = new StringBuilder();
         var clean = 0;
-        var failed = 0;
+        var syntaxErrors = 0;
+        var semanticErrors = 0;
+        var incompleteSources = 0;
         var reported = 0;
 
         foreach (var file in files)
@@ -174,32 +208,231 @@ public static class PapyrusAnalysisService
             PapyrusScript script;
             try
             {
-                script = PapyrusParser.ParseFile(file);
+                script = index?.ParseCached(file) ?? PapyrusParser.ParseFile(file);
+                if (script == null) throw new IOException("could not be parsed");
             }
             catch (Exception ex)
             {
-                failed++;
+                syntaxErrors++;
                 if (reported++ < MaxReportedFiles) sb.AppendLine($"{file}: could not be read: {ex.Message}");
                 continue;
             }
 
             var errors = script.Diagnostics.Where(d => d.Severity == PapyrusSeverity.Error).ToList();
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                clean++;
+                syntaxErrors++;
+                if (reported++ < MaxReportedFiles)
+                {
+                    foreach (var d in errors) sb.AppendLine(d.ToString());
+                }
                 continue;
             }
 
-            failed++;
+            if (resolver == null) { clean++; continue; }
+
+            // A parser cannot throw here -- the corpus sweep exists to keep it that way -- but the
+            // semantic layers walk into other files, so a bad one on the roots must not take the run
+            // down with it.
+            List<PapyrusDiagnostic> found;
+            bool sourcesComplete;
+            try
+            {
+                var resolution = resolver.Resolve(script);
+                sourcesComplete = resolution.BaseChainComplete;
+                found = resolution.Diagnostics.Concat(checker!.Check(resolution))
+                    .Where(d => d.Severity == PapyrusSeverity.Error)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                semanticErrors++;
+                if (reported++ < MaxReportedFiles) sb.AppendLine($"{file}: {ex.GetType().Name}: {ex.Message}");
+                continue;
+            }
+
+            if (!sourcesComplete) incompleteSources++;
+            if (found.Count == 0) { clean++; continue; }
+
+            semanticErrors++;
             if (reported++ >= MaxReportedFiles) continue;
-            foreach (var d in errors) sb.AppendLine(d.ToString());
+            foreach (var d in found) sb.AppendLine(d.ToString());
         }
 
-        var summary = $"RESULT: {clean} clean, {failed} with syntax errors, of {files.Count} file(s).";
+        var summary = new StringBuilder();
+        summary.Append($"RESULT: {clean} clean, {syntaxErrors} with syntax errors");
+        if (semantic) summary.Append($", {semanticErrors} with name or type errors");
+        summary.AppendLine($", of {files.Count} file(s).");
+
+        if (!semantic)
+        {
+            summary.AppendLine(
+                "Syntax only. This does not resolve names or check types, so a clean result does not "
+                + "guarantee the script compiles. Set semantic=true, or use compile_papyrus.");
+        }
+        else if (incompleteSources > 0)
+        {
+            summary.AppendLine(
+                $"{incompleteSources} file(s) referred to scripts that are not on the roots, so name and type "
+                + "reporting was switched off for those -- otherwise every inherited member reads as undefined. "
+                + "They are neither confirmed clean nor confirmed broken. Add the missing root with 'imports'.");
+        }
+
         if (reported > MaxReportedFiles) sb.AppendLine($"({reported - MaxReportedFiles} more file(s) not listed.)");
-        sb.AppendLine();
-        sb.AppendLine("Syntax only. This does not type-check, so a clean result does not guarantee the script compiles.");
-        return summary + Environment.NewLine + Environment.NewLine + sb.ToString().TrimEnd();
+
+        var detail = sb.ToString().TrimEnd();
+        return detail.Length == 0
+            ? summary.ToString().TrimEnd()
+            : summary.ToString().TrimEnd() + Environment.NewLine + Environment.NewLine + detail;
+    }
+
+    /// <summary>
+    /// Compiles <c>.psc</c> to <c>.pex</c> in process, with no Creation Kit.
+    /// </summary>
+    /// <remarks>
+    /// The front door to <see cref="PapyrusCompiler"/>, which is the thing issue #78 was for: the
+    /// tool could read, understand and decompile Papyrus on a machine with no CK, but it could not
+    /// produce a script. It can now.
+    /// <para>
+    /// <b>A refusal here is a result, not a crash.</b> The back end emits nothing it cannot justify:
+    /// a callee with no declaration on the import roots has unknown arity the moment optional
+    /// parameters exist, so it reports and writes no file rather than emitting a call of the right
+    /// shape and the wrong length. That is almost always a missing <c>imports</c> root, and the
+    /// summary says so instead of leaving the caller to guess.
+    /// </para>
+    /// </remarks>
+    /// <param name="source">A <c>.psc</c> file, or a folder of them (recursed).</param>
+    /// <param name="output">Where the <c>.pex</c> go. Default is the source folder.</param>
+    /// <param name="imports">Extra source roots, semicolon-separated. Base scripts are added automatically.</param>
+    /// <param name="release">
+    /// Strips <c>DebugOnly</c> and <c>BetaOnly</c> calls, which is what the Creation Kit's <c>-r</c>
+    /// does. Off by default: a call into excluded code is not compiled at all, and silently deleting
+    /// an author's logging is the worse failure.
+    /// </param>
+    /// <param name="debugInfo">Line numbers, property groups and struct order. What a stack trace reads.</param>
+    /// <param name="flagFile">An <c>Institute_Papyrus_Flags.flg</c>; null finds one or uses the built-in table.</param>
+    public static string Compile(
+        string source,
+        string? output = null,
+        string? imports = null,
+        bool release = false,
+        bool debugInfo = true,
+        string? flagFile = null)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return "No source given.";
+
+        source = source.Trim().Trim('"');
+        if (File.Exists(source) && source.EndsWith(".pas", StringComparison.OrdinalIgnoreCase))
+        {
+            return "That is a Papyrus ASSEMBLY listing (.pas), not source. Compile the .psc instead; "
+                 + "decompile again with assembly=false to get one.";
+        }
+
+        var files = ResolveSources(source, out var error);
+        if (error != null) return error;
+        if (files.Count == 0) return $"No .psc files found under '{source}'.";
+
+        var rootFolder = Directory.Exists(source) ? source : Path.GetDirectoryName(Path.GetFullPath(source))!;
+        var outputFolder = string.IsNullOrWhiteSpace(output) ? rootFolder : output!.Trim().Trim('"');
+
+        var index = new PapyrusScriptIndex();
+        foreach (var root in NaturalRootsFor(rootFolder)) index.AddRoot(root);
+        if (!string.IsNullOrWhiteSpace(imports))
+        {
+            foreach (var root in imports!.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                index.AddRoot(root.Trim().Trim('"'));
+        }
+        int baseRoots = 0;
+        foreach (var root in ToolPaths.PapyrusBaseImports()) { index.AddRoot(root); baseRoots++; }
+
+        var compiler = new PapyrusCompiler(index);
+        var options = new PapyrusCompileOptions
+        {
+            EmitDebugInfo = debugInfo,
+            EmitDebugOnlyCode = !release,
+            EmitBetaOnlyCode = !release,
+            FlagFile = flagFile,
+        };
+
+        var sb = new StringBuilder();
+        int succeeded = 0, failed = 0, reported = 0, incompleteSources = 0;
+
+        foreach (var file in files)
+        {
+            PapyrusCompileResult result;
+            try
+            {
+                result = compiler.CompileFile(file, options);
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                if (reported++ < MaxReportedFiles) sb.AppendLine($"{file}: {ex.GetType().Name}: {ex.Message}");
+                continue;
+            }
+
+            if (!result.Success)
+            {
+                failed++;
+                if (!result.SourcesComplete) incompleteSources++;
+                if (reported++ >= MaxReportedFiles) continue;
+                foreach (var d in result.Errors.Take(10)) sb.AppendLine(d.ToString());
+                continue;
+            }
+
+            // A namespaced script is written into namespace folders, the way the game loads it and
+            // the way the Creation Kit writes it: MyNS:MyScript goes to <out>/MyNS/MyScript.pex.
+            var target = Path.Combine(
+                outputFolder,
+                Path.Combine(result.Script!.Name.Split(':', StringSplitOptions.RemoveEmptyEntries)) + ".pex");
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                result.Pex!.WriteFile(target);
+                succeeded++;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                if (reported++ < MaxReportedFiles) sb.AppendLine($"{target}: could not be written: {ex.Message}");
+            }
+        }
+
+        var summary = new StringBuilder();
+        summary.AppendLine($"RESULT: {succeeded} succeeded, {failed} failed, of {files.Count} file(s) (output -> {outputFolder})");
+        summary.AppendLine("engine : built-in (no Creation Kit)");
+        if (release) summary.AppendLine("mode   : release; DebugOnly and BetaOnly calls are not compiled");
+        if (reported > MaxReportedFiles) summary.AppendLine($"({reported - MaxReportedFiles} more file(s) not listed.)");
+
+        if (incompleteSources > 0)
+        {
+            summary.AppendLine();
+            summary.AppendLine(
+                $"{incompleteSources} of the failures could not see every script they refer to. The back end "
+                + "refuses rather than guessing: an unresolved callee has unknown arity once optional "
+                + "parameters exist. Add the missing source root with 'imports' (semicolon-separated).");
+
+            // Compiling without a Creation Kit still needs the vanilla base script SOURCES on the
+            // import path. That is a much weaker requirement than needing PapyrusCompiler.exe -- they
+            // are just .psc text, they are redistributed with plenty of modding resource packs, and
+            // they are not Windows-only -- but a script that mentions Form or ObjectReference cannot
+            // compile without them, and saying "no Creation Kit needed" without saying this would be
+            // an overclaim.
+            if (baseRoots == 0)
+            {
+                summary.AppendLine(
+                    "No base-script root was detected on this machine at all, so every vanilla type "
+                    + "(Form, ObjectReference, Actor, ...) is unknown. The built-in engine needs no "
+                    + "PapyrusCompiler.exe, but it does need the vanilla base script SOURCES to resolve "
+                    + "against. Point Settings > Papyrus base imports, or PAPYRUS_BASE_IMPORTS, at a "
+                    + "folder of them.");
+            }
+        }
+
+        var detail = sb.ToString().TrimEnd();
+        return detail.Length == 0
+            ? summary.ToString().TrimEnd()
+            : summary.ToString().TrimEnd() + Environment.NewLine + Environment.NewLine + detail;
     }
 
     /// <summary>Lists everything a script declares: the outline behind go-to-symbol.</summary>
@@ -322,6 +555,43 @@ public static class PapyrusAnalysisService
         return index;
     }
 
+    /// <summary>
+    /// The roots a folder of scripts implies, before anything the caller adds.
+    /// </summary>
+    /// <remarks>
+    /// The folder itself, plus its <c>Source/User</c> and <c>Source</c> ancestors when the path has
+    /// them. That layout is what the whole toolchain writes -- a namespaced script lives at
+    /// <c>Source/User/MyNS/MyScript.psc</c> and is <c>MyNS:MyScript</c> relative to
+    /// <c>Source/User</c>, not to its own folder -- so rooting only at the file's folder makes a
+    /// script resolve its siblings and nothing else. The index's bare-name fallback papers over some
+    /// of that; these roots mean it does not have to.
+    /// <para>
+    /// It walks up rather than guessing a depth from the declared ScriptName, which is the trap the
+    /// closed namespace-ascent fix was about: an unbounded ascent driven by a name the file chose
+    /// hands an arbitrarily shallow folder to a recursive walk.
+    /// </para>
+    /// </remarks>
+    public static IEnumerable<string> NaturalRootsFor(string folder)
+    {
+        // GetFullPath normalises an alternate separator (a caller on Windows may well hand us
+        // forward slashes, and a JSON tool argument usually does) but it preserves a trailing one,
+        // which would make the same root compare unequal to itself when added twice.
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        yield return full;
+
+        var parts = full.Split(Path.DirectorySeparatorChar);
+        for (int i = parts.Length - 1; i > 0; i--)
+        {
+            if (!parts[i].Equals("Source", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var sourceRoot = string.Join(Path.DirectorySeparatorChar, parts.Take(i + 1));
+            var user = Path.Combine(sourceRoot, "User");
+            if (Directory.Exists(user)) yield return user;
+            yield return sourceRoot;
+            yield break;
+        }
+    }
+
     /// <summary>Converts a 1-based line and column into a 0-based offset, or -1 if out of range.</summary>
     /// <remarks>
     /// Public because every caller that has a caret has it as a line and column and every query
@@ -371,12 +641,15 @@ public static class PapyrusAnalysisService
             return files;
         }
 
-        files.AddRange(Directory.EnumerateFiles(source, "*.psc", new EnumerationOptions
-        {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            MatchCasing = MatchCasing.CaseInsensitive,
-        }));
+        // PapyrusFileWalk, not Directory.EnumerateFiles(RecurseSubdirectories). The framework's
+        // recursive form skips Hidden and System by default, which drops everything under a dotted
+        // directory -- a scripts tree inside a .git checkout, a worktree, or any dot-prefixed folder
+        // vanishes silently -- and IgnoreInaccessible does not cover the IOException a Proton
+        // prefix's /proc symlinks throw, which aborts the whole walk rather than one subtree.
+        //
+        // The index has always used the walk. Until this used it too, the two disagreed about which
+        // files exist: a folder compile could report "0 files" on a tree the resolver reads happily.
+        files.AddRange(PapyrusFileWalk.EnumerateFiles(source, "*.psc"));
         files.Sort(StringComparer.OrdinalIgnoreCase);
         return files;
     }

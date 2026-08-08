@@ -240,14 +240,38 @@ engineering. Tracked as issue #59.
 ### Papyrus (built in -- no Champollion needed)
 `compile_papyrus` (`.psc` → `.pex`) · `decompile_papyrus` (`.pex` → `.psc`, recursive)
 
+`compile_papyrus` has two engines, chosen with `engine`:
+
+- **`builtin`** is this tool's own compiler -- lexer, parser, resolver, type checker, code generator
+  and `.pex` writer -- and needs **no `PapyrusCompiler.exe`**. It does still need the vanilla base
+  script *sources* on the import path, to resolve `Form`, `ObjectReference` and the rest; those are
+  plain `.psc` text rather than the Windows-only compiler, and `PAPYRUS_BASE_IMPORTS` or
+  **Settings → Papyrus base imports** is where you point it at them.
+- **`creationkit`** shells out to `PapyrusCompiler.exe`.
+- **`auto`**, the default, uses the Creation Kit when one is installed and the built-in engine when
+  there is not.
+
+`release` means the same thing to both engines: strip `DebugOnly` and `BetaOnly` calls, which is the
+Creation Kit's `-r`. `optimize` is a Creation Kit switch and is reported as ignored by the built-in
+engine rather than silently dropped.
+
+The built-in engine **refuses rather than guessing** when a script a call goes into is not on the
+import roots: the number of operands a call emits depends on that script's optional parameters, so
+there is no safe approximation. A failure naming `PAP0050` or `PAP0051` is almost always a missing
+import root and not bad source.
+
 ### Papyrus source analysis (built in -- **no Creation Kit needed**)
 `papyrus_check` · `papyrus_outline` · `papyrus_definition`
 
-These read `.psc` source with the tool's own Papyrus lexer and parser, so unlike `compile_papyrus`
-they do not need `PapyrusCompiler.exe` and work on a machine with no Creation Kit installed.
+These read `.psc` source with the tool's own Papyrus front end, so they need no `PapyrusCompiler.exe`
+and work on a machine with no Creation Kit installed.
 
-- `papyrus_check` parses a script or a whole folder and reports `file(line,col): error CODE: message`
-  for each syntax problem.
+- `papyrus_check` checks a script or a whole folder and reports `file(line,col): error CODE: message`
+  for each problem: syntax first, then -- with `semantic=true`, the default -- name resolution and
+  type checking. Name and type reporting **switches off** for a file whose parent, import or a named
+  type is not on the roots, because otherwise every inherited member reads as undefined; those files
+  are counted separately in the summary, so a "clean" count never quietly means "could not tell".
+  Pass `imports` (semicolon-separated roots) to widen what it can see.
 - `papyrus_outline` lists everything a script declares -- header, imports, structs and their members,
   custom events, groups, properties, variables, functions, events, states -- with signatures and
   positions. It still works on a file that has syntax errors, reporting what could be read.
@@ -259,10 +283,10 @@ line gutter, syntax errors and an outline that update as you type, click-to-insp
 Ctrl+click / F12 go-to-definition (following `Extends` and imports into other files), and Ctrl+S to
 save. It edits the buffer, not the file on disk, so the errors it shows are the ones in front of you.
 
-**They parse; they do not compile.** There is no name resolution or type checking behind them, so a
-clean `papyrus_check` does **not** mean the script compiles -- a misspelled function or a bad cast
-still fails at `compile_papyrus`. For the same reason `papyrus_definition` answers `not resolved`
-for a member reached through an expression whose type is not written in the source
+**They check; they do not emit.** A clean `papyrus_check` now covers syntax, names and types, which
+is most of what a compile would tell you, but only `compile_papyrus` actually produces a `.pex`.
+`papyrus_outline` and `papyrus_definition` are still name-based: `papyrus_definition` answers
+`not resolved` for a member reached through an expression whose type is not written in the source
 (`GetOwner().MyProperty`) rather than guessing at it.
 
 ### NIF
@@ -423,8 +447,12 @@ pool by EditorID; there is nothing to match on.
 
 - **The AI reports "not found" for a tool that should exist** → the server is an old build, or it
   never started. Reconnect.
-- **`compile_papyrus` says the compiler is missing** → install the Creation Kit, or set
-  `PAPYRUS_COMPILER_PATH`. The compiler is Bethesda's and cannot be shipped here.
+- **`compile_papyrus` says the compiler is missing** → you asked for `engine="creationkit"` and there
+  is none. Install the Creation Kit, set `PAPYRUS_COMPILER_PATH` (the compiler is Bethesda's and
+  cannot be shipped here), or use `engine="builtin"`, which does not need it.
+- **The built-in engine reports `PAP0050` on every vanilla type** → it has no base script sources to
+  resolve against. Set `PAPYRUS_BASE_IMPORTS`, or Settings → Papyrus base imports, to a folder of
+  vanilla `.psc`.
 - **The `nif_*` tools fail** → `tools\niftool\niftool.exe` is missing from the package, or
   `NIFTOOL_PATH` points somewhere stale.
 - **Nothing starts at all, no window, no log** → almost always the .NET 9 **Desktop** Runtime is

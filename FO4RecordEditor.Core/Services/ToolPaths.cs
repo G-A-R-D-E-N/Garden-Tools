@@ -120,20 +120,38 @@ public static class ToolPaths
             catch { /* registry unreadable -- fall through to the disk probe */ }
         }
 
-        foreach (var drive in DriveInfo.GetDrives())
+        // Path segments, not a backslash-joined literal. On Linux a backslash is an ordinary
+        // filename character, so the old form probed for a single file literally named
+        // "SteamLibrary\steamapps\common\Fallout 4" in each mount root and could never match --
+        // which is why auto-detection found nothing at all on the native build.
+        var relative = new[]
         {
-            foreach (var rel in new[]
-                     {
-                         @"SteamLibrary\steamapps\common\Fallout 4",
-                         @"Program Files (x86)\Steam\steamapps\common\Fallout 4",
-                     })
+            new[] { "SteamLibrary", "steamapps", "common", "Fallout 4" },
+            new[] { "Program Files (x86)", "Steam", "steamapps", "common", "Fallout 4" },
+            new[] { ".steam", "steam", "steamapps", "common", "Fallout 4" },
+            new[] { ".local", "share", "Steam", "steamapps", "common", "Fallout 4" },
+        };
+
+        var bases = new List<string>();
+        try
+        {
+            foreach (var drive in DriveInfo.GetDrives()) bases.Add(drive.Name);
+        }
+        catch { /* the mount table is not readable; the home probe below still applies */ }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(home)) bases.Add(home);
+
+        foreach (var root in bases)
+        {
+            foreach (var rel in relative)
             {
                 try
                 {
-                    var probe = Path.Combine(drive.Name, rel);
+                    var probe = Path.Combine(new[] { root }.Concat(rel).ToArray());
                     if (Directory.Exists(probe)) return probe;
                 }
-                catch { /* drive not ready */ }
+                catch { /* drive not ready, or a path this platform rejects */ }
             }
         }
         return null;
@@ -210,6 +228,11 @@ public static class ToolPaths
     /// Every base-script source root that exists, highest priority first. F4SE must precede the
     /// vanilla base: its Game.psc/Actor.psc declare extra natives that the vanilla ones lack.
     /// </summary>
+    /// <remarks>
+    /// Never throws. Every caller uses this to build an import path, and a probe failing on one
+    /// unreadable mount must degrade to a shorter list rather than take a compile down -- the
+    /// compiler already has an honest answer for "no base scripts found".
+    /// </remarks>
     public static List<string> PapyrusBaseImports()
     {
         var roots = new List<string>();
@@ -217,9 +240,13 @@ public static class ToolPaths
         void Add(string? dir)
         {
             if (string.IsNullOrWhiteSpace(dir)) return;
-            dir = dir.Trim().Trim('"');
-            if (Directory.Exists(dir) && !roots.Contains(dir, StringComparer.OrdinalIgnoreCase))
-                roots.Add(dir);
+            try
+            {
+                dir = dir.Trim().Trim('"');
+                if (Directory.Exists(dir) && !roots.Contains(dir, StringComparer.OrdinalIgnoreCase))
+                    roots.Add(dir);
+            }
+            catch { /* a path this platform rejects outright is simply not a root */ }
         }
 
         foreach (var p in (Env("PAPYRUS_BASE_IMPORTS") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))

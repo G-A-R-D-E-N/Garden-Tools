@@ -68,8 +68,11 @@ pointer that loads in that folder).
 | mastersort | `Tools\PluginEditTool\mastersort\` | master-order utility |
 
 Papyrus compile/decompile is **built into FO4RecordEditor** (`compile_papyrus` / `decompile_papyrus`)
-— Champollion is no longer needed. Compiling requires the Creation Kit's `PapyrusCompiler.exe`, which
-is not redistributable and is auto-detected from the local FO4 install.
+-- Champollion is no longer needed, and as of issue #78 neither is the Creation Kit's
+`PapyrusCompiler.exe`: `compile_papyrus` has its own compiler and an `engine` parameter that picks
+between it and the CK (`auto` prefers an installed CK). The built-in engine still needs the vanilla
+base script *sources* on the import path, which are not the compiler and are just `.psc` text. See
+[PAPYRUS.md](PAPYRUS.md) for the whole subsystem.
 
 ---
 

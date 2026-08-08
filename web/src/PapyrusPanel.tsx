@@ -12,6 +12,9 @@ import './PapyrusPanel.css';
 
 type Mode = 'decompile' | 'compile' | 'lookup' | 'analyze';
 type LookupKind = 'function' | 'script';
+// Which compiler runs. 'auto' prefers an installed Creation Kit, so an existing setup is unchanged,
+// and falls back to the built-in compiler, which needs no CK at all.
+type Engine = 'auto' | 'builtin' | 'creationkit';
 // Must match .papyrus-editor's line-height in PapyrusPanel.css. A textarea cannot scroll a
 // selection into view on its own, so jumping to a line means computing a scrollTop from it.
 const EDITOR_LINE_HEIGHT = 19;
@@ -41,6 +44,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   const [optimize, setOptimize] = useState(() => LSB('optimize', true));
   const [release, setRelease] = useState(() => LSB('release', false));
   const [compilerPath, setCompilerPath] = useState(() => LS('compilerPath', ''));
+  const [engine, setEngine] = useState<Engine>(() => (LS('engine', 'auto') as Engine));
 
   // wiki lookup options
   const [lookupKind, setLookupKind] = useState<LookupKind>(() => (LS('lookupKind', 'function') as LookupKind));
@@ -71,6 +75,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => setLS('flags', flags), [flags]);
   useEffect(() => { setLS('all', all); setLS('optimize', optimize); setLS('release', release); }, [all, optimize, release]);
   useEffect(() => setLS('compilerPath', compilerPath), [compilerPath]);
+  useEffect(() => setLS('engine', engine), [engine]);
   useEffect(() => setLS('lookupKind', lookupKind), [lookupKind]);
   useEffect(() => setLS('lookupScript', lookupScript), [lookupScript]);
   useEffect(() => setLS('lookupFunction', lookupFunction), [lookupFunction]);
@@ -261,7 +266,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     try {
       const out = mode === 'decompile'
         ? await papyrus.Decompile(source, output, assembly, write)
-        : await papyrus.Compile(source, output, imports, flags, all, optimize, release, compilerPath);
+        : await papyrus.Compile(source, output, imports, flags, all, optimize, release, compilerPath, engine);
       const text = out || '(no output)';
       setResult(text);
       // remember an output dir for the "Open folder" button
@@ -405,17 +410,38 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
                   <input value={flags} onChange={e => setFlags(e.target.value)} placeholder="Institute_Papyrus_Flags.flg" />
                 </label>
                 <label className="papyrus-field">
-                  <span>Compiler path (default: CK compiler)</span>
-                  <div className="papyrus-input-row">
-                    <input value={compilerPath} onChange={e => setCompilerPath(e.target.value)} placeholder="(auto-detect)" />
-                    <button className="sidebar-action-btn" onClick={browseCompiler} disabled={unavailable}>Exe…</button>
-                  </div>
+                  <span>Engine</span>
+                  <select value={engine} onChange={e => setEngine(e.target.value as Engine)}>
+                    <option value="auto">Auto -- Creation Kit if installed, otherwise built in</option>
+                    <option value="builtin">Built in -- no PapyrusCompiler.exe needed</option>
+                    <option value="creationkit">Creation Kit -- PapyrusCompiler.exe</option>
+                  </select>
                 </label>
+                {engine !== 'builtin' && (
+                  <label className="papyrus-field">
+                    <span>Compiler path (default: CK compiler)</span>
+                    <div className="papyrus-input-row">
+                      <input value={compilerPath} onChange={e => setCompilerPath(e.target.value)} placeholder="(auto-detect)" />
+                      <button className="sidebar-action-btn" onClick={browseCompiler} disabled={unavailable}>Exe…</button>
+                    </div>
+                  </label>
+                )}
                 <div className="papyrus-opts">
                   <label><input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} /> Compile all in folder</label>
-                  <label><input type="checkbox" checked={optimize} onChange={e => setOptimize(e.target.checked)} /> Optimize (-op)</label>
+                  {engine !== 'builtin' && (
+                    <label><input type="checkbox" checked={optimize} onChange={e => setOptimize(e.target.checked)} /> Optimize (-op)</label>
+                  )}
                   <label><input type="checkbox" checked={release} onChange={e => setRelease(e.target.checked)} /> Release (-r)</label>
                 </div>
+                {engine === 'builtin' && (
+                  <p className="papyrus-hint">
+                    The built-in compiler needs no PapyrusCompiler.exe, but it does need the vanilla base script
+                    sources on the import path -- set them once in Settings &gt; Papyrus base imports. It refuses
+                    rather than guessing when a script it calls into is not on the roots, because a call's length
+                    depends on that script's optional parameters, so a failure naming PAP0050 or PAP0051 is
+                    usually a missing import root and not bad source.
+                  </p>
+                )}
               </>
             )}
 

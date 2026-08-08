@@ -33,11 +33,23 @@ public class PapyrusInterop
         return HostServices.PickFolder(title);
     }
 
+    /// <summary>
+    /// Compiles source, through whichever engine <paramref name="engine"/> selects.
+    /// </summary>
+    /// <param name="engine">
+    /// <c>auto</c> (empty counts as auto), <c>builtin</c> or <c>creationkit</c>. Auto prefers an
+    /// installed Creation Kit, so an existing setup keeps behaving exactly as it did, and uses the
+    /// built-in compiler when there is none.
+    /// </param>
     public Task<string> Compile(string source, string output, string imports, string flags,
-        bool all, bool optimize, bool release, string compilerPath) =>
+        bool all, bool optimize, bool release, string compilerPath, string engine) =>
         Task.Run(() =>
         {
-            try { return PapyrusService.Compile(source, N(output), N(imports), N(flags), all, optimize, release, N(compilerPath)); }
+            try
+            {
+                return PapyrusService.Compile(
+                    source, N(output), N(imports), N(flags), all, optimize, release, N(compilerPath), N(engine));
+            }
             catch (Exception ex) { DebugLog.Exception("Papyrus.Compile", ex); return "Error: " + ex.Message; }
         });
 
