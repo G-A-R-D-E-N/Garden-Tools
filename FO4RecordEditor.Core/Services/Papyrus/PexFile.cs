@@ -103,6 +103,17 @@ public sealed class PexObject
     public bool Const;
     public uint UserFlags;
     public string AutoStateName = "";
+
+    // Whether this object's `size` field counts its own four bytes. Both conventions exist in real
+    // compiler output: of the 1,496 loose .pex on the development machine, 1,480 include the field
+    // and 16 count the body alone. The reader records which one it saw so the writer can reproduce
+    // it; the default is the majority, which is what a freshly emitted object should use.
+    //
+    // It is not the user/machine stamp that separates them -- 1,321 files with a non-"Papyrus"/
+    // "Compiler" stamp still use the majority convention -- so the producing toolchain is not
+    // identified here, only the two encodings it has to survive.
+    public bool SizeIncludesItself = true;
+
     public List<PexStruct> Structs = new();
     public List<PexVariable> Variables = new();
     public List<PexProperty> Properties = new();
@@ -131,8 +142,13 @@ public sealed class PexStructOrder
     public List<string> MemberNames = new();
 }
 
-public sealed class PexFile
+public sealed partial class PexFile
 {
+    // Bytes left in the file after the last object. Real compiler output usually has none, but 16 of
+    // the 1,496 loose .pex on this machine carry four, and a writer that dropped them could not
+    // reproduce those files. Captured so the round trip stays honest rather than nearly-honest.
+    public byte[] TrailingBytes = Array.Empty<byte>();
+
     public byte MajorVersion, MinorVersion;
     public ushort GameId;
     public long CompilationTime;
@@ -172,6 +188,19 @@ public sealed class PexFile
         return Read(r);
     }
 
+    /// <summary>Reads a .pex from an already-open stream. The counterpart of <see cref="Write"/>.</summary>
+    public static PexFile Read(Stream stream)
+    {
+        using var r = new BinaryReader(stream, Encoding.Latin1, leaveOpen: true);
+        return Read(r);
+    }
+
+    public static PexFile FromBytes(byte[] bytes)
+    {
+        using var ms = new MemoryStream(bytes, writable: false);
+        return Read(ms);
+    }
+
     private static PexFile Read(BinaryReader r)
     {
         uint magic = r.ReadUInt32();
@@ -187,6 +216,16 @@ public sealed class PexFile
             GameId = r.ReadUInt16(),
             CompilationTime = r.ReadInt64(),
         };
+        // Fallout 4 is gameId 2 at format 3.9. The other Papyrus games share the magic and the
+        // overall shape but not the details -- Starfield is gameId 4 at 3.12 and has value type tags
+        // Fallout 4 never emits, which used to surface here as "Invalid value type tag 14" hundreds
+        // of bytes later. Say what is actually wrong instead. One such file exists on the
+        // development machine: a Fallout 4 script accidentally built with a Starfield compiler.
+        if (pex.GameId != 2)
+            throw new InvalidDataException(
+                $"This .pex is for game id {pex.GameId} at format {pex.MajorVersion}.{pex.MinorVersion}; " +
+                "Fallout 4 is game id 2 at format 3.9. It was built by another game's Papyrus compiler.");
+
         pex.SourceFileName = ReadStr(r);
         pex.UserName = ReadStr(r);
         pex.ComputerName = ReadStr(r);
@@ -250,7 +289,8 @@ public sealed class PexFile
         for (int i = 0; i < objCount; i++)
         {
             var obj = new PexObject { Name = S(r.ReadUInt16()) };
-            r.ReadUInt32(); // size (ignored)
+            uint declaredSize = r.ReadUInt32();
+            long bodyStart = r.BaseStream.CanSeek ? r.BaseStream.Position : -1;
             obj.ParentClassName = S(r.ReadUInt16());
             obj.DocString = S(r.ReadUInt16());
             obj.Const = r.ReadByte() != 0;
@@ -331,8 +371,21 @@ public sealed class PexFile
                 obj.States.Add(state);
             }
 
+            // See PexObject.SizeIncludesItself. Anything that matches neither convention keeps the
+            // majority default; the round-trip test is what surfaces such a file if one appears.
+            if (bodyStart >= 0)
+            {
+                long body = r.BaseStream.Position - bodyStart;
+                if (declaredSize == body) obj.SizeIncludesItself = false;
+            }
+
             pex.Objects.Add(obj);
         }
+
+        // Anything past the last object. See PexFile.TrailingBytes.
+        var rest = r.BaseStream;
+        if (rest.CanSeek && rest.Position < rest.Length)
+            pex.TrailingBytes = r.ReadBytes((int)(rest.Length - rest.Position));
 
         // Attach debug line numbers to instructions.
         AttachLineNumbers(pex);
