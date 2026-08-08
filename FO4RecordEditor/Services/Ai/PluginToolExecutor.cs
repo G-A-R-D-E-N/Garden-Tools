@@ -557,7 +557,10 @@ public sealed class PluginToolExecutor
         new("copy_as_override",
             "Copy a record from one plugin into a patch plugin as an OVERRIDE (xEdit 'Copy as Override Into'). " +
             "The patch is opened/created automatically; afterwards edit the override with set_field, set_components, " +
-            "set_conditions, add_list_item, or remove_list_item. Make the patch load LAST so it wins.",
+            "set_conditions, add_list_item, or remove_list_item. Make the patch load LAST so it wins. " +
+            "REFUSES if the patch loads BEFORE the plugin being overridden (the game would ignore it), and refuses " +
+            "with 'EXISTS:' if the patch already overrides this record unless overwrite=true. The origin plugin is " +
+            "declared as a master automatically.",
             new
             {
                 type = "object",
@@ -565,7 +568,8 @@ public sealed class PluginToolExecutor
                 {
                     source_plugin = new { type = "string", description = "Plugin to copy the record FROM (the version you want)." },
                     id = new { type = "string", description = "FormKey ('00008E:MAIM.esp') or EditorID of the record." },
-                    patch_plugin = new { type = "string", description = "Patch plugin to copy the override INTO, e.g. 'FallenWorld_CraftingFixes.esp'." }
+                    patch_plugin = new { type = "string", description = "Patch plugin to copy the override INTO, e.g. 'FallenWorld_CraftingFixes.esp'." },
+                    overwrite = new { type = "boolean", description = "Replace an override the patch already has for this record. Without it the call REFUSES and reports what is already there, so an existing edit is never silently discarded." }
                 },
                 required = new[] { "source_plugin", "id", "patch_plugin" }
             }),
@@ -2043,7 +2047,8 @@ public sealed class PluginToolExecutor
             case "save_plugin":
                 return WriteService.SavePlugin(Str("plugin"), root.TryGetProperty("path", out var pv) ? pv.GetString() : null, env);
             case "copy_as_override":
-                return WriteService.CopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"));
+                return WriteService.CopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"),
+                    Bool("overwrite"));
             case "copy_as_new_record":
                 return WriteService.CopyAsNewRecord(env, Str("source_plugin"), Str("id"), Str("target_plugin"),
                     Str("new_editor_id") is { Length: > 0 } nedid ? nedid : null);

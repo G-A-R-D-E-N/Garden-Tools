@@ -21,7 +21,9 @@ export interface Backend {
   AddListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
   RemoveListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
   DeleteRecord(plugin: string, id: string): Promise<string>;
-  CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string): Promise<string>;
+  // Returns a message starting 'EXISTS:' when the target already overrides this record and
+  // overwrite was false, so the caller can ask before replacing it.
+  CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
   CopyAsOverrideMany(itemsJson: string, patchPlugin: string): Promise<string>;
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
