@@ -378,6 +378,7 @@ public static class Mo2ProfileLoader
         // which plugins are absent from the load order and why, instead of dropping them quietly.
         var failedToLoad = new List<(string name, string reason)>();
         var pluginPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        MutagenLoader.PluginSourcePaths.Clear();   // a new profile can resolve the same name elsewhere
         for (int i = 0; i < loadOrder.Count; i++)
         {
             var name = loadOrder[i];
@@ -406,6 +407,7 @@ public static class Mo2ProfileLoader
                 listings.Add(new ModListing<IFallout4ModGetter>(modKey, mod, enabled: true, ghostSuffix: string.Empty));
                 loaded.Add(name);
                 pluginPaths[name] = path;
+                MutagenLoader.PluginSourcePaths[name] = path;   // keys this plugin's persisted counts (#87)
             }
             catch (Exception ex)
             {

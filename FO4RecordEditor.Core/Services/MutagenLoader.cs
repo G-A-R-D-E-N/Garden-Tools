@@ -42,6 +42,13 @@ public static partial class MutagenLoader
     // Tracks file paths for loose-opened ESPs so OpenPlugin can reload them as mutable.
     public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> LooseModPaths = new(StringComparer.OrdinalIgnoreCase);
 
+    // Where each plugin in the current load order was actually read from, recorded by whichever
+    // loader built the environment. MO2's Mo2GameEnvironment carries the same map as PluginPaths,
+    // but GetModIndex has no env to ask, and the vanilla GameEnvironmentState path has no such map at
+    // all -- so both register here. Used to key the persisted per-signature counts (#87) to a real
+    // file, since a plugin NAME is not enough to tell whether the bytes behind it have changed.
+    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> PluginSourcePaths = new(StringComparer.OrdinalIgnoreCase);
+
     // Plugins the AI has opened for editing (mutable). These take priority over the env /
     // loose read-only copies for ALL reads, so edits are immediately visible in the tree and
     // to get_record (hot loading). WriteService registers entries here.
@@ -302,6 +309,16 @@ public static partial class MutagenLoader
         var idx = new ModIndex { Source = mod };
         if (mod is Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod)
         {
+            // The counts-walk retains no records, but it still reads the whole plugin, and on a real
+            // load order that is 7.0 s paid on every process start. Serve them from disk when the
+            // plugin file is byte-for-byte the one they were taken from (#87).
+            var cacheKey = CountsCacheKeyFor(modName);
+            if (cacheKey != null && RecordCountCache.TryGet(cacheKey, out var persisted))
+            {
+                idx.Counts = persisted;
+                return StoreModIndex(modName, idx);
+            }
+
             // Count only -- deliberately retains no record. This is the walk that used to build the
             // full index; keeping nothing from it is the whole point (2.70 MB vs 1836 MB retained).
             int count = 0;
@@ -311,8 +328,40 @@ public static partial class MutagenLoader
                 idx.Counts[sig] = idx.Counts.TryGetValue(sig, out var n) ? n + 1 : 1;
                 if (++count % 5000 == 0) progress?.Invoke($"Indexing {modName}: {count} records...");
             }
+
+            if (cacheKey != null) RecordCountCache.Put(cacheKey, idx.Counts);
         }
         return StoreModIndex(modName, idx);
+    }
+
+    // The vanilla GameEnvironmentState path has no per-plugin path map, so the plugin is looked for
+    // in the data folder it was loaded from. Registered only if it is actually there: a name with no
+    // file behind it would key a counts entry that can never be validated.
+    private static void RegisterPluginSourcePath(string modName, string dataFolder)
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(dataFolder, modName);
+            if (System.IO.File.Exists(path)) PluginSourcePaths[modName] = path;
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// The on-disk file whose size and write time key this plugin's persisted counts, or null if the
+    /// counts must not be persisted at all.
+    /// </summary>
+    /// <remarks>
+    /// Null for a plugin in <see cref="EditableMods"/>: that is a mutable in-memory copy whose record
+    /// set diverges from the file the moment anything is added or deleted, so its counts cannot be
+    /// validated against the file and must never be written under its key. Also null when we simply
+    /// do not know where the plugin came from, which costs a walk rather than risking a wrong answer.
+    /// </remarks>
+    public static string? CountsCacheKeyFor(string modName)
+    {
+        if (EditableMods.ContainsKey(modName)) return null;
+        if (LooseModPaths.TryGetValue(modName, out var loose)) return loose;
+        return PluginSourcePaths.TryGetValue(modName, out var path) ? path : null;
     }
 
     /// <summary>
@@ -580,11 +629,13 @@ public static partial class MutagenLoader
 
         var plugins = new List<string>();
         MasterIsEsl.Clear();
+        PluginSourcePaths.Clear();
         foreach (var l in env.LoadOrder.ListedOrder)
             if (l.Mod != null)
             {
                 plugins.Add(l.ModKey.FileName.String);
                 MasterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
+                RegisterPluginSourcePath(l.ModKey.FileName.String, env.DataFolderPath.Path);
             }
 
         // Same reasoning as Mo2ProfileLoader.Load: texture/mesh lookups should search where this
@@ -604,7 +655,10 @@ public static partial class MutagenLoader
         
         var root = new RecordNode { Key = "Load Order" };
         var listed = env.LoadOrder.ListedOrder.ToList();
-        
+        PluginSourcePaths.Clear();
+        foreach (var l in listed)
+            if (l.Mod != null) RegisterPluginSourcePath(l.ModKey.FileName.String, env.DataFolderPath.Path);
+
         for (int i = 0; i < listed.Count; i++)
         {
             var modListing = listed[i];
