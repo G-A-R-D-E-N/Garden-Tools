@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Newtonsoft.Json;
 
 namespace FO4RecordEditor.Services.Papyrus;
 
@@ -27,6 +28,128 @@ public static class PapyrusAnalysisService
 {
     /// <summary>Cap on files reported individually, so a whole-mod check stays readable.</summary>
     private const int MaxReportedFiles = 200;
+
+    // -----------------------------------------------------------------------------------------
+    // JSON surface, for the editor panel.
+    //
+    // The text-returning methods above are shaped for an MCP tool result, which a model reads as
+    // prose. An editor needs positions it can select on, so these return JSON and -- crucially --
+    // take the buffer TEXT rather than a path. "Errors as you type" is about the unsaved buffer;
+    // re-reading the file from disk would analyse the last save instead of what is on screen.
+    // -----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Parses buffer text and returns diagnostics and the outline together, as JSON.
+    /// </summary>
+    /// <remarks>
+    /// One call, not two, because the panel wants both on every keystroke and parsing twice for
+    /// them would double the work for nothing -- they come out of the same tree.
+    /// </remarks>
+    /// <param name="text">The editor buffer.</param>
+    /// <param name="filePath">Path the buffer came from, used only to label diagnostics. May be null.</param>
+    public static string AnalyzeJson(string text, string? filePath = null)
+    {
+        PapyrusScript script;
+        try
+        {
+            script = PapyrusParser.Parse(text ?? string.Empty, filePath);
+        }
+        catch (Exception ex)
+        {
+            // The parser is not supposed to be able to throw, and the corpus sweep exists to keep
+            // it that way. If it ever does, the panel should say so rather than go blank.
+            return JsonConvert.SerializeObject(new { error = ex.Message });
+        }
+
+        var payload = new
+        {
+            script = script.Name,
+            extends = script.Extends,
+            errorCount = script.Diagnostics.Count(d => d.Severity == PapyrusSeverity.Error),
+            diagnostics = script.Diagnostics.Select(d => new
+            {
+                code = d.Code,
+                severity = d.Severity == PapyrusSeverity.Error ? "error" : "warning",
+                message = d.Message,
+                line = d.Span.Line,
+                column = d.Span.Column,
+                start = d.Span.Start,
+                length = d.Span.Length,
+            }).ToList(),
+            symbols = PapyrusSymbols.DocumentSymbols(script).Select(s => new
+            {
+                name = s.Name,
+                kind = s.Kind.ToString(),
+                signature = s.Signature,
+                documentation = s.Documentation,
+                container = s.Container,
+                line = s.Span.Line,
+                column = s.Span.Column,
+                start = s.Span.Start,
+                nameStart = s.NameSpan.Start,
+                nameLength = s.NameSpan.Length,
+                nameLine = s.NameSpan.Line,
+            }).ToList(),
+        };
+        return JsonConvert.SerializeObject(payload);
+    }
+
+    /// <summary>
+    /// Resolves the symbol at an offset in buffer text, as JSON. Drives both hover and go-to-definition.
+    /// </summary>
+    /// <remarks>
+    /// <c>resolved: false</c> is a real answer, not a failure, and the panel is expected to show it
+    /// as "no declaration found" rather than as an error. Phase 1 has no type checker; see
+    /// <see cref="PapyrusSymbols.FindDefinition"/>.
+    /// <para>
+    /// <c>sameFile</c> tells the panel whether it can jump within the open buffer or has to open
+    /// another file, which it cannot decide from the path alone when the buffer is unsaved.
+    /// </para>
+    /// </remarks>
+    public static string SymbolAtJson(string text, string? filePath, int offset, string? imports = null)
+    {
+        PapyrusScript script;
+        try
+        {
+            script = PapyrusParser.Parse(text ?? string.Empty, filePath);
+        }
+        catch (Exception ex)
+        {
+            return JsonConvert.SerializeObject(new { error = ex.Message });
+        }
+
+        // An index is only needed to follow Extends and to resolve other scripts by name, both of
+        // which want a real path. With an unsaved scratch buffer there is nothing to root it at, so
+        // the lookup degrades to this script's own members rather than failing.
+        var index = string.IsNullOrWhiteSpace(filePath)
+            ? new PapyrusScriptIndex()
+            : BuildIndex(filePath!, imports);
+
+        var symbol = PapyrusSymbols.FindDefinition(index, script, offset);
+        if (symbol == null) return JsonConvert.SerializeObject(new { resolved = false });
+
+        var sameFile = symbol.File == null
+            || (filePath != null && string.Equals(
+                Path.GetFullPath(symbol.File),
+                Path.GetFullPath(filePath),
+                StringComparison.OrdinalIgnoreCase));
+
+        return JsonConvert.SerializeObject(new
+        {
+            resolved = true,
+            name = symbol.Name,
+            kind = symbol.Kind.ToString(),
+            signature = symbol.Signature,
+            documentation = symbol.Documentation,
+            container = symbol.Container,
+            file = symbol.File,
+            sameFile,
+            line = symbol.NameSpan.Line,
+            column = symbol.NameSpan.Column,
+            start = symbol.NameSpan.Start,
+            length = symbol.NameSpan.Length,
+        });
+    }
 
     /// <summary>
     /// Parses a .psc file or a folder of them and reports syntax diagnostics.

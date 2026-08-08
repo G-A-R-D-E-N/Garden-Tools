@@ -967,6 +967,28 @@ F4SE's `scripts/modified/` fragments, which are snippets to paste into base scri
 (`PapyrusCorpusTests`), opt-in via `FO4RE_PSC_CORPUS` (roots separated by `:` on Linux, `;` on
 Windows) so a bare checkout stays green.
 
+### The Papyrus panel's Analyze mode
+
+The same front end drives a fourth mode in the Papyrus panel: an editor with a line gutter, syntax
+errors and an outline that update as you type, click-to-inspect, Ctrl+click / F12 go-to-definition
+(which follows `Extends` and `Import` into other files and opens them), and Ctrl+S to save.
+
+Three things about it that are load-bearing:
+
+- **It analyses the BUFFER, not the file.** `PapyrusInterop.Analyze` / `SymbolAt` take the editor
+  text. Passing a path instead would report the last save, which is the opposite of "as you type".
+- **The GUI path returns JSON, the MCP path returns prose.** `AnalyzeJson`/`SymbolAtJson` against
+  `Check`/`Outline`/`Definition`. A model reads text; an editor needs offsets it can select on. Both
+  come off the same parse.
+- **The gutter's CSS `line-height` must equal `EDITOR_LINE_HEIGHT` in `PapyrusPanel.tsx` (19px).** A
+  textarea cannot scroll a selection into view or draw a squiggle, so "jump to line" computes a
+  `scrollTop` from that constant and the gutter is a separate scrolling element synced to it. Change
+  one without the other and every jump lands off by a growing number of lines.
+
+`WriteScript` refuses any path not ending `.psc`. The panel hands it whatever is in the source box,
+which may still be pointing at a `.pex` from an earlier decompile, and writing source over a compiled
+script would destroy it silently.
+
 ### `FO4RecordEditor.Core.Tests` -- a test project that RUNS on Linux
 
 `FO4RecordEditor.Tests` targets `net9.0-windows` through its reference to the WPF project, so its

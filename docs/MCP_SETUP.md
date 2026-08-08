@@ -254,6 +254,11 @@ they do not need `PapyrusCompiler.exe` and work on a machine with no Creation Ki
 - `papyrus_definition` takes a 1-based line and column and reports where that symbol is declared,
   with its signature and doc comment.
 
+The desktop app exposes the same front end as the Papyrus panel's **Analyze** mode: an editor with a
+line gutter, syntax errors and an outline that update as you type, click-to-inspect and
+Ctrl+click / F12 go-to-definition (following `Extends` and imports into other files), and Ctrl+S to
+save. It edits the buffer, not the file on disk, so the errors it shows are the ones in front of you.
+
 **They parse; they do not compile.** There is no name resolution or type checking behind them, so a
 clean `papyrus_check` does **not** mean the script compiles -- a misspelled function or a bad cast
 still fails at `compile_papyrus`. For the same reason `papyrus_definition` answers `not resolved`

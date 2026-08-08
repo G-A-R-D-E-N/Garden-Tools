@@ -235,6 +235,77 @@ export interface PapyrusHost {
   LookupFunction(script: string, functionName: string): Promise<string>;
   // Look up a script's Extends/Global Functions/Member Functions/Events from the CK wiki mirror.
   LookupScriptInfo(script: string): Promise<string>;
+
+  // --- Source analysis (Analyze mode). No Creation Kit involved: these PARSE, they do not compile,
+  // so a buffer with no diagnostics is not proof that it builds. They take the editor buffer rather
+  // than a path, because "errors as you type" is about unsaved text.
+
+  // Diagnostics + outline for a buffer, as JSON (PapyrusAnalyzeResult). `path` may be "".
+  Analyze(text: string, path: string): Promise<string>;
+  // The declaration of the symbol at a 0-based offset, as JSON (PapyrusSymbolResult).
+  SymbolAt(text: string, path: string, offset: number, imports: string): Promise<string>;
+  // Read a .psc into the editor. Returns its text, or a string starting with "ERR:".
+  ReadScript(path: string): Promise<string>;
+  // Write the buffer back to a .psc. Returns "" on success, or a string starting with "ERR:".
+  WriteScript(path: string, text: string): Promise<string>;
+}
+
+/** One syntax problem, positioned in the buffer. Lines and columns are 1-based. */
+export interface PapyrusDiagnostic {
+  code: string;
+  severity: 'error' | 'warning';
+  message: string;
+  line: number;
+  column: number;
+  start: number;
+  length: number;
+}
+
+/** One declaration in the outline. `start`/`nameStart` are 0-based buffer offsets. */
+export interface PapyrusSymbol {
+  name: string;
+  kind: string;
+  signature: string;
+  documentation: string | null;
+  container: string | null;
+  line: number;
+  column: number;
+  start: number;
+  nameStart: number;
+  nameLength: number;
+  nameLine: number;
+}
+
+export interface PapyrusAnalyzeResult {
+  script?: string;
+  extends?: string | null;
+  errorCount?: number;
+  diagnostics?: PapyrusDiagnostic[];
+  symbols?: PapyrusSymbol[];
+  /** Set only if the parser itself failed, which is not supposed to be possible. */
+  error?: string;
+}
+
+/**
+ * Where a symbol is declared. `resolved: false` is a normal answer, not a failure -- phase 1 has no
+ * type checker, so a member reached through an expression whose type is not written down cannot be
+ * resolved, and it reports that rather than guessing.
+ */
+export interface PapyrusSymbolResult {
+  resolved: boolean;
+  name?: string;
+  kind?: string;
+  signature?: string;
+  documentation?: string | null;
+  container?: string | null;
+  file?: string | null;
+  /** False when the declaration is in another file, which the panel cannot jump to in place. */
+  sameFile?: boolean;
+  line?: number;
+  column?: number;
+  start?: number;
+  length?: number;
+  error?: string;
 }
 
 /** The "nif" bridge (FO4RecordEditor.Services.NifInterop) -- author/inspect/verify/repair FO4 NIFs. */

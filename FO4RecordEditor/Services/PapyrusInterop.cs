@@ -9,7 +9,8 @@ namespace FO4RecordEditor.Services;
 
 // WebView2 host object for the Papyrus panel: compile .psc -> .pex (CK compiler), decompile
 // .pex -> .psc (our in-process decompiler), and look up functions/scripts in the offline CK Wiki
-// mirror. Same COM rules as AppInterop: AutoDual, ComVisible, only string/bool params and
+// mirror, and parse .psc source for the Analyze editor. Same COM rules as AppInterop: AutoDual,
+// ComVisible, only string/bool/int params and
 // string/Task<string> returns. Native file pickers run on the UI thread (host-object calls are
 // dispatched there); compile/decompile/lookup run on a background task so the long process call
 // (or a big wiki directory scan) never blocks the UI. The wiki root is read live from Settings on
@@ -63,6 +64,76 @@ public class PapyrusInterop
         {
             try { return PapyrusWikiService.LookupScriptInfo(ToolPaths.CkWiki() ?? "", script); }
             catch (Exception ex) { DebugLog.Exception("Papyrus.LookupScriptInfo", ex); return "Error: " + ex.Message; }
+        });
+
+    // ---------------------------------------------------------------------------------------------
+    // Source analysis for the Analyze mode. These take the editor BUFFER, not a path: "errors as you
+    // type" is about unsaved text, and re-reading the file would report the last save instead of
+    // what is on screen. They return JSON rather than the MCP tools' prose, because the panel needs
+    // positions it can select on. None of this touches the Creation Kit -- see
+    // PapyrusAnalysisService: it parses, it does not compile.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>Diagnostics plus the outline for a buffer, in one call. See PapyrusAnalysisService.AnalyzeJson.</summary>
+    public Task<string> Analyze(string text, string path) =>
+        Task.Run(() =>
+        {
+            try { return Papyrus.PapyrusAnalysisService.AnalyzeJson(text ?? "", N(path)); }
+            catch (Exception ex)
+            {
+                DebugLog.Exception("Papyrus.Analyze", ex);
+                return "{\"error\":" + Newtonsoft.Json.JsonConvert.ToString(ex.Message) + "}";
+            }
+        });
+
+    /// <summary>The declaration of the symbol at a 0-based offset. See PapyrusAnalysisService.SymbolAtJson.</summary>
+    public Task<string> SymbolAt(string text, string path, int offset, string imports) =>
+        Task.Run(() =>
+        {
+            try { return Papyrus.PapyrusAnalysisService.SymbolAtJson(text ?? "", N(path), offset, N(imports)); }
+            catch (Exception ex)
+            {
+                DebugLog.Exception("Papyrus.SymbolAt", ex);
+                return "{\"error\":" + Newtonsoft.Json.JsonConvert.ToString(ex.Message) + "}";
+            }
+        });
+
+    /// <summary>Read a .psc into the editor. Returns the text, or a string starting with "ERR:".</summary>
+    public Task<string> ReadScript(string path) =>
+        Task.Run(() =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path)) return "ERR:No path.";
+                if (!File.Exists(path)) return "ERR:Not found: " + path;
+                return File.ReadAllText(path);
+            }
+            catch (Exception ex) { DebugLog.Exception("Papyrus.ReadScript", ex); return "ERR:" + ex.Message; }
+        });
+
+    /// <summary>
+    /// Write the editor buffer back to a .psc. Returns "" on success, or a message starting with "ERR:".
+    /// </summary>
+    /// <remarks>
+    /// Refuses anything that is not a .psc. This is the only write path the Papyrus panel has, and
+    /// the panel hands it whatever path is in the source box -- which the user may have typed, or
+    /// dragged in, or left pointing at a .pex from a previous decompile. Overwriting a compiled
+    /// script with source text would destroy it silently.
+    /// </remarks>
+    public Task<string> WriteScript(string path, string text) =>
+        Task.Run(() =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path)) return "ERR:No path.";
+                if (!path.EndsWith(".psc", StringComparison.OrdinalIgnoreCase))
+                    return "ERR:Refusing to write '" + Path.GetFileName(path) + "' -- this saves Papyrus source, so the path must end in .psc.";
+                var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+                if (dir != null) Directory.CreateDirectory(dir);
+                File.WriteAllText(path, text ?? "");
+                return "";
+            }
+            catch (Exception ex) { DebugLog.Exception("Papyrus.WriteScript", ex); return "ERR:" + ex.Message; }
         });
 
     /// <summary>Open a folder (or the folder containing a file) in Windows Explorer. Returns "" on success.</summary>

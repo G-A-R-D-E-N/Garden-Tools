@@ -122,6 +122,11 @@ nothing to point them at.
 Kit** and is not redistributable, so it is not in this package. Install the CK (it is free, on Steam)
 and it is found automatically.
 
+*Reading* Papyrus source needs nothing installed. The tool has its own Papyrus lexer and parser, so
+the Papyrus panel's **Analyze** mode -- syntax errors, an outline, and go-to-definition as you type
+-- and the `papyrus_check` / `papyrus_outline` / `papyrus_definition` tools all work with no CK
+present. They parse rather than compile, so no reported errors is not the same as "this builds".
+
 Archives need nothing installed, in either direction. Reading (`archive_list`/`archive_extract`/
 `archive_extract_all`) goes through Mutagen; `archive_pack` writes BA2s in process, both General
 (sounds/meshes/scripts) and DDS (textures). `Archive2.exe` is only used if you explicitly ask for it

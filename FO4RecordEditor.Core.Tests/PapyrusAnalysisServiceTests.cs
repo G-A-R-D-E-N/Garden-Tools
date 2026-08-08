@@ -1,5 +1,8 @@
+using System;
 using System.IO;
+using System.Linq;
 using FluentAssertions;
+using Newtonsoft.Json.Linq;
 using FO4RecordEditor.Services.Papyrus;
 
 namespace FO4RecordEditor.Core.Tests;
@@ -132,5 +135,97 @@ public class PapyrusAnalysisServiceTests
         var file = root.Write("A.psc", "ScriptName A\n");
 
         PapyrusAnalysisService.Definition(file, 99, 1).Should().Contain("outside");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // JSON surface, which the editor panel drives on every keystroke
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Analyze_returns_diagnostics_and_outline_from_buffer_text_not_from_disk()
+    {
+        using var root = new SourceRoot();
+        // What is ON DISK is valid; the BUFFER is not. "Errors as you type" is about the buffer, so
+        // analysing the file instead would report the last save and show no error at all.
+        var file = root.Write("A.psc", "ScriptName A\nint Property Health auto\n");
+        var buffer = "ScriptName A\nint Property Health auto\nFunction F(\nEndFunction\n";
+
+        var json = JObject.Parse(PapyrusAnalysisService.AnalyzeJson(buffer, file));
+
+        ((int)json["errorCount"]!).Should().BeGreaterThan(0);
+        var first = json["diagnostics"]!.First!;
+        ((int)first["line"]!).Should().Be(3);
+        ((string)first["severity"]!).Should().Be("error");
+        json["symbols"]!.Select(s => (string)s["name"]!).Should().Contain("Health");
+    }
+
+    [Fact]
+    public void Analyze_of_a_clean_buffer_reports_no_errors()
+    {
+        var json = JObject.Parse(PapyrusAnalysisService.AnalyzeJson("ScriptName A extends B\n"));
+        ((int)json["errorCount"]!).Should().Be(0);
+        ((string)json["script"]!).Should().Be("A");
+        ((string)json["extends"]!).Should().Be("B");
+    }
+
+    [Fact]
+    public void Analyze_survives_an_unsaved_buffer_with_no_path()
+    {
+        var json = JObject.Parse(PapyrusAnalysisService.AnalyzeJson("ScriptName A\n", null));
+        ((int)json["errorCount"]!).Should().Be(0);
+    }
+
+    [Fact]
+    public void Symbol_at_resolves_within_the_buffer_and_says_it_is_the_same_file()
+    {
+        using var root = new SourceRoot();
+        var text = "ScriptName A\nint Property Health auto\nFunction F()\n  Health = 1\nEndFunction\n";
+        var file = root.Write("A.psc", text);
+        var offset = text.IndexOf("Health = 1", StringComparison.Ordinal);
+
+        var json = JObject.Parse(PapyrusAnalysisService.SymbolAtJson(text, file, offset));
+
+        ((bool)json["resolved"]!).Should().BeTrue();
+        ((string)json["kind"]!).Should().Be("Property");
+        ((bool)json["sameFile"]!).Should().BeTrue();
+        ((int)json["line"]!).Should().Be(2);
+    }
+
+    [Fact]
+    public void Symbol_at_reports_another_file_as_not_same_file_so_the_panel_knows_to_open_it()
+    {
+        using var root = new SourceRoot();
+        root.Write("Parent.psc", "ScriptName Parent\nFunction DoStuff()\nEndFunction\n");
+        var text = "ScriptName Child extends Parent\nFunction F()\n  DoStuff()\nEndFunction\n";
+        var file = root.Write("Child.psc", text);
+        var offset = text.IndexOf("DoStuff()", StringComparison.Ordinal);
+
+        var json = JObject.Parse(PapyrusAnalysisService.SymbolAtJson(text, file, offset));
+
+        ((bool)json["resolved"]!).Should().BeTrue();
+        ((bool)json["sameFile"]!).Should().BeFalse();
+        ((string)json["file"]!).Should().EndWith("Parent.psc");
+    }
+
+    [Fact]
+    public void Symbol_at_reports_unresolved_as_an_answer_rather_than_an_error()
+    {
+        var text = "ScriptName A\nFunction F()\n  GetThing().Unknown()\nEndFunction\n";
+        var json = JObject.Parse(PapyrusAnalysisService.SymbolAtJson(text, null, text.IndexOf("Unknown", StringComparison.Ordinal)));
+
+        ((bool)json["resolved"]!).Should().BeFalse();
+        json["error"].Should().BeNull("an unresolvable position is a normal outcome, not a failure");
+    }
+
+    [Fact]
+    public void Symbol_at_works_on_an_unsaved_buffer_with_no_path()
+    {
+        // No path means no index root, so cross-file lookup degrades -- but this script's own
+        // members must still resolve, or a scratch buffer would have no navigation at all.
+        var text = "ScriptName A\nint Property Health auto\nFunction F()\n  Health = 1\nEndFunction\n";
+        var json = JObject.Parse(PapyrusAnalysisService.SymbolAtJson(text, null, text.IndexOf("Health = 1", StringComparison.Ordinal)));
+
+        ((bool)json["resolved"]!).Should().BeTrue();
+        ((bool)json["sameFile"]!).Should().BeTrue();
     }
 }
