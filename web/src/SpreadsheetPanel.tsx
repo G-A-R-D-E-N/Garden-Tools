@@ -38,9 +38,22 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!backend) return;
-    backend.GetEditablePlugins().then(raw => {
-      try { setPlugins(JSON.parse(raw) as string[]); } catch { setPlugins([]); }
-    });
+    // The plugin picker has to offer the LOADED LOAD ORDER, not just the editable plugins.
+    // GetEditablePlugins only returns plugins opened or created for editing, which is empty in an
+    // ordinary session, so the dropdown came up blank on a fully loaded modlist and the panel looked
+    // broken. Editable plugins are still merged in: an AI-created plugin may not be in the tree yet.
+    const app = window.chrome?.webview?.hostObjects?.appInterop;
+    void (async () => {
+      const names = new Set<string>();
+      try {
+        const tree = JSON.parse(await app?.GetPlugins() ?? '[]') as { Key: string }[];
+        for (const n of tree) if (n?.Key) names.add(n.Key);
+      } catch { /* fall through to editable-only */ }
+      try {
+        for (const n of JSON.parse(await backend.GetEditablePlugins()) as string[]) if (n) names.add(n);
+      } catch { /* ignore */ }
+      setPlugins([...names]);
+    })();
     backend.GetRecordTypeIndex().then(raw => {
       try { setTypes(JSON.parse(raw) as RecordTypeEntry[]); } catch { setTypes([]); }
     });
