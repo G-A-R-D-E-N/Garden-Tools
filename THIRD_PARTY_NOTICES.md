@@ -60,9 +60,28 @@ exactly, and BC1 and BC4 differ by at most 1 in the rounding of a rare interpola
 
 ## Our Mutagen is patched
 
-The vendored Mutagen (`Mutagen/`) is a fork with five functional fixes that upstream does not have.
-Without them the editor writes broken perk data or misreads Next-Gen archives, so a clean upstream
-Mutagen is **not** a drop-in replacement:
+The vendored Mutagen (`Mutagen/`) is a fork with seven functional fixes that upstream does not have.
+Without them the editor writes broken perk data, misreads Next-Gen archives, or cannot resolve any
+record at all on Linux, so a clean upstream Mutagen is **not** a drop-in replacement:
+
+- `Mutagen.Bethesda.Core/Archives/DI/IArchiveListingDetailsProvider.cs` -- a load order listing that
+  cannot be determined is no longer fatal. `listingsProvider.Get()` resolves the game-managed load
+  order file, which does not exist off Windows (no `%LocalAppData%\<Game>\Plugins.txt`), so it threw
+  `InvalidOperationException` there. That `Lazy` is reached while resolving a localized record's
+  strings -- which for Fallout 4 happens during **parse**, not only when a name is read -- so merely
+  walking a vanilla record was fatal on Linux, and it surfaced as search, referenced-by and record
+  views all reporting nothing found. Degrading to an empty list is safe: the set only supplies
+  archive ordering and the modKey-less `Contains()` path, while applicability by name
+  (`<ModName> - *.ba2`) is untouched, so strings still resolve out of the game archives and **record
+  names keep working**.
+- `Mutagen.Bethesda.Core/Plugins/Records/AGroup.cs` (`GroupMajorRecordCacheWrapper.Factory`) -- a
+  duplicate FormKey inside one group no longer throws `RecordCollisionException`. Groups parse
+  lazily while the link cache resolves *any* record, so one malformed plugin anywhere in the load
+  order made every record in every plugin unresolvable, with nothing indicating which plugin was at
+  fault. Real modlists contain such plugins (`VELDT.esp` ships two grass records sharing `000804`)
+  and xEdit loads them. Last occurrence wins, matching the engine, which loads a file's records in
+  order into one form table. Nothing is hidden: `check_plugin` and `scan_broken_refs` still report
+  the plugin's real problems.
 
 - `Mutagen.Bethesda.Core/Translations/Binary/EnumBinaryTranslation.cs` -- adds the missing case for
   short-backed (2-byte) enums, which previously threw `NotImplementedException` on write.

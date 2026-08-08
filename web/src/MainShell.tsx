@@ -46,14 +46,22 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<RecordNode[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const toggle = async () => {
     if (!expanded) {
       if (node.HasChildren && children.length === 0) {
         setLoading(true);
-        const json = await backend.GetChildren(path);
-        setChildren(JSON.parse(json));
-        setLoading(false);
+        // finally, not the happy path: setLoading(false) used to be reachable only on success, so a
+        // failed expand left the node showing its "..." spinner forever with no way to retry.
+        try {
+          const json = await backend.GetChildren(path);
+          setChildren(JSON.parse(json));
+        } catch (err: any) {
+          setLoadError(err?.message || String(err));
+        } finally {
+          setLoading(false);
+        }
       }
     }
     setExpanded(!expanded);
@@ -80,6 +88,9 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
             : undefined}
         >{node.Key}</span>
         {loading && <span className="tree-loading">...</span>}
+        {!loading && loadError && (
+          <span className="tree-loading" style={{ color: '#f44747' }} title={loadError}>failed</span>
+        )}
       </div>
       {expanded && (
         <div className="tree-children">

@@ -849,17 +849,29 @@ public static partial class MutagenLoader
         foreach (var (name, mod) in AllLoadedMods(envObj))
         {
             if (mod is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4) continue;
-            foreach (var rec in f4.EnumerateMajorRecords())
+            // One malformed plugin must not take out the whole sweep. Real modlists contain plugins
+            // that Mutagen refuses to enumerate (a duplicate FormKey inside one group, for instance),
+            // and this loop crosses every plugin in the load order, so an unguarded throw meant a
+            // single bad mod made "referenced by" unusable for the entire modlist. Skip it, note it,
+            // and keep going: a partial answer that names what it skipped beats no answer.
+            try
             {
-                if (rec.FormKey == target) continue;   // a record referencing itself isn't interesting
-                bool refs = false;
-                foreach (var link in rec.EnumerateFormLinks())
-                    if (link.FormKey == target) { refs = true; break; }
-                if (!refs) continue;
+                foreach (var rec in f4.EnumerateMajorRecords())
+                {
+                    if (rec.FormKey == target) continue;   // a record referencing itself isn't interesting
+                    bool refs = false;
+                    foreach (var link in rec.EnumerateFormLinks())
+                        if (link.FormKey == target) { refs = true; break; }
+                    if (!refs) continue;
 
-                if (!seen.Add(name + "|" + rec.FormKey)) continue;
-                result.Add(new RefByDto(name, rec.FormKey.ToString(), rec.EditorID ?? "", rec.Registration.Name));
-                if (result.Count >= cap) return result;
+                    if (!seen.Add(name + "|" + rec.FormKey)) continue;
+                    result.Add(new RefByDto(name, rec.FormKey.ToString(), rec.EditorID ?? "", rec.Registration.Name));
+                    if (result.Count >= cap) return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Exception($"GetReferencedBy: skipped {name}", ex);
             }
         }
         return result;
@@ -1401,20 +1413,35 @@ public static partial class MutagenLoader
 
         foreach (var (name, mod) in AllLoadedMods(envObj))
         {
-            var idx = GetModIndex(mod, name);
-            foreach (var (sig, r) in StreamRecords(idx))
+            // Per-plugin guard: search crosses every plugin, and a real modlist can contain one that
+            // Mutagen refuses to enumerate (e.g. a duplicate FormKey inside a single group). Without
+            // this, that one plugin made search fail for the entire load order rather than costing
+            // its own results. Skipping is logged, never silent.
+            try
             {
-                if (filterSet != null && !filterSet.Contains(sig)) continue;
+                var idx = GetModIndex(mod, name);
+                foreach (var (sig, r) in StreamRecords(idx))
                 {
-                    var eid = r.EditorID ?? "";
-                    var dispName = r is Mutagen.Bethesda.Plugins.Aspects.INamedGetter nm ? (nm.Name ?? "") : "";
-                    if (query.Length > 0 &&
-                        !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                        !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                        !r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
-                    hits[r.FormKey] = new SearchHit(r.FormKey.ToString(), eid, sig, name, dispName);
-                    if (hits.Count >= AccumulationCap) goto done;
+                    if (filterSet != null && !filterSet.Contains(sig)) continue;
+                    {
+                        var eid = r.EditorID ?? "";
+                        string dispName = "";
+                        // A localized name can still fail to resolve on its own; that is worth losing
+                        // the name over, never the hit.
+                        try { dispName = r is Mutagen.Bethesda.Plugins.Aspects.INamedGetter nm ? (nm.Name ?? "") : ""; }
+                        catch { }
+                        if (query.Length > 0 &&
+                            !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                            !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                            !r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                        hits[r.FormKey] = new SearchHit(r.FormKey.ToString(), eid, sig, name, dispName);
+                        if (hits.Count >= AccumulationCap) goto done;
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Exception($"SearchAllRecords: skipped {name}", ex);
             }
         }
         done:

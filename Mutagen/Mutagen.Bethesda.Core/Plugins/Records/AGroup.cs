@@ -331,17 +331,19 @@ internal sealed class GroupMajorRecordCacheWrapper<T> : IReadOnlyCache<T, FormKe
                 {
                     throw new RecordException(formKey: formKey, recordType: null, modKey: package.MetaData.ModKey, edid: null, message: "Unexpected type encountered when parsing MajorRecord locations: " + majorMeta.RecordType);
                 }
-                try
-                {
-                    locationDict.Add(formKey, checked((int)(stream.Position - offset)));
-                }
-                catch (ArgumentException)
-                {
-                    throw new RecordCollisionException(
-                        stream.MetaData.ModKey,
-                        formKey,
-                        typeof(T));
-                }
+                // FO4RecordEditor patch: a duplicate FormKey inside one group must not be fatal.
+                //
+                // Upstream throws RecordCollisionException here. Groups are parsed lazily while the
+                // link cache resolves ANY record, so a single malformed plugin anywhere in the load
+                // order made every record in every plugin unresolvable -- which presented as records
+                // that simply would not open, with no indication which plugin was at fault. Real
+                // modlists do contain such plugins (VELDT.esp ships two grass records sharing
+                // 000804), and xEdit loads them.
+                //
+                // Last occurrence wins, matching the engine, which loads a file's records in order
+                // into one form table so a later duplicate supersedes the earlier. Nothing is hidden:
+                // check_plugin and scan_broken_refs still report the plugin's real problems.
+                locationDict[formKey] = checked((int)(stream.Position - offset));
                 stream.Position += checked((int)majorMeta.TotalLength);
                 lastParsed = formKey;
             }
