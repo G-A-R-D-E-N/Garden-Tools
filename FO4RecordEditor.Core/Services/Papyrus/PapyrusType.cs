@@ -184,9 +184,17 @@ public static class PapyrusConversions
         switch (to.Kind)
         {
             // "Floats, strings, and vars can be cast to integers", and likewise to floats.
+            //
+            // Bool is missing from that sentence and belongs in it. `false as int` and
+            // `bStartAtTop as float` are in eleven vanilla scripts that the Creation Kit compiled --
+            // LightbulbOnOffScript, SimpleElevatorMasterScript and MQ206Script among them -- so the
+            // published list is incomplete rather than the code being wrong. This is the same shape
+            // as the two grammar gaps the parser found (a local carrying `const`, a float literal
+            // carrying `f`): the reference under-describes what the compiler accepts.
             case PapyrusTypeKind.Int:
             case PapyrusTypeKind.Float:
-                return from.Kind is PapyrusTypeKind.Int or PapyrusTypeKind.Float or PapyrusTypeKind.String;
+                return from.Kind is PapyrusTypeKind.Int or PapyrusTypeKind.Float
+                    or PapyrusTypeKind.String or PapyrusTypeKind.Bool;
 
             // Downcast: legal to write, may be None at runtime.
             case PapyrusTypeKind.Object:

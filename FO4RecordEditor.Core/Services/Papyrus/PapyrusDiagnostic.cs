@@ -143,6 +143,14 @@ public static class PapyrusDiagnosticCodes
     // PapyrusResolution.BaseChainComplete.
     public const string UnresolvedName = "PAP0030";
     public const string UnknownMember = "PAP0031";
+
+    // Type checker. Same rule: nothing is raised unless the sources were complete enough to be sure.
+    public const string TypeMismatch = "PAP0040";
+    public const string ArgumentCount = "PAP0041";
+    public const string UnknownArgumentName = "PAP0042";
+    public const string InvalidCast = "PAP0043";
+    public const string OverrideMismatch = "PAP0044";
+    public const string ParameterOrder = "PAP0045";
 }
 
 /// <summary>Collects diagnostics and stops the parser from looping forever on hopeless input.</summary>
