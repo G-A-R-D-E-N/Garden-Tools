@@ -141,7 +141,13 @@ tools\audio\               ffmpeg, xWMAEncode, BmlFuzEncode/Decode, for the audi
 mcp.sample.json            copy-paste MCP config
 docs\MCP_SETUP.md          the MCP wiring, the tool surface, and the rules
 docs\MODKIT21_PULLS.md     tracker for features reviewed/pulled from a comparable tool, and what's still open
+docs\internal\            engineering docs: knowledge base, design notes, session history (not shipped)
 ```
+
+Working on the tool rather than with it? Start at
+**[docs/internal/README.md](docs/internal/README.md)**, and read
+[docs/internal/KNOWLEDGE.md](docs/internal/KNOWLEDGE.md) before touching plugin or script logic.
+Nothing under `docs\internal\` goes into a release: `package.ps1` copies an explicit allowlist.
 
 ---
 
