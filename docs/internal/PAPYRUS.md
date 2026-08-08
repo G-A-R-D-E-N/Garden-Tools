@@ -311,7 +311,9 @@ ancestors (`PapyrusAnalysisService.NaturalRootsFor`, because a namespaced script
 
 Known gaps in the layers that are built, stated rather than hidden:
 
-- Array built-in call arguments are unchecked (nothing declares them in any `.psc`).
+- Array built-in argument **types** are unchecked (nothing declares them in any `.psc`). Their
+  **counts** are checked, but only at the back end, in `PapyrusCodeGenerator.ArrayBuiltinArity`, so
+  `papyrus_check` will not catch a miscounted one -- `compile_papyrus` will.
 - Override checking compares parameter **count**, not parameter types or return type.
 - No definite-assignment and no all-paths-return analysis.
 - `GetMatchingStructs` has no Fallout 4 opcode and is refused rather than approximated.
@@ -335,3 +337,19 @@ Known gaps in the layers that are built, stated rather than hidden:
 - A generated `PexFile` has no string table until `RebuildStringTable()` is called. `PexWriter`
   throws on a string it cannot index rather than appending one, deliberately: a silently-added entry
   would shift no index but would let a genuinely inconsistent model through.
+- **Anything that lists `.psc` files must use `PapyrusFileWalk`, including the file list, not just
+  the index.** `PapyrusAnalysisService.ResolveSources` used the framework's recursive enumeration and
+  therefore skipped Hidden and System, so a scripts tree inside any dot-prefixed folder -- a git
+  checkout, a worktree -- was invisible to a folder compile while the resolver read it happily. The
+  two front doors disagreed about which files exist. Fixed, and there is a test that puts a script
+  under a dotted directory and demands both see it.
+- **Array built-ins are the one call shape with no arity check above the back end.** They are
+  declared in no `.psc`, which is exactly why the type checker leaves their arguments unchecked, so
+  `xs.Add()` parses, resolves, type-checks and reaches codegen. Reading operand zero of an empty
+  argument list is a crash, not a refusal: the counts live in
+  `PapyrusCodeGenerator.ArrayBuiltinArity` and anything outside them is reported.
+- **Fallout 4 auto-detection could never work on Linux.** `ToolPaths.Fallout4Root`'s Steam probe
+  joined its relative paths with backslashes, which are ordinary filename characters off Windows, so
+  it looked for one file literally named `SteamLibrary\steamapps\common\Fallout 4` in each mount
+  root. It builds them from segments now and also probes the two standard Linux Steam locations
+  under the home directory.

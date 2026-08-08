@@ -573,7 +573,10 @@ public static class PapyrusAnalysisService
     /// </remarks>
     public static IEnumerable<string> NaturalRootsFor(string folder)
     {
-        var full = Path.GetFullPath(folder);
+        // GetFullPath normalises an alternate separator (a caller on Windows may well hand us
+        // forward slashes, and a JSON tool argument usually does) but it preserves a trailing one,
+        // which would make the same root compare unequal to itself when added twice.
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
         yield return full;
 
         var parts = full.Split(Path.DirectorySeparatorChar);
@@ -638,12 +641,15 @@ public static class PapyrusAnalysisService
             return files;
         }
 
-        files.AddRange(Directory.EnumerateFiles(source, "*.psc", new EnumerationOptions
-        {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            MatchCasing = MatchCasing.CaseInsensitive,
-        }));
+        // PapyrusFileWalk, not Directory.EnumerateFiles(RecurseSubdirectories). The framework's
+        // recursive form skips Hidden and System by default, which drops everything under a dotted
+        // directory -- a scripts tree inside a .git checkout, a worktree, or any dot-prefixed folder
+        // vanishes silently -- and IgnoreInaccessible does not cover the IOException a Proton
+        // prefix's /proc symlinks throw, which aborts the whole walk rather than one subtree.
+        //
+        // The index has always used the walk. Until this used it too, the two disagreed about which
+        // files exist: a folder compile could report "0 files" on a tree the resolver reads happily.
+        files.AddRange(PapyrusFileWalk.EnumerateFiles(source, "*.psc"));
         files.Sort(StringComparer.OrdinalIgnoreCase);
         return files;
     }

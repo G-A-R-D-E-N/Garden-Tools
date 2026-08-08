@@ -662,6 +662,80 @@ public class PapyrusCodeGenTests : IDisposable
         result.Pex.Should().BeNull();
     }
 
+    /// <summary>
+    /// Array built-ins are declared in no script, so the type checker leaves their arguments
+    /// unchecked by design -- which means bad-but-parseable source reaches the back end. Reading
+    /// operand zero of an empty argument list is not a refusal, it is a crash, and this is the
+    /// regression guard for exactly that.
+    /// </summary>
+    [Theory]
+    [InlineData("xs.Add()")]
+    [InlineData("xs.Insert(1)")]
+    [InlineData("xs.Remove()")]
+    [InlineData("xs.Clear(1)")]
+    [InlineData("xs.RemoveLast(1)")]
+    public void An_array_builtin_with_the_wrong_argument_count_is_refused_not_thrown(string call)
+    {
+        Write("BadArray", $"""
+            Scriptname BadArray
+            Function Go()
+                int[] xs = new int[2]
+                {call}
+            EndFunction
+            """);
+
+        var result = Compile("BadArray");
+
+        result.Success.Should().BeFalse();
+        result.Errors.Should().Contain(d => d.Code == PapyrusDiagnosticCodes.ArgumentCount);
+    }
+
+    [Theory]
+    [InlineData("xs.Find(1)")]
+    [InlineData("xs.Find(1, 2)")]
+    [InlineData("xs.Add(1)")]
+    [InlineData("xs.Add(1, 3)")]
+    [InlineData("xs.Insert(1, 0)")]
+    [InlineData("xs.Remove(0)")]
+    [InlineData("xs.RemoveLast()")]
+    [InlineData("xs.Clear()")]
+    public void An_array_builtin_with_a_legal_argument_count_still_compiles(string call)
+    {
+        Write("GoodArray", $"""
+            Scriptname GoodArray
+            Function Go()
+                int[] xs = new int[2]
+                {call}
+            EndFunction
+            """);
+
+        Compile("GoodArray").Success.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// GetMatchingStructs is documented on the Arrays page and has no Fallout 4 opcode, so it is
+    /// refused rather than approximated -- and refused as a diagnostic, not as an exception.
+    /// </summary>
+    [Fact]
+    public void An_array_builtin_with_no_opcode_is_refused_by_name()
+    {
+        Write("NoOpcode", """
+            Scriptname NoOpcode
+            Struct Pair
+                int iKey = 0
+            EndStruct
+            Function Go()
+                Pair[] xs = new Pair[2]
+                Pair[] hits = xs.GetMatchingStructs("iKey", 1)
+            EndFunction
+            """);
+
+        var result = Compile("NoOpcode");
+
+        result.Success.Should().BeFalse();
+        result.Errors.Should().Contain(d => d.Message.Contains("GetMatchingStructs"));
+    }
+
     [Fact]
     public void A_non_literal_variable_initialiser_is_refused()
     {
@@ -862,6 +936,60 @@ public class PapyrusCompileServiceTests : IDisposable
         PapyrusAnalysisService.Compile(_root, _out).Should().StartWith("RESULT: 2 succeeded, 0 failed");
         File.Exists(Path.Combine(_out, "One.pex")).Should().BeTrue();
         File.Exists(Path.Combine(_out, "Two.pex")).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The file list and the script index have to agree about which files exist. The framework's
+    /// recursive enumeration skips Hidden and System by default, so a scripts tree inside any
+    /// dot-prefixed folder -- a git checkout, a worktree -- was invisible to a folder compile while
+    /// the resolver read it happily.
+    /// </summary>
+    [Fact]
+    public void A_folder_compile_sees_scripts_under_a_dotted_or_hidden_directory()
+    {
+        Write("Visible", "Scriptname Visible\n");
+
+        var hidden = Path.Combine(_root, ".worktree");
+        Directory.CreateDirectory(hidden);
+        if (OperatingSystem.IsWindows())
+            File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+        File.WriteAllText(Path.Combine(hidden, "Tucked.psc"), "Scriptname Tucked\n");
+
+        PapyrusAnalysisService.Compile(_root, _out).Should().StartWith("RESULT: 2 succeeded, 0 failed");
+        File.Exists(Path.Combine(_out, "Tucked.pex")).Should().BeTrue();
+
+        // And the two front doors must not disagree with each other about the count.
+        PapyrusAnalysisService.Check(_root, semantic: false).Should().Contain("of 2 file(s)");
+    }
+
+    /// <summary>
+    /// A namespaced script is named relative to Source/User, not to its own folder, so a compile
+    /// pointed straight at one has to reach its siblings in other namespaces without being told.
+    /// </summary>
+    [Fact]
+    public void A_script_under_a_Source_User_tree_resolves_its_siblings_without_extra_roots()
+    {
+        var user = Path.Combine(_root, "Scripts", "Source", "User");
+        Directory.CreateDirectory(Path.Combine(user, "Alpha"));
+        Directory.CreateDirectory(Path.Combine(user, "Beta"));
+        File.WriteAllText(Path.Combine(user, "Beta", "Helper.psc"),
+            "Scriptname Beta:Helper\nint Function Answer() Global\n    return 42\nEndFunction\n");
+        var caller = Path.Combine(user, "Alpha", "Caller.psc");
+        File.WriteAllText(caller,
+            "Scriptname Alpha:Caller\nFunction Go()\n    int n = Beta:Helper.Answer()\nEndFunction\n");
+
+        PapyrusAnalysisService.Compile(caller, _out).Should().StartWith("RESULT: 1 succeeded");
+        File.Exists(Path.Combine(_out, "Alpha", "Caller.pex")).Should().BeTrue();
+    }
+
+    /// <summary>A trailing separator must not make the same root count as two.</summary>
+    [Fact]
+    public void Natural_roots_are_normalised_so_a_trailing_separator_does_not_duplicate_one()
+    {
+        var withSeparator = _root + Path.DirectorySeparatorChar;
+
+        PapyrusAnalysisService.NaturalRootsFor(withSeparator)
+            .Should().Equal(PapyrusAnalysisService.NaturalRootsFor(_root));
     }
 
     [Fact]

@@ -1674,14 +1674,60 @@ public sealed class PapyrusCodeGenerator
         /// the Arrays page but has no opcode in the Fallout 4 instruction set, so it is refused
         /// rather than approximated.
         /// </remarks>
+        /// <summary>
+        /// How many arguments each array built-in takes, from the Creation Kit's per-function pages.
+        /// </summary>
+        /// <remarks>
+        /// These have to be stated here because there is nowhere else to state them: array built-ins
+        /// are declared in no <c>.psc</c>, which is exactly why the type checker leaves their
+        /// arguments unchecked. That gap means bad-but-parseable source -- <c>xs.Add()</c> -- reaches
+        /// the back end, and reading operand zero of an empty list is not a refusal, it is a crash.
+        /// </remarks>
+        private static readonly Dictionary<string, (int Min, int Max)> ArrayBuiltinArity =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["find"] = (1, 2),
+                ["rfind"] = (1, 2),
+                ["findstruct"] = (2, 3),
+                ["rfindstruct"] = (2, 3),
+                ["add"] = (1, 2),
+                ["insert"] = (2, 2),
+                ["remove"] = (1, 2),
+                ["removelast"] = (0, 0),
+                ["clear"] = (0, 0),
+            };
+
         private void EmitArrayBuiltin(PapyrusCallExpression call, PapyrusBinding binding, string destination)
         {
             if (call.Callee is not PapyrusMemberExpression member) { CannotEmit(call); return; }
 
+            var arguments = call.Arguments.Select(a => a.Value).ToList();
+            if (!ArrayBuiltinArity.TryGetValue(binding.Name, out var arity))
+            {
+                _gen.Report(
+                    PapyrusDiagnosticCodes.CannotEmit,
+                    $"The array built-in '{binding.Name}' has no Fallout 4 opcode, so there is no "
+                    + "instruction to emit for it.",
+                    call.Span);
+                return;
+            }
+
+            if (arguments.Count < arity.Min || arguments.Count > arity.Max)
+            {
+                var wanted = arity.Min == arity.Max
+                    ? $"{arity.Min}"
+                    : $"{arity.Min} to {arity.Max}";
+                _gen.Report(
+                    PapyrusDiagnosticCodes.ArgumentCount,
+                    $"'{binding.Name}' on an array takes {wanted} argument(s), not {arguments.Count}. "
+                    + "Array built-ins are declared in no script, so this is not caught earlier.",
+                    call.Span);
+                return;
+            }
+
             var arrayType = _gen.TypeOf(member.Target);
             var element = arrayType.ElementType ?? PapyrusType.Error;
             var array = Value(member.Target);
-            var arguments = call.Arguments.Select(a => a.Value).ToList();
 
             PexValue Argument(int at, PapyrusType type, int fallback) =>
                 at < arguments.Count ? ValueAs(arguments[at], type) : Int(fallback);
@@ -1713,7 +1759,7 @@ public sealed class PapyrusCodeGenerator
                     return;
 
                 case "insert":
-                    Add("array_insert", array, ValueAs(arguments[0], element), Argument(1, PapyrusType.Int, 0));
+                    Add("array_insert", array, ValueAs(arguments[0], element), ValueAs(arguments[1], PapyrusType.Int));
                     return;
 
                 case "remove":
@@ -1730,11 +1776,9 @@ public sealed class PapyrusCodeGenerator
                     return;
 
                 default:
-                    _gen.Report(
-                        PapyrusDiagnosticCodes.CannotEmit,
-                        $"The array built-in '{binding.Name}' has no Fallout 4 opcode, so there is "
-                        + "no instruction to emit for it.",
-                        call.Span);
+                    // Unreachable: the arity table above is the list of built-ins with opcodes, and
+                    // anything absent from it was already refused.
+                    CannotEmit(call);
                     return;
             }
         }
