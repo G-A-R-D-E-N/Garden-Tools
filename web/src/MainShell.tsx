@@ -436,8 +436,12 @@ export default function MainShell() {
       const raw = await back.GetConflictMatrix(formKey);
       const matrix: ConflictMatrix | null = raw ? JSON.parse(raw) : null;
       if (!matrix) {
-        setErrorStr(`Couldn't read ${node.Key} (${formKey}). No loaded plugin holds that record -- `
-          + `reload the environment with Open MO2 and try again.`);
+        // Do not assert why. BuildConflictMatrix returns null for several distinct reasons (no
+        // environment, unparseable FormKey, no version found), and claiming "that record does not
+        // exist" was wrong for a record that plainly did -- it had simply been asked for while the
+        // environment was being swapped. Say what happened and what usually clears it.
+        setErrorStr(`Couldn't build a view of ${node.Key} (${formKey}). The environment may still be `
+          + `loading or was just reloaded -- try again, or reload it with Open MO2.`);
         return;
       }
       putRecord({ title: node.Key, plugin, matrix });
