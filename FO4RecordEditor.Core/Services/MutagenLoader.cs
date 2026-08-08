@@ -967,7 +967,15 @@ public static partial class MutagenLoader
                 foreach (var ctx in contexts)
                     ordered.Add((ctx.ModKey.FileName.String, ctx.Record));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // NEVER swallow this silently. An empty result here is indistinguishable from "no
+                // plugin holds this record", so a transient link-cache failure (one seen while the
+                // cache is still warming right after an environment load) surfaced to the user as
+                // "that record does not exist" -- a wrong answer with no trace anywhere. The caller
+                // still gets the empty list, but now the reason is in the log.
+                DebugLog.Exception($"GetRecordContexts({fk})", ex);
+            }
         }
 
         // Hot-load AI/in-editor patches: any EditableMods plugin that carries this FormKey is a LIVE
