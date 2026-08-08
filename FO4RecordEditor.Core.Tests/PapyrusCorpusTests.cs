@@ -231,4 +231,72 @@ public class PapyrusCorpusTests
 
         resolved.Should().BeGreaterThan(0);
     }
+
+    /// <summary>
+    /// Type-checks every script the corpus roots contain.
+    /// </summary>
+    /// <remarks>
+    /// The strongest test available without the game, because every one of these files is code the
+    /// real compiler already accepted. A diagnostic here is therefore a false positive until proven
+    /// otherwise, and the count is a direct measure of how many of the checker's rules are actually
+    /// the language's rules. It is the reason the checker stays silent wherever it is unsure.
+    /// </remarks>
+    [Fact]
+    public void Every_script_on_disk_type_checks_without_crashing()
+    {
+        var files = CorpusFiles();
+        if (files.Count == 0)
+        {
+            _output.WriteLine($"{CorpusVariable} is not set; corpus sweep skipped.");
+            return;
+        }
+
+        var index = new PapyrusScriptIndex();
+        foreach (var root in (Environment.GetEnvironmentVariable(CorpusVariable) ?? string.Empty)
+                 .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            index.AddRoot(root);
+        }
+
+        var resolver = new PapyrusResolver(index);
+        var checker = new PapyrusTypeChecker(index);
+        var stopwatch = Stopwatch.StartNew();
+        int checked_ = 0, clean = 0;
+        var byCode = new Dictionary<string, int>(StringComparer.Ordinal);
+        var examples = new List<string>();
+
+        foreach (var file in files)
+        {
+            var script = index.ParseCached(file);
+            if (script == null || script.HasErrors) continue;
+
+            IReadOnlyList<PapyrusDiagnostic> diagnostics;
+            try
+            {
+                var resolution = resolver.Resolve(script);
+                if (!resolution.BaseChainComplete) continue;
+                diagnostics = checker.Check(resolution);
+            }
+            catch (Exception ex)
+            {
+                throw new Xunit.Sdk.XunitException($"Type checking threw on {file}: {ex}");
+            }
+
+            checked_++;
+            if (diagnostics.Count == 0) { clean++; continue; }
+
+            foreach (var d in diagnostics) byCode[d.Code] = byCode.GetValueOrDefault(d.Code) + 1;
+            if (examples.Count < 40) examples.Add($"{file}: {diagnostics[0]}");
+        }
+        stopwatch.Stop();
+
+        var rate = checked_ == 0 ? 0 : (double)clean / checked_;
+        _output.WriteLine(
+            $"{checked_} scripts type-checked with complete sources; {clean} clean ({rate:P2}); " +
+            $"{stopwatch.ElapsedMilliseconds} ms");
+        foreach (var kv in byCode.OrderByDescending(k => k.Value)) _output.WriteLine($"  {kv.Key}: {kv.Value}");
+        foreach (var e in examples) _output.WriteLine("  " + e);
+
+        checked_.Should().BeGreaterThan(0);
+    }
 }

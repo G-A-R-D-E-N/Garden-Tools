@@ -214,6 +214,24 @@ public sealed class PapyrusResolver
         return binding.Type;
     }
 
+    /// <summary>The callee of a call. A bare name here is a function, never a local.</summary>
+    private PapyrusType ResolveCallee(Context ctx, PapyrusExpression callee)
+    {
+        if (callee is not PapyrusIdentifierExpression id) return ResolveExpression(ctx, callee);
+
+        var binding = LookupName(ctx, id.Name, inCallPosition: true);
+        if (binding == null)
+        {
+            ReportUnresolved(ctx, id.Name, id.Span);
+            ctx.Types[id] = PapyrusType.Error;
+            return PapyrusType.Error;
+        }
+
+        ctx.Bindings[id] = binding;
+        ctx.Types[id] = binding.Type;
+        return binding.Type;
+    }
+
     private PapyrusType ResolveExpression(Context ctx, PapyrusExpression expr)
     {
         var type = ComputeType(ctx, expr);
@@ -270,7 +288,7 @@ public sealed class PapyrusResolver
             case PapyrusCallExpression call:
             {
                 foreach (var arg in call.Arguments) ResolveExpression(ctx, arg.Value);
-                var calleeType = ResolveExpression(ctx, call.Callee);
+                var calleeType = ResolveCallee(ctx, call.Callee);
                 var binding = ctx.Bindings.TryGetValue(call.Callee, out var b) ? b : null;
                 if (binding != null) ctx.Bindings[call] = binding;
                 return calleeType;
@@ -340,11 +358,22 @@ public sealed class PapyrusResolver
     // ---- name lookup ----------------------------------------------------------------------------
 
     /// <summary>A bare identifier, resolved outward: locals, then Self's members, then wider.</summary>
-    private PapyrusBinding? LookupName(Context ctx, string name)
+    /// <param name="inCallPosition">
+    /// True for the name in <c>Foo(...)</c>. Papyrus has no function values, so a name being called
+    /// cannot be a local or a parameter however well it matches one -- and since the language is
+    /// case-insensitive, it can match one by accident. Vanilla's
+    /// <c>Inst307_ZoneQuestRespawnScript</c> does exactly this: it calls <c>RespawnCollection(...)</c>
+    /// from a function whose parameter is named <c>respawnCollection</c>, and binding the call to the
+    /// parameter gives the call that parameter's type instead of the function's return type.
+    /// </param>
+    private PapyrusBinding? LookupName(Context ctx, string name, bool inCallPosition = false)
     {
-        for (int i = ctx.Scopes.Count - 1; i >= 0; i--)
+        if (!inCallPosition)
         {
-            if (ctx.Scopes[i].TryGetValue(name, out var local)) return local;
+            for (int i = ctx.Scopes.Count - 1; i >= 0; i--)
+            {
+                if (ctx.Scopes[i].TryGetValue(name, out var local)) return local;
+            }
         }
 
         // "Self refers to the instance of the script that the function is running on", and a global
