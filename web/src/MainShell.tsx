@@ -183,12 +183,17 @@ export default function MainShell() {
   const [activeKey, setActiveKey] = useState<string>('');
   const [recordLoading, setRecordLoading] = useState(false);
 
-  const openRecord = openRecords.find(r => r.matrix.FormKey === activeKey) ?? null;
+  // Every lookup below reads through `?.` on purpose. These run during render and inside state
+  // updaters, where an exception is not recoverable: React unmounts the whole tree and the window
+  // goes blank with no message. Optional access costs nothing and keeps one bad entry from being
+  // fatal, in addition to the guard at the point a record is opened.
+  const openRecord = openRecords.find(r => r.matrix?.FormKey === activeKey) ?? null;
 
   /** Add or focus a record tab. Re-opening an already-open record refreshes it in place. */
   const putRecord = useCallback((rec: OpenRec) => {
+    if (!rec.matrix?.FormKey) return;   // nothing sensible to key a tab on
     setOpenRecords(prev => {
-      const at = prev.findIndex(r => r.matrix.FormKey === rec.matrix.FormKey);
+      const at = prev.findIndex(r => r.matrix?.FormKey === rec.matrix.FormKey);
       if (at === -1) return [...prev, rec];
       const next = [...prev];
       next[at] = rec;
@@ -199,11 +204,11 @@ export default function MainShell() {
 
   const closeRecordTab = useCallback((formKey: string) => {
     setOpenRecords(prev => {
-      const at = prev.findIndex(r => r.matrix.FormKey === formKey);
+      const at = prev.findIndex(r => r.matrix?.FormKey === formKey);
       if (at === -1) return prev;
-      const next = prev.filter(r => r.matrix.FormKey !== formKey);
+      const next = prev.filter(r => r.matrix?.FormKey !== formKey);
       // Focus the neighbour rather than dumping the user on the welcome screen.
-      setActiveKey(cur => (cur !== formKey ? cur : (next[at] ?? next[at - 1])?.matrix.FormKey ?? ''));
+      setActiveKey(cur => (cur !== formKey ? cur : (next[at] ?? next[at - 1])?.matrix?.FormKey ?? ''));
       return next;
     });
   }, []);
@@ -424,7 +429,17 @@ export default function MainShell() {
       if (!formKey) { setErrorStr(`Couldn't resolve a FormKey for ${node.Key}.`); return; }
       const plugin = path.split(/[\\/]/)[0];
       // xEdit-style conflict matrix: every plugin that touches this record becomes a column.
-      const matrix: ConflictMatrix = JSON.parse(await back.GetConflictMatrix(formKey));
+      // BuildConflictMatrix returns null (serialized as the string "null") when the environment is
+      // gone, the FormKey will not parse, or no loaded plugin holds that record. That is a failure to
+      // report, not a record to open: putting a null matrix into state used to throw while rendering
+      // and take the whole UI down with it, which in the native window looks like a blank app.
+      const raw = await back.GetConflictMatrix(formKey);
+      const matrix: ConflictMatrix | null = raw ? JSON.parse(raw) : null;
+      if (!matrix) {
+        setErrorStr(`Couldn't read ${node.Key} (${formKey}). No loaded plugin holds that record -- `
+          + `reload the environment with Open MO2 and try again.`);
+        return;
+      }
       putRecord({ title: node.Key, plugin, matrix });
     } catch (err: any) {
       setErrorStr(err?.message || String(err));
