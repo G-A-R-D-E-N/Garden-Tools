@@ -57,7 +57,8 @@ in WebView2. Same app, same code: the interop layer, the record editing, and the
 to use a browser window instead, or `--headless` to serve without opening anything.
 
 A few helper tools (niftool, texconv, Archive2, PapyrusCompiler, xWMAEncode) only exist as Windows
-binaries; installing `wine` makes the panels that drive them work. Everything else is native.
+binaries; installing `wine` makes the panels that drive them work. Everything else is native --
+including Papyrus compiling, which has its own engine and does not need `PapyrusCompiler.exe`.
 
 ---
 
@@ -116,16 +117,36 @@ Each also honours an environment variable, which wins over the settings file:
 packer/splitter) are bundled-only, in the same `tools\audio\` folder, with no override -- there's
 nothing to point them at.
 
-### Papyrus compiling needs the Creation Kit; BA2 packing does not
+### Papyrus compiling no longer needs the Creation Kit; BA2 packing never did
 
-`compile_papyrus` shells out to Bethesda's `PapyrusCompiler.exe`, which ships with the **Creation
-Kit** and is not redistributable, so it is not in this package. Install the CK (it is free, on Steam)
-and it is found automatically.
+`compile_papyrus` has two engines, chosen with `engine`:
 
-*Reading* Papyrus source needs nothing installed. The tool has its own Papyrus lexer and parser, so
-the Papyrus panel's **Analyze** mode -- syntax errors, an outline, and go-to-definition as you type
--- and the `papyrus_check` / `papyrus_outline` / `papyrus_definition` tools all work with no CK
-present. They parse rather than compile, so no reported errors is not the same as "this builds".
+- **`builtin`** is this tool's own compiler -- lexer, parser, script index, resolver, type checker,
+  code generator and `.pex` writer -- and needs **no `PapyrusCompiler.exe`**. It is measured against
+  the Creation Kit's own output: of the 161 real scripts on the development machine it compiled,
+  158 came out instruction for instruction identical to the `.pex` the CK produced from the same
+  source, Bethesda's own 55 KB `ObjectReference.psc` among them.
+- **`creationkit`** shells out to Bethesda's `PapyrusCompiler.exe`, which ships with the **Creation
+  Kit**, is not redistributable, and is therefore not in this package. Install the CK (it is free, on
+  Steam) and it is found automatically.
+- **`auto`**, the default, uses the Creation Kit when one is installed and the built-in engine when
+  there is not.
+
+**One honest caveat.** No `PapyrusCompiler.exe` is not the same as no Creation Kit *install*. The
+built-in engine still needs the vanilla base script *sources* on the import path to resolve `Form`,
+`ObjectReference`, `Actor` and the rest, and those ship with the CK rather than in the game archives.
+That is a far weaker requirement -- they are plain `.psc` text, widely redistributed, and not
+Windows-only, whereas the compiler is a non-redistributable Windows binary -- so this compiles on
+Linux, in CI, or anywhere the sources are lying around. It does not compile out of thin air. Point
+`PAPYRUS_BASE_IMPORTS`, or **Settings → Papyrus base imports**, at a folder of them; when none is
+found, the failure says exactly that rather than listing every vanilla type as unknown.
+
+*Reading and checking* Papyrus source needs nothing installed either. The Papyrus panel's
+**Analyze** mode -- syntax errors, an outline, and go-to-definition as you type -- and the
+`papyrus_check` / `papyrus_outline` / `papyrus_definition` tools all work with no CK present.
+`papyrus_check` resolves names and checks types as well as parsing, and it switches that reporting
+off for a file whose parent or import it cannot find, counting those separately, so a clean result
+never quietly means "could not tell".
 
 Archives need nothing installed, in either direction. Reading (`archive_list`/`archive_extract`/
 `archive_extract_all`) goes through Mutagen; `archive_pack` writes BA2s in process, both General

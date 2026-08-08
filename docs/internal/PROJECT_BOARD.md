@@ -11,9 +11,13 @@ Seeded 2026-08-05 from the `bd` tracker; the repo and board were both empty befo
 
 > **Stale as of 2026-08-08.** The tables below are a snapshot taken on 2026-08-05 and have not been
 > re-seeded since, so issues filed after that date are not in them at all. Treat GitHub as the source
-> of truth and this file as history. Open right now: **#55, #57, #73, #74, #77, #78, #87**. Of those,
-> #73/#74 are parked by priority rather than cancelled, and #78 has had its phase 1 merged (PR #89:
-> the Papyrus front end, plus the panel's Analyze mode) with phase 2 still an open decision.
+> of truth and this file as history. Open right now: **#55, #57, #73, #74, #77, #87**. Of those,
+> #73/#74 are parked by priority rather than cancelled.
+>
+> **#78 is done** (2026-08-08). Phase 1 merged as PR #89 (the Papyrus front end, plus the panel's
+> Analyze mode); phase 2 as PR #98 -- resolver, type checker, `.pex` writer, code generator, and the
+> `engine` parameter on `compile_papyrus` that makes the Creation Kit's `PapyrusCompiler.exe`
+> optional. See [PAPYRUS.md](PAPYRUS.md).
 
 ## Summary
 

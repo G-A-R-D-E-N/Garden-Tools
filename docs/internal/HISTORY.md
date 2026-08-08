@@ -25,6 +25,17 @@ added to the graph.
 
 **M6 shipped a full WPF shell — and was then thrown away.** See "Abandoned" below.
 
+**2026-08-07/08 -- the Papyrus compiler (issue #78).** The tool could read, understand and decompile
+Papyrus on a machine with no Creation Kit, but not produce a script: `compile_papyrus` shelled out to
+Bethesda's `PapyrusCompiler.exe`, the same shape of dependency the `Archive2.exe` one had been. Phase
+1 (PR #89) built the front end -- lexer, parser, script index -- and the panel's Analyze mode. Phase 2
+(PR #98) built the semantic half and the back end: resolver, type checker, `.pex` writer, code
+generator, and the user-flag table that removes the last file only the CK ships. `compile_papyrus`
+gained an `engine` parameter; `auto` prefers an installed CK and falls back to the built-in compiler.
+The whole subsystem is documented in [PAPYRUS.md](PAPYRUS.md), including the thing worth not
+re-deriving: byte-identity with the CK is **not** achievable for a code generator, because the CK's
+output is not a function of the source alone.
+
 **2026-06-11 — Readability (renderer registry).** Killed raw reflection dumps
 (`Model.Data[0..31]`, `MarkerColor.R/G/B/A`) with a generic `ElementRenderer` registry +
 `FriendlyNames` map consulted by `MutagenLoader.WalkObject`. The invariants this established are
