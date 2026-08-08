@@ -26,6 +26,18 @@ public sealed class AnthropicProvider : IAIProvider
         IReadOnlyList<ChatMessage> messages,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        // Refuse before the network, not after. With a blank key this sent x-api-key: "" and the user
+        // got Anthropic's own 401 -- '{"message":"x-api-key header is required"}' -- which reads like
+        // the app forgot to attach the header, when in fact no key was ever configured. The provider
+        // is also the fallback in AiProviderFactory, so an unset AiProvider lands here by default.
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            yield return "No Anthropic API key is configured, so the request was not sent. "
+                + "Add one in Settings > AI (Anthropic API Key), or switch the AI provider to "
+                + "Claude Code or Ollama, which need no key.";
+            yield break;
+        }
+
         var system = string.Join("\n\n",
             messages.Where(m => m.Role == ChatRole.System).Select(m => m.Content));
         var turns = messages.Where(m => m.Role != ChatRole.System)

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type KeyboardEvent, type ClipboardEvent } from 'react';
+import { useDialogs } from './dialogs';
 import { MessageSquare, X, Plus, Pencil, Trash2, Wrench, Brain, CornerDownRight, Image as ImageIcon, GitBranch, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -68,6 +69,7 @@ const GREETING: ChatMsg = {
 
 export default function ChatPanel() {
   // Per-session message buffers + busy flags, so multiple chats stream independently without bleeding.
+  const { confirm: askConfirm, prompt: askPrompt } = useDialogs();
   const [buffers, setBuffers] = useState<Record<string, ChatMsg[]>>({});
   const [busyMap, setBusyMap] = useState<Record<string, boolean>>({});
   const [input, setInput] = useState('');
@@ -268,7 +270,8 @@ export default function ChatPanel() {
     const c = host();
     if (!c || !currentId) return;
     const cur = sessions.find(s => s.id === currentId);
-    const name = window.prompt('Rename chat:', cur?.name || '');
+    const name = await askPrompt({ title: 'Rename chat', label: 'Chat name',
+      defaultValue: cur?.name || '', validate: v => v.trim() ? null : 'Enter a name.' });
     if (!name) return;
     await c.RenameSession(currentId, name);
     refreshSessions();
@@ -277,7 +280,8 @@ export default function ChatPanel() {
   const deleteChat = async () => {
     const c = host();
     if (!c || !currentId) return;
-    if (!window.confirm('Delete this chat?')) return;
+    if (!await askConfirm({ title: 'Delete chat', danger: true, confirmLabel: 'Delete',
+      message: 'Delete this chat? Its messages cannot be recovered.' })) return;
     const idDel = currentId;
     const list: ChatSessionMeta[] = JSON.parse(await c.DeleteSession(idDel));
     setSessions(list);

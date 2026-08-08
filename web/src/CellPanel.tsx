@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogs } from './dialogs';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
 import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
@@ -11,6 +12,7 @@ const LS = (k: string, d: string) => localStorage.getItem('cell.' + k) ?? d;
 const setLS = (k: string, v: string) => localStorage.setItem('cell.' + k, v);
 
 export default function CellPanel({ onClose }: { onClose: () => void }) {
+  const { pickPlugin: askForTarget } = useDialogs();
   const [cellId, setCellId] = useState(() => LS('cellId', ''));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -330,11 +332,13 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     if (!c || !backend) return;
     let patch = gizmoPatchRef.current;
     if (!patch) {
-      const entered = window.prompt(
-        'Save this move (and any further moves this session) into which patch plugin?',
-        LS('gizmoPatch', 'CellEdits.esp'));
-      if (!entered || !entered.trim()) { appendLog('✗ move not saved -- no patch plugin chosen.'); return; }
-      patch = entered.trim();
+      const picked = await askForTarget({
+        title: 'Save cell edits into',
+        description: 'This move, and any further moves this session, are written here.',
+        confirmLabel: 'Save into', defaultTarget: LS('gizmoPatch', 'CellEdits.esp'),
+      });
+      if (!picked) { appendLog('x move not saved -- no patch plugin chosen.'); return; }
+      patch = picked.target;
       gizmoPatchRef.current = patch;
       setLS('gizmoPatch', patch);
     }

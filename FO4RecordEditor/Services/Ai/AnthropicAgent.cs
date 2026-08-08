@@ -159,6 +159,23 @@ public sealed class AnthropicAgent
 
     private async Task<string> PostAsync(object payload, CancellationToken ct)
     {
+        // Same guard as AnthropicProvider: a blank key produced an upstream 401 reading
+        // "x-api-key header is required", which points at the wrong thing. Say what is actually wrong.
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            return JsonSerializer.Serialize(new
+            {
+                type = "error",
+                error = new
+                {
+                    type = "not_configured",
+                    message = "No Anthropic API key is configured, so the request was not sent. "
+                        + "Add one in Settings > AI (Anthropic API Key), or switch the AI provider to "
+                        + "Claude Code or Ollama, which need no key.",
+                },
+            });
+        }
+
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
         req.Headers.Add("x-api-key", _apiKey);
         req.Headers.Add("anthropic-version", "2023-06-01");

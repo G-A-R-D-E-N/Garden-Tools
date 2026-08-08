@@ -12,6 +12,7 @@ import AudioPanel from './AudioPanel';
 import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
 import { readFavourites, removeFavourite, FAVOURITES_CHANGED } from './favourites';
+import { useDialogs } from './dialogs';
 
 interface McpLiveMsg {
   Tool: string;
@@ -120,6 +121,8 @@ export default function MainShell() {
   const [showCell, setShowCell] = useState(false);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+
+  const { pickPlugin: askForTarget } = useDialogs();
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -522,8 +525,14 @@ export default function MainShell() {
     if (!b || !conflicts) return;
     const picked = conflicts.filter(c => conflictSel[c.FormKey]);
     if (picked.length === 0) { setStatus('Select at least one conflict first.'); return; }
-    const patch = window.prompt(`Copy ${picked.length} record(s) as override into which patch plugin?`, 'ConflictPatch.esp');
-    if (!patch) return;
+    const chosen = await askForTarget({
+      title: `Copy ${picked.length} record(s) as override`,
+      description: 'Every selected conflict is copied into this plugin as an override. It still has to be saved and enabled last in the load order.',
+      confirmLabel: 'Copy',
+      defaultTarget: 'ConflictPatch.esp',
+    });
+    if (!chosen) return;
+    const patch = chosen.target;
     setConflictBusy(true);
     try {
       const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
@@ -1003,6 +1012,7 @@ export default function MainShell() {
           user actually needs to know that are not visible in the UI: where the log is, why Load Env
 
           refuses on Linux, and that edits are in memory until saved. */}
+
 
       {showHelp && (
 

@@ -3,12 +3,14 @@ import {
   ChevronRight, ChevronDown, EyeOff, Pencil, Copy, Save, Trash2,
   Link2, AlertTriangle, Hash, Minimize2, Eraser, Brain, Crown, Clock, Network, HelpCircle,
   Plus, Minus, ListFilter, ClipboardCopy, FilePlus2, ArrowUp, ArrowDown, Eraser as EraserIcon,
+  GitCompare as GitCompareIcon,
 } from 'lucide-react';
 import type {
   ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry, ElementActions,
 } from './backend';
 import RecordPicker from './RecordPicker';
 import ConditionsEditor from './ConditionsEditor';
+import { useDialogs } from './dialogs';
 import WorkspaceHeader from './Workspace/WorkspaceHeader';
 import { buildActions } from './Workspace/actions';
 import ConflictsView, { type ConflictLayout } from './Workspace/ConflictsView';
@@ -118,6 +120,10 @@ export default function RecordView(
   const [edit, setEdit] = useState<Edit | null>(null);
   const [editVal, setEditVal] = useState('');
   const [picker, setPicker] = useState<{ row: ConflictFieldRow; col: number } | null>(null);
+
+  // One dialog mechanism for the whole app (see dialogs.tsx). Promise-shaped, so each call site
+  // reads like the window.* call it replaces and keeps its early-return.
+  const { confirm: askConfirm, prompt: askPrompt, pickPlugin: askForTarget } = useDialogs();
   const [conditions, setConditions] = useState<{ plugin: string; path: string; label: string } | null>(null);
   const [status, setStatus] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
@@ -335,6 +341,18 @@ export default function RecordView(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menu]);
 
+  // xEdit's "Copy as override into...": ask for the target, then copy. This replaces an inline list
+  // of editable plugins plus a hardcoded ConflictPatch.esp, which offered nothing in a fresh session.
+  const copyAsOverrideInto = async (col: number) => {
+    setMenu(null);
+    const picked = await askForTarget({
+      title: 'Copy as override into',
+      description: `Copies ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[col]} into the plugin you choose, as an override.`,
+      confirmLabel: 'Copy', defaultTarget: editablePlugins[0] ?? '',
+    });
+    if (picked) await copyInto(col, picked.target);
+  };
+
   const copyInto = async (col: number, target: string) => {
     setMenu(null);
     const b = back();
@@ -358,7 +376,8 @@ export default function RecordView(
     const b = back();
     if (!b) return;
     const plug = matrix.Plugins[col];
-    if (!window.confirm(`Delete ${matrix.EditorID || matrix.FormKey} from ${plug}?`)) return;
+    if (!await askConfirm({ title: 'Remove record', danger: true, confirmLabel: 'Remove',
+      message: `Remove ${matrix.EditorID || matrix.FormKey} from ${plug}?` })) return;
     setStatus('Deleting…');
     try { setStatus(await b.DeleteRecord(plug, matrix.FormKey)); await onReload(); }
     catch (e: any) { setStatus('Delete failed: ' + (e?.message || e)); }
@@ -370,7 +389,12 @@ export default function RecordView(
     if (!b) return;
     const plug = matrix.Plugins[col];
     const cur = matrix.FormKey.split(':')[0];
-    const next = window.prompt(`New FormID for ${matrix.EditorID || matrix.FormKey} in ${plug} (6-digit hex):`, cur);
+    const next = await askPrompt({
+      title: 'Change FormID',
+      description: `Renumbers ${matrix.EditorID || matrix.FormKey} in ${plug}.`,
+      label: 'New FormID (6-digit hex)', defaultValue: cur, placeholder: '001000',
+      validate: v => /^[0-9a-fA-F]{1,6}$/.test(v.trim()) ? null : 'Six hex digits or fewer, e.g. 001000.',
+    });
     if (!next) return;
     setStatus('Renumbering…');
     try { setStatus(await b.RenumberFormId(plug, matrix.FormKey, next)); await onReload(); }
@@ -381,7 +405,8 @@ export default function RecordView(
     setMenu(null);
     const b = back();
     if (!b) return;
-    if (!window.confirm(`Compact ${matrix.Plugins[col]} to ESL? This renumbers every record's FormID into the 0x800-0xFFF range and can break references from other plugins.`)) return;
+    if (!await askConfirm({ title: 'Compact to ESL', danger: true, confirmLabel: 'Compact',
+      message: `Compact ${matrix.Plugins[col]} to ESL?\n\nThis renumbers every record's FormID into the 0x800-0xFFF range and can break references from other plugins.` })) return;
     setStatus('Compacting…');
     try { setStatus(await b.CompactToEsl(matrix.Plugins[col])); await onReload(); }
     catch (e: any) { setStatus('Compact failed: ' + (e?.message || e)); }
@@ -391,7 +416,8 @@ export default function RecordView(
     setMenu(null);
     const b = back();
     if (!b) return;
-    if (!window.confirm(`Clean (UDR) ${matrix.Plugins[col]}? This undeletes and disables every deleted record in the plugin.`)) return;
+    if (!await askConfirm({ title: 'Clean (UDR)', confirmLabel: 'Clean',
+      message: `Clean (UDR) ${matrix.Plugins[col]}?\n\nThis undeletes and disables every deleted record in the plugin.` })) return;
     setStatus('Cleaning…');
     try { setStatus(await b.CleanPlugin(matrix.Plugins[col])); await onReload(); }
     catch (e: any) { setStatus('Clean failed: ' + (e?.message || e)); }
@@ -402,10 +428,19 @@ export default function RecordView(
     setMenu(null);
     const b = back();
     if (!b) return;
-    const target = window.prompt('Copy as NEW record into which plugin?', editablePlugins[0] ?? '');
-    if (!target) return;
-    const edid = window.prompt('EditorID for the new record:', (matrix.EditorID || 'NewRecord') + 'DUP');
-    if (edid === null) return;
+    const picked = await askForTarget({
+      title: 'Copy as new record',
+      description: `Duplicates ${matrix.EditorID || matrix.FormKey} under a fresh FormID in the plugin you choose.`,
+      confirmLabel: 'Duplicate',
+      defaultTarget: editablePlugins[0] ?? '',
+      extraField: {
+        label: 'EditorID for the new record',
+        defaultValue: (matrix.EditorID || 'NewRecord') + 'DUP',
+        placeholder: 'MyNewRecord',
+      },
+    });
+    if (!picked) return;
+    const { target, extra: edid } = picked;
     setStatus('Duplicating…');
     try { setStatus(await b.CopyAsNewRecord(matrix.Plugins[col], matrix.FormKey, target, edid)); await onReload(); }
     catch (e: any) { setStatus('Copy as new record failed: ' + (e?.message || e)); }
@@ -419,14 +454,20 @@ export default function RecordView(
       setStatus(`${matrix.Type} does not support deep copy here -- copy it with Copy as Override and its placed objects individually.`);
       return;
     }
-    const target = window.prompt('Deep copy (record + its own referenced content) as override into which plugin?', editablePlugins[0] ?? 'ConflictPatch.esp');
-    if (!target) return;
+    const picked = await askForTarget({
+      title: 'Deep copy as override',
+      description: 'Copies the record and the content it references into the plugin you choose. You get a dry run to confirm first.',
+      confirmLabel: 'Dry run',
+      defaultTarget: editablePlugins[0] ?? 'ConflictPatch.esp',
+    });
+    if (!picked) return;
+    const target = picked.target;
     setStatus('Scanning references…');
     try {
       const preview = await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, false);
       setStatus(preview);
       if (!preview.startsWith('DRY RUN')) return;
-      if (!window.confirm(`${preview}\n\nProceed?`)) return;
+      if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
       setStatus(await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true));
       await onReload();
     } catch (e: any) { setStatus('Deep copy failed: ' + (e?.message || e)); }
@@ -436,16 +477,26 @@ export default function RecordView(
     setMenu(null);
     const b = back();
     if (!b) return;
-    const to = window.prompt(`Point every record that references ${matrix.EditorID || matrix.FormKey} at which record instead (FormKey or EditorID)?`, '');
+    const to = await askPrompt({
+      title: 'Change referencing records',
+      description: `Every record that references ${matrix.EditorID || matrix.FormKey} will point at this instead.`,
+      label: 'Replacement record (FormKey or EditorID)', placeholder: '000800:MyPlugin.esp',
+      validate: v => v.trim().length > 0 ? null : 'Enter a FormKey or EditorID.',
+    });
     if (!to) return;
-    const target = window.prompt('Write the repointed records into which patch plugin?', editablePlugins[0] ?? 'ConflictPatch.esp');
+    const targetPick = await askForTarget({
+      title: 'Write repointed records into',
+      description: 'The rewritten records are written here as overrides.',
+      confirmLabel: 'Dry run', defaultTarget: editablePlugins[0] ?? 'ConflictPatch.esp',
+    });
+    const target = targetPick?.target ?? '';
     if (!target) return;
     setStatus('Finding referencing records…');
     try {
       const preview = await b.ChangeReferencingRecords(matrix.FormKey, to, target, false);
       setStatus(preview);
       if (!preview.startsWith('DRY RUN')) return;
-      if (!window.confirm(`${preview}\n\nProceed?`)) return;
+      if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
       setStatus(await b.ChangeReferencingRecords(matrix.FormKey, to, target, true));
       await onReload();
     } catch (e: any) { setStatus('Change referencing records failed: ' + (e?.message || e)); }
@@ -463,7 +514,8 @@ export default function RecordView(
       const preview = await b.RemoveIdenticalToMaster(plug, false);
       setStatus(preview);
       if (!preview.startsWith('DRY RUN')) return;
-      if (!window.confirm(`${preview}\n\nRemove them from ${plug}?`)) return;
+      if (!await askConfirm({ title: 'Remove from selected records', danger: true, confirmLabel: 'Remove',
+        message: `${preview}\n\nRemove them from ${plug}?` })) return;
       setStatus(await b.RemoveIdenticalToMaster(plug, true));
       await onReload();
     } catch (e: any) { setStatus('Remove ITM failed: ' + (e?.message || e)); }
@@ -474,7 +526,12 @@ export default function RecordView(
     const b = back();
     if (!b) return;
     const plug = matrix.Plugins[col];
-    const list = window.prompt(`Declare master(s) on ${plug} -- comma separated plugin filenames:`, '');
+    const list = await askPrompt({
+      title: 'Add masters',
+      description: `Declares master files on ${plug}.`,
+      label: 'Plugin filenames, comma separated', placeholder: 'Fallout4.esm, MyMod.esp',
+      validate: v => v.trim().length > 0 ? null : 'Enter at least one plugin filename.',
+    });
     if (!list) return;
     try { setStatus(await b.AddMasters(plug, list)); await onReload(); }
     catch (e: any) { setStatus('Add masters failed: ' + (e?.message || e)); }
@@ -487,13 +544,18 @@ export default function RecordView(
     const b = back();
     if (!b) return;
     const plug = matrix.Plugins[col];
-    const start = window.prompt(`Renumber every record in ${plug}, starting at which hex object id?`, '001000');
+    const start = await askPrompt({
+      title: 'Renumber FormIDs',
+      description: `Renumbers every record in ${plug}. You get a dry run to confirm first.`,
+      label: 'Starting object id (hex)', defaultValue: '001000',
+      validate: v => /^[0-9a-fA-F]{1,6}$/.test(v.trim()) ? null : 'Six hex digits or fewer, e.g. 001000.',
+    });
     if (!start) return;
     try {
       const preview = await b.RenumberPluginFormIds(plug, start, false);
       setStatus(preview);
       if (!preview.startsWith('DRY RUN')) return;
-      if (!window.confirm(`${preview}\n\nProceed?`)) return;
+      if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
       setStatus(await b.RenumberPluginFormIds(plug, start, true));
       await onReload();
     } catch (e: any) { setStatus('Renumber failed: ' + (e?.message || e)); }
@@ -547,7 +609,8 @@ export default function RecordView(
         case 'up':     msg = await b.MoveElement(plug, matrix.FormKey, r.Field, -1); break;
         case 'down':   msg = await b.MoveElement(plug, matrix.FormKey, r.Field, 1); break;
         case 'clear':
-          if (!window.confirm(`Clear every entry from ${r.DisplayLabel || r.Field} in ${plug}?`)) return;
+          if (!await askConfirm({ title: 'Clear list', danger: true, confirmLabel: 'Clear',
+            message: `Clear every entry from ${r.DisplayLabel || r.Field} in ${plug}?` })) return;
           msg = await b.ClearElement(plug, matrix.FormKey, r.Field); break;
       }
       setStatus(msg);
@@ -560,10 +623,15 @@ export default function RecordView(
   const winnerCol = Math.max(0, matrix.Plugins.lastIndexOf(matrix.Winner));
   const headerActions = useMemo(() => buildActions({
     copyAsOverride: () => {
-      const target = window.prompt(
-        'Copy as override into which plugin?',
-        editablePlugins[0] ?? '');
-      if (target) void copyInto(winnerCol, target);
+      void (async () => {
+        const picked = await askForTarget({
+          title: 'Copy as override',
+          description: `Copies ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[winnerCol]} into the plugin you choose, as an override.`,
+          confirmLabel: 'Copy',
+          defaultTarget: editablePlugins[0] ?? '',
+        });
+        if (picked) await copyInto(winnerCol, picked.target);
+      })();
     },
     changeFormId: () => void renumberFormId(winnerCol),
     compactToEsl: () => void compactEsl(winnerCol),
@@ -1080,13 +1148,18 @@ export default function RecordView(
           )}
 
           <div className="rv-context-sep" />
-          <div className="rv-context-label">Copy as Override into</div>
-          {(editablePlugins.includes('ConflictPatch.esp') ? editablePlugins : [...editablePlugins, 'ConflictPatch.esp']).map(p => (
-            <button key={p} onClick={() => copyInto(menu.col, p)}><Copy size={13} /> {p}</button>
-          ))}
-          <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into…</button>
-          <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into…</button>
-          <button onClick={() => changeReferencingRecords()}><Link2 size={13} /> Change referencing records…</button>
+          {/* xEdit naming and order. Each opens the target picker rather than a native prompt. */}
+          <button onClick={() => copyAsOverrideInto(menu.col)}><Copy size={13} /> Copy as override into...</button>
+          <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into...</button>
+          <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into...</button>
+          <div className="rv-context-sep" />
+          <button onClick={() => { setMenu(null); setRecordTab('conflicts'); }}>
+            <GitCompareIcon size={13} /> Compare...
+          </button>
+          <button onClick={() => { setMenu(null); setRecordTab('references'); }}>
+            <Link2 size={13} /> Referenced By
+          </button>
+          <button onClick={() => changeReferencingRecords()}><Link2 size={13} /> Change referencing records...</button>
           <div className="rv-context-sep" />
           <div className="rv-context-label">Copy to clipboard</div>
           <button onClick={() => copyText('path', menu.row.Field)}><ClipboardCopy size={13} /> Path</button>
@@ -1095,15 +1168,16 @@ export default function RecordView(
           <button onClick={() => copyText('signature', matrix.Type)}><ClipboardCopy size={13} /> Signature</button>
           <div className="rv-context-sep" />
           <button onClick={() => savePlugin(menu.col)}><Save size={13} /> Save "{matrix.Plugins[menu.col]}"</button>
-          <button className="rv-danger" onClick={() => deleteRecord(menu.col)}><Trash2 size={13} /> Delete from "{matrix.Plugins[menu.col]}"</button>
+          <button className="rv-danger" onClick={() => deleteRecord(menu.col)}
+            title={`Remove this record from ${matrix.Plugins[menu.col]}`}><Trash2 size={13} /> Remove</button>
           <div className="rv-context-sep" />
           <div className="rv-context-label">Plugin: {matrix.Plugins[menu.col]}</div>
-          <button onClick={() => renumberFormId(menu.col)}><Hash size={13} /> Change FormID…</button>
+          <button onClick={() => renumberFormId(menu.col)}><Hash size={13} /> Change FormID...</button>
           <button onClick={() => compactEsl(menu.col)}><Minimize2 size={13} /> Compact to ESL</button>
           <button onClick={() => cleanPlugin(menu.col)}><Eraser size={13} /> Clean (UDR)</button>
-          <button onClick={() => removeItm(menu.col)}><Eraser size={13} /> Remove identical to master…</button>
-          <button onClick={() => addMasters(menu.col)}><Plus size={13} /> Add masters…</button>
-          <button onClick={() => renumberPlugin(menu.col)}><Hash size={13} /> Renumber all FormIDs…</button>
+          <button onClick={() => removeItm(menu.col)}><Eraser size={13} /> Remove identical to master...</button>
+          <button onClick={() => addMasters(menu.col)}><Plus size={13} /> Add masters...</button>
+          <button onClick={() => renumberPlugin(menu.col)}><Hash size={13} /> Renumber all FormIDs...</button>
           <button onClick={() => createSeq(menu.col)}><FilePlus2 size={13} /> Create SEQ file</button>
           <button onClick={() => checkCircularLeveled(menu.col)}><ListFilter size={13} /> Check circular leveled lists</button>
           <div className="rv-context-sep" />
