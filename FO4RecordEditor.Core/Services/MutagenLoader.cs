@@ -166,14 +166,54 @@ public static partial class MutagenLoader
         return (null, null);
     }
 
-    // ---- per-mod record index (built once, reused for every group/record load) ----
-    // Without this, every group expansion re-enumerated the ENTIRE mod (O(allRecords)
-    // per group), which hangs on large masters like Fallout4.esm.
+    // Signature name ("Weapon") -> the GETTER INTERFACE (typeof(IWeaponGetter)), reflected once.
+    // This is what type-scoped enumeration must be given. Passing the concrete record CLASS instead
+    // (Weapon, Cell, PlacedObject) does not throw -- it silently returns wrong results, because a
+    // binary overlay's records are WeaponBinaryOverlay etc., which implement IWeaponGetter but are
+    // not Weapon. Measured against Fallout4.esm: concrete Weapon -> 0 records (should be 252),
+    // concrete PlacedObject -> 0 (should be 1,244,528), concrete Cell -> 5 (should be 40,165).
+    private static readonly Lazy<Dictionary<string, Type>> _getterIfaceBySig = new(() =>
+    {
+        var map = new Dictionary<string, Type>(StringComparer.Ordinal);
+        var major = typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter);
+        Type[] types;
+        try { types = typeof(Mutagen.Bethesda.Fallout4.IFallout4ModGetter).Assembly.GetTypes(); }
+        catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray()!; }
+        foreach (var t in types)
+        {
+            if (t is null || !t.IsInterface || !major.IsAssignableFrom(t)) continue;
+            var n = t.Name;
+            if (!n.StartsWith("I", StringComparison.Ordinal) || !n.EndsWith("Getter", StringComparison.Ordinal)) continue;
+            map[n[1..^6]] = t;                                   // "IWeaponGetter" -> "Weapon"
+        }
+        return map;
+    });
+
+    // ---- per-mod record index (lazy: only what a caller actually asks for is materialized) ----
+    // The dominant cost of an index is not its dictionaries, it is materializing record objects:
+    // measured on Fallout4.esm, a FormKey->record map costs 1816 MB and a signature->records map
+    // 1712 MB, because both force all 1,549,276 records into memory. 80.3% of that is PlacedObject
+    // (1,244,528 records, ~1477 MB) which a `list_records type=Weapon` never looks at. Type-scoped
+    // enumeration of just the signature asked for costs 0.4 MB / 22 ms for WEAP against
+    // 1836 MB / 4324 ms for the old eager index. So nothing here is built until it is demanded.
     internal sealed class ModIndex
     {
-        public readonly Dictionary<string, List<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>> BySig =
+        // The only eager part: signature -> record count, from a walk that RETAINS NOTHING.
+        // Measured 2.70 MB retained / 3.2 s on Fallout4.esm. Answers "which record types exist and
+        // how many" (the plugin tree, list_record_types, pagination headers) without holding records.
+        public Dictionary<string, int> Counts = new(StringComparer.Ordinal);
+
+        // Lazily materialized per signature. Only signatures actually requested are ever built.
+        public readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>> BySig =
             new(StringComparer.Ordinal);
-        public readonly Dictionary<FormKey, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> ByFormKey = new();
+
+        // Lazily materialized, and ONLY by a lookup that does not know the record's type. Every
+        // caller that does know it goes through BySig instead and never pays for this. Null until
+        // first untyped use; see RecordsByFormKey.
+        public Dictionary<FormKey, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>? ByFormKey;
+
+        // Records this index currently holds alive, for the record-weighted LRU bound below.
+        public long RetainedRecords;
         // The exact mod instance this index was built from. Cached entries are keyed by file name,
         // but a plugin's backing instance is REPLACED on reload_plugin / open / env refresh (the
         // editable in-memory copy supersedes the env/loose copy). If we served the cache by name
@@ -198,6 +238,14 @@ public static partial class MutagenLoader
     // internal so tests can lower it. A generous default: the realistic burst of plugins a user juggles
     // is well under this, so normal editing never evicts, but a full-load-order sweep is capped.
     public static int MaxCachedModIndexes = 64;
+
+    // Second, and now the load-bearing bound: a cap on RETAINED RECORDS, not on entries. An entry
+    // count is the wrong unit here because per-plugin cost varies about 47,000x -- measured over a
+    // real 656-plugin load order the median plugin holds 33 records (~40 KB) and 569 of 655 hold
+    // under 1 MB, while Fallout4.esm holds 1,549,276 (~1836 MB). A 64-entry cache is therefore
+    // anywhere between ~2.5 MB and several GB, which is not a memory bound at all. At the measured
+    // ~1,245 bytes per retained record this budget is roughly 600 MB of records.
+    public static long MaxCachedIndexRecords = 500_000;
 
     // Resolve a mod by file name. Editable (mutable) copies win so the AI's in-progress
     // edits are what everything reads (hot loading), then the env load order, then loose ESPs.
@@ -254,17 +302,132 @@ public static partial class MutagenLoader
         var idx = new ModIndex { Source = mod };
         if (mod is Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod)
         {
+            // Count only -- deliberately retains no record. This is the walk that used to build the
+            // full index; keeping nothing from it is the whole point (2.70 MB vs 1836 MB retained).
             int count = 0;
             foreach (var rec in f4mod.EnumerateMajorRecords())
             {
                 var sig = rec.Registration.Name;
-                if (!idx.BySig.TryGetValue(sig, out var list)) { list = new(); idx.BySig[sig] = list; }
-                list.Add(rec);
-                idx.ByFormKey[rec.FormKey] = rec;
+                idx.Counts[sig] = idx.Counts.TryGetValue(sig, out var n) ? n + 1 : 1;
                 if (++count % 5000 == 0) progress?.Invoke($"Indexing {modName}: {count} records...");
             }
         }
         return StoreModIndex(modName, idx);
+    }
+
+    /// <summary>
+    /// The records of one signature in a mod, materialized on first request and cached thereafter.
+    /// </summary>
+    /// <remarks>
+    /// Uses type-scoped enumeration, which is what makes this cheap: for WEAP on Fallout4.esm it
+    /// touches 252 records (0.4 MB / 22 ms) instead of all 1,549,276 (1836 MB / 4324 ms).
+    /// <para>
+    /// The <c>Registration.Name</c> filter is required, not defensive. For polymorphic on-disk record
+    /// families the enumeration returns the WHOLE family, not the requested subtype: verified against
+    /// Fallout4.esm, 17 of 147 signatures over-return this way -- every GameSetting* variant yields
+    /// all 2,039 GMSTs, every Global* yields all 1,346 GLOBs, the ObjectModification family yields all
+    /// 2,409 OMODs, and the placed types share 1,377. It is always a SUPERSET and never a subset,
+    /// which is exactly why filtering on the exact registration name is correct. With the filter, all
+    /// 147 signatures of Fallout4.esm and all 116 of DLCCoast.esm match the old eager index exactly.
+    /// </para>
+    /// </remarks>
+    private static List<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> RecordsOfSig(ModIndex idx, string sig)
+    {
+        if (idx.BySig.TryGetValue(sig, out var cached)) return cached;
+        if (!idx.Counts.ContainsKey(sig)) return [];            // signature not present in this mod
+
+        var list = new List<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>();
+        if (idx.Source is Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod
+            && _getterIfaceBySig.Value.TryGetValue(sig, out var iface))
+        {
+            foreach (Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec in f4mod.EnumerateMajorRecords(iface))
+                if (string.Equals(rec.Registration.Name, sig, StringComparison.Ordinal))
+                    list.Add(rec);
+        }
+
+        var stored = idx.BySig.GetOrAdd(sig, list);
+        if (ReferenceEquals(stored, list))
+        {
+            System.Threading.Interlocked.Add(ref idx.RetainedRecords, list.Count);
+            EvictModIndexLru();                                  // newly retained records may bust the budget
+        }
+        return stored;
+    }
+
+    /// <summary>
+    /// FormKey -> record for a whole mod, built on first use. Only for lookups that do NOT know the
+    /// record's type; every typed caller uses <see cref="RecordsOfSig"/> and never triggers this.
+    /// </summary>
+    /// <remarks>
+    /// This is the one genuinely expensive structure left (1816 MB on Fallout4.esm), which is why it
+    /// is built lazily rather than eagerly: in practice it is reached for actively-edited and loosely
+    /// opened plugins, whose median size in a real 656-plugin load order is 33 records.
+    /// </remarks>
+    private static Dictionary<FormKey, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> RecordsByFormKey(ModIndex idx)
+    {
+        if (idx.ByFormKey is { } built) return built;
+
+        var map = new Dictionary<FormKey, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter>();
+        if (idx.Source is Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod)
+            foreach (var rec in f4mod.EnumerateMajorRecords())
+                map[rec.FormKey] = rec;
+
+        idx.ByFormKey = map;
+        System.Threading.Interlocked.Add(ref idx.RetainedRecords, map.Count);
+        EvictModIndexLru();
+        return map;
+    }
+
+    /// <summary>
+    /// Every record of a mod, paired with its signature, RETAINING NOTHING.
+    /// </summary>
+    /// <remarks>
+    /// For whole-plugin searches, which read <c>EditorID</c>/<c>FormKey</c> as they go and keep only
+    /// the handful of hits. Caching those records would be the worst case for no benefit -- a single
+    /// blank-query sweep would pin every record of every plugin it touched. A retain-nothing walk of
+    /// Fallout4.esm holds 2.70 MB against the 1836 MB the cached form costs.
+    /// <para>
+    /// Cached per-signature lists are reused when they already exist, so a search after a
+    /// <c>list_records</c> on the same plugin does not re-read what is already in memory.
+    /// </para>
+    /// </remarks>
+    private static IEnumerable<(string sig, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter rec)> StreamRecords(ModIndex idx)
+    {
+        if (idx.Source is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter f4mod) yield break;
+
+        // Snapshot which signatures are already materialized BEFORE yielding anything. Re-testing
+        // idx.BySig during the walk would let a signature materialized mid-enumeration suppress
+        // records in the second loop that the first loop never yielded, silently dropping them.
+        var alreadyServed = new HashSet<string>(idx.BySig.Keys, StringComparer.Ordinal);
+
+        foreach (var sig in alreadyServed)
+            if (idx.BySig.TryGetValue(sig, out var cached))
+                foreach (var r in cached)
+                    yield return (sig, r);
+
+        foreach (var rec in f4mod.EnumerateMajorRecords())
+        {
+            var sig = rec.Registration.Name;
+            if (alreadyServed.Contains(sig)) continue;      // already yielded above
+            yield return (sig, rec);
+        }
+    }
+
+    /// <summary>
+    /// Look a FormKey up in a mod, preferring the type-scoped path when the caller knows the
+    /// signature (the record tree always does -- it stamps a "Type" leaf on every record node).
+    /// Falls back to the full FormKey map only when the type is genuinely unknown.
+    /// </summary>
+    private static Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? LookupByFormKey(
+        ModIndex idx, FormKey formKey, string? sigHint)
+    {
+        if (!string.IsNullOrEmpty(sigHint) && idx.Counts.ContainsKey(sigHint))
+        {
+            foreach (var rec in RecordsOfSig(idx, sigHint))
+                if (rec.FormKey == formKey) return rec;
+            return null;      // the hint was authoritative: the record is not of that type here
+        }
+        return RecordsByFormKey(idx).TryGetValue(formKey, out var r) ? r : null;
     }
 
     // Insert (or replace) a mod's index, stamp its access tick, and evict LRU overflow past the cap.
@@ -272,7 +435,7 @@ public static partial class MutagenLoader
     {
         idx.LastAccess = System.Threading.Interlocked.Increment(ref _modIndexAccessTick);
         _modIndexCache[modName] = idx;
-        if (_modIndexCache.Count > MaxCachedModIndexes) EvictModIndexLru();
+        EvictModIndexLru();   // self-checks BOTH the entry cap and the retained-record budget
         return idx;
     }
 
@@ -287,8 +450,12 @@ public static partial class MutagenLoader
     {
         lock (_modIndexEvictLock)
         {
-            while (_modIndexCache.Count > MaxCachedModIndexes)
+            while (true)
             {
+                long retained = 0;
+                foreach (var kv in _modIndexCache) retained += kv.Value.RetainedRecords;
+                if (_modIndexCache.Count <= MaxCachedModIndexes && retained <= MaxCachedIndexRecords) break;
+
                 string? victim = null;
                 long oldest = long.MaxValue;
                 foreach (var kv in _modIndexCache)
@@ -351,10 +518,14 @@ public static partial class MutagenLoader
     public static int ModIndexCacheCount => _modIndexCache.Count;
     public static bool ModIndexCacheContains(string modName) => _modIndexCache.ContainsKey(modName);
     public static void ClearModIndexCacheForTest() => _modIndexCache.Clear();
-    // Seed a synthetic (empty) index through the real store/evict path so LRU behavior can be tested
-    // without enumerating a real mod; `source` stands in for the backing mod instance.
-    public static void SeedModIndexForTest(string modName, object source)
-        => StoreModIndex(modName, new ModIndex { Source = source });
+    // Seed a synthetic index through the real store/evict path so LRU behavior can be tested without
+    // enumerating a real mod; `source` stands in for the backing mod instance and `retainedRecords`
+    // for how many records it would be holding (what the record budget actually evicts on).
+    public static void SeedModIndexForTest(string modName, object source, long retainedRecords = 0)
+        => StoreModIndex(modName, new ModIndex { Source = source, RetainedRecords = retainedRecords });
+
+    public static long ModIndexRetainedRecords =>
+        _modIndexCache.Values.Sum(v => v.RetainedRecords);
 
     public static RecordNode LoadEsp(string espPath, IProgress<(string message, double? percent)>? progress = null)
     {
@@ -465,7 +636,9 @@ public static partial class MutagenLoader
         var idx = GetModIndex(mod, modName, progress);
 
         var result = new List<RecordNode>();
-        foreach (var sig in idx.BySig.Keys.OrderBy(g => g))
+        // Counts, not BySig: the tree only needs the signature names, so no records are materialized
+        // here. Each group's records are built when that group is actually expanded (GetRecords).
+        foreach (var sig in idx.Counts.Keys.OrderBy(g => g))
         {
             var grpNode = new RecordNode { Key = sig, Parent = pluginNode };
             var grpDummy = new RecordNode { Key = "Loading...", Parent = grpNode };
@@ -490,7 +663,8 @@ public static partial class MutagenLoader
         var idx = GetModIndex(mod, modName, progress);
 
         var result = new List<RecordNode>();
-        if (!idx.BySig.TryGetValue(sig, out var recs)) return result;
+        var recs = RecordsOfSig(idx, sig);
+        if (recs.Count == 0) return result;
 
         foreach (var rec in recs)
         {
@@ -526,11 +700,13 @@ public static partial class MutagenLoader
         var mod = ResolveMod(modName, envObj);
         if (mod == null) return;
 
-        // O(1) lookup against the index built when the group was expanded -- no link-cache
-        // build, no full re-enumeration, so this is safe to call synchronously.
+        // Lookup against the index built when the group was expanded -- no link-cache build, no full
+        // re-enumeration, so this is safe to call synchronously. The node carries its own "Type"
+        // leaf (stamped in GetRecords), so this stays on the type-scoped path and never materializes
+        // the whole plugin just to open one record.
         var idx = GetModIndex(mod, modName);
-        if (idx.ByFormKey.TryGetValue(formKey, out var rec))
-            WalkObject(rec, node, 0, 4, modName);
+        var rec = LookupByFormKey(idx, formKey, node.GetValue("Type"));
+        if (rec != null) WalkObject(rec, node, 0, 4, modName);
     }
 
     // Populate a record node with EVERY plugin's version of the record (xEdit-style),
@@ -552,8 +728,8 @@ public static partial class MutagenLoader
             // No load order (e.g. a loosely opened ESP): keep the legacy single-plugin walk.
             var modName = node.Parent?.Parent?.Key ?? fk.ModKey.FileName.String;
             var mod = ResolveMod(modName, envObj);
-            if (mod != null && GetModIndex(mod, modName).ByFormKey.TryGetValue(fk, out var rec))
-                WalkObject(rec, node, 0, 4, modName);
+            var rec = mod == null ? null : LookupByFormKey(GetModIndex(mod, modName), fk, node.GetValue("Type"));
+            if (rec != null) WalkObject(rec, node, 0, 4, modName);
             return new List<string> { modName };
         }
 
@@ -566,7 +742,13 @@ public static partial class MutagenLoader
     // thread because nothing is bound to it yet). The caller attaches the returned
     // children to the real, tree-bound record node on the UI thread. This keeps large
     // records (NPC_, etc.) from freezing the UI during the reflection walk.
-    public static List<RecordNode> BuildPopulatedFields(string formKeyStr, object? envObj, string modName)
+    /// <param name="sig">
+    /// The record's signature when the caller knows it (the record tree always does). Supplying it
+    /// keeps this on the type-scoped lookup path; omitting it falls back to building the whole
+    /// plugin's FormKey map, which on a master like Fallout4.esm is the difference between a few
+    /// hundred KB and ~1.8 GB.
+    /// </param>
+    public static List<RecordNode> BuildPopulatedFields(string formKeyStr, object? envObj, string modName, string? sig = null)
     {
         var temp = new RecordNode { Key = "temp" };
         if (!FormKey.TryFactory(formKeyStr, out var formKey)) return [];
@@ -576,7 +758,8 @@ public static partial class MutagenLoader
         if (mod == null) return [];
 
         var idx = GetModIndex(mod, modName);
-        if (idx.ByFormKey.TryGetValue(formKey, out var rec))
+        var rec = LookupByFormKey(idx, formKey, sig);
+        if (rec != null)
             WalkObject(rec, temp, 0, 4, modName);
 
         return temp.Children.ToList();
@@ -743,7 +926,7 @@ public static partial class MutagenLoader
             try
             {
                 var idx = GetModIndex(kv.Value, kv.Key);
-                if (!idx.ByFormKey.TryGetValue(fk, out var rec)) continue;
+                if (!RecordsByFormKey(idx).TryGetValue(fk, out var rec)) continue;
                 int at = ordered.FindIndex(o => string.Equals(o.plugin, kv.Key, StringComparison.OrdinalIgnoreCase));
                 if (at >= 0) ordered[at] = (kv.Key, rec);
                 else ordered.Add((kv.Key, rec));
@@ -964,9 +1147,9 @@ public static partial class MutagenLoader
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
         // Include per-type counts so the caller can gauge group size before listing.
-        return GetModIndex(mod, plugin).BySig
+        return GetModIndex(mod, plugin).Counts
             .OrderBy(kv => kv.Key)
-            .Select(kv => $"{kv.Key} ({kv.Value.Count})")
+            .Select(kv => $"{kv.Key} ({kv.Value})")
             .ToList();
     }
 
@@ -976,7 +1159,7 @@ public static partial class MutagenLoader
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
         var idx = GetModIndex(mod, plugin);
-        if (!idx.BySig.TryGetValue(sig, out var recs)) return [];
+        var recs = RecordsOfSig(idx, sig);
         return recs.Skip(Math.Max(0, offset)).Take(limit).Select(r => (r.FormKey.ToString(), r.EditorID ?? "")).ToList();
     }
 
@@ -986,7 +1169,7 @@ public static partial class MutagenLoader
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return 0;
         var idx = GetModIndex(mod, plugin);
-        return idx.BySig.TryGetValue(sig, out var recs) ? recs.Count : 0;
+        return idx.Counts.TryGetValue(sig, out var n) ? n : 0;
     }
 
     /// <summary>
@@ -999,7 +1182,8 @@ public static partial class MutagenLoader
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return ToolError.Fail($"Plugin '{plugin}' not found.");
         var idx = GetModIndex(mod, plugin);
-        if (!idx.BySig.TryGetValue(sig, out var recs))
+        var recs = RecordsOfSig(idx, sig);
+        if (recs.Count == 0)
             return $"No records of type '{sig}' in {plugin}.";
 
         var take = recs.Skip(Math.Max(0, offset)).Take(limit).ToList();
@@ -1101,7 +1285,7 @@ public static partial class MutagenLoader
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
         var idx = GetModIndex(mod, plugin);
-        return idx.BySig.TryGetValue(sig, out var recs) ? recs : [];
+        return RecordsOfSig(idx, sig);
     }
 
     public static IReadOnlyList<(string formKey, string editorId, string type)> QuerySearch(
@@ -1112,18 +1296,17 @@ public static partial class MutagenLoader
         var idx = GetModIndex(mod, plugin);
         var hits = new List<(string, string, string)>();
         int skipped = 0;
-        foreach (var kv in idx.BySig)
-            foreach (var r in kv.Value)
+        foreach (var (sig, r) in StreamRecords(idx))
+        {
+            var eid = r.EditorID ?? "";
+            if (eid.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase))
             {
-                var eid = r.EditorID ?? "";
-                if (eid.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (skipped < offset) { skipped++; continue; }
-                    hits.Add((r.FormKey.ToString(), eid, kv.Key));
-                    if (hits.Count >= limit) return hits;
-                }
+                if (skipped < offset) { skipped++; continue; }
+                hits.Add((r.FormKey.ToString(), eid, sig));
+                if (hits.Count >= limit) return hits;
             }
+        }
         return hits;
     }
 
@@ -1160,10 +1343,9 @@ public static partial class MutagenLoader
         foreach (var (name, mod) in AllLoadedMods(envObj))
         {
             var idx = GetModIndex(mod, name);
-            foreach (var kv in idx.BySig)
+            foreach (var (sig, r) in StreamRecords(idx))
             {
-                if (filterSet != null && !filterSet.Contains(kv.Key)) continue;
-                foreach (var r in kv.Value)
+                if (filterSet != null && !filterSet.Contains(sig)) continue;
                 {
                     var eid = r.EditorID ?? "";
                     var dispName = r is Mutagen.Bethesda.Plugins.Aspects.INamedGetter nm ? (nm.Name ?? "") : "";
@@ -1171,7 +1353,7 @@ public static partial class MutagenLoader
                         !eid.Contains(query, StringComparison.OrdinalIgnoreCase) &&
                         !dispName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
                         !r.FormKey.ToString().Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
-                    hits[r.FormKey] = new SearchHit(r.FormKey.ToString(), eid, kv.Key, name, dispName);
+                    hits[r.FormKey] = new SearchHit(r.FormKey.ToString(), eid, sig, name, dispName);
                     if (hits.Count >= AccumulationCap) goto done;
                 }
             }
@@ -1272,11 +1454,12 @@ public static partial class MutagenLoader
         {
             var idx = GetModIndex(mod, name);
             Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? rec = null;
-            if (!fk.IsNull && idx.ByFormKey.TryGetValue(fk, out var byFk))
-                rec = byFk;
-            else
-                rec = idx.BySig.Values.SelectMany(v => v)
-                         .FirstOrDefault(r => string.Equals(r.EditorID, formKeyOrEditorId, StringComparison.OrdinalIgnoreCase));
+            foreach (var (_, r) in StreamRecords(idx))
+            {
+                if (!fk.IsNull ? r.FormKey == fk
+                               : string.Equals(r.EditorID, formKeyOrEditorId, StringComparison.OrdinalIgnoreCase))
+                { rec = r; break; }
+            }
             if (rec == null) continue;
 
             var temp = new RecordNode { Key = rec.EditorID ?? rec.FormKey.ToString() };
@@ -1591,9 +1774,9 @@ public static partial class MutagenLoader
         {
             if (!LooseMods.ContainsKey(name) && !_modIndexCache.ContainsKey(name)) continue;
             var idx = GetModIndex(mod, name);
-            var rec = idx.BySig.Values.SelectMany(v => v)
-                .FirstOrDefault(r => string.Equals(r.EditorID, editorId, StringComparison.OrdinalIgnoreCase));
-            if (rec != null) return rec.FormKey;
+            foreach (var (_, r) in StreamRecords(idx))
+                if (string.Equals(r.EditorID, editorId, StringComparison.OrdinalIgnoreCase))
+                    return r.FormKey;
         }
         return FormKey.Null;
     }

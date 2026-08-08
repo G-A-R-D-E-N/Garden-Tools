@@ -23,7 +23,8 @@ public static partial class MutagenLoader
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return JsonSerializer.Serialize(new { error = $"Plugin '{plugin}' not found." });
         var idx = GetModIndex(mod, plugin);
-        if (!idx.BySig.TryGetValue(sig, out var recs))
+        var recs = RecordsOfSig(idx, sig);
+        if (recs.Count == 0)
             return JsonSerializer.Serialize(new { columns = Array.Empty<string>(), rows = Array.Empty<object>(), total = 0, offset });
 
         var take = recs.Skip(Math.Max(0, offset)).Take(Math.Max(1, limit)).ToList();

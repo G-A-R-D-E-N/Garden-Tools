@@ -19,6 +19,7 @@ namespace FO4RecordEditor.Tests;
 public class MutagenLoaderCacheTests : IDisposable
 {
     private readonly int _originalCap = MutagenLoader.MaxCachedModIndexes;
+    private readonly long _originalRecordCap = MutagenLoader.MaxCachedIndexRecords;
 
     public MutagenLoaderCacheTests()
     {
@@ -29,6 +30,7 @@ public class MutagenLoaderCacheTests : IDisposable
     public void Dispose()
     {
         MutagenLoader.MaxCachedModIndexes = _originalCap;
+        MutagenLoader.MaxCachedIndexRecords = _originalRecordCap;
         MutagenLoader.ClearModIndexCacheForTest();
         MutagenLoader.EditableMods.Clear();
     }
@@ -65,5 +67,57 @@ public class MutagenLoaderCacheTests : IDisposable
 
         // Despite being the oldest, the in-edit plugin's index is protected from eviction.
         MutagenLoader.ModIndexCacheContains("MyPatch.esp").Should().BeTrue("EditableMods entries are never evicted");
+    }
+
+    // An entry cap alone is not a memory bound, which is why MaxCachedIndexRecords exists. Per-plugin
+    // cost varies about 47,000x on a real load order: the median plugin holds 33 records (~40 KB)
+    // while Fallout4.esm holds 1,549,276 (~1836 MB). Four big plugins can therefore blow any sane
+    // memory budget while sitting far below a 64-entry cap, so eviction has to count records.
+    [Fact]
+    public void Cache_evicts_on_the_record_budget_even_when_far_under_the_entry_cap()
+    {
+        MutagenLoader.MaxCachedModIndexes = 1000;      // deliberately not the binding constraint
+        MutagenLoader.MaxCachedIndexRecords = 100_000;
+
+        for (int i = 0; i < 6; i++)
+            MutagenLoader.SeedModIndexForTest($"Big{i:D2}.esp", new object(), retainedRecords: 40_000);
+
+        MutagenLoader.ModIndexCacheCount.Should().BeLessThan(6, "the record budget must bite before the entry cap");
+        MutagenLoader.ModIndexRetainedRecords.Should().BeLessThanOrEqualTo(100_000);
+
+        // LRU order still holds: the most recently seeded survives.
+        MutagenLoader.ModIndexCacheContains("Big05.esp").Should().BeTrue();
+        MutagenLoader.ModIndexCacheContains("Big00.esp").Should().BeFalse();
+    }
+
+    // A plugin that is only ever type-queried retains nothing, so it must not consume the budget.
+    [Fact]
+    public void Indexes_that_retain_no_records_do_not_count_against_the_record_budget()
+    {
+        MutagenLoader.MaxCachedModIndexes = 1000;
+        MutagenLoader.MaxCachedIndexRecords = 10;
+
+        for (int i = 0; i < 50; i++)
+            MutagenLoader.SeedModIndexForTest($"Counts{i:D2}.esp", new object(), retainedRecords: 0);
+
+        MutagenLoader.ModIndexCacheCount.Should().Be(50, "counts-only indexes hold no records to evict");
+        MutagenLoader.ModIndexRetainedRecords.Should().Be(0);
+    }
+
+    // The record budget must not be able to evict a plugin the user is actively editing, for the
+    // same reason the entry cap cannot: live overrides and EditorID resolution filter on "is this
+    // plugin indexed", so dropping it can make an in-progress edit silently stop resolving.
+    [Fact]
+    public void Actively_edited_plugins_survive_the_record_budget_too()
+    {
+        MutagenLoader.MaxCachedModIndexes = 1000;
+        MutagenLoader.MaxCachedIndexRecords = 1_000;
+
+        MutagenLoader.EditableMods["MyPatch.esp"] = new object();
+        MutagenLoader.SeedModIndexForTest("MyPatch.esp", new object(), retainedRecords: 500_000);
+        for (int i = 0; i < 5; i++)
+            MutagenLoader.SeedModIndexForTest($"Other{i:D2}.esp", new object(), retainedRecords: 5_000);
+
+        MutagenLoader.ModIndexCacheContains("MyPatch.esp").Should().BeTrue();
     }
 }

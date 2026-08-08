@@ -28,6 +28,11 @@ public static class TestDataRoots
         @"D:\InstallTest\Stock Folder\Data",
         "/media/user/D Drive/Fallout4Backup/Fallout 4/Data",
         "/media/user/D Drive/InstallTest/Stock Folder/Data",
+        // udisks2 mounts removable volumes under /run/media/<user>, not /media/<user>; without these
+        // every fixture-dependent test silently skipped on this machine and still reported green,
+        // which is the exact failure mode the remarks above describe.
+        "/run/media/user/Games-Storage/Modlists/Fallen World Alpha 2/Stock Folder/Data",
+        "/run/media/user/Games-Storage/SteamLibrary/steamapps/common/Fallout 4/Data",
     };
 
     /// <summary>A Data folder that exists, or null.</summary>

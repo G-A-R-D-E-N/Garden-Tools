@@ -79,8 +79,8 @@ public static partial class MutagenLoader
         {
             ModIndex idx;
             try { idx = GetModIndex(mod, name); } catch { continue; }
-            foreach (var kv in idx.BySig)
-                counts[kv.Key] = counts.TryGetValue(kv.Key, out var n) ? n + kv.Value.Count : kv.Value.Count;
+            foreach (var kv in idx.Counts)
+                counts[kv.Key] = counts.TryGetValue(kv.Key, out var n) ? n + kv.Value : kv.Value;
         }
         return counts
             .Select(kv => new RecordTypeDto(kv.Key, FriendlyNames.Label(kv.Key), kv.Value))
@@ -105,7 +105,8 @@ public static partial class MutagenLoader
         {
             ModIndex idx;
             try { idx = GetModIndex(mod, name); } catch { continue; }
-            if (!idx.BySig.TryGetValue(sig, out var recs)) continue;
+            var recs = RecordsOfSig(idx, sig);
+            if (recs.Count == 0) continue;
 
             foreach (var r in recs)
             {
@@ -331,7 +332,7 @@ public static partial class MutagenLoader
         foreach (var (name, mod) in AllLoadedMods(envObj))
         {
             names.Add(name);
-            try { total += GetModIndex(mod, name).BySig.Sum(kv => kv.Value.Count); } catch { }
+            try { total += GetModIndex(mod, name).Counts.Values.Sum(); } catch { }
         }
         return new LoadOrderSummaryDto(total, names.Count, names);
     }
