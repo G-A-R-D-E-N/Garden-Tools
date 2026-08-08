@@ -21,15 +21,42 @@ namespace FO4RecordEditor.Services;
 /// </summary>
 public static class Mo2ProfileLoader
 {
-    // At/below this size a plugin is full-read (unlocked, save_plugin can File.Replace in place);
-    // larger ones are mmap overlays (record data stays off the managed heap). See docs Code Notes.
-    private const long FullReadMaxBytes = 1 * 1024 * 1024;   // 1 MB
+    // Every plugin in the load order is an mmap overlay. Record data stays off the managed heap, so
+    // the load order costs almost nothing regardless of how big the modlist is.
+    //
+    // This used to full-read anything at or below a size threshold, so that those files carried no
+    // open handle and save_plugin could File.Replace them in place. That was backwards on memory: a
+    // full read materializes every record as a managed object, roughly 9x the file on disk, and it
+    // was paid for the WHOLE load order at startup. Measured on a real 661-plugin modlist:
+    //
+    //   threshold   full-read   managed heap   RSS     load time
+    //   1 MB          616        +489 MB      +646 MB    3.5 s
+    //   64 KB         436         +45 MB      +157 MB    1.4 s
+    //   all overlay     0          +5 MB       +29 MB    0.05 s
+    //
+    // The inversion is the point: at 1 MB the 616 small plugins were 53 MB on disk but essentially
+    // all of the memory, while the 44 large ones -- 655 MB on disk, 92% of the bytes -- cost almost
+    // nothing as overlays.
+    //
+    // In-place saving is preserved a different way: TryReplaceLoadedPluginFile disposes just the one
+    // plugin's overlay to release its handle, swaps the new file in, and reopens it. Reading a whole
+    // load order into RAM to keep one file writable was paying for 661 plugins to save one.
+    //
+    // Note a startup full read was never what made a plugin editable: WriteService.EnsureOpen does
+    // its own CreateFromBinary when a plugin is opened for editing, whatever the load order did.
 
     /// <summary>Minimal env shape the rest of the app accesses via dynamic.</summary>
     public sealed class Mo2GameEnvironment
     {
         public required ILoadOrderGetter<IModListingGetter<IFallout4ModGetter>> LoadOrder { get; init; }
-        public required ILinkCache LinkCache { get; init; }
+
+        /// <summary>
+        /// Settable rather than init-only because <see cref="TryReplaceLoadedPluginFile"/> has to
+        /// rebuild it: an immutable link cache captures the mod instances it was built from, so once
+        /// a plugin's overlay is disposed to release its file handle, the old cache is holding a
+        /// disposed overlay and must be replaced before anything reads through it again.
+        /// </summary>
+        public required ILinkCache LinkCache { get; set; }
         public required DirectoryPath DataFolderPath { get; init; }
 
         /// <summary>
@@ -47,6 +74,125 @@ public static class Mo2ProfileLoader
     }
 
     public sealed record Mo2Info(string InstancePath, string Profile, string GameDataFolder, string OverwriteFolder);
+
+    /// <summary>
+    /// Plugins from the last <see cref="Load"/> that were found on disk but could not be parsed, with
+    /// the reason. They are NOT in the load order, so anything derived from it -- conflict scans,
+    /// patches, master lists -- is computed as though they do not exist.
+    /// </summary>
+    /// <remarks>
+    /// Exposed separately from the summary string so the GUI and the MCP layer can surface this as a
+    /// real warning rather than a sentence a user may never read. Previously these were folded into
+    /// the "could not be resolved" count with no reason attached, which made a corrupt plugin
+    /// indistinguishable from a missing one.
+    /// </remarks>
+    public static IReadOnlyList<(string name, string reason)> FailedToLoad { get; private set; } =
+        Array.Empty<(string, string)>();
+
+    /// <summary>
+    /// Swap <paramref name="tempPath"/> in over <paramref name="targetPath"/> for a plugin that this
+    /// environment currently holds open, releasing and reopening just that one plugin's overlay.
+    /// Returns false (with <paramref name="error"/> set) if the swap could not be done, in which case
+    /// the caller should fall back to its own write path -- nothing is left half-applied.
+    /// </summary>
+    /// <remarks>
+    /// Every plugin in the load order is an mmap overlay, and a mapped file cannot be replaced on
+    /// Windows while the mapping is live. Rather than keep the whole load order in RAM so that files
+    /// stay writable, this releases exactly the one plugin being saved.
+    /// <para>
+    /// The ordering matters and is not incidental. <c>LoadOrder.Set</c> disposes the listing it
+    /// replaces (the load order is constructed with <c>disposeItems: true</c>), which is what actually
+    /// closes the handle -- so the old overlay is dropped BEFORE the file is touched, and the new one
+    /// is opened only after. Between those two points the plugin's slot holds no mod.
+    /// </para>
+    /// <para>
+    /// The link cache must then be rebuilt, because an immutable link cache captures the mod
+    /// instances it was constructed from: leaving the old one in place would leave every subsequent
+    /// resolve reading through a disposed overlay. Both holders are updated --
+    /// <see cref="MutagenLoader.LinkCache"/> and this environment's own property -- and every reader
+    /// in the app fetches one of those at point of use rather than caching its own copy, so they all
+    /// pick up the replacement. The mod index for the plugin is invalidated for the same reason: its
+    /// entries point at records owned by the overlay that just went away.
+    /// </para>
+    /// <para>
+    /// Callers must have finished writing <paramref name="tempPath"/> first. This is deliberately not
+    /// thread-safe: it is driven by an explicit user save, and a concurrent read during the swap
+    /// window would be reading a load order mid-mutation regardless of what this method did.
+    /// </para>
+    /// </remarks>
+    public static bool TryReplaceLoadedPluginFile(
+        object? env, string pluginName, string tempPath, string targetPath, out string error)
+    {
+        error = "";
+        if (env is not Mo2GameEnvironment mo2)
+        {
+            error = "no MO2 environment loaded";
+            return false;
+        }
+        // Set() is on the concrete LoadOrder, not the getter interface the env exposes.
+        if (mo2.LoadOrder is not LoadOrder<IModListingGetter<IFallout4ModGetter>> lo)
+        {
+            error = "load order is not mutable";
+            return false;
+        }
+
+        ModKey modKey;
+        try { modKey = ModKey.FromNameAndExtension(pluginName); }
+        catch (Exception ex) { error = $"'{pluginName}' is not a valid plugin name: {ex.Message}"; return false; }
+
+        if (!lo.TryGetValue(modKey, out var existing) || existing.Mod == null)
+        {
+            error = $"'{pluginName}' is not currently loaded in the environment";
+            return false;
+        }
+
+        // Drop the overlay (Set disposes what it replaces) so the file handle is gone before the swap.
+        lo.Set(new ModListing<IFallout4ModGetter>(modKey, mod: null, enabled: existing.Enabled, ghostSuffix: existing.GhostSuffix));
+        MutagenLoader.InvalidateModIndex(pluginName);
+
+        try
+        {
+            if (File.Exists(targetPath)) File.Replace(tempPath, targetPath, null);
+            else File.Move(tempPath, targetPath);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            // Put the plugin back from whatever is still on disk, so a failed swap does not leave the
+            // environment permanently missing it.
+            TryReopen(lo, modKey, targetPath, existing);
+            RebuildLinkCache(mo2, lo);
+            return false;
+        }
+
+        TryReopen(lo, modKey, targetPath, existing);
+        RebuildLinkCache(mo2, lo);
+        return true;
+    }
+
+    private static void TryReopen(
+        LoadOrder<IModListingGetter<IFallout4ModGetter>> lo, ModKey modKey, string path,
+        IModListingGetter<IFallout4ModGetter> previous)
+    {
+        try
+        {
+            var reopened = Fallout4Mod.CreateFromBinaryOverlay(ModPath.FromPath(path), Fallout4Release.Fallout4);
+            lo.Set(new ModListing<IFallout4ModGetter>(modKey, reopened, enabled: previous.Enabled, ghostSuffix: previous.GhostSuffix));
+        }
+        catch
+        {
+            // Leave the empty listing in place rather than throw out of a save that already succeeded
+            // on disk. The plugin is on disk correctly; only this session's view of it is stale, and
+            // reloading the modlist restores it.
+        }
+    }
+
+    private static void RebuildLinkCache(Mo2GameEnvironment mo2, LoadOrder<IModListingGetter<IFallout4ModGetter>> lo)
+    {
+        var rebuilt = lo.ToImmutableLinkCache<IFallout4Mod, IFallout4ModGetter>();
+        mo2.LinkCache = rebuilt;
+        MutagenLoader.LinkCache = rebuilt;
+    }
 
     /// <summary>Reads ModOrganizer.ini at the instance root to find the active profile + game Data folder.</summary>
     public static Mo2Info ReadInstanceInfo(string instancePath)
@@ -228,6 +374,9 @@ public static class Mo2ProfileLoader
         var listings = new List<IModListingGetter<IFallout4ModGetter>>();
         var loaded = new List<string>();
         var missing = new List<string>();
+        // Found on disk but failed to parse -- kept apart from `missing` so the summary can say
+        // which plugins are absent from the load order and why, instead of dropping them quietly.
+        var failedToLoad = new List<(string name, string reason)>();
         var pluginPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < loadOrder.Count; i++)
         {
@@ -249,18 +398,24 @@ public static class Mo2ProfileLoader
                 // Dispose; a full read shows none.) ReadLargePluginsIntoMemory lifts the size limit so
                 // everything is read into memory instead, trading RAM for saving in place. With the
                 // setting off this evaluates to exactly the previous expression.
-                var fullReadLimit = ToolPaths.ReadLargePluginsIntoMemory ? long.MaxValue : FullReadMaxBytes;
-                IFallout4ModGetter mod = size > 0 && size <= fullReadLimit
-                    ? Fallout4Mod.CreateFromBinary(ModPath.FromPath(path), Fallout4Release.Fallout4)      // unlocked, editable
-                    : Fallout4Mod.CreateFromBinaryOverlay(ModPath.FromPath(path), Fallout4Release.Fallout4); // mmap, fast
+                IFallout4ModGetter mod = ToolPaths.ReadLargePluginsIntoMemory
+                    ? Fallout4Mod.CreateFromBinary(ModPath.FromPath(path), Fallout4Release.Fallout4)      // opt-in: RAM for lock-free files
+                    : Fallout4Mod.CreateFromBinaryOverlay(ModPath.FromPath(path), Fallout4Release.Fallout4); // mmap, off the managed heap
+                _ = size;
 
                 listings.Add(new ModListing<IFallout4ModGetter>(modKey, mod, enabled: true, ghostSuffix: string.Empty));
                 loaded.Add(name);
                 pluginPaths[name] = path;
             }
-            catch
+            catch (Exception ex)
             {
-                missing.Add(name);
+                // A plugin that WAS found but would not parse is a different problem from one that
+                // was never found, and used to be reported as the same "could not be resolved" line
+                // with no reason. That silently drops real plugins from the load order: on the
+                // reference modlist three of them (a truncated subrecord, a bad FLTV length, a
+                // duplicate FormKey in a Grass group) vanished with nothing said, so the user was
+                // patching against a load order that did not contain them.
+                failedToLoad.Add((name, $"{ex.GetType().Name}: {ex.Message.Split('\n')[0].Trim()}"));
             }
         }
 
@@ -277,7 +432,15 @@ public static class Mo2ProfileLoader
         var summary = $"Loaded {loaded.Count} plugins from MO2 profile '{profile}'."
             + (missing.Count > 0
                 ? $" {missing.Count} could not be resolved (e.g. {string.Join(", ", missing.Take(5))})."
+                : "")
+            + (failedToLoad.Count > 0
+                ? $" WARNING: {failedToLoad.Count} plugin(s) were found but FAILED TO LOAD and are NOT in the "
+                  + "load order, so conflicts and patches will not account for them: "
+                  + string.Join("; ", failedToLoad.Take(5).Select(f => $"{f.name} ({f.reason})"))
+                  + (failedToLoad.Count > 5 ? $"; and {failedToLoad.Count - 5} more." : ".")
                 : "");
+
+        FailedToLoad = failedToLoad;
         progress?.Report((summary, 100));
 
         // So texture/mesh lookups (TextureService.ResolveDds/ResolveNif) search this ACTUAL modlist's

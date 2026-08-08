@@ -772,6 +772,28 @@ public static partial class WriteService
     /// (five inside this file, then three more in the GUI). Pass null explicitly if you genuinely
     /// have no environment -- that at least shows up in review.
     /// </summary>
+    /// <summary>The success message for a completed save, shared by the overlay-swap and direct
+    /// write paths so both report identically.</summary>
+    private static string DescribeSave(string name, string path, string? orderingUnavailable)
+    {
+        var inOverwrite = !string.IsNullOrWhiteSpace(Mo2OverwriteFolder) &&
+            path.StartsWith(Mo2OverwriteFolder!, StringComparison.OrdinalIgnoreCase);
+        var baseMsg = inOverwrite
+            ? $"Saved {name} to the MO2 overwrite folder ({path}). MO2 loads it automatically at top " +
+              "priority -- just enable it in the plugin list if it isn't already checked, and place it " +
+              "after the plugins it patches."
+            : $"Saved {name} to {path}.";
+
+        // Only matters with 2+ masters: a single-master plugin has nothing to mis-order. Warn
+        // rather than fail, because the write did succeed and may well be fine.
+        if (orderingUnavailable != null && ReadMasterNames(path).Count > 1)
+            baseMsg += $" WARNING: master order was NOT set from the load order ({orderingUnavailable}), " +
+                       "so the MAST table is in Mutagen's own order. A multi-master plugin written this way " +
+                       "can list a dependent ESM before its dependency, which makes the game hang on load " +
+                       "with no crash log. Verify the master order, or re-save with the environment loaded.";
+        return baseMsg;
+    }
+
     public static string SavePlugin(string plugin, string? path, object? env)
     {
         var (name, explicitPath) = NormalizePlugin(plugin);
@@ -835,27 +857,23 @@ public static partial class WriteService
         try { EnsureFallout4MasterWritten(mod, tmp, loOrdering); }
         catch (Exception ex) { try { File.Delete(tmp); } catch { } return ToolError.Fail($"Save failed while enforcing the Fallout4.esm master: {ex.Message}"); }
 
+        // Every plugin in an MO2 load order is an mmap overlay, so the target is normally held open by
+        // this editor and a plain File.Replace would fail. Release just this plugin's overlay, swap,
+        // and reopen it. Falls through to the direct write below when there is no environment holding
+        // it (a brand new patch, a plugin outside the load order, or no modlist loaded at all).
+        if (Mo2ProfileLoader.TryReplaceLoadedPluginFile(env, name, tmp, path, out var swapError))
+        {
+            NotifyChanged(name);
+            return DescribeSave(name, path, orderingUnavailable);
+        }
+        _ = swapError;   // not surfaced: the direct path below reports its own, more specific failure
+
         try
         {
             if (File.Exists(path)) File.Replace(tmp, path, null);
             else File.Move(tmp, path);
             NotifyChanged(name);
-            var inOverwrite = !string.IsNullOrWhiteSpace(Mo2OverwriteFolder) &&
-                path.StartsWith(Mo2OverwriteFolder!, StringComparison.OrdinalIgnoreCase);
-            var baseMsg = inOverwrite
-                ? $"Saved {name} to the MO2 overwrite folder ({path}). MO2 loads it automatically at top " +
-                  "priority -- just enable it in the plugin list if it isn't already checked, and place it " +
-                  "after the plugins it patches."
-                : $"Saved {name} to {path}.";
-
-            // Only matters with 2+ masters: a single-master plugin has nothing to mis-order. Warn
-            // rather than fail, because the write did succeed and may well be fine.
-            if (orderingUnavailable != null && ReadMasterNames(path).Count > 1)
-                baseMsg += $" WARNING: master order was NOT set from the load order ({orderingUnavailable}), " +
-                           "so the MAST table is in Mutagen's own order. A multi-master plugin written this way " +
-                           "can list a dependent ESM before its dependency, which makes the game hang on load " +
-                           "with no crash log. Verify the master order, or re-save with the environment loaded.";
-            return baseMsg;
+            return DescribeSave(name, path, orderingUnavailable);
         }
         catch (Exception)
         {
