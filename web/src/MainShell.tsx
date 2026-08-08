@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, Table2,
+  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Star,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
@@ -11,6 +11,7 @@ import ArchivePanel from './ArchivePanel';
 import AudioPanel from './AudioPanel';
 import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
+import { readFavourites, removeFavourite, FAVOURITES_CHANGED } from './favourites';
 
 interface McpLiveMsg {
   Tool: string;
@@ -118,6 +119,7 @@ export default function MainShell() {
   const [showAudio, setShowAudio] = useState(false);
   const [showCell, setShowCell] = useState(false);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -189,6 +191,18 @@ export default function MainShell() {
   // not accept clicks while the load order is being (re)built, because anything resolved against a
   // half-built environment fails in ways that read as "this record does not exist".
   const [envLoading, setEnvLoading] = useState(false);
+
+  // Favourites, mirrored from the shared store. The star lives in the detail rail, so this listens
+  // for its change event: a same-document localStorage write raises no storage event.
+  const [favourites, setFavourites] = useState(readFavourites);
+  const [favouritesOpen, setFavouritesOpen] = useState(
+    () => localStorage.getItem('favouritesOpen') !== 'false');
+  useEffect(() => { localStorage.setItem('favouritesOpen', String(favouritesOpen)); }, [favouritesOpen]);
+  useEffect(() => {
+    const sync = () => setFavourites(readFavourites());
+    window.addEventListener(FAVOURITES_CHANGED, sync);
+    return () => window.removeEventListener(FAVOURITES_CHANGED, sync);
+  }, []);
 
   // Open records, one per tab. The active one is what the centre viewport and the rail show;
   // keeping them in an array rather than a single slot is what lets a jump to a referenced record
@@ -631,6 +645,7 @@ export default function MainShell() {
         onSelectTab={setShellTab}
         onCloseRecord={closeRecord}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenHelp={() => setShowHelp(true)}
         onToggleRail={() => setRailVisible(v => !v)}
         railVisible={railVisible}
         onToggleChat={() => setChatVisible(v => !v)}
@@ -723,6 +738,44 @@ export default function MainShell() {
             <button className="sidebar-error-clear" onClick={() => setErrorStr('')} title="Dismiss">
               <X size={12} />
             </button>
+          </div>
+        )}
+
+        {/* Favourites: the read side the star never had. Starring a record wrote to localStorage and
+            nothing displayed it, so a favourite could not be found again. Sits above the plugin tree
+            because its whole purpose is getting back to a record without hunting for it. Hidden when
+            empty rather than showing a permanently empty header. */}
+        {activeTab === 'explorer' && treeMode === 'files' && favourites.length > 0 && (
+          <div className="sidebar-favourites">
+            <button
+              className="sidebar-fav-header"
+              onClick={() => setFavouritesOpen(o => !o)}
+              title={favouritesOpen ? 'Collapse favourites' : 'Expand favourites'}
+            >
+              {favouritesOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <Star size={12} className="sidebar-fav-star" />
+              <span>FAVOURITES</span>
+              <span className="sidebar-fav-count">{favourites.length}</span>
+            </button>
+            {favouritesOpen && favourites.map(f => (
+              <div
+                key={f.formKey}
+                className="tree-row is-record sidebar-fav-row"
+                onClick={() => openByFormKey(f.formKey, f.plugin)}
+                title={`${f.formKey}${f.plugin ? ' - ' + f.plugin : ''}`}
+              >
+                <div className="tree-icon-container"><div style={{ width: 14 }} /></div>
+                <div className="tree-icon"><FileBox size={14} color="#569CD6" /></div>
+                <span className="tree-label">{f.label}</span>
+                <button
+                  className="sidebar-fav-remove"
+                  title="Remove from favourites"
+                  onClick={e => { e.stopPropagation(); removeFavourite(f.formKey); setFavourites(readFavourites()); }}
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -943,6 +996,60 @@ export default function MainShell() {
             <pre className="broken-refs-body">{brokenRefsReport}</pre>
           </div>
         </div>
+      )}
+
+      {/* Help had no handler at all. Rather than delete the button, it opens the few things a
+
+          user actually needs to know that are not visible in the UI: where the log is, why Load Env
+
+          refuses on Linux, and that edits are in memory until saved. */}
+
+      {showHelp && (
+
+        <div className="papyrus-overlay" onClick={() => setShowHelp(false)}>
+
+          <div className="papyrus-modal glass-panel" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
+
+            <div className="papyrus-header">
+
+              <span className="papyrus-title">Help</span>
+
+              <button className="papyrus-close" onClick={() => setShowHelp(false)} title="Close"><X size={16} /></button>
+
+            </div>
+
+            <div style={{ padding: '14px 18px', fontSize: 13, lineHeight: 1.65 }}>
+
+              <p><strong>Loading a modlist.</strong> Use <em>Open MO2</em> and pick the instance folder
+
+                (the one holding <code>mods/</code> and <code>profiles/</code>). On Linux <em>Load Env</em>
+
+                cannot auto-detect a load order, because there is no game-managed <code>Plugins.txt</code>
+
+                outside a Proton prefix; it will say so rather than fail silently.</p>
+
+              <p><strong>Edits are in memory until saved.</strong> Changing a field marks the plugin dirty;
+
+                use Save on that plugin (or the Spreadsheet's Save Changes) to write it to disk.</p>
+
+              <p><strong>Favourites.</strong> Star a record in the right-hand rail and it appears under
+
+                FAVOURITES at the top of the Explorer.</p>
+
+              <p><strong>Search</strong> is <code>Ctrl</code>+<code>K</code>, or the box at the top.</p>
+
+              <p><strong>When something looks wrong,</strong> the log is at
+
+                <code>~/.config/FO4RecordEditor/debug.log</code>. A failed scan now says it failed --
+
+                an empty References tab means nothing references the record, not that the scan broke.</p>
+
+            </div>
+
+          </div>
+
+        </div>
+
       )}
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}

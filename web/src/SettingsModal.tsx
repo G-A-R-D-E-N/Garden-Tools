@@ -229,6 +229,18 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               </label>
 
+              {/* This is the path --mo2 actually uses, and the one Open MO2 remembers. It round-tripped
+                  through the host all along but had no field, so the single most load-bearing path in
+                  the app was invisible and uneditable. On Linux it is also the only working way to load
+                  a modlist, since Load Env cannot auto-detect one. */}
+              <label className="settings-field">
+                <span>MO2 Instance <em>(the folder holding mods/ and profiles/; what Open MO2 remembers)</em></span>
+                <div className="settings-input-row">
+                  <input value={s.Mo2InstancePath ?? ''} onChange={e => set('Mo2InstancePath', e.target.value)} />
+                  <button className="settings-btn" onClick={() => browse('Mo2InstancePath', 'Choose the MO2 instance folder (contains mods/ and profiles/)')}>Browse</button>
+                </div>
+              </label>
+
               <label className="settings-field">
                 <span>CK Wiki Path <em>(offline Creation Kit Wiki mirror -- blank = use the copy bundled with the app)</em></span>
                 <div className="settings-input-row">

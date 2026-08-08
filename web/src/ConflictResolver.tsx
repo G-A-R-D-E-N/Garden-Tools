@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, ShieldAlert, Check, Copy, MessageSquare } from 'lucide-react';
+import { Search, ShieldAlert, Check, Copy } from 'lucide-react';
 import './ConflictResolver.css';
 
 interface ConflictEntry {
@@ -37,6 +37,34 @@ export default function ConflictResolver() {
   const [patchTarget, setPatchTarget] = useState('ConflictPatch.esp');
   const [winnerTarget, setWinnerTarget] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
+  const [copied, setCopied] = useState(false);
+
+  // Copy Report had no handler at all. It now emits the same comparison the table shows, as plain
+  // text: header, every plugin column, and one line per differing field. Enough to paste into a bug
+  // report or a patch note without re-typing it.
+  const copyReport = async () => {
+    if (!matrix) return;
+    const lines: string[] = [
+      `${matrix.EditorID || matrix.FormKey}  [${matrix.FormKey}]`,
+      `Type: ${matrix.Type}   Winner: ${matrix.Winner}`,
+      `Plugins: ${matrix.Plugins.join(', ')}`,
+      '',
+    ];
+    for (const r of matrix.Rows ?? []) {
+      if (!r.Differs) continue;
+      lines.push(`${r.DisplayLabel || r.Field}:`);
+      matrix.Plugins.forEach((p, i) => lines.push(`    ${p}: ${r.Values[i] ?? ''}`));
+    }
+    if (lines.length === 4) lines.push('(no differing fields)');
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setStatus('Could not copy to the clipboard.');
+    }
+  };
+
   const [status, setStatus] = useState('');
 
   // Fetch initial data from C# via WebView2
@@ -223,11 +251,11 @@ export default function ConflictResolver() {
               <div className="cr-actions-row">
                 <span className="cr-status">{status}</span>
                 <div className="cr-actions-right">
-                  <button className="button button-primary">
-                    <MessageSquare size={14} /> Ask AI
-                  </button>
-                  <button className="button">
-                    <Copy size={14} /> Copy Report
+                  {/* "Ask AI" was removed rather than wired: this is the standalone conflict window,
+                      which hosts no chat panel and no agent, so there was nothing for it to ask.
+                      A button that cannot work is worse than no button. */}
+                  <button className="button" onClick={copyReport} title="Copy this conflict as text">
+                    <Copy size={14} /> {copied ? 'Copied' : 'Copy Report'}
                   </button>
                 </div>
               </div>

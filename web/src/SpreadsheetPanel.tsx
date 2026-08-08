@@ -124,7 +124,21 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           failures.push(`${formKey}.${col}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
-      setResult(`Applied ${ok} of ${edits.size} edit(s).` + (failures.length ? ` ${failures.length} failed: ${failures.slice(0, 5).join('; ')}` : ''));
+      // Persist. SetField only edits the in-memory plugin, so a button labelled "Save Changes" that
+      // stopped there left the user believing edits had reached disk when nothing had been written.
+      // Only save when something actually applied, and never claim a save that did not happen.
+      let saveMsg = '';
+      if (ok > 0) {
+        try {
+          const r = await backend.SavePlugin(plugin.trim(), '');
+          saveMsg = ` Saved to disk: ${r}`;
+        } catch (e) {
+          saveMsg = ` NOT saved to disk: ${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
+      setResult(`Applied ${ok} of ${edits.size} edit(s).`
+        + (failures.length ? ` ${failures.length} failed: ${failures.slice(0, 5).join('; ')}` : '')
+        + saveMsg);
       setEdits(new Map());
       await load();
     } finally {

@@ -14,6 +14,7 @@ interface TopBarProps {
   onSelectTab: (tab: ShellTab) => void;
   onCloseRecord: () => void;
   onOpenSettings: () => void;
+  onOpenHelp: () => void;
   onToggleRail: () => void;
   railVisible: boolean;
   onToggleChat: () => void;
@@ -27,7 +28,7 @@ interface TopBarProps {
 
 export default function TopBar({
   activeTab, hasRecord, recordTitle, onSelectTab, onCloseRecord,
-  onOpenSettings, onToggleRail, railVisible, onToggleChat, chatVisible,
+  onOpenSettings, onOpenHelp, onToggleRail, railVisible, onToggleChat, chatVisible,
   isDark, onToggleTheme,
   onSearch, onOpenHit,
 }: TopBarProps) {
@@ -176,7 +177,7 @@ export default function TopBar({
         >
           <PanelRight size={17} strokeWidth={1.6} />
         </button>
-        <button className="tool-btn" title="Help">
+        <button className="tool-btn" onClick={onOpenHelp} title="Help">
           <HelpCircle size={17} strokeWidth={1.6} />
         </button>
         <button
