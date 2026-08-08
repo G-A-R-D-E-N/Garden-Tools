@@ -923,12 +923,20 @@ work at all. That is now only true of *compiling*. The tool has its own Papyrus 
 | `papyrus_outline` | Everything a script declares -- header, imports, structs + members, custom events, groups, properties, variables, functions, events, states -- with signatures and positions. |
 | `papyrus_definition` | Given a 1-based line and column, where that symbol is declared, plus its signature and doc comment. |
 
-**The line that matters: this parses, it does not compile.** There is no resolver and no type
-checker. A clean `papyrus_check` does NOT mean the script compiles -- a misspelled function or a bad
-cast still fails at `compile_papyrus`. Do not report "the script is valid" off a `papyrus_check`;
-report "the syntax is valid". For the same reason `papyrus_definition` answers `not resolved` for a
-member reached through an expression whose type is not written in the source (`GetOwner().MyProp`)
-instead of guessing -- a wrong jump is worse than none.
+**The line that matters: these three tools parse, they do not compile.** A clean `papyrus_check` does
+NOT mean the script compiles -- a misspelled function or a bad cast still fails at `compile_papyrus`.
+Do not report "the script is valid" off a `papyrus_check`; report "the syntax is valid". For the same
+reason `papyrus_definition` answers `not resolved` for a member reached through an expression whose
+type is not written in the source (`GetOwner().MyProp`) instead of guessing -- a wrong jump is worse
+than none.
+
+> **Superseded in part (2026-08-08, issue #78 phase 2).** This section said "there is no resolver and
+> no type checker". There now are: `PapyrusResolver` binds every name and types every expression, and
+> `PapyrusTypeChecker` judges the result, both measured at 100% clean over the vanilla scripts. There
+> is also a `.pex` **writer**, byte-identical over 4,581 real files. Codegen is the only piece of a
+> compiler still missing, so the paragraph above is still true of the three MCP tools -- none of them
+> is wired to the new layers yet. **See [PAPYRUS.md](PAPYRUS.md)** for the whole subsystem; the rest
+> of this section is phase 1 detail that remains accurate.
 
 **What it does resolve**, in this order: locals declared before the caret, parameters, this script's
 own members, up the `Extends` chain, `Import`ed scripts' globals and structs, then script and type
