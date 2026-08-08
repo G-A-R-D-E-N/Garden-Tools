@@ -933,10 +933,14 @@ than none.
 > **Superseded in part (2026-08-08, issue #78 phase 2).** This section said "there is no resolver and
 > no type checker". There now are: `PapyrusResolver` binds every name and types every expression, and
 > `PapyrusTypeChecker` judges the result, both measured at 100% clean over the vanilla scripts. There
-> is also a `.pex` **writer**, byte-identical over 4,581 real files. Codegen is the only piece of a
-> compiler still missing, so the paragraph above is still true of the three MCP tools -- none of them
-> is wired to the new layers yet. **See [PAPYRUS.md](PAPYRUS.md)** for the whole subsystem; the rest
-> of this section is phase 1 detail that remains accurate.
+> is also a `.pex` **writer**, byte-identical over 4,581 real files, and a **code generator**:
+> `PapyrusCompiler.CompileFile` takes a `.psc` plus roots and writes a `.pex` with no Creation Kit
+> anywhere in the path, matching the CK's own instruction sequences on 158 of the 161 real scripts
+> compiled in the differential sweep. **The paragraph above is still true of the three MCP tools** --
+> `papyrus_check` / `papyrus_outline` / `papyrus_definition` still only parse, and `compile_papyrus`
+> still shells out to `PapyrusCompiler.exe`; nothing is wired to the new layers yet, and the tool
+> count is unchanged at 105. **See [PAPYRUS.md](PAPYRUS.md)** for the whole subsystem; the rest of
+> this section is phase 1 detail that remains accurate.
 
 **What it does resolve**, in this order: locals declared before the caret, parameters, this script's
 own members, up the `Extends` chain, `Import`ed scripts' globals and structs, then script and type

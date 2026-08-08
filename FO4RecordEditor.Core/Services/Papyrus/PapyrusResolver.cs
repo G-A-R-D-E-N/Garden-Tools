@@ -538,13 +538,26 @@ public sealed class PapyrusResolver
         return final;
     }
 
-    private PapyrusType? ResolveTypeName(Context ctx, string name, PapyrusScript relativeTo)
+    private PapyrusType? ResolveTypeName(Context ctx, string name, PapyrusScript relativeTo) =>
+        ResolveTypeName(_index, name, relativeTo);
+
+    /// <summary>
+    /// A written type name, relative to the script that wrote it. Null when nothing declares it.
+    /// </summary>
+    /// <remarks>
+    /// Public and static because the code generator needs the same answer about a script it is not
+    /// resolving: a call's argument has to be cast to the parameter type, and that parameter is
+    /// declared in the callee's file, whose nodes are absent from this script's
+    /// <see cref="PapyrusResolution"/>. Sharing the one implementation is what keeps the back end
+    /// from re-deriving a rule -- struct names in particular -- and getting it subtly different.
+    /// </remarks>
+    public static PapyrusType? ResolveTypeName(PapyrusScriptIndex index, string name, PapyrusScript relativeTo)
     {
         var primitive = PapyrusType.Primitive(name);
         if (primitive != null) return primitive;
 
         // A struct is written bare inside its own script, and Script:Struct from outside.
-        foreach (var level in _index.BaseChain(relativeTo))
+        foreach (var level in index.BaseChain(relativeTo))
         {
             var local = level.Structs.FirstOrDefault(
                 s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -556,7 +569,7 @@ public sealed class PapyrusResolver
         {
             var ownerName = name[..split];
             var structName = name[(split + 1)..];
-            var owner = _index.Resolve(ownerName);
+            var owner = index.Resolve(ownerName);
             if (owner != null
                 && owner.Structs.Any(s => string.Equals(s.Name, structName, StringComparison.OrdinalIgnoreCase)))
             {
@@ -564,7 +577,7 @@ public sealed class PapyrusResolver
             }
         }
 
-        var script = _index.Resolve(name);
+        var script = index.Resolve(name);
         if (script != null) return PapyrusType.Object(script.Name);
 
         // A name the index cannot see is not necessarily wrong: the roots may simply be incomplete.
