@@ -48,7 +48,10 @@ public class ShippedDocsTests
         var expected = ToolNames().Length;
 
         // "53 tools", "**53 tools**", "the same 53 operations"
-        var counts = Regex.Matches(text, @"\*{0,2}(\d{2})\*{0,2}\s+(?:tools|operations)\b")
+        // {2,3}, not {2}: with a three-digit count the two-digit form matched the LAST two digits
+        // ("105 tools" captured "05") and then compared 5 against 105, so this guard silently
+        // stopped guarding anything the moment the tool count passed 99.
+        var counts = Regex.Matches(text, @"\*{0,2}(\d{2,3})\*{0,2}\s+(?:tools|operations)\b")
             .Select(m => int.Parse(m.Groups[1].Value))
             .Distinct()
             .ToList();

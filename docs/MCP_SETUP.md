@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4RecordEditor implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **102 tools** for reading and writing Fallout 4 plugins.
+stdout speaking JSON-RPC, and it advertises **105 tools** for reading and writing Fallout 4 plugins.
 
 The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
 can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
@@ -239,6 +239,26 @@ engineering. Tracked as issue #59.
 
 ### Papyrus (built in -- no Champollion needed)
 `compile_papyrus` (`.psc` → `.pex`) · `decompile_papyrus` (`.pex` → `.psc`, recursive)
+
+### Papyrus source analysis (built in -- **no Creation Kit needed**)
+`papyrus_check` · `papyrus_outline` · `papyrus_definition`
+
+These read `.psc` source with the tool's own Papyrus lexer and parser, so unlike `compile_papyrus`
+they do not need `PapyrusCompiler.exe` and work on a machine with no Creation Kit installed.
+
+- `papyrus_check` parses a script or a whole folder and reports `file(line,col): error CODE: message`
+  for each syntax problem.
+- `papyrus_outline` lists everything a script declares -- header, imports, structs and their members,
+  custom events, groups, properties, variables, functions, events, states -- with signatures and
+  positions. It still works on a file that has syntax errors, reporting what could be read.
+- `papyrus_definition` takes a 1-based line and column and reports where that symbol is declared,
+  with its signature and doc comment.
+
+**They parse; they do not compile.** There is no name resolution or type checking behind them, so a
+clean `papyrus_check` does **not** mean the script compiles -- a misspelled function or a bad cast
+still fails at `compile_papyrus`. For the same reason `papyrus_definition` answers `not resolved`
+for a member reached through an expression whose type is not written in the source
+(`GetOwner().MyProperty`) rather than guessing at it.
 
 ### NIF
 `nif_import` · `nif_inspect` · `nif_fix` · `nif_verify`
