@@ -129,9 +129,20 @@ app.MapGet("/events", async (HttpContext ctx, CancellationToken ct) =>
 
 app.MapGet("/api/health", () => Results.Json(new { ok = true, targets = rpc.TargetNames }));
 
-// Hash routing: every non-file path has to fall through to index.html or a refresh 404s.
+// Hash routing: every non-file path has to fall through to index.html or a refresh 404s. But a
+// stray top-level *navigation* to a hash-less path (a manual URL, a refresh on a deep path, or the
+// WebView breaking out of the SPA) would boot index.html onto its default '/' route and read as a
+// blank/secondary page. Photino/WebKitGTK cannot veto a same-window navigation, so redirect browser
+// navigations back to the SPA entry here, at the one point every same-origin navigation funnels
+// through (this covers WebView2 and WKWebView too). fetch/EventSource/asset loads are not
+// navigations and keep serving index.html unchanged.
 app.MapFallback(async ctx =>
 {
+    if (SpaFallback.ShouldRedirect(ctx.Request.Path.Value, ctx.Request.Method, ctx.Request.Headers.Accept.ToString()))
+    {
+        ctx.Response.Redirect(SpaFallback.AppEntryPath);
+        return;
+    }
     ctx.Response.ContentType = "text/html";
     await ctx.Response.SendFileAsync(Path.Combine(webRoot, "index.html"));
 });
