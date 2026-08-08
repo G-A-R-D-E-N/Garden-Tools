@@ -129,6 +129,12 @@ required, that is where it will show up first.
 
 ## Gotchas
 
+- **"Load Env" (auto-detect) does not work on Linux, and now says so.** It builds a Mutagen
+  environment from the game's managed load order file (`Plugins.txt`), which has no Linux equivalent
+  outside a Proton prefix, so it fails with an actionable `EnvironmentLoadException` ("...Use Open
+  MO2...") instead of hanging at "Initializing Game Environment...". Load a modlist with **Open MO2**
+  (`--mo2`) instead; it reads the profile's own plugin list directly. The translation lives in
+  `MutagenLoader.TranslateEnvironmentError`, and the raw Mutagen cause is kept as the inner exception.
 - **Look up FormKeys, do not guess them.** A guessed FormID just returns "Could not resolve". Use
   `scan_conflicts` or `search_all` to get a real one first.
 - **`resolve_editorid` takes `id`, not `editor_id`.** Several tools use a bare `id`; check the

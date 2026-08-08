@@ -624,7 +624,17 @@ public static partial class MutagenLoader
             progress?.Report(($"Using data folder: {dataFolderOverride}", null));
             builder = builder.WithTargetDataFolder(new Noggog.DirectoryPath(dataFolderOverride));
         }
-        var env = builder.Build();
+        IGameEnvironment<IFallout4Mod, IFallout4ModGetter> env;
+        try
+        {
+            env = builder.Build();
+        }
+        catch (System.Exception ex)
+        {
+            // On Linux the Build() call throws when it cannot locate a load order file; turn that
+            // into an actionable "use Open MO2" message rather than leaking Mutagen's internals.
+            throw TranslateEnvironmentError(ex);
+        }
         LinkCache = env.LinkCache;
 
         var plugins = new List<string>();
