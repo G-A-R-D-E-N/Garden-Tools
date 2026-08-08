@@ -28,6 +28,7 @@ The end-user documentation is `../MCP_SETUP.md`, plus `README.md`, `LICENSE` and
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How the app is put together. |
 | [CONFLICT_ENGINE.md](CONFLICT_ENGINE.md) | How conflict detection works, and why it compares `DisplaySortKey` rather than strings. |
+| [PAPYRUS.md](PAPYRUS.md) | The Papyrus subsystem: lexer, parser, script index, resolver, type checker and the `.pex` reader/writer. What is measured, the language rules the wiki gets wrong, and what codegen still needs. |
 | [MUTAGEN.md](MUTAGEN.md) | Notes on the Mutagen record library. |
 | [MUTAGEN_FORK_COMPARISON.md](MUTAGEN_FORK_COMPARISON.md) | What the vendored fork changes against upstream, and why those patches are load-bearing. |
 | [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) | The `niftool` C++ CLI, the NIF panel, and what is and is not implemented. |
