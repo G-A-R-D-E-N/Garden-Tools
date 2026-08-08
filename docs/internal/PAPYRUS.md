@@ -43,9 +43,9 @@ Read top to bottom; each consumes the one above.
 Codegen was bracketed on both sides, which is why it was worth doing last: a resolved, type-checked
 AST sits above it and a writer that reproduces real compiler output byte for byte sits below it.
 
-**`.psc` to `.pex` with no Creation Kit is now a thing this tool does.** What remains is a caller:
-none of the three Papyrus MCP tools is wired to any of the phase 2 layers yet, and `compile_papyrus`
-still shells out to `PapyrusCompiler.exe`.
+**`.psc` to `.pex` with no `PapyrusCompiler.exe` is now a thing this tool does**, and it is wired up:
+`compile_papyrus` has two engines and picks the built-in one when no Creation Kit is installed, and
+`papyrus_check` resolves names and checks types rather than only parsing. See "The surface" below.
 
 ## What is measured, and how
 
@@ -265,11 +265,49 @@ object, only the ones it is made up of".
 Real files write their flag table in a hash order that differs between them; this writes ascending
 bit order, which is deterministic.
 
-## What is left
+## The surface
 
-**A caller.** The compiler exists and is measured; nothing exposes it. `compile_papyrus` still shells
-out to `PapyrusCompiler.exe`, and none of the three Papyrus MCP tools is wired to the resolver, the
-checker or the generator. Tool count is unchanged at 105.
+Two existing tools grew; **no tool was added, so the count is still 105.** A new
+`papyrus_compile_native` beside `compile_papyrus` would have meant two ways to do one thing and a
+caller having to know which, which is the failure mode the Workshop Menu Editor note in KNOWLEDGE.md
+is about.
+
+**`compile_papyrus` has an `engine`.** `auto` is the default and prefers an installed Creation Kit,
+so nothing about an existing setup changes; it uses the built-in compiler when there is no
+`PapyrusCompiler.exe`, which is the case this whole issue existed for. `builtin` and `creationkit`
+force one. `release` means the same thing to both: strip `DebugOnly` and `BetaOnly` calls, the CK's
+`-r`. `optimize` is a CK switch and is reported as ignored rather than silently dropped.
+
+**`papyrus_check` resolves names and checks types**, not just parses. `semantic=true` is the default.
+The summary counts three things separately -- clean, syntax errors, name or type errors -- and counts
+files whose sources were incomplete separately again, because that layer switches its reporting off
+for those and "clean" must never quietly mean "could not tell".
+
+**The Papyrus panel** gained an engine picker in compile mode, and hides the compiler-path field and
+`-op` when the built-in engine is selected, since neither applies to it.
+
+Both routes go through `PapyrusAnalysisService`, which is Core, so the native Linux build
+(`FO4RecordEditor.Server`) gets all of it.
+
+### The one honest caveat
+
+**No `PapyrusCompiler.exe` is not the same as no Creation Kit install.** The built-in engine still
+needs the vanilla base script *sources* on the import path to resolve `Form`, `ObjectReference`,
+`Actor` and the rest, and those ship with the CK rather than in the game archives.
+
+That is a much weaker requirement than the old one and worth being precise about rather than
+overclaiming. The sources are plain `.psc` text, they are redistributed with plenty of modding
+resource packs, and they are not Windows-only -- whereas `PapyrusCompiler.exe` is a non-redistributable
+Windows binary. So the tool now compiles on a Linux box, in CI, or on any machine that has the script
+sources lying around; it does not compile out of thin air. When no base root is detected at all,
+`compile_papyrus` says exactly that instead of listing thirty unresolved type names.
+
+Roots come from three places, in order: the source's own folder plus its `Source/User` and `Source`
+ancestors (`PapyrusAnalysisService.NaturalRootsFor`, because a namespaced script is named relative to
+`Source/User`, not to its own folder), then the caller's `imports`, then
+`ToolPaths.PapyrusBaseImports()`.
+
+## What is left
 
 Known gaps in the layers that are built, stated rather than hidden:
 

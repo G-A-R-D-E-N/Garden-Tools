@@ -767,6 +767,141 @@ public class PapyrusCodeGenTests : IDisposable
     }
 }
 
+/// <summary>
+/// The service front door the MCP tool and the GUI panel both call.
+/// </summary>
+/// <remarks>
+/// The unit tests above hold the generator to a shape; these hold the thing a caller actually
+/// reaches to producing a file on disk, and to saying something useful when it will not.
+/// </remarks>
+public class PapyrusCompileServiceTests : IDisposable
+{
+    private readonly string _root;
+    private readonly string _out;
+
+    public PapyrusCompileServiceTests()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "fo4re-compilesvc-" + Guid.NewGuid().ToString("N"));
+        _out = Path.Combine(_root, "out");
+        Directory.CreateDirectory(_root);
+    }
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, recursive: true); } catch { }
+    }
+
+    private string Write(string scriptName, string source)
+    {
+        var path = Path.Combine(_root, scriptName.Replace(':', Path.DirectorySeparatorChar) + ".psc");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, source);
+        return path;
+    }
+
+    [Fact]
+    public void A_script_compiles_to_a_pex_that_reads_back()
+    {
+        var file = Write("Simple", """
+            Scriptname Simple
+            int Property Count = 2 Auto
+            Function Bump()
+                Count += 1
+            EndFunction
+            """);
+
+        var result = PapyrusAnalysisService.Compile(file, _out);
+        result.Should().StartWith("RESULT: 1 succeeded, 0 failed");
+
+        var written = Path.Combine(_out, "Simple.pex");
+        File.Exists(written).Should().BeTrue();
+
+        var pex = PexFile.ReadFile(written);
+        pex.Objects.Single().Name.Should().Be("Simple");
+        pex.Objects.Single().States.Single().Functions.Single().Name.Should().Be("Bump");
+    }
+
+    /// <summary>A namespaced script goes where the game loads it from, not into a flat folder.</summary>
+    [Fact]
+    public void A_namespaced_script_is_written_into_namespace_folders()
+    {
+        var file = Write("MyNS:Inner", "Scriptname MyNS:Inner\n");
+
+        PapyrusAnalysisService.Compile(file, _out).Should().StartWith("RESULT: 1 succeeded");
+        File.Exists(Path.Combine(_out, "MyNS", "Inner.pex")).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A refusal has to name the actual problem. Almost every one is a missing import root, and a
+    /// message that says only "could not compile" sends the caller looking at their source instead.
+    /// </summary>
+    [Fact]
+    public void A_missing_import_root_is_reported_as_a_missing_import_root()
+    {
+        var file = Write("Needy", """
+            Scriptname Needy extends SomethingNotHere
+            Function Go()
+                Inherited()
+            EndFunction
+            """);
+
+        var result = PapyrusAnalysisService.Compile(file, _out);
+
+        result.Should().StartWith("RESULT: 0 succeeded, 1 failed");
+        result.Should().Contain("could not see every script they refer to");
+        result.Should().Contain("imports");
+        Directory.Exists(_out).Should().BeFalse("nothing should be written for a file that did not compile");
+    }
+
+    [Fact]
+    public void A_folder_compiles_every_script_under_it()
+    {
+        Write("One", "Scriptname One\n");
+        Write("Two", "Scriptname Two\n");
+
+        PapyrusAnalysisService.Compile(_root, _out).Should().StartWith("RESULT: 2 succeeded, 0 failed");
+        File.Exists(Path.Combine(_out, "One.pex")).Should().BeTrue();
+        File.Exists(Path.Combine(_out, "Two.pex")).Should().BeTrue();
+    }
+
+    [Fact]
+    public void An_assembly_listing_is_rejected_with_the_fix_rather_than_a_parse_error()
+    {
+        var pas = Path.Combine(_root, "Thing.pas");
+        File.WriteAllText(pas, "; not source\n");
+
+        PapyrusAnalysisService.Compile(pas, _out).Should().Contain("Compile the .psc instead");
+    }
+
+    /// <summary>
+    /// Release strips DebugOnly calls, which is what the Creation Kit's -r does and what Bethesda's
+    /// own ObjectReference.pex was built with.
+    /// </summary>
+    [Fact]
+    public void Release_strips_debug_only_calls()
+    {
+        Write("Logger", "Scriptname Logger Native DebugOnly Hidden\nFunction Say(string asText) Global\nEndFunction\n");
+        var file = Write("Talker", """
+            Scriptname Talker
+            Function Go()
+                Logger.Say("hello")
+            EndFunction
+            """);
+
+        PapyrusAnalysisService.Compile(file, _out, release: false).Should().StartWith("RESULT: 1 succeeded");
+        Instructions(Path.Combine(_out, "Talker.pex")).Should().Be(1);
+
+        var releaseOut = Path.Combine(_root, "release");
+        var result = PapyrusAnalysisService.Compile(file, releaseOut, release: true);
+        result.Should().Contain("DebugOnly and BetaOnly calls are not compiled");
+        Instructions(Path.Combine(releaseOut, "Talker.pex")).Should().Be(0);
+
+        static int Instructions(string pex) =>
+            PexFile.ReadFile(pex).Objects.Single().States.Single()
+                .Functions.Single(f => f.Name == "Go").Instructions.Count;
+    }
+}
+
 /// <summary>The user-flag table, which is what takes the Creation Kit off the compile path.</summary>
 public class PapyrusUserFlagTableTests
 {

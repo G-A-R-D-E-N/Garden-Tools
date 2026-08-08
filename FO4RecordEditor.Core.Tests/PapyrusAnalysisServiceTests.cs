@@ -36,9 +36,48 @@ public class PapyrusAnalysisServiceTests
         var file = root.Write("A.psc", "ScriptName A\nFunction F()\nEndFunction\n");
 
         var result = PapyrusAnalysisService.Check(file);
-        result.Should().StartWith("RESULT: 1 clean, 0 with syntax errors");
-        // The caveat has to survive, or a clean result reads as "this compiles" when it is not.
-        result.Should().Contain("does not type-check");
+        result.Should().StartWith("RESULT: 1 clean, 0 with syntax errors, 0 with name or type errors");
+    }
+
+    /// <summary>
+    /// The syntax-only caveat has to survive where it is still true, or a clean result reads as
+    /// "this compiles" when nothing checked that.
+    /// </summary>
+    [Fact]
+    public void Check_without_the_semantic_pass_still_says_it_only_parsed()
+    {
+        using var root = new SourceRoot();
+        var file = root.Write("A.psc", "ScriptName A\nFunction F()\nEndFunction\n");
+
+        var result = PapyrusAnalysisService.Check(file, semantic: false);
+        result.Should().StartWith("RESULT: 1 clean, 0 with syntax errors,");
+        result.Should().Contain("does not resolve names or check types");
+    }
+
+    [Fact]
+    public void Check_reports_a_name_the_script_does_not_define()
+    {
+        using var root = new SourceRoot();
+        var file = root.Write("A.psc", "ScriptName A\nFunction F()\n    int n = nope\nEndFunction\n");
+
+        var result = PapyrusAnalysisService.Check(file);
+        result.Should().Contain("1 with name or type errors");
+        result.Should().Contain(PapyrusDiagnosticCodes.UnresolvedName);
+    }
+
+    /// <summary>
+    /// A file whose parent is missing is neither confirmed clean nor confirmed broken, and the
+    /// summary has to say which -- otherwise "clean" silently means "could not tell".
+    /// </summary>
+    [Fact]
+    public void Check_counts_files_whose_sources_were_incomplete_separately()
+    {
+        using var root = new SourceRoot();
+        var file = root.Write("A.psc", "ScriptName A extends NotOnAnyRoot\nFunction F()\n    Inherited()\nEndFunction\n");
+
+        var result = PapyrusAnalysisService.Check(file);
+        result.Should().Contain("0 with name or type errors");
+        result.Should().Contain("not on the roots");
     }
 
     [Fact]

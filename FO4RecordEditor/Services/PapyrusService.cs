@@ -6,26 +6,87 @@ using FO4RecordEditor.Services.Papyrus;
 namespace FO4RecordEditor.Services;
 
 /// <summary>
-/// Compiles Papyrus source (.psc -> .pex) by shelling out to the Creation Kit PapyrusCompiler.exe,
-/// so the AI can author a script's records AND compile the script in one workflow. Defaults to the
-/// CK compiler, falling back to the workspace's patched compiler. The compiler implicitly adds its
-/// working directory as an import folder, so we always run from the compile's own work dir (the
-/// script's folder, or the namespace root when the file's layout genuinely matches its ScriptName)
-/// rather than the host's CWD. Never point that at a large tree: the compiler walks every import
-/// root recursively.
+/// Compiles Papyrus source (.psc -> .pex), so the AI can author a script's records AND compile the
+/// script in one workflow.
 /// </summary>
+/// <remarks>
+/// Two engines. <b>Built-in</b> is this tool's own compiler in
+/// <c>FO4RecordEditor.Core/Services/Papyrus/</c> -- lexer, parser, script index, resolver, type
+/// checker, code generator, <c>.pex</c> writer -- and needs no Creation Kit at all. <b>Creation
+/// Kit</b> shells out to <c>PapyrusCompiler.exe</c>. <see cref="Engine.Auto"/>, the default, prefers
+/// the CK when one is installed, so nothing about an existing setup changes, and falls back to the
+/// built-in engine otherwise, which is the whole point of issue #78: the tool no longer stops at the
+/// edge of what a CK-less machine can do.
+/// <para>
+/// The CK compiler implicitly adds its working directory as an import folder, so it is always run
+/// from the compile's own work dir (the script's folder, or the namespace root when the file's
+/// layout genuinely matches its ScriptName) rather than the host's CWD. Never point that at a large
+/// tree: it walks every import root recursively. The built-in engine has no such hazard -- it
+/// indexes lazily and parses on demand.
+/// </para>
+/// </remarks>
 public static class PapyrusService
 {
     private const string DefaultFlags = "Institute_Papyrus_Flags.flg";
 
+    /// <summary>Which compiler runs.</summary>
+    public enum Engine
+    {
+        /// <summary>The Creation Kit when it is installed, the built-in compiler when it is not.</summary>
+        Auto,
+
+        /// <summary>This tool's own compiler. No Creation Kit involved.</summary>
+        BuiltIn,
+
+        /// <summary>Shell out to <c>PapyrusCompiler.exe</c>.</summary>
+        CreationKit,
+    }
+
+    /// <summary>Parses an engine name, defaulting to <see cref="Engine.Auto"/> for anything unrecognised.</summary>
+    public static Engine ParseEngine(string? name) => (name ?? "").Trim().ToLowerInvariant() switch
+    {
+        "builtin" or "built-in" or "native" or "internal" => Engine.BuiltIn,
+        "creationkit" or "creation-kit" or "ck" or "external" => Engine.CreationKit,
+        _ => Engine.Auto,
+    };
+
     public static string Compile(string source, string? output, string? imports, string? flags,
-        bool all, bool optimize, bool release, string? compilerPath)
+        bool all, bool optimize, bool release, string? compilerPath,
+        string? engine = null, bool debugInfo = true)
     {
         if (string.IsNullOrWhiteSpace(source)) return "Provide 'source' (a .psc file or a folder of scripts).";
         source = source.Trim().Trim('"');
         bool isDir = Directory.Exists(source);
         bool isFile = File.Exists(source);
         if (!isDir && !isFile) return $"Source not found: {source}";
+
+        var chosen = ParseEngine(engine);
+        var exePath = string.IsNullOrWhiteSpace(compilerPath) ? ToolPaths.PapyrusCompiler() : compilerPath.Trim().Trim('"');
+        bool haveCreationKit = !string.IsNullOrWhiteSpace(exePath) && File.Exists(exePath);
+
+        if (chosen == Engine.BuiltIn || (chosen == Engine.Auto && !haveCreationKit))
+        {
+            // A .pas rejection is worth keeping identical between the engines; the built-in one
+            // makes the same check for the same reason.
+            var result = PapyrusAnalysisService.Compile(
+                source, output, imports, release, debugInfo,
+                string.IsNullOrWhiteSpace(flags) ? null : flags.Trim().Trim('"'));
+
+            if (chosen == Engine.Auto)
+            {
+                result += Environment.NewLine + Environment.NewLine
+                    + "No PapyrusCompiler.exe was found, so the built-in compiler was used. That is not a "
+                    + "fallback to something lesser -- it is measured against the Creation Kit's own output on "
+                    + "real scripts -- but if you meant to use the CK, point at it with compiler_path or "
+                    + ToolPaths.Describe("papyrus") + ".";
+            }
+            if (optimize)
+            {
+                result += Environment.NewLine + Environment.NewLine
+                    + "Note: optimize (-op) is a Creation Kit compiler switch and was ignored.";
+            }
+            return result;
+        }
 
         // .pas is Papyrus ASSEMBLY, not source. PapyrusCompiler compiles .psc; .pas is assembled by
         // PapyrusAssembler.exe (a different tool). This is the usual "I compiled the decompiler's
@@ -35,10 +96,11 @@ public static class PapyrusService
                    "Fix: Decompile this script again with 'Assembly listing' UNCHECKED to get a .psc, then compile that.\n" +
                    "(.pas is only used by PapyrusAssembler.exe, a separate tool, and is not what you recompile.)";
 
-        var exe = string.IsNullOrWhiteSpace(compilerPath) ? ToolPaths.PapyrusCompiler() : compilerPath.Trim().Trim('"');
-        if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe))
-            return "Papyrus compiler not found. Pass compiler_path pointing at the CK PapyrusCompiler.exe, or " +
-                   ToolPaths.Describe("papyrus") + ".";
+        var exe = exePath;
+        if (!haveCreationKit)
+            return "PapyrusCompiler.exe not found, and engine='creationkit' was asked for explicitly. Pass " +
+                   "compiler_path pointing at it, or " + ToolPaths.Describe("papyrus") + ". " +
+                   "Or use engine='builtin', which needs no Creation Kit.";
 
         // Determine the compile target + working dir, handling namespaced scripts. The FO4 compiler
         // derives a script's object name from its path RELATIVE to an import root, so a namespaced

@@ -496,8 +496,23 @@ public sealed class PapyrusCodeGenerator
         return reference.IsArray ? PapyrusType.ArrayOf(resolved) : resolved;
     }
 
-    private void Report(string code, string message, PapyrusSpan span) =>
+    /// <summary>
+    /// Records a refusal, once per site.
+    /// </summary>
+    /// <remarks>
+    /// The same written type is emitted more than once -- a property's type appears on the property
+    /// and again on its backing variable -- so an unresolvable one would otherwise be reported twice
+    /// for the same source position. A caller reading a list where every line repeats stops reading
+    /// it, and the point of refusing is that the message gets read.
+    /// </remarks>
+    private void Report(string code, string message, PapyrusSpan span)
+    {
+        foreach (var existing in _diagnostics)
+        {
+            if (existing.Code == code && existing.Span.Equals(span) && existing.Message == message) return;
+        }
         _diagnostics.Add(new PapyrusDiagnostic(code, PapyrusSeverity.Error, message, span, _script.FilePath));
+    }
 
     /// <summary>The name this type is written under in a <c>.pex</c>.</summary>
     /// <remarks>

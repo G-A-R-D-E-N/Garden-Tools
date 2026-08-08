@@ -1012,14 +1012,19 @@ public sealed class PluginToolExecutor
                 required = new[] { "plugin", "record", "buttons" }
             }),
         new("compile_papyrus",
-            "Compile Papyrus source .psc -> .pex with the Creation Kit PapyrusCompiler. 'source' auto-detects a " +
-            "single .psc file or a folder (set all=true for a folder). NAMESPACES are handled automatically: a " +
-            "single namespaced file is targeted by its object name; a folder is staged into a namespace tree first, " +
-            "so even a FLAT folder of namespaced scripts (IHO:Foo) compiles. F4SE + vanilla base scripts + the " +
-            "Institute flags file are on the import path automatically; add extra extender roots via 'imports' " +
-            "(semicolon-separated). 'output' defaults to the source folder. optimize=-op, release=-r. Passing a " +
-            ".pas (assembly) is rejected with guidance (compile .psc, not .pas). On failure, a DEPENDENCY HELP " +
-            "section names the missing script extender + Nexus link. Returns a 'RESULT: X succeeded, Y failed' summary.",
+            "Compile Papyrus source .psc -> .pex. TWO ENGINES, chosen by 'engine': 'builtin' is this tool's own " +
+            "lexer/parser/resolver/type-checker/codegen/.pex-writer and needs NO PapyrusCompiler.exe (it does " +
+            "still need the vanilla base script SOURCES on the import path -- those are just .psc text, not the " +
+            "Windows-only compiler); 'creationkit' shells out to PapyrusCompiler.exe; 'auto' (the DEFAULT) uses " +
+            "the CK when one is installed and the built-in engine otherwise. 'source' auto-detects " +
+            "a single .psc file or a folder (set all=true for a folder). NAMESPACES are handled automatically and " +
+            "namespaced output is written into namespace subfolders (IHO\\Foo.pex). F4SE + vanilla base scripts " +
+            "are on the import path automatically; add extra extender roots via 'imports' (semicolon-separated). " +
+            "'output' defaults to the source folder. release=-r, which strips DebugOnly/BetaOnly calls in BOTH " +
+            "engines. Passing a .pas (assembly) is rejected with guidance (compile .psc, not .pas). Returns a " +
+            "'RESULT: X succeeded, Y failed' summary. THE BUILT-IN ENGINE REFUSES rather than guessing when a " +
+            "callee is not on the roots -- its arity is unknowable once optional parameters exist -- so a failure " +
+            "naming PAP0050/PAP0051 usually means a missing 'imports' root, not bad source.",
             new
             {
                 type = "object",
@@ -1028,10 +1033,12 @@ public sealed class PluginToolExecutor
                     source = new { type = "string", description = "A .psc file path, or a folder of scripts (with all=true)." },
                     output = new { type = "string", description = "Output dir for .pex (default: the source folder)." },
                     imports = new { type = "string", description = "Extra import roots, semicolon-separated (base scripts added automatically)." },
-                    flags = new { type = "string", description = "Flags file name (default Institute_Papyrus_Flags.flg)." },
+                    flags = new { type = "string", description = "Flags file (default Institute_Papyrus_Flags.flg; the built-in engine has the table built in and does not need it)." },
                     all = new { type = "boolean", description = "Compile every .psc in the source folder." },
-                    optimize = new { type = "boolean", description = "Optimize (-op)." },
-                    release = new { type = "boolean", description = "Release build, strips debug (-r)." },
+                    optimize = new { type = "boolean", description = "Optimize (-op). Creation Kit engine only." },
+                    release = new { type = "boolean", description = "Release build: strips DebugOnly/BetaOnly calls (-r)." },
+                    engine = new { type = "string", description = "'auto' (default), 'builtin' (no CK needed), or 'creationkit'." },
+                    debug_info = new { type = "boolean", description = "Emit line numbers and property groups (default true). Built-in engine only." },
                     compiler_path = new { type = "string", description = "Override path to PapyrusCompiler.exe." }
                 },
                 required = new[] { "source" }
@@ -1360,17 +1367,22 @@ public sealed class PluginToolExecutor
                 required = new[] { "script" }
             }),
         new("papyrus_check",
-            "Parse Papyrus SOURCE (.psc) and report syntax errors, with NO Creation Kit installed -- this " +
-            "uses the built-in front end, not PapyrusCompiler.exe, so it works where compile_papyrus cannot. " +
-            "'source' auto-detects a single .psc or a folder (recursed). Reports 'file(line,col): error CODE: " +
-            "message' per problem. SYNTAX ONLY: it does not resolve names or check types, so a clean result " +
-            "does NOT prove the script compiles -- use compile_papyrus for that when a CK is available.",
+            "Check Papyrus SOURCE (.psc) with NO Creation Kit installed -- the built-in front end, not " +
+            "PapyrusCompiler.exe. 'source' auto-detects a single .psc or a folder (recursed). Reports " +
+            "'file(line,col): error CODE: message' per problem. Three passes: syntax, then (semantic=true, the " +
+            "DEFAULT) name resolution and type checking. NAME AND TYPE REPORTING SWITCHES OFF for a file whose " +
+            "parent, import or a named type is not on the roots -- otherwise every inherited member reads as " +
+            "undefined -- and those files are counted separately, so 'clean' never means 'could not tell'. " +
+            "Pass 'imports' (semicolon-separated roots) to widen what it can see. This still stops short of " +
+            "codegen: use compile_papyrus to actually produce a .pex.",
             new
             {
                 type = "object",
                 properties = new
                 {
-                    source = new { type = "string", description = "A .psc file path, or a folder of scripts (recursed)." }
+                    source = new { type = "string", description = "A .psc file path, or a folder of scripts (recursed)." },
+                    semantic = new { type = "boolean", description = "Resolve names and check types too (default true)." },
+                    imports = new { type = "string", description = "Extra source roots, semicolon-separated (base scripts added automatically)." }
                 },
                 required = new[] { "source" }
             }),
@@ -2128,7 +2140,9 @@ public sealed class PluginToolExecutor
                     root.TryGetProperty("imports", out var pii) ? pii.GetString() : null,
                     root.TryGetProperty("flags", out var pff) ? pff.GetString() : null,
                     Bool("all"), Bool("optimize"), Bool("release"),
-                    root.TryGetProperty("compiler_path", out var pcc) ? pcc.GetString() : null);
+                    root.TryGetProperty("compiler_path", out var pcc) ? pcc.GetString() : null,
+                    StrOrNull("engine"),
+                    !root.TryGetProperty("debug_info", out var pdi) || pdi.ValueKind != JsonValueKind.False);
             case "strip_masters_clean":
             {
                 var mastersRaw = Str("masters");
@@ -2178,7 +2192,11 @@ public sealed class PluginToolExecutor
             case "papyrus_script_info":
                 return PapyrusWikiService.LookupScriptInfo(_ckWikiPathProvider?.Invoke() ?? "", Str("script"));
             case "papyrus_check":
-                return Services.Papyrus.PapyrusAnalysisService.Check(Str("source"));
+                return Services.Papyrus.PapyrusAnalysisService.Check(
+                    Str("source"),
+                    all: true,
+                    semantic: !root.TryGetProperty("semantic", out var pcs) || pcs.ValueKind != JsonValueKind.False,
+                    imports: StrOrNull("imports"));
             case "papyrus_outline":
                 return Services.Papyrus.PapyrusAnalysisService.Outline(Str("source"));
             case "papyrus_definition":

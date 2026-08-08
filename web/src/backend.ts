@@ -221,9 +221,11 @@ export interface SlashCommand { name: string; args: string; help: string; }
 export interface PapyrusHost {
   BrowseForFile(title: string, filter: string): Promise<string>;   // native file picker; "" if cancelled
   BrowseForFolder(title: string): Promise<string>;                 // native folder picker; "" if cancelled
-  // Compile .psc -> .pex via the CK PapyrusCompiler. Returns compiler output + exit code.
+  // Compile .psc -> .pex. engine is 'auto' | 'builtin' | 'creationkit'; auto prefers an installed
+  // Creation Kit and uses the built-in compiler when there is none. Returns the compiler's output.
   Compile(source: string, output: string, imports: string, flags: string,
-          all: boolean, optimize: boolean, release: boolean, compilerPath: string): Promise<string>;
+          all: boolean, optimize: boolean, release: boolean, compilerPath: string,
+          engine: string): Promise<string>;
   // Decompile .pex -> .psc (built-in). For a single file returns source text inline unless write=true.
   Decompile(source: string, output: string, assembly: boolean, write: boolean): Promise<string>;
   // Open a folder (or a file's folder) in Windows Explorer. Returns "" on success.
