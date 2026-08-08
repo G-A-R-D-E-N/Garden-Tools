@@ -9,6 +9,12 @@ Tracking table for the FO4RecordEditor / PluginEditTool toolchain.
 Statuses match the board's own field: `Todo` / `In Progress` / `Done`.
 Seeded 2026-08-05 from the `bd` tracker; the repo and board were both empty before this.
 
+> **Stale as of 2026-08-08.** The tables below are a snapshot taken on 2026-08-05 and have not been
+> re-seeded since, so issues filed after that date are not in them at all. Treat GitHub as the source
+> of truth and this file as history. Open right now: **#55, #57, #73, #74, #77, #78, #87**. Of those,
+> #73/#74 are parked by priority rather than cancelled, and #78 has had its phase 1 merged (PR #89:
+> the Papyrus front end, plus the panel's Analyze mode) with phase 2 still an open decision.
+
 ## Summary
 
 | Status | Count |
