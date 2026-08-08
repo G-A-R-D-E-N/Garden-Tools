@@ -4,7 +4,7 @@ A Fallout 4 plugin IDE. It is two things in one executable:
 
 - **A desktop editor** -- browse, diff, and edit records across your whole load order, scan for
   conflicts, compile and decompile Papyrus, and inspect NIFs. Think xEdit, but with a modern UI.
-- **An MCP server** -- the same 102 operations, exposed to an AI assistant (Claude Code, or any other
+- **An MCP server** -- the same 105 operations, exposed to an AI assistant (Claude Code, or any other
   MCP client). This is the part most people want: you describe the edit, the AI makes it, and the
   plugin is written by [Mutagen](https://github.com/Mutagen-Modding/Mutagen) rather than by hand.
 
@@ -122,6 +122,11 @@ nothing to point them at.
 Kit** and is not redistributable, so it is not in this package. Install the CK (it is free, on Steam)
 and it is found automatically.
 
+*Reading* Papyrus source needs nothing installed. The tool has its own Papyrus lexer and parser, so
+the Papyrus panel's **Analyze** mode -- syntax errors, an outline, and go-to-definition as you type
+-- and the `papyrus_check` / `papyrus_outline` / `papyrus_definition` tools all work with no CK
+present. They parse rather than compile, so no reported errors is not the same as "this builds".
+
 Archives need nothing installed, in either direction. Reading (`archive_list`/`archive_extract`/
 `archive_extract_all`) goes through Mutagen; `archive_pack` writes BA2s in process, both General
 (sounds/meshes/scripts) and DDS (textures). `Archive2.exe` is only used if you explicitly ask for it
@@ -141,7 +146,13 @@ tools\audio\               ffmpeg, xWMAEncode, BmlFuzEncode/Decode, for the audi
 mcp.sample.json            copy-paste MCP config
 docs\MCP_SETUP.md          the MCP wiring, the tool surface, and the rules
 docs\MODKIT21_PULLS.md     tracker for features reviewed/pulled from a comparable tool, and what's still open
+docs\internal\            engineering docs: knowledge base, design notes, session history (not shipped)
 ```
+
+Working on the tool rather than with it? Start at
+**[docs/internal/README.md](docs/internal/README.md)**, and read
+[docs/internal/KNOWLEDGE.md](docs/internal/KNOWLEDGE.md) before touching plugin or script logic.
+Nothing under `docs\internal\` goes into a release: `package.ps1` copies an explicit allowlist.
 
 ---
 

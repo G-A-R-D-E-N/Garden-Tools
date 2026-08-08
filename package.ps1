@@ -173,6 +173,9 @@ foreach ($f in 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md') {
 
 # Allowlist, never `Copy-Item docs -Recurse`: this repo's docs/ also held internal planning notes and
 # redirect stubs pointing at a private workspace path, and a recursive copy shipped them to end users.
+# This matters more since 2026-08-07, not less: docs/internal/ now holds the whole engineering
+# knowledge base, versioned with the code. This allowlist is the only thing keeping it out of the
+# release zip.
 $ShippedDocs = 'MCP_SETUP.md'
 $DocsDest = New-Item -ItemType Directory -Path (Join-Path $Staging 'docs') -Force
 foreach ($d in $ShippedDocs) {

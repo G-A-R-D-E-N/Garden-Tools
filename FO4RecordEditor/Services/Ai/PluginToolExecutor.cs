@@ -1359,6 +1359,55 @@ public sealed class PluginToolExecutor
                 properties = new { script = new { type = "string", description = "Script name, e.g. 'ObjectReference' or 'Actor'." } },
                 required = new[] { "script" }
             }),
+        new("papyrus_check",
+            "Parse Papyrus SOURCE (.psc) and report syntax errors, with NO Creation Kit installed -- this " +
+            "uses the built-in front end, not PapyrusCompiler.exe, so it works where compile_papyrus cannot. " +
+            "'source' auto-detects a single .psc or a folder (recursed). Reports 'file(line,col): error CODE: " +
+            "message' per problem. SYNTAX ONLY: it does not resolve names or check types, so a clean result " +
+            "does NOT prove the script compiles -- use compile_papyrus for that when a CK is available.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source = new { type = "string", description = "A .psc file path, or a folder of scripts (recursed)." }
+                },
+                required = new[] { "source" }
+            }),
+        new("papyrus_outline",
+            "List everything a .psc declares -- script header, imports, structs and their members, custom " +
+            "events, groups, properties, variables, functions, events and states -- each with its signature " +
+            "and source position. Use this instead of reading a long script end to end when you only need to " +
+            "know what it exposes. Works on a file with syntax errors too (it reports what could still be " +
+            "read), and needs no Creation Kit.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source = new { type = "string", description = "Path to the .psc file." }
+                },
+                required = new[] { "source" }
+            }),
+        new("papyrus_definition",
+            "Go to definition: given a position in a .psc, report where the symbol under it is declared, with " +
+            "its signature and doc comment. Resolves locals, parameters, this script's members, its Extends " +
+            "chain, imported scripts, and script/type names, searching the file's own folder plus any " +
+            "'imports' roots plus the detected base scripts. It has NO type checker, so a member reached " +
+            "through an expression whose type is not written down (GetOwner().Foo) returns 'not resolved' " +
+            "rather than a guess.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source = new { type = "string", description = "Path to the .psc file the position is in." },
+                    line = new { type = "integer", description = "1-based line number." },
+                    column = new { type = "integer", description = "1-based column number." },
+                    imports = new { type = "string", description = "Extra source roots to search, semicolon-separated." }
+                },
+                required = new[] { "source", "line", "column" }
+            }),
         new("bgsm_inspect",
             "Read a FO4 material file -- .bgsm (lighting) OR .bgem (effect) -- and dump every shader field " +
             "(Smoothness, SpecularColor, texture paths, PBR/porosity, emissive, translucency, terrain, " +
@@ -1767,6 +1816,9 @@ public sealed class PluginToolExecutor
             "archive_extract_all" => $"extract all <- {System.IO.Path.GetFileName(Str("archive_path"))}",
             "papyrus_function_lookup" => $"papyrus lookup {Str("function")}",
             "papyrus_script_info" => $"papyrus script {Str("script")}",
+            "papyrus_check"       => $"check {System.IO.Path.GetFileName(Str("source"))}",
+            "papyrus_outline"     => $"outline {System.IO.Path.GetFileName(Str("source"))}",
+            "papyrus_definition"  => $"definition {System.IO.Path.GetFileName(Str("source"))}",
             "bgsm_inspect"        => $"inspect {System.IO.Path.GetFileName(Str("path"))}",
             "bgsm_set_field"      => $"{System.IO.Path.GetFileName(Str("path"))}.{Str("field")} = {Str("value")}",
             "catalog_mod_folder"  => $"catalog {System.IO.Path.GetFileName(Str("mod_path"))}",
@@ -2125,6 +2177,13 @@ public sealed class PluginToolExecutor
                 return PapyrusWikiService.LookupFunction(_ckWikiPathProvider?.Invoke() ?? "", Str("script"), Str("function"));
             case "papyrus_script_info":
                 return PapyrusWikiService.LookupScriptInfo(_ckWikiPathProvider?.Invoke() ?? "", Str("script"));
+            case "papyrus_check":
+                return Services.Papyrus.PapyrusAnalysisService.Check(Str("source"));
+            case "papyrus_outline":
+                return Services.Papyrus.PapyrusAnalysisService.Outline(Str("source"));
+            case "papyrus_definition":
+                return Services.Papyrus.PapyrusAnalysisService.Definition(
+                    Str("source"), Int("line", 0), Int("column", 0), StrOrNull("imports"));
 
             case "bgsm_inspect":
                 return MaterialService.Inspect(Str("path"));
