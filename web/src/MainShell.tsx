@@ -46,14 +46,22 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<RecordNode[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const toggle = async () => {
     if (!expanded) {
       if (node.HasChildren && children.length === 0) {
         setLoading(true);
-        const json = await backend.GetChildren(path);
-        setChildren(JSON.parse(json));
-        setLoading(false);
+        // finally, not the happy path: setLoading(false) used to be reachable only on success, so a
+        // failed expand left the node showing its "..." spinner forever with no way to retry.
+        try {
+          const json = await backend.GetChildren(path);
+          setChildren(JSON.parse(json));
+        } catch (err: any) {
+          setLoadError(err?.message || String(err));
+        } finally {
+          setLoading(false);
+        }
       }
     }
     setExpanded(!expanded);
@@ -80,6 +88,9 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
             : undefined}
         >{node.Key}</span>
         {loading && <span className="tree-loading">...</span>}
+        {!loading && loadError && (
+          <span className="tree-loading" style={{ color: '#f44747' }} title={loadError}>failed</span>
+        )}
       </div>
       {expanded && (
         <div className="tree-children">
@@ -174,6 +185,10 @@ export default function MainShell() {
   const [errorStr, setErrorStr] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [progress, setProgress] = useState<number | null>(null);   // 0-100, or null = hidden
+  // True for the whole duration of an environment load. Drives the blocking overlay: the UI must
+  // not accept clicks while the load order is being (re)built, because anything resolved against a
+  // half-built environment fails in ways that read as "this record does not exist".
+  const [envLoading, setEnvLoading] = useState(false);
 
   // Open records, one per tab. The active one is what the centre viewport and the rail show;
   // keeping them in an array rather than a single slot is what lets a jump to a referenced record
@@ -343,6 +358,7 @@ export default function MainShell() {
   const handleLoadEnv = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;
     if (!b) return;
+    setEnvLoading(true);
     try {
       await b.LoadEnvironment();   // awaits the full load; progress arrives via web messages
       await refreshPlugins();
@@ -350,6 +366,7 @@ export default function MainShell() {
       setErrorStr(err?.message || JSON.stringify(err));
     } finally {
       setProgress(null);
+      setEnvLoading(false);
     }
   };
 
@@ -359,12 +376,14 @@ export default function MainShell() {
     try {
       const path = await b.BrowseForMo2Folder();   // native folder picker
       if (!path) return;                            // cancelled or not a valid MO2 instance
+      setEnvLoading(true);                          // only after the picker: a cancel must not lock the UI
       await b.OpenMo2Profile(path);                 // awaits the full load
       await refreshPlugins();
     } catch (err: any) {
       setErrorStr(err?.message || JSON.stringify(err));
     } finally {
       setProgress(null);
+      setEnvLoading(false);
     }
   };
 
@@ -583,6 +602,28 @@ export default function MainShell() {
     <div
       className={`shell-container animate-fade-in ${railVisible ? 'rail-on' : 'rail-off'} ${chatVisible ? 'chat-on' : 'chat-off'}`}
     >
+      {/* Environment loading: block the UI until it finishes.
+          Records resolve against an environment that is still being built, so clicking during a load
+          produced failures that looked like missing records ("couldn't build a view", "couldn't
+          resolve a FormKey"). Rather than teach every call site to cope, refuse the input for the
+          few seconds it takes. This covers the whole window, including the activity bar and the
+          Explorer, because a click anywhere can start work against a half-built environment. */}
+      {envLoading && (
+        <div className="env-loading-overlay" role="alertdialog" aria-busy="true" aria-live="polite">
+          <div className="env-loading-box">
+            <div className="env-loading-title">Loading environment…</div>
+            <div className="env-loading-msg">{status || 'Reading the load order. This can take a few seconds on a large modlist.'}</div>
+            <div className="env-loading-track">
+              <div
+                className={`env-loading-fill ${progress === null ? 'indeterminate' : ''}`}
+                style={progress === null ? undefined : { width: `${Math.max(2, Math.min(100, progress))}%` }}
+              />
+            </div>
+            <div className="env-loading-hint">The tool is locked until this finishes, so nothing is asked of a half-built environment.</div>
+          </div>
+        </div>
+      )}
+
       <TopBar
         activeTab={shellTab}
         hasRecord={!!openRecord}

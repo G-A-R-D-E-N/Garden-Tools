@@ -33,11 +33,32 @@ public class CachedArchiveListingDetailsProvider : IArchiveListingDetailsProvide
         _payload = new Lazy<Payload>(() =>
         {
             var ini = new List<FileName>(_getArchiveIniListings.TryGet().EmptyIfNull());
-            var listed = new List<FileName>(
-                listingsProvider.Get()
-                    .Where(x => x.Enabled)
-                    .Select(x => x.ModKey)
-                    .Select(archiveNameFromModKeyProvider.Get));
+            // FO4RecordEditor patch: a missing load order listing must not be fatal.
+            //
+            // listingsProvider.Get() resolves the game-managed load order file, which does not exist
+            // off Windows (no %LocalAppData%\<Game>\Plugins.txt), so it throws
+            // InvalidOperationException there. This Lazy is reached while resolving a localized
+            // record's strings -- which for Fallout 4 happens during PARSE, not just when a name is
+            // read -- so the throw made merely walking a vanilla record fatal, and it surfaced as
+            // whole features (search, referenced-by, record views) reporting nothing found.
+            //
+            // Degrading to an empty list is safe: this set only supplies archive ORDERING and the
+            // modKey-less Contains() path. Applicability by name ("<ModName> - *.ba2") is unaffected,
+            // so strings still resolve out of the game archives and record names keep working.
+            // The ini half above is already defensive in upstream (TryGet + EmptyIfNull).
+            List<FileName> listed;
+            try
+            {
+                listed = new List<FileName>(
+                    listingsProvider.Get()
+                        .Where(x => x.Enabled)
+                        .Select(x => x.ModKey)
+                        .Select(archiveNameFromModKeyProvider.Get));
+            }
+            catch (Exception)
+            {
+                listed = new List<FileName>();
+            }
             return new Payload()
             {
                 IniSet = ini.ToHashSet(),

@@ -149,7 +149,7 @@ export default function NifEditor(
   };
 
   // group the blocks in a friendly, fixed order
-  const groups = ['Nodes', 'Shapes', 'Extra'];
+  const groups = ['Nodes', 'Shapes', 'Collision', 'Extra'];
   const byGroup = groups
     .map(g => ({ g, blocks: tree.blocks.filter(b => b.group === g) }))
     .filter(x => x.blocks.length > 0);

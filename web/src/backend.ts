@@ -57,6 +57,7 @@ export interface Backend {
   // ---- navigator / workspace / detail rail ----
   GetActivePlugins(): Promise<string>;                       // JSON: ActivePlugin[]
   GetRecordTypeIndex(): Promise<string>;                     // JSON: RecordTypeEntry[]
+  GetPluginRecordTypes(plugin: string): Promise<string>;     // JSON: string[] "Type (count)", one plugin only
   GetRecordsOfType(signature: string, filter: string,
                    limit: number, offset: number): Promise<string>;   // JSON: SearchHit[]
   GetRecordsGrid(plugin: string, type: string, limit: number, offset: number): Promise<string>; // JSON: { columns, rows, total, offset }

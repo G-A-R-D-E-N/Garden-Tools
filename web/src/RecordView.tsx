@@ -153,6 +153,9 @@ export default function RecordView(
   const [problems, setProblems] = useState<RecordProblem[] | null>(null);
   const [deps, setDeps] = useState<Dependency[] | null>(null);
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
+  // Which of the per-record scans failed, keyed by scan. A failed scan must be reported as failed,
+  // never rendered as an empty result -- see the effect below.
+  const [scanErrors, setScanErrors] = useState<Record<string, string>>({});
 
   // Which two plugin columns the compare is anchored to; null means base against the winner.
   const [anchors, setAnchors] = useState<[string, string] | null>(null);
@@ -176,11 +179,23 @@ export default function RecordView(
     if (!b) return;
     setRefBy(null); setProblems(null); setCollapsedGroups({});
     setDeps(null); setHistory(null); setAnchors(null);
+    setScanErrors({});
     (async () => {
-      try { setProblems(JSON.parse(await b.GetProblems(matrix.FormKey))); } catch { setProblems([]); }
-      try { setRefBy(JSON.parse(await b.GetReferencedBy(matrix.FormKey))); } catch { setRefBy([]); }
-      try { setDeps(JSON.parse(await b.GetDependencies(matrix.FormKey))); } catch { setDeps([]); }
-      try { setHistory(JSON.parse(await b.GetHistory(matrix.FormKey))); } catch { setHistory([]); }
+      // A FAILED scan must never render as an EMPTY one. These tabs previously fell back to [] on
+      // any error, so a reference scan that threw (GetReferencedBy does exactly that on Linux, where
+      // reading a localized name reaches for a game environment that is not there) displayed
+      // "Nothing in the load order references this record" -- the answer a user relies on before
+      // renumbering or deleting a FormID. Record the failure and say so instead.
+      const fail = (k: string, e: unknown) =>
+        setScanErrors(prev => ({ ...prev, [k]: e instanceof Error ? e.message : String(e) }));
+      try { setProblems(JSON.parse(await b.GetProblems(matrix.FormKey))); }
+      catch (e) { setProblems([]); fail('problems', e); }
+      try { setRefBy(JSON.parse(await b.GetReferencedBy(matrix.FormKey))); }
+      catch (e) { setRefBy([]); fail('refBy', e); }
+      try { setDeps(JSON.parse(await b.GetDependencies(matrix.FormKey))); }
+      catch (e) { setDeps([]); fail('deps', e); }
+      try { setHistory(JSON.parse(await b.GetHistory(matrix.FormKey))); }
+      catch (e) { setHistory([]); fail('history', e); }
     })();
   }, [matrix.FormKey]);
 
@@ -835,6 +850,11 @@ export default function RecordView(
         <div className="rv-references-tab">
           {refBy === null ? (
             <div className="rv-tab-loading">Scanning load order for references…</div>
+          ) : scanErrors.refBy ? (
+            <div className="rv-tab-empty" style={{ color: '#f44747' }}>
+              The reference scan failed, so this is NOT a list of nothing -- it is no answer at all.
+              Do not treat this record as unreferenced. <br />{scanErrors.refBy}
+            </div>
           ) : refBy.length === 0 ? (
             <div className="rv-tab-empty">Nothing in the load order references this record.</div>
           ) : (
@@ -925,6 +945,10 @@ export default function RecordView(
         <div className="rv-list-tab">
           {deps === null ? (
             <div className="rv-tab-loading">Resolving outgoing references…</div>
+          ) : scanErrors.deps ? (
+            <div className="rv-tab-empty" style={{ color: '#f44747' }}>
+              The dependency scan failed, so this is no answer rather than an empty one.<br />{scanErrors.deps}
+            </div>
           ) : deps.length === 0 ? (
             <div className="rv-tab-empty">This record does not reference anything.</div>
           ) : (
@@ -975,6 +999,8 @@ export default function RecordView(
         {drawerOpen && (
           <div className="rv-drawer-body">
             {problems === null ? <div className="rv-drawer-note">Checking…</div>
+            : scanErrors.problems ? <div className="rv-drawer-note" style={{ color: '#f44747' }}>
+                Problem check failed (not "no problems"): {scanErrors.problems}</div>
             : problems.length === 0 ? <div className="rv-drawer-note">No problems found.</div>
             : problems.map((p, i) => (
               <div key={i} className="rv-prob-row">

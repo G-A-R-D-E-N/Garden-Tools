@@ -54,10 +54,31 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
       } catch { /* ignore */ }
       setPlugins([...names]);
     })();
-    backend.GetRecordTypeIndex().then(raw => {
-      try { setTypes(JSON.parse(raw) as RecordTypeEntry[]); } catch { setTypes([]); }
-    });
   }, [backend]);
+
+  // Types must be scoped to the CHOSEN plugin, with that plugin's own counts. The load-order-wide
+  // index offered 149 types whose counts described the whole modlist, so most picks loaded an empty
+  // grid for the selected plugin and the panel looked like it was ignoring the plugin entirely.
+  useEffect(() => {
+    if (!backend) return;
+    if (!plugin.trim()) { setTypes([]); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        // ["Keyword (33)", ...] -> [{ Type, FriendlyName, Count }]
+        const raw = JSON.parse(await backend.GetPluginRecordTypes(plugin.trim())) as string[];
+        const parsed = raw.map(s => {
+          const m = /^(.*?)\s*\((\d+)\)\s*$/.exec(s);
+          const name = m ? m[1] : s;
+          return { Type: name, FriendlyName: name, Count: m ? Number(m[2]) : 0 } as RecordTypeEntry;
+        });
+        if (!cancelled) setTypes(parsed);
+      } catch (e) {
+        if (!cancelled) { setTypes([]); setError('Could not list record types for ' + plugin + ': ' + (e instanceof Error ? e.message : String(e))); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [backend, plugin]);
 
   const cellKey = (formKey: string, col: string) => `${formKey}|${col}`;
 
