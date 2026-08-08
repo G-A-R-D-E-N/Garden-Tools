@@ -39,53 +39,15 @@ public class PexCorpusTests
         var roots = Environment.GetEnvironmentVariable(CorpusVariable);
         if (string.IsNullOrWhiteSpace(roots)) return Array.Empty<string>();
 
+        // PapyrusFileWalk rather than Directory.EnumerateFiles: a whole-drive root is the useful way
+        // to run this, and the framework's recursive enumeration aborts the entire sweep on the first
+        // directory it cannot open. See that class for the specifics.
         var files = new List<string>();
         foreach (var root in roots.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
-            if (Directory.Exists(root)) Walk(root, files);
+            files.AddRange(PapyrusFileWalk.EnumerateFiles(root, "*.pex"));
         }
         return files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-    }
-
-    // Hand-rolled rather than EnumerationOptions.RecurseSubdirectories because a whole-drive root is
-    // the useful way to run this, and a drive that has ever run a game under Proton contains
-    // compatdata prefixes whose dosdevices entries are symlinks into /proc. Those blow up the
-    // built-in recursive enumerator with an IOException that IgnoreInaccessible does not cover, and
-    // one of them would otherwise abort the whole sweep rather than skip one directory.
-    //
-    // Symlinked directories are not followed. A Proton prefix's dosdevices/z: points at the
-    // filesystem root, so following links turns a per-drive sweep into a whole-machine one that
-    // re-walks the same trees through dead /proc/<pid>/cwd paths.
-    //
-    // AttributesToSkip is cleared deliberately. Its default skips Hidden and System, which on this
-    // machine silently dropped nearly half the corpus -- everything under a dotted directory.
-    private static void Walk(string root, List<string> into)
-    {
-        var options = new EnumerationOptions
-        {
-            IgnoreInaccessible = true,
-            MatchCasing = MatchCasing.CaseInsensitive,
-            AttributesToSkip = FileAttributes.None,
-        };
-        var pending = new Stack<string>();
-        pending.Push(root);
-
-        while (pending.Count > 0)
-        {
-            var dir = pending.Pop();
-
-            try { into.AddRange(Directory.EnumerateFiles(dir, "*.pex", options)); }
-            catch (Exception) { continue; }
-
-            try
-            {
-                foreach (var sub in Directory.EnumerateDirectories(dir, "*", options))
-                {
-                    if (new DirectoryInfo(sub).LinkTarget is null) pending.Push(sub);
-                }
-            }
-            catch (Exception) { /* unreadable subtree; the rest of the sweep still counts */ }
-        }
     }
 
     [Fact]
