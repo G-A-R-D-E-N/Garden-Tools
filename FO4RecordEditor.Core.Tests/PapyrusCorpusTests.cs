@@ -45,18 +45,10 @@ public class PapyrusCorpusTests
         var roots = Environment.GetEnvironmentVariable(CorpusVariable);
         if (string.IsNullOrWhiteSpace(roots)) return Array.Empty<string>();
 
-        var options = new EnumerationOptions
-        {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            MatchCasing = MatchCasing.CaseInsensitive,
-        };
-
         var files = new List<string>();
         foreach (var root in roots.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
-            if (!Directory.Exists(root)) continue;
-            files.AddRange(Directory.EnumerateFiles(root, "*.psc", options));
+            files.AddRange(PapyrusFileWalk.EnumerateFiles(root, "*.psc"));
         }
         return files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
@@ -157,5 +149,86 @@ public class PapyrusCorpusTests
 
         _output.WriteLine($"{files.Count} files, {symbols} symbols");
         symbols.Should().BeGreaterThan(0);
+    }
+
+    /// <summary>
+    /// Resolves every script the corpus roots contain, and measures how much of it binds.
+    /// </summary>
+    /// <remarks>
+    /// The parser sweep above asks "does this crash". This asks the harder question, which is
+    /// whether the resolver's rules are the language's rules. A resolver that is subtly wrong does
+    /// not crash -- it reports names as undefined that are perfectly legal, and the only way to see
+    /// that is to point it at code the real compiler already accepted.
+    /// <para>
+    /// Two numbers matter and they measure different things. The clean rate counts scripts the
+    /// resolver had complete sources for and found nothing wrong in; that is the correctness signal.
+    /// The complete-chain rate counts how many scripts had every parent and import on the roots at
+    /// all; that is a property of the corpus, not of the resolver, and a low value there just means
+    /// the roots were partial.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void Every_script_on_disk_resolves_without_crashing()
+    {
+        var files = CorpusFiles();
+        if (files.Count == 0)
+        {
+            _output.WriteLine($"{CorpusVariable} is not set; corpus sweep skipped.");
+            return;
+        }
+
+        var index = new PapyrusScriptIndex();
+        foreach (var root in (Environment.GetEnvironmentVariable(CorpusVariable) ?? string.Empty)
+                 .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            index.AddRoot(root);
+        }
+
+        var resolver = new PapyrusResolver(index);
+        var stopwatch = Stopwatch.StartNew();
+        int resolved = 0, completeChain = 0, cleanOfComplete = 0;
+        var byCode = new Dictionary<string, int>(StringComparer.Ordinal);
+        var examples = new List<string>();
+
+        foreach (var file in files)
+        {
+            var script = index.ParseCached(file);
+            if (script == null || script.HasErrors) continue;   // a file that does not parse proves nothing here
+
+            PapyrusResolution result;
+            try
+            {
+                result = resolver.Resolve(script);
+            }
+            catch (Exception ex)
+            {
+                // Same standard as the parser sweep: throwing on real input is the failure this
+                // exercise exists to rule out.
+                throw new Xunit.Sdk.XunitException($"Resolving threw on {file}: {ex}");
+            }
+
+            resolved++;
+            if (!result.BaseChainComplete) continue;
+
+            completeChain++;
+            if (result.Diagnostics.Count == 0)
+            {
+                cleanOfComplete++;
+                continue;
+            }
+
+            foreach (var d in result.Diagnostics) byCode[d.Code] = byCode.GetValueOrDefault(d.Code) + 1;
+            if (examples.Count < 40) examples.Add($"{file}: {result.Diagnostics[0]}");
+        }
+        stopwatch.Stop();
+
+        var cleanRate = completeChain == 0 ? 0 : (double)cleanOfComplete / completeChain;
+        _output.WriteLine(
+            $"{files.Count} files; {resolved} resolved; {completeChain} with complete sources; " +
+            $"{cleanOfComplete} of those clean ({cleanRate:P2}); {stopwatch.ElapsedMilliseconds} ms");
+        foreach (var kv in byCode.OrderByDescending(k => k.Value)) _output.WriteLine($"  {kv.Key}: {kv.Value}");
+        foreach (var e in examples) _output.WriteLine("  " + e);
+
+        resolved.Should().BeGreaterThan(0);
     }
 }

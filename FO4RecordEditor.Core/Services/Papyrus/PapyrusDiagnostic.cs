@@ -138,6 +138,11 @@ public static class PapyrusDiagnosticCodes
     public const string PropertyNeedsAccessor = "PAP0017";
     public const string StructNeedsMember = "PAP0018";
     public const string TooManyErrors = "PAP0019";
+
+    // Resolver. These are only ever raised when the sources were complete enough to be sure; see
+    // PapyrusResolution.BaseChainComplete.
+    public const string UnresolvedName = "PAP0030";
+    public const string UnknownMember = "PAP0031";
 }
 
 /// <summary>Collects diagnostics and stops the parser from looping forever on hopeless input.</summary>

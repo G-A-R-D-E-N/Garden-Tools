@@ -66,8 +66,10 @@ public sealed class PapyrusScriptIndex
     /// <summary>Adds a source root and indexes every .psc beneath it.</summary>
     /// <remarks>
     /// Unreadable subdirectories are skipped rather than thrown on: import roots routinely point
-    /// into game installs and Wine prefixes where some subtree is not ours to read, and one such
-    /// folder must not cost the caller the entire index.
+    /// into game installs, modlist drives and Wine prefixes where some subtree is not ours to read
+    /// or is not a real directory at all, and one such folder must not cost the caller the entire
+    /// index. See <see cref="PapyrusFileWalk"/> for what the framework's own recursive enumeration
+    /// gets wrong here.
     /// </remarks>
     public void AddRoot(string root)
     {
@@ -80,14 +82,7 @@ public sealed class PapyrusScriptIndex
             if (_roots.Any(r => string.Equals(r, full, StringComparison.OrdinalIgnoreCase))) return;
             _roots.Add(full);
 
-            var options = new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = true,
-                MatchCasing = MatchCasing.CaseInsensitive,
-            };
-
-            foreach (var file in Directory.EnumerateFiles(full, "*.psc", options))
+            foreach (var file in PapyrusFileWalk.EnumerateFiles(full, "*.psc"))
             {
                 var qualified = QualifiedNameFor(full, file);
                 if (qualified.Length == 0) continue;
