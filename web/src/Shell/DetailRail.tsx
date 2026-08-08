@@ -13,11 +13,7 @@ interface DetailRailProps {
   onAddToFilter?: (needle: string) => void;
 }
 
-const FAVOURITES_KEY = 'favouriteRecords';
-
-function readFavourites(): string[] {
-  try { return JSON.parse(localStorage.getItem(FAVOURITES_KEY) || '[]'); } catch { return []; }
-}
+import { readFavourites, toggleFavourite as toggleFav, FAVOURITES_CHANGED } from '../favourites';
 
 export default function DetailRail({
   matrix, onOpenConflictsTab, onOpenRecord, onAddToFilter,
@@ -25,7 +21,7 @@ export default function DetailRail({
   const [details, setDetails] = useState<RecordDetails | null>(null);
   const [pluginRows, setPluginRows] = useState<PluginMatrixRow[]>([]);
   const [path, setPath] = useState<BreadcrumbNode[]>([]);
-  const [favourites, setFavourites] = useState<string[]>(readFavourites);
+  const [favourites, setFavourites] = useState(readFavourites);
   const [toast, setToast] = useState('');
 
   const formKey = matrix?.FormKey ?? '';
@@ -59,14 +55,26 @@ export default function DetailRail({
     return c;
   }, [matrix]);
 
-  const isFavourite = favourites.includes(formKey);
+  const isFavourite = favourites.some(f => f.formKey === formKey);
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 1600); };
 
+  // Keep in step when the Explorer's Favourites section removes one.
+  useEffect(() => {
+    const sync = () => setFavourites(readFavourites());
+    window.addEventListener(FAVOURITES_CHANGED, sync);
+    return () => window.removeEventListener(FAVOURITES_CHANGED, sync);
+  }, []);
+
   const toggleFavourite = () => {
-    const next = isFavourite ? favourites.filter(f => f !== formKey) : [...favourites, formKey];
-    setFavourites(next);
-    localStorage.setItem(FAVOURITES_KEY, JSON.stringify(next));
-    flash(isFavourite ? 'Removed from favourites' : 'Added to favourites');
+    if (!formKey) return;
+    // Capture a usable label now: the Explorer list has only what is stored here to show.
+    const nowFavourite = toggleFav({
+      formKey,
+      label: matrix?.EditorID || details?.EditorId || formKey,
+      plugin: matrix?.Winner || '',
+    });
+    setFavourites(readFavourites());
+    flash(nowFavourite ? 'Added to favourites' : 'Removed from favourites');
   };
 
   if (!matrix) {

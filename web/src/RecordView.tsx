@@ -160,6 +160,21 @@ export default function RecordView(
   // Which two plugin columns the compare is anchored to; null means base against the winner.
   const [anchors, setAnchors] = useState<[string, string] | null>(null);
   const [compareOnly, setCompareOnly] = useState(false);
+
+  // Compare mode: show only the two anchored plugin columns and hide the rest, which is what the
+  // button has always promised. The entries are the ORIGINAL indices into matrix.Plugins, and those
+  // indices are what every action (SetField, CopyAsOverride, SavePlugin, CompactToEsl) is keyed on --
+  // filtering the array itself would silently retarget a write at the wrong plugin.
+  // With no anchors chosen there is nothing to compare against, so it falls back to showing all.
+  const visibleCols = useMemo(() => {
+    const all = matrix.Plugins.map((_, i) => i);
+    if (!compareOnly || !anchors) return all;
+    const picked = [matrix.Plugins.indexOf(anchors[0]), matrix.Plugins.indexOf(anchors[1])]
+      .filter(i => i >= 0);
+    return picked.length ? [...new Set(picked)].sort((a, b) => a - b) : all;
+  }, [matrix.Plugins, compareOnly, anchors]);
+  const visiblePlugins = useMemo(
+    () => visibleCols.map(i => [matrix.Plugins[i], i] as const), [visibleCols, matrix.Plugins]);
   const [conflictLayout, setConflictLayout] = useState<ConflictLayout>(
     () => (localStorage.getItem('conflictLayout') as ConflictLayout) || 'cards');
   const changeLayout = (next: ConflictLayout) => {
@@ -603,12 +618,12 @@ export default function RecordView(
   const renderGrid = (gridRows: ConflictFieldRow[]) => (
     <table
       className={`rv-grid rv-cw-${columnWidthMode}`}
-      style={columnWidthMode === 'standard' ? { minWidth: 320 + matrix.Plugins.length * 240 } : undefined}
+      style={columnWidthMode === 'standard' ? { minWidth: 320 + visibleCols.length * 240 } : undefined}
     >
       <thead>
         <tr>
           <th className="rv-prop-col rv-sticky">Record Property</th>
-          {matrix.Plugins.map((p, i) => (
+          {visiblePlugins.map(([p, i]) => (
             <th key={p + i} className={i === winnerIdx ? 'rv-winner-col' : ''}>
               <span className="rv-col-name">{p}</span>
               {i === winnerIdx && matrix.Plugins.length > 1 && <span className="rv-winner-badge">WINNER</span>}
@@ -618,7 +633,7 @@ export default function RecordView(
       </thead>
       <tbody>
         {gridRows.length === 0 ? (
-          <tr><td className="rv-empty" colSpan={matrix.Plugins.length + 1}>No fields match.</td></tr>
+          <tr><td className="rv-empty" colSpan={visibleCols.length + 1}>No fields match.</td></tr>
         ) : gridRows.map((r, ri) => (
           <tr key={ri} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
             <td
@@ -635,7 +650,7 @@ export default function RecordView(
                 {r.DisplayLabel || r.Field}
               </span>
             </td>
-            {matrix.Plugins.map((_, ci) => {
+            {visibleCols.map(ci => {
               const editing = edit && edit.field === r.Field && edit.col === ci;
               const st = resolveStatus(r, ci);
               return (
@@ -778,11 +793,11 @@ export default function RecordView(
             <div className="rv-conflicts-tab">
               {/* Single unified table -- xEdit style with group separator rows */}
               <div className="rv-conflict-groups">
-                <table className="rv-grid rv-cg-table" style={{ minWidth: 280 + matrix.Plugins.length * 200 }}>
+                <table className="rv-grid rv-cg-table" style={{ minWidth: 280 + visibleCols.length * 200 }}>
                   <thead>
                     <tr>
                       <th className="rv-prop-col rv-sticky">Field</th>
-                      {matrix.Plugins.map((p, i) => (
+                      {visiblePlugins.map(([p, i]) => (
                         <th key={p + i} className={i === winnerIdx ? 'rv-winner-col' : ''}>
                           <span className="rv-col-name" title={p}>{p}</span>
                           {i === winnerIdx && matrix.Plugins.length > 1 && <span className="rv-winner-badge">WINNER</span>}
@@ -793,7 +808,7 @@ export default function RecordView(
                   <tbody>
                     {conflictGroups.map((g, gi) => {
                       const collapsed = !!collapsedGroups[gi];
-                      const colCount = matrix.Plugins.length + 1;
+                      const colCount = visibleCols.length + 1;
                       return (
                         <Fragment key={gi}>
                           <tr
@@ -818,7 +833,7 @@ export default function RecordView(
                               >
                                 <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
                               </td>
-                              {matrix.Plugins.map((_, ci) => {
+                              {visibleCols.map(ci => {
                                 const st = resolveStatus(r, ci);
                                 return (
                                   <td
