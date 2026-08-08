@@ -197,7 +197,9 @@ public sealed class ShellViewModel
         catch (Exception ex)
         {
             Log.Log(LogCategory.App, LogLevel.Error, $"Environment load failed: {ex.Message}");
-            return new();
+            // Surface it. The frontend's Load Env handler shows a thrown message in the Explorer
+            // error banner; swallowing here left the UI stuck at "Initializing Game Environment...".
+            throw;
         }
         finally
         {
