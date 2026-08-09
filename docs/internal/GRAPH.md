@@ -251,8 +251,30 @@ which is valid and which nobody writes; it comes out as `If (!x) ... EndIf`.
 
 ## What is left
 
-- **The canvas has no copy and paste, no minimap and no auto-layout.** The reducer supports paste;
-  nothing is wired to it.
+- **The canvas has no minimap and no auto-layout.**
+- **The 2 eslint errors under `web/src/Blueprint/` are pre-existing** (`viewRef.current` read during
+  render in the canvas, `savedDoc.current` in the panel). Both are real `react-hooks/refs`
+  complaints, neither is a live defect, and neither has been touched.
+
+## The frontend gate
+
+`web/` had no test runner at all, so every frontend fix was unpinned. It now runs vitest with jsdom:
+
+```
+cd web && npm test
+```
+
+**23 tests, 2 files.** `graphReducer.test.ts` covers the only place a document is ever mutated;
+`clipboard.test.ts` covers the copy logic and, more importantly, that the keys actually reach the
+reducer, since the defect it closes was wiring rather than logic.
+
+Two things about running it here:
+
+- Installed with `--no-bin-links`, and invoked as `node node_modules/vitest/vitest.mjs`. The repo
+  lives on an NTFS mount where npm cannot create the `.bin` symlinks, and the plain install fails on
+  `ENOENT ... symlink`.
+- `vitest.config.ts` is deliberately separate from `vite.config.ts`. Sharing one would let a change
+  to how the bundle is built break the tests for reasons unrelated to either.
 
 ## Gotchas
 
