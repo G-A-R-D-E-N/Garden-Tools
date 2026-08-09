@@ -139,6 +139,10 @@ public static class PapyrusDiagnosticCodes
     public const string StructNeedsMember = "PAP0018";
     public const string TooManyErrors = "PAP0019";
 
+    // Declaration check, before resolution: a duplicate makes the symbol table ambiguous, so it is
+    // reported once here rather than as a cascade of consequences later.
+    public const string DuplicateDeclaration = "PAP0020";
+
     // Resolver. These are only ever raised when the sources were complete enough to be sure; see
     // PapyrusResolution.BaseChainComplete.
     public const string UnresolvedName = "PAP0030";

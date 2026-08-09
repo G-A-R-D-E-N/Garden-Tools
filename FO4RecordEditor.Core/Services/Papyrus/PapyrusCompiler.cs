@@ -134,6 +134,12 @@ public sealed class PapyrusCompiler
         var diagnostics = new List<PapyrusDiagnostic>(script.Diagnostics);
         if (script.HasErrors) return new PapyrusCompileResult(script, null, diagnostics, sourcesComplete: false);
 
+        // Before resolution on purpose: a duplicate name makes the symbol table ambiguous, so
+        // resolving first would bury the real problem under its own consequences.
+        diagnostics.AddRange(PapyrusDeclarationCheck.Check(script));
+        if (diagnostics.Any(d => d.Severity == PapyrusSeverity.Error))
+            return new PapyrusCompileResult(script, null, diagnostics, sourcesComplete: false);
+
         var resolution = new PapyrusResolver(_index).Resolve(script);
         diagnostics.AddRange(resolution.Diagnostics);
 
