@@ -4,6 +4,7 @@ import { getGraph } from '../backend';
 import type { BpDiagnostic, BpDocument, BpNodeDef, BpPaletteEntry } from './graphModel';
 import { emptyDocument, newId, pinKey } from './graphModel';
 import { useGraphClipboard } from './clipboard';
+import { autoLayout } from './layout';
 import { useSavedDoc } from './useSavedDoc';
 import { graphReducer, initialState } from './graphReducer';
 import type { CanvasApi } from './BlueprintCanvas';
@@ -205,6 +206,12 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
   const clipboard = useGraphClipboard(state, dispatch);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
+  // One dispatch, so a layout is one undoable step rather than a move per node.
+  const tidy = useCallback(() => {
+    const positions = autoLayout(state.doc, defs);
+    if (Object.keys(positions).length > 0) dispatch({ type: 'SET_POSITIONS', positions });
+  }, [state.doc, defs]);
+
   // ---- keyboard ---------------------------------------------------------------------------
 
   useEffect(() => {
@@ -249,6 +256,11 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
           </div>
           <BuildGate gate={gate} errors={errorCount} warnings={warningCount} />
           <div className="bp-actions">
+            <button className="sidebar-action-btn" onClick={tidy}
+                    disabled={state.doc.nodes.length === 0}
+                    title="Arrange the graph left to right along its execution flow">
+              Tidy
+            </button>
             <button className="sidebar-action-btn" onClick={open} disabled={unavailable || busy}>Open</button>
             <button className="sidebar-action-btn" onClick={save} disabled={unavailable || busy}>
               Save{dirty ? ' *' : ''}
@@ -340,6 +352,11 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
                   <button disabled={state.selection.nodes.length === 0}
                           onClick={() => { clipboard.duplicate(); setMenu(null); }}>
                     Duplicate<span>Ctrl+D</span>
+                  </button>
+                  <div className="bp-menu-rule" />
+                  <button disabled={state.doc.nodes.length === 0}
+                          onClick={() => { tidy(); setMenu(null); }}>
+                    Tidy layout<span></span>
                   </button>
                   <div className="bp-menu-rule" />
                   <button disabled={state.selection.nodes.length === 0 && state.selection.wires.length === 0}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BpDiagnostic, BpDocument, BpNode, BpNodeDef, BpPinDef, BpViewport } from './graphModel';
 import { NODE_WIDTH, canConnect, nodeBounds, pinAnchor, pinKey, wirePath } from './graphModel';
+import Minimap from './Minimap';
 import type { GraphAction, BpSelection } from './graphReducer';
 import BlueprintNode from './BlueprintNode';
 
@@ -353,6 +354,34 @@ export default function BlueprintCanvas({
     element.addEventListener('pointercancel', onCancel);
   };
 
+  // Measured into state rather than read off the ref at render time. The minimap needs the canvas
+  // size to draw the viewport rectangle to scale, and a ref read during render is both a
+  // react-hooks/refs error and wrong on a resize, since nothing would re-render to update it.
+  const [stage, setStage] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const element = canvasRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (box) setStage({ width: box.width, height: box.height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  /** Puts a point in graph coordinates at the middle of the visible canvas. */
+  const centreOn = useCallback((worldX: number, worldY: number, minScale = 0) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const k = Math.max(viewRef.current.k, minScale);
+    viewRef.current = { k, x: rect.width / 2 - worldX * k, y: rect.height / 2 - worldY * k };
+    applyTransform();
+    setView({ ...viewRef.current });
+  }, [applyTransform]);
+
   // ---- imperative api ---------------------------------------------------------------------
 
   useEffect(() => {
@@ -363,14 +392,7 @@ export default function BlueprintCanvas({
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!node || !rect) return;
 
-        const k = Math.max(viewRef.current.k, 0.6);
-        viewRef.current = {
-          k,
-          x: rect.width / 2 - (node.x + NODE_WIDTH / 2) * k,
-          y: rect.height / 2 - (node.y + 40) * k,
-        };
-        applyTransform();
-        setView({ ...viewRef.current });
+        centreOn(node.x + NODE_WIDTH / 2, node.y + 40, 0.6);
         dispatch({ type: 'SELECT', ids: [nodeId] });
       },
       centerWorld: () => {
@@ -383,7 +405,7 @@ export default function BlueprintCanvas({
       },
       toWorld,
     };
-  }, [apiRef, nodeById, applyTransform, dispatch, toWorld]);
+  }, [apiRef, nodeById, centreOn, dispatch, toWorld]);
 
   const selectedNodes = useMemo(() => new Set(selection.nodes), [selection.nodes]);
 
@@ -454,6 +476,15 @@ export default function BlueprintCanvas({
 
       <div className="bp-marquee" ref={marqueeRef} />
       <div className="bp-zoom">{Math.round(view.k * 100)}%</div>
+
+      <Minimap
+        doc={doc}
+        defs={defs}
+        selection={selection.nodes}
+        view={view}
+        stage={stage}
+        onGoTo={(x, y) => centreOn(x, y)}
+      />
     </div>
   );
 }

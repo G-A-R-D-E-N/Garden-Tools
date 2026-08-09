@@ -24,6 +24,7 @@ export type GraphAction =
   | { type: 'SET_VARIABLES'; variables: BpDocument['variables'] }
   | { type: 'ADD_NODE'; node: BpNode; wire?: Omit<BpWire, 'id'> }
   | { type: 'MOVE_NODES'; ids: string[]; dx: number; dy: number }
+  | { type: 'SET_POSITIONS'; positions: Record<string, { x: number; y: number }> }
   | { type: 'SET_PIN_VALUE'; nodeId: string; pinId: string; valueType: string; value: string }
   | { type: 'SET_CONFIG'; nodeId: string; key: string; value: string }
   | { type: 'ADD_WIRE'; wire: Omit<BpWire, 'id'>; defs: Record<string, BpNodeDef> }
@@ -155,6 +156,16 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
         }),
         selection: { nodes: [], wires: [] },
       };
+    }
+
+    case 'SET_POSITIONS': {
+      // Absolute, unlike MOVE_NODES, because a layout computes where every node belongs rather than
+      // how far it should shift. One history entry, so a layout is undone in one step.
+      const moved = action.positions;
+      return pushHistory(state, {
+        ...state.doc,
+        nodes: state.doc.nodes.map((n) => (moved[n.id] ? { ...n, ...moved[n.id] } : n)),
+      });
     }
 
     case 'PASTE': {

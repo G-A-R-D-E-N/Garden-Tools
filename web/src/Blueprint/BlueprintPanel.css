@@ -417,3 +417,30 @@
   margin: 4px 6px;
   background: var(--border-color, #3a3f48);
 }
+
+/* Minimap. Node boxes only, no wires: at this scale a wire is a couple of pixels of clutter, and
+   what the reader needs is where the mass of the graph is and where they are inside it. */
+.bp-minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20;
+  border: 1px solid var(--border-color, #3a3f48);
+  border-radius: 5px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.bp-minimap-bg { fill: var(--bg-primary, #1b1e24); fill-opacity: 0.92; }
+
+.bp-minimap-node { fill: var(--text-primary, #e6e8ea); fill-opacity: 0.42; }
+
+.bp-minimap-node.selected { fill: var(--accent, #6ea8ff); fill-opacity: 0.95; }
+
+.bp-minimap-view {
+  fill: var(--accent, #6ea8ff);
+  fill-opacity: 0.13;
+  stroke: var(--accent, #6ea8ff);
+  stroke-opacity: 0.75;
+  stroke-width: 1;
+}
