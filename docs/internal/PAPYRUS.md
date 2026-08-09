@@ -307,6 +307,32 @@ ancestors (`PapyrusAnalysisService.NaturalRootsFor`, because a namespaced script
 `Source/User`, not to its own folder), then the caller's `imports`, then
 `ToolPaths.PapyrusBaseImports()`.
 
+## Two declarations of one name
+
+The compiler used to accept these with no diagnostic at all, and the code generator wrote **both**
+into the object. A state whose function list holds two entries called `OnLoad` is not a valid `.pex`,
+and which one the game runs is not something the source says. Merging two scripts by hand is the
+ordinary way to produce one.
+
+`PapyrusDeclarationCheck` raises `PAP0020` for it, and runs **before** name resolution: a duplicate
+makes the symbol table ambiguous, so resolving first would bury the real problem under a cascade of
+its own consequences.
+
+The scopes are the ones the emitted object actually uses, not the ones the source suggests. Functions
+and events share a single scope **per state**, because both land in that state's function list; the
+same event name in two different states is the point of a state machine and stays legal.
+
+The uniqueness key is the name a declaration will be **emitted** under, not the name as written. A
+remote handler compiles to `::remote_Type_Name`, so `Event OnLoad()` and
+`Event ObjectReference.OnLoad(...)` are two different functions that legitimately sit side by side:
+one overrides this script's own event, the other listens to another object's. Keying on the bare name
+refuses a script the game accepts, and that mistake was made here first and caught by the graph
+suite before it shipped.
+
+`VanillaSweep`, gated on `FO4RE_PSC_ROOTS`, points the check at the shipped sources: **7,854 files
+parsed, 0 unparseable, 0 flagged.** A refusal added to a compiler is only worth as much as the
+evidence that it refuses nothing real, and the 33-file stub tree cannot supply that.
+
 ## What is left
 
 Known gaps in the layers that are built, stated rather than hidden:
