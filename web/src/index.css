@@ -49,6 +49,8 @@
   --chip-8: #56d4dd; /* cyan */
 
   /* Radii / shadows */
+  /* Canvas grid line. Light theme overrides it below. */
+  --bp-grid: rgba(255, 255, 255, 0.045);
   --radius: 6px;
   --radius-sm: 4px;
   --shadow-panel: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -137,7 +139,6 @@ body {
   -webkit-backdrop-filter: none;
   border: 1px solid var(--border-color);
   box-shadow: 0 2px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05);
-  --bp-grid: rgba(255, 255, 255, 0.045);
 }
 
 [data-theme="light"] .rv-c-master    { background: #ede9fe; color: #5b21b6; }
