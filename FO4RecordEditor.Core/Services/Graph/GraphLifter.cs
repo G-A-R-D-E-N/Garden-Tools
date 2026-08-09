@@ -615,7 +615,11 @@ public sealed class GraphLifter
                 NodePalette.PropertyGetId(binding.Owner.Name, member.Name),
                 GraphNodeKind.PropertyGet);
             if (target != null) Attach(target, new PinRef(node, PinIds.Self));
-            return new Value(new PinRef(node, PinIds.Return), null);
+            // A property read hands back PinIds.Value, not PinIds.Return. NodePalette builds the
+            // getter with pins self and value; naming ret here produced a wire to a pin the
+            // definition never had, which the validator reported as GRA0017 on scripts that were
+            // otherwise perfectly good.
+            return new Value(new PinRef(node, PinIds.Value), null);
         }
 
         Refuse($"Reading '{member.Name}' is not something the graph can express yet.", member.Span);

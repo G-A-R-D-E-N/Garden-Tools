@@ -138,6 +138,50 @@ public class GraphScriptLoaderTests
         finally { directory.Delete(recursive: true); }
     }
 
+    /// <summary>
+    /// A lifted property read wires the pin the getter actually has.
+    /// </summary>
+    /// <remarks>
+    /// The lifter used to hand back <c>ret</c> for a property read while NodePalette builds the
+    /// getter with <c>self</c> and <c>value</c>, so the document referred to a pin that had never
+    /// existed and the validator reported GRA0017 on scripts that were perfectly good. Measured over
+    /// 400 vanilla scripts it was 45 occurrences. Lifting alone does not catch it: the document
+    /// loads fine and only validation notices, which is why this test validates rather than
+    /// asserting on the shape of the graph.
+    /// </remarks>
+    [Fact]
+    public void A_lifted_property_read_validates_against_the_pin_the_getter_declares()
+    {
+        var directory = Directory.CreateTempSubdirectory("fo4re-loader-prop-");
+        try
+        {
+            File.WriteAllText(Path.Combine(directory.FullName, "Holder.psc"),
+                "Scriptname Holder extends ObjectReference\nint Property Count Auto\n");
+            var path = Path.Combine(directory.FullName, "Reader.psc");
+            File.WriteAllText(path, """
+                Scriptname Reader extends ObjectReference
+
+                Event OnLoad()
+                    Holder store = Self as Holder
+                    Debug.Trace("count " + store.Count)
+                EndEvent
+                """);
+
+            var roots = new[] { directory.FullName, TestRoots.BaseStubs, TestRoots.GraphScripts };
+            var result = GraphScriptLoader.Load(path, roots);
+
+            result.Failure.Should().BeNull();
+            result.Success.Should().BeTrue(string.Join(" | ", result.Diagnostics.Select(d => d.Message)));
+
+            var validation = new GraphCompiler(GraphCompiler.IndexFor(roots)).Validate(result.Document!);
+            validation.Diagnostics
+                .Where(d => d.Severity == GraphSeverity.Error)
+                .Select(d => $"{d.Code} {d.Message}")
+                .Should().BeEmpty("a lifted property read should name a pin the getter declares");
+        }
+        finally { directory.Delete(recursive: true); }
+    }
+
     [Fact]
     public void A_file_that_is_not_a_script_is_refused_by_name()
     {
