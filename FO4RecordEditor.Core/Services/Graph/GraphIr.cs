@@ -175,4 +175,7 @@ public sealed record IrScript
 
     /// <summary>The state the script starts in, written as <c>Auto State</c>.</summary>
     public string? AutoState { get; init; }
+
+    /// <summary>Custom events this script declares, written as <c>CustomEvent Name</c>.</summary>
+    public IReadOnlyList<string> CustomEvents { get; init; } = Array.Empty<string>();
 }

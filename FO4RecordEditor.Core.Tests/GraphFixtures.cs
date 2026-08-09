@@ -670,6 +670,37 @@ internal static class GraphFixtures
             EndState
             """);
 
+        // 26: a listener. A remote handler for an event another object raises, a custom event this
+        // script declares, and a handler for a custom event a different script raises. All three
+        // are written Owner.Name, which is the shape every dotted handler in the wild has.
+        Add("26_RemoteAndCustomEvents", graph =>
+        {
+            graph.CustomEvent("Ready");
+
+            var remote = graph.Node(palette, NodePalette.RemoteEventId("ObjectReference", "OnLoad"));
+            var loaded = graph.Node(palette, "global:Debug.Notification");
+            graph.Value(loaded, "arg:asNotificationText", "string", "\"loaded\"");
+            graph.Wire(remote, PinIds.Exec, loaded, PinIds.Exec);
+
+            var custom = graph.Node(palette, NodePalette.RemoteEventId("FixtureEventSource", "AffinityChanged"));
+            var affinity = graph.Node(palette, "global:Debug.Notification");
+            graph.Value(affinity, "arg:asNotificationText", "string", "\"affinity\"");
+            graph.Wire(custom, PinIds.Exec, affinity, PinIds.Exec);
+            return graph.Document;
+        }, """
+            Scriptname Fixture extends ObjectReference
+
+            CustomEvent Ready
+
+            Event ObjectReference.OnLoad(ObjectReference akSender)
+                Debug.Notification("loaded")
+            EndEvent
+
+            Event FixtureEventSource.AffinityChanged(FixtureEventSource akSender, Var[] akArgs)
+                Debug.Notification("affinity")
+            EndEvent
+            """);
+
         return fixtures;
     }
 }

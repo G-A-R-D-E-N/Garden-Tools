@@ -135,6 +135,12 @@ public sealed class PapyrusSourceWriter
             foreach (var import in script.Imports) Line("Import " + import);
         }
 
+        if (script.CustomEvents.Count > 0)
+        {
+            Blank();
+            foreach (var declared in script.CustomEvents) Line("CustomEvent " + declared);
+        }
+
         if (script.Variables.Count > 0 || script.Properties.Count > 0) Blank();
         foreach (var variable in script.Variables) Line(DeclarationText(variable.TypeName, variable.IsArray, variable.Name, variable.Flags, variable.InitialText));
         foreach (var property in script.Properties) Line(PropertyText(property));

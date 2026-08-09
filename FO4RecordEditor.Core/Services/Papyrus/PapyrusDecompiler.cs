@@ -145,10 +145,29 @@ public static class PapyrusDecompiler
             header = $"{nameOverride}({ps})";
         else if (isRemote)
         {
+            // The type and the event are joined by an underscore and both may contain underscores,
+            // so the name alone cannot be split reliably. The sender parameter can: every dotted
+            // handler takes the raising object first, typed as the owner, so its type IS the
+            // boundary. Splitting on "_On" instead only works for handlers whose event name starts
+            // with On, which is true of the built-in events and false of custom events, whose names
+            // the author chooses.
             var rest = fn.Name.Substring("::remote_".Length);
-            int idx = rest.IndexOf("_On", StringComparison.OrdinalIgnoreCase);
-            string type = idx > 0 ? rest.Substring(0, idx) : "";
-            string ev = idx > 0 ? rest.Substring(idx + 1) : rest;
+            string type = fn.Params.Count > 0 ? fn.Params[0].Type : "";
+            string ev = rest;
+
+            if (type.Length > 0 && rest.StartsWith(type + "_", StringComparison.OrdinalIgnoreCase))
+            {
+                ev = rest.Substring(type.Length + 1);
+            }
+            else
+            {
+                // The sender did not match, so fall back to the old guess rather than emit a name
+                // built from a type this object does not actually mention.
+                int idx = rest.IndexOf("_On", StringComparison.OrdinalIgnoreCase);
+                type = idx > 0 ? rest.Substring(0, idx) : "";
+                ev = idx > 0 ? rest.Substring(idx + 1) : rest;
+            }
+
             header = type.Length > 0 ? $"Event {type}.{ev}({ps})" : $"Event {ev}({ps})";
         }
         else if (isEvent)

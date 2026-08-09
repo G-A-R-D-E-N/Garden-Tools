@@ -42,6 +42,13 @@ internal sealed class GraphBuilder
         return this;
     }
 
+    /// <summary>Declares a custom event this script can raise.</summary>
+    public GraphBuilder CustomEvent(string name)
+    {
+        _document.CustomEvents.Add(name);
+        return this;
+    }
+
     public GraphBuilder Flag(string flag)
     {
         _document.Header.Flags.Add(flag);
@@ -120,7 +127,8 @@ internal sealed class GraphBuilder
 internal static class GraphTestEnvironment
 {
     /// <summary>An index over the checked-in stub tree.</summary>
-    public static PapyrusScriptIndex Index() => PapyrusCompiler.IndexFor(new[] { TestRoots.BaseStubs });
+    public static PapyrusScriptIndex Index() =>
+        PapyrusCompiler.IndexFor(new[] { TestRoots.BaseStubs, TestRoots.GraphScripts });
 
     public static NodePalette Palette() => new(Index());
 

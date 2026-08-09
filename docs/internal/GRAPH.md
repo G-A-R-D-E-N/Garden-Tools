@@ -100,17 +100,18 @@ dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj
 
 | What | How | Result |
 |---|---|---|
-| Suite total | ungated, Linux net8.0 | **773 passing, 0 failed** |
-| Bare-checkout parity | same run with no env vars set | **773 / 773 identical** |
-| Fixture graphs compiling clean | 25 patterns, stub base tree | **25 / 25** |
-| Generated instructions vs hand-written Papyrus | `PexComparer`, 25 fixtures | **25 / 25 identical** |
-| Compiled object decompiles and recompiles | 25 fixtures | **25 / 25** |
+| Suite total | ungated, Linux net8.0 | **788 passing, 0 failed** |
+| Bare-checkout parity | same run with no env vars set | **788 / 788 identical** |
+| Fixture graphs compiling clean | 26 patterns, stub base tree | **26 / 26** |
+| Generated instructions vs hand-written Papyrus | `PexComparer`, 26 fixtures | **26 / 26 identical** |
+| Compiled object decompiles and recompiles | 26 fixtures | **26 / 26** |
 | Negative matrix | 19 invalid graphs | **19 / 19 correct code and node id** |
 | Dataflow matrix | 15 graphs, refused and accepted | **15 / 15 correct code, node and pin** |
 | State matrix | 10 graphs, emission and refusal | **10 / 10 correct block, code and node** |
-| Graph to source | `FO4RE_GRAPH_BENCH`, 25 fixtures, 106 nodes | **1.25 ms median, 3.15 ms p95** |
-| Translation throughput | derived from the above | **11,812 ns per node, 84,658 nodes per second** |
-| Graph to `.pex` end to end | same sweep | **4.07 ms median for 25, 0.163 ms per fixture** |
+| Event matrix | 10 graphs, remote and custom | **10 / 10 correct signature and refusal** |
+| Graph to source | `FO4RE_GRAPH_BENCH`, 26 fixtures, 110 nodes | **1.28 ms median, 2.16 ms p95** |
+| Translation throughput | derived from the above | **11,606 ns per node, 86,160 nodes per second** |
+| Graph to `.pex` end to end | same sweep | **4.10 ms median for 26, 0.158 ms per fixture** |
 | Palette build over the real base tree | `FO4RE_PSC_ROOTS`, 7,854 scripts | **1.91 s cold, 5.0 ms median warm search** |
 
 Benchmarks were taken on a **Debug** build, 6 CPUs, .NET 8.0.29, PikaOS 4. Debug is the conservative
@@ -119,7 +120,7 @@ it.
 
 ## The traps in reading those numbers
 
-**"25 / 25 identical" is Oracle 2, not a fixed point.** The comparison that carries weight is
+**"26 / 26 identical" is Oracle 2, not a fixed point.** The comparison that carries weight is
 generated output against *hand-written* Papyrus for the same behaviour, both through the same
 compiler. That is what says the graph produces what a modder would have written.
 
@@ -190,8 +191,33 @@ entry is its own root, so every node belonging to a sibling event looked unreach
 two events, which is most of them, got a warning per node in the other one. It is now a document-wide
 pass over the union of every entry's reachable set.
 
-All 25 fixtures still compile clean under every pass above, which is what says the checks are not
+All 26 fixtures still compile clean under every pass above, which is what says the checks are not
 merely strict.
+
+**A custom event handler that decompiles to the wrong name.** The compiled object names a dotted
+handler `::remote_<Type>_<Name>`, and `PapyrusDecompiler` split that on `_On` to find the boundary.
+That reconstructs the built-in events, whose names all start with `On`, and produces a flat
+`Type_Name` for every custom event, whose name the author chooses. Both halves can contain
+underscores, so the name alone cannot be split at all. The sender parameter can: every dotted handler
+takes the raising object first, typed as the owner, so its type is the boundary. This is a
+decompiler fix, so it reaches `decompile_papyrus` on any hand-written script too, not only graphs.
+
+## Events raised by other objects
+
+`Event Owner.Name(...)` covers both remote events and custom events, and the shape was measured
+rather than recalled: across 697 shipped and mod scripts, all 76 dotted handlers take the raising
+object first, typed as the owner. The only difference between the two is the tail, which is the
+source event's parameters for a remote event and a single `Var[]` for a custom one.
+
+They are separate palette entries from the local override rather than a flag on it, because the pin
+set genuinely differs by the sender pin and pins are derived from the definition id rather than
+saved. That also means a script can carry `OnLoad()` and `ObjectReference.OnLoad()` at once, which is
+legal, so the duplicate check is keyed on the emitted signature's identity rather than the bare name.
+
+`FixtureEventSource.psc` lives in `Fixtures/GraphScripts/`, not in `BaseStubs/`. A custom event
+handler needs a script that declares the custom event and no vanilla base script does, and everything
+under `BaseStubs` is checked member by member against the real game tree, so a script with no real
+counterpart cannot live there without making that check meaningless.
 
 ## What is left
 

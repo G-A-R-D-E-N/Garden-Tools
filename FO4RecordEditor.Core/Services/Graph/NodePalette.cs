@@ -142,6 +142,17 @@ public sealed class NodePalette
                         entries.Add(new PaletteEntry(
                             EventId(scriptName, symbol.Name),
                             symbol.Name, scriptName, GraphNodeKind.EventEntry, symbol.Signature, IsPure: false));
+                        entries.Add(new PaletteEntry(
+                            RemoteEventId(scriptName, symbol.Name),
+                            scriptName + "." + symbol.Name, scriptName, GraphNodeKind.EventEntry,
+                            symbol.Signature, IsPure: false));
+                        break;
+
+                    case PapyrusSymbolKind.CustomEvent:
+                        entries.Add(new PaletteEntry(
+                            RemoteEventId(scriptName, symbol.Name),
+                            scriptName + "." + symbol.Name, scriptName, GraphNodeKind.EventEntry,
+                            symbol.Signature, IsPure: false));
                         break;
 
                     case PapyrusSymbolKind.Property:
@@ -174,7 +185,22 @@ public sealed class NodePalette
             definitions.Add(FunctionDefinition(scriptName, function));
 
         foreach (var declared in script.Events)
+        {
             definitions.Add(EventDefinition(scriptName, declared));
+            definitions.Add(RemoteEventDefinition(
+                scriptName,
+                declared.Name,
+                EventDefinition(scriptName, declared).DataOutputs,
+                _docs.Function(scriptName, declared.Name)?.Summary));
+        }
+
+        // A custom event is only ever handled remotely: the script that declares it raises it, and
+        // some other script listens. So there is no local override counterpart to build.
+        foreach (var declared in script.CustomEvents)
+        {
+            definitions.Add(RemoteEventDefinition(
+                scriptName, declared.Name, new[] { CustomEventArgsPin() }, summary: null));
+        }
 
         foreach (var property in script.Properties)
         {
@@ -278,6 +304,66 @@ public sealed class NodePalette
             Pins = pins,
         };
     }
+
+    /// <summary>
+    /// A handler for an event another object raises, written <c>Event Owner.Name(...)</c>.
+    /// </summary>
+    /// <remarks>
+    /// The sender is a real parameter and comes first, of the raising script's type. That is the
+    /// shape every dotted handler in the surveyed corpus has. Authors name it various things
+    /// (`akSender`, `aSender`, plain `sender`), so the name is a convention rather than a rule, and
+    /// `akSender` is what gets emitted.
+    /// <para>
+    /// This is a separate definition from the local override rather than a flag on it, because the
+    /// pin set genuinely differs by the sender pin and pins are derived from the definition id
+    /// rather than saved.
+    /// </para>
+    /// </remarks>
+    private NodeDefinition RemoteEventDefinition(
+        string scriptName, string eventName, IEnumerable<PinDefinition> tail, string? summary)
+    {
+        var pins = new List<PinDefinition>
+        {
+            new() { Id = PinIds.Exec, Direction = PinDirection.Out, Kind = PinKind.Exec },
+            new()
+            {
+                Id = PinIds.Parameter(RemoteSenderName),
+                Label = RemoteSenderName,
+                Direction = PinDirection.Out,
+                Kind = PinKind.Data,
+                Type = PinTypeExpr.Concrete(scriptName),
+                Description = "The object that raised the event.",
+            },
+        };
+        pins.AddRange(tail);
+
+        return new NodeDefinition
+        {
+            Id = RemoteEventId(scriptName, eventName),
+            Kind = GraphNodeKind.EventEntry,
+            Title = scriptName + "." + eventName,
+            Category = scriptName,
+            Summary = summary,
+            OwnerScript = scriptName,
+            MemberName = eventName,
+            IsRemoteEvent = true,
+            Pins = pins,
+        };
+    }
+
+    /// <summary>The name emitted for a remote handler's sender parameter.</summary>
+    public const string RemoteSenderName = "akSender";
+
+    /// <summary>The fixed argument payload Papyrus gives every custom event handler.</summary>
+    private static PinDefinition CustomEventArgsPin() => new()
+    {
+        Id = PinIds.Parameter("akArgs"),
+        Label = "akArgs",
+        Direction = PinDirection.Out,
+        Kind = PinKind.Data,
+        Type = PinTypeExpr.Concrete("Var", isArray: true),
+        Description = "The values the sender passed to SendCustomEvent.",
+    };
 
     private NodeDefinition PropertyGetDefinition(string scriptName, PapyrusPropertyDecl property) => new()
     {
@@ -413,6 +499,9 @@ public sealed class NodePalette
         (isGlobal ? "global:" : "call:") + script + "." + member;
 
     public static string EventId(string script, string member) => "event:" + script + "." + member;
+
+    /// <summary>A handler for an event another object raises, local override's counterpart.</summary>
+    public static string RemoteEventId(string script, string member) => "remote:" + script + "." + member;
 
     public static string PropertyGetId(string script, string member) => "prop.get:" + script + "." + member;
 

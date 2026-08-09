@@ -94,6 +94,7 @@ public sealed class GraphLinearizer
             AutoState = string.IsNullOrWhiteSpace(_document.Header.AutoState)
                 ? null
                 : _document.Header.AutoState,
+            CustomEvents = _document.CustomEvents.ToList(),
         };
     }
 
@@ -162,6 +163,9 @@ public sealed class GraphLinearizer
             EntryNodeId = entry.Id,
             IsEvent = definition.Kind == GraphNodeKind.EventEntry,
             IsGlobal = entry.ConfigString("global") == "true",
+            // A remote or custom event handler is written Owner.Name, so the writer needs the type
+            // the event is raised by, not the script being written.
+            RemoteObjectType = definition.IsRemoteEvent ? definition.OwnerScript : null,
             StateName = entry.ConfigString("state"),
             ReturnTypeName = frame.ReturnTypeName,
             ReturnIsArray = frame.ReturnIsArray,

@@ -217,6 +217,15 @@ public sealed class GraphDocument
 
     public List<GraphStruct> Structs { get; set; } = new();
 
+    /// <summary>
+    /// Custom events this script declares and can raise.
+    /// </summary>
+    /// <remarks>
+    /// Names only. Papyrus fixes the payload of every custom event at <c>Var[]</c>, so there is no
+    /// per event signature to carry.
+    /// </remarks>
+    public List<string> CustomEvents { get; set; } = new();
+
     public List<GraphNode> Nodes { get; set; } = new();
 
     public List<GraphWire> Wires { get; set; } = new();

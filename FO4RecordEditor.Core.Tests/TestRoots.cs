@@ -29,6 +29,16 @@ internal static class TestRoots
     /// </summary>
     public static string BaseStubs => Path.Combine(Fixtures, "BaseStubs");
 
+    /// <summary>
+    /// Fixture-owned scripts that are not stand-ins for anything the game ships.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="BaseStubs"/> on purpose. Everything under BaseStubs is checked
+    /// member by member against the real tree by BaseStubFidelityTests, so a script with no real
+    /// counterpart cannot live there without making that check meaningless.
+    /// </remarks>
+    public static string GraphScripts => Path.Combine(Fixtures, "GraphScripts");
+
     /// <summary>Roots parsed out of a path-separator-delimited environment variable, existing ones only.</summary>
     public static IReadOnlyList<string> RootsFrom(string variable)
     {

@@ -463,8 +463,12 @@ public sealed class GraphValidator
                 "This graph has no event or function to start from, so nothing would run."));
         }
 
+        // Keyed by the emitted signature's identity, not just the name. A local override and a
+        // remote handler for the same event are different declarations that legitimately coexist:
+        // OnActivate() and ObjectReference.OnActivate() are not the same function.
         foreach (var duplicate in entries
-            .GroupBy(n => EntryNameOf(n, definitions[n.Id]) + "/" + (n.ConfigString("state") ?? ""),
+            .GroupBy(n => (definitions[n.Id].IsRemoteEvent ? definitions[n.Id].OwnerScript + "." : "")
+                          + EntryNameOf(n, definitions[n.Id]) + "/" + (n.ConfigString("state") ?? ""),
                 StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1))
         {
@@ -480,6 +484,31 @@ public sealed class GraphValidator
         }
 
         ValidateStates(document, definitions, entries, problems);
+        ValidateCustomEvents(document, problems);
+    }
+
+    /// <summary>Custom events this script declares and can raise.</summary>
+    private static void ValidateCustomEvents(GraphDocument document, List<GraphDiagnostic> problems)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var declared in document.CustomEvents)
+        {
+            if (!IsIdentifier(declared))
+            {
+                problems.Add(GraphDiagnostic.Error(
+                    GraphDiagnosticCodes.InvalidScriptHeader,
+                    $"'{declared}' is not a usable custom event name."));
+                continue;
+            }
+
+            if (!seen.Add(declared))
+            {
+                problems.Add(GraphDiagnostic.Error(
+                    GraphDiagnosticCodes.DuplicateDeclaration,
+                    $"Custom event '{declared}' is declared more than once."));
+            }
+        }
     }
 
     /// <summary>

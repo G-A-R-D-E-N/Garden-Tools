@@ -37,7 +37,7 @@ public class GraphRoundTripTests
         GraphFixtures.All.First(f => f.Name == name);
 
     private static PapyrusCompiler TextCompiler() =>
-        new(PapyrusCompiler.IndexFor(new[] { TestRoots.BaseStubs }));
+        new(PapyrusCompiler.IndexFor(new[] { TestRoots.BaseStubs, TestRoots.GraphScripts }));
 
     /// <summary>Compiles hand-written source the same way the graph output is compiled.</summary>
     private static PexFile CompileReference(GraphFixture fixture)
@@ -49,7 +49,7 @@ public class GraphRoundTripTests
         try
         {
             File.WriteAllText(Path.Combine(root.FullName, "Fixture.psc"), fixture.Reference);
-            var index = PapyrusCompiler.IndexFor(new[] { root.FullName, TestRoots.BaseStubs });
+            var index = PapyrusCompiler.IndexFor(new[] { root.FullName, TestRoots.BaseStubs, TestRoots.GraphScripts });
             var script = PapyrusParser.Parse(fixture.Reference, "Fixture.psc");
             var compiled = new PapyrusCompiler(index).Compile(script, sourceFileName: "Fixture.psc");
 
