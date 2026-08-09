@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Search, X, XCircle } from 'lucide-react';
 import { getGraph } from '../backend';
 import type { BpDiagnostic, BpDocument, BpNodeDef, BpPaletteEntry } from './graphModel';
 import { emptyDocument, newId, pinKey } from './graphModel';
+import { useGraphClipboard } from './clipboard';
 import { graphReducer, initialState } from './graphReducer';
 import type { CanvasApi } from './BlueprintCanvas';
 import BlueprintCanvas from './BlueprintCanvas';
@@ -199,6 +200,12 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
     setStatus('Opened.');
   });
 
+  // ---- clipboard --------------------------------------------------------------------------
+
+  // Owns its own key bindings, so the operation and the thing that triggers it cannot drift apart.
+  const clipboard = useGraphClipboard(state, dispatch);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
   // ---- keyboard ---------------------------------------------------------------------------
 
   useEffect(() => {
@@ -216,13 +223,14 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
         event.preventDefault();
         dispatch({ type: 'REDO' });
       } else if (event.key === 'Escape') {
-        if (picker) setPicker(null);
+        if (menu) setMenu(null);
+        else if (picker) setPicker(null);
         else dispatch({ type: 'SELECT_NONE' });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [picker]);
+  }, [picker, menu]);
 
   useEffect(() => setLS('scriptName', state.doc.header.scriptName), [state.doc.header.scriptName]);
 
@@ -306,9 +314,41 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
                 dispatch={dispatch}
                 onRequestNode={(x, y, from) => setPicker({ x, y, from })}
                 apiRef={canvasApi}
+                onContextMenu={(e) => setMenu({ x: e.clientX, y: e.clientY })}
               />
             ) : (
               <pre className="papyrus-output-body bp-source">{source || 'No source yet.'}</pre>
+            )}
+
+            {menu && (
+              <>
+                {/* A full-surface backdrop rather than a document listener: it closes on any click,
+                    including a click on the menu's own edge, without racing the button handlers. */}
+                <div className="bp-menu-backdrop" onPointerDown={() => setMenu(null)} />
+                <div className="bp-menu" style={{ left: menu.x, top: menu.y }}>
+                  <button disabled={state.selection.nodes.length === 0}
+                          onClick={() => { clipboard.copy(); setMenu(null); }}>
+                    Copy<span>Ctrl+C</span>
+                  </button>
+                  <button disabled={state.selection.nodes.length === 0}
+                          onClick={() => { clipboard.cut(); setMenu(null); }}>
+                    Cut<span>Ctrl+X</span>
+                  </button>
+                  <button disabled={!clipboard.canPaste}
+                          onClick={() => { clipboard.paste(); setMenu(null); }}>
+                    Paste<span>Ctrl+V</span>
+                  </button>
+                  <button disabled={state.selection.nodes.length === 0}
+                          onClick={() => { clipboard.duplicate(); setMenu(null); }}>
+                    Duplicate<span>Ctrl+D</span>
+                  </button>
+                  <div className="bp-menu-rule" />
+                  <button disabled={state.selection.nodes.length === 0 && state.selection.wires.length === 0}
+                          onClick={() => { dispatch({ type: 'DELETE_SELECTION' }); setMenu(null); }}>
+                    Delete<span>Del</span>
+                  </button>
+                </div>
+              </>
             )}
 
             {picker && (

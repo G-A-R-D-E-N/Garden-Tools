@@ -17,6 +17,9 @@ interface Props {
   dispatch: (action: GraphAction) => void;
   onRequestNode: (worldX: number, worldY: number, from?: { node: string; pin: string }) => void;
   apiRef?: React.MutableRefObject<CanvasApi | null>;
+  /// Right click anywhere on the canvas. The menu itself is the panel's, so the canvas stays
+  /// concerned only with the graph surface.
+  onContextMenu?: (event: React.MouseEvent) => void;
 }
 
 export interface CanvasApi {
@@ -30,7 +33,7 @@ const MAX_SCALE = 2.5;
 const CLICK_SLOP = 4;
 
 export default function BlueprintCanvas({
-  doc, defs, selection, diagByNode, diagByPin, dispatch, onRequestNode, apiRef,
+  doc, defs, selection, diagByNode, diagByPin, dispatch, onRequestNode, apiRef, onContextMenu,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const nodeLayerRef = useRef<HTMLDivElement | null>(null);
@@ -387,6 +390,11 @@ export default function BlueprintCanvas({
       onDoubleClick={(e) => {
         const world = toWorld(e.clientX, e.clientY);
         onRequestNode(world.x, world.y);
+      }}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        onContextMenu(e);
       }}
     >
       <svg className="bp-wires">

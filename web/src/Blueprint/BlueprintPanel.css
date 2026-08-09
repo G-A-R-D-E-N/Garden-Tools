@@ -360,3 +360,60 @@
 
 .bp-popover-list button:hover { background: var(--bg-hover); }
 .bp-popover-list span { color: var(--text-muted); font-size: 11px; }
+
+/* Canvas context menu. The backdrop covers the whole stage so any click dismisses it, which is
+   cheaper and less racy than a document-level pointerdown listener that has to ignore its own menu. */
+.bp-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.bp-menu {
+  position: fixed;
+  z-index: 41;
+  min-width: 168px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated, #23262d);
+  border: 1px solid var(--border-color, #3a3f48);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38);
+}
+
+.bp-menu button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-primary, #e6e8ea);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bp-menu button:hover:not(:disabled) {
+  background: var(--accent-soft, rgba(120, 160, 255, 0.16));
+}
+
+.bp-menu button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.bp-menu button span {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.bp-menu-rule {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-color, #3a3f48);
+}
