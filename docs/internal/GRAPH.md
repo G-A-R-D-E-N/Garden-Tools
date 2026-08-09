@@ -252,9 +252,8 @@ which is valid and which nobody writes; it comes out as `If (!x) ... EndIf`.
 ## What is left
 
 - **The canvas has no minimap and no auto-layout.**
-- **The 2 eslint errors under `web/src/Blueprint/` are pre-existing** (`viewRef.current` read during
-  render in the canvas, `savedDoc.current` in the panel). Both are real `react-hooks/refs`
-  complaints, neither is a live defect, and neither has been touched.
+- **`web/src/` outside `Blueprint/` has 92 eslint errors**, long-standing, in panels the graph work
+  never touched. `src/Blueprint/` itself is clean.
 
 ## The frontend gate
 
@@ -264,9 +263,18 @@ which is valid and which nobody writes; it comes out as `If (!x) ... EndIf`.
 cd web && npm test
 ```
 
-**23 tests, 2 files.** `graphReducer.test.ts` covers the only place a document is ever mutated;
+**30 tests, 3 files.** `graphReducer.test.ts` covers the only place a document is ever mutated;
 `clipboard.test.ts` covers the copy logic and, more importantly, that the keys actually reach the
-reducer, since the defect it closes was wiring rather than logic.
+reducer, since the defect it closes was wiring rather than logic. `useSavedDoc.test.ts` covers the
+Save button's unsaved marker.
+
+That last one is worth a note on how to read a lint error. The marker used to compare against a
+`useRef` read during render, which `react-hooks/refs` rejects. Every assignment to that ref happened
+inside a helper whose `finally` toggled an unrelated `busy` flag, and that re-render recomputed the
+marker, so no failure was reachable and none was found by trying. The fix is still right, for a
+reason the lint rule does not state: nothing in the code expressed the dependency, so an assignment
+added outside that helper would have frozen the marker silently and no test could have caught it.
+Holding it as state makes it a function of the render instead of a coincidence somewhere else.
 
 Two things about running it here:
 
