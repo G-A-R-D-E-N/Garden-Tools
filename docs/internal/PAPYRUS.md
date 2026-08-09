@@ -60,11 +60,35 @@ and they no-op when unset so a bare checkout stays green.
 | Type check | `FO4RE_PSC_CORPUS` | 7,832 scripts with complete sources, **100.00% clean** |
 | `.pex` round trip | `FO4RE_PEX_CORPUS` | 5,976 found, 4,581 read, **4,581 byte-identical, 0 differing** |
 | Compile, differential | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` | 198 (`.psc`, `.pex`) pairs, 161 compiled, **158 instruction-for-instruction identical to the Creation Kit (98.1%)**, 37 refused, 3 differing |
+| Compile, differential, vanilla | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **5,399 identical (71.2%)**, 28 refused |
 | Decompile fidelity | `FO4RE_PSC_ROOTS` | 1,498 scripts compiled, decompiled and recompiled, **1,202 instruction-identical (80.2%)**, 275 differing, 21 not recompiled |
 
 `FO4RecordEditor.Core.Tests` is 286 tests and runs on Linux. `FO4RecordEditor.Tests` targets
 `net9.0-windows` through its WPF reference and its host does not start here, so put anything testable
 without WPF in Core.Tests.
+
+### Building the vanilla corpus, and the flag that decides what it means
+
+The shipped `.pex` are not loose on disk: they are inside `Fallout4 - Misc.ba2`. Everything needed
+to stage them is in `tools/build-vanilla-pex-corpus.sh`:
+
+```
+tools/build-vanilla-pex-corpus.sh "<FO4>/Data" papyrus/Base /tmp/vanilla-corpus
+```
+
+It extracts with the tool's own BA2 reader, then repairs two things the extractor leaves behind on
+Linux: entry paths are written as literal file names with backslashes in them rather than as
+directories, and the archive spells the folder both `Scripts` and `scripts`, which is two trees on a
+case-sensitive filesystem. Sources are staged as `scripts/Source/` so the pairing rule finds them.
+Verified end to end: **7,875 `.pex` and 7,854 `.psc`**, and a rebuild reproduces the differential
+figure exactly.
+
+**`FO4RE_PEX_RELEASE=1` is not optional on this corpus.** Bethesda's scripts are release builds with
+`DebugOnly` and `BetaOnly` stripped; a mod is usually shipped debug. Rebuild a release binary in
+debug mode and every script calling `Debug.Trace` reports a difference that is not a compiler
+defect: `WorkshopSwitchDelayScript.OnPowerOn` begins at L28 in the shipped object because the
+`debug.trace` on the line before is simply absent. Measured, getting this wrong costs **11.7 points,
+59.5% against 71.2%**, and the noise buries the real differences.
 
 ### Two traps in reading those numbers
 

@@ -51,6 +51,9 @@ public class PapyrusDifferentialTests
     private const string PexCorpusVariable = "FO4RE_PEX_CORPUS";
     private const string ExtraRootsVariable = "FO4RE_PSC_ROOTS";
 
+    /// <summary>Set to 1 when the corpus is release built, as Bethesda's shipped scripts are.</summary>
+    private const string ReleaseVariable = "FO4RE_PEX_RELEASE";
+
     /// <summary>
     /// How much of the corpus is allowed to differ before the sweep is a failure.
     /// </summary>
@@ -178,10 +181,24 @@ public class PapyrusDifferentialTests
         var refusals = new List<string>();
         var differences = new List<string>();
 
+        // How the corpus was built has to match how it is rebuilt here, and the two shipped
+        // conventions differ: Bethesda's own scripts are release builds with DebugOnly and BetaOnly
+        // stripped, while a mod is usually shipped debug. Comparing a release binary against a debug
+        // rebuild reports a difference on every script that calls Debug.Trace, which is not a
+        // compiler defect and drowns out the ones that are. Measured on the vanilla corpus, getting
+        // this wrong costs about eleven points.
+        var release = Environment.GetEnvironmentVariable(ReleaseVariable) == "1";
+        var options = new PapyrusCompileOptions
+        {
+            EmitDebugOnlyCode = !release,
+            EmitBetaOnlyCode = !release,
+        };
+        _output.WriteLine($"mode={(release ? "release" : "debug")} (set {ReleaseVariable}=1 for a vanilla corpus)");
+
         foreach (var (pex, psc) in pairs)
         {
             var index = PapyrusCompiler.IndexFor(RootsFor(psc).Concat(extra));
-            var result = new PapyrusCompiler(index).CompileFile(psc);
+            var result = new PapyrusCompiler(index).CompileFile(psc, options);
 
             if (!result.Success)
             {
