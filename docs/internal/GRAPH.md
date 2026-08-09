@@ -249,9 +249,36 @@ is still refused, so the neutrality did not become leniency.
 **An empty Then arm is inverted rather than emitted.** A Continue leaves `If (x) Else ... EndIf`,
 which is valid and which nobody writes; it comes out as `If (!x) ... EndIf`.
 
+## Arranging the canvas
+
+**Tidy** lays the graph out left to right along its execution flow, and the minimap sits bottom right.
+
+Layered rather than force directed, because the graph already carries the answer: an exec wire runs
+from a statement to the one after it, so column index is depth along the flow and the arrangement
+reads in the same direction as the Papyrus it becomes. A force directed layout has no reason to keep
+the flow pointing one way, which is the only property that matters here.
+
+Column index is the **longest** execution path reaching a node, so nothing ever sits to the left of
+something that must run before it. Two things that took a test to get right:
+
+- **Back edges are excluded from ranking.** Relaxing across one pushed a three node cycle out to
+  column nine instead of column two, one column further on every pass. They are found by DFS, which
+  is the same rule `GraphExecFlow` applies on the compiler side.
+- **Expression ranks may go negative.** A node with no exec pins belongs just left of whatever reads
+  it; clamping at zero collapsed a chain of expressions into one column on top of itself. Columns are
+  shifted back to zero afterwards.
+
+Ordering within a column is by the average row of what feeds the node, ties broken by the position it
+already had and then by id, so laying out twice does not shuffle anything. `SET_POSITIONS` is
+absolute, unlike `MOVE_NODES`, so a layout is one undoable step.
+
+The minimap draws node boxes and the viewport rectangle, not wires: at that scale a wire is a couple
+of pixels of clutter. Canvas size is measured into state with a `ResizeObserver` rather than read off
+the ref during render, which would be both the `react-hooks/refs` error from #148 and wrong on a
+resize, since nothing would re-render to update it.
+
 ## What is left
 
-- **The canvas has no minimap and no auto-layout.**
 - **`web/src/` outside `Blueprint/` has 92 eslint errors**, long-standing, in panels the graph work
   never touched. `src/Blueprint/` itself is clean.
 
@@ -263,7 +290,7 @@ which is valid and which nobody writes; it comes out as `If (!x) ... EndIf`.
 cd web && npm test
 ```
 
-**30 tests, 3 files.** `graphReducer.test.ts` covers the only place a document is ever mutated;
+**50 tests, 4 files.** `graphReducer.test.ts` covers the only place a document is ever mutated;
 `clipboard.test.ts` covers the copy logic and, more importantly, that the keys actually reach the
 reducer, since the defect it closes was wiring rather than logic. `useSavedDoc.test.ts` covers the
 Save button's unsaved marker.
