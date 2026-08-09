@@ -202,6 +202,46 @@ Kit folds constants" is not a fact anyone can check and "28,073 against 1" is.
   `birdspawnerscript_Flee`. The call site wins. A rule read off the 229 would have been backwards for
   the other 3.
 
+### An observation whose mechanism is unresolved: string table case
+
+Recorded because the measurements are solid and the conclusion is not, and because without this note
+the same four experiments are cheap to repeat and expensive to finish.
+
+**Measured, and not in doubt:**
+
+- **A string table is case-insensitively unique.** Across all **7,875** shipped objects, not one
+  table holds two entries differing only by case. Zero exceptions. So every reference to a name,
+  whether a declaration, a literal or an operand, shares one spelling within an object.
+- **The spelling is not chosen by any local rule.** Over 6,635 case-collapsed groups, measured
+  against the source: first occurrence 67.1%, last occurrence 43.3%, declaration in the local file
+  20.1%, first literal 1.4%, most frequent spelling 52.9%, lowercase 25.2%. Every previous rule in
+  this document landed at or near 100%, so 67% is not a rule that fits, it is a rule that does not.
+- **It is not per-API canonicalisation and not the state subsystem.** `GotoState` operands are 42%
+  lowercase against `RegisterForRemoteEvent` at 0%, which no per-API rule explains. State records
+  themselves disagree with their own source spelling in 170 of 656 cases, so they are a consumer of
+  whatever the rule is rather than its source.
+
+**Current hypothesis, unproven.** The spelling appears to travel with the symbol from wherever it is
+declared, which is frequently another file: the kept spelling is often absent from the calling source
+entirely, and the cases that lose to a local first occurrence are type and function names such as
+`Keyword`, `Bool` and `Enable`, whose declarations live in the scripts that define them.
+
+**Status: intentionally not implemented.** This investigation was concluded without a change because
+every measured local winner rule was disproved. Further work means modelling compiler-wide symbol
+canonicalisation rather than local string interning, which is a front end question and not a table
+question.
+
+Two further reasons it was not worth carrying on at the time. The remaining difference is about 123
+scripts of 7,585, roughly 1.6%, and it is cosmetic: Papyrus compares strings and resolves states case
+insensitively, so `"Off"` and `"off"` behave alike at run time. And the change would land in
+`PexStringTable`, which every string in every object passes through, so a wrong winner rule would
+move mismatches rather than remove them. `PexStringTable` interns with `StringComparer.Ordinal`
+today, which is the concrete difference from the Creation Kit if anyone picks this up.
+
+Two limits in the sweep that produced the percentages above, so nobody reads them as tighter than
+they are: it treated keywords as names, which inflates the group count, and it only read the calling
+file, which is precisely where the evidence says the answer is not.
+
 Codegen found four more, all by disassembling real output rather than by reading:
 
 - **A script that extends nothing still names `ScriptObject` as its parent.** `Extends` is described
