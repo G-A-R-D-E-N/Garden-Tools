@@ -208,8 +208,8 @@ public sealed class GraphLinearizer
                     var merge = frame.Flow.ImmediatePostDominator.GetValueOrDefault(nodeId);
                     var condition = Pull(new PinRef(nodeId, PinIds.Condition), frame, statements);
 
-                    var thenBody = LowerRegion(frame.Flow.TargetOf(nodeId, PinIds.Then), merge, frame);
-                    var elseBody = LowerRegion(frame.Flow.TargetOf(nodeId, PinIds.Else), merge, frame);
+                    var thenBody = LowerRegion(Step(nodeId, PinIds.Then, frame), merge, frame);
+                    var elseBody = LowerRegion(Step(nodeId, PinIds.Else, frame), merge, frame);
 
                     statements.Add(Fold(condition, thenBody, elseBody, nodeId));
                     nodeId = merge;
@@ -222,14 +222,14 @@ public sealed class GraphLinearizer
                     var body = LowerRegion(frame.Flow.TargetOf(nodeId, PinIds.Body), nodeId, frame);
 
                     statements.Add(new IrWhile(condition, body) { NodeId = nodeId });
-                    nodeId = frame.Flow.TargetOf(nodeId, PinIds.Completed);
+                    nodeId = Step(nodeId, PinIds.Completed, frame);
                     continue;
                 }
 
                 case GraphNodeKind.ForEach:
                 {
                     statements.AddRange(LowerForEach(node, frame, statements));
-                    nodeId = frame.Flow.TargetOf(nodeId, PinIds.Completed);
+                    nodeId = Step(nodeId, PinIds.Completed, frame);
                     continue;
                 }
 
@@ -261,7 +261,9 @@ public sealed class GraphLinearizer
                 default:
                 {
                     statements.AddRange(LowerSimple(node, definition, frame, statements));
-                    nodeId = NextOf(nodeId, definition, frame);
+
+                    var next = NextOf(nodeId, definition, frame);
+                    nodeId = next != null && frame.Flow.BackEdges.Contains((nodeId, next)) ? null : next;
                     continue;
                 }
             }
@@ -383,6 +385,24 @@ public sealed class GraphLinearizer
             default:
                 yield break;
         }
+    }
+
+    /// <summary>
+    /// Where one exec pin leads, unless that would close the loop.
+    /// </summary>
+    /// <remarks>
+    /// A back edge is the loop repeating, not a statement to emit, so region lowering must never
+    /// walk one. Stopping at the enclosing loop's node id is not enough on its own: when a branch
+    /// inside a loop has one arm that terminates, the branch's post-dominator collapses to nothing,
+    /// the other arm is lowered with no stopping point, and it walks the back edge into the loop
+    /// header and lowers the whole loop again. That recursion overflows the stack rather than
+    /// tripping the iteration guard, which is per call.
+    /// </remarks>
+    private string? Step(string nodeId, string pinId, Frame frame)
+    {
+        var target = frame.Flow.TargetOf(nodeId, pinId);
+        if (target == null) return null;
+        return frame.Flow.BackEdges.Contains((nodeId, target)) ? null : target;
     }
 
     private string? NextOf(string nodeId, NodeDefinition definition, Frame frame)
