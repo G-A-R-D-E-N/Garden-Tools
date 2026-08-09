@@ -154,6 +154,32 @@ Creation Kit compiled. Expect more.
   be cast to integers" and omits bool, but `false as int` and `bStartAtTop as float` are in eleven
   vanilla scripts, `LightbulbOnOffScript`, `SimpleElevatorMasterScript` and `MQ206Script` among them.
 
+### Rules read off the shipped binaries
+
+These came from counting instructions across the whole vanilla corpus rather than from any
+documentation, and each one is recorded with the count that established it, because "the Creation
+Kit folds constants" is not a fact anyone can check and "28,073 against 1" is.
+
+- **A `propset` always takes a temporary as its value.** Of the 2,520 `propset` instructions in the
+  corpus, 2,520 carry a `::temp`. None carries a literal, and none carries a plain identifier, even
+  where the source assigns one straight across. This is the same shape `struct_set` has, and getting
+  it wrong was the largest single disagreement with the Creation Kit: 928 of 2,188 differing scripts.
+- **A literal is folded into the wanted type, never cast into it.** Of 28,074 `cast` instructions,
+  28,073 take an identifier as their source and exactly one takes a literal
+  (`WorkshopSwitchDelayScript`, a string). So `GetStageDone(100) == 1` compares against the operand
+  `true` with no cast instruction at all, the same way an int literal in a float slot is written
+  `5.0`. A computed value still casts; only literals fold. A **string** in a bool slot is left to
+  cast here, because what the runtime makes of it is not written down anywhere checked, and folding
+  on a guess would produce a wrong value rather than a longer one.
+- **A custom event name is qualified with the script that declares it, lowercased.** All 232
+  custom event operands in the corpus are qualified and none is bare, and all 232 resolve to a
+  script that really does declare that `CustomEvent`, across the 51 declarations in 26 scripts. The
+  qualifier is lowercased in every one; the event half keeps the casing the declaration used.
+  <br>The zero-unmatched result is what identifies *which* script: were the qualifier the target's
+  concrete type, an inherited event would produce a prefix that declares nothing, and there is not
+  one such case. Counted case-insensitively on the event half, so the qualifier's casing is measured
+  and the event half's is observed rather than swept.
+
 Codegen found four more, all by disassembling real output rather than by reading:
 
 - **A script that extends nothing still names `ScriptObject` as its parent.** `Extends` is described
