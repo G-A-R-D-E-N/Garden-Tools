@@ -150,7 +150,14 @@ public class GraphRoundTripTests
                 .Should().BeEquivalentTo(
                     first.Ir.Callables.Where(c => !c.IsEvent).Select(c => c.Name).OrderBy(n => n));
 
-            var second = TextCompiler().Compile(reparsed, sourceFileName: "Fixture.psc");
+            // Published to its own root first, for the reason CompileReference gives: a script that
+            // passes Self where its base type is wanted cannot be compiled against an index that
+            // does not contain the script, because nothing there says what Self extends.
+            File.WriteAllText(Path.Combine(directory.FullName, "Fixture.psc"), body);
+            var index = PapyrusCompiler.IndexFor(
+                new[] { directory.FullName, TestRoots.BaseStubs, TestRoots.GraphScripts });
+
+            var second = new PapyrusCompiler(index).Compile(reparsed, sourceFileName: "Fixture.psc");
             second.Success.Should().BeTrue(
                 $"{name}: recompiling the decompiled source should succeed; "
                 + string.Join(" | ", second.Diagnostics.Select(d => $"{d.Code} {d.Message}")));
@@ -268,7 +275,12 @@ public class GraphRoundTripTests
             var reparsed = PapyrusParser.Parse(body, "Fixture.psc");
             if (reparsed.Diagnostics.Any(d => d.Severity == PapyrusSeverity.Error)) return false;
 
-            return TextCompiler().Compile(reparsed, sourceFileName: "Fixture.psc").Success;
+            // Published first, for the reason Oracle1 gives.
+            File.WriteAllText(Path.Combine(directory.FullName, "Fixture.psc"), body);
+            var index = PapyrusCompiler.IndexFor(
+                new[] { directory.FullName, TestRoots.BaseStubs, TestRoots.GraphScripts });
+
+            return new PapyrusCompiler(index).Compile(reparsed, sourceFileName: "Fixture.psc").Success;
         }
         finally
         {

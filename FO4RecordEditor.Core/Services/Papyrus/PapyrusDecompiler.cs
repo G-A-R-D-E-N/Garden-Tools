@@ -7,9 +7,15 @@ namespace FO4RecordEditor.Services.Papyrus;
 /// Declarations (script header, structs, properties, variables, states, function signatures) are
 /// reconstructed exactly. Function bodies are best-effort: instructions become expressions/statements
 /// with compiler temporaries inlined, and jumps are restructured into If/Else/While. A body that
-/// can't be structured cleanly falls back to an annotated assembly listing for that function, so the
-/// output is never silently wrong.
+/// can't be structured at all falls back to an annotated assembly listing for that function.
 /// </summary>
+/// <remarks>
+/// That fallback is not a guarantee that the output is never silently wrong, and it was read as one
+/// for too long. A short circuit used to come back as two separate Ifs, which structures cleanly,
+/// parses, compiles, and is a different program. The measurement is DecompilerSweep: 1,202 of 1,498
+/// real scripts decompile to something that recompiles to the same instructions, 80.2%. The other
+/// 275 are named there, and any of them could be a difference of that kind rather than of spelling.
+/// </remarks>
 public static class PapyrusDecompiler
 {
     public static string Decompile(string pexPath, bool assembly)
@@ -203,7 +209,7 @@ public static class PapyrusDecompiler
 
     // ───────────────────────────── body decompiler ─────────────────────────────
     private enum JKind { JmpF, JmpT, Jmp }
-    private sealed class JInfo { public JKind Kind; public int Target; public string Cond = ""; }
+    private sealed class JInfo { public JKind Kind; public int Target; public string Cond = ""; public string CondVar = ""; }
 
     private static string DecompileBody(PexObject obj, PexFunction fn, string indent, bool inlineTemps)
     {
@@ -224,6 +230,12 @@ public static class PapyrusDecompiler
         var instrs = fn.Instructions;
         var stmt = new string?[instrs.Count];
         var jumps = new JInfo?[instrs.Count];
+        var firstWrite = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // Inlined temporaries, by the instruction that produced them. A temp that nothing goes on to
+        // read has to come back as a statement in its own right, or the call that filled it is lost.
+        var tempDefinition = new Dictionary<string, int>();   // temp name -> the instruction that last wrote it
+        var tempExpression = new Dictionary<int, string>();   // that instruction -> what it produced
+        var tempWasRead = new HashSet<int>();
 
         string TypeOf(string name) => types.TryGetValue(name, out var t) ? t : "";
         // ONLY real compiler temporaries (::tempN) are inlinable. Backing vars (::X_var) are storage.
@@ -238,7 +250,11 @@ public static class PapyrusDecompiler
             if (v.Type != PexValueType.Identifier) return v.ToString();
             var n = v.Str;
             if (n.Equals("::NoneVar", StringComparison.OrdinalIgnoreCase)) return "None";
-            if (inlineTemps && IsTemp(n) && temps.TryGetValue(n, out var e)) return e;
+            if (inlineTemps && IsTemp(n) && temps.TryGetValue(n, out var e))
+            {
+                if (tempDefinition.TryGetValue(n, out var definition)) tempWasRead.Add(definition);
+                return e;
+            }
             return San(ResolveName(n));
         }
         string A(PexInstruction ins, int i) => Op(ins.Args[i]);
@@ -247,7 +263,13 @@ public static class PapyrusDecompiler
         // store an expression to dest: inline if temp (inline mode), else record an assignment statement.
         void Put(int idx, string dest, string expr)
         {
-            if (inlineTemps && IsTemp(dest)) temps[dest] = expr;
+            if (!firstWrite.ContainsKey(dest)) firstWrite[dest] = idx;
+            if (inlineTemps && IsTemp(dest))
+            {
+                temps[dest] = expr;
+                tempDefinition[dest] = idx;
+                tempExpression[idx] = expr;
+            }
             else if (dest.Equals("::NoneVar", StringComparison.OrdinalIgnoreCase)) stmt[idx] = expr; // bare expr stmt
             else stmt[idx] = $"{San(ResolveName(dest))} = {expr}";
         }
@@ -277,6 +299,16 @@ public static class PapyrusDecompiler
                     // explicit "(x as ScriptObject)" both is redundant AND strips the concrete type the
                     // compiler needs to validate Register/UnregisterForRemoteEvent/HitEvent event names.
                     if (dt.Equals("ScriptObject", StringComparison.OrdinalIgnoreCase)) { Put(i, Dest(ins, 0), src); break; }
+                    // A cast to the type the operand already has is the compiler's own doing, not
+                    // something the author wrote: it is how a Bool operand of && or || reaches the
+                    // test. Writing it back out as an explicit cast reads as an author's cast, which
+                    // compiles to an assign instead and loses the instruction it came from.
+                    if (ins.Args[1].Type == PexValueType.Identifier
+                        && TypeOf(ins.Args[1].Str).Equals(dt, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Put(i, Dest(ins, 0), src);
+                        break;
+                    }
                     Put(i, Dest(ins,0), dt.Length > 0 ? $"({src} as {dt})" : src);
                     break;
                 }
@@ -332,26 +364,120 @@ public static class PapyrusDecompiler
                     break;
                 }
                 case "jmp": jumps[i] = new JInfo { Kind = JKind.Jmp, Target = i + ins.Args[0].Int }; break;
-                case "jmpt": jumps[i] = new JInfo { Kind = JKind.JmpT, Target = i + ins.Args[1].Int, Cond = A(ins,0) }; break;
-                case "jmpf": jumps[i] = new JInfo { Kind = JKind.JmpF, Target = i + ins.Args[1].Int, Cond = A(ins,0) }; break;
+                case "jmpt": jumps[i] = new JInfo { Kind = JKind.JmpT, Target = i + ins.Args[1].Int, Cond = A(ins,0), CondVar = ins.Args[0].Str }; break;
+                case "jmpf": jumps[i] = new JInfo { Kind = JKind.JmpF, Target = i + ins.Args[1].Int, Cond = A(ins,0), CondVar = ins.Args[0].Str }; break;
                 default: stmt[i] = $"; [unhandled {ins.Mnemonic}]"; break;
             }
         }
 
-        var sb = new StringBuilder();
-        // Declare function locals (sanitized). This includes compiler block-scoped locals named
-        // "::mangled_*" (referenced by name in both modes, so always declared) and, in verbose mode,
-        // the "::tempN" temporaries (which become explicit assignments). Inlined temps need no decl.
-        // Skip the None-typed ::NoneVar pseudo-local.
+        // Rejoin short circuits. "A && B" tests one temp, jumps on failure to a second test of that
+        // same temp, and fills the temp with B in between; "A || B" is the same with the first jump
+        // taken when A holds. Read one jump at a time, the first test looks like an If with an empty
+        // body and the second like an unguarded If, which is a different script: the operand that
+        // short circuits stops guarding anything. So the pair is folded back into one condition.
+        for (bool folding = true; folding;)
+        {
+            folding = false;
+            for (int i = 0; i < instrs.Count; i++)
+            {
+                var first = jumps[i];
+                if (first == null || first.CondVar.Length == 0 || first.Target <= i) continue;
+                if (first.Target >= instrs.Count) continue;
+
+                var second = jumps[first.Target];
+                if (second == null || !second.CondVar.Equals(first.CondVar, StringComparison.OrdinalIgnoreCase)) continue;
+
+                // Only the operand may sit between the two tests. Anything else would be dropped by
+                // folding, so leave that shape alone and let it decompile as it stands.
+                bool clear = true;
+                for (int k = i + 1; k < first.Target && clear; k++) clear = stmt[k] == null && jumps[k] == null;
+                if (!clear) continue;
+
+                second.Cond = first.Kind == JKind.JmpT
+                    ? $"({first.Cond} || {second.Cond})"
+                    : $"({first.Cond} && {second.Cond})";
+                jumps[i] = null;
+                folding = true;
+            }
+        }
+
+        // A call whose result is discarded still writes a temp, and inlining a temp nothing reads
+        // would drop the call with it. Papyrus only accepts a call as a statement, so this recovers
+        // calls and leaves any other dead temp alone rather than emitting something that would not
+        // parse.
+        foreach (var (idx, expression) in tempExpression)
+        {
+            if (tempWasRead.Contains(idx)) continue;
+            if (instrs[idx].Mnemonic is not ("callmethod" or "callstatic" or "callparent")) continue;
+            stmt[idx] = expression;
+        }
+
+        // Where each local's declaration goes. A bare "Type name" line is not free: the compiler
+        // zero assigns the slot for it, because that is what the Creation Kit does (the case
+        // PapyrusCodeGenerator was checked against is ObjectReference.SellItem). So hoisting every
+        // local to the top of the body invents an instruction whenever the original wrote the slot
+        // straight from an expression, and duplicates one whenever the original really did zero it.
+        // What the first write was decides which rendering is faithful.
+        var declaredAt = new Dictionary<int, string>();       // statement index -> type to prefix it with
+        var zeroedByDeclaration = new HashSet<int>();         // statement the hoisted declaration already emits
+        var hoisted = new List<PexTypedName>();
+
         foreach (var l in fn.Locals)
         {
             if (l.Name.Equals("::NoneVar", StringComparison.OrdinalIgnoreCase)) continue;
             if (l.Type.Equals("None", StringComparison.OrdinalIgnoreCase)) continue;
             if (inlineTemps && IsTemp(l.Name)) continue;   // inlined, no declaration needed
-            sb.AppendLine($"{indent}{l.Type} {San(l.Name)}");
+
+            if (firstWrite.TryGetValue(l.Name, out var at)
+                && instrs[at].Mnemonic == "assign"
+                && IsZeroFor(l.Type, instrs[at].Args[1]))
+            {
+                // The original zeroed the slot, which is exactly what a bare declaration compiles
+                // to, so the declaration stands in for that instruction rather than adding to it.
+                zeroedByDeclaration.Add(at);
+                hoisted.Add(l);
+                continue;
+            }
+
+            // Otherwise the declaration belongs on the first write, so that write stays a single
+            // instruction. It can only move there if that write runs unconditionally: inside a
+            // branch or a loop the declaration would be scoped to that block, and a later read
+            // outside it would not resolve. Hoisting is the fallback, at the cost of one zero
+            // assign the original did not have.
+            if (firstWrite.TryGetValue(l.Name, out at)
+                && stmt[at] != null
+                && stmt[at]!.StartsWith(San(l.Name) + " = ", StringComparison.Ordinal)
+                && RunsUnconditionally(at))
+            {
+                declaredAt[at] = l.Type;
+                continue;
+            }
+
+            hoisted.Add(l);
         }
+
+        var sb = new StringBuilder();
+        // Locals declared up front (sanitized). This includes compiler block-scoped locals named
+        // "::mangled_*" (referenced by name in both modes, so always declared) and, in verbose mode,
+        // the "::tempN" temporaries (which become explicit assignments).
+        foreach (var l in hoisted) sb.AppendLine($"{indent}{l.Type} {San(l.Name)}");
+
         Structure(0, instrs.Count, indent);
         return sb.ToString();
+
+        // True when no structured region encloses this instruction: nothing jumps over it, and
+        // nothing jumps back past it, so it is at the top level of the body.
+        bool RunsUnconditionally(int idx)
+        {
+            for (int k = 0; k < instrs.Count; k++)
+            {
+                var j = jumps[k];
+                if (j == null) continue;
+                if (k < idx && j.Target > idx) return false;    // a forward jump spans it
+                if (k > idx && j.Target <= idx) return false;   // a back edge reaches past it
+            }
+            return true;
+        }
 
         // recursive control-flow structurer
         void Structure(int start, int end, string ind)
@@ -362,7 +488,12 @@ public static class PapyrusDecompiler
                 var j = jumps[i];
                 if (j == null)
                 {
-                    if (stmt[i] != null) sb.AppendLine(ind + stmt[i]);
+                    if (stmt[i] != null && !zeroedByDeclaration.Contains(i))
+                    {
+                        sb.AppendLine(declaredAt.TryGetValue(i, out var declared)
+                            ? $"{ind}{declared} {stmt[i]}"
+                            : ind + stmt[i]);
+                    }
                     i++; continue;
                 }
                 if (j.Kind == JKind.JmpF && j.Target > i && j.Target <= end)
@@ -411,6 +542,17 @@ public static class PapyrusDecompiler
             }
         }
     }
+
+    /// <summary>Whether this operand is the value an uninitialised slot of that type already holds.</summary>
+    private static bool IsZeroFor(string type, PexValue value) => type.ToLowerInvariant() switch
+    {
+        "bool" => value.Type == PexValueType.Bool && !value.Bool,
+        "int" => value.Type == PexValueType.Integer && value.Int == 0,
+        "float" => value.Type == PexValueType.Float && value.Float == 0f,
+        "string" => value.Type == PexValueType.String && value.Str.Length == 0,
+        // Every other type is an object or an array, and both start as None.
+        _ => value.IsNoneType,
+    };
 
     private static string Args(PexInstruction ins, Func<PexValue, string> op) =>
         string.Join(", ", ins.VarArgs.Select(op));
