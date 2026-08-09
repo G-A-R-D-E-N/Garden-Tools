@@ -200,9 +200,14 @@ public sealed record NodeDefinition
                 var name = node.ConfigString("name");
                 var declared = document?.Variables.FirstOrDefault(v =>
                     string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase));
-                if (declared == null) return Pins;
 
-                var type = TypeFromWritten(declared.Type);
+                // A script variable declares its own type. A function local has nowhere to declare
+                // one, so the node carries it, the same way a Cast and a New Array do. Without the
+                // fallback a local reads as var and refuses to flow into anything typed.
+                var written = declared?.Type ?? node.ConfigString("type");
+                if (string.IsNullOrWhiteSpace(written)) return Pins;
+
+                var type = TypeFromWritten(written);
                 return Pins.Select(p => p.Kind == PinKind.Data ? p with { Type = type } : p).ToList();
             }
 

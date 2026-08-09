@@ -48,6 +48,7 @@ public enum GraphNodeKind
     PropertySet,
     VariableGet,
     VariableSet,
+    LocalDeclare,
 
     Literal,
     Self,

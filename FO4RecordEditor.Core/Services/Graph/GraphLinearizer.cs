@@ -45,6 +45,9 @@ public sealed class GraphLinearizer
         public Dictionary<string, string> ResultLocals { get; } = new(StringComparer.Ordinal);
         public List<IrLocal> Locals { get; } = new();
         public HashSet<string> Emitted { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Locals this callable declares, so a second declaration of one is refused.</summary>
+        public HashSet<string> DeclaredLocals { get; } = new(StringComparer.OrdinalIgnoreCase);
         public string? ReturnTypeName { get; init; }
         public bool ReturnIsArray { get; init; }
 
@@ -390,6 +393,35 @@ public sealed class GraphLinearizer
                 var name = node.ConfigString("name") ?? "";
                 var value = Pull(new PinRef(node.Id, PinIds.Value), frame, into);
                 yield return new IrAssign(new IrName(name), value) { NodeId = node.Id };
+                yield break;
+            }
+
+            case GraphNodeKind.LocalDeclare:
+            {
+                // A local that outlives nothing but this call. Papyrus declares locals at function
+                // scope, so this only records the declaration and the writer hoists it; the node's
+                // position in the exec flow decides where the initial assignment lands, not where
+                // the name comes into being.
+                var name = node.ConfigString("name") ?? "";
+                var written = node.ConfigString("type") ?? "var";
+
+                if (!frame.DeclaredLocals.Add(name))
+                {
+                    _problems.Add(GraphDiagnostic.Error(
+                        GraphDiagnosticCodes.DuplicateDeclaration,
+                        $"'{name}' is already declared in this function.",
+                        node.Id));
+                    yield break;
+                }
+
+                frame.Names.Reserve(name);
+                frame.Locals.Add(new IrLocal(name, BaseType(written), IsArray(written)));
+
+                if (_document.Into(new PinRef(node.Id, PinIds.Value)).Any())
+                {
+                    var initial = Pull(new PinRef(node.Id, PinIds.Value), frame, into);
+                    yield return new IrAssign(new IrName(name), initial) { NodeId = node.Id };
+                }
                 yield break;
             }
 

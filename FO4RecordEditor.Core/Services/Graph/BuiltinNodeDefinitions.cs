@@ -31,6 +31,7 @@ public static class BuiltinNodeDefinitions
     public const string IndexSet = "index.set";
     public const string VariableGet = "var.get";
     public const string VariableSet = "var.set";
+    public const string LocalDeclare = "local.declare";
     public const string FunctionEntry = "function.entry";
 
     public const string LiteralPrefix = "literal.";
@@ -198,6 +199,17 @@ public static class BuiltinNodeDefinitions
                 {
                     ExecIn(),
                     DataIn(PinIds.Value, "Value", PinTypeExpr.Any, optional: true),
+                },
+            },
+            new()
+            {
+                Id = LocalDeclare, Kind = GraphNodeKind.LocalDeclare, Title = "Local", Category = "Flow",
+                Summary = "Declares a variable that lives for one call of this function.",
+                Pins = new[]
+                {
+                    ExecIn(),
+                    DataIn(PinIds.Value, "Value", PinTypeExpr.Any, optional: true),
+                    ExecOut(PinIds.Then, ""),
                 },
             },
             new()
