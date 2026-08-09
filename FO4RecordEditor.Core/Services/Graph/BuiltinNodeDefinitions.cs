@@ -18,6 +18,8 @@ public static class BuiltinNodeDefinitions
     public const string While = "while";
     public const string ForEach = "foreach";
     public const string Return = "return";
+    public const string Break = "break";
+    public const string Continue = "continue";
     public const string Reroute = "reroute";
     public const string Self = "self";
     public const string Parent = "parent";
@@ -197,6 +199,18 @@ public static class BuiltinNodeDefinitions
                     ExecIn(),
                     DataIn(PinIds.Value, "Value", PinTypeExpr.Any, optional: true),
                 },
+            },
+            new()
+            {
+                Id = Break, Kind = GraphNodeKind.Break, Title = "Break", Category = "Flow",
+                Summary = "Leaves the enclosing loop.",
+                Pins = new[] { ExecIn() },
+            },
+            new()
+            {
+                Id = Continue, Kind = GraphNodeKind.Continue, Title = "Continue", Category = "Flow",
+                Summary = "Skips the rest of this pass and tests the loop again.",
+                Pins = new[] { ExecIn() },
             },
             new()
             {

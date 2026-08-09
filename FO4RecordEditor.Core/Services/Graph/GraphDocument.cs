@@ -36,6 +36,8 @@ public enum GraphNodeKind
     EventEntry,
     FunctionEntry,
     Return,
+    Break,
+    Continue,
 
     Branch,
     While,

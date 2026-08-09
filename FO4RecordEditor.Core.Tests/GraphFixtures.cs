@@ -701,6 +701,100 @@ internal static class GraphFixtures
             EndEvent
             """);
 
+        // 27: Break. Papyrus has no break, so leaving early means making the condition false.
+        Add("27_BreakLeavesTheLoop", graph =>
+        {
+            var entry = graph.Node(palette, "event:ObjectReference.OnLoad");
+            var enabled = graph.Node(palette, "call:ObjectReference.IsEnabled");
+            var loop = graph.Node(palette, BuiltinNodeDefinitions.While);
+            var first = graph.Node(palette, "global:Debug.Notification");
+            var branch = graph.Node(palette, BuiltinNodeDefinitions.Branch);
+            var leave = graph.Node(palette, BuiltinNodeDefinitions.Break);
+            var rest = graph.Node(palette, "global:Debug.Notification");
+            var after = graph.Node(palette, "global:Debug.Notification");
+
+            graph.Value(first, "arg:asNotificationText", "string", "\"A\"");
+            graph.Value(rest, "arg:asNotificationText", "string", "\"B\"");
+            graph.Value(after, "arg:asNotificationText", "string", "\"after\"");
+
+            graph.Wire(entry, PinIds.Exec, enabled, PinIds.Exec);
+            graph.Wire(enabled, PinIds.Then, loop, PinIds.Exec);
+            graph.Wire(enabled, PinIds.Return, loop, PinIds.Condition);
+            graph.Wire(loop, PinIds.Body, first, PinIds.Exec);
+            graph.Wire(first, PinIds.Then, branch, PinIds.Exec);
+            graph.Wire(enabled, PinIds.Return, branch, PinIds.Condition);
+            graph.Wire(branch, PinIds.Then, leave, PinIds.Exec);
+            graph.Wire(branch, PinIds.Else, rest, PinIds.Exec);
+            graph.Wire(rest, PinIds.Then, loop, PinIds.Exec);
+            graph.Wire(loop, PinIds.Completed, after, PinIds.Exec);
+            return graph.Document;
+        }, """
+            Scriptname Fixture extends ObjectReference
+
+            Event OnLoad()
+                bool enabled
+                bool broke
+                enabled = IsEnabled()
+                broke = false
+                While (enabled && !broke)
+                    Debug.Notification("A")
+                    If (enabled)
+                        broke = true
+                    Else
+                        Debug.Notification("B")
+                    EndIf
+                EndWhile
+                Debug.Notification("after")
+            EndEvent
+            """);
+
+        // 28: Continue, which emits nothing at all. Falling off the end of the If is where it goes,
+        // and the ForEach step sits outside that If so the index still advances.
+        Add("28_ContinueSkipsThePass", graph =>
+        {
+            graph.Variable("Items", "Form[]", isProperty: true);
+
+            var entry = graph.Node(palette, "event:ObjectReference.OnLoad");
+            var enabled = graph.Node(palette, "call:ObjectReference.IsEnabled");
+            var loop = graph.Node(palette, BuiltinNodeDefinitions.ForEach);
+            var items = graph.Node(palette, BuiltinNodeDefinitions.VariableGet, ("name", "Items"));
+            var branch = graph.Node(palette, BuiltinNodeDefinitions.Branch);
+            var skip = graph.Node(palette, BuiltinNodeDefinitions.Continue);
+            var work = graph.Node(palette, "global:Debug.Notification");
+
+            graph.Value(work, "arg:asNotificationText", "string", "\"work\"");
+
+            graph.Wire(entry, PinIds.Exec, enabled, PinIds.Exec);
+            graph.Wire(enabled, PinIds.Then, loop, PinIds.Exec);
+            graph.Wire(items, PinIds.Value, loop, PinIds.Array);
+            graph.Wire(loop, PinIds.Body, branch, PinIds.Exec);
+            graph.Wire(enabled, PinIds.Return, branch, PinIds.Condition);
+            graph.Wire(branch, PinIds.Then, skip, PinIds.Exec);
+            graph.Wire(branch, PinIds.Else, work, PinIds.Exec);
+            return graph.Document;
+        }, """
+            Scriptname Fixture extends ObjectReference
+
+            Form[] Property Items Auto
+
+            Event OnLoad()
+                bool enabled
+                Form[] items
+                int index
+                Form item
+                enabled = IsEnabled()
+                items = Items
+                index = 0
+                While (index < items.Length)
+                    item = items[index]
+                    If (!enabled)
+                        Debug.Notification("work")
+                    EndIf
+                    index = index + 1
+                EndWhile
+            EndEvent
+            """);
+
         return fixtures;
     }
 }

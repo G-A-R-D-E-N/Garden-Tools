@@ -100,18 +100,19 @@ dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj
 
 | What | How | Result |
 |---|---|---|
-| Suite total | ungated, Linux net8.0 | **788 passing, 0 failed** |
-| Bare-checkout parity | same run with no env vars set | **788 / 788 identical** |
-| Fixture graphs compiling clean | 26 patterns, stub base tree | **26 / 26** |
-| Generated instructions vs hand-written Papyrus | `PexComparer`, 26 fixtures | **26 / 26 identical** |
-| Compiled object decompiles and recompiles | 26 fixtures | **26 / 26** |
+| Suite total | ungated, Linux net8.0 | **813 passing, 0 failed** |
+| Bare-checkout parity | same run with no env vars set | **813 / 813 identical** |
+| Fixture graphs compiling clean | 28 patterns, stub base tree | **28 / 28** |
+| Generated instructions vs hand-written Papyrus | `PexComparer`, 28 fixtures | **28 / 28 identical** |
+| Compiled object decompiles and recompiles | 28 fixtures | **28 / 28** |
 | Negative matrix | 19 invalid graphs | **19 / 19 correct code and node id** |
 | Dataflow matrix | 15 graphs, refused and accepted | **15 / 15 correct code, node and pin** |
 | State matrix | 10 graphs, emission and refusal | **10 / 10 correct block, code and node** |
 | Event matrix | 10 graphs, remote and custom | **10 / 10 correct signature and refusal** |
-| Graph to source | `FO4RE_GRAPH_BENCH`, 26 fixtures, 110 nodes | **1.28 ms median, 2.16 ms p95** |
-| Translation throughput | derived from the above | **11,606 ns per node, 86,160 nodes per second** |
-| Graph to `.pex` end to end | same sweep | **4.10 ms median for 26, 0.158 ms per fixture** |
+| Loop exit matrix | 11 graphs, Break and Continue | **11 / 11 correct sentinel, scope and refusal** |
+| Graph to source | `FO4RE_GRAPH_BENCH`, 28 fixtures, 125 nodes | **1.47 ms median, 2.18 ms p95** |
+| Translation throughput | derived from the above | **11,764 ns per node, 85,005 nodes per second** |
+| Graph to `.pex` end to end | same sweep | **4.56 ms median for 28, 0.163 ms per fixture** |
 | Palette build over the real base tree | `FO4RE_PSC_ROOTS`, 7,854 scripts | **1.91 s cold, 5.0 ms median warm search** |
 
 Benchmarks were taken on a **Debug** build, 6 CPUs, .NET 8.0.29, PikaOS 4. Debug is the conservative
@@ -120,7 +121,7 @@ it.
 
 ## The traps in reading those numbers
 
-**"26 / 26 identical" is Oracle 2, not a fixed point.** The comparison that carries weight is
+**"28 / 28 identical" is Oracle 2, not a fixed point.** The comparison that carries weight is
 generated output against *hand-written* Papyrus for the same behaviour, both through the same
 compiler. That is what says the graph produces what a modder would have written.
 
@@ -191,7 +192,7 @@ entry is its own root, so every node belonging to a sibling event looked unreach
 two events, which is most of them, got a warning per node in the other one. It is now a document-wide
 pass over the union of every entry's reachable set.
 
-All 26 fixtures still compile clean under every pass above, which is what says the checks are not
+All 28 fixtures still compile clean under every pass above, which is what says the checks are not
 merely strict.
 
 **A custom event handler that decompiles to the wrong name.** The compiled object names a dotted
@@ -219,10 +220,37 @@ handler needs a script that declares the custom event and no vanilla base script
 under `BaseStubs` is checked member by member against the real game tree, so a script with no real
 counterpart cannot live there without making that check meaningless.
 
+## Leaving a loop early
+
+Papyrus has no `break`, no `continue` and no `goto`, and the rewrite this needs turned out to be far
+smaller than expected, because the region emitter already does most of it.
+
+**Both nodes are terminal**, the way `Return` is. A branch holding one therefore has no
+post-dominator, so the rest of the loop body is lowered into the sibling arm on its own. There is no
+trailing body to guard, which is the part a sentinel rewrite normally has to handle.
+
+**Break** becomes one `bool` per loop: reset immediately before the loop, folded into the condition
+as `cond && !broke`, set true at the node. The reset sits before the loop rather than at the top of
+the function so a loop nested in another one can run again on each outer pass. It is allocated
+lazily, on the first Break that targets that loop, so a loop nobody breaks out of emits exactly what
+it emitted before this existed.
+
+**Continue emits nothing at all.** Falling off the end of the body is precisely where it goes. In a
+`ForEach` the index step is appended after the body region rather than inside it, so a Continue still
+advances the loop. Both claims are pinned by fixtures 27 and 28 against hand-written Papyrus, because
+"it should be equivalent" is not a measurement.
+
+A Break or Continue with no enclosing loop is `GRA0025`, naming the node.
+
+Neither counts as leaving the function for the all-paths-return check: every path through one arrives
+at the loop's Completed target, which is judged on its own account. A loop whose Completed is unwired
+is still refused, so the neutrality did not become leniency.
+
+**An empty Then arm is inverted rather than emitted.** A Continue leaves `If (x) Else ... EndIf`,
+which is valid and which nobody writes; it comes out as `If (!x) ... EndIf`.
+
 ## What is left
 
-- **`Break` and `Continue`.** Papyrus has no `goto`, so both need a sentinel-bool rewrite of the
-  enclosing loop. Deferred rather than half-built. `ForEach` ships, lowered to a `While` over an index.
 - **The canvas has no copy and paste, no minimap and no auto-layout.** The reducer supports paste;
   nothing is wired to it.
 

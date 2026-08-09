@@ -47,6 +47,23 @@ public sealed class GraphLinearizer
         public HashSet<string> Emitted { get; } = new(StringComparer.Ordinal);
         public string? ReturnTypeName { get; init; }
         public bool ReturnIsArray { get; init; }
+
+        /// <summary>The loops enclosing the region being lowered, innermost last.</summary>
+        public List<LoopFrame> Loops { get; } = new();
+    }
+
+    /// <summary>
+    /// One enclosing loop, and the sentinel a Break inside it needs.
+    /// </summary>
+    /// <remarks>
+    /// The sentinel is allocated lazily, on the first Break that targets this loop, so a loop nobody
+    /// breaks out of emits exactly what it emitted before this existed.
+    /// </remarks>
+    private sealed class LoopFrame
+    {
+        public required string NodeId { get; init; }
+
+        public string? Sentinel { get; set; }
     }
 
     /// <summary>Lowers every entry node in the document.</summary>
@@ -219,9 +236,16 @@ public sealed class GraphLinearizer
                 case GraphNodeKind.While:
                 {
                     var condition = Pull(new PinRef(nodeId, PinIds.Condition), frame, statements);
-                    var body = LowerRegion(frame.Flow.TargetOf(nodeId, PinIds.Body), nodeId, frame);
 
-                    statements.Add(new IrWhile(condition, body) { NodeId = nodeId });
+                    var loop = new LoopFrame { NodeId = nodeId };
+                    frame.Loops.Add(loop);
+                    var body = LowerRegion(frame.Flow.TargetOf(nodeId, PinIds.Body), nodeId, frame);
+                    frame.Loops.RemoveAt(frame.Loops.Count - 1);
+
+                    statements.Add(new IrWhile(GuardedBy(loop, condition, frame, statements), body)
+                    {
+                        NodeId = nodeId,
+                    });
                     nodeId = Step(nodeId, PinIds.Completed, frame);
                     continue;
                 }
@@ -255,6 +279,28 @@ public sealed class GraphLinearizer
                     }
 
                     statements.Add(new IrReturn(value) { NodeId = nodeId });
+                    return statements;
+                }
+
+                case GraphNodeKind.Break:
+                {
+                    if (!InLoop(nodeId, "Break", frame)) return statements;
+
+                    var loop = frame.Loops[^1];
+                    loop.Sentinel ??= DeclareSentinel(frame);
+                    statements.Add(new IrAssign(new IrName(loop.Sentinel), new IrLiteral("true"))
+                    {
+                        NodeId = nodeId,
+                    });
+                    return statements;
+                }
+
+                case GraphNodeKind.Continue:
+                {
+                    // Nothing to emit. Falling off the end of the body is where Continue goes, and
+                    // because Continue is terminal the branch it sits in has no post-dominator, so
+                    // the rest of the body was already lowered into the sibling arm.
+                    InLoop(nodeId, "Continue", frame);
                     return statements;
                 }
 
@@ -304,7 +350,13 @@ public sealed class GraphLinearizer
                 }) { NodeId = node.Id },
         };
 
+        var loop = new LoopFrame { NodeId = node.Id };
+        frame.Loops.Add(loop);
         body.AddRange(LowerRegion(frame.Flow.TargetOf(node.Id, PinIds.Body), node.Id, frame));
+        frame.Loops.RemoveAt(frame.Loops.Count - 1);
+
+        // The step is appended after the body region, not inside it, so a Continue still advances
+        // the index. Continue ends the region early; it does not skip what the loop itself emits.
         body.Add(new IrAssign(
             new IrName(indexName),
             new IrBinary("+", new IrName(indexName), new IrLiteral("1")) { TypeName = "int" })
@@ -312,18 +364,19 @@ public sealed class GraphLinearizer
             NodeId = node.Id,
         });
 
-        yield return new IrWhile(
-            new IrBinary(
-                "<",
-                new IrName(indexName),
-                new IrMember(new IrName(arrayLocal), "Length") { TypeName = "int" })
-            {
-                TypeName = "bool",
-            },
-            body)
+        IrExpression bounds = new IrBinary(
+            "<",
+            new IrName(indexName),
+            new IrMember(new IrName(arrayLocal), "Length") { TypeName = "int" })
         {
-            NodeId = node.Id,
+            TypeName = "bool",
         };
+
+        var reset = new List<IrStatement>();
+        bounds = GuardedBy(loop, bounds, frame, reset);
+        foreach (var statement in reset) yield return statement;
+
+        yield return new IrWhile(bounds, body) { NodeId = node.Id };
     }
 
     /// <summary>Everything that is one statement, or none.</summary>
@@ -405,6 +458,59 @@ public sealed class GraphLinearizer
         return frame.Flow.BackEdges.Contains((nodeId, target)) ? null : target;
     }
 
+    /// <summary>Refuses a loop exit that has no loop to exit, naming the node.</summary>
+    private bool InLoop(string nodeId, string what, Frame frame)
+    {
+        if (frame.Loops.Count > 0) return true;
+
+        _problems.Add(GraphDiagnostic.Error(
+            GraphDiagnosticCodes.LoopExitOutsideLoop,
+            $"{what} has no loop to act on. Put it inside a While or ForEach.",
+            nodeId));
+        return false;
+    }
+
+    /// <summary>A fresh bool local for one loop's Break.</summary>
+    private static string DeclareSentinel(Frame frame)
+    {
+        var name = frame.Names.Allocate("broke");
+        frame.Locals.Add(new IrLocal(name, "bool", false));
+        return name;
+    }
+
+    /// <summary>
+    /// The loop condition, with the Break sentinel folded in when one was needed.
+    /// </summary>
+    /// <remarks>
+    /// Papyrus has no break, so leaving a loop early means making its condition false. The sentinel
+    /// is reset immediately before the loop rather than once at the top of the function, so a loop
+    /// nested inside another one starts each outer pass able to run again.
+    /// <para>
+    /// Nothing guards the rest of the body, because there is no rest to guard: a Break is terminal,
+    /// so the branch holding it has no post-dominator and everything after it was already lowered
+    /// into the sibling arm.
+    /// </para>
+    /// </remarks>
+    private static IrExpression GuardedBy(
+        LoopFrame loop, IrExpression condition, Frame frame, List<IrStatement> before)
+    {
+        if (loop.Sentinel == null) return condition;
+
+        before.Add(new IrAssign(new IrName(loop.Sentinel), new IrLiteral("false"))
+        {
+            NodeId = loop.NodeId,
+        });
+
+        return new IrBinary(
+            "&&",
+            condition,
+            new IrUnary("!", new IrName(loop.Sentinel) { TypeName = "bool" }) { TypeName = "bool" })
+        {
+            TypeName = "bool",
+            NodeId = loop.NodeId,
+        };
+    }
+
     private string? NextOf(string nodeId, NodeDefinition definition, Frame frame)
     {
         foreach (var pin in definition.ExecOutputs)
@@ -419,6 +525,17 @@ public sealed class GraphLinearizer
     private static IrIf Fold(
         IrExpression condition, List<IrStatement> thenBody, List<IrStatement> elseBody, string nodeId)
     {
+        // An empty Then arm with a real Else is what a Continue produces, and nobody writes
+        // "If (x) Else ... EndIf" by hand. Inverting is left to the elseif fold below when that
+        // applies, since folding reads better than a negated condition wrapping a chain.
+        if (thenBody.Count == 0 && elseBody.Count > 0
+            && !(elseBody.Count == 1 && elseBody[0] is IrIf))
+        {
+            return new IrIf(
+                new List<IrBranch> { new(Negate(condition), elseBody) },
+                null) { NodeId = nodeId };
+        }
+
         var branches = new List<IrBranch> { new(condition, thenBody) };
 
         if (elseBody.Count == 1 && elseBody[0] is IrIf nested)
@@ -429,6 +546,12 @@ public sealed class GraphLinearizer
 
         return new IrIf(branches, elseBody.Count == 0 ? null : elseBody) { NodeId = nodeId };
     }
+
+    /// <summary>Logical negation, undoing a double negative rather than stacking one.</summary>
+    private static IrExpression Negate(IrExpression condition) =>
+        condition is IrUnary { Operator: "!" } already
+            ? already.Operand
+            : new IrUnary("!", condition) { TypeName = "bool", NodeId = condition.NodeId };
 
     // ---- data pull ---------------------------------------------------------------------------
 

@@ -94,6 +94,7 @@ public static class GraphDiagnosticCodes
     public const string UnreachableExec = "GRA0022";
     public const string UnstructuredFlow = "GRA0023";
     public const string NoEntryNodes = "GRA0024";
+    public const string LoopExitOutsideLoop = "GRA0025";
 
     // 0030 to 0039: names and references.
     public const string MissingRequiredInput = "GRA0030";
