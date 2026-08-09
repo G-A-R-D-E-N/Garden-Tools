@@ -177,6 +177,8 @@ public sealed class GraphLinearizer
             ? new List<IrStatement>()
             : LowerRegion(start, stopAt: null, frame);
 
+        CollapseTemporaries(body, frame);
+
         return new IrCallable
         {
             Name = GraphValidator.EntryNameOf(entry, definition),
@@ -262,9 +264,13 @@ public sealed class GraphLinearizer
 
                 case GraphNodeKind.Return:
                 {
+                    // A wire or a value typed straight into the pin. Reading only the wire made
+                    // Return the one data input that ignored a literal, so a graph with 1 typed
+                    // into it was told its Return node needed a value.
                     IrExpression? value = null;
-                    if (_document.Into(new PinRef(nodeId, PinIds.Value)).Any())
-                        value = Pull(new PinRef(nodeId, PinIds.Value), frame, statements);
+                    var valuePin = new PinRef(nodeId, PinIds.Value);
+                    if (_document.Into(valuePin).Any() || node.PinValues.ContainsKey(PinIds.Value))
+                        value = Pull(valuePin, frame, statements);
 
                     if (value == null && frame.ReturnTypeName != null)
                     {
@@ -469,6 +475,136 @@ public sealed class GraphLinearizer
 
             default:
                 yield break;
+        }
+    }
+
+    /// <summary>
+    /// Folds "temp = work; name = temp" into "name = work".
+    /// </summary>
+    /// <remarks>
+    /// Every impure node binds its result to a local, which is what fixes evaluation order. When the
+    /// only thing that reads that local is an assignment to another name, the local is pure
+    /// overhead: <c>x = IsEnabled()</c> came out as <c>t = IsEnabled()</c> followed by
+    /// <c>x = t</c>, which is two instructions and a declaration for one idea.
+    /// <para>
+    /// Guarded three ways. The temporary must be read exactly once in the whole body, so a result
+    /// shared between two uses keeps its local. It must not be a local the author declared, since
+    /// that name is theirs whether or not it is used twice. And the folded statements must be
+    /// adjacent, so nothing can run between the call and the assignment.
+    /// </para>
+    /// </remarks>
+    private static void CollapseTemporaries(List<IrStatement> body, Frame frame) =>
+        CollapseIn(body, body, frame);
+
+    /// <summary>
+    /// Folds within one block, counting reads across the whole callable.
+    /// </summary>
+    /// <remarks>
+    /// Nested blocks are folded too, because the shape appears just as readily inside an If as at
+    /// the top of a function. The read count is always taken over the entire body: a temporary read
+    /// once inside a branch and again after it is still read twice, and folding it would move the
+    /// call inside the branch.
+    /// </remarks>
+    private static void CollapseIn(List<IrStatement> block, List<IrStatement> whole, Frame frame)
+    {
+        foreach (var statement in block)
+        {
+            switch (statement)
+            {
+                case IrIf branch:
+                    foreach (var arm in branch.Branches)
+                        if (arm.Body is List<IrStatement> armBody) CollapseIn(armBody, whole, frame);
+                    if (branch.Else is List<IrStatement> elseBody) CollapseIn(elseBody, whole, frame);
+                    break;
+                case IrWhile loop:
+                    if (loop.Body is List<IrStatement> loopBody) CollapseIn(loopBody, whole, frame);
+                    break;
+            }
+        }
+
+        for (int i = 0; i + 1 < block.Count; i++)
+        {
+            var body = block;
+            if (body[i] is not IrAssign { Target: IrName produced } first) continue;
+            if (first.Value is IrName) continue;
+            if (body[i + 1] is not IrAssign { Target: IrName _, Value: IrName copied } second) continue;
+            if (!string.Equals(produced.Name, copied.Name, StringComparison.Ordinal)) continue;
+            if (frame.DeclaredLocals.Contains(produced.Name)) continue;
+
+            var local = frame.Locals.FirstOrDefault(l =>
+                string.Equals(l.Name, produced.Name, StringComparison.Ordinal));
+            if (local == null) continue;
+            if (CountReads(whole, produced.Name) != 1) continue;
+
+            body[i] = new IrAssign(second.Target, first.Value)
+            {
+                NodeId = second.NodeId ?? first.NodeId,
+                PinId = second.PinId,
+            };
+            body.RemoveAt(i + 1);
+            frame.Locals.Remove(local);
+        }
+    }
+
+    /// <summary>How many times a name is read anywhere in a body, assignment targets excluded.</summary>
+    private static int CountReads(IEnumerable<IrStatement> body, string name)
+    {
+        var count = 0;
+        foreach (var statement in body) Walk(statement);
+        return count;
+
+        void Walk(IrStatement statement)
+        {
+            switch (statement)
+            {
+                case IrAssign assign:
+                    if (assign.Target is not IrName) Read(assign.Target);
+                    Read(assign.Value);
+                    break;
+                case IrDefine define:
+                    Read(define.Value);
+                    break;
+                case IrExpressionStatement expression:
+                    Read(expression.Expression);
+                    break;
+                case IrReturn returned:
+                    Read(returned.Value);
+                    break;
+                case IrIf branch:
+                    foreach (var arm in branch.Branches)
+                    {
+                        Read(arm.Condition);
+                        foreach (var inner in arm.Body) Walk(inner);
+                    }
+                    if (branch.Else != null) foreach (var inner in branch.Else) Walk(inner);
+                    break;
+                case IrWhile loop:
+                    Read(loop.Condition);
+                    foreach (var inner in loop.Body) Walk(inner);
+                    break;
+            }
+        }
+
+        void Read(IrExpression? expression)
+        {
+            switch (expression)
+            {
+                case null: return;
+                case IrName named:
+                    if (string.Equals(named.Name, name, StringComparison.Ordinal)) count++;
+                    return;
+                case IrMember member: Read(member.Target); return;
+                case IrIndex index: Read(index.Target); Read(index.Index); return;
+                case IrCall call:
+                    Read(call.Receiver);
+                    foreach (var argument in call.Arguments) Read(argument.Value);
+                    return;
+                case IrUnary unary: Read(unary.Operand); return;
+                case IrBinary binary: Read(binary.Left); Read(binary.Right); return;
+                case IrCast cast: Read(cast.Value); return;
+                case IrTypeCheck check: Read(check.Value); return;
+                case IrNewArray created: Read(created.Size); return;
+            }
         }
     }
 
