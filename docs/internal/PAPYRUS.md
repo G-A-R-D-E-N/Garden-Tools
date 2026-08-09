@@ -60,7 +60,7 @@ and they no-op when unset so a bare checkout stays green.
 | Type check | `FO4RE_PSC_CORPUS` | 7,832 scripts with complete sources, **100.00% clean** |
 | `.pex` round trip | `FO4RE_PEX_CORPUS` | 5,976 found, 4,581 read, **4,581 byte-identical, 0 differing** |
 | Compile, differential | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` | 198 (`.psc`, `.pex`) pairs, 161 compiled, **158 instruction-for-instruction identical to the Creation Kit (98.1%)**, 37 refused, 3 differing |
-| Compile, differential, vanilla | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **6,730 identical (88.7%)**, 28 refused |
+| Compile, differential, vanilla | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **7,067 identical (93.2%)**, 28 refused |
 | Decompile fidelity | `FO4RE_PSC_ROOTS` | 1,498 scripts compiled, decompiled and recompiled, **1,202 instruction-identical (80.2%)**, 275 differing, 21 not recompiled |
 
 `FO4RecordEditor.Core.Tests` is 286 tests and runs on Linux. `FO4RecordEditor.Tests` targets
@@ -171,6 +171,23 @@ Kit folds constants" is not a fact anyone can check and "28,073 against 1" is.
   `5.0`. A computed value still casts; only literals fold. A **string** in a bool slot is left to
   cast here, because what the runtime makes of it is not written down anywhere checked, and folding
   on a guess would produce a wrong value rather than a longer one.
+- **Reads go left to right; writes put the value first.** Measured by tracing every temporary
+  operand back to the instruction that defined it, across the whole corpus. Everything that reads is
+  left to right with **no exception in more than 3,200 cases**: 2,652 for a method call's receiver
+  and arguments, 99 for a static call's arguments, and the rest over every binary operator and
+  `array_getelement`. Every form that writes is value first, with **no exception in 490 cases**: 447
+  `propset`, 22 `array_setelement`, 21 `struct_set`. So `(GetOwningQuest() as X).Prop = 0` emits the
+  `0` before it calls `GetOwningQuest`.
+  <br>Because all three write forms agree, this is one rule at the assignment layer rather than three
+  opcode patches. Compound assignment is excluded and has to be: it cannot compute the value before
+  reading the target.
+  <br>**What the corpus does not settle** is whether the write ordering is observable. For calls it
+  plainly is: 495 of those 2,652 have a call on both sides, so the order the game runs them in is
+  fixed and visible. For assignment there is no such case, because not one shipped script assigns a
+  call's result through a receiver that is also a call. Matching the Creation Kit is right either
+  way, and with no such case shipped, no vanilla script can change behaviour from it. That is a
+  narrower claim than the one the call side supports, and it is worth keeping narrow.
+
 - **A custom event name is qualified with the script that declares it, lowercased.** All 232
   custom event operands in the corpus are qualified and none is bare, and all 232 resolve to a
   script that really does declare that `CustomEvent`, across the 51 declarations in 26 scripts. The

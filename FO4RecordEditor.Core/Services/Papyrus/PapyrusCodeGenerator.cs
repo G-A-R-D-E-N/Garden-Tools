@@ -987,10 +987,18 @@ public sealed class PapyrusCodeGenerator
                     if (slot == null) return;
                     if (slot.Value.IsProperty)
                     {
-                        var current = op == null ? null : PropertyGet(slot.Value, id);
-                        var result = op == null
-                            ? ValueAs(value, targetType)
-                            : BinaryInto(null, targetType, op.Value, current!, ValueAs(value, targetType), assign.Span);
+                        if (op == null)
+                        {
+                            var (stored, receiver) = StoreOrder(
+                                () => Materialise(ValueAs(value, targetType), targetType),
+                                () => slot.Value.Receiver!);
+                            Add("propset", Id(slot.Value.Name), receiver, stored);
+                            return;
+                        }
+
+                        var current = PropertyGet(slot.Value, id);
+                        var result = BinaryInto(
+                            null, targetType, op.Value, current, ValueAs(value, targetType), assign.Span);
                         Add("propset", Id(slot.Value.Name), slot.Value.Receiver!, Materialise(result, targetType));
                         return;
                     }
@@ -1008,26 +1016,38 @@ public sealed class PapyrusCodeGenerator
 
                     if (binding.Kind == PapyrusBindingKind.StructMember)
                     {
+                        if (op == null)
+                        {
+                            var (stored, target) = StoreOrder(
+                                () => Materialise(ValueAs(value, targetType), targetType),
+                                () => Value(member.Target));
+                            Add("struct_set", target, Id(member.Name), stored);
+                            return;
+                        }
+
                         var structValue = Value(member.Target);
-                        var newValue = op == null
-                            ? ValueAs(value, targetType)
-                            : StructCompound(structValue, member.Name, targetType, op.Value, value, assign.Span);
+                        var newValue = StructCompound(
+                            structValue, member.Name, targetType, op.Value, value, assign.Span);
                         Add("struct_set", structValue, Id(member.Name), Materialise(newValue, targetType));
                         return;
                     }
 
                     if (binding.Kind == PapyrusBindingKind.Property)
                     {
-                        var receiver = Value(member.Target);
-                        PexValue newValue;
-                        if (op == null) newValue = ValueAs(value, targetType);
-                        else
+                        if (op == null)
                         {
-                            var current = AllocTemp(targetType);
-                            Add("propget", Id(member.Name), receiver, Id(current));
-                            newValue = BinaryInto(null, targetType, op.Value, Id(current),
-                                ValueAs(value, targetType), assign.Span);
+                            var (stored, target) = StoreOrder(
+                                () => Materialise(ValueAs(value, targetType), targetType),
+                                () => Value(member.Target));
+                            Add("propset", Id(member.Name), target, stored);
+                            return;
                         }
+
+                        var receiver = Value(member.Target);
+                        var current = AllocTemp(targetType);
+                        Add("propget", Id(member.Name), receiver, Id(current));
+                        var newValue = BinaryInto(null, targetType, op.Value, Id(current),
+                            ValueAs(value, targetType), assign.Span);
                         Add("propset", Id(member.Name), receiver, Materialise(newValue, targetType));
                         return;
                     }
@@ -1038,17 +1058,23 @@ public sealed class PapyrusCodeGenerator
 
                 case PapyrusIndexExpression index:
                 {
+                    if (op == null)
+                    {
+                        // The array and its subscript are both part of the target, so they follow
+                        // the value and are themselves read left to right.
+                        var (stored, target) = StoreOrder(
+                            () => ValueAs(value, targetType),
+                            () => (Array: Value(index.Target), Subscript: ValueAs(index.Index, PapyrusType.Int)));
+                        Add("array_setelement", target.Array, target.Subscript, stored);
+                        return;
+                    }
+
                     var array = Value(index.Target);
                     var subscript = ValueAs(index.Index, PapyrusType.Int);
-                    PexValue newValue;
-                    if (op == null) newValue = ValueAs(value, targetType);
-                    else
-                    {
-                        var current = AllocTemp(targetType);
-                        Add("array_getelement", Id(current), array, subscript);
-                        newValue = BinaryInto(null, targetType, op.Value, Id(current),
-                            ValueAs(value, targetType), assign.Span);
-                    }
+                    var current = AllocTemp(targetType);
+                    Add("array_getelement", Id(current), array, subscript);
+                    var newValue = BinaryInto(null, targetType, op.Value, Id(current),
+                        ValueAs(value, targetType), assign.Span);
                     Add("array_setelement", array, subscript, newValue);
                     return;
                 }
@@ -1059,7 +1085,44 @@ public sealed class PapyrusCodeGenerator
             }
         }
 
-        /// <summary>Copies a value into a temporary, which is what <c>struct_set</c> is given.</summary>
+        /// <summary>
+        /// Emits a simple assignment's operands in the order the Creation Kit emits them: the value
+        /// first, then the target it is stored through.
+        /// </summary>
+        /// <remarks>
+        /// Reads and writes go opposite ways, and both were measured over the vanilla corpus by
+        /// tracing every temporary operand back to the instruction that defined it.
+        /// <para>
+        /// Everything that reads is left to right, with no exception in more than 3,200 cases: 2,652
+        /// for a method call's receiver and arguments, 99 for a static call's arguments, and the rest
+        /// spread over every binary operator and <c>array_getelement</c>.
+        /// </para>
+        /// <para>
+        /// Every form that writes is value first, with no exception in 490 cases: 447 <c>propset</c>,
+        /// 22 <c>array_setelement</c> and 21 <c>struct_set</c>. That is why this is one helper rather
+        /// than three patches. Only simple assignment goes through it: a compound assignment has to
+        /// read the target before it can compute the value, so it cannot be value first and is left
+        /// alone.
+        /// </para>
+        /// <para>
+        /// What the corpus does <em>not</em> establish is whether this ordering is observable. For
+        /// calls it plainly is, because 495 of those 2,652 have a call on both sides, so the order
+        /// the game runs them in is fixed and visible. For assignment there is no such case: not one
+        /// shipped script assigns a call's result through a receiver that is also a call, so nothing
+        /// in the corpus can separate a behavioural rule from a shape convention here. Matching the
+        /// Creation Kit is right either way, and with no such case shipped, no vanilla script can
+        /// change behaviour from it.
+        /// </para>
+        /// </remarks>
+        private static (PexValue Value, TTarget Target) StoreOrder<TTarget>(
+            Func<PexValue> value, Func<TTarget> target)
+        {
+            var stored = value();
+            return (stored, target());
+        }
+
+        /// <summary>Copies a value into a temporary, which is what <c>struct_set</c> and
+        /// <c>propset</c> are given.</summary>
         /// <remarks>
         /// Every <c>struct_set</c> in the corpus takes a temporary as its value operand, even where
         /// the source assigns a parameter straight across: <c>kVector.fX = afX</c> compiles to
