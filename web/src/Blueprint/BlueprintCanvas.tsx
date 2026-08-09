@@ -32,6 +32,9 @@ const MIN_SCALE = 0.15;
 const MAX_SCALE = 2.5;
 const CLICK_SLOP = 4;
 
+/** Where the canvas sits before anyone pans or zooms. */
+const INITIAL_VIEW: BpViewport = { x: 60, y: 60, k: 1 };
+
 export default function BlueprintCanvas({
   doc, defs, selection, diagByNode, diagByPin, dispatch, onRequestNode, apiRef, onContextMenu,
 }: Props) {
@@ -44,8 +47,10 @@ export default function BlueprintCanvas({
   const nodeElements = useRef(new Map<string, HTMLDivElement>());
   const wireElements = useRef(new Map<string, SVGPathElement>());
 
-  const viewRef = useRef<BpViewport>({ x: 60, y: 60, k: 1 });
-  const [view, setView] = useState<BpViewport>(viewRef.current);
+  // Both seeded from the same constant rather than the state reading the ref. Reading a ref during
+  // render is a react-hooks/refs error, and it said "these two start equal" only by side effect.
+  const viewRef = useRef<BpViewport>({ ...INITIAL_VIEW });
+  const [view, setView] = useState<BpViewport>({ ...INITIAL_VIEW });
   const [connect, setConnect] = useState<{ node: string; pin: string; compatible: Set<string> } | null>(null);
 
   const nodeById = useMemo(

@@ -4,6 +4,7 @@ import { getGraph } from '../backend';
 import type { BpDiagnostic, BpDocument, BpNodeDef, BpPaletteEntry } from './graphModel';
 import { emptyDocument, newId, pinKey } from './graphModel';
 import { useGraphClipboard } from './clipboard';
+import { useSavedDoc } from './useSavedDoc';
 import { graphReducer, initialState } from './graphReducer';
 import type { CanvasApi } from './BlueprintCanvas';
 import BlueprintCanvas from './BlueprintCanvas';
@@ -39,9 +40,7 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
     { x: number; y: number; from?: { node: string; pin: string } } | null>(null);
 
   const canvasApi = useRef<CanvasApi | null>(null);
-  const savedDoc = useRef<BpDocument>(state.doc);
-
-  const dirty = state.doc !== savedDoc.current;
+  const { dirty, markSaved } = useSavedDoc(state.doc);
 
   // ---- palette ----------------------------------------------------------------------------
 
@@ -182,7 +181,7 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
     if (!path) return;
     const result = await graph.SaveGraph(path, JSON.stringify(state.doc));
     if (result.startsWith('Error:')) { setStatus(result); return; }
-    savedDoc.current = state.doc;
+    markSaved(state.doc);
     setStatus('Saved.');
   });
 
@@ -196,7 +195,7 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
     const doc = JSON.parse(raw) as BpDocument;
     for (const node of doc.nodes) await signature(node.def);
     dispatch({ type: 'LOAD', doc });
-    savedDoc.current = doc;
+    markSaved(doc);
     setStatus('Opened.');
   });
 
