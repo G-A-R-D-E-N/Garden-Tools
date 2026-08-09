@@ -1390,6 +1390,70 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "source" }
             }),
+        new("graph_validate",
+            "Check a node graph (.fograph) WITHOUT compiling it. Reports every problem against the NODE and PIN " +
+            "that caused it, not a line in generated text, so a failure names the thing you would click on. " +
+            "Codes are GRA####, mirroring the PAP#### the Papyrus front end uses. Same checks graph_compile " +
+            "runs first, so a graph that validates clean here will not fail structurally there.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    graph = new { type = "string", description = "Path to a .fograph document." },
+                    imports = new { type = "string", description = "Extra script roots, semicolon-separated." }
+                },
+                required = new[] { "graph" }
+            }),
+        new("graph_compile",
+            "Compile a node graph to Papyrus. The graph becomes readable .psc source, which the built-in " +
+            "compiler turns into a .pex -- so the output is source you can read, diff and hand-edit, not an " +
+            "opaque binary. Set source_only to stop after generating the .psc. With 'output' it writes both " +
+            "beside each other; without it the source is returned inline. A failure reports the offending NODE " +
+            "and shows the generated source, since you never wrote that text and cannot inspect it otherwise.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    graph = new { type = "string", description = "Path to a .fograph document." },
+                    output = new { type = "string", description = "Folder to write the .psc and .pex into." },
+                    imports = new { type = "string", description = "Extra script roots, semicolon-separated." },
+                    source_only = new { type = "boolean", description = "Stop after generating .psc (default false)." }
+                },
+                required = new[] { "graph" }
+            }),
+        new("graph_palette_search",
+            "Find node types a graph may contain. The palette is generated live from whatever scripts are on " +
+            "the import roots, so it covers the base game, F4SE and any extender the roots include -- it is " +
+            "not a fixed list. Returns definition ids in the form graph documents reference them by " +
+            "(call:Script.Fn, global:Script.Fn, event:Script.Ev, prop.get:Script.Prop, plus built-ins such as " +
+            "branch and op.add). Use graph_node_info for one type's pins.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Text to match against a member or script name." },
+                    imports = new { type = "string", description = "Extra script roots, semicolon-separated." },
+                    limit = new { type = "integer", description = "Maximum entries to return (default 30)." }
+                },
+                required = new[] { "query" }
+            }),
+        new("graph_node_info",
+            "Describe one node type: its pins, their direction, whether each carries control flow or a value, " +
+            "the type each value pin takes, and which are optional with what default. This is what you need to " +
+            "author wires into a graph document by hand.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    node_type = new { type = "string", description = "A definition id, as graph_palette_search returns." },
+                    imports = new { type = "string", description = "Extra script roots, semicolon-separated." }
+                },
+                required = new[] { "node_type" }
+            }),
         new("papyrus_outline",
             "List everything a .psc declares -- script header, imports, structs and their members, custom " +
             "events, groups, properties, variables, functions, events and states -- each with its signature " +
@@ -1832,6 +1896,10 @@ public sealed class PluginToolExecutor
             "archive_extract_all" => $"extract all <- {System.IO.Path.GetFileName(Str("archive_path"))}",
             "papyrus_function_lookup" => $"papyrus lookup {Str("function")}",
             "papyrus_script_info" => $"papyrus script {Str("script")}",
+            "graph_validate"      => $"validate {System.IO.Path.GetFileName(Str("graph"))}",
+            "graph_compile"       => $"compile {System.IO.Path.GetFileName(Str("graph"))}",
+            "graph_palette_search" => $"palette '{Str("query")}'",
+            "graph_node_info"     => $"node {Str("node_type")}",
             "papyrus_check"       => $"check {System.IO.Path.GetFileName(Str("source"))}",
             "papyrus_outline"     => $"outline {System.IO.Path.GetFileName(Str("source"))}",
             "papyrus_definition"  => $"definition {System.IO.Path.GetFileName(Str("source"))}",
@@ -2202,6 +2270,18 @@ public sealed class PluginToolExecutor
                     all: true,
                     semantic: !root.TryGetProperty("semantic", out var pcs) || pcs.ValueKind != JsonValueKind.False,
                     imports: StrOrNull("imports"));
+            case "graph_validate":
+                return Services.Graph.GraphToolService.Validate(Str("graph"), StrOrNull("imports"));
+            case "graph_compile":
+                return Services.Graph.GraphToolService.Compile(
+                    Str("graph"), StrOrNull("output"), StrOrNull("imports"),
+                    sourceOnly: root.TryGetProperty("source_only", out var gso) && gso.ValueKind == JsonValueKind.True);
+            case "graph_palette_search":
+                return Services.Graph.GraphToolService.SearchPalette(
+                    Str("query"), StrOrNull("imports"), Int("limit", 30));
+            case "graph_node_info":
+                return Services.Graph.GraphToolService.DescribeNode(Str("node_type"), StrOrNull("imports"));
+
             case "papyrus_outline":
                 return Services.Papyrus.PapyrusAnalysisService.Outline(Str("source"));
             case "papyrus_definition":

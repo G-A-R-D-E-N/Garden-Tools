@@ -88,6 +88,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AppWebView.CoreWebView2.AddHostObjectToScript("audio", new Services.AudioInterop());
         // Cell Viewer panel: read a cell's placed references + batch-convert their meshes to geometry.
         AppWebView.CoreWebView2.AddHostObjectToScript("cell", new Services.CellInterop(_shell));
+        // Blueprint panel: the node graph that validates and compiles down to Papyrus.
+        AppWebView.CoreWebView2.AddHostObjectToScript("graph", new Services.GraphInterop(_shell));
 
 #if DEBUG
         AppWebView.Source = new Uri("http://localhost:5173/#/main");

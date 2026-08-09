@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Star,
+  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Star, Workflow,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
@@ -11,6 +11,7 @@ import ArchivePanel from './ArchivePanel';
 import AudioPanel from './AudioPanel';
 import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
+import BlueprintPanel from './Blueprint/BlueprintPanel';
 import { readFavourites, removeFavourite, FAVOURITES_CHANGED } from './favourites';
 import { useDialogs } from './dialogs';
 
@@ -120,6 +121,7 @@ export default function MainShell() {
   const [showAudio, setShowAudio] = useState(false);
   const [showCell, setShowCell] = useState(false);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
+  const [showBlueprint, setShowBlueprint] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
   const { pickPlugin: askForTarget } = useDialogs();
@@ -693,6 +695,9 @@ export default function MainShell() {
           <button className={`activity-btn ${showSpreadsheet ? 'active' : ''}`} onClick={() => setShowSpreadsheet(true)} title="Spreadsheet (bulk-edit every record of one type)">
             <Table2 size={22} strokeWidth={1.5} />
           </button>
+          <button className={`activity-btn ${showBlueprint ? 'active' : ''}`} onClick={() => setShowBlueprint(true)} title="Blueprint (node graph that compiles to Papyrus)">
+            <Workflow size={22} strokeWidth={1.5} />
+          </button>
         </div>
       </div>
 
@@ -1071,6 +1076,7 @@ export default function MainShell() {
       {showAudio && <AudioPanel onClose={() => setShowAudio(false)} />}
       {showCell && <CellPanel onClose={() => setShowCell(false)} />}
       {showSpreadsheet && <SpreadsheetPanel onClose={() => setShowSpreadsheet(false)} />}
+      {showBlueprint && <BlueprintPanel onClose={() => setShowBlueprint(false)} />}
     </div>
   );
 }

@@ -530,6 +530,30 @@ export interface CellHost {
     x: number, y: number, z: number, rx: number, ry: number, rz: number): Promise<string>;
 }
 
+/** The "graph" bridge (FO4RecordEditor.Services.GraphInterop) -- the Blueprint panel.
+ *  Every payload is a JSON string: the marshaller carries only string|boolean|number in and
+ *  string|void out, so a whole graph document travels as text in both directions. Casing is
+ *  camelCase on both sides, set once in GraphDocumentJson. */
+export interface GraphHost {
+  /** Built-in node types plus the script list. One call per app run, not per panel open. */
+  GetCorePalette(): Promise<string>;
+  /** At most `limit` entries plus the true total, so a capped list can say what it is hiding. */
+  SearchPalette(kind: string, query: string, scriptFilter: string, limit: number): Promise<string>;
+  /** The full pin list for one node type. Search results omit pins deliberately. */
+  GetNodeSignature(nodeType: string): Promise<string>;
+  /** Diagnostics only. Cheap enough to run on a debounce while editing. */
+  ValidateGraph(documentJson: string): Promise<string>;
+  /** Generated .psc plus diagnostics, without compiling. */
+  CompileToSource(documentJson: string): Promise<string>;
+  /** Generated .psc through to .pex, written into outputDirectory when it compiles. */
+  CompileToPex(documentJson: string, outputDirectory: string): Promise<string>;
+  LoadGraph(path: string): Promise<string>;
+  SaveGraph(path: string, documentJson: string): Promise<string>;
+  BrowseForGraph(save: boolean): Promise<string>;
+  /** Drops the cached palette after the import roots or the scripts on them change. */
+  Refresh(): Promise<void>;
+}
+
 declare global {
   interface Window {
     chrome?: {
@@ -546,6 +570,7 @@ declare global {
           archive?: ArchiveHost;
           audio?: AudioHost;
           cell?: CellHost;
+          graph?: GraphHost;
         };
       };
     };
@@ -578,3 +603,6 @@ export const getAudio = (): AudioHost | undefined =>
 
 export const getCell = (): CellHost | undefined =>
   window.chrome?.webview?.hostObjects?.cell;
+
+export const getGraph = (): GraphHost | undefined =>
+  window.chrome?.webview?.hostObjects?.graph;

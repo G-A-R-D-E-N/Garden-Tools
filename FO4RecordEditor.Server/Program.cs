@@ -38,7 +38,7 @@ ElementRenderer.Init(MutagenLoader.FormatFormLink, MutagenLoader.FormatCondition
 var shell = new ShellViewModel();
 var events = new EventStream();
 
-// Same eleven names MainWindow registers with AddHostObjectToScript. The frontend addresses these
+// Same twelve names MainWindow registers with AddHostObjectToScript. The frontend addresses these
 // by name, so they must not drift apart.
 var rpc = new RpcDispatcher();
 rpc.Register("appInterop", new AppInterop(shell, (msg, pct) =>
@@ -56,6 +56,7 @@ rpc.Register("masters", new MastersInterop(shell));
 rpc.Register("archive", new ArchiveInterop());
 rpc.Register("audio", new AudioInterop());
 rpc.Register("cell", new CellInterop(shell));
+rpc.Register("graph", new GraphInterop(shell));
 
 PluginToolExecutor.ToolCompleted += ev => events.Push(new
 {

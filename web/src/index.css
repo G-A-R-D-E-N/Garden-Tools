@@ -126,6 +126,7 @@ body {
   color-scheme: light;
   background-color: var(--bg-primary);
   color: var(--text-primary);
+  --bp-grid: rgba(0, 0, 0, 0.06);
 }
 
 /* Light mode -- solid conflict cell colors for maximum readability on white. */
@@ -136,6 +137,7 @@ body {
   -webkit-backdrop-filter: none;
   border: 1px solid var(--border-color);
   box-shadow: 0 2px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05);
+  --bp-grid: rgba(255, 255, 255, 0.045);
 }
 
 [data-theme="light"] .rv-c-master    { background: #ede9fe; color: #5b21b6; }

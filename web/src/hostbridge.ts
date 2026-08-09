@@ -12,7 +12,7 @@ type Listener = (e: { data: unknown }) => void;
 
 const HOST_OBJECTS = [
   'backend', 'appInterop', 'chat', 'settings', 'papyrus',
-  'nif', 'material', 'masters', 'archive', 'audio', 'cell',
+  'nif', 'material', 'masters', 'archive', 'audio', 'cell', 'graph',
 ] as const;
 
 async function call(target: string, method: string, args: unknown[]): Promise<unknown> {
