@@ -188,16 +188,53 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
 
   const open = () => run(async () => {
     if (!graph) return;
-    const path = await graph.BrowseForGraph(false);
+    const path = await graph.BrowseForScript();
     if (!path) return;
-    const raw = await graph.LoadGraph(path);
-    if (raw.startsWith('Error:')) { setStatus(raw); return; }
 
-    const doc = JSON.parse(raw) as BpDocument;
-    for (const node of doc.nodes) await signature(node.def);
+    const isScript = /\.(psc|pex)$/i.test(path);
+    let doc: BpDocument;
+
+    if (isScript) {
+      const raw = await graph.LoadScript(path);
+      if (raw.startsWith('Error:')) { setStatus(raw); return; }
+      const parsed = JSON.parse(raw) as
+        { ok: boolean; document: BpDocument | null; diagnostics: BpDiagnostic[] };
+
+      // A refusal names the construct, the node and the line, so it goes to the problems list. A
+      // status line saying only that the file did not open would throw away the reason.
+      setValidation({ diagnostics: parsed.diagnostics });
+      if (!parsed.ok || !parsed.document) {
+        setStatus('Could not read that script into a graph. See the problems list.');
+        return;
+      }
+      doc = parsed.document;
+    } else {
+      const raw = await graph.LoadGraph(path);
+      if (raw.startsWith('Error:')) { setStatus(raw); return; }
+      doc = JSON.parse(raw) as BpDocument;
+    }
+
+    // Collected here rather than read from `defs`: setDefs has not settled by the time the layout
+    // runs, so the state hook would still be missing every node this document just introduced.
+    const loaded: Record<string, BpNodeDef> = { ...defs };
+    for (const node of doc.nodes) {
+      const def = await signature(node.def);
+      if (def) loaded[def.type] = def;
+    }
+
     dispatch({ type: 'LOAD', doc });
-    markSaved(doc);
-    setStatus('Opened.');
+
+    if (isScript) {
+      // The lifter positions nodes in a plain cascade, which is unreadable past a handful of them.
+      const positions = autoLayout(doc, loaded);
+      if (Object.keys(positions).length > 0) dispatch({ type: 'SET_POSITIONS', positions });
+      // Deliberately not marked saved: a lifted script is a new graph that exists nowhere on disk,
+      // and saying otherwise would let it be closed without a prompt.
+      setStatus(`Opened ${path.split(/[\\/]/).pop()} as a graph.`);
+    } else {
+      markSaved(doc);
+      setStatus('Opened.');
+    }
   });
 
   // ---- clipboard --------------------------------------------------------------------------

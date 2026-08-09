@@ -181,6 +181,42 @@ public class GraphInterop
             : "Error: " + error!.Message;
     });
 
+    /// <summary>
+    /// Reads a Papyrus script into a graph: <c>.psc</c> straight, <c>.pex</c> through the decompiler.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="LoadGraph"/> because the two answer different questions. A .fograph
+    /// either is a document or is not, so it comes back raw. A script may be perfectly good Papyrus
+    /// and still hold something the graph cannot express, and the lifter refuses those by name and
+    /// line. Those refusals are the useful part of the answer, so this returns an envelope carrying
+    /// them rather than one "Error:" string that throws the detail away.
+    /// <para>
+    /// The .pex path is the weaker of the two, and honestly so: the decompiler reconstructs
+    /// declarations exactly but function bodies are best effort, so what lands on the canvas is what
+    /// the object says, not what its author wrote. GraphLiftPexRoundTripTests is the measurement.
+    /// </para>
+    /// </remarks>
+    public Task<string> LoadScript(string path) => Run(() =>
+    {
+        var result = GraphScriptLoader.Load(path, Roots());
+        if (result.Failure != null) return "Error: " + result.Failure;
+
+        return JsonConvert.SerializeObject(new
+        {
+            ok = result.Success,
+            document = result.Document,
+            diagnostics = result.Diagnostics.Select(Describe),
+        }, GraphDocumentJson.Settings);
+    });
+
+    /// <summary>The file the Open dialog offers, now that a script is openable too.</summary>
+    public string BrowseForScript() =>
+        HostServices.PickFile("Open graph or script",
+            "Graph or script (*.fograph;*.psc;*.pex)|*.fograph;*.psc;*.pex"
+            + "|Node graph (*.fograph)|*.fograph"
+            + "|Papyrus source (*.psc)|*.psc"
+            + "|Compiled Papyrus (*.pex)|*.pex");
+
     public Task<string> SaveGraph(string path, string documentJson) => Run(() =>
     {
         if (!GraphDocumentJson.TryDeserialize(documentJson, out var document, out var error))

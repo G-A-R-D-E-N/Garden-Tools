@@ -60,6 +60,7 @@ and they no-op when unset so a bare checkout stays green.
 | Type check | `FO4RE_PSC_CORPUS` | 7,832 scripts with complete sources, **100.00% clean** |
 | `.pex` round trip | `FO4RE_PEX_CORPUS` | 5,976 found, 4,581 read, **4,581 byte-identical, 0 differing** |
 | Compile, differential | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` | 198 (`.psc`, `.pex`) pairs, 161 compiled, **158 instruction-for-instruction identical to the Creation Kit (98.1%)**, 37 refused, 3 differing |
+| Decompile fidelity | `FO4RE_PSC_ROOTS` | 1,498 scripts compiled, decompiled and recompiled, **1,202 instruction-identical (80.2%)**, 275 differing, 21 not recompiled |
 
 `FO4RecordEditor.Core.Tests` is 286 tests and runs on Linux. `FO4RecordEditor.Tests` targets
 `net9.0-windows` through its WPF reference and its host does not start here, so put anything testable
@@ -348,6 +349,14 @@ Known gaps in the layers that are built, stated rather than hidden:
   from the format rather than read off real output.
 - Named states, `callparent` and full property handlers are likewise unrepresented in the corpus.
   They are emitted from the format and covered by unit tests, not by the differential sweep.
+- **Decompiled bodies are right 80.2% of the time, measured** (`DecompilerSweep`), up from 42.1%
+  once four defects were fixed: locals hoisted to a declaration that compiles to a zero assignment
+  the original never had, a call whose result nothing reads dropped along with its temporary, a
+  short circuit read as two separate `If`s so the first operand stopped guarding anything, and the
+  compiler's own cast to `Bool` written back as an author's cast. GRAPH.md carries the detail,
+  because opening a `.pex` into the canvas is what made them matter. The remaining 275 differences
+  are named per script by that sweep. Declarations are still exact; it is bodies that are best
+  effort, and that has not changed.
 
 ## Gotchas
 

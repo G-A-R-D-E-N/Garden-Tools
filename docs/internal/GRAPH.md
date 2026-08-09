@@ -100,11 +100,15 @@ dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj
 
 | What | How | Result |
 |---|---|---|
-| Suite total | ungated, Linux net8.0 | **813 passing, 0 failed** |
-| Bare-checkout parity | same run with no env vars set | **813 / 813 identical** |
+| Suite total | ungated, Linux net8.0 | **879 passing, 0 failed** |
+| Bare-checkout parity | same run with no env vars set | **879 / 879 identical** |
 | Fixture graphs compiling clean | 28 patterns, stub base tree | **28 / 28** |
 | Generated instructions vs hand-written Papyrus | `PexComparer`, 28 fixtures | **28 / 28 identical** |
 | Compiled object decompiles and recompiles | 28 fixtures | **28 / 28** |
+| Source through the graph and back | `GraphLiftRoundTripTests`, 28 fixtures | **28 / 28 instruction-identical** |
+| A compiled `.pex` through the graph and back | `GraphLiftPexRoundTripTests`, 28 fixtures | **28 / 28 instruction-identical** |
+| Decompiler fidelity on the real corpus | `FO4RE_PSC_ROOTS`, 1,498 scripts | **1,202 matched, 80.2%** |
+| Corpus lifting into a graph | `FO4RE_PSC_ROOTS`, 1,500 scripts | **1,414 lifted, 94.3%** |
 | Negative matrix | 19 invalid graphs | **19 / 19 correct code and node id** |
 | Dataflow matrix | 15 graphs, refused and accepted | **15 / 15 correct code, node and pin** |
 | State matrix | 10 graphs, emission and refusal | **10 / 10 correct block, code and node** |
@@ -277,10 +281,63 @@ of pixels of clutter. Canvas size is measured into state with a `ResizeObserver`
 the ref during render, which would be both the `react-hooks/refs` error from #148 and wrong on a
 resize, since nothing would re-render to update it.
 
+## Opening a script into the canvas
+
+`GraphScriptLoader.Load(path, roots)` is the whole path from a file to a document: `.psc` is read
+straight, `.pex` goes through `PapyrusDecompiler` first, and both then parse and lift. It lives in
+Core rather than in `GraphInterop` for one practical reason, that the interop is in the WPF project
+and cannot be tested on a Linux checkout. The panel's Open dialog offers all three extensions, a
+refusal goes to the problems drawer rather than to the status line because it names the construct
+and the line, and a freshly lifted document is run through Tidy, since the lifter positions nodes in
+a plain cascade.
+
+Two decisions in there are worth keeping:
+
+- **The script's own folder is put in front of the import roots.** Without it a script that passes
+  `Self` where its base type is wanted cannot be checked, because nothing on the roots says what
+  this script extends. Every compile path here already publishes to a scratch root for the same
+  reason; this is that step, not a special case.
+- **A lifted script is not marked saved.** It is a new graph that exists nowhere on disk, and saying
+  otherwise would let it be closed without a prompt.
+
+### What the `.pex` round trip cost to make true
+
+It started at **12 of 28** fixtures, and the other 16 were four decompiler defects rather than an
+inherent limit. Each is worth knowing because each produced output that looked fine:
+
+- **Locals were all hoisted to a bare declaration at the top of the body.** A bare `Bool enabled` is
+  not free: it compiles to `assign enabled false`, because that is what the Creation Kit does. So
+  hoisting invented an instruction whenever the original wrote the slot straight from an expression,
+  and duplicated one whenever the original really did zero it. The declaration now goes on the first
+  write, unless that write is inside a branch or a loop, where scoping makes hoisting the only safe
+  fallback.
+- **A call whose result nothing reads was dropped entirely.** It writes a temporary, temporaries are
+  inlined, and inlining a temporary nobody reads discards the call with it. `GetDistance(akActionRef)`
+  as a statement decompiled to an empty event.
+- **A short circuit read as two separate `If`s.** `A && B` tests one temporary and jumps to a second
+  test of that same temporary, so read one jump at a time it looks like an empty `If` followed by an
+  unguarded one, and the first operand stops guarding anything. This was silent wrongness, not a
+  formatting difference. The pair is now folded back into one condition.
+- **The compiler's own cast to `Bool` was written back as an author's cast.** Both operands of `&&`
+  are cast in even when already `bool` (PAPYRUS.md records this), and re-emitting that as
+  `(enabled as Bool)` compiles to an `assign` instead, losing the instruction it came from.
+
+The corpus number moved with them: **42.1% to 80.2%** over 1,498 real scripts, measured by compiling
+each, decompiling, recompiling and comparing instructions (`DecompilerSweep`, gated on
+`FO4RE_PSC_ROOTS`). The remaining 275 differences and 21 failures are the work list, and that sweep
+prints them.
+
+One thing that sweep is not: it compiles both ends with our compiler, so it measures the decompiler
+against the compiler. `PapyrusDifferentialTests` is what anchors the compiler to the Creation Kit,
+and it needs Bethesda-built `.pex` files that a Linux checkout does not have.
+
 ## What is left
 
 - **`web/src/` outside `Blueprint/` has 92 eslint errors**, long-standing, in panels the graph work
   never touched. `src/Blueprint/` itself is clean.
+- **Decompiler fidelity is 80.2%, not 100%.** Opening a `.pex` whose body falls in the remaining
+  20% puts a graph on the canvas that is not quite the program in the object. The differences are
+  named per script by `DecompilerSweep`.
 
 ## The frontend gate
 

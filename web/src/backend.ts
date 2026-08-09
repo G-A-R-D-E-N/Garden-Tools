@@ -548,8 +548,16 @@ export interface GraphHost {
   /** Generated .psc through to .pex, written into outputDirectory when it compiles. */
   CompileToPex(documentJson: string, outputDirectory: string): Promise<string>;
   LoadGraph(path: string): Promise<string>;
+  /**
+   * A .psc or .pex read into a graph. Unlike LoadGraph this answers with an envelope, because a
+   * script the lifter cannot express is refused by name and line and those refusals belong in the
+   * problems list rather than in a status string.
+   */
+  LoadScript(path: string): Promise<string>;
   SaveGraph(path: string, documentJson: string): Promise<string>;
   BrowseForGraph(save: boolean): Promise<string>;
+  /** The Open dialog, offering .fograph, .psc and .pex. */
+  BrowseForScript(): Promise<string>;
   /** Drops the cached palette after the import roots or the scripts on them change. */
   Refresh(): Promise<void>;
 }
