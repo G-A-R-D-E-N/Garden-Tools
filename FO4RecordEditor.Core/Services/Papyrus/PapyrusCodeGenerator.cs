@@ -485,6 +485,70 @@ public sealed class PapyrusCodeGenerator
     /// as <c>Error</c> is what made the first differential run skip every widening object cast the
     /// Creation Kit emits, so this resolves them against the script that declares them instead.
     /// </remarks>
+    /// <summary>
+    /// The operand a custom event name compiles to: the declaring script, lowercased, an underscore,
+    /// and the name exactly as the call site spelled it.
+    /// </summary>
+    /// <remarks>
+    /// Measured over the vanilla corpus rather than reasoned about. All 232 custom event operands
+    /// are qualified, none is bare, and all 232 name a script that really does declare that event.
+    /// <para>
+    /// Two details only the corpus could settle. The qualifier is the script that <em>declares</em>
+    /// the event, not the target's concrete type: were it the concrete type, an inherited event
+    /// would produce a prefix that declares nothing, and there is no such case in 232. And the event
+    /// half keeps the <em>call site's</em> spelling, not the declaration's: BirdSpawnerScript
+    /// declares <c>customEvent flee</c>, BirdCritterScript calls it with <c>"Flee"</c>, and the
+    /// shipped operand is <c>birdspawnerscript_Flee</c>. Three of the 232 turn on that difference,
+    /// so a rule read off a sample would have had it backwards.
+    /// </para>
+    /// <para>
+    /// Null when this is not a literal, or when no ancestor declares the name. Neither is this
+    /// method's business to report: the checker owns that, and a silent wrong qualification would be
+    /// worse than leaving the string alone.
+    /// </para>
+    /// </remarks>
+    internal PexValue? QualifyCustomEvent(
+        PapyrusExpression argument, PapyrusExpression?[] slots, int index, string? receiverScript)
+    {
+        if (argument is not PapyrusLiteralExpression { Kind: PapyrusLiteralKind.String } literal) return null;
+
+        // The target is the nearest preceding object argument, which is how RegisterForCustomEvent
+        // names the sender. With none, the call is about the caller itself.
+        string? target = receiverScript;
+        for (int i = index - 1; i >= 0; i--)
+        {
+            if (slots[i] == null) continue;
+            var type = TypeOf(slots[i]!);
+            if (type.Kind == PapyrusTypeKind.Object) { target = type.Name; break; }
+        }
+        if (target == null) return null;
+
+        var declarer = DeclaringScriptOf(target, literal.Text);
+        return declarer == null
+            ? null
+            : new PexValue
+            {
+                Type = PexValueType.String,
+                Str = declarer.ToLowerInvariant() + "_" + literal.Text,
+            };
+    }
+
+    /// <summary>Walks up from a script to whichever ancestor declares this custom event.</summary>
+    private string? DeclaringScriptOf(string scriptName, string eventName)
+    {
+        var script = _index.Resolve(scriptName);
+        if (script == null) return null;
+
+        // BaseChain is the script and its ancestors in order, and it already guards a cycle in
+        // Extends, so the nearest declaration wins the same way a member lookup does.
+        foreach (var ancestor in _index.BaseChain(script))
+        {
+            if (ancestor.CustomEvents.Any(e => e.Name.Equals(eventName, StringComparison.OrdinalIgnoreCase)))
+                return ancestor.Name;
+        }
+        return null;
+    }
+
     internal PapyrusType ForeignType(PapyrusTypeRef reference, PapyrusScript? owner)
     {
         var known = _resolution.TypeOf(reference);
@@ -1650,7 +1714,20 @@ public sealed class PapyrusCodeGenerator
                 var parameter = callee.Parameters[i];
                 var parameterType = _gen.ForeignType(parameter.Type, calleeOwner);
 
-                if (slots[i] != null) { operands.Add(ValueAs(slots[i]!, parameterType)); continue; }
+                if (slots[i] != null)
+                {
+                    // A custom event name is not the string the author wrote: it is qualified with
+                    // the script that declares the event. See PapyrusCodeGenerator.QualifyCustomEvent.
+                    if (parameter.Semantic == ParameterSemantic.CustomEventName
+                        && _gen.QualifyCustomEvent(slots[i]!, slots, i, ReceiverScript()) is { } qualified)
+                    {
+                        operands.Add(qualified);
+                        continue;
+                    }
+
+                    operands.Add(ValueAs(slots[i]!, parameterType));
+                    continue;
+                }
 
                 if (parameter.DefaultValue == null)
                 {
@@ -1675,6 +1752,18 @@ public sealed class PapyrusCodeGenerator
             }
 
             return operands;
+
+            // The script a bare custom event call is talking about. SendCustomEvent takes no target
+            // parameter because the target is the caller, so an unqualified call means this script.
+            string? ReceiverScript()
+            {
+                if (call.Callee is PapyrusMemberExpression member)
+                {
+                    var receiver = _gen.TypeOf(member.Target);
+                    if (receiver.Kind == PapyrusTypeKind.Object) return receiver.Name;
+                }
+                return _gen._script?.Name;
+            }
         }
 
         /// <summary>

@@ -60,7 +60,7 @@ and they no-op when unset so a bare checkout stays green.
 | Type check | `FO4RE_PSC_CORPUS` | 7,832 scripts with complete sources, **100.00% clean** |
 | `.pex` round trip | `FO4RE_PEX_CORPUS` | 5,976 found, 4,581 read, **4,581 byte-identical, 0 differing** |
 | Compile, differential | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` | 198 (`.psc`, `.pex`) pairs, 161 compiled, **158 instruction-for-instruction identical to the Creation Kit (98.1%)**, 37 refused, 3 differing |
-| Compile, differential, vanilla | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **6,667 identical (87.9%)**, 28 refused |
+| Compile, differential, vanilla | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **6,730 identical (88.7%)**, 28 refused |
 | Decompile fidelity | `FO4RE_PSC_ROOTS` | 1,498 scripts compiled, decompiled and recompiled, **1,202 instruction-identical (80.2%)**, 275 differing, 21 not recompiled |
 
 `FO4RecordEditor.Core.Tests` is 286 tests and runs on Linux. `FO4RecordEditor.Tests` targets
@@ -174,11 +174,16 @@ Kit folds constants" is not a fact anyone can check and "28,073 against 1" is.
 - **A custom event name is qualified with the script that declares it, lowercased.** All 232
   custom event operands in the corpus are qualified and none is bare, and all 232 resolve to a
   script that really does declare that `CustomEvent`, across the 51 declarations in 26 scripts. The
-  qualifier is lowercased in every one; the event half keeps the casing the declaration used.
+  qualifier is lowercased in every one; the event half keeps the casing **the call site** used, not
+  the declaration's.
   <br>The zero-unmatched result is what identifies *which* script: were the qualifier the target's
   concrete type, an inherited event would produce a prefix that declares nothing, and there is not
-  one such case. Counted case-insensitively on the event half, so the qualifier's casing is measured
-  and the event half's is observed rather than swept.
+  one such case.
+  <br>The event half was swept separately, and it is the reason to sweep rather than sample: 229 of
+  232 match the declaration's casing, and the 3 that do not settle the rule. `BirdSpawnerScript`
+  declares `customEvent flee`, `BirdCritterScript` calls it with `"Flee"`, and the shipped operand is
+  `birdspawnerscript_Flee`. The call site wins. A rule read off the 229 would have been backwards for
+  the other 3.
 
 Codegen found four more, all by disassembling real output rather than by reading:
 

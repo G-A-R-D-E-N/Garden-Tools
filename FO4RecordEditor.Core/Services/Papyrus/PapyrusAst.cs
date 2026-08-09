@@ -140,9 +140,39 @@ public sealed class PapyrusCustomEventDecl : PapyrusDeclaration
     public override string Signature => $"CustomEvent {Name}";
 }
 
+/// <summary>
+/// What an argument means to the callee, as distinct from what type of value it is.
+/// </summary>
+/// <remarks>
+/// The Function Reference calls these "special parameter types". They are not Papyrus value types
+/// and do not belong in <see cref="PapyrusTypeKind"/>: the expression in that position is a String
+/// and stays one. What they carry is a rule about the string's contents, which only the callee
+/// knows, so it travels with the parameter rather than with the type.
+/// </remarks>
+public enum ParameterSemantic
+{
+    None,
+    ScriptEventName,
+    CustomEventName,
+    StructVarName,
+}
+
 public sealed class PapyrusParameter : PapyrusDeclaration
 {
     public PapyrusTypeRef Type { get; internal set; } = null!;
+
+    /// <summary>What this argument means to the callee. See <see cref="ParameterSemantic"/>.</summary>
+    /// <remarks>
+    /// Read off the declared type name, which the parser has already lowercased, rather than stored
+    /// separately, so there is one source of truth and no way for the two to disagree.
+    /// </remarks>
+    public ParameterSemantic Semantic => Type?.Name switch
+    {
+        "scripteventname" => ParameterSemantic.ScriptEventName,
+        "customeventname" => ParameterSemantic.CustomEventName,
+        "structvarname" => ParameterSemantic.StructVarName,
+        _ => ParameterSemantic.None,
+    };
 
     /// <summary>Default value, which makes the parameter optional.</summary>
     public PapyrusExpression? DefaultValue { get; internal set; }
