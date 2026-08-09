@@ -145,14 +145,14 @@ public sealed class NodePalette
                         entries.Add(new PaletteEntry(
                             RemoteEventId(scriptName, symbol.Name),
                             scriptName + "." + symbol.Name, scriptName, GraphNodeKind.EventEntry,
-                            symbol.Signature, IsPure: false));
+                            RemoteSignature(scriptName, symbol.Name, symbol.Signature), IsPure: false));
                         break;
 
                     case PapyrusSymbolKind.CustomEvent:
                         entries.Add(new PaletteEntry(
                             RemoteEventId(scriptName, symbol.Name),
                             scriptName + "." + symbol.Name, scriptName, GraphNodeKind.EventEntry,
-                            symbol.Signature, IsPure: false));
+                            RemoteSignature(scriptName, symbol.Name, declaredSignature: null), IsPure: false));
                         break;
 
                     case PapyrusSymbolKind.Property:
@@ -353,6 +353,35 @@ public sealed class NodePalette
 
     /// <summary>The name emitted for a remote handler's sender parameter.</summary>
     public const string RemoteSenderName = "akSender";
+
+    /// <summary>
+    /// What a remote handler's signature reads as in the palette.
+    /// </summary>
+    /// <remarks>
+    /// Built rather than reusing the declaring event's own signature. The two differ by the dotted
+    /// name and the sender parameter, so showing the local one would describe a node the author
+    /// cannot get by placing this entry, which is exactly the sort of thing the palette is read for.
+    /// <para>
+    /// A null <paramref name="declaredSignature"/> means a custom event, whose payload Papyrus fixes
+    /// at <c>Var[]</c> and which therefore has no declared parameter list to extend.
+    /// </para>
+    /// </remarks>
+    internal static string RemoteSignature(string scriptName, string eventName, string? declaredSignature)
+    {
+        var sender = scriptName + " " + RemoteSenderName;
+
+        if (declaredSignature == null)
+            return $"Event {scriptName}.{eventName}({sender}, Var[] akArgs)";
+
+        int open = declaredSignature.IndexOf('(');
+        int close = declaredSignature.LastIndexOf(')');
+        var declared = open >= 0 && close > open
+            ? declaredSignature[(open + 1)..close].Trim()
+            : "";
+
+        var parameters = declared.Length == 0 ? sender : sender + ", " + declared;
+        return $"Event {scriptName}.{eventName}({parameters})";
+    }
 
     /// <summary>The fixed argument payload Papyrus gives every custom event handler.</summary>
     private static PinDefinition CustomEventArgsPin() => new()

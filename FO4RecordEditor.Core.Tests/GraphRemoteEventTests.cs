@@ -180,6 +180,32 @@ public class GraphRemoteEventTests
     }
 
     [Fact]
+    public void The_palette_shows_the_signature_the_node_actually_emits()
+    {
+        // The local override and the remote handler differ by the dotted name and the sender, so
+        // reusing the declaring event's signature would describe a node the author cannot place.
+        var palette = GraphTestEnvironment.Palette();
+
+        var withParameters = palette.Search("ObjectReference.OnActivate", limit: 20).Entries
+            .FirstOrDefault(e => e.Id == NodePalette.RemoteEventId("ObjectReference", "OnActivate"));
+        withParameters.Should().NotBeNull();
+        withParameters!.Signature.Should().Be(
+            "Event ObjectReference.OnActivate(ObjectReference akSender, ObjectReference akActionRef)");
+
+        var withoutParameters = palette.Search("ObjectReference.OnLoad", limit: 20).Entries
+            .FirstOrDefault(e => e.Id == NodePalette.RemoteEventId("ObjectReference", "OnLoad"));
+        withoutParameters.Should().NotBeNull();
+        withoutParameters!.Signature.Should().Be(
+            "Event ObjectReference.OnLoad(ObjectReference akSender)");
+
+        var custom = palette.Search("FixtureEventSource.AffinityChanged", limit: 20).Entries
+            .FirstOrDefault(e => e.Id == NodePalette.RemoteEventId("FixtureEventSource", "AffinityChanged"));
+        custom.Should().NotBeNull();
+        custom!.Signature.Should().Be(
+            "Event FixtureEventSource.AffinityChanged(FixtureEventSource akSender, Var[] akArgs)");
+    }
+
+    [Fact]
     public void A_custom_event_handler_decompiles_back_to_its_dotted_name()
     {
         // The compiled object names a dotted handler "::remote_<Type>_<Name>", and both halves can
