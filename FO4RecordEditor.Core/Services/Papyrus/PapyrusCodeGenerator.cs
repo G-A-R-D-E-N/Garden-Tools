@@ -624,9 +624,9 @@ public sealed class PapyrusCodeGenerator
                 if (!TryParseInt(literal.Text, out int i)) return null;
                 // An int literal in a float slot is stored as a float rather than converted at
                 // load: `float Property f = 1` has to write 1.0.
-                return want?.Kind == PapyrusTypeKind.Float
-                    ? new PexValue { Type = PexValueType.Float, Float = i }
-                    : new PexValue { Type = PexValueType.Integer, Int = i };
+                if (want?.Kind == PapyrusTypeKind.Float) return new PexValue { Type = PexValueType.Float, Float = i };
+                if (want?.Kind == PapyrusTypeKind.Bool) return new PexValue { Type = PexValueType.Bool, Bool = i != 0 };
+                return new PexValue { Type = PexValueType.Integer, Int = i };
             }
 
             case PapyrusLiteralKind.Float:
@@ -635,10 +635,11 @@ public sealed class PapyrusCodeGenerator
                 // A float literal may carry an `f` suffix; the published Literals production does
                 // not mention it and the wiki's own Statement Reference example uses it.
                 if (text.EndsWith("f", StringComparison.OrdinalIgnoreCase)) text = text[..^1];
-                return float.TryParse(text, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out float f)
-                    ? new PexValue { Type = PexValueType.Float, Float = f }
-                    : null;
+                if (!float.TryParse(text, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float f)) return null;
+                return want?.Kind == PapyrusTypeKind.Bool
+                    ? new PexValue { Type = PexValueType.Bool, Bool = f != 0f }
+                    : new PexValue { Type = PexValueType.Float, Float = f };
             }
 
             default:
@@ -1077,6 +1078,18 @@ public sealed class PapyrusCodeGenerator
             {
                 var folded = TryConstant(expression, want);
                 if (folded is { Type: PexValueType.Float }) return folded;
+            }
+
+            // The same holds for a bool slot, and measured over the vanilla corpus it is close to
+            // absolute: of 28,074 cast instructions, 28,073 take an identifier and exactly one
+            // takes a literal. `GetStageDone(100) == 1` compares against the operand true, with no
+            // cast. Int and float fold on "not zero"; string is left to cast, because what the
+            // runtime makes of a string in a bool slot is not written down anywhere checked.
+            if (want.Kind == PapyrusTypeKind.Bool
+                && natural.Kind is PapyrusTypeKind.Int or PapyrusTypeKind.Float)
+            {
+                var folded = TryConstant(expression, want);
+                if (folded is { Type: PexValueType.Bool }) return folded;
             }
 
             var source = Value(expression);
