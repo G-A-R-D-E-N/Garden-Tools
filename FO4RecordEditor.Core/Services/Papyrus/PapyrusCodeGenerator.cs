@@ -926,7 +926,7 @@ public sealed class PapyrusCodeGenerator
                         var result = op == null
                             ? ValueAs(value, targetType)
                             : BinaryInto(null, targetType, op.Value, current!, ValueAs(value, targetType), assign.Span);
-                        Add("propset", Id(slot.Value.Name), slot.Value.Receiver!, result);
+                        Add("propset", Id(slot.Value.Name), slot.Value.Receiver!, Materialise(result, targetType));
                         return;
                     }
 
@@ -963,7 +963,7 @@ public sealed class PapyrusCodeGenerator
                             newValue = BinaryInto(null, targetType, op.Value, Id(current),
                                 ValueAs(value, targetType), assign.Span);
                         }
-                        Add("propset", Id(member.Name), receiver, newValue);
+                        Add("propset", Id(member.Name), receiver, Materialise(newValue, targetType));
                         return;
                     }
 

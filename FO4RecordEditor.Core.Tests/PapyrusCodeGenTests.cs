@@ -599,8 +599,14 @@ public class PapyrusCodeGenTests : IDisposable
                 int n = akHolder.Count
             EndFunction
             """);
+        // The literal is copied into a temporary before the propset, which is not an optimisation
+        // anyone would choose but is what the shipped objects contain: all 2,520 propset
+        // instructions in the vanilla corpus carry a temporary, and none carries a literal. This
+        // expectation used to say otherwise, and was written from what looked reasonable rather
+        // than from anything measured.
         Listing(Function(CompileObject("User"), "Go")).Should().Equal(
-            "propset Count akHolder 5",
+            "assign T 5",
+            "propset Count akHolder T",
             "propget Count akHolder n");
     }
 
