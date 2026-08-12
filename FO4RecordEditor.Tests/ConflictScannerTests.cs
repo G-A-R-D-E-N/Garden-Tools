@@ -20,6 +20,12 @@ public class ConflictScannerTests
     private static object BuildEnv(out FormKey fk, string editorIdA, string[] keywordsA,
                                                    string editorIdB, string[] keywordsB)
     {
+        // ConflictScanner deliberately overlays process-global editable mods onto the supplied
+        // environment. This fixture owns exactly A and B, so isolate it from plugins authored by
+        // earlier tests instead of relying on test-class execution order.
+        MutagenLoader.EditableMods.Clear();
+        ConflictScanner.InvalidateCache();
+
         var a = new Fallout4Mod(ModKey.FromNameAndExtension("A.esp"), Fallout4Release.Fallout4);
         fk = new FormKey(a.ModKey, 0x800);
 
