@@ -24,8 +24,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f .github/esl-formid.patch.gz.b64 ]]; then
-            base64 --decode .github/esl-formid.patch.gz.b64 | gunzip > /tmp/esl-formid.patch
+          if [[ -f .github/esl-formid.patch.gz ]]; then
+            gunzip -c .github/esl-formid.patch.gz > /tmp/esl-formid.patch
             git apply --check /tmp/esl-formid.patch
             git apply /tmp/esl-formid.patch
           fi
@@ -67,8 +67,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f .github/esl-formid.patch.gz.b64 ]]; then
-            base64 --decode .github/esl-formid.patch.gz.b64 | gunzip > /tmp/esl-formid.patch
+          if [[ -f .github/esl-formid.patch.gz ]]; then
+            gunzip -c .github/esl-formid.patch.gz > /tmp/esl-formid.patch
             git apply --check /tmp/esl-formid.patch
             git apply /tmp/esl-formid.patch
           fi
@@ -106,14 +106,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -f .github/esl-formid.patch.gz.b64 ]]; then
+          if [[ ! -f .github/esl-formid.patch.gz ]]; then
             echo "Validated source commit already exists."
             exit 0
           fi
-          base64 --decode .github/esl-formid.patch.gz.b64 | gunzip > /tmp/esl-formid.patch
+          gunzip -c .github/esl-formid.patch.gz > /tmp/esl-formid.patch
           git apply --check /tmp/esl-formid.patch
           git apply /tmp/esl-formid.patch
-          rm .github/esl-formid.patch.gz.b64
+          rm .github/esl-formid.patch.gz
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -122,6 +122,6 @@ jobs:
                   FO4RecordEditor.Core/Services/WriteService.XEdit2.cs \
                   FO4RecordEditor.Tests/PluginFormIdEncodingTests.cs \
                   docs/internal/KNOWLEDGE.md \
-                  .github/esl-formid.patch.gz.b64
+                  .github/esl-formid.patch.gz
           git commit -m "fix(formids): encode ESL references in light slots"
           git push origin HEAD:fix/esl-formid-encoding
