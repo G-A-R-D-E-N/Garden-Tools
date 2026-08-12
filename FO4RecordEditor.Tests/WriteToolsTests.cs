@@ -148,6 +148,7 @@ public class WriteToolsTests
         root.GetProperty("total").GetInt32().Should().Be(2);
         root.GetProperty("ok").GetInt32().Should().Be(1);
         root.GetProperty("failed").GetInt32().Should().Be(1);
+        root.GetProperty("requiresOverwrite").GetBoolean().Should().BeFalse();
 
         var failures = root.GetProperty("failures");
         failures.GetArrayLength().Should().Be(1);

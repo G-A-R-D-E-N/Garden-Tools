@@ -124,7 +124,7 @@ export default function MainShell() {
   const [showBlueprint, setShowBlueprint] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  const { pickPlugin: askForTarget } = useDialogs();
+  const { pickPlugin: askForTarget, confirm: askConfirm } = useDialogs();
 
   // Top-bar workspace tab (Home vs Record Viewer) + right-rail / chat visibility.
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -538,8 +538,30 @@ export default function MainShell() {
     setConflictBusy(true);
     try {
       const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
-      const res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch));
-      setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${res.failed ? ` ${res.failed} failed.` : ''} Save ${patch} from a record's context menu, then enable it last.`);
+      let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, false));
+      if (res.requiresOverwrite) {
+        const existing = Array.isArray(res.existing) ? res.existing : [];
+        const sample = existing.slice(0, 5)
+          .map((x: any) => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
+        const more = existing.length > 5 ? `\n...and ${existing.length - 5} more.` : '';
+        const proceed = await askConfirm({
+          title: 'Overwrite existing overrides?',
+          message: `${existing.length} of the ${res.total} selected records already exist in ${patch}. ` +
+            `Nothing has been copied yet.\n\n${sample}${more}`,
+          confirmLabel: 'Overwrite and copy',
+          danger: true,
+        });
+        if (!proceed) {
+          setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
+          return;
+        }
+        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, true));
+      }
+      const firstFailure = Array.isArray(res.failures) && res.failures.length ? res.failures[0]?.reason : '';
+      const failureNote = res.failed
+        ? ` ${res.failed} failed${firstFailure ? `: ${firstFailure}` : ''}.`
+        : '';
+      setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
       if (!res.failed) setConflictSel({});
     } catch (e: any) {
       setStatus('Batch copy failed: ' + (e?.message || e));

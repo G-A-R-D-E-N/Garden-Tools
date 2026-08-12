@@ -35,16 +35,27 @@ public static partial class WriteService
     ///
     /// Defaults to a dry run listing what would be copied.
     /// </summary>
-    public static string DeepCopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin, bool apply, int cap = 200)
+    public static string DeepCopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin,
+        bool apply, bool overwrite = false, int cap = 200)
     {
         if (!ResolveFk(env, id, out var rootFk))
             return ToolError.Fail($"'{id}' is not a FormKey and no loaded record has that EditorID.");
 
         var rootVersions = MutagenLoader.GetRecordContexts(env, rootFk);
-        var root = string.IsNullOrWhiteSpace(sourcePlugin)
-            ? rootVersions.LastOrDefault().rec
-            : MutagenLoader.GetRecordVersion(env, sourcePlugin, rootFk);
-        if (root == null) return ToolError.Fail($"Could not find {rootFk} in '{sourcePlugin}'.");
+        string sourceName;
+        IMajorRecordGetter? root;
+        if (string.IsNullOrWhiteSpace(sourcePlugin))
+        {
+            var selected = rootVersions.LastOrDefault();
+            root = selected.rec;
+            sourceName = selected.plugin ?? rootFk.ModKey.FileName.String;
+        }
+        else
+        {
+            (sourceName, _) = NormalizePlugin(sourcePlugin);
+            root = MutagenLoader.GetRecordVersion(env, sourceName, rootFk);
+        }
+        if (root == null) return ToolError.Fail($"Could not find {rootFk} in '{sourceName}'.");
 
         if (root.Registration.Name is "Cell" or "Worldspace")
             return ToolError.Fail(
@@ -53,7 +64,7 @@ public static partial class WriteService
                 "compact_to_esl's cell-nested-record refusal for why. Copy the cell with copy_as_override and " +
                 "its placed objects individually with create_placed_object instead.");
 
-        var owner = rootFk.ModKey;
+        var owner = ModKey.FromNameAndExtension(sourceName);
 
         // BFS over FormLinks, following only links owned by the same plugin as the root.
         var visited = new HashSet<FormKey> { rootFk };
@@ -69,9 +80,8 @@ public static partial class WriteService
                 var lfk = link.FormKey;
                 if (lfk.IsNull || lfk.ModKey != owner || !visited.Add(lfk)) continue;
 
-                var versions = MutagenLoader.GetRecordContexts(env, lfk);
-                var target = versions.LastOrDefault().rec;
-                if (target == null) continue;   // dangling; nothing to copy
+                var target = MutagenLoader.GetRecordVersion(env, sourceName, lfk);
+                if (target == null) continue;   // the selected source plugin does not override this dependency
 
                 toCopy.Add(target);
                 queue.Enqueue(target);
@@ -79,13 +89,33 @@ public static partial class WriteService
             }
         }
 
+        if (!TryFindExistingOverrides(env, patchPlugin, toCopy.Select(r => r.FormKey),
+                out var existing, out var inspectError))
+            return ToolError.Fail(inspectError);
+
         if (!apply)
         {
             var byType = toCopy.GroupBy(r => r.Registration.Name).OrderByDescending(g => g.Count())
                 .Select(g => $"{g.Key} x{g.Count()}");
             var capped = queue.Count > 0 ? $" (capped at {cap}; more remained in the queue)" : "";
+            var overwriteNote = existing.Count > 0
+                ? $" {existing.Count} already exist in the target and will require a separate overwrite confirmation."
+                : "";
             return $"DRY RUN: deep copy of {rootFk} would bring {toCopy.Count} record(s) into {patchPlugin}{capped}: " +
-                   string.Join(", ", byType) + ". Re-run with apply=true.";
+                   string.Join(", ", byType) + "." + overwriteNote + " Re-run with apply=true.";
+        }
+
+        // Preflight every destination before copying the first dependency. Without this, the loop
+        // could copy several children and only then discover that the root already existed, leaving
+        // a partial deep copy after the caller cancelled or treated EXISTS as a failure.
+        if (existing.Count > 0 && !overwrite)
+        {
+            var sample = string.Join(", ", existing.Take(5).Select(e => $"{e.editorId} ({e.formKey})"));
+            var more = existing.Count > 5 ? $" and {existing.Count - 5} more" : "";
+            var (targetName, _) = NormalizePlugin(patchPlugin);
+            return $"{OverwritePrompt} '{targetName}' already contains {existing.Count} of the {toCopy.Count} " +
+                   $"record(s) in this deep copy: {sample}{more}. Overwrite all existing records with " +
+                   $"fresh copies from '{sourceName}'?";
         }
 
         int ok = 0;
@@ -95,7 +125,7 @@ public static partial class WriteService
         // AddOverride that happens to also validate outgoing links sees a complete picture.
         foreach (var rec in toCopy.AsEnumerable().Reverse())
         {
-            var msg = ResolveConflict(env, rec.FormKey.ToString(), rec.FormKey.ModKey.FileName, patchPlugin);
+            var msg = ResolveConflict(env, rec.FormKey.ToString(), sourceName, patchPlugin, overwrite);
             if (msg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase)) ok++;
             else failures.Add($"{rec.FormKey} ({rec.Registration.Name}): {msg}");
         }
@@ -144,6 +174,42 @@ public static partial class WriteService
                    $"{patchPlugin}:\n" + string.Join("\n", preview) + more + "\nRe-run with apply=true.";
         }
 
+        var (patchName, patchPath) = NormalizePlugin(patchPlugin);
+        if (GetMutable(patchName) == null)
+        {
+            bool existsOnDisk = (patchPath != null && File.Exists(patchPath))
+                || MutagenLoader.LooseModPaths.ContainsKey(patchName)
+                || FindPluginPath(patchName, env) != null;
+            if (existsOnDisk) OpenPlugin(patchPlugin, env);
+            else CreatePlugin(patchPlugin);
+        }
+        var patch = GetMutable(patchName);
+        if (patch == null) return ToolError.Fail($"Could not open or create patch plugin '{patchName}'.");
+
+        // A record already mutable in the target can be edited directly, but only when that target
+        // actually wins over every referencing version represented by the operation. Preflight the
+        // complete set before mutating the first link so an earlier patch cannot report success for
+        // a record whose later winning version still points at the retired FormKey.
+        var targetIndex = LoadOrderIndexOf(env, patchName);
+        if (targetIndex >= 0)
+        {
+            foreach (var reference in referencing)
+            {
+                if (!FormKey.TryFactory(reference.FormKey, out var referenceKey)) continue;
+                if (FindMutableRecord(patch, referenceKey.ToString()) == null) continue;
+
+                var sourceIndex = LoadOrderIndexOf(env, reference.Plugin);
+                if (sourceIndex >= 0 && targetIndex < sourceIndex)
+                {
+                    return ToolError.Fail(
+                        $"Refused before changing any records: '{patchName}' is at load order {targetIndex:X2}, " +
+                        $"but '{reference.Plugin}' is at {sourceIndex:X2} and carries a later version of " +
+                        $"{referenceKey}. Editing the earlier target override would not change the winning record. " +
+                        $"Move '{patchName}' after '{reference.Plugin}' or choose a later patch plugin.");
+                }
+            }
+        }
+
         var remap = new Dictionary<FormKey, FormKey> { [fromFk] = toFk };
         int ok = 0;
         var failures = new List<string>();
@@ -152,23 +218,28 @@ public static partial class WriteService
         {
             if (!FormKey.TryFactory(r.FormKey, out var rfk)) { failures.Add($"{r.FormKey}: not a FormKey"); continue; }
 
-            var copyMsg = ResolveConflict(env, rfk.ToString(), r.Plugin, patchPlugin);
-            if (!copyMsg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase))
-            { failures.Add($"{rfk} ({r.Plugin}): {copyMsg}"); continue; }
+            // xEdit edits a record that is already mutable in the target. Do the same instead of
+            // routing it through ResolveConflict, whose overwrite prompt is correct for copy actions
+            // but would cause this operation to skip an existing target override entirely.
+            var ovr = FindMutableRecord(patch, rfk.ToString());
+            if (ovr == null)
+            {
+                var copyMsg = ResolveConflict(env, rfk.ToString(), r.Plugin, patchPlugin);
+                if (!copyMsg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase))
+                { failures.Add($"{rfk} ({r.Plugin}): {copyMsg}"); continue; }
+                ovr = FindMutableRecord(patch, rfk.ToString());
+            }
 
-            var (patchName, _) = NormalizePlugin(patchPlugin);
-            var patch = GetMutable(patchName);
-            var ovr = patch == null ? null : FindMutableRecord(patch, rfk.ToString());
-            if (ovr is not IFormLinkContainer container) { failures.Add($"{rfk}: override is not a FormLink container"); continue; }
+            if (ovr is not IFormLinkContainer container)
+            { failures.Add($"{rfk}: target record is not a FormLink container"); continue; }
 
             try { container.RemapLinks(remap); ok++; }
             catch (Exception ex) { failures.Add($"{rfk}: remap failed ({ex.Message})"); }
         }
 
-        var (name, _) = NormalizePlugin(patchPlugin);
-        MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
-        var result = $"Repointed {ok} of {referencing.Count} referencing record(s) from {fromFk} to {toFk} in {name}. " +
-                     $"Ensure {name} loads after the plugins it copied from, then save_plugin.";
+        MutagenLoader.InvalidateModIndex(patchName); NotifyChanged(patchName);
+        var result = $"Repointed {ok} of {referencing.Count} referencing record(s) from {fromFk} to {toFk} in {patchName}. " +
+                     $"Ensure {patchName} loads after the plugins it copied from, then save_plugin.";
         if (failures.Count > 0) result += $" {failures.Count} failed: {string.Join("; ", failures.Take(5))}.";
         return result;
     }

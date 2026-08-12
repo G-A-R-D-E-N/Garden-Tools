@@ -486,11 +486,25 @@ export default function RecordView(
     const target = picked.target;
     setStatus('Scanning references…');
     try {
-      const preview = await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, false);
+      const preview = await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, false, false);
       setStatus(preview);
       if (!preview.startsWith('DRY RUN')) return;
       if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
-      setStatus(await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true));
+      let result = await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true, false);
+      if (result.startsWith('EXISTS:')) {
+        const proceed = await askConfirm({
+          title: 'Deep copy would replace existing overrides',
+          message: result.slice('EXISTS:'.length).trim(),
+          confirmLabel: 'Overwrite all and copy',
+          danger: true,
+        });
+        if (!proceed) {
+          setStatus('Deep copy cancelled -- the target plugin was left unchanged.');
+          return;
+        }
+        result = await b.DeepCopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true, true);
+      }
+      setStatus(result);
       await onReload();
     } catch (e: any) { setStatus('Deep copy failed: ' + (e?.message || e)); }
   };
