@@ -1,0 +1,127 @@
+name: ESL FormID validation
+
+on:
+  push:
+    branches:
+      - fix/esl-formid-encoding
+
+permissions:
+  contents: write
+
+concurrency:
+  group: esl-formid-validation
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply proposed patch when staged
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f .github/esl-formid.patch.gz.b64 ]]; then
+            base64 --decode .github/esl-formid.patch.gz.b64 | gunzip > /tmp/esl-formid.patch
+            git apply --check /tmp/esl-formid.patch
+            git apply /tmp/esl-formid.patch
+          fi
+          git diff --check
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Run web tests
+        working-directory: web
+        run: npm test
+      - name: Build web bundle
+        working-directory: web
+        run: npm run build
+      - name: Restore portable tests
+        run: dotnet restore FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj
+      - name: Build portable tests
+        run: dotnet build FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-restore
+      - name: Run portable tests
+        run: dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+      - name: Build server
+        run: dotnet build FO4RecordEditor.Server/FO4RecordEditor.Server.csproj --configuration Release
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply proposed patch when staged
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f .github/esl-formid.patch.gz.b64 ]]; then
+            base64 --decode .github/esl-formid.patch.gz.b64 | gunzip > /tmp/esl-formid.patch
+            git apply --check /tmp/esl-formid.patch
+            git apply /tmp/esl-formid.patch
+          fi
+          git diff --check
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Build web bundle
+        working-directory: web
+        run: npm run build
+      - name: Restore Windows tests
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj
+      - name: Build Windows tests
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore
+      - name: Run Windows tests
+        run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+
+  commit:
+    needs: [portable, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Commit validated source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f .github/esl-formid.patch.gz.b64 ]]; then
+            echo "Validated source commit already exists."
+            exit 0
+          fi
+          base64 --decode .github/esl-formid.patch.gz.b64 | gunzip > /tmp/esl-formid.patch
+          git apply --check /tmp/esl-formid.patch
+          git apply /tmp/esl-formid.patch
+          rm .github/esl-formid.patch.gz.b64
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add FO4RecordEditor.Core/Services/PluginFormIdEncoder.cs \
+                  FO4RecordEditor.Core/Services/WriteService.cs \
+                  FO4RecordEditor.Core/Services/WriteService.XEdit2.cs \
+                  FO4RecordEditor.Tests/PluginFormIdEncodingTests.cs \
+                  docs/internal/KNOWLEDGE.md \
+                  .github/esl-formid.patch.gz.b64
+          git commit -m "fix(formids): encode ESL references in light slots"
+          git push origin HEAD:fix/esl-formid-encoding
