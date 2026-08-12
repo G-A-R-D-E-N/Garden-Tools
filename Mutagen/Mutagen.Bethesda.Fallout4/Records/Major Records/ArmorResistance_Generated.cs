@@ -64,6 +64,16 @@ namespace Mutagen.Bethesda.Fallout4
         #region Value
         public UInt32 Value { get; set; } = default(UInt32);
         #endregion
+        #region CurveTable
+        private readonly IFormLink<IFallout4MajorRecordGetter> _CurveTable = new FormLink<IFallout4MajorRecordGetter>();
+        public IFormLink<IFallout4MajorRecordGetter> CurveTable
+        {
+            get => _CurveTable;
+            set => _CurveTable.SetTo(value);
+        }
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+        IFormLinkGetter<IFallout4MajorRecordGetter> IArmorResistanceGetter.CurveTable => this.CurveTable;
+        #endregion
 
         #region To String
 
@@ -105,14 +115,17 @@ namespace Mutagen.Bethesda.Fallout4
             {
                 this.DamageType = initialValue;
                 this.Value = initialValue;
+                this.CurveTable = initialValue;
             }
 
             public Mask(
                 TItem DamageType,
-                TItem Value)
+                TItem Value,
+                TItem CurveTable)
             {
                 this.DamageType = DamageType;
                 this.Value = Value;
+                this.CurveTable = CurveTable;
             }
 
             #pragma warning disable CS8618
@@ -126,6 +139,7 @@ namespace Mutagen.Bethesda.Fallout4
             #region Members
             public TItem DamageType;
             public TItem Value;
+            public TItem CurveTable;
             #endregion
 
             #region Equals
@@ -140,6 +154,7 @@ namespace Mutagen.Bethesda.Fallout4
                 if (rhs == null) return false;
                 if (!object.Equals(this.DamageType, rhs.DamageType)) return false;
                 if (!object.Equals(this.Value, rhs.Value)) return false;
+                if (!object.Equals(this.CurveTable, rhs.CurveTable)) return false;
                 return true;
             }
             public override int GetHashCode()
@@ -147,6 +162,7 @@ namespace Mutagen.Bethesda.Fallout4
                 var hash = new HashCode();
                 hash.Add(this.DamageType);
                 hash.Add(this.Value);
+                hash.Add(this.CurveTable);
                 return hash.ToHashCode();
             }
 
@@ -157,6 +173,7 @@ namespace Mutagen.Bethesda.Fallout4
             {
                 if (!eval(this.DamageType)) return false;
                 if (!eval(this.Value)) return false;
+                if (!eval(this.CurveTable)) return false;
                 return true;
             }
             #endregion
@@ -166,6 +183,7 @@ namespace Mutagen.Bethesda.Fallout4
             {
                 if (eval(this.DamageType)) return true;
                 if (eval(this.Value)) return true;
+                if (eval(this.CurveTable)) return true;
                 return false;
             }
             #endregion
@@ -182,6 +200,7 @@ namespace Mutagen.Bethesda.Fallout4
             {
                 obj.DamageType = eval(this.DamageType);
                 obj.Value = eval(this.Value);
+                obj.CurveTable = eval(this.CurveTable);
             }
             #endregion
 
@@ -207,6 +226,10 @@ namespace Mutagen.Bethesda.Fallout4
                     if (printMask?.Value ?? true)
                     {
                         sb.AppendItem(Value, "Value");
+                    }
+                    if (printMask?.CurveTable ?? true)
+                    {
+                        sb.AppendItem(CurveTable, "CurveTable");
                     }
                 }
             }
@@ -234,6 +257,7 @@ namespace Mutagen.Bethesda.Fallout4
             }
             public Exception? DamageType;
             public Exception? Value;
+            public Exception? CurveTable;
             #endregion
 
             #region IErrorMask
@@ -246,6 +270,8 @@ namespace Mutagen.Bethesda.Fallout4
                         return DamageType;
                     case ArmorResistance_FieldIndex.Value:
                         return Value;
+                    case ArmorResistance_FieldIndex.CurveTable:
+                        return CurveTable;
                     default:
                         throw new ArgumentException($"Index is out of range: {index}");
                 }
@@ -261,6 +287,9 @@ namespace Mutagen.Bethesda.Fallout4
                         break;
                     case ArmorResistance_FieldIndex.Value:
                         this.Value = ex;
+                        break;
+                    case ArmorResistance_FieldIndex.CurveTable:
+                        this.CurveTable = ex;
                         break;
                     default:
                         throw new ArgumentException($"Index is out of range: {index}");
@@ -278,6 +307,9 @@ namespace Mutagen.Bethesda.Fallout4
                     case ArmorResistance_FieldIndex.Value:
                         this.Value = (Exception?)obj;
                         break;
+                    case ArmorResistance_FieldIndex.CurveTable:
+                        this.CurveTable = (Exception?)obj;
+                        break;
                     default:
                         throw new ArgumentException($"Index is out of range: {index}");
                 }
@@ -288,6 +320,7 @@ namespace Mutagen.Bethesda.Fallout4
                 if (Overall != null) return true;
                 if (DamageType != null) return true;
                 if (Value != null) return true;
+                if (CurveTable != null) return true;
                 return false;
             }
             #endregion
@@ -319,6 +352,9 @@ namespace Mutagen.Bethesda.Fallout4
                 {
                     sb.AppendItem(Value, "Value");
                 }
+                {
+                    sb.AppendItem(CurveTable, "CurveTable");
+                }
             }
             #endregion
 
@@ -329,6 +365,7 @@ namespace Mutagen.Bethesda.Fallout4
                 var ret = new ErrorMask();
                 ret.DamageType = this.DamageType.Combine(rhs.DamageType);
                 ret.Value = this.Value.Combine(rhs.Value);
+                ret.CurveTable = this.CurveTable.Combine(rhs.CurveTable);
                 return ret;
             }
             public static ErrorMask? Combine(ErrorMask? lhs, ErrorMask? rhs)
@@ -354,6 +391,7 @@ namespace Mutagen.Bethesda.Fallout4
             public bool OnOverall;
             public bool DamageType;
             public bool Value;
+            public bool CurveTable;
             #endregion
 
             #region Ctors
@@ -365,6 +403,7 @@ namespace Mutagen.Bethesda.Fallout4
                 this.OnOverall = onOverall;
                 this.DamageType = defaultOn;
                 this.Value = defaultOn;
+                this.CurveTable = defaultOn;
             }
 
             #endregion
@@ -382,6 +421,7 @@ namespace Mutagen.Bethesda.Fallout4
             {
                 ret.Add((DamageType, null));
                 ret.Add((Value, null));
+                ret.Add((CurveTable, null));
             }
 
             public static implicit operator TranslationMask(bool defaultOn)
@@ -462,6 +502,7 @@ namespace Mutagen.Bethesda.Fallout4
     {
         new IFormLink<IDamageTypeGetter> DamageType { get; set; }
         new UInt32 Value { get; set; }
+        new IFormLink<IFallout4MajorRecordGetter> CurveTable { get; set; }
     }
 
     public partial interface IArmorResistanceGetter :
@@ -479,6 +520,7 @@ namespace Mutagen.Bethesda.Fallout4
         static ILoquiRegistration StaticRegistration => ArmorResistance_Registration.Instance;
         IFormLinkGetter<IDamageTypeGetter> DamageType { get; }
         UInt32 Value { get; }
+        IFormLinkGetter<IFallout4MajorRecordGetter> CurveTable { get; }
 
     }
 
@@ -650,6 +692,7 @@ namespace Mutagen.Bethesda.Fallout4
     {
         DamageType = 0,
         Value = 1,
+        CurveTable = 2,
     }
     #endregion
 
@@ -660,9 +703,9 @@ namespace Mutagen.Bethesda.Fallout4
 
         public static ProtocolKey ProtocolKey => ProtocolDefinition_Fallout4.ProtocolKey;
 
-        public const ushort AdditionalFieldCount = 2;
+        public const ushort AdditionalFieldCount = 3;
 
-        public const ushort FieldCount = 2;
+        public const ushort FieldCount = 3;
 
         public static readonly Type MaskType = typeof(ArmorResistance.Mask<>);
 
@@ -730,12 +773,14 @@ namespace Mutagen.Bethesda.Fallout4
             ClearPartial();
             item.DamageType.Clear();
             item.Value = default(UInt32);
+            item.CurveTable.Clear();
         }
         
         #region Mutagen
         public void RemapLinks(IArmorResistance obj, IReadOnlyDictionary<FormKey, FormKey> mapping)
         {
             obj.DamageType.Relink(mapping);
+            obj.CurveTable.Relink(mapping);
         }
         
         #endregion
@@ -782,6 +827,7 @@ namespace Mutagen.Bethesda.Fallout4
         {
             ret.DamageType = item.DamageType.Equals(rhs.DamageType);
             ret.Value = item.Value == rhs.Value;
+            ret.CurveTable = item.CurveTable.Equals(rhs.CurveTable);
         }
         
         public string Print(
@@ -834,6 +880,10 @@ namespace Mutagen.Bethesda.Fallout4
             {
                 sb.AppendItem(item.Value, "Value");
             }
+            if (printMask?.CurveTable ?? true)
+            {
+                sb.AppendItem(item.CurveTable.FormKey, "CurveTable");
+            }
         }
         
         #region Equals and Hash
@@ -851,6 +901,10 @@ namespace Mutagen.Bethesda.Fallout4
             {
                 if (lhs.Value != rhs.Value) return false;
             }
+            if ((equalsMask?.GetShouldTranslate((int)ArmorResistance_FieldIndex.CurveTable) ?? true))
+            {
+                if (!lhs.CurveTable.Equals(rhs.CurveTable)) return false;
+            }
             return true;
         }
         
@@ -859,6 +913,7 @@ namespace Mutagen.Bethesda.Fallout4
             var hash = new HashCode();
             hash.Add(item.DamageType);
             hash.Add(item.Value);
+            hash.Add(item.CurveTable);
             return hash.ToHashCode();
         }
         
@@ -874,6 +929,7 @@ namespace Mutagen.Bethesda.Fallout4
         public IEnumerable<IFormLinkGetter> EnumerateFormLinks(IArmorResistanceGetter obj, bool iterateNestedRecords = true)
         {
             yield return FormLinkInformation.Factory(obj.DamageType);
+            yield return FormLinkInformation.Factory(obj.CurveTable);
             yield break;
         }
         
@@ -899,6 +955,10 @@ namespace Mutagen.Bethesda.Fallout4
             if ((copyMask?.GetShouldTranslate((int)ArmorResistance_FieldIndex.Value) ?? true))
             {
                 item.Value = rhs.Value;
+            }
+            if ((copyMask?.GetShouldTranslate((int)ArmorResistance_FieldIndex.CurveTable) ?? true))
+            {
+                item.CurveTable.SetTo(rhs.CurveTable.FormKey);
             }
             DeepCopyInCustom(
                 item: item,
@@ -1012,6 +1072,12 @@ namespace Mutagen.Bethesda.Fallout4
                 writer: writer,
                 item: item.DamageType);
             writer.Write(item.Value);
+            if (writer.MetaData.FormVersion!.Value >= 152)
+            {
+                FormLinkBinaryTranslation.Instance.Write(
+                    writer: writer,
+                    item: item.CurveTable);
+            }
         }
 
         public void Write(
@@ -1047,6 +1113,10 @@ namespace Mutagen.Bethesda.Fallout4
         {
             item.DamageType.SetTo(FormLinkBinaryTranslation.Instance.Parse(reader: frame));
             item.Value = frame.ReadUInt32();
+            if (frame.MetaData.FormVersion!.Value >= 152)
+            {
+                item.CurveTable.SetTo(FormLinkBinaryTranslation.Instance.Parse(reader: frame));
+            }
         }
 
     }
@@ -1115,6 +1185,13 @@ namespace Mutagen.Bethesda.Fallout4
 
         public IFormLinkGetter<IDamageTypeGetter> DamageType => FormLinkBinaryTranslation.Instance.OverlayFactory<IDamageTypeGetter>(_package, _structData.Span.Slice(0x0, 0x4));
         public UInt32 Value => BinaryPrimitives.ReadUInt32LittleEndian(_structData.Slice(0x4, 0x4));
+        #region CurveTable
+        public IFormLinkGetter<IFallout4MajorRecordGetter> CurveTable =>
+          _package.FormVersion!.FormVersion!.Value >= 152
+              ? FormLinkBinaryTranslation.Instance.OverlayFactory<IFallout4MajorRecordGetter>(_package, _structData.Span.Slice(0x8, 0x4))
+              : FormLinkGetter<IFallout4MajorRecordGetter>.Null;
+        int CurveTableVersioningOffset => _package.FormVersion!.FormVersion!.Value < 152 ? -4 : 0;
+        #endregion
         partial void CustomFactoryEnd(
             OverlayStream stream,
             int finalPos,
@@ -1140,13 +1217,13 @@ namespace Mutagen.Bethesda.Fallout4
                 stream: stream,
                 meta: package.MetaData.Constants,
                 translationParams: translationParams,
-                length: 0x8,
+                length: 0xC,
                 memoryPair: out var memoryPair,
                 offset: out var offset);
             var ret = new ArmorResistanceBinaryOverlay(
                 memoryPair: memoryPair,
                 package: package);
-            stream.Position += 0x8;
+            stream.Position += ret.CurveTableVersioningOffset + 0xC;
             ret.CustomFactoryEnd(
                 stream: stream,
                 finalPos: stream.Length,

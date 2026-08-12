@@ -4742,7 +4742,7 @@ namespace Mutagen.Bethesda.Fallout4
                         stream: stream,
                         package: _package,
                         finalPos: finalPos,
-                        itemLength: 8,
+                        itemLength: _package.FormVersion!.FormVersion!.Value >= 152 ? 12 : 8,
                         getter: (s, p) => ArmorResistanceBinaryOverlay.ArmorResistanceFactory(s, p));
                     return (int)Armor_FieldIndex.Resistances;
                 }
