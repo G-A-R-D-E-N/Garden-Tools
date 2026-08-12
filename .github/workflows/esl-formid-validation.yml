@@ -20,12 +20,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply proposed patch when staged
+      - name: Reassemble and apply proposed patch
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f .github/esl-formid.patch.gz ]]; then
-            gunzip -c .github/esl-formid.patch.gz > /tmp/esl-formid.patch
+          if [[ -d .github/esl-formid.parts ]]; then
+            cat .github/esl-formid.parts/* | tr -d '\r\n' > /tmp/esl-formid.patch.gz.b64
+            echo "278d3a289ff80f44e0a14942b799ad54d483fab2d5c54de6a0404b6766da75e3  /tmp/esl-formid.patch.gz.b64" | sha256sum -c -
+            base64 --decode /tmp/esl-formid.patch.gz.b64 > /tmp/esl-formid.patch.gz
+            echo "8a0336b93967a29eed7b0deb4d1e59365d86eae30a7ae2fe2212efb38c8b988b  /tmp/esl-formid.patch.gz" | sha256sum -c -
+            gunzip -c /tmp/esl-formid.patch.gz > /tmp/esl-formid.patch
+            echo "40e4930cb670c3724550a18a6bf154cc2a23aa2e9fe309b6455dc7c831b7362c  /tmp/esl-formid.patch" | sha256sum -c -
             git apply --check /tmp/esl-formid.patch
             git apply /tmp/esl-formid.patch
           fi
@@ -63,12 +68,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply proposed patch when staged
+      - name: Reassemble and apply proposed patch
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f .github/esl-formid.patch.gz ]]; then
-            gunzip -c .github/esl-formid.patch.gz > /tmp/esl-formid.patch
+          if [[ -d .github/esl-formid.parts ]]; then
+            cat .github/esl-formid.parts/* | tr -d '\r\n' > /tmp/esl-formid.patch.gz.b64
+            echo "278d3a289ff80f44e0a14942b799ad54d483fab2d5c54de6a0404b6766da75e3  /tmp/esl-formid.patch.gz.b64" | sha256sum -c -
+            base64 --decode /tmp/esl-formid.patch.gz.b64 > /tmp/esl-formid.patch.gz
+            echo "8a0336b93967a29eed7b0deb4d1e59365d86eae30a7ae2fe2212efb38c8b988b  /tmp/esl-formid.patch.gz" | sha256sum -c -
+            gunzip -c /tmp/esl-formid.patch.gz > /tmp/esl-formid.patch
+            echo "40e4930cb670c3724550a18a6bf154cc2a23aa2e9fe309b6455dc7c831b7362c  /tmp/esl-formid.patch" | sha256sum -c -
             git apply --check /tmp/esl-formid.patch
             git apply /tmp/esl-formid.patch
           fi
@@ -106,14 +116,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -f .github/esl-formid.patch.gz ]]; then
+          if [[ ! -d .github/esl-formid.parts ]]; then
             echo "Validated source commit already exists."
             exit 0
           fi
-          gunzip -c .github/esl-formid.patch.gz > /tmp/esl-formid.patch
+          cat .github/esl-formid.parts/* | tr -d '\r\n' > /tmp/esl-formid.patch.gz.b64
+          echo "278d3a289ff80f44e0a14942b799ad54d483fab2d5c54de6a0404b6766da75e3  /tmp/esl-formid.patch.gz.b64" | sha256sum -c -
+          base64 --decode /tmp/esl-formid.patch.gz.b64 > /tmp/esl-formid.patch.gz
+          echo "8a0336b93967a29eed7b0deb4d1e59365d86eae30a7ae2fe2212efb38c8b988b  /tmp/esl-formid.patch.gz" | sha256sum -c -
+          gunzip -c /tmp/esl-formid.patch.gz > /tmp/esl-formid.patch
+          echo "40e4930cb670c3724550a18a6bf154cc2a23aa2e9fe309b6455dc7c831b7362c  /tmp/esl-formid.patch" | sha256sum -c -
           git apply --check /tmp/esl-formid.patch
           git apply /tmp/esl-formid.patch
-          rm .github/esl-formid.patch.gz
+          rm -rf .github/esl-formid.parts
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -122,6 +137,6 @@ jobs:
                   FO4RecordEditor.Core/Services/WriteService.XEdit2.cs \
                   FO4RecordEditor.Tests/PluginFormIdEncodingTests.cs \
                   docs/internal/KNOWLEDGE.md \
-                  .github/esl-formid.patch.gz
+                  .github/esl-formid.parts
           git commit -m "fix(formids): encode ESL references in light slots"
           git push origin HEAD:fix/esl-formid-encoding
