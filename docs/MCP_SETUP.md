@@ -289,6 +289,20 @@ is most of what a compile would tell you, but only `compile_papyrus` actually pr
 `not resolved` for a member reached through an expression whose type is not written in the source
 (`GetOwner().MyProperty`) rather than guessing at it.
 
+### Papyrus node graphs
+`graph_validate` · `graph_compile` · `graph_palette_search` · `graph_node_info`
+
+These operate on the editor's readable `.fograph` node-graph format:
+
+- `graph_validate` checks graph structure, node types, pins, value types, required connections and
+  control-flow rules without writing output.
+- `graph_compile` generates readable `.psc` source and optionally compiles it to `.pex`;
+  `source_only: true` stops after source generation.
+- `graph_palette_search` discovers node definitions from the active Papyrus import roots, including
+  functions, events, properties and built-in operators.
+- `graph_node_info` describes one definition's input/output pins, control-flow pins, value types,
+  optional values and defaults so a graph can be authored without guessing its schema.
+
 ### NIF
 `nif_import` · `nif_inspect` · `nif_fix` · `nif_verify`
 

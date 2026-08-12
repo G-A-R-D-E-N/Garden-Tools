@@ -674,7 +674,7 @@ bundles `niftool` + `texconv`, adds the docs and `mcp.sample.json`, and zips.
   `compile_papyrus` needs the CK's non-redistributable `PapyrusCompiler.exe` anyway, and anyone with
   the CK already has the base scripts, which `ToolPaths` auto-detects.
 - Smoke-test after packaging: extract the zip clean, run the exe with `--mcp`, write an `initialize`
-  and a `tools/list` JSON-RPC line to stdin. It must answer and advertise **105 tools**.
+  and a `tools/list` JSON-RPC line to stdin. It must answer and advertise **109 tools**.
 
 ### The docs it ships are an ALLOWLIST — never make it recursive again (2026-07-16)
 

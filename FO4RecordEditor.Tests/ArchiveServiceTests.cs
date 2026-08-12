@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using FluentAssertions;
 using FO4RecordEditor.Services;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Archives;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -295,6 +297,174 @@ public class ArchiveServiceTests
             ((JArray)json["entries"]!).Should().HaveCount(1);
         }
         finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_GlobAlias_MatchesExtensionAcrossNestedArchivePath()
+    {
+        var archive = BuildTestBa2(
+            (@"Scripts\Nested\Quest.pex", Encoding.ASCII.GetBytes("a")),
+            (@"Scripts\Nested\Quest.psc", Encoding.ASCII.GetBytes("b")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, "*.pex", 100, "glob"));
+            var entries = (JArray)json["entries"]!;
+            entries.Should().ContainSingle();
+            entries[0]["path"]!.Value<string>().Should().Be(@"Scripts\Nested\Quest.pex");
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ListArchiveJson_UnknownFilterMode_ReturnsAnErrorInsteadOfSilentlyUsingContains()
+    {
+        var archive = BuildTestBa2((@"Scripts\Quest.pex", Encoding.ASCII.GetBytes("a")));
+        try
+        {
+            var json = JObject.Parse(ArchiveService.ListArchiveJson(archive, "*.pex", 100, "typo"));
+            json["error"]!.Value<string>().Should().Contain("filter mode must be");
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void RegexFilter_TimeoutIsCaughtAndReported()
+    {
+        var hostilePath = new string('a', 30_000) + "!";
+        var archive = BuildTestBa2((hostilePath, Encoding.ASCII.GetBytes("x")));
+        try
+        {
+            var reader = Archive.CreateReader(GameRelease.Fallout4, archive);
+            var matcher = ArchiveService.BuildMatcher("^(a|aa)+$", "regex", TimeSpan.FromMilliseconds(1));
+
+            ArchiveService.TryFilterFiles(reader.Files, matcher, "regex", out var files, out var error)
+                .Should().BeFalse();
+
+            files.Should().BeEmpty();
+            error.Should().Contain("too long").And.Contain("stopped");
+        }
+        finally { try { File.Delete(archive); } catch { } }
+    }
+
+    [Fact]
+    public void ExtractAll_UnsafeEntryRefusesTheWholeBatchBeforeWriting()
+    {
+        var archive = BuildTestBa2(
+            (@"Meshes\Safe.nif", Encoding.ASCII.GetBytes("safe")),
+            (@"..\escape.txt", Encoding.ASCII.GetBytes("escape")));
+        var parent = Path.Combine(Path.GetTempPath(), $"ArchiveTraversal_{Guid.NewGuid():N}");
+        var outDir = Path.Combine(parent, "out");
+        try
+        {
+            var result = ToolError.Unwrap(ArchiveService.ExtractAll(archive, outDir, null, 100));
+
+            result.IsError.Should().BeTrue();
+            result.Text.Should().Contain("refused before writing anything").And.Contain("Unsafe archive entry");
+            Directory.Exists(outDir).Should().BeFalse();
+            File.Exists(Path.Combine(parent, "escape.txt")).Should().BeFalse();
+        }
+        finally
+        {
+            try { File.Delete(archive); } catch { }
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ExtractSelected_UnsafeEntryRefusesBeforeWriting()
+    {
+        var archive = BuildTestBa2((@"..\selected-escape.txt", Encoding.ASCII.GetBytes("escape")));
+        var parent = Path.Combine(Path.GetTempPath(), $"ArchiveSelectedTraversal_{Guid.NewGuid():N}");
+        var outDir = Path.Combine(parent, "out");
+        try
+        {
+            var result = ToolError.Unwrap(ArchiveService.ExtractSelected(
+                archive,
+                new[] { @"..\selected-escape.txt" },
+                outDir));
+
+            result.IsError.Should().BeTrue();
+            result.Text.Should().Contain("Unsafe archive entry");
+            Directory.Exists(outDir).Should().BeFalse();
+            File.Exists(Path.Combine(parent, "selected-escape.txt")).Should().BeFalse();
+        }
+        finally
+        {
+            try { File.Delete(archive); } catch { }
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ExtractAll_CaseInsensitiveFileCollisionRefusesBeforeWriting()
+    {
+        var archive = BuildTestBa2(
+            (@"Meshes\Weapon.nif", Encoding.ASCII.GetBytes("first")),
+            (@"meshes\WEAPON.NIF", Encoding.ASCII.GetBytes("second")));
+        var outDir = Path.Combine(Path.GetTempPath(), $"ArchiveCollision_{Guid.NewGuid():N}");
+        try
+        {
+            var result = ToolError.Unwrap(ArchiveService.ExtractAll(archive, outDir, null, 100));
+
+            result.IsError.Should().BeTrue();
+            result.Text.Should().Contain("same case-insensitive destination");
+            Directory.Exists(outDir).Should().BeFalse();
+        }
+        finally
+        {
+            try { File.Delete(archive); } catch { }
+            try { Directory.Delete(outDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ExtractAll_MergesCaseOnlyDirectoryVariantsIntoOneDeterministicTree()
+    {
+        var archive = BuildTestBa2(
+            (@"Scripts\Hardcore\A.pex", Encoding.ASCII.GetBytes("a")),
+            (@"scripts\Source\B.psc", Encoding.ASCII.GetBytes("b")));
+        var outDir = Path.Combine(Path.GetTempPath(), $"ArchiveCaseMerge_{Guid.NewGuid():N}");
+        try
+        {
+            ArchiveService.ExtractAll(archive, outDir, null, 100)
+                .Should().Contain("Extracted 2 of 2");
+
+            var roots = Directory.GetDirectories(outDir);
+            roots.Should().ContainSingle();
+            Path.GetFileName(roots[0]).Should().Be("scripts");
+            File.Exists(Path.Combine(outDir, "scripts", "Hardcore", "A.pex")).Should().BeTrue();
+            File.Exists(Path.Combine(outDir, "scripts", "Source", "B.psc")).Should().BeTrue();
+        }
+        finally
+        {
+            try { File.Delete(archive); } catch { }
+            try { Directory.Delete(outDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ExtractFile_AtomicallyReplacesAnExistingDestination()
+    {
+        var content = Encoding.ASCII.GetBytes("replacement payload");
+        var archive = BuildTestBa2((@"Meshes\Thing.nif", content));
+        var outDir = Path.Combine(Path.GetTempPath(), $"ArchiveSingleAtomic_{Guid.NewGuid():N}");
+        var outPath = Path.Combine(outDir, "Thing.nif");
+        try
+        {
+            Directory.CreateDirectory(outDir);
+            File.WriteAllText(outPath, "old payload that must not be partially reused");
+
+            ArchiveService.ExtractFile(archive, @"Meshes\Thing.nif", outPath)
+                .Should().Contain("Extracted");
+
+            File.ReadAllBytes(outPath).Should().Equal(content);
+            Directory.GetFiles(outDir, "*.tmp").Should().BeEmpty();
+        }
+        finally
+        {
+            try { File.Delete(archive); } catch { }
+            try { Directory.Delete(outDir, recursive: true); } catch { }
+        }
     }
 
     // ---- CompareArchivesJson (ported from AlexxEG/BSA_Browser's CompareForm.CompareAsync) ----

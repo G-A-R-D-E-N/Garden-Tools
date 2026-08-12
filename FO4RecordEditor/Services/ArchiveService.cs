@@ -26,32 +26,54 @@ public static class ArchiveService
         catch (Exception ex) { error = ToolError.Fail($"Could not read '{archivePath}': {ex.Message}"); return null; }
     }
 
-    /// <summary>
-    /// Builds a path matcher for the GUI Archive panel's filter box. 'simple' (default, and the only
-    /// mode the AI-facing tools/ListArchive/ExtractAll ever used before this) is a plain substring
-    /// search -- unchanged, so the shipped archive_list/archive_extract_all MCP tool contract doesn't
-    /// change underneath existing callers. 'wildcard' and 'regex' are GUI-only additions ported from
-    /// AlexxEG/BSA_Browser's filter design (GPL-3.0, reviewed directly): wildcard converts '*'/'?' to
-    /// regex (not anchored, so it matches anywhere in the path, same as their tool); regex is used
-    /// as-is via .NET's own engine (their own FilterPredicateRegex is exactly this, no PowerShell
-    /// dependency needed the way their 'simple'/wildcard mode used System.Management.Automation).
-    /// </summary>
-    private static Func<string, bool> BuildMatcher(string? filter, string? mode)
-    {
-        if (string.IsNullOrWhiteSpace(filter)) return _ => true;
+    private static readonly TimeSpan FilterRegexTimeout = TimeSpan.FromMilliseconds(100);
 
-        if (string.Equals(mode, "regex", StringComparison.OrdinalIgnoreCase))
+    /// <summary>
+    /// Builds a path matcher for the Archive panel and RPC host. "simple"/"contains" is a plain
+    /// substring search; "wildcard"/"glob" converts '*'/'?' to regex; "regex" uses the caller's
+    /// expression. Every regex has a hard timeout so an untrusted or accidentally catastrophic
+    /// expression cannot pin the archive worker indefinitely.
+    /// </summary>
+    internal static Func<string, bool> BuildMatcher(string? filter, string? mode, TimeSpan? regexTimeout = null)
+    {
+        var normalizedMode = string.IsNullOrWhiteSpace(mode) ? "simple" : mode.Trim().ToLowerInvariant();
+        if (normalizedMode is not ("simple" or "contains" or "wildcard" or "glob" or "regex"))
+            throw new ArgumentException("filter mode must be 'simple'/'contains', 'wildcard'/'glob', or 'regex'.");
+
+        if (string.IsNullOrWhiteSpace(filter)) return _ => true;
+        if (normalizedMode is "simple" or "contains")
+            return s => s.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+        var pattern = normalizedMode == "regex"
+            ? filter
+            : Regex.Escape(filter).Replace(@"\*", ".*").Replace(@"\?", ".");
+        var rx = new Regex(
+            pattern,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
+            regexTimeout ?? FilterRegexTimeout);
+        return s => rx.IsMatch(s);
+    }
+
+    internal static bool TryFilterFiles(
+        IEnumerable<IArchiveFile> source,
+        Func<string, bool> matches,
+        string? filterMode,
+        out List<IArchiveFile> files,
+        out string error)
+    {
+        try
         {
-            var rx = new Regex(filter, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            return s => rx.IsMatch(s);
+            files = source.Where(f => matches(f.Path ?? "")).ToList();
+            error = "";
+            return true;
         }
-        if (string.Equals(mode, "wildcard", StringComparison.OrdinalIgnoreCase))
+        catch (RegexMatchTimeoutException)
         {
-            var pattern = Regex.Escape(filter).Replace(@"\*", ".*").Replace(@"\?", ".");
-            var rx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            return s => rx.IsMatch(s);
+            files = new List<IArchiveFile>();
+            error = $"The {filterMode ?? "regex"} filter took too long to evaluate and was stopped. " +
+                    "Use a simpler expression or substring/wildcard mode.";
+            return false;
         }
-        return s => s.Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string ListArchive(string archivePath, string? filter, int limit)
@@ -77,7 +99,7 @@ public static class ArchiveService
 
     /// <summary>JSON variant of <see cref="ListArchive"/> for the GUI Archive panel: structured
     /// {path,size} rows plus counts, so the panel can render a real table/tree instead of parsing
-    /// text lines. filterMode: "simple" (default) | "wildcard" | "regex" -- see BuildMatcher.</summary>
+    /// text lines. filterMode: "simple"/"contains" (default) | "wildcard"/"glob" | "regex" -- see BuildMatcher.</summary>
     public static string ListArchiveJson(string archivePath, string? filter, int limit, string? filterMode = null)
     {
         var reader = TryOpen(archivePath, out var err);
@@ -88,9 +110,9 @@ public static class ArchiveService
         try { matches = BuildMatcher(filter, filterMode); }
         catch (Exception ex) { return JsonConvert.SerializeObject(new { error = ToolError.Fail($"Invalid {filterMode ?? "simple"} filter: {ex.Message}") }); }
 
-        var files = reader.Files.Where(f => matches(f.Path ?? ""));
+        if (!TryFilterFiles(reader.Files, matches, filterMode, out var all, out var filterError))
+            return JsonConvert.SerializeObject(new { error = ToolError.Fail(filterError) });
 
-        var all = files.ToList();
         var shown = all.Take(limit).ToList();
         return JsonConvert.SerializeObject(new
         {
@@ -112,30 +134,15 @@ public static class ArchiveService
         if (string.IsNullOrWhiteSpace(outDir)) return ToolError.Fail("Provide an output directory.");
 
         var wanted = new HashSet<string>(
-            innerPaths.Select(p => p.Replace('/', '\\').TrimStart('\\')), StringComparer.OrdinalIgnoreCase);
+            innerPaths.Select(ArchiveExtraction.NormalizeLookupPath), StringComparer.OrdinalIgnoreCase);
         if (wanted.Count == 0) return ToolError.Fail("No files selected.");
 
-        var matches = reader.Files.Where(f => wanted.Contains((f.Path ?? "").Replace('/', '\\'))).ToList();
+        var matches = reader.Files
+            .Where(f => wanted.Contains(ArchiveExtraction.NormalizeLookupPath(f.Path)))
+            .ToList();
         if (matches.Count == 0) return ToolError.Fail("None of the selected files were found in the archive.");
 
-        int written = 0;
-        var failures = new List<string>();
-        foreach (var f in matches)
-        {
-            try
-            {
-                var rel = (f.Path ?? "").Replace('/', '\\').TrimStart('\\');
-                var dest = Path.Combine(outDir, rel);
-                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                File.WriteAllBytes(dest, f.GetBytes());
-                written++;
-            }
-            catch (Exception ex) { failures.Add($"{f.Path}: {ex.Message}"); }
-        }
-
-        var msg = $"Extracted {written} of {matches.Count} selected file(s) from '{Path.GetFileName(archivePath)}' to '{outDir}'.";
-        if (failures.Count > 0) msg += $" {failures.Count} FAILED: " + string.Join("; ", failures.Take(10));
-        return msg;
+        return ExtractEntries(archivePath, outDir, matches, selected: true);
     }
 
     public static string ExtractFile(string archivePath, string innerPath, string outPath)
@@ -153,13 +160,12 @@ public static class ArchiveService
         if (entry == null)
             return ToolError.Fail($"'{innerPath}' is not in '{Path.GetFileName(archivePath)}'. Call archive_list first to see exact entry paths.");
 
-        try
-        {
-            var fullOut = Path.GetFullPath(outPath);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullOut)!);
-            File.WriteAllBytes(fullOut, entry.GetBytes());
-        }
-        catch (Exception ex) { return ToolError.Fail($"Extract failed: {ex.Message}"); }
+        byte[] bytes;
+        try { bytes = entry.GetBytes(); }
+        catch (Exception ex) { return ToolError.Fail($"Extract failed while reading '{innerPath}': {ex.Message}"); }
+
+        if (!ArchiveExtraction.TryWriteExplicitFile(outPath, bytes, out var writeError))
+            return ToolError.Fail($"Extract failed: {writeError}");
 
         return $"Extracted '{innerPath}' ({entry.Size:N0} bytes) from '{Path.GetFileName(archivePath)}' to '{outPath}'.";
     }
@@ -175,7 +181,8 @@ public static class ArchiveService
         try { matches = BuildMatcher(filter, filterMode); }
         catch (Exception ex) { return ToolError.Fail($"Invalid {filterMode ?? "simple"} filter: {ex.Message}"); }
 
-        var all = reader.Files.Where(f => matches(f.Path ?? "")).ToList();
+        if (!TryFilterFiles(reader.Files, matches, filterMode, out var all, out var filterError))
+            return ToolError.Fail(filterError);
         if (all.Count == 0)
             return $"No entries" + (string.IsNullOrWhiteSpace(filter) ? "" : $" matching '{filter}'") + $" in '{Path.GetFileName(archivePath)}'.";
 
@@ -185,22 +192,30 @@ public static class ArchiveService
             return ToolError.Fail($"'{Path.GetFileName(archivePath)}' has {all.Count} matching entries, over the {limit} limit. " +
                 "Narrow with 'filter' (a path substring, e.g. 'Meshes\\mymod\\') or raise 'limit'.");
 
-        int written = 0;
+        return ExtractEntries(archivePath, outDir, all, selected: false);
+    }
+
+    private static string ExtractEntries(
+        string archivePath,
+        string outDir,
+        IReadOnlyList<IArchiveFile> entries,
+        bool selected)
+    {
+        if (!ArchiveExtraction.TryCreatePlan(entries, outDir, out var outputRoot, out var plan, out var planError))
+            return ToolError.Fail($"Extraction refused before writing anything: {planError}");
+
+        var written = 0;
         var failures = new List<string>();
-        foreach (var f in all)
+        foreach (var item in plan)
         {
-            try
-            {
-                var rel = (f.Path ?? "").Replace('/', '\\').TrimStart('\\');
-                var dest = Path.Combine(outDir, rel);
-                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                File.WriteAllBytes(dest, f.GetBytes());
+            if (ArchiveExtraction.TryWritePlannedEntry(item, outputRoot, out var writeError))
                 written++;
-            }
-            catch (Exception ex) { failures.Add($"{f.Path}: {ex.Message}"); }
+            else
+                failures.Add($"{item.Entry.Path}: {writeError}");
         }
 
-        var msg = $"Extracted {written} of {all.Count} file(s) from '{Path.GetFileName(archivePath)}' to '{outDir}'.";
+        var countDescription = selected ? $"{entries.Count} selected file(s)" : $"{entries.Count} file(s)";
+        var msg = $"Extracted {written} of {countDescription} from '{Path.GetFileName(archivePath)}' to '{outDir}'.";
         if (failures.Count > 0) msg += $" {failures.Count} FAILED: " + string.Join("; ", failures.Take(10));
         return msg;
     }
