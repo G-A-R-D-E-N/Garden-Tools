@@ -47,6 +47,9 @@ public static partial class WriteService
     public static IFallout4Mod? GetMutable(string name) =>
         _mutable.TryGetValue(name, out var m) ? m : null;
 
+    internal static bool TryGetSourcePath(string name, out string path) =>
+        _sourcePath.TryGetValue(name, out path!);
+
     private static void Register(string name, IFallout4Mod mod)
     {
         _mutable[name] = mod;
@@ -85,6 +88,7 @@ public static partial class WriteService
             var mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(filePath), Fallout4Release.Fallout4);
             Register(name, mod);
             _sourcePath[name] = filePath;     // save_plugin overwrites the original by default
+            MutagenLoader.LooseModPaths[name] = filePath; // also backs raw integrity scans
             NotifyChanged(name);
             var count = mod.EnumerateMajorRecords().Count();
             return $"Opened '{name}' for editing ({count} records). Use create_record, set_field, and save_plugin.";
@@ -855,6 +859,7 @@ public static partial class WriteService
         // it (a brand new patch, a plugin outside the load order, or no modlist loaded at all).
         if (Mo2ProfileLoader.TryReplaceLoadedPluginFile(env, name, tmp, path, out var swapError))
         {
+            DuplicateFormIdScanner.Invalidate(path);
             NotifyChanged(name);
             return DescribeSave(name, path, orderingUnavailable);
         }
@@ -864,6 +869,7 @@ public static partial class WriteService
         {
             if (File.Exists(path)) File.Replace(tmp, path, null);
             else File.Move(tmp, path);
+            DuplicateFormIdScanner.Invalidate(path);
             NotifyChanged(name);
             return DescribeSave(name, path, orderingUnavailable);
         }

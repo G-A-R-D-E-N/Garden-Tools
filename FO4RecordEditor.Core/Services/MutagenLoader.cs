@@ -888,6 +888,110 @@ public static partial class MutagenLoader
     }
 
     public sealed record ProblemDto(string Severity, string Description);
+    public sealed record DuplicateFormIdDto(uint RawFormId, int Count, IReadOnlyList<string> RecordTypes);
+
+    private sealed record DuplicateIntegrityResult(
+        IReadOnlyList<DuplicateFormIdDto> Duplicates,
+        string? Error);
+
+    private static string? ResolveDuplicateScanPath(string plugin, object? envObj)
+    {
+        if (EditableMods.ContainsKey(plugin) &&
+            WriteService.TryGetSourcePath(plugin, out var editablePath) &&
+            File.Exists(editablePath))
+            return editablePath;
+
+        if (envObj != null)
+        {
+            try
+            {
+                dynamic dynEnv = envObj;
+                IReadOnlyDictionary<string, string> pluginPaths = dynEnv.PluginPaths;
+                if (pluginPaths.TryGetValue(plugin, out var envPath) && File.Exists(envPath))
+                    return envPath;
+            }
+            catch { }
+        }
+
+        if (PluginSourcePaths.TryGetValue(plugin, out var sourcePath) && File.Exists(sourcePath))
+            return sourcePath;
+        if (LooseModPaths.TryGetValue(plugin, out var loosePath) && File.Exists(loosePath))
+            return loosePath;
+        return null;
+    }
+
+    private static DuplicateIntegrityResult ConvertDuplicateScan(DuplicateFormIdScanner.Result scan) =>
+        new(
+            scan.Duplicates
+                .Select(d => new DuplicateFormIdDto(d.RawFormId, d.Count, d.RecordTypes))
+                .ToArray(),
+            scan.Error);
+
+    private static DuplicateIntegrityResult ScanDuplicateFormIds(string plugin, object? envObj)
+    {
+        var path = ResolveDuplicateScanPath(plugin, envObj);
+        return path == null
+            ? new DuplicateIntegrityResult([], null)
+            : ConvertDuplicateScan(DuplicateFormIdScanner.Scan(path));
+    }
+
+    private static bool TryGetCachedDuplicateFormIds(
+        string plugin,
+        object? envObj,
+        out DuplicateIntegrityResult result)
+    {
+        result = new DuplicateIntegrityResult([], null);
+        var path = ResolveDuplicateScanPath(plugin, envObj);
+        if (path == null) return true;
+        if (!DuplicateFormIdScanner.TryGetCached(path, out var cached))
+        {
+            DuplicateFormIdScanner.QueueScan(path);
+            return false;
+        }
+        result = ConvertDuplicateScan(cached);
+        return true;
+    }
+
+    public static IReadOnlyList<DuplicateFormIdDto> GetDuplicateFormIds(string plugin) =>
+        ScanDuplicateFormIds(plugin, envObj: null).Duplicates;
+
+    private static uint ToFileLocalFormId(IFallout4ModGetter mod, FormKey formKey)
+    {
+        var objectId = formKey.ID & 0x00FFFFFFu;
+        if (formKey.ModKey.Equals(mod.ModKey))
+            return ((uint)mod.MasterReferences.Count << 24) | objectId;
+
+        for (var i = 0; i < mod.MasterReferences.Count; i++)
+            if (mod.MasterReferences[i].Master.Equals(formKey.ModKey))
+                return ((uint)i << 24) | objectId;
+
+        return uint.MaxValue;
+    }
+
+    private static string DuplicateLabel(DuplicateFormIdDto duplicate) =>
+        $"DUPLICATE FORMID {duplicate.RawFormId:X8} appears {duplicate.Count} times " +
+        $"({string.Join(", ", duplicate.RecordTypes)}); Fallout 4 and this loader keep the last occurrence.";
+
+    private static string? DuplicateIntegrityBlock(string plugin, object? envObj)
+    {
+        var scan = ScanDuplicateFormIds(plugin, envObj);
+        if (scan.Duplicates.Count == 0 && scan.Error == null) return null;
+
+        var sb = new System.Text.StringBuilder();
+        if (scan.Error != null)
+        {
+            sb.AppendLine($"{plugin}: duplicate FormID scan failed: {scan.Error}");
+            return sb.ToString();
+        }
+
+        var extras = scan.Duplicates.Sum(d => d.Count - 1);
+        sb.AppendLine($"{plugin}: {scan.Duplicates.Count} duplicate FormID group(s), {extras} extra record(s).");
+        foreach (var duplicate in scan.Duplicates.Take(80))
+            sb.AppendLine("  " + DuplicateLabel(duplicate));
+        if (scan.Duplicates.Count > 80)
+            sb.AppendLine($"  ... and {scan.Duplicates.Count - 80} more duplicate FormID group(s)");
+        return sb.ToString();
+    }
 
     /// <summary>Lightweight per-record problems for the winning version: deleted flag and any
     /// FormLink that doesn't resolve anywhere in the load order (a dangling, crash-risk reference).</summary>
@@ -898,7 +1002,28 @@ public static partial class MutagenLoader
 
         var ctx = GetRecordContexts(envObj, fk);
         if (ctx.Count == 0) return result;
+        var winnerPlugin = ctx[^1].plugin;
         var rec = ctx[^1].rec;   // the winning version is what the game uses
+
+        if (ResolveMod(winnerPlugin, envObj) is IFallout4ModGetter winnerMod)
+        {
+            var rawFormId = ToFileLocalFormId(winnerMod, rec.FormKey);
+            if (TryGetCachedDuplicateFormIds(winnerPlugin, envObj, out var duplicateScan))
+            {
+                if (duplicateScan.Error != null)
+                    result.Add(new ProblemDto("Error",
+                        $"Duplicate FormID scan failed for {winnerPlugin}: {duplicateScan.Error}"));
+                var duplicate = duplicateScan.Duplicates
+                    .FirstOrDefault(d => d.RawFormId == rawFormId);
+                if (duplicate != null)
+                    result.Add(new ProblemDto("Error", DuplicateLabel(duplicate)));
+            }
+            else
+            {
+                result.Add(new ProblemDto("Warning",
+                    $"Duplicate FormID scan for {winnerPlugin} is running in the background; refresh Problems."));
+            }
+        }
 
         if (rec.IsDeleted)
             result.Add(new ProblemDto("Error", "Record is flagged DELETED -- prefer a disable/override; deletions can crash the game."));
@@ -1644,12 +1769,28 @@ public static partial class MutagenLoader
             }
         }
 
+        var duplicateScan = ScanDuplicateFormIds(plugin, envObj);
+        var duplicateExtras = duplicateScan.Duplicates.Sum(d => d.Count - 1);
+        foreach (var duplicate in duplicateScan.Duplicates)
+            if (samples.Count < 50) samples.Add(DuplicateLabel(duplicate));
+        if (duplicateScan.Error != null && samples.Count < 50)
+            samples.Add($"DUPLICATE FORMID SCAN FAILED  {duplicateScan.Error}");
+
+        var issueCount = deleted + broken + typeCollisions + duplicateScan.Duplicates.Count;
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"Checked {plugin}: {count} records, {deleted} deleted, {broken} reference(s) to undeclared masters, {typeCollisions} type collision(s).");
-        if (deleted + broken + typeCollisions == 0) { sb.AppendLine("No issues found."); return sb.ToString(); }
-        sb.AppendLine("Issues:");
-        foreach (var s in samples) sb.AppendLine("  " + s);
-        if (deleted + broken + typeCollisions > samples.Count) sb.AppendLine($"  ... and {deleted + broken + typeCollisions - samples.Count} more");
+        sb.AppendLine($"Checked {plugin}: {count} records, {deleted} deleted, {broken} reference(s) to undeclared masters, " +
+                      $"{typeCollisions} type collision(s), {duplicateScan.Duplicates.Count} duplicate FormID group(s) " +
+                      $"({duplicateExtras} extra record(s)).");
+        if (issueCount == 0 && duplicateScan.Error == null)
+        {
+            sb.AppendLine("No issues found.");
+            return sb.ToString();
+        }
+
+        sb.AppendLine(duplicateScan.Error == null ? "Issues:" : "Issues / incomplete checks:");
+        foreach (var sample in samples) sb.AppendLine("  " + sample);
+        var hidden = issueCount + (duplicateScan.Error == null ? 0 : 1) - samples.Count;
+        if (hidden > 0) sb.AppendLine($"  ... and {hidden} more");
         return sb.ToString();
     }
 
@@ -1720,8 +1861,13 @@ public static partial class MutagenLoader
 
         var cache = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
         var loadedPlugins = BuildLoadedPluginSet(envObj);
-        var result = ScanBrokenRefsInMod(cache, plugin, mod, loadedPlugins);
-        return result ?? $"{plugin}: no broken references found.";
+        var brokenRefs = ScanBrokenRefsInMod(cache, plugin, mod, loadedPlugins);
+        var duplicates = DuplicateIntegrityBlock(plugin, envObj);
+        if (brokenRefs == null && duplicates == null)
+            return $"{plugin}: no broken references or duplicate FormIDs found.";
+        if (brokenRefs == null) return duplicates!;
+        if (duplicates == null) return brokenRefs;
+        return brokenRefs.TrimEnd() + "\n\n" + duplicates;
     }
 
     // Build the set of plugin filenames present in the loaded environment (env + editable mods).
