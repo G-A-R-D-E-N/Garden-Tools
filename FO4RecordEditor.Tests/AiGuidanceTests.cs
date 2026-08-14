@@ -51,6 +51,7 @@ public class AiGuidanceTests
         {
             "dry_run", "patch_plugin", "source_plugin", "chance_none", "form_list",
             "new_id", "base_object", "map_marker", "record_type", "object_bounds",
+            "hide_grouped",
         }.ToHashSet(StringComparer.Ordinal);
 
         var stale = referenced.Where(r => !known.Contains(r) && !notTools.Contains(r)).ToList();

@@ -3,8 +3,8 @@
 # Builds the vanilla (.psc, .pex) corpus the Creation Kit differential compares against.
 #
 # The shipped compiled scripts are not loose on disk: they live inside "Fallout4 - Misc.ba2".
-# This extracts them with the tool's own BA2 reader, repairs the paths, and stages the vanilla
-# sources beside them in the layout PapyrusDifferentialTests pairs on:
+# This extracts them with the tool's own BA2 reader and stages the vanilla sources beside them in
+# the layout PapyrusDifferentialTests pairs on:
 #
 #     <out>/scripts/X.pex   with   <out>/scripts/Source/X.psc
 #
@@ -57,42 +57,15 @@ for _ in $(seq 1 60); do
 done
 curl -sf --max-time 2 "http://127.0.0.1:$PORT/api/health" >/dev/null || { echo "server did not start" >&2; exit 1; }
 
-# "contains" rather than a glob: the entry paths are Windows style, and a glob does not cross the
-# backslash, so "*.pex" matches nothing.
+# The extractor accepts "glob" as the RPC alias for wildcard mode, splits archive separators with
+# the host platform's directory separator, and merges case-only directory variants. A clean
+# Fallout4 - Misc.ba2 extraction therefore produces one lowercase scripts tree directly.
 echo "extracting..."
 jq -n --arg a "$BA2" --arg o "$OUT" \
-    '{target:"archive",method:"ExtractAll",args:[$a,$o,".pex",20000,"contains"]}' \
+    '{target:"archive",method:"ExtractAll",args:[$a,$o,"*.pex",20000,"glob"]}' \
     | curl -sf --max-time 900 -X POST "http://127.0.0.1:$PORT/rpc" \
         -H 'Content-Type: application/json' --data @- \
     | sed 's/\\"/"/g'
-
-# The extractor writes the archive's Windows paths as literal file names on Linux, backslashes and
-# all, so "scripts\Foo.pex" is one file rather than a directory and a file. Split them.
-echo "repairing paths..."
-python3 - "$OUT" <<'PY'
-import os, shutil, sys
-root = sys.argv[1]
-moved = 0
-for name in list(os.listdir(root)):
-    if "\\" not in name:
-        continue
-    src = os.path.join(root, name)
-    if not os.path.isfile(src):
-        continue
-    dst = os.path.join(root, *name.split("\\"))
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    shutil.move(src, dst)
-    moved += 1
-print(f"  split {moved} paths")
-PY
-
-# The archive spells the folder both ways, and on a case-sensitive filesystem that is two trees.
-if [[ -d "$OUT/Scripts" && -d "$OUT/scripts" ]]; then
-    cp -rn "$OUT/Scripts/." "$OUT/scripts/"
-    rm -rf "$OUT/Scripts"
-elif [[ -d "$OUT/Scripts" ]]; then
-    mv "$OUT/Scripts" "$OUT/scripts"
-fi
 
 echo "staging sources..."
 cp -r "$SOURCES" "$OUT/scripts/Source"
