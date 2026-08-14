@@ -833,19 +833,11 @@ public static partial class WriteService
         };
         try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); } catch { }
 
-        // Repair custom-ActorValue condition params (GetBaseValue etc.) that Mutagen would otherwise
-        // serialize as null. When it returns true, mod.MasterReferences was explicitly rebuilt
-        // (Iterate does NOT walk ParameterOneRecord in CTDA, so S7 etc. would be missing);
-        // use NoCheck for the real write so Mutagen uses our hand-built MAST list instead of rescanning.
-        bool masterListFixed = FixActorValueConditionParams(mod, prms);
-        var writeParams = masterListFixed
-            ? new BinaryWriteParameters
-            {
-                MastersListContent = MastersListContentOption.NoCheck,
-                ModKey = ModKeyOption.NoCheck,
-                MastersListOrdering = loOrdering,
-            }
-            : prms;
+        // FunctionConditionData's generated FormLink metadata now includes custom ActorValue
+        // parameters, and the local Mutagen writer serializes Form-category parameters directly from
+        // ParameterOneRecord. Keep Iterate as the single source of truth for both MAST discovery and
+        // FormID remapping instead of maintaining a second hand-written integer encoder.
+        var writeParams = prms;
 
         // Write to a temp file first, then swap it in. A direct in-place write fails when the file is
         // memory-mapped -- every plugin loaded via 'Open MO2' is an overlay the editor itself locks,
@@ -905,8 +897,8 @@ public static partial class WriteService
     /// with Mutagen's own logic -- instead this checks the ACTUAL master list Mutagen just wrote to
     /// disk (ReadMasterNames reads the real TES4 header bytes), and only if Fallout4.esm is
     /// genuinely absent does it rewrite with MastersListContentOption.NoCheck, which DOES honor
-    /// mod.MasterReferences verbatim -- the same Iterate-vs-NoCheck fallback pattern SavePlugin
-    /// already uses above for FixActorValueConditionParams.
+    /// mod.MasterReferences verbatim. The rewrite still serializes every FormLink against the new
+    /// header, so record bytes and the forced master order stay synchronized.
     /// </summary>
     private static void EnsureFallout4MasterWritten(IFallout4Mod mod, string writtenPath, AMastersListOrderingOption? loOrdering)
     {
@@ -915,23 +907,33 @@ public static partial class WriteService
             return;   // Fallout4.esm itself is never its own master
 
         var written = ReadMasterNames(writtenPath);
-        if (written.Any(m => string.Equals(m, fo4, StringComparison.OrdinalIgnoreCase)))
-            return;   // already there naturally -- most saves that touch any base-game record
-
-        mod.MasterReferences.Clear();
-        mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
-        { Master = ModKey.FromNameAndExtension(fo4) });
-        foreach (var m in written)
-            mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
-            { Master = ModKey.FromNameAndExtension(m) });
-
-        var forced = new BinaryWriteParameters
+        if (!written.Any(m => string.Equals(m, fo4, StringComparison.OrdinalIgnoreCase)))
         {
-            MastersListContent = MastersListContentOption.NoCheck,
-            ModKey = ModKeyOption.NoCheck,
-            MastersListOrdering = loOrdering,
-        };
-        mod.WriteToBinary(writtenPath, forced);
+            mod.MasterReferences.Clear();
+            mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
+            { Master = ModKey.FromNameAndExtension(fo4) });
+            foreach (var m in written)
+                mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
+                { Master = ModKey.FromNameAndExtension(m) });
+
+            var forced = new BinaryWriteParameters
+            {
+                MastersListContent = MastersListContentOption.NoCheck,
+                ModKey = ModKeyOption.NoCheck,
+                MastersListOrdering = loOrdering,
+            };
+            mod.WriteToBinary(writtenPath, forced);
+            written = ReadMasterNames(writtenPath);
+        }
+
+        // Iterate derives the MAST table without mutating the editable model. Keep the
+        // session copy synchronized with the exact header bytes that survived ordering and
+        // the optional Fallout4.esm rewrite. Follow-up operations such as CreateSeqFile use
+        // this file-local master count and must not observe a stale pre-save list.
+        mod.MasterReferences.Clear();
+        foreach (var master in written)
+            mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
+            { Master = ModKey.FromNameAndExtension(master) });
     }
 
     /// <summary>
@@ -2185,103 +2187,6 @@ public static partial class WriteService
         if (string.IsNullOrWhiteSpace(s)) return;
         if (int.TryParse(s, out var ni)) setNumber(ni);
         else if (ResolveFk(env, s!, out var fk)) setRecord(fk);
-    }
-
-    // ── custom-ActorValue condition parameter fixup ───────────────────────────────────────────────
-    // Mutagen serializes a GetBaseValue/GetValue-style condition's ActorValue parameter from
-    // ParameterOneNumber and DROPS ParameterOneRecord, so a CUSTOM actor value (an AVIF record, e.g.
-    // an S7 skill) is written as 00000000 -- a silently dead condition. (The CK and xEdit write it
-    // correctly; Mutagen/Spriggit do not.) Fix: for any condition whose Parameter #1 points to an
-    // ActorValueInformation record, set ParameterOneNumber to the correctly master-mapped FormID --
-    // a regular high-byte index for full masters, or the 0xFE light-master encoding for ESL masters.
-    // A throwaway "probe" write establishes the final master list first so the indices are right.
-    // Returns true when it encoded AV params AND rebuilt mod.ModHeader.MasterFiles, so the caller
-    // must use NoCheck (not Iterate) for the real write -- Iterate would throw away our master list.
-    private static bool FixActorValueConditionParams(IFallout4Mod mod, BinaryWriteParameters prms)
-    {
-        var cache = MutagenLoader.LinkCache;
-        if (cache == null || MutagenLoader.MasterIsEsl.Count == 0) return false;
-
-        // 1. Collect mutable condition data whose Parameter #1 resolves to a custom ActorValue.
-        var targets = new List<(FunctionConditionData data, FormKey av)>();
-        foreach (var rec in mod.EnumerateMajorRecords())
-        {
-            if (rec.GetType().GetProperty("Conditions")?.GetValue(rec) is not System.Collections.IEnumerable conds)
-                continue;
-            foreach (var item in conds)
-            {
-                if (item is not Condition cond || cond.Data is not FunctionConditionData fcd) continue;
-                var fk = fcd.ParameterOneRecord.FormKey;
-                if (fk.IsNull) continue;
-                if (cache.TryResolve<IActorValueInformationGetter>(fk, out _))
-                    targets.Add((fcd, fk));
-            }
-        }
-        if (targets.Count == 0) return false;
-
-        // 2. Probe-write to discover FormLink-referenced masters (Iterate scans proper FormLinks),
-        //    then read the MAST order it produced.
-        var probe = Path.Combine(Path.GetTempPath(), "FO4RE_avprobe_" + Guid.NewGuid().ToString("N")[..8] + ".tmp");
-        List<string> masters;
-        try { mod.WriteToBinary(probe, prms); masters = ReadMasterOrder(probe); }
-        catch { return false; }
-        finally { try { File.Delete(probe); } catch { } }
-
-        // 3. Augment the master list with any AV source plugins not found by Iterate.
-        //    Mutagen's Iterate does NOT walk ParameterOneRecord in CTDA conditions, so e.g.
-        //    S7 System.esp never appears in the probe even though every skill gate points into it.
-        var mastersSet = new HashSet<string>(masters, StringComparer.OrdinalIgnoreCase);
-        foreach (var plugin in targets
-            .Select(t => t.av.ModKey.FileName.String)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(p => !string.Equals(p, mod.ModKey.FileName.String, StringComparison.OrdinalIgnoreCase)))
-        {
-            if (mastersSet.Add(plugin)) masters.Add(plugin);
-        }
-
-        // 4. Plugin-file FormID encoding uses the MAST table index for ALL masters, including ESL.
-        //    The 0xFExxxxxx space is the engine's runtime remapping, not the on-disk format.
-        //    On disk: FormID = (mastIndex << 24) | (localObjId & 0x00FFFFFF) for every master type.
-        var enc = new Dictionary<string, (uint bse, uint mask)>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < masters.Count; i++)
-            enc[masters[i]] = ((uint)i << 24, 0x00FFFFFFu);
-
-        // 5. Write the real FormID into ParameterOneNumber (what Mutagen actually serializes).
-        int fixedCount = 0;
-        foreach (var (data, av) in targets)
-            if (enc.TryGetValue(av.ModKey.FileName.String, out var m))
-            { data.ParameterOneNumber = unchecked((int)(m.bse | (av.ID & m.mask))); fixedCount++; }
-        if (fixedCount == 0) return false;
-
-        // 6. Rebuild mod.MasterReferences from the augmented list so the caller can use
-        //    NoCheck for the real write and Mutagen emits exactly these MAST subrecords -- including
-        //    S7 System.esp which Iterate would never add (no ParameterOneRecord scanning in CTDA).
-        mod.MasterReferences.Clear();
-        foreach (var m in masters)
-            mod.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = m });
-
-        System.Diagnostics.Debug.WriteLine(
-            $"[AVFix] Encoded {fixedCount} AV condition param(s); {masters.Count} master(s) in header.");
-        return true;
-    }
-
-    // Read the ordered master file names from a written plugin's TES4 header (MAST subrecords).
-    private static List<string> ReadMasterOrder(string path)
-    {
-        var b = File.ReadAllBytes(path);
-        var masters = new List<string>();
-        if (b.Length < 24) return masters;
-        uint hdrSize = BitConverter.ToUInt32(b, 4);
-        int pos = 24; long end = Math.Min(24L + hdrSize, b.Length);
-        while (pos + 6 <= end)
-        {
-            var sig = System.Text.Encoding.ASCII.GetString(b, pos, 4);
-            ushort sz = BitConverter.ToUInt16(b, pos + 4);
-            if (sig == "MAST" && sz > 1 && pos + 6 + sz <= b.Length)
-                masters.Add(System.Text.Encoding.ASCII.GetString(b, pos + 6, sz - 1));
-            pos += 6 + sz;
-        }
-        return masters;
     }
 
     // Check if a record matches a simple field filter. filterValue is a case-insensitive
