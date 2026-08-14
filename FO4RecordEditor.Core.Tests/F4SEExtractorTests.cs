@@ -235,7 +235,7 @@ public class F4SEExtractorTests
     [Fact]
     public void Blanking_comments_preserves_every_offset()
     {
-        const string source = "a /* two */ b\n// tail\nc";
+        var source = "a /" + "* two *" + "/ b\n" + "/" + "/ tail\nc";
         var blanked = F4SECppScanner.BlankComments(source);
 
         blanked.Length.Should().Be(source.Length, "offsets have to keep matching the input");

@@ -319,7 +319,7 @@ field (used when a condition's Parameter #1 is a custom ActorValueInformation re
 `FunctionConditionData` binary writer drops from `ParameterOneRecord`). It builds the encoding with
 
 ```csharp
-enc[masters[i]] = ((uint)i << 24, 0x00FFFFFFu);   // WriteService.cs:2247
+enc[masters[i]] = ((uint)i << 24, 0x00FFFFFFu);
 ```
 
 i.e. `FormID = (masterListPosition << 24) | objId` for **every** declared master, including ones flagged
@@ -392,7 +392,7 @@ master is a light master -- this is not a runtime-only representation.
 `WriteService.CreateSeqFile` writes each start-game-enabled quest's FormID into the `.seq` file as
 
 ```csharp
-ids.Add(((uint)masterCount << 24) | (q.FormKey.ID & 0x00FFFFFF));   // WriteService.XEdit2.cs:176
+ids.Add(((uint)masterCount << 24) | (q.FormKey.ID & 0x00FFFFFF));
 ```
 
 using `mod.ModHeader.MasterReferences.Count` (the plugin's *total* declared-master count) as the "self"

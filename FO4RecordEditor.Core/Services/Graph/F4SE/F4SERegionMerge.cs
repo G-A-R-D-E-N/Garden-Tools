@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -20,15 +21,19 @@ namespace FO4RecordEditor.Services.Graph.F4SE;
 
 public static class F4SERegionMerge
 {
-    public const string BeginPrefix = "// >>> body: ";
-    public const string EndPrefix = "// <<< body: ";
+    public const string BeginPrefix = "#pragma region FO4IDE_BODY ";
+    public const string EndPrefix = "#pragma endregion FO4IDE_BODY ";
 
 
     public const string SignatureChangedBanner =
-        "\t// SIGNATURE CHANGED: this body was written against a different signature. Review it.";
+        "\t#pragma message(\"FO4IDE: preserved body signature changed; review it.\")";
 
     private static readonly Regex Marker = new(
-        @"^[ \t]*//[ \t]*(?<kind>>>>|<<<)[ \t]*body:[ \t]*(?<name>[^\r\n]*?)[ \t]*$",
+        @"^[ \t]*#pragma[ \t]+(?<kind>region|endregion)[ \t]+FO4IDE_BODY[ \t]+(?<name>[^\r\n]*?)[ \t]*$",
+        RegexOptions.Multiline | RegexOptions.Compiled);
+
+    private static readonly Regex LegacyMarker = new(
+        @"^[ \t]*" + "/" + "/[ \t]*(?<kind>>>>|<<<)[ \t]*body:[ \t]*(?<name>[^\r\n]*?)[ \t]*$",
         RegexOptions.Multiline | RegexOptions.Compiled);
 
 
@@ -39,6 +44,14 @@ public static class F4SERegionMerge
 
 
     public static string End(string name) => EndPrefix + name;
+
+    private static IEnumerable<Match> MarkerMatches(string text) =>
+        Marker.Matches(text).Cast<Match>()
+            .Concat(LegacyMarker.Matches(text).Cast<Match>())
+            .OrderBy(match => match.Index);
+
+    private static bool IsBegin(Match match) =>
+        match.Groups["kind"].Value is "region" or ">>>";
 
 
 
@@ -56,10 +69,10 @@ public static class F4SERegionMerge
         string? openName = null;
         int openEnd = -1, openStart = -1;
 
-        foreach (Match match in Marker.Matches(normalized))
+        foreach (var match in MarkerMatches(normalized))
         {
             var name = match.Groups["name"].Value;
-            if (match.Groups["kind"].Value == ">>>")
+            if (IsBegin(match))
             {
                 openName = name;
                 openStart = match.Index;
@@ -120,9 +133,9 @@ public static class F4SERegionMerge
         string? openName = null;
         int openEnd = -1, openStart = -1;
 
-        foreach (Match match in Marker.Matches(normalized))
+        foreach (var match in MarkerMatches(normalized))
         {
-            if (match.Groups["kind"].Value == ">>>")
+            if (IsBegin(match))
             {
                 openName = match.Groups["name"].Value;
                 openStart = match.Index;

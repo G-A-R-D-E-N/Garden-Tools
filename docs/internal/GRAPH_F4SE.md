@@ -73,11 +73,11 @@ All verified against the shipped source in this workspace, not recalled.
 
 ## Preserved regions
 
-Bodies sit between `// >>> body: Name` and `// <<< body: Name`. Regeneration keeps everything inside
-verbatim and overwrites everything outside. A body whose signature changed keeps its text and gains
-a `SIGNATURE CHANGED` banner; a body whose function was deleted is reported as orphaned rather than
-dropped silently. **The merge never deletes.** Losing hand-written C++ because a parameter was added
-would be the worst failure this subsystem could have.
+Bodies sit between `#pragma region FO4IDE_BODY Name` and `#pragma endregion FO4IDE_BODY Name`.
+Regeneration keeps everything inside verbatim and overwrites everything outside. A body whose
+signature changed keeps its text and emits a compile-time message; a body whose function was deleted
+is reported as orphaned rather than dropped silently. **The merge never deletes.** Losing hand-written
+C++ because a parameter was added would be the worst failure this subsystem could have.
 
 Stubs invoke `F4SE_BINDING_UNIMPLEMENTED`, which expands to a `static_assert(false, ...)` unless
 `F4SE_BINDING_ALLOW_STUBS` is defined, so a half-finished plugin fails the build loudly rather than

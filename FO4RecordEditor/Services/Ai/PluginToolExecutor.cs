@@ -2375,7 +2375,7 @@ public sealed class PluginToolExecutor
                 var line = "  " + (sev + " " + row.Field).PadRight(FW);
                 for (int ci = 0; ci < matrix.Plugins.Count; ci++)
                     line += " | " + Trunc(ci < row.Values.Count ? row.Values[ci] : "", VW).PadRight(VW);
-                sb.AppendLine(line.TrimEnd());   // drop trailing column padding -- pure wasted tokens
+                sb.AppendLine(line.TrimEnd());
                 shown++;
             }
         }
@@ -2453,7 +2453,7 @@ public sealed class PluginToolExecutor
         var contexts = MutagenLoader.GetRecordContexts(env, fk);
         if (contexts.Count == 0) return $"No record found for {fk}.";
 
-        var winner = contexts[^1].plugin;   // load order, last = winner
+        var winner = contexts[^1].plugin;
         var dump = MutagenLoader.QueryRecordFields(env, winner, fk.ToString());
         return $"Winning plugin: {winner}  (of {contexts.Count} version(s) in the load order)\n{dump}";
     }

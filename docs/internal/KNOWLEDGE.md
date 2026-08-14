@@ -447,12 +447,10 @@ Also: use `id=` not `record=` as the parameter name in `get_record`.
 
 **Correct pattern:**
 ```csharp
-// g = source plugin getter (used to READ skill/threshold/conditions for classification)
-// best = the winning full-record version, skipping your own patch and broken intermediaries
 var best = host.GetBestBase(g, "FallenWorldCrafting_S7.esp", "FW_SkillGates.esp");
 if (!host.CnamIsResolvable(best)) { skippedBroken++; continue; }
 var c = host.Cobj(best);
-host.RemoveConditions(c, "GetBaseValue"); // clean any old nulls
+host.RemoveConditions(c, "GetBaseValue");
 host.AddCondition(c, "GetBaseValue", param1: avFk, op: ">=", value: threshold, ...);
 ```
 
@@ -515,12 +513,7 @@ If `host.Cobjs("FW_SkillGates.esp")` iterates records FROM FW_SkillGates.esp, ca
 **Fix:** Use a different patch plugin name (e.g., `FW_SkillGatesCatFix.esp`) and place it after the source plugin in load order. The override deep-copies from the source record and adds the fix on top — conditions and other fields from the source are preserved.
 
 ```csharp
-// WRONG:
-// run_script(patch_plugin="FW_SkillGates.esp") + iterate FW_SkillGates records → crash
 
-// CORRECT:
-// run_script(patch_plugin="FW_SkillGatesCatFix.esp") + iterate FW_SkillGates records
-// → saves FW_SkillGatesCatFix.esp as a thin override patch, placed after FW_SkillGates.esp
 ```
 
 This means fixes to an existing plugin are applied as a separate override plugin loaded after it, not by overwriting the original. This is also safer (preserves original on disk).
@@ -531,9 +524,7 @@ When FallenWorldCrafting_Compat.esp (or any compat plugin) creates a partial ove
 
 **Fix pattern — added to PatchScriptHost.cs:**
 ```csharp
-// Walk override chain, skip the compat/patch plugin, find first plugin with non-empty categories
 var chainCats = host.GetCategoriesFromChain(g, "FW_SkillGates.esp");
-// Copy those categories into the mutable override
 host.CopyCategories(c, chainCats);
 ```
 
@@ -550,9 +541,8 @@ host.CopyCategories(c, chainCats);
 **Reading the correct AV from FW_SkillGates:**
 FW_SkillGates.esp was saved by FO4RecordEditor using the local Mutagen FormLink writer. Mutagen CAN read `ParameterOneRecord` from it correctly:
 ```csharp
-// This works for FW_SkillGates records; returns proper FormKey like 000165:S7 System.esp
 if (cond.Data is IFunctionConditionDataGetter fcd && !fcd.ParameterOneRecord.FormKey.IsNull)
-    var avFk = fcd.ParameterOneRecord.FormKey; // valid!
+    var avFk = fcd.ParameterOneRecord.FormKey;
 ```
 
 **Correct approach for Mutagen condition access:**
@@ -561,7 +551,7 @@ foreach (var cond in g.Conditions)
 {
     if (cond.Data is Mutagen.Bethesda.Fallout4.IFunctionConditionDataGetter fcd)
     {
-        var func = fcd.Function; // Condition.Function enum
+        var func = fcd.Function;
         var p1 = fcd.ParameterOneRecord.FormKey;
         float val = 0;
         if (cond is Mutagen.Bethesda.Fallout4.IConditionFloatGetter cf) val = cf.ComparisonValue;
@@ -589,7 +579,7 @@ To identify which AV applies, look up the winning record's CNAM ModKey (DLCRobot
 var cache = MutagenLoader.LinkCache;
 if (cache.TryResolve<Mutagen.Bethesda.Fallout4.IConstructibleObjectGetter>(formKey, out var winner))
 {
-    var cnamMod = winner.CreatedObject.FormKey.ModKey.FileName.String; // e.g. "DLCRobot.esm"
+    var cnamMod = winner.CreatedObject.FormKey.ModKey.FileName.String;
 }
 ```
 

@@ -32,13 +32,10 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-// 1. New plugin
 var mod = new Fallout4Mod(ModKey.FromNameAndExtension("MyMod.esp"));
 
-// 2. Reference a vanilla record by FormKey ("XXXXXX:Plugin.esm")
 var endurance = FormKey.Factory("0002C4:Fallout4.esm");
 
-// 3. Create a typed record (auto-assigns next FormID in the new mod)
 var glob = mod.Globals.AddNewFloat();
 glob.EditorID = "MyMod_SomeFloat";
 glob.Data = 0f;
@@ -48,17 +45,14 @@ mgef.EditorID = "MyMod_ReduceEND";
 mgef.Name = "Radiation Sickness";
 mgef.Archetype = new MagicEffect.PeakValueModArchetype { ActorValue = endurance };
 
-// 4. Write binary
 mod.WriteToBinary("E:\\out\\MyMod.esp");
 ```
 
 ## FormKey validation pattern (from the Rad Mod generator)
 
 ```csharp
-// Parse "XXXXXX:Plugin.esp" safely
 if (!FormKey.TryFactory("023742:Fallout4.esm", out var key)) { /* malformed */ }
 
-// Verify it actually exists by resolving against a load order / env
 using var env = GameEnvironment.Typical.Fallout4(Fallout4Release.Fallout4);
 if (env.LinkCache.TryResolve<IIngestibleGetter>(key, out var rec)) { /* valid */ }
 else { /* log missing FormKey, do not emit a broken reference */ }

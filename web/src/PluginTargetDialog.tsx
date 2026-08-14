@@ -112,7 +112,6 @@ export default function PluginTargetDialog(
         />
 
         <div className="ptd-list">
-          {/* <new file> first, as in xEdit */}
           {NEW_ROWS.map(r => (
             <button
               key={r.kind}

@@ -1,43 +1,4 @@
-<#
-.SYNOPSIS
-  Builds the FO4RecordEditor release zip — the thing you hand to other people.
 
-.DESCRIPTION
-  Produces a framework-dependent folder build (NOT self-contained: MO2's usvfs cannot load a
-  self-contained .NET host's bundled runtime, so the app would die silently before managed code
-  runs), bundles the external tools it shells out to, adds the docs and a sample MCP config, and
-  zips the result.
-
-  Recipients need the .NET 9 Desktop Runtime (x64) and nothing else.
-
-.PARAMETER Version
-  Version string in the zip name. Defaults to today's date.
-
-.PARAMETER SkipWeb
-  Skip the npm build of the web UI. Only safe if web\dist\ is already current.
-
-.PARAMETER SkipCkWiki
-  Skip bundling the offline Creation Kit Wiki mirror (~160MB). Bundled by default so
-  papyrus_function_lookup / papyrus_script_info work out of the box for recipients with no setup.
-  Use this for a fast local iteration build; never for a build you're actually handing to someone.
-
-.PARAMETER SkipAudioTools
-  Skip bundling ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode (~110MB, mostly ffmpeg). Bundled by
-  default so the audio_* tools work out of the box. Use this for a fast local iteration build; never
-  for a build you're actually handing to someone.
-
-.PARAMETER IncludeBaseScripts
-  Bundle the vanilla Papyrus base scripts from ..\papyrus\Base.
-
-  OFF by default, deliberately: those are Bethesda's script sources and are not ours to
-  redistribute. They are also unnecessary — compile_papyrus needs the Creation Kit's compiler
-  anyway, and anyone who has the CK already has the base scripts, which the tool auto-detects from
-  their Fallout 4 install. Turn this on only for a private build for yourself.
-
-.EXAMPLE
-  .\package.ps1
-  .\package.ps1 -Version 1.2.0 -SkipWeb
-#>
 [CmdletBinding()]
 param(
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
@@ -66,8 +27,6 @@ $AudioToolsDir = 'E:\F4SE OG\Tools\Audio Converter\bin'
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
 
-# A running exe locks the build output, and a live MCP server is a running exe. This is the most
-# common cause of a mysterious "build failed" here.
 Step 'Stopping any running FO4RecordEditor.exe'
 Get-Process FO4RecordEditor -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 300
@@ -100,7 +59,6 @@ New-Item -ItemType Directory -Path $Staging -Force | Out-Null
 
 Copy-Item "$PublishIn\*" $Staging -Recurse -Force
 
-# Never ship build debris or a developer's own settings/logs.
 Get-ChildItem $Staging -Include '*.pdb', '*.startup.log', 'settings.json' -Recurse -File |
     Remove-Item -Force -ErrorAction SilentlyContinue
 
@@ -171,11 +129,6 @@ foreach ($f in 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md') {
     Copy-Item (Join-Path $Root $f) $Staging -Force
 }
 
-# Allowlist, never `Copy-Item docs -Recurse`: this repo's docs/ also held internal planning notes and
-# redirect stubs pointing at a private workspace path, and a recursive copy shipped them to end users.
-# This matters more since 2026-08-07, not less: docs/internal/ now holds the whole engineering
-# knowledge base, versioned with the code. This allowlist is the only thing keeping it out of the
-# release zip.
 $ShippedDocs = 'MCP_SETUP.md'
 $DocsDest = New-Item -ItemType Directory -Path (Join-Path $Staging 'docs') -Force
 foreach ($d in $ShippedDocs) {
@@ -184,8 +137,6 @@ foreach ($d in $ShippedDocs) {
     Copy-Item $src $DocsDest -Force
 }
 
-# The path is left as a placeholder on purpose: it must be the recipient's own absolute path, and a
-# stale one silently starts nothing.
 @'
 {
   "mcpServers": {
