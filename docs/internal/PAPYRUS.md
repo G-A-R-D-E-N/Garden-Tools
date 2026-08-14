@@ -202,6 +202,15 @@ Kit folds constants" is not a fact anyone can check and "28,073 against 1" is.
   `birdspawnerscript_Flee`. The call site wins. A rule read off the 229 would have been backwards for
   the other 3.
 
+- **`Conditional` belongs to the storage, not the accessor.** It reads like a property-access
+  semantic, and it is declared on the property, but the Creation Kit records it on the backing
+  variable and never on the property record. Counted over the shipped corpus: the conditional bit
+  appears on a property **0** times and on a backing variable **846** times, while the only bits a
+  property ever carries are `Hidden` (381) and `Mandatory` (2,440). That is the reason, not merely
+  the observation: `Conditional` is what lets a condition function read the slot, so it describes
+  the variable the condition reads. Emitting it on both was worth 503 of 22,587 properties, and
+  correcting it closed that bucket exactly.
+
 ### An observation whose mechanism is unresolved: string table case
 
 Recorded because the measurements are solid and the conclusion is not, and because without this note

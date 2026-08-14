@@ -242,7 +242,9 @@ public sealed class PapyrusCodeGenerator
             {
                 Name = BackingVarName(p.Name),
                 Type = PexTypeName(TypeOf(p.Type), p.Type),
-                UserFlags = 0,
+                // Conditional describes the storage, not the accessor, so it rides on the backing
+                // variable. See ConditionalMask.
+                UserFlags = _userFlags.MaskFor(p.Flags) & ConditionalMask,
                 DefaultValue = ConstantOrDefault(p.Initializer, TypeOf(p.Type)),
                 Const = p.HasFlag("const"),
             });
@@ -280,6 +282,19 @@ public sealed class PapyrusCodeGenerator
         return obj;
     }
 
+    /// <summary>
+    /// The bit for <c>Conditional</c>, which a property never carries.
+    /// </summary>
+    /// <remarks>
+    /// Counted over the whole vanilla corpus. Of every user flag bit set on a property in 7,875
+    /// shipped objects, only two ever appear: bit 0 (<c>Hidden</c>) 381 times and bit 5
+    /// (<c>Mandatory</c>) 2,440 times. The conditional bit appears on properties **zero** times, and
+    /// on variables 846 times, which is where it belongs: <c>Conditional</c> is what lets a
+    /// condition function read the storage, so it describes the variable rather than the accessor.
+    /// An auto property's backing variable carries it, and the property does not.
+    /// </remarks>
+    private uint ConditionalMask => _userFlags.MaskFor("conditional");
+
     private PexProperty BuildProperty(PapyrusPropertyDecl p)
     {
         var type = PexTypeName(TypeOf(p.Type), p.Type);
@@ -288,7 +303,7 @@ public sealed class PapyrusCodeGenerator
             Name = p.Name,
             Type = type,
             DocString = p.Documentation ?? "",
-            UserFlags = _userFlags.MaskFor(p.Flags),
+            UserFlags = _userFlags.MaskFor(p.Flags) & ~ConditionalMask,
         };
 
         switch (p.Kind)
