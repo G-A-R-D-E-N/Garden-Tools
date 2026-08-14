@@ -18,7 +18,9 @@ concurrency:
 jobs:
   portable-core-and-web:
     name: Portable core, server, and web
-    runs-on: ubuntu-latest
+    # Self-hosted only -- the org does not use GitHub-hosted runners. Any Linux X64 self-hosted
+    # runner (e.g. debian-wine-msvc) picks this up.
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 40
     steps:
       - name: Check out repository
@@ -88,8 +90,10 @@ jobs:
           - name: compile-on-selfhosted
             runner: [self-hosted, Linux, X64, wine, msvc]
             run_tests: false
+          # Requires a Windows self-hosted runner registered with the standard labels
+          # (self-hosted, Windows, X64) -- the WPF suite needs a real Windows testhost.
           - name: run-on-windows
-            runner: [windows-latest]
+            runner: [self-hosted, Windows, X64]
             run_tests: true
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
