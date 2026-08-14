@@ -8,10 +8,15 @@ namespace FO4RecordEditor.Tests;
 
 // Integration test against a real MO2 instance on this machine. Skipped automatically if the
 // instance isn't present, so it won't fail on other machines/CI.
-public class Mo2ProfileLoaderTests
+public class Mo2ProfileLoaderTests : IDisposable
 {
     private readonly Xunit.Abstractions.ITestOutputHelper _out;
     public Mo2ProfileLoaderTests(Xunit.Abstractions.ITestOutputHelper o) => _out = o;
+
+    // Load() writes the process-global environment (LinkCache, MasterIsEsl, PluginSourcePaths, ...)
+    // by contract; restore it so this real modlist's env doesn't leak into later test classes.
+    private readonly GlobalStateIsolation _state = new();
+    public void Dispose() => _state.Dispose();
 
     // Was D:\Games\ModlistDownloads -- that instance's profiles\/ModOrganizer.ini are gone from this
     // dev box (confirmed 2026-07-20; only its mods\ folder remains), so Available silently evaluated

@@ -11,10 +11,15 @@ namespace FO4RecordEditor.Tests;
 
 // Integration test against a real MO2 instance on this machine (same one Mo2ProfileLoaderTests uses).
 // Skipped automatically if the instance isn't present, so it won't fail on other machines/CI.
-public class CellServiceTests
+public class CellServiceTests : IDisposable
 {
     private readonly ITestOutputHelper _out;
     public CellServiceTests(ITestOutputHelper o) => _out = o;
+
+    // Load() writes the process-global environment (LinkCache, MasterIsEsl, PluginSourcePaths, ...)
+    // by contract; restore it so this real modlist's env doesn't leak into later test classes.
+    private readonly GlobalStateIsolation _state = new();
+    public void Dispose() => _state.Dispose();
 
     private const string Instance = @"E:\Modlists\Fallen World Alpha 2";
 

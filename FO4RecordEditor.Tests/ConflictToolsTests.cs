@@ -4,10 +4,15 @@ using FO4RecordEditor.Services;
 
 namespace FO4RecordEditor.Tests;
 
-public class ConflictToolsTests
+public class ConflictToolsTests : IDisposable
 {
     private const string Instance = @"D:\Games\ModlistDownloads";
     private static bool Available => Directory.Exists(Path.Combine(Instance, "profiles"));
+
+    // Load() writes the process-global environment (LinkCache, MasterIsEsl, PluginSourcePaths, ...)
+    // by contract; restore it so this env doesn't leak into later test classes.
+    private readonly GlobalStateIsolation _state = new();
+    public void Dispose() => _state.Dispose();
 
     private static PluginToolExecutor MakeExecutor(out object env)
     {
