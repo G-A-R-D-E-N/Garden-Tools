@@ -31,7 +31,11 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          # 8.0 is required to RUN the portable suite (Core.Tests targets net8.0 and its testhost
+          # does not roll forward); 10.0 is the build SDK. Cached on the runner after first use.
+          dotnet-version: |
+            10.0.x
+            8.0.x
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -95,6 +99,12 @@ jobs:
           - name: run-on-windows
             runner: [self-hosted, Windows, X64]
             run_tests: true
+    # The run-on-windows matrix entry (run_tests: true) is skipped until a Windows self-hosted
+    # runner is registered AND the RUN_WINDOWS_TESTS variable is set to 'true' (org or repo
+    # settings -> Variables). Without the gate, an absent [self-hosted, Windows, X64] runner
+    # would queue every push for the full 50-minute timeout and red-fail. The compile leg
+    # (run_tests: false) always runs.
+    if: ${{ !matrix.run_tests || vars.RUN_WINDOWS_TESTS == 'true' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
     steps:
