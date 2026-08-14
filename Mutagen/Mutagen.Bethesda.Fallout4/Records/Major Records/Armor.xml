@@ -94,6 +94,9 @@
     <Fields>
       <FormLink name="DamageType" refName="DamageType" />
       <UInt32 name="Value" />
+      <FormLink name="CurveTable" refName="Fallout4MajorRecord">
+        <Versioning formVersion="152" />
+      </FormLink>
     </Fields>
   </Object>
 </Loqui>
