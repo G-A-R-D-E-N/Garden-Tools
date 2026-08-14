@@ -2,7 +2,7 @@
 
 There is a native Linux build. Install the .deb and run it; no Wine, no WebView2.
 
-Verified 2026-08-05 on Linux Mint 22.3 against the real 651-plugin Fallen World load order.
+Verified on Linux Mint 22.3 against a real 651-plugin load order.
 
 ## Install
 
@@ -46,8 +46,8 @@ Two things that will bite:
   around it with `--no-bin-links` and call the tools by their real paths:
   `npm ci --no-bin-links`, then `node node_modules/typescript/bin/tsc -b`,
   `node node_modules/vite/bin/vite.js build` (dev: `node node_modules/vite/bin/vite.js`),
-  `node node_modules/vitest/vitest.mjs run` for the web tests. On an ext4 mount — or on Windows,
-  where npm writes `.bin` shims instead of symlinks — the plain `npm ci && npm run build` works as
+  `node node_modules/vitest/vitest.mjs run` for the web tests. On an ext4 mount, or on Windows,
+  where npm writes `.bin` shims instead of symlinks, the plain `npm ci && npm run build` works as
   written.
 
 ## How it works
@@ -180,7 +180,7 @@ cd web && npm ci && npm run build          # the UI bundle
 dotnet build FO4RecordEditor.Server/FO4RecordEditor.Server.csproj -c Release
 ```
 
-If this repo is on an `ntfs3` mount, `npm ci`/`npm run build` fail on symlinks — see the workaround
+If this repo is on an `ntfs3` mount, `npm ci`/`npm run build` fail on symlinks, see the workaround
 under “Two things that will bite” above (`npm ci --no-bin-links` + direct `node .../bin/...`
 invocations).
 

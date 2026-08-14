@@ -79,9 +79,9 @@ set a second repository variable to the runner's Data folder:
 FO4RE_TEST_DATA = D:\SteamLibrary\steamapps\common\Fallout 4\Data
 ```
 
-(`TestDataRoots` also auto-detects a few known layouts like
-`E:\Modlists\Fallen World Alpha 2\Stock Folder\Data`, so on a machine with the game at one of
-those paths this step is unnecessary. A wrong path degrades to a clean skip, never a failure.)
+(`TestDataRoots` also auto-detects several known layouts, so on a machine with the game at
+one of those paths this step is unnecessary. A wrong path degrades to a clean skip, never a
+failure.)
 
 ## What the leg runs on a fresh runner
 

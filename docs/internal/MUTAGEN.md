@@ -4,14 +4,12 @@ Mutagen is the C# record library that Spriggit is built on. Use it directly when
 you want to **generate** records programmatically with FormKey validation and
 automatic link resolution, rather than hand/script-authoring JSON.
 
-Source: `E:\F4SE OG\Tools\PluginEditTool\tools\Mutagen` (solutions, generators, per-game
-projects). For FO4 work the relevant solution is `Mutagen.Records.Fallout4.sln`
-and the package `Mutagen.Bethesda.Fallout4`.
+Source: the vendored Mutagen tree (solutions, generators, per-game projects). For FO4 work
+the relevant solution is `Mutagen.Records.Fallout4.sln` and the package
+`Mutagen.Bethesda.Fallout4`.
 
-The copy that FO4RecordEditor and GodotCK actually **build** against is the
-trimmed one at `FO4RecordEditor\Mutagen\` (Kernel/Core/Fallout4 only). See
-[MUTAGEN_FORK_COMPARISON.md](MUTAGEN_FORK_COMPARISON.md) for how the two relate
-and for the GitLab mirror.
+The copy FO4RecordEditor actually builds against is the trimmed one at
+`FO4RecordEditor\Mutagen\` (Kernel/Core/Fallout4 only).
 
 ## Spriggit (JSON) vs Mutagen (C# API) - when to use which
 
@@ -72,7 +70,7 @@ instead of shipping a dangling reference.
 ## Build/run a Mutagen generator project
 
 ```powershell
-cd "E:\F4SE OG\Projects\Rad Mod"   # example generator project
+cd <generator project>
 dotnet restore
 dotnet build -c Release
 dotnet run --project RadiationESPGenerator.csproj --configuration Release
@@ -85,5 +83,5 @@ dotnet run --project RadiationESPGenerator.csproj --configuration Release
 - Mutagen and Spriggit must agree on the record schema; both here track FO4 / the
   0.40.1-era record layout. If you regenerate JSON with one and compile with the
   other, keep versions consistent.
-- Synthesis (`Tools\Synthesis`) is the Mutagen-based runtime patcher framework if
+- Synthesis is the Mutagen-based runtime patcher framework if
   you want load-order-aware patches rather than a standalone plugin.

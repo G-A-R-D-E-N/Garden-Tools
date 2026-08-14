@@ -2,7 +2,7 @@
 
 A visual scripting layer over the Papyrus toolchain. A graph document becomes readable `.psc`
 source, which the built-in compiler turns into a `.pex`. Everything below it already existed and is
-documented in [PAPYRUS.md](PAPYRUS.md).
+documented in [PAPYRUS.md](PAPYRUS).
 
 ## Why it exists, and why it emits source
 

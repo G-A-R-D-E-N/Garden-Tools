@@ -1,7 +1,7 @@
 # The F4SE binding generator
 
 Generates the boundary layer of an F4SE plugin: the C++ registrations, correctly typed signatures,
-the paired Papyrus declarations, and the plugin shell. Sits beside [GRAPH.md](GRAPH.md) and uses the
+the paired Papyrus declarations, and the plugin shell. Sits beside [GRAPH.md](GRAPH) and uses the
 same diagnostic scheme.
 
 ## The contract, stated up front

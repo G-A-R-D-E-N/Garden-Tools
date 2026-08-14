@@ -12,11 +12,11 @@ text (JSON or YAML). Built on Mutagen. Pinned here to **0.40.1**, package
 
 | Use | Path |
 |---|---|
-| CLI launcher | `E:\F4SE OG\Tools\Spriggit\spriggit-cli.bat` |
+| CLI launcher | `spriggit-cli.bat` in the repo's `Spriggit\` folder |
 | CLI exe | `Spriggit\Spriggit.CLI\bin\Release\net9.0\Spriggit.CLI.exe` |
-| UI launcher | `E:\F4SE OG\Tools\Spriggit\spriggit-ui.bat` |
+| UI launcher | `spriggit-ui.bat` in the repo's `Spriggit\` folder |
 | UI exe | `Spriggit\Spriggit.UI\bin\Release\net9.0\Spriggit.exe` |
-| Global tool (wrapper) | `C:\Users\Game\.dotnet\tools\spriggit.exe` |
+| Global tool (wrapper) | `spriggit.exe` installed as a dotnet global tool |
 | Cached translation exe | `%LOCALAPPDATA%\Temp\Spriggit\Translations\Spriggit.Json.Fallout4\0.40.1\Spriggit.Json.Fallout4.exe` |
 
 ## Packages (one per game x format)
@@ -27,7 +27,7 @@ YAML is more readable. This workspace standardizes on JSON for FO4.
 ## Serialize (plugin -> JSON)
 
 ```powershell
-cd "E:\F4SE OG\Tools\Spriggit"
+cd <spriggit folder>
 .\spriggit-cli.bat serialize `
   --InputPath  "E:\path\to\SomeMod.esp" `
   --OutputPath "E:\path\to\SomeMod_repo" `
@@ -37,7 +37,7 @@ cd "E:\F4SE OG\Tools\Spriggit"
 
 Output layout: `<OutputPath>\<RecordType>\<EditorID> - <FormID>_<Master>.json`
 plus a `RecordData.json` header and a `.spriggit` metadata file. See
-[JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT.md).
+[JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT).
 
 The global tool form (used in the Rad Mod docs) is equivalent:
 ```powershell

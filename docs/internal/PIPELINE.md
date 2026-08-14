@@ -1,7 +1,7 @@
 # Plugin Build Pipeline
 
 The end-to-end round-trip for producing a plugin from text/scripts. Modeled on
-the working `RadiationOverhaul.esp` build in `E:\F4SE OG\Projects\Rad Mod`.
+a real plugin build pipeline.
 
 ```
  (1) PARSE      existing plugins  -> JSON   (Spriggit serialize)   research input
@@ -35,7 +35,7 @@ tree. The Rad Mod `gen_esl.py` pattern:
 - writes one JSON file per record into folders by record type.
 
 ```powershell
-cd "E:\F4SE OG\Projects\Rad Mod"
+cd <generator project>
 python gen_esl.py
 ```
 Retune by editing constants at the top of the generator, then re-run.
@@ -72,11 +72,10 @@ Verify size afterward; a real build matches its record count, a failed one is ti
 ## 5. DEPLOY - copy to MO2
 
 Always targeted copies. NEVER delete the mod folder (it holds untracked runtime
-files). Deploy to the live modlist (`E:\Modlists\Fallen World Alpha 2\mods\...`,
-not the broken `D:\Games\ModlistDownloads`).
+files). Deploy to the modlist (`<modlist>\mods\...`).
 
 ```powershell
-Copy-Item "esl_build\MyMod.esp" "E:\Modlists\Fallen World Alpha 2\mods\<ModFolder>\MyMod.esp" -Force
+Copy-Item "esl_build\MyMod.esp" "<modlist>\mods\<ModFolder>\MyMod.esp" -Force
 ```
 
 ## Plain ESP vs ESL - load order consequence
@@ -89,4 +88,4 @@ Copy-Item "esl_build\MyMod.esp" "E:\Modlists\Fallen World Alpha 2\mods\<ModFolde
 ## The FormID contract
 When a DLL reads records by hardcoded FormID, the FormID map is a contract:
 changing an ID in the generator requires a matching change in the DLL constants.
-Keep an authoritative FormID table next to the generator (the Rad Mod doc has one).
+Keep an authoritative FormID table next to the generator.

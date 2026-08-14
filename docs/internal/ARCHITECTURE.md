@@ -1,20 +1,15 @@
-# FO4RecordEditor — Architecture & Contributor Facts
+# FO4RecordEditor: Architecture & Contributor Facts
 
-Internal engineering reference for the editor itself. Condensed 2026-07-16 from four superpowers
-plans and one design spec (2026-06-09 → 2026-06-22), which were deleted afterward: all of them
-shipped, and their inlined source had drifted from the real code. What survives here is the
-*rationale* and the *invariants* — the things the code cannot tell you.
-
-User-facing docs are **not** here. They live in the distributable repo:
-`Tools/PluginEditTool/FO4RecordEditor/README.md` + `docs/MCP_SETUP.md`.
+How the editor is put together: the components, the data flow, and the invariants the code
+depends on. Contributor-facing; user documentation lives in the [README](README) and
+[MCP_SETUP](MCP_SETUP).
 
 ---
 
 ## Repository facts (read before touching the code)
 
-- **Two git roots.** `Tools/PluginEditTool/FO4RecordEditor` has its own `.git`. Commits there do
-  **not** touch the workspace repo, and workspace `git status` never shows them. See
-  [[project_untracked_projects]].
+- **The app repo is self-contained.** `FO4RecordEditor/` is its own git root; commits there do
+  not touch any surrounding workspace repo.
 - **The app is a WebView2 shell, not WPF.** `MainWindow.xaml` is a WPF-UI `FluentWindow` hosting a
   single `WebView2`. The window title is `NexusEdit`. The real UI is React under `web/src/`
   (`MainShell.tsx`, `RecordView.tsx`, `ChatPanel.tsx`).
@@ -23,19 +18,19 @@ User-facing docs are **not** here. They live in the distributable repo:
   `BackendInterop` method wraps its body in `DebugLog.Guard(name, () => ...)` (sync) or
   `DebugLog.GuardAsync` (async) and **returns a `string`**.
 - **Tests run serially, deliberately.** `[assembly: CollectionBehavior(DisableTestParallelization=true)]`
-  — `WriteService`/`MutagenLoader` use process-global registries.
+ , `WriteService`/`MutagenLoader` use process-global registries.
 - **The test project must share the `net9.0-windows` TFM** (+ `UseWPF`) or the project reference fails
   to resolve.
 - **React is not unit-tested.** UI changes are manual-verify only.
-- **Do not run `publish.bat` / `package.ps1` while the editor or an MCP server is open** — the exe and
-  its DLLs are locked. See the MSB3021 note in [KNOWLEDGE.md](KNOWLEDGE.md).
+- **Do not run `publish.bat` / `package.ps1` while the editor or an MCP server is open**: the exe and
+  its DLLs are locked. See the MSB3021 note in [KNOWLEDGE.md](https://github.com/G-A-R-D-E-N/FO4-IDE/blob/main/docs/internal/KNOWLEDGE.md).
 
 ### Dead code you will trip over
 
 ~15 WPF `Views/*.xaml` panels (`ExplorerPanel`, `ChatPanel`, `ErrorsPanel`, `ComparePanel`,
-`RecordEditorView`) are **constructed by nothing** — orphaned when the UI moved to React. Only
+`RecordEditorView`) are **constructed by nothing**, orphaned when the UI moved to React. Only
 `CommandPalette` and `SettingsDialog` are still referenced from `MainWindow.xaml.cs`. Likewise
-`RecordMatrixView` and `ShellWindow` were specified in 2026-06-11 and **never built**; the editable
+`RecordMatrixView` and `ShellWindow` were specified but never built; the editable
 matrix shipped as React `RecordView.tsx` instead. Do not treat any of these as live architecture.
 
 ---
@@ -46,7 +41,7 @@ matrix shipped as React `RecordView.tsx` instead. Do not treat any of these as l
 > Index every FormKey, EditorID, and reference once, then answer "what breaks if I delete this?" in
 > O(1) instead of rescanning.
 
-**Generic over every record type — always.** xEdit reads all records via its element-def system; we
+**Generic over every record type, always.** xEdit reads all records via its element-def system; we
 read them all via Mutagen's typed records plus a reflection walker. Readability fixes must therefore
 be *generic with per-type enhancements*, never hardcoded to a handful of record types.
 
@@ -69,7 +64,7 @@ behave as they do today). Worldspace/cell navigation redesign is out of scope.
 
 ### Adding an MCP tool touches FOUR sites
 
-Miss one and the tool half-exists — the classic symptom is a tool that lists but never dispatches.
+Miss one and the tool half-exists, the classic symptom is a tool that lists but never dispatches.
 In `Services/Ai/PluginToolExecutor.cs`:
 
 1. a `ToolSpec[] _specs` entry,
@@ -82,7 +77,7 @@ Then `BackendInterop.cs` + `web/src/backend.ts` if the GUI should expose it too.
 ### Rendering
 
 - **Keep raw keys on the nodes; only the *displayed* label is friendly.** Edits and paths resolve
-  against the raw keys — `FriendlyNames.LabelPath` relabels only the final path segment when it is a
+  against the raw keys, `FriendlyNames.LabelPath` relabels only the final path segment when it is a
   plain property name, and leaves dotted paths and indices structurally intact.
 - **Byte-blob collapse is checked on the collection *before* `WalkObject` expands it**, not per
   element. This ordering is load-bearing.
@@ -95,13 +90,13 @@ Then `BackendInterop.cs` + `web/src/backend.ts` if the GUI should expose it too.
 
 ### Records and conflicts
 
-- FormKey wire format is `001234:Fallout4.esm` — regex `^[0-9A-Fa-f]{6}:.+\.(esp|esm|esl)$`.
+- FormKey wire format is `001234:Fallout4.esm`: regex `^[0-9A-Fa-f]{6}:.+\.(esp|esm|esl)$`.
 - When two plugins define the same FormKey, **the last indexed wins** (load order). Losing overrides
   are tracked so the Compare/Errors tabs can surface them.
 - Conflict status is not binary. The model mirrors xEdit's: no-conflict, benign override, critical
-  conflict, identical-to-master. Full research in [CONFLICT_ENGINE.md](CONFLICT_ENGINE.md).
+  conflict, identical-to-master.
 - A `KnownMasters` allowlist (Fallout4.esm + the 7 DLC esms) exists to stop false-positive broken refs.
-- **Renumbering does not rewrite references in *other* plugins** — that needs a patch. The tool
+- **Renumbering does not rewrite references in *other* plugins**: that needs a patch. The tool
   reports how many exist so the caller or the AI can act on it.
 - The Mutagen re-key pattern is `mod.RemapLinks(Dictionary<FormKey,FormKey>)` +
   `DuplicateInAsNewUntypedRecord(IMajorRecord, FormKey)` + `Remove(FormKey)`. `CompactToEsl` has the
@@ -110,38 +105,37 @@ Then `BackendInterop.cs` + `web/src/backend.ts` if the GUI should expose it too.
 
 ### Anthropic provider
 
-System messages are hoisted to the top-level `system` field — the API accepts only `user`/`assistant`
+System messages are hoisted to the top-level `system` field, the API accepts only `user`/`assistant`
 in `messages`.
 
 ---
 
 ## Palette
 
-**Source of truth is `web/src/index.css`** — CSS custom properties (`--conflict-green`,
+**Source of truth is `web/src/index.css`**, CSS custom properties (`--conflict-green`,
 `--conflict-yellow`, `--conflict-orange`, `--conflict-purple`, `--conflict-red`, `--conflict-empty`,
 `--text-identical`), with a `[data-theme="light"]` block overriding them. Do not copy the hex values
-into docs; every doc that did has already drifted (the 2026-06-11 spec and `geminiprogress.md` each
-recorded a different, now-dead palette, and neither knew about the light theme).
+into docs; every doc that did has already drifted.
 
 What is durable is the *intent*: VSCode Dark+ as the base, and **xEdit's exact semantic color
-meanings preserved** — identical/override/winner/master/loser — because that mapping is what modders
+meanings preserved**, identical/override/winner/master/loser, because that mapping is what modders
 already have in their heads. Retune the values freely; do not remap the meanings.
 
 The WPF `Views/ConflictStatusToBrush.cs` and `ConflictCellBrush.cs` still exist but are part of the
-orphaned WPF layer above — they do not color the shipping UI.
+orphaned WPF layer above, they do not color the shipping UI.
 
 ---
 
 ## Inner loop
 
 ```powershell
-cd "E:\F4SE OG\Tools\PluginEditTool\FO4RecordEditor"
+cd FO4RecordEditor
 dotnet test FO4RecordEditor.Tests\FO4RecordEditor.Tests.csproj --filter FullyQualifiedName~<Name>
 dotnet test                                   # full suite
 cd web && npm run build                       # the csproj copies web\dist on Release build
 dotnet build FO4RecordEditor\FO4RecordEditor.csproj -c Release
 ```
 
-Then the user runs **`/mcp reconnect`** — a rebuilt exe does not reach a running server. If the build
+Then the user runs **`/mcp reconnect`**, a rebuilt exe does not reach a running server. If the build
 fails MSB3021 "being used by another process", that is a **file lock, not a code error**: stop every
 `FO4RecordEditor.exe --mcp` instance, or prove the code with `dotnet build -t:Compile`.

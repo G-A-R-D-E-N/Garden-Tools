@@ -1,9 +1,9 @@
 # Modern xEdit UI Redesign - Task Plan
 
-Drafted 2026-06-23, built 2026-08-05. Target: re-skin the React record editor (`web/src/`) to
+A re-skin of the React record editor (`web/src/`) to
 match the "Modern xEdit - Record Viewer" concept mockups.
 
-> **BUILT 2026-08-05.** All six phases and all seven backend contracts are implemented and on
+> **Implemented.** All six phases and all seven backend contracts are implemented and on
 > `main`. This document is kept as the record of what was specified and decided, not as a backlog.
 >
 > What shipped, by phase:
@@ -28,8 +28,7 @@ match the "Modern xEdit - Record Viewer" concept mockups.
 > in the backend means the sub-tab counts and the donut come from the same rows the grid renders and
 > cannot drift from what is on screen.
 >
-> Shipped work is in [HISTORY.md](HISTORY.md); current architecture in
-> [ARCHITECTURE.md](ARCHITECTURE.md).
+> Current architecture is in [ARCHITECTURE.md](ARCHITECTURE).
 
 The two concept images are two variants of the SAME screen. They agree on the overall shell and
 differ only in how the Conflicts view is laid out:
@@ -39,7 +38,7 @@ differ only in how the Conflicts view is laid out:
 
 Recommendation: build the shared shell first (Phases 1-3), then implement the Conflicts layout.
 
-**DECISIONS (locked 2026-06-23):**
+**DECISIONS:**
 - **Scope:** full end-to-end redesign approved (all 6 phases + the backend contracts).
 - **Default Conflicts layout: Variant B (cards)** - base-vs-override cards with an `Overridden By (N)`
   plugin-chip column. Phase 4 builds Variant B as the primary view; Variant A (matrix) is an
