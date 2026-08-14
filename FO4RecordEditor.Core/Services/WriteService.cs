@@ -1406,8 +1406,60 @@ public static partial class WriteService
         return true;
     }
 
-    public static string ResolveConflict(object? env, string formKeyStr, string winningPlugin, string patchPlugin)
-        => ResolveConflict(env, formKeyStr, winningPlugin, patchPlugin, overwrite: false);
+    /// <summary>
+    /// Inspect a target before a multi-record operation. Existing targets fail closed: if the file
+    /// cannot be opened or enumerated, the caller must stop before writing anything rather than
+    /// treating an unknown state as "no collisions".
+    /// </summary>
+    private static bool TryFindExistingOverrides(
+        object? env,
+        string patchPlugin,
+        IEnumerable<FormKey> candidates,
+        out IReadOnlyList<(FormKey formKey, string editorId)> existing,
+        out string error)
+    {
+        existing = Array.Empty<(FormKey, string)>();
+        error = "";
+
+        var wanted = candidates.Where(fk => !fk.IsNull).ToHashSet();
+        if (wanted.Count == 0) return true;
+
+        var (patchName, patchPath) = NormalizePlugin(patchPlugin);
+        var patch = GetMutable(patchName);
+        if (patch == null)
+        {
+            bool existsOnDisk = (patchPath != null && File.Exists(patchPath))
+                || MutagenLoader.LooseModPaths.ContainsKey(patchName)
+                || FindPluginPath(patchName, env) != null;
+            if (!existsOnDisk) return true;
+
+            var openResult = OpenPlugin(patchPlugin, env);
+            patch = GetMutable(patchName);
+            if (patch == null)
+            {
+                error = $"Could not inspect existing target '{patchName}' before copying: {openResult}";
+                return false;
+            }
+        }
+
+        try
+        {
+            existing = patch.EnumerateMajorRecords()
+                .Where(r => wanted.Contains(r.FormKey))
+                .Select(r => (r.FormKey, string.IsNullOrWhiteSpace(r.EditorID) ? r.FormKey.ToString() : r.EditorID!))
+                .OrderBy(r => r.FormKey.ToString(), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not inspect existing overrides in '{patchName}' before copying: {ex.Message}";
+            return false;
+        }
+    }
+
+    public static string ResolveConflict(object? env, string formKeyStr, string sourceName, string patchPlugin)
+        => ResolveConflict(env, formKeyStr, sourceName, patchPlugin, overwrite: false);
 
     /// <summary>
     /// Copy a record into a patch as an override, with xEdit's rules around it:
@@ -1420,12 +1472,18 @@ public static partial class WriteService
         if (!FormKey.TryFactory(formKeyStr, out var fk)) return "Invalid FormKey.";
         if (string.IsNullOrWhiteSpace(patchPlugin)) return "Choose a patch plugin to write the resolution into.";
 
-        var src = MutagenLoader.GetRecordVersion(env, winningPlugin, fk);
-        if (src == null) return $"Could not find {fk} in '{winningPlugin}'.";
+        var (sourceName, _) = NormalizePlugin(winningPlugin);
+        var (patchName, patchPath) = NormalizePlugin(patchPlugin);
+        if (string.Equals(sourceName, patchName, StringComparison.OrdinalIgnoreCase))
+            return ToolError.Fail(
+                $"Refused: source and target are both '{patchName}'. Replacing an override from the same " +
+                "mutable plugin would remove the source record before it can be copied. Choose a separate patch plugin.");
+
+        var src = MutagenLoader.GetRecordVersion(env, sourceName, fk);
+        if (src == null) return $"Could not find {fk} in '{sourceName}'.";
 
         // The patch may be given as a bare name or a full path. Ensure it's open and mutable:
         // open it if it already exists on disk (so we extend it), else create it new.
-        var (patchName, patchPath) = NormalizePlugin(patchPlugin);
         if (GetMutable(patchName) == null)
         {
             bool existsOnDisk = (patchPath != null && File.Exists(patchPath))
@@ -1454,7 +1512,7 @@ public static partial class WriteService
             {
                 var masterEdid = string.IsNullOrEmpty(masterRec.EditorID) ? fk.ToString() : masterRec.EditorID;
                 return $"Type collision refused: {fk} is {masterSig.Name} '{masterEdid}' in {masterPlugin} " +
-                       $"but the supplied record is {srcSig.Name} from '{winningPlugin}'. " +
+                       $"but the supplied record is {srcSig.Name} from '{sourceName}'. " +
                        $"Creating this override would clobber the base record. " +
                        $"Check which mod owns this FormID in xEdit before proceeding.";
             }
@@ -1468,11 +1526,11 @@ public static partial class WriteService
         int targetIdx = LoadOrderIndexOf(env, patchName);
         if (targetIdx >= 0)
         {
-            int originIdx = LoadOrderIndexOf(env, winningPlugin);
+            int originIdx = LoadOrderIndexOf(env, sourceName);
             int masterIdx = LoadOrderIndexOf(env, recordMaster);
             // Must sit after BOTH the record's own master and the version being copied.
             int mustFollowIdx = Math.Max(originIdx, masterIdx);
-            var mustFollow = originIdx >= masterIdx ? winningPlugin : recordMaster;
+            var mustFollow = originIdx >= masterIdx ? sourceName : recordMaster;
             if (mustFollowIdx >= 0 && targetIdx < mustFollowIdx)
             {
                 return ToolError.Fail(
@@ -1483,34 +1541,43 @@ public static partial class WriteService
             }
         }
 
-        // Overwrite protection: GetOrAddAsOverride would silently replace an override already in the
-        // patch, discarding whatever edits it carried. Ask first, exactly once, via a sentinel the
-        // caller turns into a prompt.
+        // Overwrite protection: Mutagen's GetOrAddAsOverride returns an existing override unchanged.
+        // That is safe by default, but an explicit replacement needs a separate remove/copy path and
+        // must never be mistaken for success without confirmation.
         bool alreadyPresent;
         try { alreadyPresent = patch.EnumerateMajorRecords().Any(r => r.FormKey == fk); }
-        catch { alreadyPresent = false; }
+        catch (Exception ex)
+        {
+            return ToolError.Fail(
+                $"Could not inspect target '{patchName}' before copying; no changes were made: {ex.Message}");
+        }
         if (alreadyPresent && !overwrite)
         {
             var existingEdid = string.IsNullOrEmpty(getter.EditorID) ? fk.ToString() : getter.EditorID;
             return $"{OverwritePrompt} '{patchName}' already contains an override for {existingEdid} ({fk}). " +
-                   $"Overwrite the existing record with {winningPlugin}'s version?";
+                   $"Overwrite the existing record with {sourceName}'s version?";
         }
 
         try
         {
-            if (!AddOverride(patch, getter))
-                return $"This record type ({getter.Registration.Name}) cannot be overridden yet.";
+            var copied = alreadyPresent
+                ? ReplaceOverride(patch, getter)
+                : AddOverride(patch, getter);
+            if (!copied)
+                return alreadyPresent
+                    ? $"Could not replace the existing {getter.Registration.Name} override; the original was left unchanged."
+                    : $"This record type ({getter.Registration.Name}) cannot be overridden yet.";
 
             // Master injection: the override references a record owned by another plugin, so that
             // plugin has to be declared or the FormID resolves to nothing. Save recomputes the list,
             // but the UI reads the header back immediately, and xEdit shows the dependency at once.
             var added = new List<string>();
             if (EnsureMaster(patch, recordMaster, patchName)) added.Add(recordMaster);
-            if (EnsureMaster(patch, winningPlugin, patchName)) added.Add(winningPlugin);
+            if (EnsureMaster(patch, sourceName, patchName)) added.Add(sourceName);
 
             MutagenLoader.InvalidateModIndex(patchName);
             NotifyChanged(patchName);
-            return $"Copied {winningPlugin}'s version of {fk} into {patchName} as an override"
+            return $"Copied {sourceName}'s version of {fk} into {patchName} as an override"
                    + (alreadyPresent ? " (replacing the override already there)" : "")
                    + (added.Count > 0 ? $"; declared master(s): {string.Join(", ", added)}" : "")
                    + $". Ensure {patchName} loads after the conflicting plugins, then save it.";
@@ -1569,6 +1636,52 @@ public static partial class WriteService
         return null;
     }
 
+    private static bool ReplaceOverride(IFallout4Mod mod, IMajorRecordGetter getter) =>
+        ReplaceOverrideReturning(mod, getter) != null;
+
+    /// <summary>
+    /// Replace an existing override with a fresh override-mask copy of <paramref name="getter"/>.
+    /// Mutagen's GetOrAddAsOverride intentionally returns an existing record unchanged, so calling
+    /// it with overwrite=true used to report "replacing" while preserving the old fields. Remove
+    /// only after retaining the old mutable record, and restore it if the deep copy or insertion
+    /// fails, so an attempted overwrite cannot turn into data loss.
+    /// </summary>
+    private static IFallout4MajorRecord? ReplaceOverrideReturning(IFallout4Mod mod, IMajorRecordGetter getter)
+    {
+        if (_groupOverrideMixin == null) return null;
+        var getterType = getter.Registration.GetterType;
+
+        foreach (var prop in mod.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var pt = prop.PropertyType;
+            if (!pt.IsGenericType) continue;
+            var args = pt.GetGenericArguments();
+            if (args.Length != 1) continue;
+            var groupMajor = args[0];
+            if (!getterType.IsAssignableFrom(groupMajor)) continue;
+            if (prop.GetValue(mod) is not Mutagen.Bethesda.Plugins.Records.IGroup group) continue;
+            var existing = group.Records.FirstOrDefault(record => record.FormKey == getter.FormKey);
+            if (existing == null) return AddOverrideReturning(mod, getter);
+
+            if (!TryRemoveFromGroup(group, getter.FormKey, out _)) return null;
+            try
+            {
+                var replacement = _groupOverrideMixin.MakeGenericMethod(groupMajor, getterType)
+                    .Invoke(null, new object?[] { group, getter }) as IFallout4MajorRecord;
+                if (replacement != null) return replacement;
+
+                group.SetUntyped(existing);
+                return null;
+            }
+            catch
+            {
+                try { group.SetUntyped(existing); } catch { }
+                throw;
+            }
+        }
+        return null;
+    }
+
     /// <summary>Plugins currently open for editing (candidates for a conflict patch target).</summary>
     public static IReadOnlyList<string> EditablePlugins() => _mutable.Keys.ToList();
 
@@ -1593,44 +1706,116 @@ public static partial class WriteService
     /// { total, ok, failed, failures: [ { formKey, reason } ] } so callers get authoritative counts
     /// instead of parsing human-readable result strings.
     /// </summary>
-    public static string CopyAsOverrideMany(object? env, string itemsJson, string patchPlugin)
+    public static string CopyAsOverrideMany(object? env, string itemsJson, string patchPlugin,
+        bool overwrite = false)
     {
-        int total = 0, ok = 0;
-        var failures = new List<(string formKey, string reason)>();
-
+        List<(string formKey, string source)> items;
         try
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(itemsJson) ? "[]" : itemsJson);
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                total++;
-                var formKey = el.TryGetProperty("formKey", out var fkEl) ? fkEl.GetString() ?? "" : "";
-                var source = el.TryGetProperty("source", out var sEl) ? sEl.GetString() ?? "" : "";
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                throw new JsonException("Expected a JSON array.");
 
-                var msg = ResolveConflict(env, formKey, source, patchPlugin);
-                // Couples to ResolveConflict's success contract: a successful copy is the only result
-                // whose message starts with "Copied" -- the one authoritative success token.
-                if (msg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase)) ok++;
-                else failures.Add((formKey, msg));
-            }
+            items = doc.RootElement.EnumerateArray()
+                .Select(el => (
+                    formKey: el.TryGetProperty("formKey", out var fkEl) ? fkEl.GetString() ?? "" : "",
+                    source: el.TryGetProperty("source", out var sEl) ? sEl.GetString() ?? "" : ""))
+                .ToList();
         }
         catch (Exception ex)
         {
-            // Invalid/unparseable input: report an empty batch with the parse error as the reason.
             return JsonSerializer.Serialize(new
             {
                 total = 0,
                 ok = 0,
                 failed = 0,
+                requiresOverwrite = false,
+                existing = Array.Empty<object>(),
                 failures = new[] { new { formKey = "", reason = $"Could not parse items JSON: {ex.Message}" } },
             });
         }
 
+        // Preflight the whole batch before the first write. Duplicate destinations are ambiguous even
+        // when overwrite was approved: processing them in order would copy the first item and then
+        // silently replace it with the second source version. Reject the entire request before a patch
+        // is created so malformed or duplicate UI selections cannot become partial writes.
+        var parsedKeys = items
+            .Select(i => FormKey.TryFactory(i.formKey, out var fk) ? fk : default)
+            .Where(fk => !fk.IsNull)
+            .ToArray();
+        var duplicateKeys = parsedKeys
+            .GroupBy(fk => fk)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .OrderBy(fk => fk.ToString(), StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (duplicateKeys.Length > 0)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                total = items.Count,
+                ok = 0,
+                failed = items.Count,
+                requiresOverwrite = false,
+                existing = Array.Empty<object>(),
+                failures = duplicateKeys.Select(fk => new
+                {
+                    formKey = fk.ToString(),
+                    reason = "The batch contains this FormKey more than once; nothing was copied.",
+                }).ToArray(),
+            });
+        }
+
+        // Existing-target collisions still use one explicit confirmation, and cancellation leaves
+        // every selected record untouched.
+        if (!overwrite)
+        {
+            if (!TryFindExistingOverrides(env, patchPlugin, parsedKeys, out var existing, out var inspectError))
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    total = items.Count,
+                    ok = 0,
+                    failed = items.Count,
+                    requiresOverwrite = false,
+                    existing = Array.Empty<object>(),
+                    failures = new[] { new { formKey = "", reason = inspectError } },
+                });
+            }
+            if (existing.Count > 0)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    total = items.Count,
+                    ok = 0,
+                    failed = 0,
+                    requiresOverwrite = true,
+                    existing = existing.Select(e => new
+                    {
+                        formKey = e.formKey.ToString(),
+                        editorId = e.editorId,
+                    }).ToArray(),
+                    failures = Array.Empty<object>(),
+                });
+            }
+        }
+
+        int ok = 0;
+        var failures = new List<(string formKey, string reason)>();
+        foreach (var item in items)
+        {
+            var msg = ResolveConflict(env, item.formKey, item.source, patchPlugin, overwrite);
+            if (msg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase)) ok++;
+            else failures.Add((item.formKey, msg));
+        }
+
         return JsonSerializer.Serialize(new
         {
-            total,
+            total = items.Count,
             ok,
-            failed = total - ok,
+            failed = items.Count - ok,
+            requiresOverwrite = false,
+            existing = Array.Empty<object>(),
             failures = failures.Select(f => new { formKey = f.formKey, reason = f.reason }).ToArray(),
         });
     }

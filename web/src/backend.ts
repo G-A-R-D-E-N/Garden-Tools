@@ -24,7 +24,7 @@ export interface Backend {
   // Returns a message starting 'EXISTS:' when the target already overrides this record and
   // overwrite was false, so the caller can ask before replacing it.
   CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
-  CopyAsOverrideMany(itemsJson: string, patchPlugin: string): Promise<string>;
+  CopyAsOverrideMany(itemsJson: string, patchPlugin: string, overwrite: boolean): Promise<string>;
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
@@ -53,7 +53,7 @@ export interface Backend {
   RenumberPluginFormIds(plugin: string, start: string, apply: boolean): Promise<string>;
   CreateSeqFile(plugin: string, outputDir: string): Promise<string>;
   CheckCircularLeveledLists(plugin: string): Promise<string>;
-  DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean): Promise<string>;
+  DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean, overwrite: boolean): Promise<string>;
   ChangeReferencingRecords(from: string, to: string, patchPlugin: string, apply: boolean): Promise<string>;
 
   // ---- navigator / workspace / detail rail ----

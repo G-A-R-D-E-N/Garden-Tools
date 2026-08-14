@@ -200,8 +200,9 @@ public class BackendInterop
     public string CopyAsOverride(string sourcePlugin, string id, string patchPlugin, bool overwrite) =>
         DebugLog.Guard(nameof(CopyAsOverride), () => WriteService.CopyAsOverride(Env, sourcePlugin, id, patchPlugin, overwrite),
             $"{id} {sourcePlugin}->{patchPlugin}");
-    public string CopyAsOverrideMany(string itemsJson, string patchPlugin) =>
-        DebugLog.Guard(nameof(CopyAsOverrideMany), () => WriteService.CopyAsOverrideMany(Env, itemsJson, patchPlugin), patchPlugin);
+    public string CopyAsOverrideMany(string itemsJson, string patchPlugin, bool overwrite) =>
+        DebugLog.Guard(nameof(CopyAsOverrideMany),
+            () => WriteService.CopyAsOverrideMany(Env, itemsJson, patchPlugin, overwrite), patchPlugin);
     public string RevertOverrides(string badPlugin, string patchPlugin, string signature, string containsComponent, bool apply, int limit) =>
         DebugLog.Guard(nameof(RevertOverrides), () => WriteService.RevertOverridesFrom(Env, badPlugin, patchPlugin,
             string.IsNullOrWhiteSpace(signature) ? null : signature,
@@ -249,10 +250,10 @@ public class BackendInterop
     public string RemoveIdenticalToMaster(string plugin, bool apply) =>
         DebugLog.Guard(nameof(RemoveIdenticalToMaster), () => WriteService.RemoveIdenticalToMaster(Env, plugin, apply),
             $"{plugin} apply={apply}");
-    public string DeepCopyAsOverride(string sourcePlugin, string id, string patchPlugin, bool apply) =>
+    public string DeepCopyAsOverride(string sourcePlugin, string id, string patchPlugin, bool apply, bool overwrite) =>
         DebugLog.Guard(nameof(DeepCopyAsOverride),
-            () => WriteService.DeepCopyAsOverride(Env, sourcePlugin, id, patchPlugin, apply),
-            $"{id} {sourcePlugin}->{patchPlugin} apply={apply}");
+            () => WriteService.DeepCopyAsOverride(Env, sourcePlugin, id, patchPlugin, apply, overwrite),
+            $"{id} {sourcePlugin}->{patchPlugin} apply={apply} overwrite={overwrite}");
     public string ChangeReferencingRecords(string from, string to, string patchPlugin, bool apply) =>
         DebugLog.Guard(nameof(ChangeReferencingRecords),
             () => WriteService.ChangeReferencingRecords(Env, from, to, patchPlugin, apply),

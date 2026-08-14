@@ -640,7 +640,8 @@ public sealed class PluginToolExecutor
             "by the source plugin (a link into Fallout4.esm or another already-loaded master is left alone -- " +
             "that record already exists everywhere). Refuses CELL and WRLD: xEdit's deep copy for those means " +
             "something this tool cannot reproduce (their placed-reference/cell-block tree), so copy those with " +
-            "copy_as_override plus create_placed_object instead. DRY RUN by default.",
+            "copy_as_override plus create_placed_object instead. DRY RUN by default. Existing target " +
+            "overrides are never replaced unless overwrite=true is supplied explicitly.",
             new
             {
                 type = "object",
@@ -649,7 +650,8 @@ public sealed class PluginToolExecutor
                     source_plugin = new { type = "string", description = "Plugin to copy FROM. Omit to take the winning version." },
                     id = new { type = "string", description = "FormKey or EditorID of the root record." },
                     patch_plugin = new { type = "string" },
-                    apply = new { type = "boolean", description = "Default false (dry run)." }
+                    apply = new { type = "boolean", description = "Default false (dry run)." },
+                    overwrite = new { type = "boolean", description = "Default false. Set true only after reviewing the EXISTS refusal and approving replacement of every existing override in the deep-copy set." }
                 },
                 required = new[] { "id", "patch_plugin" }
             }),
@@ -2129,7 +2131,8 @@ public sealed class PluginToolExecutor
                     ? WriteService.GetConditionsAtPath(env, Str("plugin"), Str("record"), condPath)
                     : WriteService.GetConditionsJson(env, Str("plugin"), Str("record"));
             case "deep_copy_as_override":
-                return WriteService.DeepCopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"), Bool("apply"));
+                return WriteService.DeepCopyAsOverride(env, Str("source_plugin"), Str("id"), Str("patch_plugin"),
+                    Bool("apply"), Bool("overwrite"));
             case "change_referencing_records":
                 return WriteService.ChangeReferencingRecords(env, Str("from"), Str("to"), Str("patch_plugin"), Bool("apply"));
             case "element_add":
