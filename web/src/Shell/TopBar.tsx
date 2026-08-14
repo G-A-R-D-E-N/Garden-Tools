@@ -95,7 +95,7 @@ export default function TopBar({
     <div className="topbar">
       { }
       <div className="topbar-brand">
-        <span className="brand-x">NexusEdit</span>
+        <span className="brand-x">FO4IDE</span>
       </div>
 
       { }

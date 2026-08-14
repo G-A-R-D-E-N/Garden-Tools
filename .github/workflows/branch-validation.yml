@@ -26,6 +26,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Enforce source policy
+        run: python3 tools/check-source-policy.py
+
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:

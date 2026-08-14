@@ -22,7 +22,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
 
-    console.error('[FO4RecordEditor] UI error:', error, info.componentStack);
+    console.error('[FO4IDE] UI error:', error, info.componentStack);
     this.setState({ info: info.componentStack ?? '' });
   }
 

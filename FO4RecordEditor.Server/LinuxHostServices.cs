@@ -90,7 +90,7 @@ public static class LinuxHostServices
         {
             if (Picker == "zenity") Run("zenity", ["--info", "--no-wrap", "--text=" + text]);
             else if (Picker == "kdialog") Run("kdialog", ["--msgbox", text]);
-            else Console.Error.WriteLine("[FO4RecordEditor] " + text);
+        else Console.Error.WriteLine("[FO4IDE] " + text);
         }
         catch (Exception ex) { DebugLog.Exception("HostServices.ShowMessage", ex); }
     }

@@ -14,7 +14,7 @@ using Newtonsoft.Json.Linq;
 
 
 DebugLog.Init();
-DebugLog.Info("App", "=== FO4RecordEditor (server) launching ===",
+DebugLog.Info("App", "=== FO4IDE (server) launching ===",
     $"base={AppContext.BaseDirectory} cwd={Environment.CurrentDirectory}");
 
 string? ArgValue(string name)
@@ -149,7 +149,7 @@ app.MapFallback(async ctx =>
 });
 
 var url = $"http://{host}:{port}/#/main";
-Console.WriteLine($"FO4RecordEditor is running at {url}");
+Console.WriteLine($"FO4IDE is running at {url}");
 Console.WriteLine($"Log: {DebugLog.Path}");
 
 if (HasFlag("--headless"))
@@ -196,7 +196,7 @@ static void OpenNativeWindow(string url)
         Environment.SetEnvironmentVariable("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
     new Photino.NET.PhotinoWindow()
-        .SetTitle("FO4RecordEditor")
+        .SetTitle("FO4IDE")
         .SetUseOsDefaultSize(false)
         .SetSize(1600, 1000)
         .SetUseOsDefaultLocation(true)

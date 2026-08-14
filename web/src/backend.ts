@@ -562,6 +562,8 @@ declare global {
           cell?: CellHost;
           graph?: GraphHost;
         };
+        addEventListener(type: string, listener: (event: MessageEvent) => void): void;
+        removeEventListener(type: string, listener: (event: MessageEvent) => void): void;
       };
     };
   }

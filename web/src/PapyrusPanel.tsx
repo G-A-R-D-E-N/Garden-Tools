@@ -625,7 +625,7 @@ function renderHighlighted(text: string, mode: Mode, assembly: boolean) {
       let cls = '';
       if (/error|cannot|unknown|FAILED|No output|is not a function|DEPENDENCY HELP/i.test(line)) cls = 'tk-err';
       else if (/succeeded|^RESULT:.*0 failed|^SAVED ->|^OUTPUT:/i.test(line)) cls = 'tk-ok';
-      else if (/RESULT:|Nexus:|https?:\/\
+      else if (new RegExp('RESULT:|Nexus:|https?:\\/\\/', 'i').test(line)) cls = 'tk-key';
       return <div key={i} className={cls}>{line || ' '}</div>;
     }
     return <div key={i}>{tokenizePsc(line)}</div>;
