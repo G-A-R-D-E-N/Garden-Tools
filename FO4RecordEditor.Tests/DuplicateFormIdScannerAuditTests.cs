@@ -158,7 +158,13 @@ public class DuplicateFormIdScannerAuditTests
         var offsets = new List<int>();
         for (var i = 0; i <= bytes.Length - 24; i++)
         {
-            if (bytes.AsSpan(i, 4).SequenceEqual(marker)) offsets.Add(i);
+            if (bytes.AsSpan(i, 4).SequenceEqual(marker))
+            {
+                // A GRUP header's label field (at offset +8) spells the group's record signature;
+                // it is a group marker, not a record header, so skip it.
+                var isGroupLabel = i >= 8 && bytes.AsSpan(i - 8, 4).SequenceEqual("GRUP"u8);
+                if (!isGroupLabel) offsets.Add(i);
+            }
         }
         return offsets;
     }

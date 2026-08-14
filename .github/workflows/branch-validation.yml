@@ -62,6 +62,18 @@ jobs:
       - name: Build cross-platform server
         run: dotnet build FO4RecordEditor.Server/FO4RecordEditor.Server.csproj --configuration Release
 
+      # Compile gate for the Windows test project. The WPF SDK targets remove System.IO from
+      # implicit usings, so test files relying on it fail to compile even though the code reads
+      # fine; the full suite only builds+runs on the Windows job, so gate compilation here on the
+      # cheap job to catch uncompilable merged test files in minutes instead of on the Windows
+      # runner. EnableWindowsTargeting lets net9.0-windows compile on ubuntu; it only compiles,
+      # it does not run (the suite references WPF and needs the Windows testhost).
+      - name: Restore Windows test project (compile gate)
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true
+
+      - name: Compile Windows test project (compile gate)
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
+
   windows-shell-and-tests:
     name: Windows shell and integration tests
     runs-on: windows-latest

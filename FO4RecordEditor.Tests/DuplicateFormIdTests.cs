@@ -79,8 +79,15 @@ public class DuplicateFormIdTests
     public void Problems_UseTheEnvironmentPathAndQueueAnUncachedScan()
     {
         var plugin = $"DuplicateEnvPath_{Guid.NewGuid():N}.esp";
-        var envPath = Path.Combine(Path.GetTempPath(), $"env_{plugin}");
-        var loosePath = Path.Combine(Path.GetTempPath(), $"loose_{plugin}");
+        // Both files represent the same plugin, so each must be named exactly `plugin` (Mutagen's
+        // RunMasterMatch throws "ModKeys were misaligned" if the target filename differs from the
+        // mod's ModKey); distinct directories keep the env and loose paths distinct.
+        var envDir = Path.Combine(Path.GetTempPath(), $"envdir_{Guid.NewGuid():N}");
+        var looseDir = Path.Combine(Path.GetTempPath(), $"loosedir_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(envDir);
+        Directory.CreateDirectory(looseDir);
+        var envPath = Path.Combine(envDir, plugin);
+        var loosePath = Path.Combine(looseDir, plugin);
         var modKey = ModKey.FromNameAndExtension(plugin);
         var mod = new Fallout4Mod(modKey, Fallout4Release.Fallout4);
         mod.Keywords.Add(new Keyword(new FormKey(modKey, 0x800), Fallout4Release.Fallout4)
@@ -122,8 +129,8 @@ public class DuplicateFormIdTests
             MutagenLoader.LooseModPaths.TryRemove(plugin, out _);
             DuplicateFormIdScanner.Invalidate(envPath);
             DuplicateFormIdScanner.Invalidate(loosePath);
-            try { File.Delete(envPath); } catch { }
-            try { File.Delete(loosePath); } catch { }
+            try { Directory.Delete(envDir, recursive: true); } catch { }
+            try { Directory.Delete(looseDir, recursive: true); } catch { }
         }
     }
 
