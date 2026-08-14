@@ -1,5 +1,7 @@
+using System.IO;
 using FluentAssertions;
 using FO4RecordEditor.Services;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;

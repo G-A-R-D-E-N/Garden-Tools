@@ -60,12 +60,12 @@ pointer that loads in that folder).
 | Tool | Path | Role |
 |---|---|---|
 | **FO4RecordEditor** | `Tools\PluginEditTool\FO4RecordEditor\` | The IDE + MCP server. GUI at `FO4RecordEditor\bin\Release\net9.0-windows\FO4RecordEditor.exe` |
-| Mutagen (patched) | `Tools\PluginEditTool\Mutagen\` | C# record library. **Our fork carries patches** (`Perk.cs` EPF3 choice flags, enum serialization) — a clean upstream clone cannot write perk EPF3 data |
-| Spriggit (CLI) | `Tools\PluginEditTool\Spriggit\Spriggit.CLI\bin\Release\net9.0\Spriggit.CLI.exe` | serialize/deserialize plugins |
-| Spriggit (UI) | `Tools\PluginEditTool\Spriggit\Spriggit.UI\bin\Release\net9.0\Spriggit.exe` | visual workflow, link manager |
+| Mutagen (patched) | `Tools\PluginEditTool\tools\Mutagen\` | C# record library. **Our fork carries patches** (`Perk.cs` EPF3 choice flags, enum serialization) — a clean upstream clone cannot write perk EPF3 data |
+| Spriggit (CLI) | `Tools\PluginEditTool\tools\Spriggit\Spriggit.CLI\bin\Release\net9.0\Spriggit.CLI.exe` | serialize/deserialize plugins |
+| Spriggit (UI) | `Tools\PluginEditTool\tools\Spriggit\Spriggit.UI\bin\Release\net9.0\Spriggit.exe` | visual workflow, link manager |
 | Translation exe cache | `%LOCALAPPDATA%\Temp\Spriggit\Translations\<pkg>\<ver>\<pkg>.exe` | per-game serializer (the compile bypass) |
-| niftool | `Tools\PluginEditTool\niftool\` | our C++ NIF engine — see [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) |
-| mastersort | `Tools\PluginEditTool\mastersort\` | master-order utility |
+| niftool | `Tools\PluginEditTool\tools\niftool\` | our C++ NIF engine — see [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) |
+| mastersort | `Tools\PluginEditTool\tools\mastersort\` | master-order utility |
 
 Papyrus compile/decompile is **built into FO4RecordEditor** (`compile_papyrus` / `decompile_papyrus`)
 -- Champollion is no longer needed, and as of issue #78 neither is the Creation Kit's
@@ -79,7 +79,7 @@ base script *sources* on the import path, which are not the compiler and are jus
 ## Quick start — Spriggit round-trip
 
 ```powershell
-cd "E:\F4SE OG\Tools\PluginEditTool\Spriggit"
+cd "E:\F4SE OG\Tools\PluginEditTool\tools\Spriggit"
 
 # Plugin -> JSON folder ("serialize" = parse/extract)
 .\spriggit-cli.bat serialize --InputPath "Some.esp" --OutputPath "D:\SomeRepo" `

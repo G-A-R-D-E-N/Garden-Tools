@@ -5,7 +5,7 @@ different forks; the second is a trimmed copy of the first. Compared 2026-08-05.
 
 | | A - full fork | B - vendored subset |
 |---|---|---|
-| Path | `Tools/PluginEditTool/Mutagen/` | `Tools/PluginEditTool/FO4RecordEditor/Mutagen/` |
+| Path | `Tools/PluginEditTool/tools/Mutagen/` | `Tools/PluginEditTool/FO4RecordEditor/Mutagen/` |
 | Git repo | its own clone of `Mutagen-Modding/Mutagen`, branch `dev` | files tracked inside the `PluginEditTool` repo |
 | Projects | all ~30 (Skyrim, Oblivion, Starfield, generators, WPF, tests) | 3 only: Kernel, Core, Fallout4 |
 | `.cs` files | 12,607 | 1,460 |
@@ -68,6 +68,6 @@ Upstream is GPL-3.0; the fork keeps `LICENSE.txt` and the patches are documented
 
 - A's working tree shows ~7,000 modified files on Linux. These are **CRLF-only**;
   `git diff --ignore-cr-at-eol` is empty. Do not commit them.
-- `Tools/PluginEditTool/Mutagen/Mutagen-dev/` is an untracked pristine upstream copy kept for
+- `Tools/PluginEditTool/tools/Mutagen/Mutagen-dev/` is an untracked pristine upstream copy kept for
   reference - it has none of the patches.
 - If a patch is made in B, port it to A (or vice versa) or the two drift silently. Today they agree.

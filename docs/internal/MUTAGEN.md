@@ -4,7 +4,7 @@ Mutagen is the C# record library that Spriggit is built on. Use it directly when
 you want to **generate** records programmatically with FormKey validation and
 automatic link resolution, rather than hand/script-authoring JSON.
 
-Source: `E:\F4SE OG\Tools\PluginEditTool\Mutagen` (solutions, generators, per-game
+Source: `E:\F4SE OG\Tools\PluginEditTool\tools\Mutagen` (solutions, generators, per-game
 projects). For FO4 work the relevant solution is `Mutagen.Records.Fallout4.sln`
 and the package `Mutagen.Bethesda.Fallout4`.
 

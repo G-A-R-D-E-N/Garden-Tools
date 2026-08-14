@@ -164,7 +164,7 @@ public static class ToolPaths
         App("tools", "niftool", "niftool.exe"),
         App("niftool", "niftool.exe"),
         WhichOnPath("niftool.exe"),
-        @"E:\F4SE OG\Tools\PluginEditTool\niftool\build\windows\x64\release\niftool.exe");
+        @"E:\F4SE OG\Tools\PluginEditTool\tools\niftool\build\windows\x64\release\niftool.exe");
 
     /// <summary>texconv -- ships inside xEdit's Edit Scripts folder; also bundled in the release.</summary>
     public static string? Texconv() => FirstFile(

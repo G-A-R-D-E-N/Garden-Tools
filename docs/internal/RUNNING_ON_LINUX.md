@@ -39,6 +39,16 @@ Two things that will bite:
   with `Cannot find module '../rolldown-binding.linux-x64-gnu.node'`. Run `npm ci` on the machine
   you are building on. Installing the Linux binding prunes the Windows one, so a Windows build
   afterwards needs its own `npm ci`.
+- **`npm install` needs symlinks, which the ntfs3 kernel driver cannot create.** If the repo sits
+  on a mount reported as `type ntfs3` (check `mount`; `ntfs-3g` userspace supports symlinks, the
+  kernel `ntfs3` driver does not), npm dies on the `node_modules/.bin` links with
+  `ENOENT: no such file or directory, symlink '../@babel/parser/bin/babel-parser.js' -> ...`. Work
+  around it with `--no-bin-links` and call the tools by their real paths:
+  `npm ci --no-bin-links`, then `node node_modules/typescript/bin/tsc -b`,
+  `node node_modules/vite/bin/vite.js build` (dev: `node node_modules/vite/bin/vite.js`),
+  `node node_modules/vitest/vitest.mjs run` for the web tests. On an ext4 mount — or on Windows,
+  where npm writes `.bin` shims instead of symlinks — the plain `npm ci && npm run build` works as
+  written.
 
 ## How it works
 
@@ -169,6 +179,10 @@ is running; the SDK itself still installs correctly and only the shared host bin
 cd web && npm ci && npm run build          # the UI bundle
 dotnet build FO4RecordEditor.Server/FO4RecordEditor.Server.csproj -c Release
 ```
+
+If this repo is on an `ntfs3` mount, `npm ci`/`npm run build` fail on symlinks — see the workaround
+under “Two things that will bite” above (`npm ci --no-bin-links` + direct `node .../bin/...`
+invocations).
 
 The Windows shell also builds here, which is worth running after touching any shared source, since
 that source is compiled by both:

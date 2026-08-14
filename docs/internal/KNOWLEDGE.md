@@ -74,12 +74,12 @@ open_plugin → list_records → get_record → set_field → save_plugin → ch
 
 If a plugin has a master listed in its TES4 header that no active records actually reference (stale/orphaned master), calling `save_plugin` does NOT remove it. The editor does not recompute masters on save.
 
-Fix: use `strip_stale_master.py` in this folder to surgically remove the MAST+DATA subrecord pair from the binary TES4 header. The script patches the TES4 data-size field to match and writes a `.bak` backup before modifying.
+Fix: use `Patched Data\Source\strip_stale_master.py` to surgically remove the MAST+DATA subrecord pair from the binary TES4 header. The script patches the TES4 data-size field to match and writes a `.bak` backup before modifying.
 
 For **ITO-style master-index corruption** (where binary surgery shifted master indices but left condition FormID high-bytes pointing at old positions), use the MCP tool `strip_masters_clean` instead -- it loads the .bak via Mutagen, drops conditions that reference the stripped masters, and lets Mutagen recompute all indices on save.
 
 **Why binary surgery corrupts (the mechanism — this is why `strip_masters_clean` exists).** The old
-`fix_ito_conditions.py` removed ITO CTDA conditions and the ITO MAST+DATA header entries, but did NOT
+`Patched Data\Source\fix_ito_conditions.py` removed ITO CTDA conditions and the ITO MAST+DATA header entries, but did NOT
 re-index the FormID high bytes of the *remaining* conditions. Any condition referencing a master at an
 index **above** a removed one silently repoints. Worked example: a `GetGlobalValue([5600009A])`
 condition resolved to `Stalker Suit.esp` (index `0x56` after the strip) instead of
@@ -127,7 +127,7 @@ entry point used to add a contextual button like "Field Dress" on a corpse) and 
 `NotImplementedException` ("One or more errors occurred ... method or operation is not implemented").
 A plain ability-effect perk saved fine. Root cause (two layers):
 1. The editor's `FO4RecordEditor.csproj` referenced **Mutagen as NuGet package `0.53.1`**, not the local
-   Mutagen source under `Tools\PluginEditTool\Mutagen\`. So source edits to Mutagen had no effect.
+   Mutagen source under `Tools\PluginEditTool\tools\Mutagen\`. So source edits to Mutagen had no effect.
 2. The actual write bug: `Mutagen.Bethesda.Core\Translations\Binary\EnumBinaryTranslation.cs`
    `WriteValue` has no `UnderlyingType` case for a **short-backed enum** (throws at its `default`).
    `PerkEntryPointAddActivateChoice.Flag` is 2-byte, and `Perk.cs` `WriteBinaryEffectsCustom` wrote the
@@ -334,7 +334,7 @@ A MAST+DATA pair for one master takes exactly 46 bytes:
 
 After deleting subrecord bytes, patch TES4 data-size at offset 4 (4-byte LE uint32) by the same amount removed.
 
-Script: `E:\F4SE OG\Tools\PluginEditTool\strip_stale_master.py`
+Script: `E:\F4SE OG\Tools\PluginEditTool\Patched Data\Source\strip_stale_master.py`
 
 ---
 
@@ -381,7 +381,7 @@ The `RecipeMAIMHealing` keyword routes to MAIM's custom station, which is not pr
 
 ### Rule: FWC_NonFWC_Schematics Must Be in S7 Master List
 
-`FallenWorldCrafting_S7.esp` overrides MAIM records and adds `HasPerk` conditions referencing schematic unlock perks from `FWC_NonFWC_Schematics.esp`. That plugin MUST be declared as a master of S7. Verify with `add_master.py` after any pipeline rebuild.
+`FallenWorldCrafting_S7.esp` overrides MAIM records and adds `HasPerk` conditions referencing schematic unlock perks from `FWC_NonFWC_Schematics.esp`. That plugin MUST be declared as a master of S7. Verify with `Patched Data\Source\add_master.py` after any pipeline rebuild.
 
 ### The 18 MAIM Records in S7 -- Correct Condition Table
 

@@ -6,7 +6,7 @@ in a live 3D viewport with its DDS textures**, verify it, and wire it onto a rec
 no NifSkope and no Creation Kit.
 
 > Working tool: `E:\F4SE OG\Tools\PluginEditTool\` (engine `niftool\`, app `FO4RecordEditor\`).
-> CLI reference: `Tools\PluginEditTool\niftool\README.md`.
+> CLI reference: `Tools\PluginEditTool\tools\niftool\README.md`.
 
 Last updated: 2026-07-02. This file is the single source of truth for the NIF toolchain —
 `NIF_SECTION_PLAN.md` and `NIF_SECTION_PROMPT.md` were folded in and deleted 2026-07-16 (the plan was
@@ -34,6 +34,14 @@ Blender ──OBJ──▶ niftool.exe (C++/nifly) ──▶ FO4 .nif ──▶ 
   pynifly's `NiflyWrapper.cpp` (raw nifly has no collision helpers).
 - **Record tie-in already solved:** `set_field` maps `Model`/`nif`/`Model.File` onto any
   STAT/WEAP/MISC/ARMO — no Creation Kit.
+
+> **Planned replacement (2026-08).** The nifly-based engine is **temporary**: embedding nifly makes
+> the whole binary GPL-3.0, which is why the tool ships as an external exe rather than in-process.
+> We will eventually write our own NIF implementation. The drop-in surface is the CLI contract
+> (`NifService` → `niftool <cmd>` with JSON on stdout) and the `ToolPaths` resolution order — a
+> replacement binary needs only to implement the same commands, not touch the C# side. Until then,
+> a release built without `niftool.exe` simply has dead `nif_*` tools (package.ps1 warns and
+> continues).
 
 ---
 
@@ -136,8 +144,8 @@ alpha property (create-on-save), effect-shader fields, and collision editing. Se
 
 | File | Role |
 |---|---|
-| `Tools\PluginEditTool\niftool\src\main.cpp` | the C++ CLI (import/geo/inspect/verify/fix + **tree/set** + OBJ parser + box collision) |
-| `Tools\PluginEditTool\niftool\xmake.lua` | build; `includes("../../FO4AnimForge/extern/nifly")` |
+| `Tools\PluginEditTool\tools\niftool\src\main.cpp` | the C++ CLI (import/geo/inspect/verify/fix + **tree/set** + OBJ parser + box collision) |
+| `Tools\PluginEditTool\tools\niftool\xmake.lua` | build; `includes("../../../FO4AnimForge/extern/nifly")` |
 | `…\FO4RecordEditor\Services\NifService.cs` | shells out to niftool.exe, returns stdout |
 | `…\FO4RecordEditor\Services\TextureService.cs` | DDS resolve (loose **+ BA2 archive index**) + Texconv DDS→PNG (**BC5 `-reconstructz`**) + cache |
 | `…\FO4RecordEditor\Services\NifInterop.cs` | WebView2 host object (`"nif"`) for the GUI |
@@ -159,7 +167,7 @@ submodule was pulled to `…\NiflyDLL\external\nifly`); `Texconv.exe` at
 ## Rebuild / run
 
 ```powershell
-# 1) engine (C++), from Tools\PluginEditTool\niftool\  — MUST be PowerShell, not Git Bash
+# 1) engine (C++), from Tools\PluginEditTool\tools\niftool\  — MUST be PowerShell, not Git Bash
 xmake f -p windows -a x64 -m release -y ; xmake -y     # -> build\windows\x64\release\niftool.exe
 
 # 2) web frontend, from FO4RecordEditor\web\  (needed after any .tsx / backend.ts change)

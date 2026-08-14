@@ -176,7 +176,7 @@ public static class NifService
     {
         var exe = ResolveExe();
         if (exe == null)
-            return "niftool.exe not found. Build it with `xmake` in E:\\F4SE OG\\Tools\\PluginEditTool\\niftool, " +
+            return "niftool.exe not found. Build it with `xmake` in E:\\F4SE OG\\Tools\\PluginEditTool\\tools\\niftool, " +
                    "or set the NIFTOOL_PATH environment variable to its full path.";
 
         var psi = new ProcessStartInfo

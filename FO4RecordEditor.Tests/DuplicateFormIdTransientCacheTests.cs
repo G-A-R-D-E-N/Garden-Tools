@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using FO4RecordEditor.Services;
 using Mutagen.Bethesda;

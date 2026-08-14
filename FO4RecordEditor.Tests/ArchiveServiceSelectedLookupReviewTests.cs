@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using FluentAssertions;
 using FO4RecordEditor.Services;

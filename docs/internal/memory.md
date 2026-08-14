@@ -268,7 +268,7 @@ Continuing/completing FO4RecordEditor's self-contained NIF editing tool (a NifSk
 - Docs (`NIF_TOOLCHAIN.md`, `NIF_SECTION_PLAN.md`) are updated only for capability changes, not for pure UI/UX polish rounds — this was treated as intentional but flagged as worth confirming if revisited.
 
 **What changed**
-- `Tools/PluginEditTool/niftool/src/main.cpp`: added `cmdTree()`, `cmdSet()`, `kShaderFlags[]`, `shaderFlagsValue()`/`applyShaderFlags()` helpers; fixed `NifFile::RenameShape` static-call qualification bug; fixed `tex0`..`tex7` key-matching collision with new `eff_*` keys via added `std::isdigit` check (`#include <cctype>`); changed shader flag label `"Greyscale→Color"` → `"Greyscale to Color"` to fix mojibake.
+- `Tools/PluginEditTool/tools/niftool/src/main.cpp`: added `cmdTree()`, `cmdSet()`, `kShaderFlags[]`, `shaderFlagsValue()`/`applyShaderFlags()` helpers; fixed `NifFile::RenameShape` static-call qualification bug; fixed `tex0`..`tex7` key-matching collision with new `eff_*` keys via added `std::isdigit` check (`#include <cctype>`); changed shader flag label `"Greyscale→Color"` → `"Greyscale to Color"` to fix mojibake.
 - `Tools/PluginEditTool/FO4RecordEditor/FO4RecordEditor/Services/NifService.cs`: added `Tree()` and `ApplyEdits()` methods; added `StandardOutputEncoding = Encoding.UTF8` / `StandardErrorEncoding = Encoding.UTF8` to `ProcessStartInfo` in `Run()` to fix non-ASCII decoding.
 - `Tools/PluginEditTool/FO4RecordEditor/FO4RecordEditor/Services/NifInterop.cs`: added `Tree()`/`ApplyEdits()` Task wrappers.
 - `Tools/PluginEditTool/FO4RecordEditor/web/src/backend.ts`: extended `NifHost` interface with `Tree`/`ApplyEdits`.
@@ -305,12 +305,12 @@ Built a self-contained C++/C# NIF authoring, repair, verification and 3D preview
 - All work kept local-only (no git push); GPL-3.0 noted for nifly-derived code.
 
 **What changed**
-- New: `Tools/PluginEditTool/niftool/xmake.lua`, `niftool/src/main.cpp` (commands: `import`, `inspect`, `geo`, `verify`, `fix`; box collision via Havok recipe, HK scale `0.0142875`, layer 1), `niftool/README.md`.
+- New: `Tools/PluginEditTool/tools/niftool/xmake.lua`, `niftool/src/main.cpp` (commands: `import`, `inspect`, `geo`, `verify`, `fix`; box collision via Havok recipe, HK scale `0.0142875`, layer 1), `niftool/README.md`.
 - New C# services: `FO4RecordEditor/Services/NifService.cs` (shell-out to niftool.exe), `TextureService.cs` (DDS→PNG via Texconv, cached in `%TEMP%\FO4RE_Tex\`, `textureRoot` override resolution), `NifInterop.cs` (WebView2 host object).
 - Edited: `Services/Ai/PluginToolExecutor.cs` (added `nif_import`/`nif_inspect`/`nif_verify`/`nif_fix` MCP tools), `MainWindow.xaml.cs` (registered `"nif"` host object).
 - New React: `web/src/NifPanel.tsx`, `NifViewport.tsx` (three.js, Z-up, OrbitControls, textured/wireframe toggle), `NifPanel.css`; edited `backend.ts` (NifHost interface + `getNif()`), `MainShell.tsx` (Box icon button under Papyrus button, `showNif` state).
 - Added dependency: `three@^0.180.0` + `@types/three`.
-- Docs: created `docs/Plugin Tool/NIF_TOOLCHAIN.md` (architecture, DONE/TODO, file map, rebuild/run + gotchas); added pointer row to `docs/Plugin Tool/INDEX.md`; `Tools/PluginEditTool/niftool/README.md` created; `Tools/PluginEditTool/NIF_SECTION_PLAN.md` kept current through prior milestones.
+- Docs: created `docs/Plugin Tool/NIF_TOOLCHAIN.md` (architecture, DONE/TODO, file map, rebuild/run + gotchas); added pointer row to `docs/Plugin Tool/INDEX.md`; `Tools/PluginEditTool/tools/niftool/README.md` created; `Tools/PluginEditTool/NIF_SECTION_PLAN.md` kept current through prior milestones.
 - Memory file `project_niftool_nif_toolchain.md` and `MEMORY.md` index entry created/maintained (not yet updated for texture-root-picker feature at session end).
 
 **Gotchas / findings**
@@ -322,7 +322,7 @@ Built a self-contained C++/C# NIF authoring, repair, verification and 3D preview
 
 **Open threads**
 - `NIF_TOOLCHAIN.md` TODO list (not started, future work only): in-game render/collision proof, BA2-packed texture resolution via Mutagen's `Ba2Reader`, BC5 normal-map Z reconstruction, glTF importer, convex/mesh collision + MOPP, Phase-2 MCP tools (`nif_set_shader/material/collision/skin`, `nif_diff`, headless `nif_view`), skinned-mesh viewport support.
-- Test asset (`cube.nif`/`cube_d.dds`) still sits in a session-temp scratchpad; moving it to `Tools/PluginEditTool/niftool/sample/` was offered but not requested/done.
+- Test asset (`cube.nif`/`cube_d.dds`) still sits in a session-temp scratchpad; moving it to `Tools/PluginEditTool/tools/niftool/sample/` was offered but not requested/done.
 - Memory file `project_niftool_nif_toolchain.md` and `NIF_SECTION_PLAN.md` were not updated for the final texture-root-picker feature or this last documentation pass before the session ended.
 
 ## https://github.com/orgs/PRISMA-USER-INTERFACE-FRAMEWORK/projects/7/views/1 start working these issues in to do...it also looks like we can not right click and create new conditions and other core functions like this that xedit has

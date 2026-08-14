@@ -57,7 +57,7 @@ $PublishIn = Join-Path $Root 'FO4RecordEditor\bin\Release\net9.0-windows\win-x64
 $Staging   = Join-Path $Root "dist\FO4RecordEditor-$Version"
 $ZipPath   = Join-Path $Root "dist\FO4RecordEditor-$Version.zip"
 
-$Niftool   = Join-Path $Root '..\niftool\build\windows\x64\release\niftool.exe'
+$Niftool   = Join-Path $Root '..\tools\niftool\build\windows\x64\release\niftool.exe'
 $Texconv   = Join-Path $Root 'TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconvx64.exe'
 $BaseScripts = Join-Path $Root '..\papyrus\Base'
 $CkWiki    = 'E:\F4SE OG\docs\Knowledge Materials\Creation Kit Wiki\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4'
