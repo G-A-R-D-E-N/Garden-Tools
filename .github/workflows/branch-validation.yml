@@ -31,11 +31,12 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          # 8.0 is required to RUN the portable suite (Core.Tests targets net8.0 and its testhost
-          # does not roll forward); 10.0 is the build SDK. Cached on the runner after first use.
-          dotnet-version: |
-            10.0.x
-            8.0.x
+          # 10.0 only: Core.Tests targets net10.0 (it references the net8.0 Core library), so its
+          # testhost runs on the 10.0 runtime the runner already has cached -- no net8 runtime
+          # install needed. setup-dotnet CANNOT install a missing net8 runtime on this runner
+          # anyway: its system dotnet lives in /usr/share/dotnet, which the runner service cannot
+          # write to (permission denied).
+          dotnet-version: 10.0.x
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
