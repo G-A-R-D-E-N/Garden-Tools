@@ -141,23 +141,18 @@ public static class CellService
             // regardless of what it's placed as, so grouping on baseType is what actually matters.
             string? baseType = null;
             float scale = 1f;
-            // A shape with no texture of its own can render via a ground decal instead: the base is a
-            // TextureSet (TXST), not anything with a Model at all -- confirmed via get_record on a real
-            // decal reference ("Type: PlacedObject", Base resolves to a genuine TXST with its own
-            // Decal subrecord: Diffuse texture + Width/Height/Depth/Flags). Emitted alongside modelPath
-            // (which stays null for these -- TXST has no Model field) so the viewer can draw a real
-            // textured decal plane instead of a generic "no model" marker.
+            // A shape with no texture of its own can render via a ground decal instead: the base is
+            // a TextureSet (TXST) with no Model field at all, carrying a Decal subrecord (Diffuse
+            // texture + Width/Height/Depth/Flags). Emitted alongside modelPath (which stays null for
+            // these) so the viewer can draw a textured decal plane instead of a "no model" marker.
             string? decalDiffuse = null;
             float? decalWidth = null;
             float? decalHeight = null;
-            // Static Collections (SCOL) bake a precombined Model.File, but a LOT of mods ship the
-            // SCOL record without ever running the CK's "generate precombine" step -- confirmed on a
-            // real case (SwitchBoard_Reborn.esp's SCOL\SwitchBoard_Reborn.esp\CM000000EA.NIF): the
-            // mod's own BA2 has zero SCOL entries at all, so that path can NEVER resolve, loose or
-            // archived. The game engine's own fallback in that case is to render each of the SCOL's
-            // member statics individually at their own local placement -- this is that fallback,
-            // exposed so the viewer can do the same instead of showing a "mesh unavailable" marker
-            // for what's often a large chunk of a cell's own structure (floors/walls built from SCOL).
+            // Static Collections (SCOL) bake a precombined Model.File, but many mods ship the SCOL
+            // record without running the CK's "generate precombine" step, so that path never
+            // resolves. The engine's own fallback is to render each member static at its own local
+            // placement; this exposes that fallback so the viewer can do the same instead of showing
+            // a "mesh unavailable" marker for what's often a large chunk of a cell's structure.
             List<object>? scolParts = null;
 
             if (placed is IPlacedObjectGetter po)
@@ -169,11 +164,9 @@ public static class CellService
                     if (cache.TryResolve<IMajorRecordGetter>(po.Base.FormKey, out var baseRec))
                     {
                         baseEditorId = baseRec.EditorID;
-                        // Mutagen's lazy binary-overlay wrapper class is named "<RealType>BinaryOverlay"
-                        // (confirmed: a real TextureSet base's runtime type reported "TextureSetBinaryOverlay",
-                        // caught by CellServiceTests against a known real record, not assumed) -- strip it
-                        // so the layer list groups by the real record kind ("Static", "TextureSet", ...)
-                        // instead of every layer label carrying this internal loading-detail suffix.
+                        // Mutagen's lazy binary-overlay wrapper class is named "<RealType>BinaryOverlay";
+                        // strip it so the layer list groups by the real record kind ("Static",
+                        // "TextureSet", ...) instead of carrying this internal loading-detail suffix.
                         baseType = baseRec.GetType().Name;
                         if (baseType.EndsWith("BinaryOverlay", StringComparison.Ordinal))
                             baseType = baseType[..^"BinaryOverlay".Length];
@@ -204,12 +197,10 @@ public static class CellService
                         if (baseRec is ITextureSetGetter txst && !string.IsNullOrWhiteSpace(txst.Diffuse))
                         {
                             decalDiffuse = txst.Diffuse;
-                            // ObjectBounds is in the same world-unit convention as everything else this
-                            // viewer already renders (unlike the Decal subrecord's own MinWidth/MaxWidth,
-                            // whose unit convention wasn't confirmed against a known-good real-world
-                            // reference) -- X/Y extent of the bounding box is a reasonable stand-in for
-                            // the decal's real footprint. Falls back to the Decal subrecord's own
-                            // Width/Height only if ObjectBounds is degenerate (both zero).
+                            // ObjectBounds shares the world-unit convention everything else here
+                            // renders in; its X/Y extent is a reasonable stand-in for the decal's
+                            // footprint. Falls back to the Decal subrecord's own Width/Height only
+                            // if ObjectBounds is degenerate (both zero).
                             var b = baseRec is IObjectBoundedGetter ob ? ob.ObjectBounds : null;
                             var bw = b != null ? Math.Abs(b.Second.X - b.First.X) : 0f;
                             var bh = b != null ? Math.Abs(b.Second.Y - b.First.Y) : 0f;

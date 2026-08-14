@@ -20,8 +20,6 @@ public class Mo2StartupLoadTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "fo4re-mo2-" + Guid.NewGuid().ToString("N")[..8]);
 
-    // Load() writes the process-global environment (LinkCache, MasterIsEsl, PluginSourcePaths, ...)
-    // by contract; restore it so this synthetic env doesn't leak into later test classes.
     private readonly GlobalStateIsolation _state = new();
 
     public void Dispose()

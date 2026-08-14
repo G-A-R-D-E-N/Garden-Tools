@@ -12,11 +12,9 @@ namespace FO4RecordEditor.Tests;
 
 /// <summary>
 /// Regression guard for the process-global leak fix: a class that loads an environment into
-/// MutagenLoader.LinkCache without restoring it leaves ITS records answering every later FormLink
-/// resolution in the run (the leak class behind the order-dependent CellCompaction spin). This
-/// proves GlobalStateIsolation's dispose really restores resolution, not just the pointer: after
-/// a simulated leak scope, the leaked environment's record stops resolving and the pre-existing
-/// environment's record resolves again.
+/// MutagenLoader.LinkCache without restoring it leaves its records answering every later FormLink
+/// resolution in the run. These tests prove GlobalStateIsolation's dispose really restores
+/// resolution (and the registry snapshot), not just the pointer.
 /// </summary>
 public class GlobalStateIsolationTests
 {
@@ -43,7 +41,7 @@ public class GlobalStateIsolationTests
     [Fact]
     public void AfterARestore_ResolutionReturnsToThePreExistingEnvironment()
     {
-        // A legitimate environment that the NEXT test class would resolve against.
+        // The environment a later test class would legitimately resolve against.
         var previous = BuildEnv("Prev.esp", editorId: "PrevWeapon", out var prevFk);
         MutagenLoader.LinkCache = previous.LinkCache;
 
@@ -52,19 +50,16 @@ public class GlobalStateIsolationTests
             FormKey leakFk;
             using (var isolation = new GlobalStateIsolation())
             {
-                // Simulate a leaky prior class: it loads a DIFFERENT environment into the process
-                // global while the isolation scope is open.
+                // Simulate a leaky prior class: load a different environment while the scope is open.
                 var leaked = BuildEnv("Leak.esp", editorId: "LeakWeapon", out leakFk);
                 MutagenLoader.LinkCache = leaked.LinkCache;
 
-                // The leak is genuinely live while the scope is open -- without this assertion the
-                // test could pass vacuously if the swap never happened.
+                // The leak is live while the scope is open, so the post-restore assertions cannot
+                // pass vacuously.
                 MutagenLoader.DescribeFormKey(null, leakFk.ToString()).Should().Contain("LeakWeapon");
             }   // dispose restores the pre-existing cache
 
-            // After the restore, resolution consults the legitimate environment again: the
-            // previous record resolves, and the leaked one no longer does (the raw FormKey string
-            // comes back untouched instead of its EditorID).
+            // After the restore, resolution consults the legitimate environment again.
             MutagenLoader.DescribeFormKey(null, prevFk.ToString()).Should().Contain("PrevWeapon");
             MutagenLoader.DescribeFormKey(null, leakFk.ToString()).Should().NotContain("LeakWeapon");
         }
@@ -75,21 +70,18 @@ public class GlobalStateIsolationTests
     }
 
     /// <summary>
-    /// Pins the REST of the snapshot contract: every registry dictionary, both LRU caps, the
-    /// per-mod index cache, and ConflictScanner's cache. The resolution test above proves the
-    /// LinkCache half; this proves a leaky class can't leave registry entries, caps, or stale
-    /// caches behind either. A second GlobalStateIsolation captured BEFORE the seeded state is
-    /// disposed last, which returns the process to pristine defaults for later test classes.
+    /// Pins the rest of the snapshot contract: every registry dictionary, both LRU caps, the
+    /// per-mod index cache, and ConflictScanner's cache.
     /// </summary>
     [Fact]
     public void Dispose_RestoresTheRegistryDictionariesCapsAndCaches()
     {
-        // Captured first: the pristine process-start state, handed back at the end.
+        // Captured before the seeded state; disposed last to return the process to defaults.
         var pristine = new GlobalStateIsolation();
 
         try
         {
-            // A pre-existing environment that a later class would legitimately see.
+            // Pre-existing state a later class would legitimately see.
             MutagenLoader.LooseMods["A.esp"] = "loose-mod";
             MutagenLoader.LooseModPaths["A.esp"] = @"C:\mods\A.esp";
             MutagenLoader.PluginSourcePaths["A.esp"] = @"C:\mods\A.esp";
@@ -114,8 +106,8 @@ public class GlobalStateIsolationTests
                 MutagenLoader.SeedModIndexForTest("B.esp", new object());
                 ConflictScanner.ScanCached(BuildEnv("Prev.esp", "PrevWeapon", out _));   // populates its cache
 
-                // The mutations are live while the scope is open -- so the post-restore
-                // assertions cannot pass vacuously.
+                // The mutations are live while the scope is open, so the restores cannot pass
+                // vacuously.
                 MutagenLoader.LooseMods.Keys.Should().BeEquivalentTo("B.esp");
                 MutagenLoader.LooseModPaths.Keys.Should().BeEquivalentTo("B.esp");
                 MutagenLoader.PluginSourcePaths.Keys.Should().BeEquivalentTo("B.esp");
@@ -127,8 +119,7 @@ public class GlobalStateIsolationTests
                 ConflictScanner.HasCache.Should().BeTrue();
             }   // dispose restores the seeded state
 
-            // Every registry is back to exactly the pre-existing content, caps included; the
-            // caches were cleared (a pure cache rebuilds on demand, so clearing is the restore).
+            // Registries and caps are back to the pre-existing state; the caches were cleared.
             MutagenLoader.LooseMods.Should().BeEquivalentTo(new[] { new KeyValuePair<string, object>("A.esp", "loose-mod") });
             MutagenLoader.LooseModPaths.Should().BeEquivalentTo(new[] { new KeyValuePair<string, string>("A.esp", @"C:\mods\A.esp") });
             MutagenLoader.PluginSourcePaths.Should().BeEquivalentTo(new[] { new KeyValuePair<string, string>("A.esp", @"C:\mods\A.esp") });
@@ -145,7 +136,7 @@ public class GlobalStateIsolationTests
         }
         finally
         {
-            // Return the process to the pristine pre-test state for later test classes.
+            // Hand the process back to pristine defaults.
             pristine.Dispose();
         }
     }

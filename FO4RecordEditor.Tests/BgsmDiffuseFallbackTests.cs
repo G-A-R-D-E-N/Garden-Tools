@@ -12,12 +12,10 @@ namespace FO4RecordEditor.Tests;
 // in their own BSShaderTextureSet at all -- the BSLightingShaderProperty instead points at a shared
 // .bgsm material file (rootMaterialName) that holds the real diffuse path. Without resolving that,
 // GetTexturePngDataUrl returns "" for such a shape and it renders flat gray even though the mesh
-// legitimately has a texture (confirmed on a real cell: a shape whose "textures" array niftool
-// reports as empty, but whose base object visibly has wood grain in-game).
+// legitimately has a texture: a shape whose "textures" array niftool reports as empty, but whose
+// base object visibly has wood grain in-game.
 //
-// Verified the real fixture .bgsm's DiffuseTexture value directly (not guessed): parsed
-// Materials\Architecture\Buildings\WoodPlanks01.BGSM by hand and confirmed
-// "architecture/buildings/woodfloor01_d.dds" is really in there.
+// The fixture .bgsm's DiffuseTexture holds "architecture/buildings/woodfloor01_d.dds".
 //
 // Skips loudly when the fixture archives aren't present, rather than passing.
 public class BgsmDiffuseFallbackTests

@@ -13,15 +13,9 @@ public class Mo2ProfileLoaderTests : IDisposable
     private readonly Xunit.Abstractions.ITestOutputHelper _out;
     public Mo2ProfileLoaderTests(Xunit.Abstractions.ITestOutputHelper o) => _out = o;
 
-    // Load() writes the process-global environment (LinkCache, MasterIsEsl, PluginSourcePaths, ...)
-    // by contract; restore it so this real modlist's env doesn't leak into later test classes.
     private readonly GlobalStateIsolation _state = new();
     public void Dispose() => _state.Dispose();
 
-    // Was D:\Games\ModlistDownloads -- that instance's profiles\/ModOrganizer.ini are gone from this
-    // dev box (confirmed 2026-07-20; only its mods\ folder remains), so Available silently evaluated
-    // false and every test in this file had been no-op-passing rather than actually testing anything.
-    // Pointed at the modlist actually in active use this session instead.
     private const string Instance = @"E:\Modlists\Fallen World Alpha 2";
 
     private static bool Available =>
@@ -168,13 +162,12 @@ public class Mo2ProfileLoaderTests : IDisposable
         var info = Mo2ProfileLoader.ReadInstanceInfo(Instance);
         var (env, plugins) = Mo2ProfileLoader.Load(Instance, info.Profile, info.GameDataFolder);
 
-        // Vanilla masters (Fallout4.esm/DLCs) AND Creation Club content (cc*.esl -- ships inside the
-        // base install's Data folder, not a mods\ folder) both happen to also physically live in the
-        // game Data folder, so BOTH resolve even with the old DataFolderPath-only fallback and don't
-        // exercise the bug (confirmed empirically: a first pass of this test picked a CC .esl and
-        // passed even with the fix disabled). Need an ordinary mod plugin, which only ever lives in
-        // an MO2 mods\ or overwrite\ folder -- prefer the exact plugin from the user's original bug
-        // report if this instance has it, otherwise the first non-master non-CC plugin.
+        // Vanilla masters (Fallout4.esm/DLCs) AND Creation Club content (cc*.esl, which ships inside
+        // the base install's Data folder, not a mods\ folder) also physically live in the game Data
+        // folder, so both resolve even with the old DataFolderPath-only fallback and don't exercise
+        // the bug. Need an ordinary mod plugin, which only ever lives in an MO2 mods\ or overwrite\
+        // folder: prefer a known plugin if this instance has it, otherwise the first non-master
+        // non-CC plugin.
         var implicitMasters = new HashSet<string>(
             Mutagen.Bethesda.Plugins.Implicits.Get(Mutagen.Bethesda.GameRelease.Fallout4).Listings.Select(m => m.FileName.String),
             System.StringComparer.OrdinalIgnoreCase);
@@ -189,12 +182,4 @@ public class Mo2ProfileLoaderTests : IDisposable
             $"'{modPlugin}' was reported loaded by Mo2ProfileLoader.Load, so WriteService must be able to re-locate it on disk");
     }
 
-    // EditingComponentCountWritesToPatch used to live here: it built a RecordNode display tree,
-    // simulated a grid edit (setting a leaf's .Value to mark it dirty), and called
-    // WriteService.SaveRecordEditsToPatch to flush the dirty diff into a patch. Removed 2026-07-19
-    // together with SaveRecordEditsToPatch itself -- its only real-app caller was
-    // ViewModels/RecordTabViewModel.SaveToPatch, and RecordTabViewModel was only ever constructed by
-    // ShellViewModel.OpenRecord, which had zero callers. The live edit path (React editor ->
-    // BackendInterop.SetField -> WriteService.SetField) writes fields directly onto the loaded
-    // Mutagen record and was never covered by this test to begin with.
 }

@@ -7,7 +7,7 @@ namespace FO4RecordEditor.Tests;
 
 // MutagenLoader._modIndexCache used to grow unbounded: every plugin a sweep (search_all /
 // scan_conflicts / list_records across a 650+-plugin load order) touched cached a full per-mod index
-// forever, driving multi-GB long-session memory growth (bd f4se_og-ths). It is now an LRU capped at
+// forever, driving multi-GB long-session memory growth. It is now an LRU capped at
 // MaxCachedModIndexes, with actively-edited plugins (EditableMods) protected from eviction. These
 // tests pin that behavior down against the real StoreModIndex/EvictModIndexLru path via the internal
 // seams -- no real mod enumeration needed, so they're deterministic and fast.

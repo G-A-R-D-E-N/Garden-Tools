@@ -240,7 +240,7 @@ public static partial class MutagenLoader
     // Cap on how many per-mod indexes stay resident. Each index pins a reference to every record in
     // its mod, so without a bound a broad sweep (search_all / scan_conflicts / list_records across a
     // 650+-plugin load order) caches every plugin's full index and never releases it -- the measured
-    // multi-GB long-session growth in bd f4se_og-ths. LRU by last access keeps the active working set
+    // multi-GB long-session memory growth. LRU by last access keeps the active working set
     // warm while bounding the total; actively-edited plugins are never evicted (see EvictModIndexLru).
     // internal so tests can lower it. A generous default: the realistic burst of plugins a user juggles
     // is well under this, so normal editing never evicts, but a full-load-order sweep is capped.

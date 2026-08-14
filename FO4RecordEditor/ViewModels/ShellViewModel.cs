@@ -140,9 +140,7 @@ public sealed class ShellViewModel
 
     // Build the environment and return its plugin list; the caller picks which to load.
     // Replace the Explorer tree with a lazy node per plugin. The React frontend reads this via
-    // AppInterop.GetPlugins(); without this the env loads but the tree stays empty. (The WPF
-    // ExplorerPanel used to populate the tree from this same list, but it was deleted 2026-07-19 --
-    // it was never mounted by the WebView2 shell, so it could not have been doing this either.)
+    // AppInterop.GetPlugins(); without this the env loads but the tree stays empty.
     // Runs on the UI thread (callers await Task.Run, resuming on the WPF SynchronizationContext).
     // Point new-patch saves at the MO2 instance's overwrite folder (from ModOrganizer.ini) so MO2
     // auto-loads them -- correct for both portable and global instances.
@@ -261,9 +259,8 @@ public sealed class ShellViewModel
 
     /// <summary>
     /// Save from the WPF tree selection. Reachable from Ctrl+S and the "save" command, but
-    /// <see cref="SelectedNode"/> is only ever assigned by <c>ExplorerPanel</c> -- deleted 2026-07-19
-    /// as dead code, since the WebView2 shell never mounted it -- so in practice this reports that
-    /// there is nothing selected. The real save surfaces are the React record editor's own Save
+    /// <see cref="SelectedNode"/> is never assigned by the live UI, so in practice this reports
+    /// that nothing is selected. The real save surfaces are the React record editor's own Save
     /// action (over the <c>backend</c> WebView2 host object) and the MCP <c>save_plugin</c> tool.
     /// </summary>
     public string SaveSelectedPlugin()
@@ -290,10 +287,8 @@ public sealed class ShellViewModel
 
         // Nothing is saved from this tree, of any kind. set_field/set_components/etc. (called by the
         // React editor and the MCP tools) write straight onto the loaded Mutagen record, in memory;
-        // there is no separate "dirty edits on a display tree" staging step left to flush here -- that
-        // mechanism (RecordNode.IsDirty + WriteService.SaveRecordEditsToPatch, and the YAML/JSON
-        // equivalent in the now-deleted SpriggitLoader) existed only to serve the WPF
-        // RecordEditorView and was deleted with it. Use save_plugin to write to disk.
+        // there is no separate "dirty edits on a display tree" staging step left to flush here.
+        // Use save_plugin to write to disk.
         var refuse = $"Saving from the tree is not supported. Use the editor's Save action, " +
                      "or call the save_plugin tool.";
         Log.Log(LogCategory.App, LogLevel.Warning, refuse);

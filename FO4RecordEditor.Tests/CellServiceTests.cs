@@ -44,10 +44,10 @@ public class CellServiceTests : IDisposable
         if (cell == null) return;   // no interior cells in this profile somehow
 
         // The naive count from whichever single plugin's copy EnumerateMajorRecords() happened to
-        // surface is a lower bound, not the truth -- proven wrong in practice (2026-07-20): the
-        // WINNING cell record for FO4's biggest interior cell reported 0 references while the real,
-        // unioned total was 28,471. Assert the service's real total is never smaller than that lower
-        // bound, which would be true if it silently fell back to a single plugin's copy again.
+        // surface is a lower bound, not the truth: the winning cell record for FO4's biggest
+        // interior cell reported 0 references while the real, unioned total was 28,471. Assert the
+        // service's real total is never smaller than that lower bound, which would be true if it
+        // silently fell back to a single plugin's copy again.
         var namingLowerBound = cell.Persistent.Count + cell.Temporary.Count;
 
         var json = CellService.GetPlacedReferencesJson(cell.FormKey.ToString(), env);
@@ -78,17 +78,10 @@ public class CellServiceTests : IDisposable
         parsed["error"].Should().NotBeNull();
     }
 
-    // Regression for the ground-decal fix (2026-07-20). Ref 1D515B:Fallout4.esm in
-    // SanctuaryBasementJahani is a REAL PlacedObject whose Base resolves to a TextureSet
-    // (DecalGroundDefault01, 078966:Fallout4.esm) with a genuine Decal subrecord -- verified by hand
-    // via get_record before writing this fix, not guessed. Before the fix, TextureSet bases (no Model
-    // field at all) fell through to modelPath=null with nothing else to show; the viewer drew a
-    // generic "no model" marker for what's actually a real, textured ground decal. Also regression-
-    // tests the recordType fix: Mutagen's lazy binary-overlay wrapper reported this ref's runtime type
-    // as "TextureSetBinaryOverlay" (the TextureSet MAJOR RECORD's own overlay class, not a placement
-    // kind -- confirmed no such placed-record type exists in Mutagen.Fallout4 at all), which is
-    // corrected to the real semantic kind via an interface check, same pattern already used for
-    // baseType.
+    // Regression for the ground-decal fix: a PlacedObject whose base resolves to a TextureSet must
+    // report its Decal fields rather than falling through to a null modelPath. Also covers the
+    // recordType fix, where Mutagen's binary-overlay wrapper reports the TextureSet overlay class
+    // instead of the real placement kind.
     [Fact]
     public void GetPlacedReferences_ATextureSetBase_ReportsDecalFields_NotAModelPath()
     {
@@ -114,13 +107,9 @@ public class CellServiceTests : IDisposable
         ((float?)decalRef["decalHeight"]).Should().BeApproximately(60f, 0.5f, "ObjectBounds Y-extent (30 - -30)");
     }
 
-    // Regression for the SCOL member-static fallback (2026-07-20). Switchboard has a real Static
-    // Collection reference whose precombined modelPath (SCOL\SwitchBoard_Reborn.esp\CM000000EA.NIF)
-    // can NEVER resolve -- confirmed by hand: SwitchBoard_Reborn's own BA2 has zero SCOL entries in
-    // its file table at all, so the mod never shipped that mesh. scolParts is the fix: each member
-    // static's own resolvable model path plus every local placement, so the viewer can render the
-    // exploded pieces instead of a "mesh unavailable" marker for what's a real chunk of the cell's
-    // own structure (the user's report: "the floor and wall are still failing to load").
+    // Regression for the SCOL member-static fallback: a Static Collection whose precombined mesh is
+    // absent must still render, via each member static's own resolvable model path plus its local
+    // placements (scolParts), instead of a "mesh unavailable" marker.
     [Fact]
     public void GetPlacedReferences_SwitchboardScol_FallsBackToMemberStatics()
     {

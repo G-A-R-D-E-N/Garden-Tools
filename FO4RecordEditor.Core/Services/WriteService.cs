@@ -965,7 +965,7 @@ public static partial class WriteService
     /// Load a plugin binary, drop every COBJ condition whose param1/param2/reference FormKey
     /// belongs to one of the stripped masters, then write it back via Mutagen so that the master
     /// list is recomputed from scratch and all remaining FormID high-bytes are correct.
-    /// This is the Mutagen-native fix for the ITO master-index corruption found in session 2026-06-22.
+    /// This is the Mutagen-native fix for the ITO master-index corruption.
     /// </summary>
     public static string StripMastersClean(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun, object? env)
     {

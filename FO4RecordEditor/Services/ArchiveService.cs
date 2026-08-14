@@ -324,8 +324,7 @@ public static class ArchiveService
         catch (Exception ex) { return ToolError.Fail($"Cannot create output dir for '{outputBa2}': {ex.Message}"); }
 
         var psi = new ProcessStartInfo { FileName = archive2 };
-        // Archive2 wants every source folder as ONE comma-separated argument, not repeated -i flags
-        // -- confirmed against a real, actively-used community packing batch script.
+        // Archive2 wants every source folder as ONE comma-separated argument, not repeated -i flags.
         psi.ArgumentList.Add(string.Join(",", sources));
         psi.ArgumentList.Add($"-f={format}");
         psi.ArgumentList.Add($"-c={outputBa2}");
@@ -341,11 +340,10 @@ public static class ArchiveService
             return ToolError.Fail($"Archive2.exe failed (exit {run.ExitCode}):\n{run.Combined}");
 
         // Verify what actually got written, rather than trust a clean exit code. This project's
-        // vendored Mutagen cannot correctly decompress BA2 header version >= 7 (Next-Gen's format) --
-        // GetBytes() silently returns still-compressed bytes instead of throwing -- so a stale/updated
-        // Archive2.exe would otherwise ship an archive that LOOKS packed but reads back as garbage
+        // vendored Mutagen cannot correctly decompress BA2 header version >= 7 (Next-Gen's format):
+        // GetBytes() silently returns still-compressed bytes instead of throwing, so a stale or
+        // updated Archive2.exe would ship an archive that looks packed but reads back as garbage
         // through every other tool here (archive_list/archive_extract/TextureService's own lookups).
-        // Confirmed 2026-07-20 against a real drifted install; see ToolPaths.Archive2's doc comment.
         var headerVersion = ReadBa2HeaderVersion(outputBa2);
         if (headerVersion is int v && v >= 7)
             return ToolError.Fail(

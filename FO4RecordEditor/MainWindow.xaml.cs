@@ -65,7 +65,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         await AppWebView.EnsureCoreWebView2Async(env);
         
         AppWebView.CoreWebView2.AddHostObjectToScript("appInterop", _appInterop);
-        // ConflictResolver.tsx calls hostObjects.backend.* -- this was never registered (the bug).
         AppWebView.CoreWebView2.AddHostObjectToScript("backend", new BackendInterop(_shell));
         // Claude AI panel bridge. The agent's onText/onToolStatus callbacks can fire off the UI
         // thread, so marshal every web-message post through the Dispatcher before PostWebMessageAsJson.
@@ -108,12 +107,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         c.Register("save", "Save Plugin", "File", () => SetStatus(_shell.SaveSelectedPlugin()));
     }
 
-    // Ctrl+Z/Ctrl+Y (undo/redo) used to be handled here, but the only code that ever populated the
-    // undo stack was ViewModels/RecordTabViewModel.EditField, and RecordTabViewModel was only ever
-    // constructed by ShellViewModel.OpenRecord, which had zero callers. Both were dead code -- the
-    // undo stack could never receive a change in the live app -- so both keybindings were guaranteed
-    // no-ops. Deleted together with the rest of the dead WPF view layer on 2026-07-19, rather than
-    // kept bound to a capability the app cannot provide.
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.P && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
