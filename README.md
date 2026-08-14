@@ -179,7 +179,11 @@ Nothing under `docs\internal\` goes into a release: `package.ps1` copies an expl
 
 ## Licensing
 
-FO4RecordEditor bundles third-party components (Mutagen, niftool/nifly, texconv, WPF-UI and others).
-Their licenses and attributions are in **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)**.
+FO4RecordEditor itself is distributed under the **GNU General Public License v3.0** -- see
+**[LICENSE](LICENSE)**. It is GPL because it is built directly against Mutagen and embeds nifly, both
+GPL-3.0; a program linked against GPL code and distributed to others must itself be GPL.
+
+It bundles third-party components (Mutagen, niftool/nifly, texconv, WPF-UI and others). Their
+licenses and attributions are in **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)**.
 
 This package contains **no Bethesda assets**. It reads the game files you already own.
