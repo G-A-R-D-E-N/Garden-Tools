@@ -178,4 +178,11 @@ jobs:
         run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
 
       - name: Run Windows integration test suite
+        env:
+          # FO4RE_TEST_DATA -> the runner's Fallout 4 Data folder, if it has the game. Set the repo
+          # variable of the same name to that path to make the archive/codec fixture tests actually
+          # execute instead of skipping (e.g. D:\SteamLibrary\steamapps\common\Fallout 4\Data).
+          # Unset/empty = TestDataRoots auto-detects its known layouts on the machine, else the
+          # fixture tests skip cleanly. A wrong path degrades to the same skip, never a failure.
+          FO4RE_TEST_DATA: ${{ vars.FO4RE_TEST_DATA }}
         run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
