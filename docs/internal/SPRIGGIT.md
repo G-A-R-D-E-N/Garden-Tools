@@ -37,7 +37,7 @@ cd <spriggit folder>
 
 Output layout: `<OutputPath>\<RecordType>\<EditorID> - <FormID>_<Master>.json`
 plus a `RecordData.json` header and a `.spriggit` metadata file. See
-[JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT).
+[JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT.md).
 
 The global tool form (used in the Rad Mod docs) is equivalent:
 ```powershell

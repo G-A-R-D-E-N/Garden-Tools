@@ -42,6 +42,6 @@ Targeted copy only. Never deletes the mod folder. The mod folder must already ex
 ## Notes
 - `repos\` is the working area (one subfolder per plugin); git-init it if you want diffs.
 - ESL plugins risk master-FormID corruption through Spriggit on FO4; for ESL-heavy patches use
-  the xEdit route instead (see [SPRIGGIT](SPRIGGIT)).
+  the xEdit route instead (see [SPRIGGIT](SPRIGGIT.md)).
 - If the cached compile exe is ever missing, `compile.ps1` falls back to the repo-built exe
   automatically; running `serialize.ps1` once also repopulates the cache.

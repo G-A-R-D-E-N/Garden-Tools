@@ -28,7 +28,7 @@ match the "Modern xEdit - Record Viewer" concept mockups.
 > in the backend means the sub-tab counts and the donut come from the same rows the grid renders and
 > cannot drift from what is on screen.
 >
-> Current architecture is in [ARCHITECTURE.md](ARCHITECTURE).
+> Current architecture is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 The two concept images are two variants of the SAME screen. They agree on the overall shell and
 differ only in how the Conflicts view is laid out:

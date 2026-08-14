@@ -1,8 +1,8 @@
 # FO4RecordEditor: Architecture & Contributor Facts
 
 How the editor is put together: the components, the data flow, and the invariants the code
-depends on. Contributor-facing; user documentation lives in the [README](README) and
-[MCP_SETUP](MCP_SETUP).
+depends on. Contributor-facing; user documentation lives in the [README](README.md) and
+[MCP_SETUP](../MCP_SETUP.md).
 
 ---
 
