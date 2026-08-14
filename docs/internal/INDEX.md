@@ -48,9 +48,9 @@ Reference hub for editing Fallout 4 plugins (`.esp`/`.esm`/`.esl`). Two distinct
 recursive copy of that `docs/` folder is what shipped internal planning notes to end users once
 already. `package.ps1` now allowlists exactly one file.
 
-Related, outside this folder: [Patched Data/](Patched%20Data/) (crafting/schematic pipeline,
-ESP build pipeline) · [Code Notes/](../../docs/Code%20Notes/) · `Tools/PluginEditTool/CLAUDE.md` (the agent
-pointer that loads in that folder).
+Related, outside this folder (outer workspace, not part of this repository):
+`Patched Data/` (crafting/schematic pipeline, ESP build pipeline) · `docs/Code Notes/` ·
+`Tools/PluginEditTool/CLAUDE.md` (the agent pointer that loads in that folder).
 
 ---
 

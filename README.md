@@ -12,7 +12,7 @@ It is built on a patched Mutagen, so it reads and writes real `.esp`/`.esm`/`.es
 not go through xEdit and does not need xEdit installed.
 
 It runs natively on **Windows and Linux** from one codebase. See
-[Linux](#linux) below, or [RUNNING_ON_LINUX.md](../RUNNING_ON_LINUX.md) for the detail.
+[Linux](#linux) below, or [RUNNING_ON_LINUX.md](docs/internal/RUNNING_ON_LINUX.md) for the detail.
 
 ---
 

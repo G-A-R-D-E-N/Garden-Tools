@@ -814,7 +814,8 @@ Notes worth keeping:
 - Both reuse `NextFreeFormKey`, so ESL FormID-range safety is unchanged.
 - **Two independent sources agree on the Visible flag.** Mutagen's
   `PlacedObjectMapMarker.Flag.Visible = 0x01` matches the engine decompile of `MapMarkerData::SetVisible`
-  (`this[0x10] |= 1`, RVA `0xdea50`) exactly — see [Code Notes/Permadeath.md](../../docs/Code%20Notes/Permadeath.md).
+  (`this[0x10] |= 1`, RVA `0xdea50`) exactly — see `docs/Code Notes/Permadeath.md` (outer workspace, not
+  in this repo).
   Record-library and disassembly corroborating each other is what confirmed the earlier visibility bug.
 
 **Deploying a change to this server:** the MCP host holds `bin\Release\net9.0-windows\*.dll` open, so
@@ -829,7 +830,7 @@ on 2026-07-16, most orphaned from earlier sessions.
 ## Write-layer hardening — behaviour changes you must know (2026-07-19)
 
 Six defects fixed in FO4RecordEditor. Full reasoning in
-[docs/Code Notes/FO4RecordEditor.md](../../docs/Code%20Notes/FO4RecordEditor.md); what changes for a caller:
+`docs/Code Notes/FO4RecordEditor.md` (outer workspace, not in this repo); what changes for a caller:
 
 **1. Failed tools now report `isError: true`.** Both MCP transports used to hardcode `isError: false`
 on every outcome — caught exceptions, `Unknown tool`, `Record not found`, `Save failed while
