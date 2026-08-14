@@ -80,32 +80,57 @@ jobs:
       - name: Compile Windows test project (compile gate)
         run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
 
-  windows-shell-and-tests:
-    name: Windows shell and integration tests
-    # The compile leg runs on the org's self-hosted debian-wine-msvc runner (Linux/X64, wine+msvc
-    # labels) so Windows-targeted builds cost no cloud minutes; EnableWindowsTargeting compiles
-    # the net9.0-windows projects on Linux. Executing the WPF suite under Wine is NOT CI-reliable
-    # (vstest hangs, native stack overflows in process-spawning tests, order-dependent CPU spins
-    # in Mutagen static state), so the suite itself RUNS on windows-latest.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: compile-on-selfhosted
-            runner: [self-hosted, Linux, X64, wine, msvc]
-            run_tests: false
-          # Requires a Windows self-hosted runner registered with the standard labels
-          # (self-hosted, Windows, X64) -- the WPF suite needs a real Windows testhost.
-          - name: run-on-windows
-            runner: [self-hosted, Windows, X64]
-            run_tests: true
-    # The run-on-windows matrix entry (run_tests: true) is skipped until a Windows self-hosted
-    # runner is registered AND the RUN_WINDOWS_TESTS variable is set to 'true' (org or repo
-    # settings -> Variables). Without the gate, an absent [self-hosted, Windows, X64] runner
-    # would queue every push for the full 50-minute timeout and red-fail. The compile leg
-    # (run_tests: false) always runs.
-    if: ${{ !matrix.run_tests || vars.RUN_WINDOWS_TESTS == 'true' }}
-    runs-on: ${{ matrix.runner }}
+  windows-compile:
+    name: Windows compile (self-hosted)
+    # Runs on the org's self-hosted debian-wine-msvc runner (Linux/X64, wine+msvc labels) so
+    # Windows-targeted builds cost no cloud minutes; EnableWindowsTargeting compiles the
+    # net9.0-windows projects on Linux. Compile-only: executing the WPF suite under Wine is NOT
+    # CI-reliable (vstest hangs, native stack overflows in process-spawning tests, order-dependent
+    # CPU spins in Mutagen static state), so the suite itself RUNS on a real Windows runner.
+    runs-on: [self-hosted, Linux, X64, wine, msvc]
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+
+      - name: Build web bundle for desktop output
+        working-directory: web
+        run: npm run build
+
+      - name: Restore Windows test project
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true
+
+      - name: Build Windows shell and test project
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
+
+  windows-tests:
+    name: Windows integration tests
+    # Skipped until a Windows self-hosted runner is registered with the standard labels
+    # (self-hosted, Windows, X64) AND the RUN_WINDOWS_TESTS variable is set to 'true' (org or
+    # repo Settings -> Variables). Without the gate, an absent Windows runner would queue every
+    # push for the full timeout and red-fail. NOTE: only vars is safe in a job-level if -- a
+    # matrix-based gate here failed workflow validation entirely (matrix is not available in
+    # job-level if; the allowed contexts are github, inputs, needs, vars).
+    if: vars.RUN_WINDOWS_TESTS == 'true'
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 50
     steps:
       - name: Check out repository
@@ -140,5 +165,4 @@ jobs:
         run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
 
       - name: Run Windows integration test suite
-        if: matrix.run_tests
         run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
