@@ -1,5 +1,39 @@
 # Project memory
 
+## FO4RecordEditor CI: self-hosted-only runners, the gated Windows leg, test-suite hardening
+_Condensed from the session on 2026-08-14._
+
+**What this was about** — Moved the repo's CI entirely onto the org's self-hosted runners (GitHub-hosted cloud jobs fail org-wide at allocation: "recent account payments have failed"), fixed the workflow through several validation and runtime landmines, hardened the test suite's process-global state, and documented how to enable the still-gated Windows test leg.
+
+**Decisions made**
+- The org runs **self-hosted runners only**; `branch-validation.yml` now has zero GitHub-hosted jobs. `portable-core-and-web` and `windows-compile` run on `debian-wine-msvc` (labels `self-hosted, Linux, X64, wine, msvc`); the WPF suite runs on a `[self-hosted, Windows, X64]` runner that does not exist yet.
+- `windows-tests` is gated with a job-level `if: vars.RUN_WINDOWS_TESTS == 'true'`. **matrix is NOT a legal context in a job-level `if`** (only `github`, `inputs`, `needs`, `vars` are) -- a matrix+if gate failed the ENTIRE workflow at validation with a generic "workflow file issue" banner and zero jobs. Split into two plain jobs instead. `actionlint` catches this where YAML parsers cannot.
+- WPF-suite execution under Wine is NOT CI-reliable: proven on this box (xunit.console ran 222 tests, found and fixed 2 real bugs) but the full run dies on a native stack overflow in `ProcessRunnerTests` and order-dependent Mutagen static-state spins. The Wine .NET install was removed afterward; the box is back to its pre-experiment state.
+- `Core.Tests` retargeted **net8.0 -> net10.0** (a newer TFM consuming the net8.0 Core library is legal): the net8 testhost had forced `setup-dotnet` to install net8 into `/usr/share/dotnet`, which the runner service cannot write (permission denied). The net10 testhost runs on the cached 10.0 runtime. 916/916 pass locally and in CI.
+- Process-global test state gets **save/restore, not just clearing**: new `GlobalStateIsolation` helper (snapshot in ctor, restore in Dispose) wraps the five environment-loading test classes (`Mo2StartupLoadTests` -- which runs on EVERY machine with a synthetic env -- plus `Mo2ProfileLoaderTests`, `GmstDiagnosticTests`, `ConflictToolsTests`, `CellServiceTests`). Assembly parallelization was already disabled (`AssemblyConfig.cs`), so per-test restore makes inter-class state deterministic.
+- Branch protection is **not possible on this private free-tier repo** (API 403: "Upgrade to GitHub Pro or make this repository public" -- verified for both branch protection and rulesets). If protection is ever enabled, never require the gated `windows-tests` job: a skipped required check blocks every PR at "Expected -- Waiting for status to be reported" forever.
+
+**What changed**
+- `FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj` -- net8.0 -> net10.0 (comment updated; XML comments must not contain `--`).
+- `FO4RecordEditor.Tests/GlobalStateIsolation.cs` (new) + applied to the 5 env-loading test classes; `GlobalStateIsolationTests.cs` (new, 2 tests: resolution-restore proof via `DescribeFormKey`, and the full dictionary/caps/cache snapshot contract).
+- Test fixes: `ConflictDiffTests`/`ConflictScannerTests` no longer write the process-global `MutagenLoader.LinkCache` (dead writes that leaked cross-class state -- the leak class behind the order-dependent `CellCompactionTests` 182% CPU spin); `ArchiveWindowsAclReviewTests` skips under Wine (`IsWindows()` lies there; the `SOFTWARE\Wine` registry key is the tell); `ShippedDocsTests` anchors the repo-root walk on the test assembly; the two merged-suite repair fixes from `c1c7de0`.
+- `docs/internal/WINDOWS_CI_RUNNER.md` (new) -- the complete Windows-runner checklist: Windows 10/11 x64 only, **no VC++ redist / .NET / Node installs needed** (UCRT is in-box; WPF natives ship in the runtime; the runner bundles .NET 8; `setup-dotnet` fetches SDK 9.0.x for the `net9.0-windows` testhost's WindowsDesktop runtime + 10.0.x), first-run network, registration via the Settings page, `RUN_WINDOWS_TESTS` then optional `FO4RE_TEST_DATA` variables.
+- `.github/workflows/branch-validation.yml` -- `FO4RE_TEST_DATA` env wired to `${{ vars.FO4RE_TEST_DATA }}` on the Windows test step; branch-protection warning comment on `windows-tests`.
+- Commits (all on `main`, pushed): `c1c7de0`, `faafe60`, `0f4bd2d`, `e9c00b8`, `24b6583`, `9d0aa3c`, `22b3d96`, `26eaa70`, `8b4647a`, `8629070`, `5e1bf55`, `2c12524`, `f8449cc`, `06d82e5`.
+
+**Gotchas / findings**
+- `actionlint` (binary, not a npm package) is the tool that catches GitHub schema violations local YAML parsers miss -- e.g. disallowed contexts in job-level `if`. It was downloaded to `/tmp` and is gone after a restart; re-download from rhysd/actionlint releases if needed (asset name is `actionlint_<ver>_linux_amd64.tar.gz`).
+- GitHub holds job logs until the RUN completes; a mid-run job with a failing step shows nothing until you cancel/let the run finish.
+- YAML block scalars (`dotnet-version: |`) keep a trailing newline when parsed -- comparisons against the raw string must strip/compare line-wise.
+- `setup-dotnet` CANNOT install a missing runtime into a system `/usr/share/dotnet` the runner service cannot write; keep the runner's needed runtimes in its tool cache (pre-install or align TFMs).
+- The 50-min queue: a gated job with `vars` off never queues (skipped); opening the gate before a matching runner exists queues EVERY push for the full timeout and red-fails it -- runner first, variable second.
+
+**Open threads**
+- **Register the Windows runner** (the only remaining blocker): org Settings -> Actions -> Runners -> New runner -> Windows -> x64, then set `RUN_WINDOWS_TESTS=true`. Full instructions in `WINDOWS_CI_RUNNER.md`. First green Windows run also finally executes `GlobalStateIsolationTests` and the ACL tests for real.
+- The WPF suite has never run end-to-end on real Windows since the merge; the definitive order-dependence check (CellCompaction hang) is a couple of full `dotnet test` runs on the Windows box.
+- Remote `feat/visual-scripter` branch still exists on GitHub (fully merged into main; safe to `git push origin --delete feat/visual-scripter`).
+- Untracked docs still in the working tree: `HOUSECARL_PULLS.md`, `XEDIT_PARITY_AUDIT_2026-08.md` (user's call whether they ship).
+
 ## FO4RecordEditor highest-severity defects (fork)
 _Condensed from a deleted conversation on 2026-08-05._
 
