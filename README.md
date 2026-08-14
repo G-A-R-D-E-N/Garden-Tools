@@ -73,6 +73,20 @@ of text. Scripts open from compiled `.pex` files and compile back to them.
 
 ![The blueprint editor: a Papyrus script as a node graph](images/blueprint.png)
 
+## The panels
+
+The editor ships with a set of focused panels for game-asset work:
+
+![The audio panel: convert to XWM, and make or extract FUZ files](images/audio-panel.png)
+
+![The archive panel: list, compare, and pack BA2/BSA archives](images/archive-panel.png)
+
+![The NIF viewer: view, edit, and verify meshes in a live 3D viewport](images/nif-viewer.png)
+
+![The Papyrus panel: decompile .pex back to source, or compile .psc](images/papyrus-decompile.png)
+
+![The cell viewer: inspect placed references in a 3D viewport](images/cell-viewer.png)
+
 ## Configuration
 
 Settings live in `%APPDATA%\FO4RecordEditor\settings.json` and are all optional: every path is
