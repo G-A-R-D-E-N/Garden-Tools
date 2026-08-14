@@ -54,17 +54,18 @@ class SourcePolicyTests(unittest.TestCase):
 
         self.assertEqual([], self.violations())
 
-    def test_rejects_markup_shell_and_papyrus_comments(self):
+    def test_rejects_markup_project_shell_and_papyrus_comments(self):
         markup = "<" + "!-- prohibited -->\n"
         shell = "# prohibited\n"
         papyrus = "; prohibited\n"
         self.write("view.xaml", markup)
+        self.write("Project.csproj", markup)
         self.write("build.sh", shell)
         self.write("script.psc", papyrus)
 
         violations = self.violations()
 
-        self.assertEqual(3, len(violations))
+        self.assertEqual(4, len(violations))
         self.assertTrue(all(violation.kind == "comment" for violation in violations))
 
     def test_ignores_excluded_vendor_tree(self):

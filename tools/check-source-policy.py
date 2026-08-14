@@ -30,7 +30,7 @@ C_STYLE_SUFFIXES = {
     ".ts",
     ".tsx",
 }
-MARKUP_SUFFIXES = {".html", ".htm", ".svg", ".xaml", ".xml"}
+MARKUP_SUFFIXES = {".csproj", ".html", ".htm", ".props", ".svg", ".targets", ".xaml", ".xml"}
 HASH_SUFFIXES = {".py", ".ps1", ".sh", ".yml", ".yaml"}
 PAPYRUS_SUFFIXES = {".psc", ".pas"}
 TEXT_SUFFIXES = C_STYLE_SUFFIXES | MARKUP_SUFFIXES | HASH_SUFFIXES | PAPYRUS_SUFFIXES | {
@@ -205,4 +205,5 @@ def main(root):
 
 
 if __name__ == "__main__":
-    sys.exit(main(pathlib.Path.cwd()))
+    target = pathlib.Path(sys.argv[1]) if len(sys.argv) == 2 else pathlib.Path.cwd()
+    sys.exit(main(target))
