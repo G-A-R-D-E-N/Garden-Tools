@@ -45,7 +45,6 @@ public class ConflictScannerTests
         };
         var lo = new LoadOrder<IModListingGetter<IFallout4ModGetter>>(listings, disposeItems: false);
         var lc = lo.ToImmutableLinkCache<IFallout4Mod, IFallout4ModGetter>();
-        MutagenLoader.LinkCache = lc;
         return new Mo2ProfileLoader.Mo2GameEnvironment
         {
             LoadOrder = lo,

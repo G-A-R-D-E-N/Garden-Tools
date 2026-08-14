@@ -16,11 +16,13 @@ public class ShippedDocsTests
     private readonly ITestOutputHelper _out;
     public ShippedDocsTests(ITestOutputHelper o) => _out = o;
 
-    // Walk up from the test binary to the repo root (the folder holding README.md next to the
-    // FO4RecordEditor project). Fails loudly rather than silently passing on a layout change.
+    // Walk up from the test assembly to the repo root (the folder holding README.md next to the
+    // FO4RecordEditor project). Anchors on the test dll rather than AppContext.BaseDirectory,
+    // which points at the runner's own dir (e.g. xunit.console) rather than the test output.
+    // Fails loudly rather than silently passing on a layout change.
     private static string RepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        var dir = new DirectoryInfo(typeof(ShippedDocsTests).Assembly.Location);
         while (dir != null)
         {
             if (File.Exists(Path.Combine(dir.FullName, "README.md")) &&

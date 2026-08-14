@@ -76,7 +76,22 @@ jobs:
 
   windows-shell-and-tests:
     name: Windows shell and integration tests
-    runs-on: windows-latest
+    # The compile leg runs on the org's self-hosted debian-wine-msvc runner (Linux/X64, wine+msvc
+    # labels) so Windows-targeted builds cost no cloud minutes; EnableWindowsTargeting compiles
+    # the net9.0-windows projects on Linux. Executing the WPF suite under Wine is NOT CI-reliable
+    # (vstest hangs, native stack overflows in process-spawning tests, order-dependent CPU spins
+    # in Mutagen static state), so the suite itself RUNS on windows-latest.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: compile-on-selfhosted
+            runner: [self-hosted, Linux, X64, wine, msvc]
+            run_tests: false
+          - name: run-on-windows
+            runner: [windows-latest]
+            run_tests: true
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
     steps:
       - name: Check out repository
@@ -105,10 +120,11 @@ jobs:
         run: npm run build
 
       - name: Restore Windows test project
-        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true
 
       - name: Build Windows shell and test project
-        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
 
       - name: Run Windows integration test suite
+        if: matrix.run_tests
         run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
