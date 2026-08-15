@@ -57,7 +57,22 @@ State lives in `/var/lib/gh-runner` (`pending/` markers, `lock`, `idle-since.*`)
 runners. nginx terminates TLS and proxies to `127.0.0.1:9494` through an **exact-match**
 location in `/etc/nginx/sites-enabled/git`; exact match outranks the prefix `location /`,
 so it cannot shadow a GitLab route. The receiver verifies `X-Hub-Signature-256` against
-`/etc/gh-runner/webhook.secret` and ignores anything whose action is not `queued`.
+`/etc/gh-runner/webhook.secret` and ignores anything whose action is not `queued`. An
+empty or whitespace-only secret file is refused at startup rather than tolerated: it
+would authenticate every caller against a publicly known empty HMAC key.
+
+**Label filtering.** A wake only happens when the job's `workflow_job.labels` are ones
+this fleet can actually serve -- `serves_labels()` requires `self-hosted` and rejects
+anything outside `self-hosted, linux, x64, wine, msvc`. Without this, every queued job
+in these three orgs woke a Linux runner, including `ubuntu-latest` and `windows-latest`
+jobs and the gated `[self-hosted, Windows, X64]` leg. Since there is only one slot, each
+of those consumed it and then sat idle for minutes while a runner that could serve its
+job waited. A job whose labels are rejected is not stranded -- it is simply left to the
+sweep, which is the right trade for a job this fleet cannot run anyway.
+
+The corollary: if a repo in one of these orgs adopts a self-hosted label outside that
+set, its jobs stop being woken promptly and fall back to a wait of up to 30 minutes.
+Add the label to `RUNNER_LABELS` when that happens.
 
 **Wake, fallback.** `gh-runner-sweep.timer` every 30 minutes marks every runner pending,
 giving each a turn. This exists so a dropped webhook delivery cannot strand a job
@@ -69,6 +84,15 @@ is active and logs `slot full (1 active), <unit> stays queued`.
 **Stop.** `gh-runner-idle-stop.timer` every 60 seconds stops a runner that has shown no
 live `Runner.Worker` across consecutive ticks -- after 5 minutes normally, or 2 minutes
 when another runner is pending -- then drains the queue so the next one starts.
+
+While a job is actually running the idle markers are cleared, *unless* another unit is
+pending. That exception matters: a runner with a continuous backlog claims its next job
+within the same tick, so `job_running()` never goes false, the markers were wiped every
+time, and the busy listener could never age into a stop. Other repositories starved
+behind it indefinitely. Retaining the markers under contention means the marker is
+already past threshold the moment the last job ends, so the slot rotates immediately
+instead of after another full idle wait. Stopping is still re-checked under the lock, so
+a runner that has just claimed work is never stopped out from under it.
 
 ### No credential on the host
 
