@@ -100,6 +100,33 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
     }
 
     [Fact]
+    public void Nested_read_uses_inherited_auto_property_backing_variable_as_receiver()
+    {
+        Write("WorkshopParentScript", """
+            Scriptname WorkshopParentScript extends ScriptObject
+            bool Property PlayerInstitute_Destroyed Auto
+            """);
+        Write("WorkshopAttackScript", """
+            Scriptname WorkshopAttackScript extends ScriptObject
+            WorkshopParentScript Property WorkshopParent Auto
+            """);
+        Write("WorkshopSynthAttackScript", """
+            Scriptname WorkshopSynthAttackScript extends WorkshopAttackScript
+            Function Go()
+                bool value = WorkshopParent.PlayerInstitute_Destroyed
+            EndFunction
+            """);
+
+        var reads = CompileFunction("WorkshopSynthAttackScript", "Go").Instructions
+            .Where(instruction => instruction.Mnemonic == "propget")
+            .ToArray();
+
+        reads.Should().ContainSingle();
+        reads[0].Args[0].Str.Should().BeEquivalentTo("PlayerInstitute_Destroyed");
+        reads[0].Args[1].Str.Should().Be("::WorkshopParent_var");
+    }
+
+    [Fact]
     public void GotoState_literal_is_canonicalized_to_the_declared_state_and_survives_pex_round_trip()
     {
         Write("StateCase", """

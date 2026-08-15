@@ -132,7 +132,6 @@ public sealed class PapyrusCodeGenerator
     private int _tempCounter;
 
 
-    private Dictionary<string, PapyrusPropertyDecl> _ownAutoProperties = null!;
 
     private bool _emitDebugOnly = true;
     private bool _emitBetaOnly = true;
@@ -166,10 +165,6 @@ public sealed class PapyrusCodeGenerator
         _emitDebugOnly = options.EmitDebugOnlyCode;
         _emitBetaOnly = options.EmitBetaOnlyCode;
         _tempCounter = 0;
-        _ownAutoProperties = script.Properties
-            .Where(p => p.Kind == PapyrusPropertyKind.Auto)
-            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var pex = new PexFile
         {
@@ -1333,11 +1328,7 @@ public sealed class PapyrusCodeGenerator
 
                 case PapyrusBindingKind.Property:
                 {
-
-
-
-                    if (binding.Owner == _gen._script
-                        && _gen._ownAutoProperties.ContainsKey(binding.Name))
+                    if (IsAutoBackingProperty(binding))
                     {
                         return new Storage(BackingVarName(binding.Name), false, null);
                     }
@@ -1469,10 +1460,13 @@ public sealed class PapyrusCodeGenerator
 
         private bool IsOwnBackingProperty(PapyrusMemberExpression member, PapyrusBinding binding)
         {
-            if (binding.Owner != _gen._script || !_gen._ownAutoProperties.ContainsKey(binding.Name)) return false;
+            if (!IsAutoBackingProperty(binding)) return false;
             var targetBinding = _gen._resolution.BindingFor(member.Target);
             return targetBinding?.Kind == PapyrusBindingKind.SelfKeyword;
         }
+
+        private static bool IsAutoBackingProperty(PapyrusBinding binding) =>
+            binding.Declaration is PapyrusPropertyDecl { Kind: PapyrusPropertyKind.Auto };
 
         private void EmitUnary(PapyrusUnaryExpression unary, string destination, PapyrusType destinationType)
         {
