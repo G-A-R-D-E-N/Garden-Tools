@@ -74,7 +74,6 @@ jobs:
   windows-compile:
     name: Windows compile (self-hosted)
     runs-on: [self-hosted, Linux, X64, wine, msvc]
-    # The runner service account is shared, so Wine state must not overlap.
     concurrency:
       group: plugin-edit-tool-wine-build
       cancel-in-progress: false
