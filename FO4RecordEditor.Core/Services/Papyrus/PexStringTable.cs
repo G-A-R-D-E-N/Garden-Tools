@@ -17,7 +17,7 @@ public sealed partial class PexFile
 
     public void RebuildStringTable()
     {
-        var seen = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(System.StringComparer.Ordinal);
         var table = new List<string>();
 
         void Add(string? s)
