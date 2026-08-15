@@ -21,6 +21,7 @@ internal static class PapyrusCreationKitFidelity
         }
 
         if (changed) pex.RebuildStringTable();
+        CanonicalizeGeneratedStrings(pex);
     }
 
     private static bool LowerGotoStateLiteral(PexInstruction instruction)
@@ -64,6 +65,120 @@ internal static class PapyrusCreationKitFidelity
         }
 
         return false;
+    }
+
+    private static void CanonicalizeGeneratedStrings(PexFile pex)
+    {
+        var canonical = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var table = new List<string>();
+
+        string Canonical(string? value)
+        {
+            value ??= "";
+            if (canonical.TryGetValue(value, out var first)) return first;
+            canonical[value] = value;
+            table.Add(value);
+            return value;
+        }
+
+        foreach (var value in pex.StringTable) Canonical(value);
+
+        void Value(PexValue? value)
+        {
+            if (value?.Type is PexValueType.Identifier or PexValueType.String)
+                value.Str = Canonical(value.Str);
+        }
+
+        void Function(PexFunction function)
+        {
+            function.Name = Canonical(function.Name);
+            function.ReturnType = Canonical(function.ReturnType);
+            function.DocString = Canonical(function.DocString);
+            foreach (var parameter in function.Params)
+            {
+                parameter.Name = Canonical(parameter.Name);
+                parameter.Type = Canonical(parameter.Type);
+            }
+            foreach (var local in function.Locals)
+            {
+                local.Name = Canonical(local.Name);
+                local.Type = Canonical(local.Type);
+            }
+            foreach (var instruction in function.Instructions)
+                foreach (var argument in instruction.Args)
+                    Value(argument);
+        }
+
+        foreach (var flag in pex.UserFlags) flag.Name = Canonical(flag.Name);
+
+        foreach (var debugFunction in pex.DebugFunctions)
+        {
+            debugFunction.ObjectName = Canonical(debugFunction.ObjectName);
+            debugFunction.StateName = Canonical(debugFunction.StateName);
+            debugFunction.FunctionName = Canonical(debugFunction.FunctionName);
+        }
+
+        foreach (var group in pex.PropertyGroups)
+        {
+            group.ObjectName = Canonical(group.ObjectName);
+            group.GroupName = Canonical(group.GroupName);
+            group.DocString = Canonical(group.DocString);
+            for (var index = 0; index < group.PropertyNames.Count; index++)
+                group.PropertyNames[index] = Canonical(group.PropertyNames[index]);
+        }
+
+        foreach (var order in pex.StructOrders)
+        {
+            order.ObjectName = Canonical(order.ObjectName);
+            order.OrderName = Canonical(order.OrderName);
+            for (var index = 0; index < order.MemberNames.Count; index++)
+                order.MemberNames[index] = Canonical(order.MemberNames[index]);
+        }
+
+        foreach (var obj in pex.Objects)
+        {
+            obj.Name = Canonical(obj.Name);
+            obj.ParentClassName = Canonical(obj.ParentClassName);
+            obj.DocString = Canonical(obj.DocString);
+            obj.AutoStateName = Canonical(obj.AutoStateName);
+
+            foreach (var structure in obj.Structs)
+            {
+                structure.Name = Canonical(structure.Name);
+                foreach (var member in structure.Members)
+                {
+                    member.Name = Canonical(member.Name);
+                    member.Type = Canonical(member.Type);
+                    member.DocString = Canonical(member.DocString);
+                    Value(member.DefaultValue);
+                }
+            }
+
+            foreach (var variable in obj.Variables)
+            {
+                variable.Name = Canonical(variable.Name);
+                variable.Type = Canonical(variable.Type);
+                Value(variable.DefaultValue);
+            }
+
+            foreach (var property in obj.Properties)
+            {
+                property.Name = Canonical(property.Name);
+                property.Type = Canonical(property.Type);
+                property.DocString = Canonical(property.DocString);
+                property.AutoVarName = Canonical(property.AutoVarName);
+                if (property.ReadHandler != null) Function(property.ReadHandler);
+                if (property.WriteHandler != null) Function(property.WriteHandler);
+            }
+
+            foreach (var state in obj.States)
+            {
+                state.Name = Canonical(state.Name);
+                foreach (var function in state.Functions) Function(function);
+            }
+        }
+
+        pex.StringTable = table;
     }
 
     private static void RewriteAsAssign(PexInstruction instruction)
