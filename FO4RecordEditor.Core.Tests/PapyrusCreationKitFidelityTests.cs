@@ -96,6 +96,32 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
         instructions[1].Args[1].Float.Should().Be(-2.5f);
     }
 
+    [Fact]
+    public void String_table_uses_case_insensitive_first_writer_spelling()
+    {
+        Write("StringCase", """
+            Scriptname StringCase extends ScriptObject
+            Function Go()
+                string first = "SPECIALMenu"
+                string second = "SpecialMenu"
+            EndFunction
+            """);
+
+        var emitted = CompilePex("StringCase");
+        emitted.StringTable
+            .Where(value => value.Equals("SPECIALMenu", StringComparison.OrdinalIgnoreCase))
+            .Should().Equal("SPECIALMenu");
+
+        var reloaded = PexFile.FromBytes(emitted.ToBytes());
+        var literalValues = Function(reloaded, "Go").Instructions
+            .SelectMany(instruction => instruction.Args)
+            .Where(value => value.Type == PexValueType.String)
+            .Select(value => value.Str)
+            .ToArray();
+
+        literalValues.Should().Equal("SPECIALMenu", "SPECIALMenu");
+    }
+
     private static string StateArgument(PexFunction function) =>
         function.Instructions.Single(instruction => instruction.Mnemonic == "callmethod").Args[3].Str;
 
