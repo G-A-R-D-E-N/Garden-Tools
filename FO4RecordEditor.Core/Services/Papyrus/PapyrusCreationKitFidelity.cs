@@ -91,7 +91,6 @@ internal static class PapyrusCreationKitFidelity
 
         void Function(PexFunction function)
         {
-            function.Name = Canonical(function.Name);
             function.ReturnType = Canonical(function.ReturnType);
             function.DocString = Canonical(function.DocString);
             foreach (var parameter in function.Params)
@@ -174,7 +173,11 @@ internal static class PapyrusCreationKitFidelity
             foreach (var state in obj.States)
             {
                 state.Name = Canonical(state.Name);
-                foreach (var function in state.Functions) Function(function);
+                foreach (var function in state.Functions)
+                {
+                    function.Name = Canonical(function.Name);
+                    Function(function);
+                }
             }
         }
 
