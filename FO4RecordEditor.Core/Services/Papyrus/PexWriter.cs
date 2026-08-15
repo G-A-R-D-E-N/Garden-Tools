@@ -43,7 +43,7 @@ public sealed partial class PexFile
         using var w = new BinaryWriter(stream, Encoding.Latin1, leaveOpen: true);
 
 
-        var index = new Dictionary<string, ushort>(StringTable.Count, StringComparer.Ordinal);
+        var index = new Dictionary<string, ushort>(StringTable.Count, StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < StringTable.Count; i++)
         {
             if (i > ushort.MaxValue)
