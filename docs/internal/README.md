@@ -43,6 +43,7 @@ The end-user documentation is `../MCP_SETUP.md`, plus `README.md`, `LICENSE` and
 |---|---|
 | [RUNNING_ON_LINUX.md](RUNNING_ON_LINUX.md) | The native Linux build: installing it, building the .deb, how the WebKitGTK host stands in for WebView2, and the gotchas. |
 | [WINDOWS_CI_RUNNER.md](WINDOWS_CI_RUNNER.md) | Registering the Windows self-hosted runner that the gated `windows-tests` CI leg needs: download, labels, the `RUN_WINDOWS_TESTS` / `FO4RE_TEST_DATA` variables, and first-run expectations. |
+| [CI_RUNNERS.md](CI_RUNNERS.md) | The Linux self-hosted fleet that actually runs `branch-validation.yml`: where the runners live, the on-demand webhook wake, why only one job runs at a time, and how to diagnose CI that queues forever. |
 | [MO2_SETUP.md](MO2_SETUP.md) | Using the tool with a Mod Organizer 2 instance. |
 | [SCRIPTS.md](SCRIPTS.md) | The helper scripts in the tool folder. |
 | [SPRIGGIT.md](SPRIGGIT.md) | Spriggit round-tripping notes. |
