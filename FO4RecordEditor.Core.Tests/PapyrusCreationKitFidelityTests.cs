@@ -127,6 +127,28 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
     }
 
     [Fact]
+    public void Write_to_inherited_auto_property_assigns_the_backing_variable()
+    {
+        Write("BaseHolderScript", """
+            Scriptname BaseHolderScript extends ScriptObject
+            int Property Counter Auto
+            """);
+        Write("DerivedWriterScript", """
+            Scriptname DerivedWriterScript extends BaseHolderScript
+            Function Go()
+                Counter = 7
+            EndFunction
+            """);
+
+        var instructions = CompileFunction("DerivedWriterScript", "Go").Instructions;
+
+        instructions.Should().NotContain(i => i.Mnemonic == "propset",
+            "an inherited Auto property is written through its backing variable, not a propset");
+        var write = instructions.Single(i => i.Mnemonic == "assign" && i.Args[0].Str == "::Counter_var");
+        write.Args[1].Int.Should().Be(7);
+    }
+
+    [Fact]
     public void GotoState_literal_is_canonicalized_to_the_declared_state_and_survives_pex_round_trip()
     {
         Write("StateCase", """

@@ -61,18 +61,28 @@ and they no-op when unset so a bare checkout stays green.
 | `.pex` round trip | `FO4RE_PEX_CORPUS` | 5,976 found, 4,581 read, **4,581 byte-identical, 0 differing** |
 | Compile, differential | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` | 198 (`.psc`, `.pex`) pairs, 161 compiled, **158 instruction-for-instruction identical to the Creation Kit (98.1%)**, 37 refused, 3 differing |
 | Compile, differential, vanilla (corpus A, historical) | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **7,067 identical (93.2%)**, 28 refused |
-| Compile, differential, vanilla (corpus B, build 20686350) | same env | 7,571 pairs, 7,543 compiled, **7,182 identical (95.21%)**, 28 refused |
+| Compile, differential, vanilla (corpus B, build 20686350) | same env | 7,571 pairs, 7,543 compiled, **7,242 identical (96.01%)**, 28 refused (at `c124d8c`/#173) |
 | Decompile fidelity | `FO4RE_PSC_ROOTS` | 1,498 scripts compiled, decompiled and recompiled, **1,202 instruction-identical (80.2%)**, 275 differing, 21 not recompiled |
 
 Corpus A and corpus B are **different populations, not comparable head to head**: A is the
 historical extraction; B is depot build `20686350` (Misc.ba2 sha256 `a70c5820…`, Base.zip
 sha256 `80712380…`) staged Base+DLC. Do not read the A→B delta as progress. The valid #151
-comparison is three commits against the ONE fixed corpus B: `c7ce8d1`=7175, `078efa1`=7165
-(the #168 regression), `bd39825` (#172)=7182 identical. The residual difference is dominated
-by the item-7 string-table case canonicalization (native `PapyrusAssembler.exe`), for which
-neither lowercasing (#168) nor own-declared-state casing (#172) is the true rule.
+comparison is the commit ladder against the ONE fixed corpus B (identical/compiled of 7,543):
+`c7ce8d1`=7175, `078efa1`=7165 (the #168 regression), `bd39825` (#172)=7182, `c124d8c` (#173,
+inherited auto-property backing var)=7242 (96.01%), zero regressions. Per-script before/after
+set-diff for #173 is committed as `CORPUS_RESULT_173.md`.
 
-`FO4RecordEditor.Core.Tests` is 934 tests and runs on Linux. `FO4RecordEditor.Tests` targets
+The residual GotoState/state-name casing class (~106 diffs) is a **measurement ceiling, not a
+fixable gap**: running the real CK toolchain (PapyrusCompiler 2.8.0.4 / PapyrusAssembler 2.7.0.2)
+on the vanilla sources does NOT reproduce the shipped `.pex` for those cases -- e.g.
+`WorkshopSwitchIntervalScript` (`state Off`) compiles to `"Off"` under the current CK but ships as
+`"off"`, while `Counting`/`Done` match. So the shipped scripts were built by an OLDER toolchain
+whose casing differs; the current CK (and our compiler, emitting source casing) cannot match them.
+The clean fidelity oracle is a corpus C compiled from the current on-disk CK, not the mixed-vintage
+shipped `.pex`. Evidence: `off`/`on` lowercasing is absent from both current CK tools; not a
+string-table mechanism we can implement.
+
+`FO4RecordEditor.Core.Tests` is 936 tests and runs on Linux. `FO4RecordEditor.Tests` targets
 `net9.0-windows` through its WPF reference and its host does not start here, so put anything testable
 without WPF in Core.Tests.
 
