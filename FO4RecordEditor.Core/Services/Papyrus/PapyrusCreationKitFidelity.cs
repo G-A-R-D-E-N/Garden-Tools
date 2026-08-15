@@ -14,7 +14,7 @@ internal static class PapyrusCreationKitFidelity
         {
             foreach (var instruction in entry.Function.Instructions)
             {
-                stringsChanged |= LowerGotoStateLiteral(instruction, entry.Object, entry.Function, index);
+                stringsChanged |= CanonicalizeGotoStateLiteral(instruction, entry.Object, entry.Function, index);
                 FoldNegativeLiteral(instruction);
             }
         }
@@ -22,7 +22,7 @@ internal static class PapyrusCreationKitFidelity
         if (stringsChanged) pex.RebuildStringTable();
     }
 
-    private static bool LowerGotoStateLiteral(
+    private static bool CanonicalizeGotoStateLiteral(
         PexInstruction instruction,
         PexObject obj,
         PexFunction function,
@@ -35,17 +35,20 @@ internal static class PapyrusCreationKitFidelity
 
         PexValue argument;
         PapyrusScript? receiverScript;
+        bool receiverIsSelf;
         switch (instruction.Mnemonic)
         {
             case "callmethod":
                 if (instruction.Args.Count <= 3) return false;
                 var receiverType = ReceiverType(instruction.Args[1], obj, function);
                 receiverScript = receiverType == null ? null : index.Resolve(receiverType);
+                receiverIsSelf = receiverType != null && receiverType.Equals(obj.Name, StringComparison.OrdinalIgnoreCase);
                 argument = instruction.Args[3];
                 break;
             case "callparent":
                 if (instruction.Args.Count <= 2) return false;
                 receiverScript = index.Resolve(obj.ParentClassName);
+                receiverIsSelf = false;
                 argument = instruction.Args[2];
                 break;
             default:
@@ -59,10 +62,21 @@ internal static class PapyrusCreationKitFidelity
             || argument.Type != PexValueType.String)
             return false;
 
-        var lowered = argument.Str.ToLowerInvariant();
-        if (lowered == argument.Str) return false;
-        argument.Str = lowered;
+        var canonical = DeclaredStateName(obj, argument.Str, receiverIsSelf);
+        if (canonical == null || canonical == argument.Str) return false;
+        argument.Str = canonical;
         return true;
+    }
+
+    private static string? DeclaredStateName(PexObject obj, string literal, bool receiverIsSelf)
+    {
+        if (!receiverIsSelf) return null;
+        foreach (var state in obj.States)
+        {
+            if (state.Name.Length != 0 && state.Name.Equals(literal, StringComparison.OrdinalIgnoreCase))
+                return state.Name;
+        }
+        return null;
     }
 
     private static string? ReceiverType(PexValue receiver, PexObject obj, PexFunction function)
