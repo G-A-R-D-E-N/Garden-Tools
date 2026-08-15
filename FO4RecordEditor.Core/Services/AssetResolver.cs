@@ -6,41 +6,14 @@ using Newtonsoft.Json;
 
 namespace FO4RecordEditor.Services;
 
-
-
-
-
-
-public sealed record AssetHit(string Kind, string Container, string Path, string InnerPath, long Size);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+public sealed record AssetHit(string Kind, string Container, string Path, string InnerPath, long Size)
+{
+    public string Provider { get; init; } = string.Empty;
+}
 
 public static class AssetResolver
 {
     private static readonly object _lock = new();
-
 
     private static readonly Dictionary<string, Dictionary<string, string>> _archiveIndex =
         new(StringComparer.OrdinalIgnoreCase);
@@ -48,8 +21,7 @@ public static class AssetResolver
 
     private static string Norm(string p) => (p ?? "").Replace('/', '\\').Trim().Trim('"').TrimStart('\\');
 
-
-
+    private static string NativeRelativePath(string p) => Norm(p).Replace('\\', Path.DirectorySeparatorChar);
 
     public static void SetSessionDataRoots(IEnumerable<string> rootsHighToLow)
     {
@@ -62,9 +34,6 @@ public static class AssetResolver
             _archiveIndex.Clear();
         }
     }
-
-
-
 
     public static List<string> Mo2DataRoots(string instancePath, IReadOnlyList<string> modsHighToLow,
                                             string overwriteFolder, string gameDataFolder)
@@ -83,8 +52,6 @@ public static class AssetResolver
         {
             if (_sessionRoots != null) return _sessionRoots;
         }
-
-
 
         var roots = new List<string>();
         try
@@ -114,7 +81,8 @@ public static class AssetResolver
             var sw = Stopwatch.StartNew();
             try
             {
-                foreach (var archive in Directory.EnumerateFiles(root, "*.ba2", SearchOption.AllDirectories))
+                foreach (var archive in Directory.EnumerateFiles(root, "*.ba2", SearchOption.AllDirectories)
+                             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
                 {
                     try
                     {
@@ -137,49 +105,48 @@ public static class AssetResolver
         }
     }
 
-
-
     public static List<AssetHit> ResolveAll(string relPath, int limit = 25)
     {
         var rel = Norm(relPath);
+        var nativeRel = NativeRelativePath(rel);
         var hits = new List<AssetHit>();
         if (rel.Length == 0) return hits;
 
         foreach (var root in Roots())
         {
             if (string.IsNullOrWhiteSpace(root)) continue;
+            var provider = Path.GetFileName(root.TrimEnd('\\', '/'));
 
             string full;
-            try { full = Path.Combine(root, rel); } catch { continue; }
+            try { full = Path.Combine(root, nativeRel); } catch { continue; }
             try
             {
                 if (File.Exists(full))
                 {
                     long size = 0;
                     try { size = new FileInfo(full).Length; } catch { }
-                    hits.Add(new AssetHit("loose", Path.GetFileName(root.TrimEnd('\\', '/')), full, "", size));
+                    hits.Add(new AssetHit("loose", provider, full, "", size) { Provider = provider });
                     if (hits.Count >= limit) return hits;
+                    continue;
                 }
             }
             catch (Exception ex) { DebugLog.Exception("Asset.Loose", ex); }
 
             if (ArchiveIndexFor(root).TryGetValue(rel, out var archivePath))
             {
-                hits.Add(new AssetHit("archive", Path.GetFileName(archivePath), archivePath, rel, 0));
+                hits.Add(new AssetHit("archive", Path.GetFileName(archivePath), archivePath, rel, 0)
+                {
+                    Provider = provider
+                });
                 if (hits.Count >= limit) return hits;
             }
         }
         return hits;
     }
 
-
     public static AssetHit? Resolve(string relPath) => ResolveAll(relPath, 1).FirstOrDefault();
 
     public static bool Exists(string relPath) => Resolve(relPath) != null;
-
-
-
-
 
     public static string? Materialize(AssetHit hit)
     {
@@ -210,7 +177,6 @@ public static class AssetResolver
         return null;
     }
 
-
     public static string ResolveText(string relPath, bool extract, int limit = 25)
     {
         var rel = Norm(relPath);
@@ -233,12 +199,15 @@ public static class AssetResolver
 
         var win = hits[0];
         sb.AppendLine($"'{rel}' -> served by {win.Kind} '{win.Container}'.");
+        sb.AppendLine($"  Providers: {hits.Count}; ambiguous: {(hits.Count > 1 ? "true" : "false")}.");
+        sb.AppendLine($"  Winning mod: {win.Provider}.");
         sb.AppendLine($"  Winner: {win.Path}" + (win.InnerPath.Length > 0 ? $" [{win.InnerPath}]" : "")
                       + (win.Size > 0 ? $" ({win.Size} bytes)" : ""));
         if (hits.Count > 1)
         {
-            sb.AppendLine($"  Also present in {hits.Count - 1} lower-priority source(s):");
-            foreach (var h in hits.Skip(1)) sb.AppendLine($"    {h.Kind}: {h.Container} ({h.Path})");
+            sb.AppendLine($"  Also present in {hits.Count - 1} lower-priority mod(s), highest priority first:");
+            foreach (var h in hits.Skip(1))
+                sb.AppendLine($"    {h.Provider}: {h.Kind} {h.Container} ({h.Path})");
         }
         if (extract)
         {

@@ -246,11 +246,11 @@ public sealed class PluginToolExecutor
             "List every declared ModGroup and its plugins.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }),
         new("resolve_asset",
-            "Which loose file or BA2 actually serves a game-relative asset path (xEdit's ResourceExists/" +
-            "ResourceContainerList). Answers 'does Meshes\\Weapons\\x.nif exist anywhere in this load " +
-            "order, and where' WITHOUT you having to already know which archive to look in. Searches " +
-            "every mod folder in MO2 priority order plus the game Data folder, loose files before that " +
-            "root's archives. Use this to VERIFY a MODL/texture path instead of guessing one.",
+            "Resolve a game-relative asset across the full MO2 data-root order. Reports the winning loose/BA2 " +
+            "source plus every lower-priority contending mod in resolver order, with an explicit distinct-mod " +
+            "provider count and ambiguity flag. A mod that contains both a loose and packed copy counts once; " +
+            "the source that actually wins inside that mod is reported. Use this to verify MODL/texture paths " +
+            "and to detect asset conflicts instead of guessing which mod or archive serves them.",
             new
             {
                 type = "object",
@@ -258,7 +258,7 @@ public sealed class PluginToolExecutor
                 {
                     path = new { type = "string", description = @"Game-relative path, e.g. 'Meshes\Clutter\Rock01.nif' or 'Textures\Sky\Clouds_d.dds'." },
                     extract = new { type = "boolean", description = "Also materialize the winning copy as a real file on disk (extracting it from its BA2 if needed) and report the path -- so you can hand it to nif_inspect/bgsm_inspect. Default false." },
-                    limit = new { type = "integer", description = "Max providers to list (default 25)." }
+                    limit = new { type = "integer", description = "Max distinct providing mods to list (default 25)." }
                 },
                 required = new[] { "path" }
             }),
