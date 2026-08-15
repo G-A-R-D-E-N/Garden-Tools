@@ -328,7 +328,7 @@ public static class Mo2ProfileLoader
             .Select(m => m.FileName.String)
             .Where(m => !present.Contains(m))
             .ToList();
-        loadOrder = implicitMasters.Concat(loadOrder).ToList();
+        loadOrder = EnsureRequiredGameMasters(implicitMasters.Concat(loadOrder));
 
 
 
@@ -463,5 +463,13 @@ public static class Mo2ProfileLoader
             PluginPaths = pluginPaths,
         };
         return (env, loaded);
+    }
+
+    internal static List<string> EnsureRequiredGameMasters(IEnumerable<string> loadOrder)
+    {
+        var result = loadOrder.ToList();
+        if (!result.Any(m => m.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase)))
+            result.Insert(0, "Fallout4.esm");
+        return result;
     }
 }
