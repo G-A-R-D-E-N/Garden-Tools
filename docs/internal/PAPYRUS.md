@@ -60,10 +60,19 @@ and they no-op when unset so a bare checkout stays green.
 | Type check | `FO4RE_PSC_CORPUS` | 7,832 scripts with complete sources, **100.00% clean** |
 | `.pex` round trip | `FO4RE_PEX_CORPUS` | 5,976 found, 4,581 read, **4,581 byte-identical, 0 differing** |
 | Compile, differential | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` | 198 (`.psc`, `.pex`) pairs, 161 compiled, **158 instruction-for-instruction identical to the Creation Kit (98.1%)**, 37 refused, 3 differing |
-| Compile, differential, vanilla | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **7,067 identical (93.2%)**, 28 refused |
+| Compile, differential, vanilla (corpus A, historical) | `FO4RE_PEX_CORPUS` + `FO4RE_PSC_ROOTS` + `FO4RE_PEX_RELEASE=1` | 7,613 pairs, 7,585 compiled, **7,067 identical (93.2%)**, 28 refused |
+| Compile, differential, vanilla (corpus B, build 20686350) | same env | 7,571 pairs, 7,543 compiled, **7,182 identical (95.21%)**, 28 refused |
 | Decompile fidelity | `FO4RE_PSC_ROOTS` | 1,498 scripts compiled, decompiled and recompiled, **1,202 instruction-identical (80.2%)**, 275 differing, 21 not recompiled |
 
-`FO4RecordEditor.Core.Tests` is 286 tests and runs on Linux. `FO4RecordEditor.Tests` targets
+Corpus A and corpus B are **different populations, not comparable head to head**: A is the
+historical extraction; B is depot build `20686350` (Misc.ba2 sha256 `a70c5820…`, Base.zip
+sha256 `80712380…`) staged Base+DLC. Do not read the A→B delta as progress. The valid #151
+comparison is three commits against the ONE fixed corpus B: `c7ce8d1`=7175, `078efa1`=7165
+(the #168 regression), `bd39825` (#172)=7182 identical. The residual difference is dominated
+by the item-7 string-table case canonicalization (native `PapyrusAssembler.exe`), for which
+neither lowercasing (#168) nor own-declared-state casing (#172) is the true rule.
+
+`FO4RecordEditor.Core.Tests` is 934 tests and runs on Linux. `FO4RecordEditor.Tests` targets
 `net9.0-windows` through its WPF reference and its host does not start here, so put anything testable
 without WPF in Core.Tests.
 
