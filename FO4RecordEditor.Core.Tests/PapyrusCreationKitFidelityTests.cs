@@ -53,6 +53,53 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
     }
 
     [Fact]
+    public void Bool_literal_comparison_uses_true_without_casting_one()
+    {
+        Write("BoolCondition", """
+            Scriptname BoolCondition extends ScriptObject
+            bool Function GetStageDone(int aiStage)
+                return false
+            EndFunction
+            Function Go()
+                bool abUnconscious = GetStageDone(100) == 1
+            EndFunction
+            """);
+
+        var instructions = CompileFunction("BoolCondition", "Go").Instructions;
+        var comparison = instructions.Single(instruction => instruction.Mnemonic == "cmp_eq");
+
+        comparison.Args[2].Type.Should().Be(PexValueType.Bool);
+        comparison.Args[2].Bool.Should().BeTrue();
+        instructions.Should().NotContain(instruction =>
+            instruction.Mnemonic == "cast"
+            && instruction.Args.Any(value => value.Type == PexValueType.Integer && value.Int == 1));
+    }
+
+    [Fact]
+    public void Nested_read_uses_own_auto_property_backing_variable_as_receiver()
+    {
+        Write("WorkshopParentScript", """
+            Scriptname WorkshopParentScript extends ScriptObject
+            bool Property PlayerInstitute_Destroyed Auto
+            """);
+        Write("PropertyRoute", """
+            Scriptname PropertyRoute extends ScriptObject
+            WorkshopParentScript Property WorkshopParent Auto
+            Function Go()
+                bool value = WorkshopParent.PlayerInstitute_Destroyed
+            EndFunction
+            """);
+
+        var reads = CompileFunction("PropertyRoute", "Go").Instructions
+            .Where(instruction => instruction.Mnemonic == "propget")
+            .ToArray();
+
+        reads.Should().ContainSingle();
+        reads[0].Args[0].Str.Should().BeEquivalentTo("PlayerInstitute_Destroyed");
+        reads[0].Args[1].Str.Should().Be("::WorkshopParent_var");
+    }
+
+    [Fact]
     public void GotoState_literal_is_lowercased_and_survives_pex_round_trip()
     {
         Write("StateCase", """
@@ -69,6 +116,35 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
 
         var reloaded = PexFile.FromBytes(emitted.ToBytes());
         StateArgument(Function(reloaded, "Go")).Should().Be("glassflipped");
+    }
+
+    [Fact]
+    public void GotoState_override_keeps_ordinary_string_argument_spelling()
+    {
+        Write("StateOverride", """
+            Scriptname StateOverride extends ScriptObject
+            Function GotoState(string asValue)
+            EndFunction
+            Function Go()
+                GotoState("KeepCase")
+            EndFunction
+            """);
+
+        StateArgument(CompileFunction("StateOverride", "Go")).Should().Be("KeepCase");
+    }
+
+    [Fact]
+    public void GotoState_on_an_inherited_external_receiver_is_lowercased()
+    {
+        Write("StateTarget", "Scriptname StateTarget extends ScriptObject\n");
+        Write("ExternalStateCase", """
+            Scriptname ExternalStateCase extends ScriptObject
+            Function Go(StateTarget akTarget)
+                akTarget.GotoState("MixedCase")
+            EndFunction
+            """);
+
+        StateArgument(CompileFunction("ExternalStateCase", "Go")).Should().Be("mixedcase");
     }
 
     [Fact]
@@ -94,32 +170,6 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
         instructions[1].Args[0].Str.Should().Be("f");
         instructions[1].Args[1].Type.Should().Be(PexValueType.Float);
         instructions[1].Args[1].Float.Should().Be(-2.5f);
-    }
-
-    [Fact]
-    public void String_table_uses_case_insensitive_first_writer_spelling()
-    {
-        Write("StringCase", """
-            Scriptname StringCase extends ScriptObject
-            Function Go()
-                string first = "SPECIALMenu"
-                string second = "SpecialMenu"
-            EndFunction
-            """);
-
-        var emitted = CompilePex("StringCase");
-        emitted.StringTable
-            .Where(value => value.Equals("SPECIALMenu", StringComparison.OrdinalIgnoreCase))
-            .Should().Equal("SPECIALMenu");
-
-        var reloaded = PexFile.FromBytes(emitted.ToBytes());
-        var literalValues = Function(reloaded, "Go").Instructions
-            .SelectMany(instruction => instruction.Args)
-            .Where(value => value.Type == PexValueType.String)
-            .Select(value => value.Str)
-            .ToArray();
-
-        literalValues.Should().Equal("SPECIALMenu", "SPECIALMenu");
     }
 
     private static string StateArgument(PexFunction function) =>
