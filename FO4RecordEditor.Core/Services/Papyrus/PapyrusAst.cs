@@ -166,7 +166,7 @@ public sealed class PapyrusParameter : PapyrusDeclaration
 
 
 
-    public ParameterSemantic Semantic => Type?.Name.ToLowerInvariant() switch
+    public ParameterSemantic Semantic => Type?.Name switch
     {
         "scripteventname" => ParameterSemantic.ScriptEventName,
         "customeventname" => ParameterSemantic.CustomEventName,
