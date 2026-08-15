@@ -100,22 +100,37 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
     }
 
     [Fact]
-    public void GotoState_literal_is_lowercased_and_survives_pex_round_trip()
+    public void GotoState_literal_is_canonicalized_to_the_declared_state_and_survives_pex_round_trip()
     {
         Write("StateCase", """
             Scriptname StateCase extends ScriptObject
             Function Go()
-                GotoState("GlassFlipped")
+                GotoState("glassFLIPPED")
             EndFunction
             State GlassFlipped
             EndState
             """);
 
         var emitted = CompilePex("StateCase");
-        StateArgument(Function(emitted, "Go")).Should().Be("glassflipped");
+        StateArgument(Function(emitted, "Go")).Should().Be("GlassFlipped");
 
         var reloaded = PexFile.FromBytes(emitted.ToBytes());
-        StateArgument(Function(reloaded, "Go")).Should().Be("glassflipped");
+        StateArgument(Function(reloaded, "Go")).Should().Be("GlassFlipped");
+    }
+
+    [Fact]
+    public void GotoState_literal_matching_a_lowercase_declaration_is_lowered()
+    {
+        Write("StateCaseLower", """
+            Scriptname StateCaseLower extends ScriptObject
+            Function Go()
+                GotoState("Off")
+            EndFunction
+            State off
+            EndState
+            """);
+
+        StateArgument(CompileFunction("StateCaseLower", "Go")).Should().Be("off");
     }
 
     [Fact]
@@ -134,7 +149,7 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
     }
 
     [Fact]
-    public void GotoState_on_an_inherited_external_receiver_is_lowercased()
+    public void GotoState_on_an_external_receiver_keeps_its_spelling()
     {
         Write("StateTarget", "Scriptname StateTarget extends ScriptObject\n");
         Write("ExternalStateCase", """
@@ -144,7 +159,7 @@ public sealed class PapyrusCreationKitFidelityTests : IDisposable
             EndFunction
             """);
 
-        StateArgument(CompileFunction("ExternalStateCase", "Go")).Should().Be("mixedcase");
+        StateArgument(CompileFunction("ExternalStateCase", "Go")).Should().Be("MixedCase");
     }
 
     [Fact]
