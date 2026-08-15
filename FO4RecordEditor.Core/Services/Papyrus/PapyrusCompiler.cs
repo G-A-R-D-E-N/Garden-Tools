@@ -167,6 +167,7 @@ public sealed class PapyrusCompiler
             },
             out var codegenDiagnostics);
 
+        if (pex != null) PapyrusCreationKitFidelity.Normalize(pex, _index);
         diagnostics.AddRange(codegenDiagnostics);
         return new PapyrusCompileResult(script, pex, diagnostics, resolution.BaseChainComplete);
     }
