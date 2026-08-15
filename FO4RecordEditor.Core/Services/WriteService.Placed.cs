@@ -60,6 +60,19 @@ public static partial class WriteService
         float x, float y, float z, float rotZ,
         bool persistent, bool initiallyDisabled,
         string? mapMarkerName, string? mapMarkerType, bool mapMarkerVisible,
+        object? env) =>
+        CreatePlacedObject(
+            plugin, cellId, baseId, editorId,
+            x, y, z, 0f, 0f, rotZ,
+            persistent, initiallyDisabled,
+            mapMarkerName, mapMarkerType, mapMarkerVisible,
+            env);
+
+    public static string CreatePlacedObject(
+        string plugin, string cellId, string baseId, string? editorId,
+        float x, float y, float z, float rotX, float rotY, float rotZ,
+        bool persistent, bool initiallyDisabled,
+        string? mapMarkerName, string? mapMarkerType, bool mapMarkerVisible,
         object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg);
@@ -116,7 +129,7 @@ public static partial class WriteService
         var refr = new PlacedObject(fk.Value, Fallout4Release.Fallout4)
         {
             Position = new P3Float(x, y, z),
-            Rotation = new P3Float(0f, 0f, rotZ),
+            Rotation = new P3Float(rotX, rotY, rotZ),
             MapMarker = marker,
         };
         if (!string.IsNullOrWhiteSpace(editorId)) refr.EditorID = editorId;

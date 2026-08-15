@@ -774,7 +774,7 @@ Block → SubBlock → Cell tree under `mod.Cells`. `run_script` only *overrides
 
 ```
 create_cell(plugin, editorId, name?)
-create_placed_object(plugin, cell, baseObject, editorId?, x, y, z, rotZ,
+create_placed_object(plugin, cell, baseObject, editorId?, x, y, z, rotX?, rotY?, rotZ?,
                      persistent?, initiallyDisabled?, mapMarkerName?, mapMarkerType?, mapMarkerVisible?)
 ```
 
@@ -802,6 +802,7 @@ Notes worth keeping:
 - `mapMarkerType` accepts the marker icon names (`Graveyard`, `Settlement`, `Cave`, `Vault`, …); an
   invalid one is rejected with the full valid list rather than silently defaulting.
 - Both reuse `NextFreeFormKey`, so ESL FormID-range safety is unchanged.
+- `rotX`, `rotY`, and `rotZ` set the full DATA rotation in radians during creation; all default to `0`. Existing callers that only send `rotZ` keep the old Z-only behavior.
 - **Two independent sources agree on the Visible flag.** Mutagen's
   `PlacedObjectMapMarker.Flag.Visible = 0x01` matches the engine decompile of `MapMarkerData::SetVisible`
   (`this[0x10] |= 1`, RVA `0xdea50`) exactly — see `docs/Code Notes/Permadeath.md` (outer workspace, not

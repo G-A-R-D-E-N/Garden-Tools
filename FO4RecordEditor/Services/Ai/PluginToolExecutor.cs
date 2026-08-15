@@ -378,7 +378,9 @@ public sealed class PluginToolExecutor
                     x = new { type = "number" },
                     y = new { type = "number" },
                     z = new { type = "number" },
-                    rotZ = new { type = "number", description = "Z rotation in radians." },
+                    rotX = new { type = "number", description = "X rotation in radians. Default 0." },
+                    rotY = new { type = "number", description = "Y rotation in radians. Default 0." },
+                    rotZ = new { type = "number", description = "Z rotation in radians. Default 0." },
                     persistent = new { type = "boolean", description = "Default true. Persistent refs go in the cell's Persistent list and can be reached by script from anywhere." },
                     initiallyDisabled = new { type = "boolean", description = "Default false." },
                     mapMarkerName = new { type = "string", description = "Set to attach map-marker data (turns the ref into a real map marker)." },
@@ -2085,7 +2087,8 @@ public sealed class PluginToolExecutor
             case "create_placed_object":
                 return WriteService.CreatePlacedObject(
                     Str("plugin"), Str("cell"), Str("baseObject"), StrOrNull("editorId"),
-                    Flt("x", 0f), Flt("y", 0f), Flt("z", 0f), Flt("rotZ", 0f),
+                    Flt("x", 0f), Flt("y", 0f), Flt("z", 0f),
+                    Flt("rotX", 0f), Flt("rotY", 0f), Flt("rotZ", 0f),
                     BoolOr("persistent", true), BoolOr("initiallyDisabled", false),
                     StrOrNull("mapMarkerName"), StrOrNull("mapMarkerType"), BoolOr("mapMarkerVisible", false),
                     env);
