@@ -123,6 +123,10 @@ def _drain():
     for unit in pending_units():
         active = active_units()
         if unit in active:
+            try:
+                os.utime(_idle_path(unit), None)
+            except FileNotFoundError:
+                pass
             clear_pending(unit)
             continue
         if len(active) >= MAX_CONCURRENT:
@@ -160,11 +164,12 @@ def cmd_idle_stop():
     which keeps a just-started runner from being stopped before it claims its job.
     """
     if job_running():
-        for u in ALL_UNITS:
-            try:
-                os.unlink(_idle_path(u))
-            except FileNotFoundError:
-                pass
+        if not pending_units():
+            for u in ALL_UNITS:
+                try:
+                    os.unlink(_idle_path(u))
+                except FileNotFoundError:
+                    pass
         return
     now = time.time()
     contended = bool(pending_units())
@@ -211,9 +216,35 @@ def cmd_status():
         print("  %-104s %s" % (u, ",".join(flags) or "stopped"))
 
 
+RUNNER_LABELS = {"self-hosted", "linux", "x64", "wine", "msvc"}
+
+
 def load_secret():
+    """Read the shared secret, refusing an empty one.
+
+    An empty file would authenticate every caller against a publicly known
+    empty HMAC key, letting anyone reaching the endpoint forge wake events.
+    """
     with open(SECRET_FILE, "rb") as fh:
-        return fh.read().strip()
+        secret = fh.read().strip()
+    if not secret:
+        raise RuntimeError("%s is empty; refusing to run with a guessable key" % SECRET_FILE)
+    return secret
+
+
+def serves_labels(labels):
+    """True when this Linux fleet can actually run a job with these labels.
+
+    Jobs asking for GitHub-hosted images or the Windows fleet must not consume
+    the single slot: the woken runner cannot claim them and would sit idle,
+    delaying a runner that could.
+    """
+    wanted = {str(l).strip().lower() for l in (labels or []) if str(l).strip()}
+    if not wanted:
+        return False
+    if "self-hosted" not in wanted:
+        return False
+    return wanted <= RUNNER_LABELS
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -255,6 +286,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._reply(400, "bad json")
         if payload.get("action") != "queued":
             return self._reply(200, "ignored")
+
+        labels = ((payload.get("workflow_job") or {}).get("labels")) or []
+        if not serves_labels(labels):
+            return self._reply(200, "not for this fleet")
 
         repo = (payload.get("repository") or {}).get("full_name")
         org = (payload.get("organization") or {}).get("login")
