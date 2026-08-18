@@ -23,9 +23,18 @@ int main() {
     assert(lod4->water_delta == -1.0F);
     assert(lod32->water_delta == 550.0F);
 
+    // The reference engine only gives LOD4 a dedicated full-geometry path.
+    // At LOD8/16/32, -1 is accepted and normalized to effective threshold 0.
+    auto normalized = defaults;
+    normalized.levels[1].quality = -1;
+    normalized.levels[2].quality = -1;
+    normalized.levels[3].quality = -1;
+    const auto normalized_result = f4lod::validate_terrain_lod_profile(normalized);
+    assert(normalized_result.valid);
+    assert(normalized_result.error_count() == 0U);
+
     auto invalid = defaults;
-    invalid.levels[0].quality = -1;
-    invalid.levels[1].quality = -1;
+    invalid.levels[0].quality = -2;
     invalid.levels[2].lod_level = 8U;
     invalid.levels[3].max_vertices = 65535U;
     const auto invalid_result = f4lod::validate_terrain_lod_profile(invalid);
