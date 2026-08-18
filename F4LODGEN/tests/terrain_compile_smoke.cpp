@@ -33,9 +33,8 @@ int main() {
     assert(options.max_vertices == 32767U);
     assert(options.lock_cell_borders);
 
-    // Compile at non-zero Quality so the CI smoke test validates the greedy
-    // path without intentionally expanding every zero-error sample of a flat
-    // Quality-0 block.
+    // Compile at non-zero Quality so the smoke test validates the normal greedy
+    // path independently of the special LOD4 full-geometry mode.
     auto fast_options = options;
     fast_options.quality = 1;
     const auto compiled = f4lod::compile_terrain_block_in_memory(
@@ -72,10 +71,17 @@ int main() {
     assert(lod8_defaults.quality == 5);
     assert(!lod8_defaults.lock_cell_borders);
 
-    auto invalid_full_lod8 = lod8_defaults;
-    invalid_full_lod8.quality = -1;
-    assert(!f4lod::compile_terrain_block_in_memory(
-        world, lod8, "Commonwealth", invalid_full_lod8).valid);
+    // Reference Program.cs clamps non-LOD4 -1 to TerrainLOD's constructor
+    // threshold 0. It does not reject the setting and does not use LOD4's
+    // pre-triangulated full-geometry path.
+    auto zero_threshold_lod8 = lod8_defaults;
+    zero_threshold_lod8.quality = -1;
+    const auto lod8_quality_minus_one = f4lod::compile_terrain_block_in_memory(
+        world, lod8, "Commonwealth", zero_threshold_lod8);
+    assert(lod8_quality_minus_one.valid);
+    assert(lod8_quality_minus_one.requested_quality == -1);
+    assert(lod8_quality_minus_one.simplification_error <= 0.0001F);
+    assert(lod8_quality_minus_one.output_vertices < 257U * 257U);
 
     auto tiny_budget = fast_options;
     tiny_budget.use_xlodgen_quality = false;
