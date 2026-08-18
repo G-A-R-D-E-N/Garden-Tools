@@ -201,6 +201,16 @@ public:
 
         float stopping_error = 0.0F;
         while (true) {
+            // Terrain.GoalMet checks PointCount > PointCountLimit before
+            // GreedyInsert. Preserve the heap-root error for diagnostics without
+            // performing another insertion after the target has been exceeded.
+            if (selected_count_ > point_limit_) {
+                result.point_limit_reached = true;
+                HeapEntry limit_entry;
+                if (pop_candidate(limit_entry)) stopping_error = limit_entry.error;
+                break;
+            }
+
             HeapEntry entry;
             if (!pop_candidate(entry)) {
                 stopping_error = 0.0F;
@@ -209,13 +219,6 @@ public:
 
             stopping_error = entry.error;
             if (entry.error < threshold_) break;
-            // Reference Terrain.GoalMet stops only after PointCount exceeds the
-            // configured limit, not when it merely reaches it.
-            if (selected_count_ > point_limit_) {
-                result.point_limit_reached = true;
-                break;
-            }
-
             if (!insert_candidate(entry.triangle, entry.point, result.error)) return result;
             ++result.insertions;
         }
@@ -244,9 +247,6 @@ private:
     struct HeapLess {
         bool operator()(const HeapEntry& lhs, const HeapEntry& rhs) const noexcept {
             if (lhs.error != rhs.error) return lhs.error < rhs.error;
-            // The reference heap swaps only on strict importance comparisons.
-            // Triangle creation order is the closest stable analogue to its
-            // token position; point index must not break equal-error ties.
             return lhs.triangle > rhs.triangle;
         }
     };
@@ -696,9 +696,6 @@ private:
         std::uint32_t best_point = 0U;
         const long double area_ld = static_cast<long double>(area);
 
-        // Scanline order is y-major then x-major. Candidate.Consider in the
-        // reference keeps only the first strictly-greater error, so equal-error
-        // points never replace an earlier point.
         for (std::int32_t y = min_y; y <= max_y; ++y) {
             for (std::int32_t x = min_x; x <= max_x; ++x) {
                 const auto p = local_index(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
@@ -722,8 +719,6 @@ private:
             }
         }
 
-        // TrackedTriangle.Scan kills candidates below 0.0001 instead of
-        // inserting zero-error samples forever when Quality is zero.
         if (!found || best_error < 0.0001F) return false;
         entry = HeapEntry{best_error, triangle_id, best_point};
         return true;
@@ -816,9 +811,6 @@ TerrainSimplifiedMesh build_output_mesh(
         }
     }
 
-    // CreateGeometry in the reference re-sorts terrain vertices by y*4096+x.
-    // TerrainBlockMesh source samples are already stored in that y-major order,
-    // so iterating source indices gives the same deterministic normalization.
     std::vector<std::uint32_t> remap(source.vertices.size(), std::numeric_limits<std::uint32_t>::max());
     for (std::size_t source_index = 0; source_index < source.vertices.size(); ++source_index) {
         if (used[source_index] == 0U) continue;
@@ -860,8 +852,8 @@ TerrainGreedyResult reduce_terrain_greedy(
         result.error = "Greedy terrain reducer accepts Quality 0 or greater after caller normalization.";
         return result;
     }
-    if (options.point_limit < 4U || options.point_limit > 32767U) {
-        result.error = "Greedy terrain MaxVerts/point limit must be between 4 and 32767 until BTR chunk splitting is enabled.";
+    if (options.point_limit < 4U || options.point_limit > 65535U) {
+        result.error = "Greedy terrain MaxVerts/point limit must be between 4 and 65535.";
         return result;
     }
     if (source.lod_level != 4U && source.lod_level != 8U &&
@@ -892,10 +884,6 @@ TerrainGreedyResult reduce_terrain_greedy(
         result.threshold_quad_units = threshold;
         for (std::uint32_t cell_y = 0U; cell_y < 4U; ++cell_y) {
             for (std::uint32_t cell_x = 0U; cell_x < 4U; ++cell_x) {
-                // Previous-level pinning is not yet represented in the native
-                // job graph, so retain dense per-cell boundaries as the safe
-                // conservative path rather than inventing those old-geometry
-                // states. Interior WaterDelta states are still exact.
                 RegionReducer reducer(
                     grid,
                     cell_x * 32U,
@@ -923,8 +911,6 @@ TerrainGreedyResult reduce_terrain_greedy(
     } else {
         const float threshold = static_cast<float>(options.quality);
         result.threshold_quad_units = threshold;
-        // TerrainLOD scripts outline points every lodLevel*2 samples; the old
-        // native reducer incorrectly forced every point on all four sides.
         const std::uint32_t boundary_step = source.lod_level * 2U;
         RegionReducer reducer(
             grid, 0U, 0U, grid.side, threshold, options.point_limit,
