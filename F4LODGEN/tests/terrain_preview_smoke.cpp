@@ -80,11 +80,16 @@ int main() {
     assert(unusual.profile_name == "Fixture unusual");
     assert(!unusual.profile_diagnostics.empty());
 
-    auto invalid_profile = profile;
-    invalid_profile.levels[1].quality = -1;
-    const auto rejected = f4lod::preview_terrain_generation(plan, invalid_profile);
-    assert(!rejected.valid);
-    assert(!rejected.error.empty());
+    // Non-LOD4 Quality=-1 is normalized by the reference engine to effective
+    // threshold 0. Preview must accept and compile it rather than rejecting the
+    // profile as invalid.
+    auto zero_threshold_profile = profile;
+    zero_threshold_profile.levels[1].quality = -1;
+    const auto zero_threshold = f4lod::preview_terrain_generation(plan, zero_threshold_profile);
+    assert(zero_threshold.valid);
+    assert(zero_threshold.levels[1].requested_quality == -1);
+    assert(zero_threshold.levels[1].blocks[0].requested_quality == -1);
+    assert(zero_threshold.levels[1].blocks[0].simplification_error <= 0.0001F);
 
     auto bad = plan;
     bad.valid = false;
