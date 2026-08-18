@@ -40,11 +40,13 @@ int main() {
     assert(btr.valid);
     assert(btr.nif.blocks.size() == 4);
     assert(btr.terrain_shape == 1);
+    assert(btr.nif.blocks[1].type == "BSTriShape");
     assert(btr.bounds_position[0] == 1064.0F);
     assert(btr.bounds_position[1] == 2064.0F);
 
     const auto geometry = f4lod::inspect_fallout4_btr_geometry(path, btr.terrain_shape);
     assert(geometry.valid);
+    assert(geometry.type == "BSTriShape");
     assert(geometry.vertex_count == 4);
     assert(geometry.triangle_count == 2);
     assert(geometry.full_precision_positions);
@@ -57,8 +59,9 @@ int main() {
     assert(geometry.position_max[0] == 128.0F);
     assert(geometry.position_min[1] == 0.0F);
     assert(geometry.position_max[1] == 128.0F);
-    assert(geometry.subindex_triangle_count == 2);
-    assert(geometry.subindex_a == 0);
+    assert(geometry.vertex_flag3 == 0U);
+    assert(geometry.subindex_triangle_count == 0U);
+    assert(geometry.subindex_a == 0U);
     assert(geometry.shader_properties[0] == -1);
 
     auto half_options = options;
