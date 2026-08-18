@@ -156,8 +156,16 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
 
     result.output_vertices = result.mesh.vertices.size();
     result.output_triangles = result.mesh.indices.size() / 3U;
-    if (result.output_vertices > options.max_vertices) {
-        result.error = "Terrain block compiler exceeded the configured MaxVerts point budget.";
+    // MaxVerts is the recovered greedy point target, not a post-generation
+    // serialization ceiling. GoalMet permits one final insertion before
+    // PointCount > MaxVerts stops refinement. Keep the configured limit as an
+    // absolute ceiling only for the unrelated legacy simplifier.
+    if (!options.use_xlodgen_quality && result.output_vertices > options.max_vertices) {
+        result.error = "Legacy terrain simplification exceeded its configured vertex ceiling.";
+        return result;
+    }
+    if (result.output_vertices > 65535U) {
+        result.error = "Terrain block requires 65535-vertex BTR chunk splitting that is not enabled yet.";
         return result;
     }
     if (result.output_triangles > options.max_triangles) {
