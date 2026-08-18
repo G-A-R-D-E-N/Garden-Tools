@@ -54,7 +54,7 @@ int main() {
     assert(!compiled.document.renderable);
     assert(compiled.document.nif.blocks.size() == 4U);
     assert(compiled.document.nif.blocks[0].type == "BSMultiBoundNode");
-    assert(compiled.document.nif.blocks[1].type == "BSSubIndexTriShape");
+    assert(compiled.document.nif.blocks[1].type == "BSTriShape");
 
     auto full = options;
     full.quality = -1;
@@ -64,6 +64,16 @@ int main() {
     assert(full_compiled.output_vertices == 129U * 129U);
     assert(full_compiled.output_triangles == 128U * 128U * 2U);
     assert(full_compiled.simplification_error == 0.0F);
+
+    // LOD4 Quality=-1 bypasses the greedy point target in the reference
+    // engine. A deliberately tiny MaxVerts setting must not reject the full
+    // pre-triangulated LOD4 path as long as the current writer can hold it.
+    auto full_tiny_target = full;
+    full_tiny_target.max_vertices = 512U;
+    const auto full_tiny_compiled = f4lod::compile_terrain_block_in_memory(
+        world, plan, "Commonwealth", full_tiny_target);
+    assert(full_tiny_compiled.valid);
+    assert(full_tiny_compiled.output_vertices == 129U * 129U);
 
     f4lod::TerrainBlockPlan lod8 = plan;
     lod8.lod_level = 8;
