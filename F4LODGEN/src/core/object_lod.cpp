@@ -1,9 +1,59 @@
 #include "f4lod/object_lod.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
 namespace f4lod {
+namespace {
+
+bool has_any_authored_model(const ObjectLodDescriptor& descriptor) noexcept {
+    return std::any_of(
+        descriptor.authored_lod_models.begin(),
+        descriptor.authored_lod_models.end(),
+        [](const std::string& path) { return !path.empty(); });
+}
+
+ObjectLodSafety effective_preflight_safety(
+    const ObjectLodDescriptor& descriptor) noexcept {
+    if (descriptor.safety != ObjectLodSafety::safe_static) return descriptor.safety;
+    if (!has_any_authored_model(descriptor)) return ObjectLodSafety::missing_authored_lod;
+    if (descriptor.enable_parent.has_value()) return ObjectLodSafety::enable_state_sensitive;
+    return ObjectLodSafety::safe_static;
+}
+
+std::string default_preflight_message(ObjectLodSafety safety) {
+    switch (safety) {
+    case ObjectLodSafety::safe_static:
+        return "Reference is eligible for unconditional authored object LOD.";
+    case ObjectLodSafety::enable_state_sensitive:
+        return "Reference has enable-parent state and must not be baked as unconditional LOD.";
+    case ObjectLodSafety::potentially_stateful:
+        return "Reference is potentially stateful and is excluded by the v0.1 safety policy.";
+    case ObjectLodSafety::unsupported_asset_material:
+        return "Reference uses an unsupported model or material feature and fails closed.";
+    case ObjectLodSafety::missing_authored_lod:
+        return "Reference has no usable authored LOD model and is excluded in v0.1.";
+    case ObjectLodSafety::forced:
+        return "Reference is explicitly forced by policy and bypasses the normal exclusion state.";
+    }
+    return "Reference has an unknown object LOD safety state.";
+}
+
+void increment_safety_count(
+    ObjectLodPreflightCounts& counts,
+    ObjectLodSafety safety) noexcept {
+    switch (safety) {
+    case ObjectLodSafety::safe_static: ++counts.safe_static; break;
+    case ObjectLodSafety::enable_state_sensitive: ++counts.enable_state_sensitive; break;
+    case ObjectLodSafety::potentially_stateful: ++counts.potentially_stateful; break;
+    case ObjectLodSafety::unsupported_asset_material: ++counts.unsupported_asset_material; break;
+    case ObjectLodSafety::missing_authored_lod: ++counts.missing_authored_lod; break;
+    case ObjectLodSafety::forced: ++counts.forced; break;
+    }
+}
+
+} // namespace
 
 std::optional<std::size_t> object_lod_level_index(
     std::uint32_t lod_level) noexcept {
@@ -51,6 +101,39 @@ ObjectLodSafety classify_object_lod_safety(
     if (potentially_stateful) return ObjectLodSafety::potentially_stateful;
     if (has_enable_parent) return ObjectLodSafety::enable_state_sensitive;
     return ObjectLodSafety::safe_static;
+}
+
+ObjectLodPreflight preflight_object_lod_descriptors(
+    std::span<const ObjectLodDescriptor> descriptors) {
+    ObjectLodPreflight result;
+    result.counts.total = descriptors.size();
+
+    for (std::size_t i = 0; i < descriptors.size(); ++i) {
+        const auto& descriptor = descriptors[i];
+        const auto safety = effective_preflight_safety(descriptor);
+        increment_safety_count(result.counts, safety);
+
+        const bool included = safety == ObjectLodSafety::safe_static ||
+                              safety == ObjectLodSafety::forced;
+        if (included) {
+            ++result.counts.included;
+        } else {
+            ++result.counts.excluded;
+        }
+
+        if (safety != ObjectLodSafety::safe_static) {
+            ObjectLodPreflightDiagnostic diagnostic;
+            diagnostic.descriptor_index = i;
+            diagnostic.safety = safety;
+            diagnostic.code = object_lod_safety_name(safety);
+            diagnostic.message = descriptor.exclusion_reason.empty()
+                ? default_preflight_message(safety)
+                : descriptor.exclusion_reason;
+            result.diagnostics.push_back(std::move(diagnostic));
+        }
+    }
+
+    return result;
 }
 
 const char* object_lod_safety_name(ObjectLodSafety safety) noexcept {
