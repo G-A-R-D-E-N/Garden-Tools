@@ -49,6 +49,9 @@ int main() {
     assert(json.find("\"positionPrecision\":\"half\"") != std::string::npos);
     assert(json.find("obj\\\"fixture") != std::string::npos);
     assert(json.find("\"subindexEntries\":2") != std::string::npos);
+    assert(json.find("\"transform\":{") != std::string::npos);
+    assert(json.find("\"positionRange\":{") != std::string::npos);
+    assert(json.find("\"uvRange\":{") != std::string::npos);
     assert(json.find("subindex unsupported") != std::string::npos);
     assert(json.back() == '\n');
 
