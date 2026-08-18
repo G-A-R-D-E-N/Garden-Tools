@@ -91,10 +91,6 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
         result.error = "Terrain block compilation requires a worldspace EditorID.";
         return result;
     }
-    if (options.use_xlodgen_quality && options.quality == -1 && plan.lod_level != 4U) {
-        result.error = "xLODGen Quality -1 (full terrain geometry) is supported only for LOD4.";
-        return result;
-    }
 
     const auto source = build_terrain_block_source_mesh(world, plan);
     if (!source.valid) {
