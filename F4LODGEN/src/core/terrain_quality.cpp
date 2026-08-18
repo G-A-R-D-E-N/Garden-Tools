@@ -21,11 +21,11 @@ TerrainSimplifiedMesh copy_source(const TerrainBlockMesh& source) {
     return result;
 }
 
-bool fits_limits(
+bool fits_current_writer_safety(
     const TerrainSimplifiedMesh& mesh,
     const TerrainQualityOptions& options) noexcept {
     return mesh.valid &&
-           mesh.vertices.size() <= options.max_vertices &&
+           mesh.vertices.size() <= 65535U &&
            mesh.indices.size() / 3U <= options.max_triangles;
 }
 
@@ -84,12 +84,12 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
     const auto& working = unseen.mesh;
 
     // Only LOD4 has the reference engine's pre-triangulated full-geometry path.
-    // At LOD8/16/32 a requested -1 is normalized by Program.cs/TerrainLOD to
-    // threshold 0 instead of being rejected.
+    // MaxVerts is a greedy point target and does not constrain this special
+    // path. The temporary 65535 writer cap remains until chunk splitting lands.
     if (options.quality == -1 && source.lod_level == 4U) {
         result.mesh = copy_source(working);
-        if (!fits_limits(result.mesh, options)) {
-            result.error = "Full LOD4 terrain geometry exceeds the configured MaxVerts/triangle safety limits.";
+        if (!fits_current_writer_safety(result.mesh, options)) {
+            result.error = "Full LOD4 terrain geometry exceeds the current single-shape writer safety limits.";
             result.mesh.valid = false;
             return result;
         }
@@ -115,6 +115,10 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
 
     if (greedy.mesh.indices.size() / 3U > options.max_triangles) {
         result.error = "Greedy terrain output exceeds the configured triangle safety ceiling.";
+        return result;
+    }
+    if (greedy.mesh.vertices.size() > 65535U) {
+        result.error = "Greedy terrain output requires BTR chunk splitting that is not enabled yet.";
         return result;
     }
 
