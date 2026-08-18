@@ -56,16 +56,12 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
         result.error = "xLODGen terrain Quality must be -1 or greater.";
         return result;
     }
-    if (options.quality == -1 && source.lod_level != 4U) {
-        result.error = "Recovered LODGen behavior only permits Quality -1 full geometry for LOD4.";
-        return result;
-    }
     if (options.max_vertices < 4U || options.max_vertices > 32767U) {
-        result.error = "xLODGen terrain MaxVerts must be between 4 and 32767.";
+        result.error = "xLODGen terrain MaxVerts must be between 4 and 32767 until 65535-vertex BTR chunk splitting is enabled.";
         return result;
     }
     if (options.max_triangles == 0U || options.max_triangles > 65535U) {
-        result.error = "Terrain triangle safety ceiling must be between 1 and 65535.";
+        result.error = "Terrain triangle safety ceiling must be between 1 and 65535 until FO4 chunk splitting is enabled.";
         return result;
     }
     if (!std::isfinite(options.water_delta) || options.water_delta < -1.0F) {
@@ -87,7 +83,10 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
     result.underwater_triangles = unseen.underwater_triangles;
     const auto& working = unseen.mesh;
 
-    if (options.quality == -1) {
+    // Only LOD4 has the reference engine's pre-triangulated full-geometry path.
+    // At LOD8/16/32 a requested -1 is normalized by Program.cs/TerrainLOD to
+    // threshold 0 instead of being rejected.
+    if (options.quality == -1 && source.lod_level == 4U) {
         result.mesh = copy_source(working);
         if (!fits_limits(result.mesh, options)) {
             result.error = "Full LOD4 terrain geometry exceeds the configured MaxVerts/triangle safety limits.";
@@ -103,9 +102,11 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
     }
 
     TerrainGreedyOptions greedy_options;
-    greedy_options.quality = options.quality;
+    greedy_options.quality = options.quality < 0 ? 0 : options.quality;
     greedy_options.point_limit = options.max_vertices;
     greedy_options.protect_cell_borders = options.protect_cell_borders;
+    greedy_options.forced_points = unseen.forced_vertices;
+    greedy_options.ignored_points = unseen.ignored_vertices;
     auto greedy = reduce_terrain_greedy(working, greedy_options);
     if (!greedy.valid) {
         result.error = "Greedy terrain Quality reduction failed: " + greedy.error;
