@@ -76,8 +76,8 @@ TerrainBtrCalibration calibrate_terrain_btr_writer(const PackedBtrProbe& probe) 
         result.shape_name = probe.btr.nif.strings[static_cast<std::size_t>(g.name_index)];
     }
 
-    if (g.type != "BSSubIndexTriShape") {
-        add_issue(result, "Commonwealth terrain sample is not BSSubIndexTriShape.");
+    if (g.type != "BSTriShape") {
+        add_issue(result, "Commonwealth terrain land sample is not BSTriShape.");
     }
     constexpr std::uint16_t supported_streams = 16U | 32U | 128U | 16384U;
     if ((g.vertex_flags & 16U) == 0U || (g.vertex_flags & 32U) == 0U || (g.vertex_flags & 128U) == 0U) {
@@ -90,13 +90,16 @@ TerrainBtrCalibration calibrate_terrain_btr_writer(const PackedBtrProbe& probe) 
     if (g.vertex_stride != expected_stride) {
         add_issue(result, "Terrain sample vertex stride does not match the supported calibrated position/UV/normal layout.");
     }
+    if (g.vertex_flag3 != 0U || g.vertex_flag4 != 0U || g.vertex_flag5 != 0U || g.vertex_flag8 != 0U) {
+        add_issue(result, "FO4 terrain land sample uses non-zero terrain vertex descriptor flag bytes.");
+    }
     if (!finite_transform(result.shape_transform)) {
         add_issue(result, "Terrain sample contains an invalid transform.");
     } else if (!approximately_orthonormal(result.shape_transform.rotation)) {
         add_issue(result, "Terrain sample rotation is not orthonormal; safe inverse transform cannot be guaranteed.");
     }
     if (g.subindex_a != 0U || g.subindex_b != 0U || !g.subindex_segments.empty()) {
-        add_issue(result, "Terrain sample uses a non-empty BSSubIndexTriShape table; generated triangle segmentation is not implemented yet.");
+        add_issue(result, "Terrain land sample unexpectedly contains BSSubIndexTriShape segment data.");
     }
     for (std::size_t slot = 0; slot < 2U; ++slot) {
         if (g.shader_properties[slot] >= 0 && !probe.material_present[slot]) {
