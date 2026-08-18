@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace f4lod {
@@ -20,6 +22,11 @@ struct ShapePayload {
     std::vector<unsigned char> data;
     std::vector<Vec3> local_positions;
     TerrainBtrTransform transform;
+};
+
+struct TerrainChunk {
+    TerrainSimplifiedMesh mesh;
+    std::vector<Vec3> normals;
 };
 
 void u8(std::vector<unsigned char>& out, std::uint8_t value) { out.push_back(value); }
@@ -43,6 +50,7 @@ void vec3(std::vector<unsigned char>& out, const Vec3& value) { f32(out, value.x
 void rotation(std::vector<unsigned char>& out, const float (&value)[9]) { for (float component : value) f32(out, component); }
 
 constexpr float kIdentityRotation[9]{1,0,0, 0,1,0, 0,0,1};
+constexpr std::size_t kMaxShapeVertices = 65535U;
 
 void avobject_prefix(std::vector<unsigned char>& out, std::int32_t name_index,
                      std::uint16_t flags, std::uint16_t flags2,
@@ -64,6 +72,7 @@ std::vector<Vec3> generate_normals(const TerrainSimplifiedMesh& mesh) {
     std::vector<Vec3> normals(mesh.vertices.size());
     for (std::size_t i = 0; i < mesh.indices.size(); i += 3U) {
         const auto ia=mesh.indices[i], ib=mesh.indices[i+1], ic=mesh.indices[i+2];
+        if (ia >= mesh.vertices.size() || ib >= mesh.vertices.size() || ic >= mesh.vertices.size()) continue;
         const auto face = cross(subtract(mesh.vertices[ib], mesh.vertices[ia]), subtract(mesh.vertices[ic], mesh.vertices[ia]));
         add(normals[ia], face); add(normals[ib], face); add(normals[ic], face);
     }
@@ -92,8 +101,8 @@ Vec3 inverse_transform_direction(const Vec3& v, const TerrainBtrTransform& t) {
                        t.rotation[1]*v.x+t.rotation[4]*v.y+t.rotation[7]*v.z,
                        t.rotation[2]*v.x+t.rotation[5]*v.y+t.rotation[8]*v.z});
 }
-bool valid_property_ref(std::int32_t ref, std::size_t count) noexcept {
-    return ref == -1 || (ref >= 0 && static_cast<std::size_t>(ref) < count);
+bool valid_property_ref(std::int32_t ref, std::size_t additional_count) noexcept {
+    return ref == -1 || (ref >= 4 && static_cast<std::size_t>(ref) < 4U + additional_count);
 }
 
 bool valid_recovered_lod(std::uint32_t lod) noexcept {
@@ -143,10 +152,15 @@ Vec3 recovered_local_point(
     };
 }
 
-std::vector<unsigned char> make_root_node(std::int32_t name_index) {
+std::vector<unsigned char> make_root_node(
+    std::int32_t name_index,
+    const std::vector<std::int32_t>& children) {
     std::vector<unsigned char> out;
     avobject_prefix(out, name_index, 14U, 0U, {}, kIdentityRotation, 1.0F);
-    u32(out, 1U); i32(out, 1); i32(out, 2); u32(out, 0U);
+    u32(out, static_cast<std::uint32_t>(children.size()));
+    for (const auto child : children) i32(out, child);
+    i32(out, 2);       // BSMultiBound block remains stable at index 2.
+    u32(out, 1U);      // TerrainLOD root cullMode.
     return out;
 }
 std::vector<unsigned char> make_multibound() { std::vector<unsigned char> out; i32(out, 3); return out; }
@@ -180,12 +194,85 @@ std::vector<unsigned char> make_recovered_aabb(
     return out;
 }
 
-ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
-                        const TerrainBtrBuildOptions& options,
-                        std::int32_t name_index) {
+std::vector<TerrainChunk> split_terrain_chunks(
+    const TerrainSimplifiedMesh& source,
+    std::string& error) {
+    std::vector<TerrainChunk> chunks;
+    if (source.indices.empty() || source.indices.size() % 3U != 0U) {
+        error = "Terrain mesh does not contain a valid triangle list for chunking.";
+        return chunks;
+    }
+    if (source.indices.size() / 3U > std::numeric_limits<std::uint32_t>::max()) {
+        error = "Terrain mesh triangle count exceeds the FO4 uint32 range.";
+        return chunks;
+    }
+    for (const auto index : source.indices) {
+        if (index >= source.vertices.size()) {
+            error = "Terrain mesh contains an out-of-range source index.";
+            return chunks;
+        }
+    }
+
+    const auto source_normals = generate_normals(source);
+    TerrainChunk current;
+    current.mesh.valid = true;
+    std::unordered_map<std::uint32_t, std::uint32_t> remap;
+    remap.reserve(kMaxShapeVertices);
+
+    const auto flush = [&]() mutable {
+        if (current.mesh.indices.empty()) return;
+        current.mesh.source_vertices = source.vertices.size();
+        current.mesh.source_triangles = source.indices.size() / 3U;
+        current.mesh.target_triangles = current.mesh.indices.size() / 3U;
+        chunks.push_back(std::move(current));
+        current = TerrainChunk{};
+        current.mesh.valid = true;
+        remap.clear();
+    };
+
+    for (std::size_t tri = 0; tri < source.indices.size(); tri += 3U) {
+        // The reference writer flushes the current Geometry when there is no
+        // room for a worst-case three-new-vertex next triangle. This keeps
+        // triangle boundaries atomic and gives every chunk fresh ushort indices.
+        if (!current.mesh.indices.empty() && current.mesh.vertices.size() + 3U > kMaxShapeVertices) {
+            flush();
+        }
+
+        for (std::size_t corner = 0; corner < 3U; ++corner) {
+            const auto source_index = source.indices[tri + corner];
+            const auto found = remap.find(source_index);
+            if (found != remap.end()) {
+                current.mesh.indices.push_back(found->second);
+                continue;
+            }
+            if (current.mesh.vertices.size() >= kMaxShapeVertices) {
+                error = "A terrain triangle cannot fit inside the FO4 65535-vertex chunk limit.";
+                return {};
+            }
+            const auto local_index = static_cast<std::uint32_t>(current.mesh.vertices.size());
+            remap.emplace(source_index, local_index);
+            current.mesh.vertices.push_back(source.vertices[source_index]);
+            current.normals.push_back(source_normals[source_index]);
+            current.mesh.indices.push_back(local_index);
+        }
+    }
+    flush();
+
+    if (chunks.empty()) error = "Terrain chunking produced no geometry.";
+    return chunks;
+}
+
+ShapePayload make_shape(
+    const TerrainSimplifiedMesh& mesh,
+    const TerrainBtrBuildOptions& options,
+    std::int32_t name_index,
+    const std::vector<Vec3>* supplied_world_normals = nullptr) {
     ShapePayload result;
-    if (mesh.vertices.size() > 65535U || mesh.indices.size()%3U != 0U) {
-        result.error = "Terrain mesh cannot be represented by one FO4 BSTriShape."; return result;
+    if (mesh.vertices.size() > kMaxShapeVertices || mesh.indices.size()%3U != 0U) {
+        result.error = "Terrain chunk cannot be represented by one FO4 BSTriShape."; return result;
+    }
+    if (mesh.indices.size() / 3U > std::numeric_limits<std::uint32_t>::max()) {
+        result.error = "Terrain chunk triangle count exceeds the FO4 uint32 range."; return result;
     }
     if (options.use_recovered_terrain_block_space && !valid_recovered_lod(options.lod_level)) {
         result.error = "Recovered FO4 terrain block space requires LOD4, LOD8, LOD16, or LOD32.";
@@ -198,7 +285,7 @@ ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
         result.error = "BTR UV spans must be finite and non-zero."; return result;
     }
     for (auto index : mesh.indices) if (index >= mesh.vertices.size() || index > 65535U) {
-        result.error = "Terrain mesh contains an invalid FO4 index."; return result;
+        result.error = "Terrain chunk contains an invalid FO4 index."; return result;
     }
 
     const float recovered_mid_z = options.use_recovered_terrain_block_space
@@ -208,7 +295,17 @@ ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
         ? recovered_shape_transform(options, recovered_mid_z)
         : options.shape_transform;
 
-    const auto world_normals = generate_normals(mesh);
+    std::vector<Vec3> generated_normals;
+    const std::vector<Vec3>* world_normals = supplied_world_normals;
+    if (!world_normals) {
+        generated_normals = generate_normals(mesh);
+        world_normals = &generated_normals;
+    }
+    if (world_normals->size() != mesh.vertices.size()) {
+        result.error = "Terrain chunk normal count does not match its vertex count.";
+        return result;
+    }
+
     std::vector<Vec3> local_normals;
     result.local_positions.reserve(mesh.vertices.size()); local_normals.reserve(mesh.vertices.size());
     for (std::size_t i=0;i<mesh.vertices.size();++i) {
@@ -217,12 +314,10 @@ ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
             : inverse_transform_point(mesh.vertices[i], result.transform);
         result.local_positions.push_back(p);
         local_normals.push_back(options.use_recovered_terrain_block_space
-            ? normalized(world_normals[i])
-            : inverse_transform_direction(world_normals[i], result.transform));
+            ? normalized((*world_normals)[i])
+            : inverse_transform_direction((*world_normals)[i], result.transform));
     }
 
-    // TerrainLOD uses half positions by default and forces full precision only
-    // when the local terrain height span exceeds 131008 units.
     bool full = options.position_precision == TerrainBtrVertexPrecision::full;
     if (options.use_recovered_terrain_block_space) {
         full = world_height_span(mesh) / static_cast<float>(options.lod_level) > 131008.0F;
@@ -257,8 +352,6 @@ ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
                     result.transform.rotation,result.transform.scale);
     vec3(out,center); f32(out,std::sqrt(radius2));
     i32(out,-1); i32(out,options.shader_property_0); i32(out,options.shader_property_1);
-    // BSTriShape.Write derives vertexSize from enabled component groups. For
-    // position + UV + normal it is 5 regardless of half/full position storage.
     u8(out,5U); u8(out,full?4U:2U);
     u8(out,options.vertex_flag3); u8(out,options.vertex_flag4); u8(out,options.vertex_flag5);
     u16(out,flags); u8(out,options.vertex_flag8); u32(out,triangles); u16(out,vertices); u32(out,static_cast<std::uint32_t>(data_size));
@@ -281,9 +374,6 @@ ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
         u8(out,float_to_nif_byte(local_normals[i].z)); u8(out,0);
     }
     for (auto index:mesh.indices) u16(out,static_cast<std::uint16_t>(index));
-    // FO4 terrain land is a plain BSTriShape. The 12-byte
-    // numTriangles2/numA/numB suffix belongs only to BSSubIndexTriShape (used
-    // by LOD4 water/object paths) and must not be appended to land geometry.
     result.valid = true;
     return result;
 }
@@ -295,12 +385,9 @@ TerrainBtrDocument build_fallout4_terrain_btr_document(const TerrainSimplifiedMe
     TerrainBtrDocument result;
     if (!mesh.valid) { result.error="Cannot build BTR from invalid terrain mesh: "+mesh.error; return result; }
     if (mesh.vertices.empty() || mesh.indices.empty()) { result.error="Cannot build BTR from empty terrain mesh."; return result; }
-    const std::size_t final_count=4U+options.additional_blocks.size();
-    if (!valid_property_ref(options.shader_property_0,final_count)||!valid_property_ref(options.shader_property_1,final_count)) {
-        result.error="BTR shader property reference is out of range."; return result;
-    }
-    if ((options.shader_property_0>=0&&options.shader_property_0<4)||(options.shader_property_1>=0&&options.shader_property_1<4)) {
-        result.error="BTR shader properties may not reference reserved blocks 0-3."; return result;
+    if (!valid_property_ref(options.shader_property_0, options.additional_blocks.size()) ||
+        !valid_property_ref(options.shader_property_1, options.additional_blocks.size())) {
+        result.error="BTR shader property reference is out of the configured additional-block range."; return result;
     }
 
     const std::uint32_t expected_reserved_strings = options.use_recovered_terrain_block_space ? 2U : 1U;
@@ -308,10 +395,33 @@ TerrainBtrDocument build_fallout4_terrain_btr_document(const TerrainSimplifiedMe
         result.error = "BTR reserved string count does not match the selected terrain writer mode.";
         return result;
     }
+
+    std::string chunk_error;
+    auto chunks = split_terrain_chunks(mesh, chunk_error);
+    if (!chunk_error.empty()) { result.error = std::move(chunk_error); return result; }
+
     const std::int32_t root_name_index = 0;
     const std::int32_t shape_name_index = options.use_recovered_terrain_block_space ? 1 : 0;
-    auto shape=make_shape(mesh,options,shape_name_index);
-    if (!shape.valid) { result.error=std::move(shape.error); return result; }
+    std::vector<ShapePayload> shapes;
+    shapes.reserve(chunks.size());
+    for (const auto& chunk : chunks) {
+        auto shape = make_shape(chunk.mesh, options, shape_name_index, &chunk.normals);
+        if (!shape.valid) { result.error = std::move(shape.error); return result; }
+        shapes.push_back(std::move(shape));
+    }
+
+    const std::size_t first_extra_shape = 4U + options.additional_blocks.size();
+    std::vector<std::int32_t> children;
+    children.reserve(shapes.size());
+    children.push_back(1);
+    for (std::size_t i = 1; i < shapes.size(); ++i) {
+        const auto index = first_extra_shape + (i - 1U);
+        if (index > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max())) {
+            result.error = "Terrain BTR chunk block index exceeds signed 32-bit NIF references.";
+            return result;
+        }
+        children.push_back(static_cast<std::int32_t>(index));
+    }
 
     result.nif.creator="F4LODGen";
     if (options.use_recovered_terrain_block_space) {
@@ -321,17 +431,24 @@ TerrainBtrDocument build_fallout4_terrain_btr_document(const TerrainSimplifiedMe
         result.nif.strings.push_back(options.shape_name);
     }
     result.nif.strings.insert(result.nif.strings.end(),options.additional_strings.begin(),options.additional_strings.end());
-    result.nif.blocks.push_back({"BSMultiBoundNode",make_root_node(root_name_index)});
-    result.nif.blocks.push_back({"BSTriShape",std::move(shape.data)});
+
+    result.nif.blocks.push_back({"BSMultiBoundNode",make_root_node(root_name_index, children)});
+    result.nif.blocks.push_back({"BSTriShape",std::move(shapes.front().data)});
     result.nif.blocks.push_back({"BSMultiBound",make_multibound()});
     result.nif.blocks.push_back({"BSMultiBoundAABB",
         options.use_recovered_terrain_block_space
-            ? make_recovered_aabb(shape.local_positions, options.lod_level)
-            : make_world_aabb(mesh)});
+            ? make_recovered_aabb(shapes.front().local_positions, options.lod_level)
+            : make_world_aabb(chunks.front().mesh)});
     result.nif.blocks.insert(result.nif.blocks.end(),options.additional_blocks.begin(),options.additional_blocks.end());
+    for (std::size_t i = 1; i < shapes.size(); ++i) {
+        result.nif.blocks.push_back({"BSTriShape",std::move(shapes[i].data)});
+    }
+
     result.nif.roots={0};
-    result.vertex_count=mesh.vertices.size(); result.triangle_count=mesh.indices.size()/3U;
-    result.renderable=options.shader_property_0>=0||options.shader_property_1>=0; result.valid=true;
+    result.vertex_count=mesh.vertices.size();
+    result.triangle_count=mesh.indices.size()/3U;
+    result.renderable=options.shader_property_0>=0||options.shader_property_1>=0;
+    result.valid=true;
     return result;
 }
 
