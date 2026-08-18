@@ -21,6 +21,9 @@ struct TerrainLodLevelProfile {
     bool protect_cell_borders{};
     bool regularize{};
     float water_delta{-1.0F};
+    // Recovered ZSHIFTLOD4/8/16/32 semantics. This is applied only as terrain
+    // and water node translation; it never mutates source/generated vertices.
+    float z_shift{};
 };
 
 struct TerrainLodProfile {
