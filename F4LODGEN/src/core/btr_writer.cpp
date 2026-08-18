@@ -14,6 +14,14 @@ namespace {
 
 struct Vec3 { float x{}; float y{}; float z{}; };
 
+struct ShapePayload {
+    bool valid{};
+    std::string error;
+    std::vector<unsigned char> data;
+    std::vector<Vec3> local_positions;
+    TerrainBtrTransform transform;
+};
+
 void u8(std::vector<unsigned char>& out, std::uint8_t value) { out.push_back(value); }
 void u16(std::vector<unsigned char>& out, std::uint16_t value) {
     u8(out, static_cast<std::uint8_t>(value & 0xFFU));
@@ -88,14 +96,63 @@ bool valid_property_ref(std::int32_t ref, std::size_t count) noexcept {
     return ref == -1 || (ref >= 0 && static_cast<std::size_t>(ref) < count);
 }
 
-std::vector<unsigned char> make_root_node() {
+bool valid_recovered_lod(std::uint32_t lod) noexcept {
+    return lod == 4U || lod == 8U || lod == 16U || lod == 32U;
+}
+
+float world_mid_z(const TerrainSimplifiedMesh& mesh) {
+    float min_z = std::numeric_limits<float>::infinity();
+    float max_z = -std::numeric_limits<float>::infinity();
+    for (const auto& vertex : mesh.vertices) {
+        min_z = std::min(min_z, vertex.z);
+        max_z = std::max(max_z, vertex.z);
+    }
+    return (min_z + max_z) * 0.5F;
+}
+
+float world_height_span(const TerrainSimplifiedMesh& mesh) {
+    float min_z = std::numeric_limits<float>::infinity();
+    float max_z = -std::numeric_limits<float>::infinity();
+    for (const auto& vertex : mesh.vertices) {
+        min_z = std::min(min_z, vertex.z);
+        max_z = std::max(max_z, vertex.z);
+    }
+    return max_z - min_z;
+}
+
+TerrainBtrTransform recovered_shape_transform(
+    const TerrainSimplifiedMesh& mesh,
+    const TerrainBtrBuildOptions& options) {
+    TerrainBtrTransform transform;
+    transform.translation_x = 0.0F;
+    transform.translation_y = 0.0F;
+    transform.translation_z = world_mid_z(mesh) + options.z_shift;
+    transform.scale = static_cast<float>(options.lod_level);
+    return transform;
+}
+
+Vec3 recovered_local_point(
+    const TerrainVertex& vertex,
+    const TerrainSimplifiedMesh& mesh,
+    const TerrainBtrBuildOptions& options) {
+    const float level = static_cast<float>(options.lod_level);
+    const float mid_z = world_mid_z(mesh);
+    return {
+        (vertex.x - options.block_origin_x) / level,
+        (vertex.y - options.block_origin_y) / level,
+        (vertex.z - mid_z) / level,
+    };
+}
+
+std::vector<unsigned char> make_root_node(std::int32_t name_index) {
     std::vector<unsigned char> out;
-    avobject_prefix(out, 0, 14U, 0U, {}, kIdentityRotation, 1.0F);
+    avobject_prefix(out, name_index, 14U, 0U, {}, kIdentityRotation, 1.0F);
     u32(out, 1U); i32(out, 1); i32(out, 2); u32(out, 0U);
     return out;
 }
 std::vector<unsigned char> make_multibound() { std::vector<unsigned char> out; i32(out, 3); return out; }
-std::vector<unsigned char> make_aabb(const TerrainSimplifiedMesh& mesh) {
+
+std::vector<unsigned char> make_world_aabb(const TerrainSimplifiedMesh& mesh) {
     float minx=std::numeric_limits<float>::infinity(), miny=minx, minz=minx;
     float maxx=-minx, maxy=-minx, maxz=-minx;
     for (const auto& v : mesh.vertices) {
@@ -108,66 +165,115 @@ std::vector<unsigned char> make_aabb(const TerrainSimplifiedMesh& mesh) {
     return out;
 }
 
-std::vector<unsigned char> make_shape(const TerrainSimplifiedMesh& mesh,
-                                      const TerrainBtrBuildOptions& options,
-                                      std::string& error) {
-    if (mesh.vertices.size() > 65535U || mesh.indices.size()%3U != 0U) {
-        error = "Terrain mesh cannot be represented by FO4 BSTriShape."; return {};
+std::vector<unsigned char> make_recovered_aabb(
+    const std::vector<Vec3>& local_positions,
+    std::uint32_t lod_level) {
+    float minx=std::numeric_limits<float>::infinity(), miny=minx, minz=minx;
+    float maxx=-minx, maxy=-minx, maxz=-minx;
+    for (const auto& v : local_positions) {
+        minx=std::min(minx,v.x); miny=std::min(miny,v.y); minz=std::min(minz,v.z);
+        maxx=std::max(maxx,v.x); maxy=std::max(maxy,v.y); maxz=std::max(maxz,v.z);
     }
-    if (!finite_transform(options.shape_transform)) { error = "BTR shape transform is invalid."; return {}; }
+    const float scale = static_cast<float>(lod_level);
+    std::vector<unsigned char> out;
+    vec3(out,{(minx+maxx)*0.5F*scale,(miny+maxy)*0.5F*scale,(minz+maxz)*0.5F*scale});
+    vec3(out,{(maxx-minx)*0.5F*scale,(maxy-miny)*0.5F*scale,(maxz-minz)*0.5F*scale});
+    return out;
+}
+
+ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
+                        const TerrainBtrBuildOptions& options,
+                        std::int32_t name_index) {
+    ShapePayload result;
+    if (mesh.vertices.size() > 65535U || mesh.indices.size()%3U != 0U) {
+        result.error = "Terrain mesh cannot be represented by one FO4 BSTriShape."; return result;
+    }
+    if (options.use_recovered_terrain_block_space && !valid_recovered_lod(options.lod_level)) {
+        result.error = "Recovered FO4 terrain block space requires LOD4, LOD8, LOD16, or LOD32.";
+        return result;
+    }
+    if (!options.use_recovered_terrain_block_space && !finite_transform(options.shape_transform)) {
+        result.error = "BTR shape transform is invalid."; return result;
+    }
     if (!std::isfinite(options.uv_span_x) || !std::isfinite(options.uv_span_y) || options.uv_span_x==0 || options.uv_span_y==0) {
-        error = "BTR UV spans must be finite and non-zero."; return {};
+        result.error = "BTR UV spans must be finite and non-zero."; return result;
     }
     for (auto index : mesh.indices) if (index >= mesh.vertices.size() || index > 65535U) {
-        error = "Terrain mesh contains an invalid FO4 index."; return {};
+        result.error = "Terrain mesh contains an invalid FO4 index."; return result;
     }
 
+    result.transform = options.use_recovered_terrain_block_space
+        ? recovered_shape_transform(mesh, options)
+        : options.shape_transform;
+
     const auto world_normals = generate_normals(mesh);
-    std::vector<Vec3> local, local_normals;
-    local.reserve(mesh.vertices.size()); local_normals.reserve(mesh.vertices.size());
+    std::vector<Vec3> local_normals;
+    result.local_positions.reserve(mesh.vertices.size()); local_normals.reserve(mesh.vertices.size());
     for (std::size_t i=0;i<mesh.vertices.size();++i) {
-        const auto p = inverse_transform_point(mesh.vertices[i], options.shape_transform);
-        if (options.position_precision == TerrainBtrVertexPrecision::half &&
-            (std::fabs(p.x)>65504 || std::fabs(p.y)>65504 || std::fabs(p.z)>65504)) {
-            error = "Half-precision BTR position exceeds fp16 range."; return {};
+        const auto p = options.use_recovered_terrain_block_space
+            ? recovered_local_point(mesh.vertices[i], mesh, options)
+            : inverse_transform_point(mesh.vertices[i], result.transform);
+        result.local_positions.push_back(p);
+        local_normals.push_back(options.use_recovered_terrain_block_space
+            ? normalized(world_normals[i])
+            : inverse_transform_direction(world_normals[i], result.transform));
+    }
+
+    // TerrainLOD uses half positions by default and forces full precision only
+    // when the local terrain height span exceeds 131008 units.
+    bool full = options.position_precision == TerrainBtrVertexPrecision::full;
+    if (options.use_recovered_terrain_block_space) {
+        full = world_height_span(mesh) / static_cast<float>(options.lod_level) > 131008.0F;
+    }
+    if (!full) {
+        for (const auto& p : result.local_positions) {
+            if (std::fabs(p.x)>65504 || std::fabs(p.y)>65504 || std::fabs(p.z)>65504) {
+                result.error = "Half-precision BTR position exceeds fp16 range."; return result;
+            }
         }
-        local.push_back(p);
-        local_normals.push_back(inverse_transform_direction(world_normals[i], options.shape_transform));
     }
 
     Vec3 center{};
-    for (const auto& v : local) add(center,v);
-    const float inv = 1.0F/static_cast<float>(local.size()); center.x*=inv; center.y*=inv; center.z*=inv;
+    for (const auto& v : result.local_positions) add(center,v);
+    const float inv = 1.0F/static_cast<float>(result.local_positions.size()); center.x*=inv; center.y*=inv; center.z*=inv;
     float radius2=0;
-    for (const auto& v : local) {
+    for (const auto& v : result.local_positions) {
         const float dx=v.x-center.x,dy=v.y-center.y,dz=v.z-center.z;
         radius2=std::max(radius2,dx*dx+dy*dy+dz*dz);
     }
 
-    const bool full = options.position_precision == TerrainBtrVertexPrecision::full;
     const std::uint16_t flags = static_cast<std::uint16_t>(16U|32U|128U|(full?16384U:0U));
     const std::uint32_t stride = full ? 24U : 16U;
     const auto triangles=static_cast<std::uint32_t>(mesh.indices.size()/3U);
     const auto vertices=static_cast<std::uint16_t>(mesh.vertices.size());
     const std::uint64_t data_size=static_cast<std::uint64_t>(vertices)*stride+static_cast<std::uint64_t>(triangles)*6ULL;
-    if (data_size > std::numeric_limits<std::uint32_t>::max()) { error="Terrain BTR dataSize exceeds 32-bit range."; return {}; }
+    if (data_size > std::numeric_limits<std::uint32_t>::max()) { result.error="Terrain BTR dataSize exceeds 32-bit range."; return result; }
 
-    std::vector<unsigned char> out;
-    avobject_prefix(out,0,options.av_flags,options.av_flags2,
-                    {options.shape_transform.translation_x,options.shape_transform.translation_y,options.shape_transform.translation_z},
-                    options.shape_transform.rotation,options.shape_transform.scale);
+    auto& out = result.data;
+    avobject_prefix(out,name_index,options.av_flags,options.av_flags2,
+                    {result.transform.translation_x,result.transform.translation_y,result.transform.translation_z},
+                    result.transform.rotation,result.transform.scale);
     vec3(out,center); f32(out,std::sqrt(radius2));
     i32(out,-1); i32(out,options.shader_property_0); i32(out,options.shader_property_1);
-    u8(out,full?6U:4U); u8(out,full?4U:2U);
+    // BSTriShape.Write derives vertexSize from enabled component groups. For
+    // position + UV + normal it is 5 regardless of half/full position storage.
+    u8(out,5U); u8(out,full?4U:2U);
     u8(out,options.vertex_flag3); u8(out,options.vertex_flag4); u8(out,options.vertex_flag5);
     u16(out,flags); u8(out,options.vertex_flag8); u32(out,triangles); u16(out,vertices); u32(out,static_cast<std::uint32_t>(data_size));
 
-    for (std::size_t i=0;i<local.size();++i) {
-        const auto& p=local[i];
+    for (std::size_t i=0;i<result.local_positions.size();++i) {
+        const auto& p=result.local_positions[i];
         if (full) { f32(out,p.x); f32(out,p.y); f32(out,p.z); f32(out,0); }
         else { u16(out,meshopt_quantizeHalf(p.x)); u16(out,meshopt_quantizeHalf(p.y)); u16(out,meshopt_quantizeHalf(p.z)); u16(out,0); }
-        const float u=(mesh.vertices[i].x-options.uv_origin_x)/options.uv_span_x;
-        const float v=(mesh.vertices[i].y-options.uv_origin_y)/options.uv_span_y;
+
+        float u=0.0F, v=0.0F;
+        if (options.use_recovered_terrain_block_space) {
+            u = p.x / 4096.0F;
+            v = 1.0F - p.y / 4096.0F;
+        } else {
+            u = (mesh.vertices[i].x-options.uv_origin_x)/options.uv_span_x;
+            v = (mesh.vertices[i].y-options.uv_origin_y)/options.uv_span_y;
+        }
         u16(out,meshopt_quantizeHalf(u)); u16(out,meshopt_quantizeHalf(v));
         u8(out,float_to_nif_byte(local_normals[i].x)); u8(out,float_to_nif_byte(local_normals[i].y));
         u8(out,float_to_nif_byte(local_normals[i].z)); u8(out,0);
@@ -176,7 +282,8 @@ std::vector<unsigned char> make_shape(const TerrainSimplifiedMesh& mesh,
     // FO4 terrain land is a plain BSTriShape. The 12-byte
     // numTriangles2/numA/numB suffix belongs only to BSSubIndexTriShape (used
     // by LOD4 water/object paths) and must not be appended to land geometry.
-    return out;
+    result.valid = true;
+    return result;
 }
 
 } // namespace
@@ -190,17 +297,34 @@ TerrainBtrDocument build_fallout4_terrain_btr_document(const TerrainSimplifiedMe
     if (!valid_property_ref(options.shader_property_0,final_count)||!valid_property_ref(options.shader_property_1,final_count)) {
         result.error="BTR shader property reference is out of range."; return result; }
     if ((options.shader_property_0>=0&&options.shader_property_0<4)||(options.shader_property_1>=0&&options.shader_property_1<4)) {
-        result.error="BTR shader properties may not reference reserved blocks 0-3."; return result; }
-    std::string shape_error;
-    auto shape=make_shape(mesh,options,shape_error);
-    if (!shape_error.empty()) { result.error=std::move(shape_error); return result; }
+        result.error="BTR shader properties may not reference reserved blocks 0-3."; return result;
+    }
+
+    const std::uint32_t expected_reserved_strings = options.use_recovered_terrain_block_space ? 2U : 1U;
+    if (options.reserved_string_count != expected_reserved_strings) {
+        result.error = "BTR reserved string count does not match the selected terrain writer mode.";
+        return result;
+    }
+    const std::int32_t root_name_index = 0;
+    const std::int32_t shape_name_index = options.use_recovered_terrain_block_space ? 1 : 0;
+    auto shape=make_shape(mesh,options,shape_name_index);
+    if (!shape.valid) { result.error=std::move(shape.error); return result; }
+
     result.nif.creator="F4LODGen";
-    result.nif.strings.push_back(options.shape_name);
+    if (options.use_recovered_terrain_block_space) {
+        result.nif.strings.push_back("chunk");
+        result.nif.strings.push_back("Land");
+    } else {
+        result.nif.strings.push_back(options.shape_name);
+    }
     result.nif.strings.insert(result.nif.strings.end(),options.additional_strings.begin(),options.additional_strings.end());
-    result.nif.blocks.push_back({"BSMultiBoundNode",make_root_node()});
-    result.nif.blocks.push_back({"BSTriShape",std::move(shape)});
+    result.nif.blocks.push_back({"BSMultiBoundNode",make_root_node(root_name_index)});
+    result.nif.blocks.push_back({"BSTriShape",std::move(shape.data)});
     result.nif.blocks.push_back({"BSMultiBound",make_multibound()});
-    result.nif.blocks.push_back({"BSMultiBoundAABB",make_aabb(mesh)});
+    result.nif.blocks.push_back({"BSMultiBoundAABB",
+        options.use_recovered_terrain_block_space
+            ? make_recovered_aabb(shape.local_positions, options.lod_level)
+            : make_world_aabb(mesh)});
     result.nif.blocks.insert(result.nif.blocks.end(),options.additional_blocks.begin(),options.additional_blocks.end());
     result.nif.roots={0};
     result.vertex_count=mesh.vertices.size(); result.triangle_count=mesh.indices.size()/3U;
