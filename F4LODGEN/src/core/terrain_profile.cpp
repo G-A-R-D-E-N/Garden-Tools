@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -10,7 +11,7 @@ namespace f4lod {
 namespace {
 
 constexpr std::array<std::uint32_t, 4> kExpectedLevels{4U, 8U, 16U, 32U};
-constexpr std::size_t kMaxTerrainVertices = 32767U;
+constexpr std::size_t kMaxTerrainVertices = 65535U;
 
 void add(
     TerrainProfileValidation& result,
@@ -56,11 +57,12 @@ std::size_t TerrainProfileValidation::error_count() const noexcept {
 TerrainLodProfile default_v01_terrain_lod_profile() {
     TerrainLodProfile profile;
     profile.name = "F4LODGen v0.1 Balanced";
+    const auto max_triangles = static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
     profile.levels = {{
-        TerrainLodLevelProfile{4U, 0, 32767U, 65535U, true, false, -1.0F, 0.0F},
-        TerrainLodLevelProfile{8U, 5, 32767U, 65535U, false, false, 0.0F, 0.0F},
-        TerrainLodLevelProfile{16U, 5, 32767U, 65535U, false, false, 0.0F, 0.0F},
-        TerrainLodLevelProfile{32U, 10, 32767U, 65535U, false, false, 550.0F, 0.0F},
+        TerrainLodLevelProfile{4U, 0, 32767U, max_triangles, true, false, -1.0F, 0.0F},
+        TerrainLodLevelProfile{8U, 5, 32767U, max_triangles, false, false, 0.0F, 0.0F},
+        TerrainLodLevelProfile{16U, 5, 32767U, max_triangles, false, false, 0.0F, 0.0F},
+        TerrainLodLevelProfile{32U, 10, 32767U, max_triangles, false, false, 550.0F, 0.0F},
     }};
     return profile;
 }
@@ -100,6 +102,7 @@ TerrainProfileValidation validate_terrain_lod_profile(
         }
     }
 
+    const auto max_fo4_triangles = static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
     for (const auto& level : profile.levels) {
         const bool known_level = std::find(
             kExpectedLevels.begin(), kExpectedLevels.end(), level.lod_level) != kExpectedLevels.end();
@@ -124,13 +127,13 @@ TerrainProfileValidation validate_terrain_lod_profile(
         if (level.max_vertices < 4U || level.max_vertices > kMaxTerrainVertices) {
             add(result, TerrainProfileSeverity::error,
                 "maxverts-invalid",
-                "MaxVerts must be between 4 and 32767 until 65535-vertex BTR chunk splitting is enabled.",
+                "MaxVerts must be between 4 and 65535; 32767 remains the normal xLODGen default.",
                 level.lod_level);
         }
-        if (level.max_triangles == 0U) {
+        if (level.max_triangles == 0U || level.max_triangles > max_fo4_triangles) {
             add(result, TerrainProfileSeverity::error,
                 "maxtriangles-invalid",
-                "Terrain triangle safety ceiling must be greater than zero.", level.lod_level);
+                "FO4 terrain triangle ceiling must fit the format's uint32 triangle count.", level.lod_level);
         }
         if (!std::isfinite(level.water_delta) || level.water_delta < -1.0F) {
             add(result, TerrainProfileSeverity::error,
