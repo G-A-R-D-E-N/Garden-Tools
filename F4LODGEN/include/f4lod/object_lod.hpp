@@ -51,6 +51,37 @@ enum class ObjectLodSafety {
     forced,
 };
 
+enum class ObjectLodReferenceDecision {
+    include,
+    skip_deleted,
+    skip_unsupported_base,
+    skip_missing_position,
+    skip_marker,
+    skip_initially_disabled,
+    skip_enable_parent_disabled,
+};
+
+struct ObjectLodReferencePolicyInput {
+    bool deleted{};
+    bool supported_static_base{true};
+    bool has_position{true};
+    bool persistent{};
+    bool reference_visible_when_distant{};
+    bool base_marker{};
+    bool initially_disabled{};
+    bool has_enable_parent{};
+    bool enable_parent_target_present{};
+    bool enable_parent_respects_lod_state{};
+    bool enable_parent_initially_disabled{};
+    bool enable_parent_opposite_state{};
+};
+
+struct ObjectLodReferencePolicyResult {
+    ObjectLodReferenceDecision decision{ObjectLodReferenceDecision::include};
+    bool include{true};
+    bool export_enable_parent{};
+};
+
 struct ObjectLodDescriptor {
     FormKey reference;
     FormKey base;
@@ -107,6 +138,14 @@ struct ObjectLodPreflight {
     float world_x,
     float world_y) noexcept;
 
+[[nodiscard]] std::optional<ObjectLodCell> object_lod_block_for_cell(
+    ObjectLodCell cell,
+    ObjectLodCell southwest_cell,
+    std::uint32_t lod_level) noexcept;
+
+[[nodiscard]] ObjectLodReferencePolicyResult evaluate_object_lod_reference_policy(
+    const ObjectLodReferencePolicyInput& input) noexcept;
+
 [[nodiscard]] bool object_lod_has_authored_model(
     const ObjectLodDescriptor& descriptor,
     std::uint32_t lod_level) noexcept;
@@ -122,5 +161,7 @@ struct ObjectLodPreflight {
     std::span<const ObjectLodDescriptor> descriptors);
 
 [[nodiscard]] const char* object_lod_safety_name(ObjectLodSafety safety) noexcept;
+[[nodiscard]] const char* object_lod_reference_decision_name(
+    ObjectLodReferenceDecision decision) noexcept;
 
 } // namespace f4lod
