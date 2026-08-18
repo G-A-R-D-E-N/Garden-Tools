@@ -21,6 +21,9 @@ struct TerrainQualityOptions {
     bool regularize{false};
     // WaterDelta is applied to the regular heightfield before greedy Quality.
     float water_delta{-1.0F};
+    // TerrainLOD reserves 2000 reducer points for any non-zero skirt setting,
+    // with a floor of 512 points. FO4's GUI writes Skirts=256.
+    float skirts{256.0F};
 };
 
 struct TerrainQualityResult {
@@ -32,7 +35,9 @@ struct TerrainQualityResult {
     float effective_error_quad_units{};
     float effective_error_world_units{};
     bool full_geometry{};
-    // True when MaxVerts stops greedy insertion before Quality is met.
+    // True when the recovered reducer target stops greedy insertion before
+    // Quality is met. The target may be lower than max_vertices when skirts
+    // reserve 2000 points.
     bool forced_by_limits{};
     bool optimize_unseen{};
     float water_delta{-1.0F};
