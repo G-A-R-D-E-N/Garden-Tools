@@ -36,7 +36,9 @@ struct TerrainBtrBuildOptions {
     TerrainBtrVertexPrecision position_precision{TerrainBtrVertexPrecision::full};
     std::uint16_t av_flags{14U};
     std::uint16_t av_flags2{};
-    std::uint8_t vertex_flag3{101U};
+    // TerrainLOD zeroes the auxiliary BSTriShape descriptor bytes for terrain
+    // chunks. Object-derived BSTriShapes use different defaults.
+    std::uint8_t vertex_flag3{};
     std::uint8_t vertex_flag4{};
     std::uint8_t vertex_flag5{};
     std::uint8_t vertex_flag8{};
