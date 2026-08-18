@@ -133,7 +133,11 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
     result.effective_error = greedy.max_error_quad_units;
     result.effective_error_quad_units = greedy.max_error_quad_units;
     result.effective_error_world_units = greedy.max_error_world_units;
-    result.forced_by_limits = greedy.point_limit_reached;
+    // GoalMet uses PointCount > PointCountLimit. Preserve that status even in
+    // the edge case where the final scripted/insertion step empties the heap
+    // before RegionReducer observes another candidate.
+    result.forced_by_limits = greedy.point_limit_reached ||
+                              greedy.selected_points > greedy_options.point_limit;
     result.greedy_insertions = greedy.greedy_insertions;
     result.full_geometry = greedy.mesh.vertices.size() == working.vertices.size();
     result.mesh = std::move(greedy.mesh);
