@@ -2,7 +2,7 @@ name: clang-ci
 
 on:
   push:
-    branches: [main, work/open-issues-20260818]
+    branches: [main]
   pull_request:
 
 permissions:
