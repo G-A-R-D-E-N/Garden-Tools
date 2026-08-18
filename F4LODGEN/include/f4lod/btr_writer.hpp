@@ -45,6 +45,21 @@ struct TerrainBtrBuildOptions {
     std::int32_t shader_property_0{-1};
     std::int32_t shader_property_1{-1};
     std::string shape_name{"obj"};
+
+    // Generated terrain uses the recovered TerrainLOD coordinate contract:
+    // world-space input samples become block-local 0..4096 geometry, the land
+    // node is scaled by lod_level, Z is centered with ShiftZ semantics, and UV
+    // V is inverted. Low-level calibration/writer probes can leave this false
+    // and continue supplying an explicit generic shape_transform.
+    bool use_recovered_terrain_block_space{};
+    std::uint32_t lod_level{1U};
+    float block_origin_x{};
+    float block_origin_y{};
+    float z_shift{};
+
+    // Number of strings that precede additional_strings. Generic writer probes
+    // use one shape-name string. Recovered terrain uses "chunk" + "Land".
+    std::uint32_t reserved_string_count{1U};
     std::vector<std::string> additional_strings;
     std::vector<NifWriteBlock> additional_blocks;
 };
