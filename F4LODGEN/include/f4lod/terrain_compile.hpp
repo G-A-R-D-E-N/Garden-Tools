@@ -26,6 +26,9 @@ struct TerrainBlockCompileOptions {
     // WaterDelta is applied to the regular terrain heightfield before greedy
     // Quality reduction.
     float water_delta{-1.0F};
+    // FO4 xLODGen writes Skirts=256. Zero disables skirts; negative values use
+    // the recovered absolute-Z mode.
+    float skirts{256.0F};
 
     // Legacy relative simplification controls retained for experiments and
     // direct regression coverage. They are ignored when use_xlodgen_quality is true.
@@ -51,6 +54,9 @@ struct TerrainBlockCompileResult {
     bool forced_by_limits{};
     bool optimize_unseen{};
     float water_delta{-1.0F};
+    float skirts{};
+    std::size_t skirt_vertices{};
+    std::size_t skirt_triangles{};
     std::size_t shifted_underwater_vertices{};
     std::size_t underwater_triangles{};
     std::size_t greedy_insertions{};
