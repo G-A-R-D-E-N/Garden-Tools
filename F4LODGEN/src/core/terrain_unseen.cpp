@@ -116,7 +116,9 @@ TerrainUnseenResult optimize_unseen_terrain(
             const bool protected_cell_border =
                 options.protect_cell_borders && source.lod_level == 4U &&
                 source.cell_border[i] != 0U;
-            if (diagonals_all_below_water(result.mesh, side, x, y) && !protected_cell_border) {
+            // The reference classifies the point from the original water/land
+            // relation before the current sample is flattened or lowered.
+            if (diagonals_all_below_water(source, side, x, y) && !protected_cell_border) {
                 result.ignored_vertices[i] = 1U;
             }
 
