@@ -1,6 +1,7 @@
 #include "f4lod/terrain_quality.hpp"
 
 #include "f4lod/terrain_greedy.hpp"
+#include "f4lod/terrain_skirts.hpp"
 #include "f4lod/terrain_unseen.hpp"
 
 #include <cmath>
@@ -68,6 +69,10 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
         result.error = "WaterDelta must be -1 (off), 0, or a positive distance.";
         return result;
     }
+    if (!std::isfinite(options.skirts)) {
+        result.error = "Skirts must be finite.";
+        return result;
+    }
 
     TerrainUnseenOptions unseen_options;
     unseen_options.water_delta = options.water_delta;
@@ -103,7 +108,10 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
 
     TerrainGreedyOptions greedy_options;
     greedy_options.quality = options.quality < 0 ? 0 : options.quality;
-    greedy_options.point_limit = options.max_vertices;
+    // TerrainLOD reserves 2000 points whenever skirts are enabled and never
+    // lets the reducer target fall below 512.
+    greedy_options.point_limit = recovered_terrain_reducer_budget(
+        options.max_vertices, options.skirts);
     greedy_options.protect_cell_borders = options.protect_cell_borders;
     greedy_options.forced_points = unseen.forced_vertices;
     greedy_options.ignored_points = unseen.ignored_vertices;
