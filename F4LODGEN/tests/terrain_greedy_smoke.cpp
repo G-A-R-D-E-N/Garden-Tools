@@ -59,6 +59,7 @@ f4lod::TerrainBlockMesh make_heightfield(float spike_height) {
 
 int main() {
     const auto source = make_heightfield(40.0F);
+    constexpr std::size_t spike = 50U * 129U + 50U;
 
     f4lod::TerrainGreedyOptions coarse;
     coarse.quality = 20;
@@ -68,7 +69,9 @@ int main() {
     assert(coarse_result.valid);
     assert(coarse_result.threshold_quad_units == 20.0F);
     assert(coarse_result.max_error_quad_units < 20.0F);
-    assert(coarse_result.selected_points == 512U); // constrained 129x129 perimeter
+    // Normal blocks script outline samples every lodLevel*2 grid points. LOD4
+    // therefore keeps 17 points per side, 64 unique around the perimeter.
+    assert(coarse_result.selected_points == 64U);
     assert(coarse_result.greedy_insertions == 0U);
     assert(!coarse_result.point_limit_reached);
 
@@ -82,19 +85,52 @@ int main() {
     assert(detailed_result.max_error_quad_units < 4.0F);
     assert(detailed_result.max_error_world_units < 16.0F);
 
+    // Ignored PointState entries never become candidates, even when they carry
+    // the largest source error.
+    auto ignored = detailed;
+    ignored.ignored_points.assign(source.vertices.size(), 0U);
+    ignored.ignored_points[spike] = 1U;
+    const auto ignored_result = f4lod::reduce_terrain_greedy(source, ignored);
+    assert(ignored_result.valid);
+    assert(ignored_result.greedy_insertions == 0U);
+    assert(ignored_result.selected_points == coarse_result.selected_points);
+
+    // Scripted Used wins over Ignored, matching the border/WaterDelta state
+    // precedence used by the reference engine.
+    auto forced = ignored;
+    forced.forced_points.assign(source.vertices.size(), 0U);
+    forced.forced_points[spike] = 1U;
+    const auto forced_result = f4lod::reduce_terrain_greedy(source, forced);
+    assert(forced_result.valid);
+    assert(forced_result.selected_points > ignored_result.selected_points);
+
     f4lod::TerrainGreedyOptions protected_lod4 = coarse;
     protected_lod4.quality = 4;
     protected_lod4.protect_cell_borders = true;
     const auto protected_result = f4lod::reduce_terrain_greedy(source, protected_lod4);
     assert(protected_result.valid);
     assert(std::fabs(protected_result.threshold_quad_units - 1.0F) < 0.0001F);
-    assert(protected_result.selected_points >= 1265U); // all 32-sample cell grid lines survive
+    assert(protected_result.selected_points >= 1265U); // conservative dense cell-grid path
     assert(protected_result.max_error_quad_units < 1.0F);
     assert(protected_result.max_error_world_units < 4.0F);
+
+    // Zero-error candidates below 0.0001 are killed by the reference tracked
+    // triangle instead of being inserted forever at Quality 0.
+    const auto flat = make_heightfield(0.0F);
+    auto zero_quality = coarse;
+    zero_quality.quality = 0;
+    const auto flat_result = f4lod::reduce_terrain_greedy(flat, zero_quality);
+    assert(flat_result.valid);
+    assert(flat_result.greedy_insertions == 0U);
+    assert(flat_result.selected_points == 64U);
 
     auto invalid = coarse;
     invalid.quality = -1;
     assert(!f4lod::reduce_terrain_greedy(source, invalid).valid);
+
+    auto bad_mask = coarse;
+    bad_mask.ignored_points.assign(1U, 1U);
+    assert(!f4lod::reduce_terrain_greedy(source, bad_mask).valid);
 
     auto incomplete = source;
     incomplete.vertices.pop_back();
