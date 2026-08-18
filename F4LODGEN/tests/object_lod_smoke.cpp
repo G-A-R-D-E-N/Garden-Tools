@@ -1,8 +1,9 @@
 #include "f4lod/object_lod.hpp"
 
 #include <cassert>
-#include <cmath>
 #include <limits>
+#include <string>
+#include <vector>
 
 int main() {
     using f4lod::ObjectLodSafety;
@@ -58,6 +59,59 @@ int main() {
            "safe-static");
     assert(std::string(f4lod::object_lod_safety_name(ObjectLodSafety::enable_state_sensitive)) ==
            "enable-state-sensitive");
+
+    f4lod::ObjectLodDescriptor safe;
+    safe.authored_lod_models[0] = "meshes/lod/safe.nif";
+
+    f4lod::ObjectLodDescriptor missing;
+
+    f4lod::ObjectLodDescriptor enable_sensitive;
+    enable_sensitive.authored_lod_models[0] = "meshes/lod/enable.nif";
+    enable_sensitive.enable_parent = f4lod::FormKey{"Fallout4.esm", 0x1234U};
+
+    f4lod::ObjectLodDescriptor stateful;
+    stateful.authored_lod_models[0] = "meshes/lod/stateful.nif";
+    stateful.safety = ObjectLodSafety::potentially_stateful;
+
+    f4lod::ObjectLodDescriptor unsupported;
+    unsupported.authored_lod_models[0] = "meshes/lod/unsupported.nif";
+    unsupported.safety = ObjectLodSafety::unsupported_asset_material;
+    unsupported.exclusion_reason = "fixture unsupported material";
+
+    f4lod::ObjectLodDescriptor forced;
+    forced.safety = ObjectLodSafety::forced;
+
+    const std::vector<f4lod::ObjectLodDescriptor> candidates{
+        safe,
+        missing,
+        enable_sensitive,
+        stateful,
+        unsupported,
+        forced,
+    };
+    const auto preflight = f4lod::preflight_object_lod_descriptors(candidates);
+    assert(preflight.counts.total == 6U);
+    assert(preflight.counts.included == 2U);
+    assert(preflight.counts.excluded == 4U);
+    assert(preflight.counts.safe_static == 1U);
+    assert(preflight.counts.missing_authored_lod == 1U);
+    assert(preflight.counts.enable_state_sensitive == 1U);
+    assert(preflight.counts.potentially_stateful == 1U);
+    assert(preflight.counts.unsupported_asset_material == 1U);
+    assert(preflight.counts.forced == 1U);
+    assert(preflight.diagnostics.size() == 5U);
+
+    bool saw_missing = false;
+    bool saw_enable = false;
+    bool saw_fixture_reason = false;
+    for (const auto& diagnostic : preflight.diagnostics) {
+        if (diagnostic.code == "missing-authored-lod") saw_missing = true;
+        if (diagnostic.code == "enable-state-sensitive") saw_enable = true;
+        if (diagnostic.message == "fixture unsupported material") saw_fixture_reason = true;
+    }
+    assert(saw_missing);
+    assert(saw_enable);
+    assert(saw_fixture_reason);
 
     return 0;
 }
