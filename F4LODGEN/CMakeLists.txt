@@ -46,6 +46,7 @@ add_library(f4lod_core
     src/core/nif.cpp
     src/core/nif_writer.cpp
     src/core/object_lod.cpp
+    src/core/object_static.cpp
     src/core/pipeline.cpp
     src/core/plugin.cpp
     src/core/record_data.cpp
@@ -137,4 +138,5 @@ if(F4LOD_BUILD_TESTS)
     f4lod_add_smoke(f4lod_btr_calibration_smoke tests/btr_calibration_smoke.cpp btr-calibration-smoke)
     f4lod_add_smoke(f4lod_commonwealth_calibration_report_smoke tests/commonwealth_calibration_report_smoke.cpp commonwealth-calibration-report-smoke)
     f4lod_add_smoke(f4lod_object_lod_smoke tests/object_lod_smoke.cpp object-lod-smoke)
+    f4lod_add_smoke(f4lod_object_static_smoke tests/object_static_smoke.cpp object-static-smoke)
 endif()
