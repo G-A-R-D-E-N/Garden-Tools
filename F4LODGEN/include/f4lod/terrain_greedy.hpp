@@ -5,15 +5,21 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace f4lod {
 
 struct TerrainGreedyOptions {
-    // xLODGen/LODGen contract. -1 is handled by the caller as full geometry;
+    // xLODGen/LODGen contract. -1 normalization is handled by the caller;
     // this reducer accepts non-negative thresholds only.
     int quality{};
     std::size_t point_limit{32767U};
     bool protect_cell_borders{};
+    // Source-vertex masks matching LODGen PointStates. Forced points are
+    // scripted into the triangulation before normal refinement; ignored points
+    // are never eligible candidates. A forced point wins if both masks are set.
+    std::vector<unsigned char> forced_points;
+    std::vector<unsigned char> ignored_points;
 };
 
 struct TerrainGreedyResult {
@@ -31,10 +37,10 @@ struct TerrainGreedyResult {
 // Clean-room implementation of the recovered LODGen terrain contract:
 // - regular heightfield
 // - Z is evaluated in quad-local units (world Z / LOD level)
-// - start from constrained outer borders
+// - start from four corner points plus scripted Used/Ignored states
 // - repeatedly insert the grid sample with maximum |height - triangle plane|
 // - restore local Delaunay legality after insertion
-// - stop when MaxError < Quality or PointCount reaches MaxVerts
+// - stop when MaxError < Quality or PointCount exceeds MaxVerts
 //
 // For LOD4 + ProtectCellBorders, each 33x33 CELL region is reduced separately
 // at Quality/4 and stitched by shared source-grid indices, matching the
