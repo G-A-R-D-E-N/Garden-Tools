@@ -3,6 +3,7 @@
 #include "f4lod/terrain_block_mesh.hpp"
 #include "f4lod/terrain_profile.hpp"
 #include "f4lod/terrain_quality.hpp"
+#include "f4lod/terrain_skirts.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -92,6 +93,7 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
         worldspace_editor_id, plan.lod_level, plan.x, plan.y);
     result.requested_quality = options.quality;
     result.water_delta = options.water_delta;
+    result.skirts = options.skirts;
 
     if (worldspace_editor_id.empty()) {
         result.error = "Terrain block compilation requires a worldspace EditorID.";
@@ -114,6 +116,7 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
         quality.protect_cell_borders = options.lock_cell_borders;
         quality.regularize = options.regularize;
         quality.water_delta = options.water_delta;
+        quality.skirts = options.skirts;
 
         auto quality_result = simplify_terrain_xlodgen_quality(source, quality);
         if (!quality_result.valid) {
@@ -129,6 +132,20 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
         result.underwater_triangles = quality_result.underwater_triangles;
         result.greedy_insertions = quality_result.greedy_insertions;
         result.mesh = std::move(quality_result.mesh);
+
+        TerrainSkirtOptions skirt_options;
+        skirt_options.lod_level = plan.lod_level;
+        skirt_options.block_origin_x = static_cast<float>(plan.x) * 4096.0F;
+        skirt_options.block_origin_y = static_cast<float>(plan.y) * 4096.0F;
+        skirt_options.skirts = options.skirts;
+        auto skirted = add_recovered_terrain_skirts(result.mesh, skirt_options);
+        if (!skirted.valid) {
+            result.error = "Could not add recovered terrain skirts: " + skirted.error;
+            return result;
+        }
+        result.skirt_vertices = skirted.added_vertices;
+        result.skirt_triangles = skirted.added_triangles;
+        result.mesh = std::move(skirted.mesh);
     } else {
         if (options.triangle_budget == 0U) {
             result.error = "Terrain block triangle budget must be greater than zero.";
