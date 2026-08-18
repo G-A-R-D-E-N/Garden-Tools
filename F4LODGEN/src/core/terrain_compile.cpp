@@ -64,6 +64,7 @@ TerrainBlockCompileOptions terrain_block_options_from_level_profile(
     options.triangle_budget = 65536U;
     options.target_error = 0.01F;
     set_btr_defaults(options, plan);
+    options.btr.z_shift = level.z_shift;
     (void) worldspace_editor_id;
     return options;
 }
