@@ -57,10 +57,10 @@ TerrainLodProfile default_v01_terrain_lod_profile() {
     TerrainLodProfile profile;
     profile.name = "F4LODGen v0.1 Balanced";
     profile.levels = {{
-        TerrainLodLevelProfile{4U, 0, 32767U, 65535U, true, false, -1.0F},
-        TerrainLodLevelProfile{8U, 5, 32767U, 65535U, false, false, 0.0F},
-        TerrainLodLevelProfile{16U, 5, 32767U, 65535U, false, false, 0.0F},
-        TerrainLodLevelProfile{32U, 10, 32767U, 65535U, false, false, 550.0F},
+        TerrainLodLevelProfile{4U, 0, 32767U, 65535U, true, false, -1.0F, 0.0F},
+        TerrainLodLevelProfile{8U, 5, 32767U, 65535U, false, false, 0.0F, 0.0F},
+        TerrainLodLevelProfile{16U, 5, 32767U, 65535U, false, false, 0.0F, 0.0F},
+        TerrainLodLevelProfile{32U, 10, 32767U, 65535U, false, false, 550.0F, 0.0F},
     }};
     return profile;
 }
@@ -136,6 +136,12 @@ TerrainProfileValidation validate_terrain_lod_profile(
             add(result, TerrainProfileSeverity::error,
                 "waterdelta-invalid",
                 "WaterDelta must be finite and at least -1.", level.lod_level);
+        }
+        if (!std::isfinite(level.z_shift)) {
+            add(result, TerrainProfileSeverity::error,
+                "zshift-invalid",
+                "ZSHIFT must be finite and is applied only as terrain/water node translation.",
+                level.lod_level);
         }
 
         if (level.lod_level == 4U) {
