@@ -15,6 +15,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # MSBuild spawns one worker node per core and, with nodeReuse on (its default),
+  # those nodes SURVIVE the build. On this shared runner that left ~6G resident in
+  # the runner cgroup between jobs: seven dotnet MSBuild nodes plus a Roslyn
+  # VBCSCompiler server, idling. actions-runners.slice caps the whole fleet at
+  # 7G, so one repo's leftover nodes starved the other twelve runners badly
+  # enough that they dropped their long-poll to GitHub and were marked offline,
+  # stalling unrelated queued PRs (GHRUNNER#20).
+  #
+  # Disable node reuse so nothing outlives the step, and cap concurrency at 2 --
+  # this host has 8 cores shared with a Wine/MSVC runner, GitLab and a chat
+  # service, so -m:8 was never the right default here.
+  MSBUILDDISABLENODEREUSE: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
 jobs:
   portable-core-and-web:
     name: Portable core, server, and web
@@ -54,22 +69,22 @@ jobs:
         run: npm run build
 
       - name: Restore portable test project
-        run: dotnet restore FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj
+        run: dotnet restore FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj -m:2
 
       - name: Build portable test project
-        run: dotnet build FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-restore
+        run: dotnet build FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-restore -m:2
 
       - name: Run portable test suite
-        run: dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+        run: dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal" -m:2
 
       - name: Build cross-platform server
-        run: dotnet build FO4RecordEditor.Server/FO4RecordEditor.Server.csproj --configuration Release
+        run: dotnet build FO4RecordEditor.Server/FO4RecordEditor.Server.csproj --configuration Release -m:2
 
       - name: Restore Windows test project (compile gate)
-        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true -m:2
 
       - name: Compile Windows test project (compile gate)
-        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true -m:2
 
   windows-compile:
     name: Windows compile (self-hosted)
@@ -105,10 +120,10 @@ jobs:
         run: npm run build
 
       - name: Restore Windows test project
-        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true -m:2
 
       - name: Build Windows shell and test project
-        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true -m:2
 
   windows-tests:
     name: Windows integration tests
@@ -144,12 +159,12 @@ jobs:
         run: npm run build
 
       - name: Restore Windows test project
-        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj -p:EnableWindowsTargeting=true -m:2
 
       - name: Build Windows shell and test project
-        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore -p:EnableWindowsTargeting=true -m:2
 
       - name: Run Windows integration test suite
         env:
           FO4RE_TEST_DATA: ${{ vars.FO4RE_TEST_DATA }}
-        run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+        run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal" -m:2
