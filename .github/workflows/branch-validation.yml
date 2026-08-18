@@ -22,7 +22,7 @@ env:
 jobs:
   portable-core-and-web:
     name: Portable core, server, and web
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: prisma-light
     timeout-minutes: 40
     steps:
       - name: Check out repository
