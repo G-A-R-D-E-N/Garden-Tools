@@ -6,6 +6,7 @@
 #include <vector>
 
 int main() {
+    using f4lod::ObjectLodReferenceDecision;
     using f4lod::ObjectLodSafety;
 
     assert(f4lod::object_lod_level_index(4U) == 0U);
@@ -33,6 +34,85 @@ int main() {
         std::numeric_limits<float>::infinity(), 0.0F).has_value());
     assert(!f4lod::object_lod_cell_from_world(
         std::numeric_limits<float>::quiet_NaN(), 0.0F).has_value());
+
+    const f4lod::ObjectLodCell southwest{-96, -96};
+    const auto same_block = f4lod::object_lod_block_for_cell({-95, -93}, southwest, 4U);
+    assert(same_block.has_value());
+    assert(same_block->x == -96);
+    assert(same_block->y == -96);
+    const auto next_block = f4lod::object_lod_block_for_cell({-92, -88}, southwest, 4U);
+    assert(next_block.has_value());
+    assert(next_block->x == -92);
+    assert(next_block->y == -88);
+    const auto below_anchor = f4lod::object_lod_block_for_cell({-97, -100}, southwest, 4U);
+    assert(below_anchor.has_value());
+    assert(below_anchor->x == -96);
+    assert(below_anchor->y == -100);
+    assert(!f4lod::object_lod_block_for_cell({0, 0}, {0, 0}, 0U).has_value());
+
+    f4lod::ObjectLodReferencePolicyInput policy;
+    auto policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(policy_result.include);
+    assert(!policy_result.export_enable_parent);
+
+    policy = {};
+    policy.deleted = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(!policy_result.include);
+    assert(policy_result.decision == ObjectLodReferenceDecision::skip_deleted);
+
+    policy = {};
+    policy.persistent = true;
+    policy.base_marker = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(!policy_result.include);
+    assert(policy_result.decision == ObjectLodReferenceDecision::skip_marker);
+
+    policy = {};
+    policy.initially_disabled = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(!policy_result.include);
+    assert(policy_result.decision == ObjectLodReferenceDecision::skip_initially_disabled);
+
+    policy = {};
+    policy.initially_disabled = true;
+    policy.reference_visible_when_distant = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(policy_result.include);
+
+    policy = {};
+    policy.initially_disabled = true;
+    policy.has_enable_parent = true;
+    policy.enable_parent_target_present = true;
+    policy.enable_parent_respects_lod_state = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(policy_result.include);
+    assert(policy_result.export_enable_parent);
+
+    policy = {};
+    policy.has_enable_parent = true;
+    policy.enable_parent_target_present = true;
+    policy.enable_parent_initially_disabled = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(!policy_result.include);
+    assert(policy_result.decision == ObjectLodReferenceDecision::skip_enable_parent_disabled);
+
+    policy.enable_parent_opposite_state = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(policy_result.include);
+    assert(!policy_result.export_enable_parent);
+
+    policy = {};
+    policy.has_enable_parent = true;
+    policy.enable_parent_target_present = true;
+    policy.enable_parent_initially_disabled = true;
+    policy.reference_visible_when_distant = true;
+    policy_result = f4lod::evaluate_object_lod_reference_policy(policy);
+    assert(policy_result.include);
+
+    assert(std::string(f4lod::object_lod_reference_decision_name(
+        ObjectLodReferenceDecision::skip_enable_parent_disabled)) ==
+        "skip-enable-parent-disabled");
 
     f4lod::ObjectLodDescriptor descriptor;
     descriptor.authored_lod_models[0] = "meshes/lod/example_lod_0.nif";
