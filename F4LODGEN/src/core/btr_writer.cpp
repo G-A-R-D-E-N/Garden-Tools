@@ -121,22 +121,21 @@ float world_height_span(const TerrainSimplifiedMesh& mesh) {
 }
 
 TerrainBtrTransform recovered_shape_transform(
-    const TerrainSimplifiedMesh& mesh,
-    const TerrainBtrBuildOptions& options) {
+    const TerrainBtrBuildOptions& options,
+    float mid_z) {
     TerrainBtrTransform transform;
     transform.translation_x = 0.0F;
     transform.translation_y = 0.0F;
-    transform.translation_z = world_mid_z(mesh) + options.z_shift;
+    transform.translation_z = mid_z + options.z_shift;
     transform.scale = static_cast<float>(options.lod_level);
     return transform;
 }
 
 Vec3 recovered_local_point(
     const TerrainVertex& vertex,
-    const TerrainSimplifiedMesh& mesh,
-    const TerrainBtrBuildOptions& options) {
+    const TerrainBtrBuildOptions& options,
+    float mid_z) {
     const float level = static_cast<float>(options.lod_level);
-    const float mid_z = world_mid_z(mesh);
     return {
         (vertex.x - options.block_origin_x) / level,
         (vertex.y - options.block_origin_y) / level,
@@ -202,8 +201,11 @@ ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
         result.error = "Terrain mesh contains an invalid FO4 index."; return result;
     }
 
+    const float recovered_mid_z = options.use_recovered_terrain_block_space
+        ? world_mid_z(mesh)
+        : 0.0F;
     result.transform = options.use_recovered_terrain_block_space
-        ? recovered_shape_transform(mesh, options)
+        ? recovered_shape_transform(options, recovered_mid_z)
         : options.shape_transform;
 
     const auto world_normals = generate_normals(mesh);
@@ -211,7 +213,7 @@ ShapePayload make_shape(const TerrainSimplifiedMesh& mesh,
     result.local_positions.reserve(mesh.vertices.size()); local_normals.reserve(mesh.vertices.size());
     for (std::size_t i=0;i<mesh.vertices.size();++i) {
         const auto p = options.use_recovered_terrain_block_space
-            ? recovered_local_point(mesh.vertices[i], mesh, options)
+            ? recovered_local_point(mesh.vertices[i], options, recovered_mid_z)
             : inverse_transform_point(mesh.vertices[i], result.transform);
         result.local_positions.push_back(p);
         local_normals.push_back(options.use_recovered_terrain_block_space
@@ -295,7 +297,8 @@ TerrainBtrDocument build_fallout4_terrain_btr_document(const TerrainSimplifiedMe
     if (mesh.vertices.empty() || mesh.indices.empty()) { result.error="Cannot build BTR from empty terrain mesh."; return result; }
     const std::size_t final_count=4U+options.additional_blocks.size();
     if (!valid_property_ref(options.shader_property_0,final_count)||!valid_property_ref(options.shader_property_1,final_count)) {
-        result.error="BTR shader property reference is out of range."; return result; }
+        result.error="BTR shader property reference is out of range."; return result;
+    }
     if ((options.shader_property_0>=0&&options.shader_property_0<4)||(options.shader_property_1>=0&&options.shader_property_1<4)) {
         result.error="BTR shader properties may not reference reserved blocks 0-3."; return result;
     }
