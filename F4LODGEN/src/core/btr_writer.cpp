@@ -173,7 +173,9 @@ std::vector<unsigned char> make_shape(const TerrainSimplifiedMesh& mesh,
         u8(out,float_to_nif_byte(local_normals[i].z)); u8(out,0);
     }
     for (auto index:mesh.indices) u16(out,static_cast<std::uint16_t>(index));
-    u32(out,triangles); u32(out,0U); u32(out,0U);
+    // FO4 terrain land is a plain BSTriShape. The 12-byte
+    // numTriangles2/numA/numB suffix belongs only to BSSubIndexTriShape (used
+    // by LOD4 water/object paths) and must not be appended to land geometry.
     return out;
 }
 
@@ -186,11 +188,9 @@ TerrainBtrDocument build_fallout4_terrain_btr_document(const TerrainSimplifiedMe
     if (mesh.vertices.empty() || mesh.indices.empty()) { result.error="Cannot build BTR from empty terrain mesh."; return result; }
     const std::size_t final_count=4U+options.additional_blocks.size();
     if (!valid_property_ref(options.shader_property_0,final_count)||!valid_property_ref(options.shader_property_1,final_count)) {
-        result.error="BTR shader property reference is out of range."; return result;
-    }
+        result.error="BTR shader property reference is out of range."; return result; }
     if ((options.shader_property_0>=0&&options.shader_property_0<4)||(options.shader_property_1>=0&&options.shader_property_1<4)) {
-        result.error="BTR shader properties may not reference reserved blocks 0-3."; return result;
-    }
+        result.error="BTR shader properties may not reference reserved blocks 0-3."; return result; }
     std::string shape_error;
     auto shape=make_shape(mesh,options,shape_error);
     if (!shape_error.empty()) { result.error=std::move(shape_error); return result; }
@@ -198,7 +198,7 @@ TerrainBtrDocument build_fallout4_terrain_btr_document(const TerrainSimplifiedMe
     result.nif.strings.push_back(options.shape_name);
     result.nif.strings.insert(result.nif.strings.end(),options.additional_strings.begin(),options.additional_strings.end());
     result.nif.blocks.push_back({"BSMultiBoundNode",make_root_node()});
-    result.nif.blocks.push_back({"BSSubIndexTriShape",std::move(shape)});
+    result.nif.blocks.push_back({"BSTriShape",std::move(shape)});
     result.nif.blocks.push_back({"BSMultiBound",make_multibound()});
     result.nif.blocks.push_back({"BSMultiBoundAABB",make_aabb(mesh)});
     result.nif.blocks.insert(result.nif.blocks.end(),options.additional_blocks.begin(),options.additional_blocks.end());
