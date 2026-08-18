@@ -53,6 +53,11 @@ void increment_safety_count(
     }
 }
 
+ObjectLodReferencePolicyResult skip_reference(
+    ObjectLodReferenceDecision decision) noexcept {
+    return ObjectLodReferencePolicyResult{decision, false, false};
+}
+
 } // namespace
 
 std::optional<std::size_t> object_lod_level_index(
@@ -80,6 +85,73 @@ std::optional<ObjectLodCell> object_lod_cell_from_world(
         static_cast<std::int32_t>(cell_x),
         static_cast<std::int32_t>(cell_y),
     };
+}
+
+std::optional<ObjectLodCell> object_lod_block_for_cell(
+    ObjectLodCell cell,
+    ObjectLodCell southwest_cell,
+    std::uint32_t lod_level) noexcept {
+    if (lod_level == 0U ||
+        lod_level > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
+        return std::nullopt;
+    }
+
+    const auto level = static_cast<std::int64_t>(lod_level);
+    const auto delta_x = static_cast<std::int64_t>(cell.x) - southwest_cell.x;
+    const auto delta_y = static_cast<std::int64_t>(cell.y) - southwest_cell.y;
+    const auto block_x = static_cast<std::int64_t>(southwest_cell.x) +
+        (delta_x / level) * level;
+    const auto block_y = static_cast<std::int64_t>(southwest_cell.y) +
+        (delta_y / level) * level;
+
+    if (block_x < std::numeric_limits<std::int32_t>::min() ||
+        block_x > std::numeric_limits<std::int32_t>::max() ||
+        block_y < std::numeric_limits<std::int32_t>::min() ||
+        block_y > std::numeric_limits<std::int32_t>::max()) {
+        return std::nullopt;
+    }
+
+    return ObjectLodCell{
+        static_cast<std::int32_t>(block_x),
+        static_cast<std::int32_t>(block_y),
+    };
+}
+
+ObjectLodReferencePolicyResult evaluate_object_lod_reference_policy(
+    const ObjectLodReferencePolicyInput& input) noexcept {
+    if (input.deleted) {
+        return skip_reference(ObjectLodReferenceDecision::skip_deleted);
+    }
+    if (!input.supported_static_base) {
+        return skip_reference(ObjectLodReferenceDecision::skip_unsupported_base);
+    }
+    if (!input.has_position) {
+        return skip_reference(ObjectLodReferenceDecision::skip_missing_position);
+    }
+    if (input.persistent &&
+        !input.reference_visible_when_distant &&
+        input.base_marker) {
+        return skip_reference(ObjectLodReferenceDecision::skip_marker);
+    }
+    if (input.initially_disabled &&
+        !input.has_enable_parent &&
+        !input.reference_visible_when_distant) {
+        return skip_reference(ObjectLodReferenceDecision::skip_initially_disabled);
+    }
+
+    ObjectLodReferencePolicyResult result;
+    if (input.has_enable_parent && input.enable_parent_target_present) {
+        if (input.enable_parent_respects_lod_state) {
+            result.export_enable_parent = true;
+        } else if (!input.reference_visible_when_distant) {
+            bool parent_disabled = input.enable_parent_initially_disabled;
+            if (input.enable_parent_opposite_state) parent_disabled = !parent_disabled;
+            if (parent_disabled) {
+                return skip_reference(ObjectLodReferenceDecision::skip_enable_parent_disabled);
+            }
+        }
+    }
+    return result;
 }
 
 bool object_lod_has_authored_model(
@@ -146,6 +218,20 @@ const char* object_lod_safety_name(ObjectLodSafety safety) noexcept {
     case ObjectLodSafety::forced: return "forced";
     }
     return "safe-static";
+}
+
+const char* object_lod_reference_decision_name(
+    ObjectLodReferenceDecision decision) noexcept {
+    switch (decision) {
+    case ObjectLodReferenceDecision::include: return "include";
+    case ObjectLodReferenceDecision::skip_deleted: return "skip-deleted";
+    case ObjectLodReferenceDecision::skip_unsupported_base: return "skip-unsupported-base";
+    case ObjectLodReferenceDecision::skip_missing_position: return "skip-missing-position";
+    case ObjectLodReferenceDecision::skip_marker: return "skip-marker";
+    case ObjectLodReferenceDecision::skip_initially_disabled: return "skip-initially-disabled";
+    case ObjectLodReferenceDecision::skip_enable_parent_disabled: return "skip-enable-parent-disabled";
+    }
+    return "include";
 }
 
 } // namespace f4lod
