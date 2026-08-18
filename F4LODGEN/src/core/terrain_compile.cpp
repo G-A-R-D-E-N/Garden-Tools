@@ -37,7 +37,13 @@ void set_btr_defaults(
     options.btr.uv_origin_y = block_origin_y;
     options.btr.uv_span_x = block_span;
     options.btr.uv_span_y = block_span;
-    options.btr.shape_name = "obj";
+    options.btr.shape_name = "Land";
+    options.btr.use_recovered_terrain_block_space = true;
+    options.btr.lod_level = plan.lod_level;
+    options.btr.block_origin_x = block_origin_x;
+    options.btr.block_origin_y = block_origin_y;
+    options.btr.z_shift = 0.0F;
+    options.btr.reserved_string_count = 2U; // "chunk", "Land"
 }
 
 } // namespace
