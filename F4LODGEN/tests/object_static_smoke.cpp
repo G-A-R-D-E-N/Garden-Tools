@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
