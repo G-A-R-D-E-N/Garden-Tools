@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,6 +76,30 @@ struct ObjectLodDescriptor {
     std::string exclusion_reason;
 };
 
+struct ObjectLodPreflightCounts {
+    std::size_t total{};
+    std::size_t included{};
+    std::size_t excluded{};
+    std::size_t safe_static{};
+    std::size_t enable_state_sensitive{};
+    std::size_t potentially_stateful{};
+    std::size_t unsupported_asset_material{};
+    std::size_t missing_authored_lod{};
+    std::size_t forced{};
+};
+
+struct ObjectLodPreflightDiagnostic {
+    std::size_t descriptor_index{};
+    ObjectLodSafety safety{ObjectLodSafety::safe_static};
+    std::string code;
+    std::string message;
+};
+
+struct ObjectLodPreflight {
+    ObjectLodPreflightCounts counts;
+    std::vector<ObjectLodPreflightDiagnostic> diagnostics;
+};
+
 [[nodiscard]] std::optional<std::size_t> object_lod_level_index(
     std::uint32_t lod_level) noexcept;
 
@@ -92,6 +117,9 @@ struct ObjectLodDescriptor {
     bool potentially_stateful,
     bool has_enable_parent,
     bool explicitly_forced = false) noexcept;
+
+[[nodiscard]] ObjectLodPreflight preflight_object_lod_descriptors(
+    std::span<const ObjectLodDescriptor> descriptors);
 
 [[nodiscard]] const char* object_lod_safety_name(ObjectLodSafety safety) noexcept;
 
