@@ -15,7 +15,7 @@ f4lod::PackedBtrProbe make_probe() {
 
     auto& g = probe.geometry;
     g.valid = true;
-    g.type = "BSSubIndexTriShape";
+    g.type = "BSTriShape";
     g.name_index = 0;
     g.av_flags = 14U;
     g.av_flags2 = 0U;
@@ -23,7 +23,7 @@ f4lod::PackedBtrProbe make_probe() {
     g.full_precision_positions = true;
     g.vertex_flags = static_cast<std::uint16_t>(16U | 32U | 128U | 16384U);
     g.vertex_stride = 24U;
-    g.vertex_flag3 = 101U;
+    g.vertex_flag3 = 0U;
     g.vertex_flag4 = 0U;
     g.vertex_flag5 = 0U;
     g.vertex_flag8 = 0U;
@@ -51,7 +51,7 @@ int main() {
     assert(calibration.writer_compatible);
     assert(calibration.position_precision == f4lod::TerrainBtrVertexPrecision::full);
     assert(calibration.av_flags == 14U);
-    assert(calibration.vertex_flag3 == 101U);
+    assert(calibration.vertex_flag3 == 0U);
     assert(calibration.shape_name == "obj");
 
     f4lod::TerrainBtrBuildOptions options;
@@ -62,6 +62,7 @@ int main() {
     assert(error.empty());
     assert(options.position_precision == f4lod::TerrainBtrVertexPrecision::full);
     assert(options.shader_property_0 == 4);
+    assert(options.vertex_flag3 == 0U);
     assert(options.additional_blocks.size() == 2U);
 
     probe.geometry.vertex_flags |= 256U;
@@ -71,11 +72,18 @@ int main() {
     assert(!unsupported.issues.empty());
 
     probe = make_probe();
+    probe.geometry.type = "BSSubIndexTriShape";
     probe.geometry.subindex_a = 1U;
     probe.geometry.subindex_b = 1U;
     probe.geometry.subindex_segments.push_back({0U, 1U, 0U, 0U});
     const auto segmented = f4lod::calibrate_terrain_btr_writer(probe);
     assert(segmented.valid);
     assert(!segmented.writer_compatible);
+
+    probe = make_probe();
+    probe.geometry.vertex_flag3 = 101U;
+    const auto object_descriptor = f4lod::calibrate_terrain_btr_writer(probe);
+    assert(object_descriptor.valid);
+    assert(!object_descriptor.writer_compatible);
     return 0;
 }
