@@ -78,9 +78,9 @@ jobs:
 
   windows-compile:
     name: Windows compile (self-hosted)
-    runs-on: [self-hosted, Linux, X64, wine, msvc]
+    runs-on: prisma-light
     concurrency:
-      group: plugin-edit-tool-wine-build
+      group: plugin-edit-tool-windows-compile
       cancel-in-progress: false
     timeout-minutes: 40
     steps:
