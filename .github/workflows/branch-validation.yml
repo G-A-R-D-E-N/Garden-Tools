@@ -12,12 +12,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
   MSBUILDDISABLENODEREUSE: "1"
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  UseSharedCompilation: "false"
 
 jobs:
   portable-core-and-web:
