@@ -1,9 +1,14 @@
 #include <fo4ide/app/ServiceTargets.hpp>
 
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
+#include <fstream>
+#include <functional>
 #include <string>
+#include <thread>
 #include <utility>
+#include <vector>
 
 namespace fo4ide::app {
 namespace {
@@ -49,6 +54,11 @@ nlohmann::json serviceText(Result<std::string> result) {
     return std::move(*result);
 }
 
+nlohmann::json pathResult(Result<std::filesystem::path> result) {
+    if (!result) return std::string{};
+    return result->string();
+}
+
 std::filesystem::path firstExisting(std::initializer_list<std::filesystem::path> candidates) {
     for (const auto& candidate : candidates) {
         if (!candidate.empty() && std::filesystem::is_regular_file(candidate)) return candidate;
@@ -79,15 +89,57 @@ std::filesystem::path findOnPath(std::string_view fileName) {
     return {};
 }
 
+int base64Value(unsigned char c) {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    return -1;
 }
 
-SettingsTarget::SettingsTarget(settings::Store& store, settings::Settings& current)
-    : store_(store), current_(current) {}
+Result<std::vector<unsigned char>> decodeBase64(std::string_view input) {
+    std::vector<unsigned char> output;
+    output.reserve(input.size() * 3 / 4);
+    unsigned int value = 0;
+    int bits = -8;
+    for (const unsigned char c : input) {
+        if (std::isspace(c)) continue;
+        if (c == '=') break;
+        const int digit = base64Value(c);
+        if (digit < 0) return std::unexpected(Error{"InvalidBase64", "Dropped file payload is not valid base64"});
+        value = (value << 6) | static_cast<unsigned int>(digit);
+        bits += 6;
+        if (bits >= 0) {
+            output.push_back(static_cast<unsigned char>((value >> bits) & 0xFFU));
+            bits -= 8;
+        }
+    }
+    return output;
+}
+
+std::filesystem::path uniqueStageDirectory() {
+    const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto thread = std::hash<std::thread::id>{}(std::this_thread::get_id());
+    return std::filesystem::temp_directory_path() /
+        ("FO4RE_Nif_" + std::to_string(ticks) + "_" + std::to_string(thread));
+}
+
+}
+
+SettingsTarget::SettingsTarget(settings::Store& store,
+                               settings::Settings& current,
+                               platform::Services& platform,
+                               process::Runner& runner)
+    : store_(store), current_(current), platform_(platform), runner_(runner) {}
 
 Result<nlohmann::json> SettingsTarget::invoke(std::string_view method,
                                                const nlohmann::json& args) {
     if (method == "GetSettings") return getSettings();
     if (method == "SaveSettings") return saveSettings(args);
+    if (method == "BrowseFolder") return browseFolder(args);
+    if (method == "BrowseFile") return browseFile(args);
+    if (method == "TestClaude") return testClaude(args);
     return std::unexpected(Error{"UnknownMethod", "Unknown settings RPC method: " + std::string(method)});
 }
 
@@ -133,10 +185,60 @@ Result<nlohmann::json> SettingsTarget::saveSettings(const nlohmann::json& args) 
     }
 }
 
-NifTarget::NifTarget(assets::NifService& service) : service_(service) {}
+Result<nlohmann::json> SettingsTarget::browseFolder(const nlohmann::json& args) {
+    const auto title = stringArgument(args, 0);
+    const auto current = stringArgument(args, 1);
+    platform::FileDialogOptions options;
+    options.title = title.empty() ? "Choose a folder" : title;
+    if (!current.empty() && std::filesystem::is_directory(current)) options.initialPath = current;
+    return pathResult(platform_.pickFolder(options));
+}
+
+Result<nlohmann::json> SettingsTarget::browseFile(const nlohmann::json& args) {
+    platform::FileDialogOptions options;
+    options.title = stringArgument(args, 0);
+    options.filter = stringArgument(args, 1);
+    const auto current = stringArgument(args, 2);
+    if (!current.empty() && std::filesystem::is_regular_file(current)) options.initialPath = current;
+    return pathResult(platform_.pickFile(options));
+}
+
+Result<nlohmann::json> SettingsTarget::testClaude(const nlohmann::json& args) {
+    auto path = trim(stringArgument(args, 0));
+    if (path.empty()) path = "claude";
+
+    process::Request request;
+#if defined(_WIN32)
+    request.executable = "cmd.exe";
+    request.arguments = {"/d", "/s", "/c", "\"" + path + "\" --version"};
+#else
+    request.executable = path;
+    request.arguments = {"--version"};
+#endif
+    request.timeout = std::chrono::seconds(30);
+    auto run = runner_.run(request);
+    if (!run) return nlohmann::json("Not found: " + run.error().message);
+    if (run->timedOut) return nlohmann::json("claude --version timed out after 30s.");
+    if (run->exitCode != 0) return nlohmann::json("claude ran but returned an error.");
+    return nlohmann::json("Found: " + trim(run->stdOut));
+}
+
+NifTarget::NifTarget(assets::NifService& service, platform::Services& platform)
+    : service_(service), platform_(platform) {}
 
 Result<nlohmann::json> NifTarget::invoke(std::string_view method,
                                          const nlohmann::json& args) {
+    if (method == "BrowseForFile") {
+        return pathResult(platform_.pickFile({stringArgument(args, 0), stringArgument(args, 1), {}}));
+    }
+    if (method == "BrowseForFolder") {
+        return pathResult(platform_.pickFolder({stringArgument(args, 0), {}, {}}));
+    }
+    if (method == "BrowseForSave") {
+        auto filter = stringArgument(args, 1);
+        if (filter.empty()) filter = "NIF mesh|*.nif|All files|*.*";
+        return pathResult(platform_.pickSavePath({stringArgument(args, 0), filter, {}}));
+    }
     if (method == "Inspect") return serviceText(service_.inspect(stringArgument(args, 0)));
     if (method == "Geo") return serviceText(service_.geometry(stringArgument(args, 0)));
     if (method == "Verify") return serviceText(service_.verify(stringArgument(args, 0)));
@@ -162,7 +264,33 @@ Result<nlohmann::json> NifTarget::invoke(std::string_view method,
             return nlohmann::json("Error: " + std::string(ex.what()));
         }
     }
+    if (method == "OpenFolder") {
+        auto opened = platform_.openFolder(stringArgument(args, 0));
+        return nlohmann::json(opened ? std::string{} : "Error: " + opened.error().message);
+    }
+    if (method == "StageDroppedFile") return stageDroppedFile(args);
     return std::unexpected(Error{"UnknownMethod", "Unknown NIF RPC method: " + std::string(method)});
+}
+
+Result<nlohmann::json> NifTarget::stageDroppedFile(const nlohmann::json& args) const {
+    try {
+        auto name = std::filesystem::path(stringArgument(args, 0)).filename();
+        if (name.empty()) name = "dropped.bin";
+        auto decoded = decodeBase64(stringArgument(args, 1));
+        if (!decoded) return nlohmann::json("ERR:" + decoded.error().message);
+
+        const auto directory = uniqueStageDirectory();
+        std::filesystem::create_directories(directory);
+        const auto path = directory / name;
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        if (!stream) return nlohmann::json("ERR:Could not create staged file");
+        stream.write(reinterpret_cast<const char*>(decoded->data()), static_cast<std::streamsize>(decoded->size()));
+        stream.close();
+        if (!stream) return nlohmann::json("ERR:Could not write staged file");
+        return nlohmann::json(path.string());
+    } catch (const std::exception& ex) {
+        return nlohmann::json("ERR:" + std::string(ex.what()));
+    }
 }
 
 std::filesystem::path locateNifTool(const settings::Settings& settings,
