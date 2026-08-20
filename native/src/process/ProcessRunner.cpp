@@ -34,8 +34,9 @@ Result<Output> ReprocRunner::run(const Request& request) {
         ? static_cast<int>(request.timeout.count())
         : 120000;
     const reproc::milliseconds timeout(timeoutCount);
+    options.deadline = timeout;
     options.stop = {
-        {reproc::stop::wait, timeout},
+        {reproc::stop::wait, reproc::milliseconds(0)},
         {reproc::stop::terminate, reproc::milliseconds(2000)},
         {reproc::stop::kill, reproc::milliseconds(2000)},
     };
