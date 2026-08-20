@@ -12,6 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <fo4ide/app/AppInteropTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/assets/NifService.hpp>
 #include <fo4ide/events/EventBus.hpp>
@@ -124,8 +125,10 @@ int main(int argc, char** argv) {
     fo4ide::events::EventBus events;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::rpc::Dispatcher rpc;
+    auto appInteropTarget = std::make_shared<fo4ide::app::AppInteropTarget>(settingsStore, currentSettings, platformServices);
 
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, nifTool), log) ||
+        !registerTarget(rpc, "appInterop", appInteropTarget, log) ||
         !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
         !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log)) {
         fo4ide::logging::shutdown();
