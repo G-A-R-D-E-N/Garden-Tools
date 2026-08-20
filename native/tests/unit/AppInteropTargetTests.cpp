@@ -2,10 +2,13 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4ide/app/AppInteropTarget.hpp>
+#include <fo4ide/plugin/IPluginBackend.hpp>
 
 namespace {
 
@@ -24,7 +27,7 @@ struct Cleanup {
 
 void writeFile(const std::filesystem::path& path, std::string_view contents = {}) {
     std::filesystem::create_directories(path.parent_path());
-    std::ofstream stream(path, std::ios::binary);
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     stream << contents;
 }
 
@@ -53,6 +56,24 @@ public:
     }
 };
 
+class FakePluginBackend final : public fo4ide::plugin::IPluginBackend {
+public:
+    std::vector<std::pair<std::string, nlohmann::json>> calls;
+
+    fo4ide::plugin::Capabilities capabilities() const noexcept override {
+        return {.available = true, .readPlugins = true};
+    }
+
+    fo4ide::Result<nlohmann::json> invoke(std::string_view operation,
+                                          const nlohmann::json& arguments) override {
+        calls.emplace_back(std::string(operation), arguments);
+        if (operation == "appInterop.GetPlugins") {
+            return nlohmann::json(R"([{"Key":"Native.esp","ConflictStatus":0,"IsRecordNode":false,"HasChildren":true}])");
+        }
+        return nlohmann::json(nullptr);
+    }
+};
+
 void makeProfile(const std::filesystem::path& root) {
     const auto game = root / "Game";
     writeFile(root / "ModOrganizer.ini",
@@ -73,8 +94,9 @@ TEST_CASE("AppInterop validates selected MO2 instance folders") {
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::Settings settings;
     FakePlatform platform;
+    fo4ide::plugin::NullPluginBackend plugins;
     platform.folder = root;
-    fo4ide::app::AppInteropTarget target(store, settings, platform);
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
 
     auto result = target.invoke("BrowseForMo2Folder", nlohmann::json::array());
     REQUIRE(result.has_value());
@@ -89,7 +111,8 @@ TEST_CASE("AppInterop opens MO2 metadata and returns top-level plugin rows") {
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::Settings settings;
     FakePlatform platform;
-    fo4ide::app::AppInteropTarget target(store, settings, platform);
+    fo4ide::plugin::NullPluginBackend nativePlugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, nativePlugins);
 
     auto opened = target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()}));
     REQUIRE(opened.has_value());
@@ -113,11 +136,67 @@ TEST_CASE("AppInterop keeps profile metadata available for the future plugin bac
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::Settings settings;
     FakePlatform platform;
-    fo4ide::app::AppInteropTarget target(store, settings, platform);
+    fo4ide::plugin::NullPluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
 
     REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()})).has_value());
     const auto snapshot = target.snapshot();
     REQUIRE(snapshot.has_value());
     CHECK(snapshot->plugins.size() == 2);
     CHECK(snapshot->missingPlugins.empty());
+}
+
+TEST_CASE("AppInterop sends one normalized MO2 environment to the native plugin backend") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    makeProfile(root);
+
+    fo4ide::settings::Store store(root / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    FakePluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()})).has_value());
+    REQUIRE_FALSE(plugins.calls.empty());
+    CHECK(plugins.calls.front().first == "environment.LoadMo2");
+    const auto& environment = plugins.calls.front().second;
+    CHECK(environment.at("profile") == "Test");
+    CHECK(environment.at("dataFolder") == (root / "Game" / "Data").string());
+    CHECK(environment.at("plugins").is_array());
+    CHECK(environment.at("plugins").size() == 2);
+
+    const auto result = target.invoke("GetPlugins", nlohmann::json::array());
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find("Native.esp") != std::string::npos);
+}
+
+TEST_CASE("AppInterop reports MO2 profile staleness and reload clears it") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    makeProfile(root);
+
+    fo4ide::settings::Store store(root / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    fo4ide::plugin::NullPluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()})).has_value());
+
+    auto status = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(status.has_value());
+    CHECK_FALSE(status->at("stale").get<bool>());
+
+    const auto pluginsTxt = root / "profiles" / "Test" / "plugins.txt";
+    const auto previous = std::filesystem::last_write_time(pluginsTxt);
+    writeFile(pluginsTxt, "*Example.esp\n*Second.esp\n");
+    std::filesystem::last_write_time(pluginsTxt, previous + std::chrono::seconds(2));
+
+    status = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(status.has_value());
+    CHECK(status->at("stale").get<bool>());
+
+    auto reloaded = target.invoke("ReloadMo2Profile", nlohmann::json::array());
+    REQUIRE(reloaded.has_value());
+    CHECK_FALSE(reloaded->at("stale").get<bool>());
 }
