@@ -14,9 +14,12 @@
 #include <nlohmann/json.hpp>
 
 #include <fo4ide/app/AppInteropTarget.hpp>
+#include <fo4ide/app/ArchiveTarget.hpp>
 #include <fo4ide/app/AudioTarget.hpp>
 #include <fo4ide/app/MaterialTarget.hpp>
+#include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
+#include <fo4ide/archive/ArchiveService.hpp>
 #include <fo4ide/assets/NifService.hpp>
 #include <fo4ide/audio/AudioService.hpp>
 #include <fo4ide/events/EventBus.hpp>
@@ -73,8 +76,10 @@ std::filesystem::path webRootFromArgs(int argc, char** argv) {
 
 class AppTarget final : public fo4ide::rpc::Target {
 public:
-    AppTarget(fo4ide::plugin::IPluginBackend& plugins, std::filesystem::path nifTool)
-        : plugins_(plugins), nifTool_(std::move(nifTool)) {}
+    AppTarget(fo4ide::plugin::IPluginBackend& plugins,
+              fo4ide::archive::ArchiveService& archives,
+              std::filesystem::path nifTool)
+        : plugins_(plugins), archives_(archives), nifTool_(std::move(nifTool)) {}
 
     fo4ide::Result<nlohmann::json> invoke(std::string_view method,
                                            const nlohmann::json&) override {
@@ -84,7 +89,13 @@ public:
                 {"ok", true},
                 {"native", true},
                 {"pluginBackend", capabilities.available},
-                {"nifTool", !nifTool_.empty()}
+                {"pluginRead", capabilities.readPlugins},
+                {"pluginWrite", capabilities.writePlugins},
+                {"archiveReadBackend", archives_.readBackendAvailable()},
+                {"nifTool", !nifTool_.empty()},
+                {"materialCodec", true},
+                {"audioTools", true},
+                {"embeddedWindow", fo4ide::platform::NativeWindow::available()}
             };
         }
         return std::unexpected(fo4ide::Error{"UnknownMethod", "Unknown app RPC method"});
@@ -92,6 +103,7 @@ public:
 
 private:
     fo4ide::plugin::IPluginBackend& plugins_;
+    fo4ide::archive::ArchiveService& archives_;
     std::filesystem::path nifTool_;
 };
 
@@ -243,6 +255,38 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
             }),
             log)) return false;
 
+    ToolDefinition archivePack{
+        .name = "archive_pack",
+        .description = "Pack folders into a Fallout 4 BA2 through Archive2.exe",
+        .inputSchema = objectSchema({
+            {"sources", {{"type", "array"}, {"items", {{"type", "string"}}}, {"minItems", 1}}},
+            {"output", {{"type", "string"}}},
+            {"format", {{"type", "string"}, {"enum", nlohmann::json::array({"General", "DDS"})}}},
+            {"rootDir", {{"type", "string"}}},
+            {"compress", {{"type", "boolean"}, {"default", true}}}
+        }, nlohmann::json::array({"sources", "output", "rootDir"}))
+    };
+    if (!registerMcpTool(
+            registry,
+            std::make_shared<FunctionTool>(std::move(archivePack), [&rpc](const nlohmann::json& args) {
+                if (!args.is_object() || !args.contains("sources") || !args.at("sources").is_array()) {
+                    return fo4ide::mcp::ToolResult{"sources is required", true};
+                }
+                const auto response = rpc.invoke({
+                    "archive",
+                    "Pack",
+                    nlohmann::json::array({
+                        args.at("sources").dump(),
+                        args.value("output", std::string{}),
+                        args.value("format", std::string("General")),
+                        args.value("rootDir", std::string{}),
+                        args.value("compress", true)
+                    })
+                });
+                return rpcToolText(response);
+            }),
+            log)) return false;
+
     return true;
 }
 
@@ -274,17 +318,25 @@ int main(int argc, char** argv) {
     fo4ide::assets::NifService nifService(processRunner, nifTool);
     fo4ide::audio::AudioService audioService(processRunner, toolLocator);
     fo4ide::material::MaterialService materialService;
+    fo4ide::archive::NullArchiveBackend archiveBackend;
+    fo4ide::archive::ArchiveService archiveService(processRunner, toolLocator, archiveBackend);
     fo4ide::events::EventBus events;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::rpc::Dispatcher rpc;
-    auto appInteropTarget = std::make_shared<fo4ide::app::AppInteropTarget>(settingsStore, currentSettings, platformServices);
+    auto appInteropTarget = std::make_shared<fo4ide::app::AppInteropTarget>(
+        settingsStore, currentSettings, platformServices, plugins);
 
-    if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, nifTool), log) ||
+    if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
         !registerTarget(rpc, "appInterop", appInteropTarget, log) ||
         !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
         !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log) ||
         !registerTarget(rpc, "audio", std::make_shared<fo4ide::app::AudioTarget>(audioService, platformServices), log) ||
-        !registerTarget(rpc, "material", std::make_shared<fo4ide::app::MaterialTarget>(materialService, platformServices), log)) {
+        !registerTarget(rpc, "material", std::make_shared<fo4ide::app::MaterialTarget>(materialService, platformServices), log) ||
+        !registerTarget(rpc, "archive", std::make_shared<fo4ide::app::ArchiveTarget>(archiveService, platformServices), log) ||
+        !registerTarget(rpc, "backend", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "backend"), log) ||
+        !registerTarget(rpc, "masters", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "masters"), log) ||
+        !registerTarget(rpc, "cell", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "cell"), log) ||
+        !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "graph"), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }
