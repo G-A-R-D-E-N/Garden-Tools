@@ -15,6 +15,7 @@
 
 #include <fo4ide/app/AppInteropTarget.hpp>
 #include <fo4ide/app/AudioTarget.hpp>
+#include <fo4ide/app/MaterialTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/assets/NifService.hpp>
 #include <fo4ide/audio/AudioService.hpp>
@@ -23,6 +24,7 @@
 #include <fo4ide/http/HttpServer.hpp>
 #endif
 #include <fo4ide/logging/Logger.hpp>
+#include <fo4ide/material/MaterialService.hpp>
 #include <fo4ide/mcp/McpServer.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
@@ -119,9 +121,20 @@ nlohmann::json objectSchema(nlohmann::json properties,
     return schema;
 }
 
+fo4ide::mcp::ToolResult rpcToolText(const fo4ide::rpc::Response& response) {
+    if (!response.ok) {
+        const auto prefix = response.type.empty() ? std::string{} : response.type + ": ";
+        return {prefix + response.error, true};
+    }
+    if (response.value.is_string()) return {response.value.get<std::string>(), false};
+    if (response.value.is_null()) return {"", false};
+    return {response.value.dump(), false};
+}
+
 bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
                             const fo4ide::rpc::Dispatcher& rpc,
                             const std::shared_ptr<spdlog::logger>& log) {
+    using fo4ide::mcp::FunctionTool;
     using fo4ide::mcp::RpcTool;
     using fo4ide::mcp::ToolDefinition;
 
@@ -136,25 +149,26 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
             log);
     };
 
-    if (!add({"native_status", "Report the native FO4IDE host and backend capability status", objectSchema({})},
+    const auto emptySchema = objectSchema(nlohmann::json::object());
+    if (!add({"native_status", "Report the native FO4IDE host and backend capability status", emptySchema},
              "app", "GetHealth")) return false;
-    if (!add({"get_mo2_status", "Report the loaded MO2 instance/profile and whether its files changed on disk", objectSchema({})},
+    if (!add({"get_mo2_status", "Report the loaded MO2 instance/profile and whether its files changed on disk", emptySchema},
              "appInterop", "GetMo2Status")) return false;
-    if (!add({"reload_mo2_profile", "Reload the currently configured MO2 profile from disk", objectSchema({})},
+    if (!add({"reload_mo2_profile", "Reload the currently configured MO2 profile from disk", emptySchema},
              "appInterop", "ReloadMo2Profile")) return false;
-    if (!add({"get_settings", "Return the current FO4IDE settings", objectSchema({})},
+    if (!add({"get_settings", "Return the current FO4IDE settings", emptySchema},
              "settings", "GetSettings")) return false;
 
-    const auto pathSchema = objectSchema(
+    const auto nifPathSchema = objectSchema(
         {{"path", {{"type", "string"}, {"description", "Path to the NIF file"}}}},
         nlohmann::json::array({"path"}));
-    if (!add({"nif_inspect", "Inspect a NIF through the native niftool wrapper", pathSchema},
+    if (!add({"nif_inspect", "Inspect a NIF through the native niftool wrapper", nifPathSchema},
              "nif", "Inspect", {"path"})) return false;
-    if (!add({"nif_verify", "Verify a NIF through the native niftool wrapper", pathSchema},
+    if (!add({"nif_verify", "Verify a NIF through the native niftool wrapper", nifPathSchema},
              "nif", "Verify", {"path"})) return false;
-    if (!add({"nif_tree", "Return the NIF block tree through the native niftool wrapper", pathSchema},
+    if (!add({"nif_tree", "Return the NIF block tree through the native niftool wrapper", nifPathSchema},
              "nif", "Tree", {"path"})) return false;
-    if (!add({"nif_geometry", "Return geometry data through the native niftool wrapper", pathSchema},
+    if (!add({"nif_geometry", "Return geometry data through the native niftool wrapper", nifPathSchema},
              "nif", "Geo", {"path"})) return false;
 
     if (!add({
@@ -196,6 +210,38 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
             }, nlohmann::json::array({"fuzPath"}))},
             "audio", "ExtractFuz", {"fuzPath", "xwmOutput", "lipOutput", "alsoWav"})) return false;
 
+    if (!add({
+            "material_inspect",
+            "Inspect a Fallout 4 BGSM or BGEM material through the native codec",
+            objectSchema({{"path", {{"type", "string"}}}}, nlohmann::json::array({"path"}))},
+            "material", "Inspect", {"path"})) return false;
+
+    ToolDefinition materialSet{
+        .name = "material_set_fields",
+        .description = "Set one or more named BGSM/BGEM material fields through the native codec",
+        .inputSchema = objectSchema({
+            {"path", {{"type", "string"}}},
+            {"fields", {{"type", "object"}, {"additionalProperties", {{"type", "string"}}}}},
+            {"output", {{"type", "string"}}}
+        }, nlohmann::json::array({"path", "fields"}))
+    };
+    if (!registerMcpTool(
+            registry,
+            std::make_shared<FunctionTool>(std::move(materialSet), [&rpc](const nlohmann::json& args) {
+                if (!args.is_object() || !args.contains("path") || !args.at("path").is_string() ||
+                    !args.contains("fields") || !args.at("fields").is_object()) {
+                    return fo4ide::mcp::ToolResult{"path and fields are required", true};
+                }
+                const auto output = args.value("output", std::string{});
+                const auto response = rpc.invoke({
+                    "material",
+                    "SetFields",
+                    nlohmann::json::array({args.at("path"), args.at("fields").dump(), output})
+                });
+                return rpcToolText(response);
+            }),
+            log)) return false;
+
     return true;
 }
 
@@ -226,6 +272,7 @@ int main(int argc, char** argv) {
     const auto nifTool = toolLocator.resolve(fo4ide::tools::Tool::NifTool);
     fo4ide::assets::NifService nifService(processRunner, nifTool);
     fo4ide::audio::AudioService audioService(processRunner, toolLocator);
+    fo4ide::material::MaterialService materialService;
     fo4ide::events::EventBus events;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::rpc::Dispatcher rpc;
@@ -235,7 +282,8 @@ int main(int argc, char** argv) {
         !registerTarget(rpc, "appInterop", appInteropTarget, log) ||
         !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
         !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log) ||
-        !registerTarget(rpc, "audio", std::make_shared<fo4ide::app::AudioTarget>(audioService, platformServices), log)) {
+        !registerTarget(rpc, "audio", std::make_shared<fo4ide::app::AudioTarget>(audioService, platformServices), log) ||
+        !registerTarget(rpc, "material", std::make_shared<fo4ide::app::MaterialTarget>(materialService, platformServices), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }
