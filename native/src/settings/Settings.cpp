@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <unordered_map>
+#include <utility>
 
 namespace fo4ide::settings {
 namespace {
