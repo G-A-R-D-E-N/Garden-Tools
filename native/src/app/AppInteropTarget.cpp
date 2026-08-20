@@ -1,5 +1,6 @@
 #include <fo4ide/app/AppInteropTarget.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -10,6 +11,12 @@ namespace {
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
     return args[index].get<std::string>();
+}
+
+std::filesystem::file_time_type fileStamp(const std::filesystem::path& path) {
+    std::error_code ec;
+    const auto stamp = std::filesystem::last_write_time(path, ec);
+    return ec ? std::filesystem::file_time_type::min() : stamp;
 }
 
 }
@@ -26,6 +33,8 @@ Result<nlohmann::json> AppInteropTarget::invoke(std::string_view method,
     if (method == "LoadEnvironment") return loadEnvironment();
     if (method == "RefreshTree") return getPlugins();
     if (method == "GetPlugins") return getPlugins();
+    if (method == "GetMo2Status") return getMo2Status();
+    if (method == "ReloadMo2Profile") return reloadMo2Profile();
     if (method == "GetChildren") return nlohmann::json("[]");
     if (method == "OpenRecord") return nlohmann::json("");
     if (method == "ScanConflicts") return nlohmann::json("Native plugin backend is not connected yet.");
@@ -72,8 +81,12 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
     auto saved = store_.save(settings_);
     if (!saved) return std::unexpected(saved.error());
 
+    auto watched = captureWatchFiles(*loaded);
+    const auto loadedAt = std::chrono::system_clock::now();
     std::scoped_lock lock(mutex_);
     snapshot_ = std::move(*loaded);
+    watchedFiles_ = std::move(watched);
+    loadedAt_ = loadedAt;
     return {};
 }
 
@@ -92,6 +105,79 @@ Result<nlohmann::json> AppInteropTarget::getPlugins() const {
         });
     }
     return rows.dump();
+}
+
+Result<nlohmann::json> AppInteropTarget::getMo2Status() const {
+    std::optional<mo2::ProfileSnapshot> current;
+    std::vector<WatchedFile> watched;
+    std::chrono::system_clock::time_point loadedAt;
+    {
+        std::scoped_lock lock(mutex_);
+        current = snapshot_;
+        watched = watchedFiles_;
+        loadedAt = loadedAt_;
+    }
+
+    if (!current) {
+        return nlohmann::json{
+            {"loaded", false},
+            {"configuredInstance", settings_.mo2InstancePath.string()},
+            {"stale", false}
+        };
+    }
+
+    const auto loadedAtMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        loadedAt.time_since_epoch()).count();
+    return nlohmann::json{
+        {"loaded", true},
+        {"instancePath", current->instance.instancePath.string()},
+        {"profile", current->instance.profile},
+        {"dataFolder", current->instance.gameDataFolder.string()},
+        {"overwriteFolder", current->instance.overwriteFolder.string()},
+        {"pluginCount", current->plugins.size()},
+        {"missingPluginCount", current->missingPlugins.size()},
+        {"loadedAtUnixMs", loadedAtMs},
+        {"stale", isSnapshotStale(watched)}
+    };
+}
+
+Result<nlohmann::json> AppInteropTarget::reloadMo2Profile() {
+    std::filesystem::path instance;
+    {
+        std::scoped_lock lock(mutex_);
+        if (snapshot_) instance = snapshot_->instance.instancePath;
+    }
+    if (instance.empty()) instance = settings_.mo2InstancePath;
+    if (instance.empty()) {
+        return std::unexpected(Error{"Mo2InstanceMissing", "No MO2 instance is configured"});
+    }
+
+    auto loaded = loadProfile(instance);
+    if (!loaded) return std::unexpected(loaded.error());
+    return getMo2Status();
+}
+
+std::vector<AppInteropTarget::WatchedFile> AppInteropTarget::captureWatchFiles(
+    const mo2::ProfileSnapshot& snapshot) const {
+    const auto profileRoot = snapshot.instance.instancePath / "profiles" / snapshot.instance.profile;
+    const std::vector<std::filesystem::path> paths{
+        snapshot.instance.instancePath / "ModOrganizer.ini",
+        profileRoot / "plugins.txt",
+        profileRoot / "modlist.txt",
+        profileRoot / "loadorder.txt"
+    };
+
+    std::vector<WatchedFile> watched;
+    watched.reserve(paths.size());
+    for (const auto& path : paths) watched.emplace_back(path, fileStamp(path));
+    return watched;
+}
+
+bool AppInteropTarget::isSnapshotStale(const std::vector<WatchedFile>& files) const {
+    for (const auto& [path, stamp] : files) {
+        if (fileStamp(path) != stamp) return true;
+    }
+    return false;
 }
 
 std::optional<mo2::ProfileSnapshot> AppInteropTarget::snapshot() const {
