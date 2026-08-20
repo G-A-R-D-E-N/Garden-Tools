@@ -13,6 +13,16 @@ target_link_libraries(
         fo4ide_plugin_api
 )
 
+if(FO4IDE_BUILD_HTTP)
+    target_link_libraries(fo4ide PRIVATE fo4ide_http)
+    target_compile_definitions(fo4ide PRIVATE FO4IDE_HAS_HTTP=1)
+endif()
+
+target_compile_definitions(
+    fo4ide
+    PRIVATE FO4IDE_SOURCE_WEB_ROOT="${PROJECT_SOURCE_DIR}/../web/dist"
+)
+
 fo4ide_enable_warnings(fo4ide)
 fo4ide_enable_sanitizers(fo4ide)
 
