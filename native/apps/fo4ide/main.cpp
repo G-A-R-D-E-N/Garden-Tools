@@ -19,6 +19,7 @@
 #include <fo4ide/http/HttpServer.hpp>
 #endif
 #include <fo4ide/logging/Logger.hpp>
+#include <fo4ide/platform/PlatformServices.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 #include <fo4ide/process/ProcessRunner.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
@@ -117,6 +118,7 @@ int main(int argc, char** argv) {
     }
 
     fo4ide::process::ReprocRunner processRunner;
+    fo4ide::platform::NativeServices platformServices(processRunner);
     const auto nifTool = fo4ide::app::locateNifTool(currentSettings, argv[0]);
     fo4ide::assets::NifService nifService(processRunner, nifTool);
     fo4ide::events::EventBus events;
@@ -124,19 +126,21 @@ int main(int argc, char** argv) {
     fo4ide::rpc::Dispatcher rpc;
 
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, nifTool), log) ||
-        !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings), log) ||
-        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService), log)) {
+        !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
+        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }
 
     bool printHealth = false;
     bool runServer = false;
+    bool openBrowser = false;
     int requestedPort = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--health") printHealth = true;
         if (arg == "--headless" || arg == "--serve" || arg == "--browser") runServer = true;
+        if (arg == "--browser") openBrowser = true;
         if (arg == "--port" && i + 1 < argc) requestedPort = std::stoi(argv[++i]);
     }
 
@@ -169,6 +173,10 @@ int main(int argc, char** argv) {
         const auto url = "http://127.0.0.1:" + std::to_string(*started) + "/#/main";
         std::cout << "FO4IDE native server: " << url << '\n';
         log->info("HTTP server listening at {}", url);
+        if (openBrowser) {
+            auto opened = platformServices.openExternal(url);
+            if (!opened) log->warn("Could not open browser: {}", opened.error().message);
+        }
 
         std::signal(SIGINT, requestStop);
         std::signal(SIGTERM, requestStop);
@@ -176,7 +184,7 @@ int main(int argc, char** argv) {
         server.stop();
     } else if (!printHealth) {
         std::cout << "FO4IDE native Milestone 1 foundation\n"
-                     "Use --headless to serve the existing React UI or --health for a quick check.\n";
+                     "Use --headless to serve the existing React UI, --browser to open it, or --health for a quick check.\n";
     }
 #else
     if (runServer) {
