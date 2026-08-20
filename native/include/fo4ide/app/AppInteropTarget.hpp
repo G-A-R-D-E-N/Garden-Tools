@@ -9,6 +9,7 @@
 
 #include <fo4ide/mo2/Mo2Profile.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
+#include <fo4ide/plugin/IPluginBackend.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
 
@@ -18,7 +19,8 @@ class AppInteropTarget final : public rpc::Target {
 public:
     AppInteropTarget(settings::Store& store,
                      settings::Settings& settings,
-                     platform::Services& platform);
+                     platform::Services& platform,
+                     plugin::IPluginBackend& plugins);
 
     Result<nlohmann::json> invoke(std::string_view method,
                                   const nlohmann::json& args) override;
@@ -35,13 +37,18 @@ private:
     Result<nlohmann::json> getMo2Status() const;
     Result<nlohmann::json> reloadMo2Profile();
     Result<void> loadProfile(const std::filesystem::path& instancePath);
+    Result<nlohmann::json> pluginOperation(std::string_view method,
+                                           const nlohmann::json& args,
+                                           nlohmann::json fallback) const;
 
+    nlohmann::json backendEnvironment(const mo2::ProfileSnapshot& snapshot) const;
     std::vector<WatchedFile> captureWatchFiles(const mo2::ProfileSnapshot& snapshot) const;
     bool isSnapshotStale(const std::vector<WatchedFile>& files) const;
 
     settings::Store& store_;
     settings::Settings& settings_;
     platform::Services& platform_;
+    plugin::IPluginBackend& plugins_;
     mutable std::mutex mutex_;
     std::optional<mo2::ProfileSnapshot> snapshot_;
     std::vector<WatchedFile> watchedFiles_;
