@@ -19,6 +19,7 @@ struct Settings {
     std::string ollamaUrl;
     std::string ollamaModel;
     std::filesystem::path outputFolder;
+    std::filesystem::path fallout4Path;
     std::filesystem::path dataFolder;
     std::filesystem::path mo2InstancePath;
     std::filesystem::path ckWikiPath;
