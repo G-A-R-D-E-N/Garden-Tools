@@ -1,17 +1,31 @@
+#include <atomic>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <memory>
+#include <string>
 #include <string_view>
+#include <thread>
 
 #include <nlohmann/json.hpp>
 
 #include <fo4ide/events/EventBus.hpp>
+#if defined(FO4IDE_HAS_HTTP)
+#include <fo4ide/http/HttpServer.hpp>
+#endif
 #include <fo4ide/logging/Logger.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
 
 namespace {
+
+std::atomic_bool stopRequested{false};
+
+void requestStop(int) {
+    stopRequested.store(true);
+}
 
 std::filesystem::path configDirectory() {
 #if defined(_WIN32)
@@ -27,6 +41,19 @@ std::filesystem::path configDirectory() {
     }
 #endif
     return std::filesystem::current_path() / ".fo4ide";
+}
+
+std::filesystem::path webRootFromArgs(int argc, char** argv) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::string_view(argv[i]) == "--web-root") return argv[i + 1];
+    }
+
+    const auto besideExe = std::filesystem::absolute(argv[0]).parent_path() / "web" / "dist";
+    if (std::filesystem::is_directory(besideExe)) return besideExe;
+
+    const std::filesystem::path sourceRoot(FO4IDE_SOURCE_WEB_ROOT);
+    if (std::filesystem::is_directory(sourceRoot)) return sourceRoot;
+    return {};
 }
 
 class AppTarget final : public fo4ide::rpc::Target {
@@ -78,17 +105,60 @@ int main(int argc, char** argv) {
     }
 
     bool printHealth = false;
+    bool runServer = false;
+    int requestedPort = 0;
     for (int i = 1; i < argc; ++i) {
-        if (std::string_view(argv[i]) == "--health") printHealth = true;
+        const std::string_view arg(argv[i]);
+        if (arg == "--health") printHealth = true;
+        if (arg == "--headless" || arg == "--serve" || arg == "--browser") runServer = true;
+        if (arg == "--port" && i + 1 < argc) requestedPort = std::stoi(argv[++i]);
     }
 
     if (printHealth) {
         const auto response = rpc.invoke({"app", "GetHealth", nlohmann::json::array()});
         std::cout << response.toJson().dump(2) << '\n';
-    } else {
-        std::cout << "FO4IDE native Milestone 1 foundation\n"
-                     "Use --health to verify the composition root. HTTP/UI hosting is the next slice.\n";
     }
+
+#if defined(FO4IDE_HAS_HTTP)
+    if (runServer) {
+        const auto webRoot = webRootFromArgs(argc, argv);
+        if (webRoot.empty()) {
+            std::cerr << "web/dist was not found. Build it with: cd web && npm ci && npm run build\n";
+            fo4ide::logging::shutdown();
+            return 2;
+        }
+
+        fo4ide::http::HttpServer server(rpc, events);
+        auto started = server.start({
+            .host = "127.0.0.1",
+            .port = requestedPort,
+            .webRoot = webRoot,
+        });
+        if (!started) {
+            std::cerr << "HTTP server failed: " << started.error().message << '\n';
+            fo4ide::logging::shutdown();
+            return 3;
+        }
+
+        const auto url = "http://127.0.0.1:" + std::to_string(*started) + "/#/main";
+        std::cout << "FO4IDE native server: " << url << '\n';
+        log->info("HTTP server listening at {}", url);
+
+        std::signal(SIGINT, requestStop);
+        std::signal(SIGTERM, requestStop);
+        while (!stopRequested.load()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        server.stop();
+    } else if (!printHealth) {
+        std::cout << "FO4IDE native Milestone 1 foundation\n"
+                     "Use --headless to serve the existing React UI or --health for a quick check.\n";
+    }
+#else
+    if (runServer) {
+        std::cerr << "This build was configured with FO4IDE_BUILD_HTTP=OFF.\n";
+        fo4ide::logging::shutdown();
+        return 4;
+    }
+#endif
 
     events.shutdown();
     log->info("FO4IDE native foundation stopped");
