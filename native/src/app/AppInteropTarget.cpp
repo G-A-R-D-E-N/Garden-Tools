@@ -23,22 +23,22 @@ std::filesystem::file_time_type fileStamp(const std::filesystem::path& path) {
 
 AppInteropTarget::AppInteropTarget(settings::Store& store,
                                    settings::Settings& settings,
-                                   platform::Services& platform)
-    : store_(store), settings_(settings), platform_(platform) {}
+                                   platform::Services& platform,
+                                   plugin::IPluginBackend& plugins)
+    : store_(store), settings_(settings), platform_(platform), plugins_(plugins) {}
 
 Result<nlohmann::json> AppInteropTarget::invoke(std::string_view method,
                                                  const nlohmann::json& args) {
     if (method == "BrowseForMo2Folder") return browseForMo2Folder();
     if (method == "OpenMo2Profile") return openMo2Profile(args);
     if (method == "LoadEnvironment") return loadEnvironment();
-    if (method == "RefreshTree") return getPlugins();
-    if (method == "GetPlugins") return getPlugins();
+    if (method == "RefreshTree" || method == "GetPlugins") return getPlugins();
     if (method == "GetMo2Status") return getMo2Status();
     if (method == "ReloadMo2Profile") return reloadMo2Profile();
-    if (method == "GetChildren") return nlohmann::json("[]");
-    if (method == "OpenRecord") return nlohmann::json("");
-    if (method == "ScanConflicts") return nlohmann::json("Native plugin backend is not connected yet.");
-    if (method == "ScanBrokenRefs") return nlohmann::json("Native plugin backend is not connected yet.");
+    if (method == "GetChildren") return pluginOperation(method, args, nlohmann::json("[]"));
+    if (method == "OpenRecord") return pluginOperation(method, args, nlohmann::json(""));
+    if (method == "ScanConflicts") return pluginOperation(method, args, nlohmann::json("Native plugin backend is not connected yet."));
+    if (method == "ScanBrokenRefs") return pluginOperation(method, args, nlohmann::json("Native plugin backend is not connected yet."));
     return std::unexpected(Error{"UnknownMethod", "Unknown appInterop RPC method: " + std::string(method)});
 }
 
@@ -65,7 +65,7 @@ Result<nlohmann::json> AppInteropTarget::openMo2Profile(const nlohmann::json& ar
 
 Result<nlohmann::json> AppInteropTarget::loadEnvironment() {
     if (settings_.mo2InstancePath.empty()) {
-        return std::unexpected(Error{"EnvironmentUnavailable", "No MO2 instance is configured and the native plugin backend is not connected yet"});
+        return std::unexpected(Error{"EnvironmentUnavailable", "No MO2 instance is configured"});
     }
     auto loaded = loadProfile(settings_.mo2InstancePath);
     if (!loaded) return std::unexpected(loaded.error());
@@ -81,6 +81,11 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
     auto saved = store_.save(settings_);
     if (!saved) return std::unexpected(saved.error());
 
+    if (plugins_.capabilities().available) {
+        auto backendLoad = plugins_.invoke("environment.LoadMo2", backendEnvironment(*loaded));
+        if (!backendLoad) return std::unexpected(backendLoad.error());
+    }
+
     auto watched = captureWatchFiles(*loaded);
     const auto loadedAt = std::chrono::system_clock::now();
     std::scoped_lock lock(mutex_);
@@ -91,6 +96,11 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
 }
 
 Result<nlohmann::json> AppInteropTarget::getPlugins() const {
+    if (plugins_.capabilities().available) {
+        auto result = plugins_.invoke("appInterop.GetPlugins", nlohmann::json::array());
+        if (result) return result;
+    }
+
     nlohmann::json rows = nlohmann::json::array();
     std::scoped_lock lock(mutex_);
     if (!snapshot_) return rows.dump();
@@ -100,7 +110,7 @@ Result<nlohmann::json> AppInteropTarget::getPlugins() const {
             {"Key", plugin.name},
             {"ConflictStatus", 0},
             {"IsRecordNode", false},
-            {"HasChildren", false},
+            {"HasChildren", plugins_.capabilities().available},
             {"FilePath", plugin.resolved ? plugin.path.string() : std::string{}}
         });
     }
@@ -137,7 +147,8 @@ Result<nlohmann::json> AppInteropTarget::getMo2Status() const {
         {"pluginCount", current->plugins.size()},
         {"missingPluginCount", current->missingPlugins.size()},
         {"loadedAtUnixMs", loadedAtMs},
-        {"stale", isSnapshotStale(watched)}
+        {"stale", isSnapshotStale(watched)},
+        {"nativePluginBackend", plugins_.capabilities().available}
     };
 }
 
@@ -155,6 +166,50 @@ Result<nlohmann::json> AppInteropTarget::reloadMo2Profile() {
     auto loaded = loadProfile(instance);
     if (!loaded) return std::unexpected(loaded.error());
     return getMo2Status();
+}
+
+Result<nlohmann::json> AppInteropTarget::pluginOperation(std::string_view method,
+                                                          const nlohmann::json& args,
+                                                          nlohmann::json fallback) const {
+    if (!plugins_.capabilities().available) return fallback;
+    return plugins_.invoke("appInterop." + std::string(method), args);
+}
+
+nlohmann::json AppInteropTarget::backendEnvironment(const mo2::ProfileSnapshot& snapshot) const {
+    nlohmann::json plugins = nlohmann::json::array();
+    for (const auto& plugin : snapshot.plugins) {
+        plugins.push_back({
+            {"name", plugin.name},
+            {"path", plugin.path.string()},
+            {"source", plugin.source},
+            {"resolved", plugin.resolved}
+        });
+    }
+
+    nlohmann::json mods = nlohmann::json::array();
+    for (const auto& mod : snapshot.enabledModsHighToLow) {
+        mods.push_back({
+            {"name", mod.name},
+            {"path", mod.path.string()},
+            {"priority", mod.priority}
+        });
+    }
+
+    nlohmann::json assetRoots = nlohmann::json::array();
+    for (const auto& root : snapshot.assetRootsLowToHigh) assetRoots.push_back(root.string());
+
+    return {
+        {"instancePath", snapshot.instance.instancePath.string()},
+        {"profile", snapshot.instance.profile},
+        {"dataFolder", snapshot.instance.gameDataFolder.string()},
+        {"overwriteFolder", snapshot.instance.overwriteFolder.string()},
+        {"modsFolder", snapshot.instance.modsFolder.string()},
+        {"loadOrder", snapshot.loadOrder},
+        {"enabledModsHighToLow", std::move(mods)},
+        {"plugins", std::move(plugins)},
+        {"missingPlugins", snapshot.missingPlugins},
+        {"assetRootsLowToHigh", std::move(assetRoots)}
+    };
 }
 
 std::vector<AppInteropTarget::WatchedFile> AppInteropTarget::captureWatchFiles(
