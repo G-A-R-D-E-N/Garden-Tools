@@ -16,6 +16,7 @@ fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
 fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
 fo4ide_add_test(fo4ide_test_app_interop unit/AppInteropTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 
 add_executable(fo4ide_fake_process helpers/fake_process.cpp)
 fo4ide_enable_warnings(fo4ide_fake_process)
