@@ -28,6 +28,11 @@ endif()
 fo4ide_enable_warnings(fo4ide_platform)
 fo4ide_enable_sanitizers(fo4ide_platform)
 
+add_library(fo4ide_mo2 mo2/Mo2Profile.cpp)
+target_link_libraries(fo4ide_mo2 PUBLIC fo4ide_core)
+fo4ide_enable_warnings(fo4ide_mo2)
+fo4ide_enable_sanitizers(fo4ide_mo2)
+
 add_library(fo4ide_events events/EventBus.cpp)
 target_link_libraries(fo4ide_events PUBLIC fo4ide_core nlohmann_json::nlohmann_json)
 fo4ide_enable_warnings(fo4ide_events)
