@@ -1,7 +1,9 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <optional>
+#include <iterator>
+#include <string_view>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
