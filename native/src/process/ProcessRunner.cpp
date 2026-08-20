@@ -1,5 +1,8 @@
 #include <fo4ide/process/ProcessRunner.hpp>
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -7,6 +10,17 @@
 #include <reproc++/run.hpp>
 
 namespace fo4ide::process {
+namespace {
+
+bool endsWithExe(const std::filesystem::path& path) {
+    auto extension = path.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return extension == ".exe";
+}
+
+}
 
 std::string Output::combined() const {
     if (stdErr.empty()) return stdOut;
@@ -20,15 +34,38 @@ Result<Output> ReprocRunner::run(const Request& request) {
         return std::unexpected(Error{"ProcessStartFailed", "Executable path is empty"});
     }
 
+    auto executable = request.executable;
+    auto childArguments = request.arguments;
+    auto environment = request.environment;
+
+#if !defined(_WIN32)
+    if (endsWithExe(executable)) {
+        const char* configured = std::getenv("FO4RE_WINE");
+        const bool explicitlyDisabled = configured && *configured == '\0';
+        if (!explicitlyDisabled) {
+            std::filesystem::path wine = "wine";
+            if (configured) {
+                std::string value(configured);
+                if (!value.empty() && std::any_of(value.begin(), value.end(), [](unsigned char c) { return !std::isspace(c); })) {
+                    wine = value;
+                }
+            }
+            childArguments.insert(childArguments.begin(), executable.string());
+            executable = std::move(wine);
+            environment.insert_or_assign("DOTNET_ROOT", "");
+        }
+    }
+#endif
+
     std::vector<std::string> arguments;
-    arguments.reserve(request.arguments.size() + 1);
-    arguments.push_back(request.executable.string());
-    arguments.insert(arguments.end(), request.arguments.begin(), request.arguments.end());
+    arguments.reserve(childArguments.size() + 1);
+    arguments.push_back(executable.string());
+    arguments.insert(arguments.end(), childArguments.begin(), childArguments.end());
 
     reproc::options options;
     const auto workingDirectory = request.workingDirectory.string();
     if (!workingDirectory.empty()) options.working_directory = workingDirectory.c_str();
-    if (!request.environment.empty()) options.env.extra = request.environment;
+    if (!environment.empty()) options.env.extra = environment;
 
     const auto timeoutCount = request.timeout.count() > 0
         ? static_cast<int>(request.timeout.count())
