@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 #include <nlohmann/json.hpp>
 
@@ -9,16 +10,26 @@
 namespace fo4ide::settings {
 
 struct Settings {
-    std::filesystem::path mo2InstancePath;
+    std::string aiProvider;
+    std::string anthropicApiKey;
+    std::string model;
+    std::string geminiApiKey;
+    std::string geminiModel;
+    std::filesystem::path claudeCodePath;
+    std::string ollamaUrl;
+    std::string ollamaModel;
+    std::filesystem::path outputFolder;
     std::filesystem::path dataFolder;
-    std::filesystem::path nifToolPath;
+    std::filesystem::path mo2InstancePath;
+    std::filesystem::path ckWikiPath;
     std::filesystem::path texconvPath;
     std::filesystem::path papyrusCompilerPath;
     std::filesystem::path papyrusBaseImports;
-    std::filesystem::path ckWikiPath;
+    std::filesystem::path nifToolPath;
     std::filesystem::path ffmpegPath;
     std::filesystem::path xwmaEncodePath;
     std::filesystem::path archive2Path;
+    bool readLargePluginsIntoMemory{false};
     nlohmann::json extra{nlohmann::json::object()};
 };
 
