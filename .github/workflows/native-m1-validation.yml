@@ -156,7 +156,7 @@ jobs:
           set "CMAKE_EXE=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
           set "CTEST_EXE=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
           cd /d "${PROJ_WIN}"
-          "%CMAKE_EXE%" -S native -B native\out\windows-msvc-debug -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="${JSON_WIN}" -DFETCHCONTENT_SOURCE_DIR_SPDLOG="${SPDLOG_WIN}" -DFETCHCONTENT_SOURCE_DIR_REPROC="${REPROC_WIN}" -DFETCHCONTENT_SOURCE_DIR_CATCH2="${CATCH_WIN}" -DFETCHCONTENT_SOURCE_DIR_CPP_HTTPLIB="${HTTPLIB_WIN}"
+          "%CMAKE_EXE%" -S native -B native\out\windows-msvc-debug -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="${JSON_WIN}" -DFETCHCONTENT_SOURCE_DIR_SPDLOG="${SPDLOG_WIN}" -DFETCHCONTENT_SOURCE_DIR_REPROC="${REPROC_WIN}" -DFETCHCONTENT_SOURCE_DIR_CATCH2="${CATCH_WIN}" -DFETCHCONTENT_SOURCE_DIR_HTTPLIB="${HTTPLIB_WIN}"
           if errorlevel 1 exit /b 10
           "%CMAKE_EXE%" --build native\out\windows-msvc-debug --parallel 2
           if errorlevel 1 exit /b 20
