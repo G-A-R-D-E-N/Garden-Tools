@@ -11,6 +11,7 @@ target_link_libraries(
         fo4ide_rpc
         fo4ide_mcp
         fo4ide_nif
+        fo4ide_window
         fo4ide_app
         fo4ide_plugin_api
 )
