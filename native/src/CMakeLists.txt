@@ -48,8 +48,8 @@ target_link_libraries(fo4ide_nif PUBLIC fo4ide_core fo4ide_process nlohmann_json
 fo4ide_enable_warnings(fo4ide_nif)
 fo4ide_enable_sanitizers(fo4ide_nif)
 
-add_library(fo4ide_app app/ServiceTargets.cpp)
-target_link_libraries(fo4ide_app PUBLIC fo4ide_core fo4ide_rpc fo4ide_settings fo4ide_nif fo4ide_platform fo4ide_process)
+add_library(fo4ide_app app/ServiceTargets.cpp app/AppInteropTarget.cpp)
+target_link_libraries(fo4ide_app PUBLIC fo4ide_core fo4ide_rpc fo4ide_settings fo4ide_nif fo4ide_platform fo4ide_process fo4ide_mo2)
 fo4ide_enable_warnings(fo4ide_app)
 fo4ide_enable_sanitizers(fo4ide_app)
 
