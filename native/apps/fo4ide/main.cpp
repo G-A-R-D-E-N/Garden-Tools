@@ -9,6 +9,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -22,6 +23,7 @@
 #include <fo4ide/http/HttpServer.hpp>
 #endif
 #include <fo4ide/logging/Logger.hpp>
+#include <fo4ide/mcp/McpServer.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 #include <fo4ide/process/ProcessRunner.hpp>
@@ -100,6 +102,103 @@ bool registerTarget(fo4ide::rpc::Dispatcher& rpc,
     return false;
 }
 
+bool registerMcpTool(fo4ide::mcp::Registry& registry,
+                     std::shared_ptr<fo4ide::mcp::Tool> tool,
+                     const std::shared_ptr<spdlog::logger>& log) {
+    auto registered = registry.registerTool(std::move(tool));
+    if (registered) return true;
+    log->error("MCP setup failed: {}", registered.error().message);
+    return false;
+}
+
+nlohmann::json objectSchema(nlohmann::json properties,
+                            nlohmann::json required = nlohmann::json::array()) {
+    nlohmann::json schema{{"type", "object"}, {"properties", std::move(properties)}};
+    if (!required.empty()) schema["required"] = std::move(required);
+    schema["additionalProperties"] = false;
+    return schema;
+}
+
+bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
+                            const fo4ide::rpc::Dispatcher& rpc,
+                            const std::shared_ptr<spdlog::logger>& log) {
+    using fo4ide::mcp::RpcTool;
+    using fo4ide::mcp::ToolDefinition;
+
+    const auto add = [&](ToolDefinition definition,
+                         std::string target,
+                         std::string method,
+                         std::vector<std::string> argumentOrder = {}) {
+        return registerMcpTool(
+            registry,
+            std::make_shared<RpcTool>(
+                std::move(definition), rpc, std::move(target), std::move(method), std::move(argumentOrder)),
+            log);
+    };
+
+    if (!add({"native_status", "Report the native FO4IDE host and backend capability status", objectSchema({})},
+             "app", "GetHealth")) return false;
+    if (!add({"get_mo2_status", "Report the loaded MO2 instance/profile and whether its files changed on disk", objectSchema({})},
+             "appInterop", "GetMo2Status")) return false;
+    if (!add({"reload_mo2_profile", "Reload the currently configured MO2 profile from disk", objectSchema({})},
+             "appInterop", "ReloadMo2Profile")) return false;
+    if (!add({"get_settings", "Return the current FO4IDE settings", objectSchema({})},
+             "settings", "GetSettings")) return false;
+
+    const auto pathSchema = objectSchema(
+        {{"path", {{"type", "string"}, {"description", "Path to the NIF file"}}}},
+        nlohmann::json::array({"path"}));
+    if (!add({"nif_inspect", "Inspect a NIF through the native niftool wrapper", pathSchema},
+             "nif", "Inspect", {"path"})) return false;
+    if (!add({"nif_verify", "Verify a NIF through the native niftool wrapper", pathSchema},
+             "nif", "Verify", {"path"})) return false;
+    if (!add({"nif_tree", "Return the NIF block tree through the native niftool wrapper", pathSchema},
+             "nif", "Tree", {"path"})) return false;
+    if (!add({"nif_geometry", "Return geometry data through the native niftool wrapper", pathSchema},
+             "nif", "Geo", {"path"})) return false;
+
+    if (!add({
+            "audio_convert_to_xwm",
+            "Convert one audio/video file or a folder to Fallout 4 XWM",
+            objectSchema({
+                {"source", {{"type", "string"}}},
+                {"output", {{"type", "string"}}},
+                {"bitrateBps", {{"type", "integer"}, {"minimum", 1}}}
+            }, nlohmann::json::array({"source"}))},
+            "audio", "ConvertToXwm", {"source", "output", "bitrateBps"})) return false;
+    if (!add({
+            "audio_convert_from_xwm",
+            "Decode an XWM file to WAV or another ffmpeg-supported format",
+            objectSchema({
+                {"source", {{"type", "string"}}},
+                {"output", {{"type", "string"}}},
+                {"targetExt", {{"type", "string"}, {"default", "wav"}}}
+            }, nlohmann::json::array({"source"}))},
+            "audio", "ConvertFromXwm", {"source", "output", "targetExt"})) return false;
+    if (!add({
+            "audio_make_fuz",
+            "Create a Fallout 4 FUZ package from audio/XWM and an optional LIP file",
+            objectSchema({
+                {"audioSource", {{"type", "string"}}},
+                {"lipPath", {{"type", "string"}}},
+                {"fuzOutput", {{"type", "string"}}},
+                {"noLip", {{"type", "boolean"}, {"default", false}}}
+            }, nlohmann::json::array({"audioSource", "fuzOutput"}))},
+            "audio", "MakeFuz", {"audioSource", "lipPath", "fuzOutput", "noLip"})) return false;
+    if (!add({
+            "audio_extract_fuz",
+            "Extract XWM/LIP data from a Fallout 4 FUZ package",
+            objectSchema({
+                {"fuzPath", {{"type", "string"}}},
+                {"xwmOutput", {{"type", "string"}}},
+                {"lipOutput", {{"type", "string"}}},
+                {"alsoWav", {{"type", "boolean"}, {"default", false}}}
+            }, nlohmann::json::array({"fuzPath"}))},
+            "audio", "ExtractFuz", {"fuzPath", "xwmOutput", "lipOutput", "alsoWav"})) return false;
+
+    return true;
+}
+
 }
 
 int main(int argc, char** argv) {
@@ -111,7 +210,7 @@ int main(int argc, char** argv) {
     }
 
     auto log = fo4ide::logging::get("app");
-    log->info("FO4IDE native Milestone 1 foundation starting");
+    log->info("FO4IDE native host starting");
 
     fo4ide::settings::Store settingsStore(configDir / "settings.json");
     fo4ide::settings::Settings currentSettings;
@@ -141,16 +240,33 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    fo4ide::mcp::Registry mcpRegistry;
+    if (!registerNativeMcpTools(mcpRegistry, rpc, log)) {
+        fo4ide::logging::shutdown();
+        return 1;
+    }
+
     bool printHealth = false;
     bool runServer = false;
     bool openBrowser = false;
+    bool runMcp = false;
     int requestedPort = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--health") printHealth = true;
         if (arg == "--headless" || arg == "--serve" || arg == "--browser") runServer = true;
         if (arg == "--browser") openBrowser = true;
+        if (arg == "--mcp") runMcp = true;
         if (arg == "--port" && i + 1 < argc) requestedPort = std::stoi(argv[++i]);
+    }
+
+    if (runMcp) {
+        log->info("Starting native stdio MCP server");
+        fo4ide::mcp::StdioServer server(mcpRegistry);
+        server.run(std::cin, std::cout);
+        events.shutdown();
+        fo4ide::logging::shutdown();
+        return 0;
     }
 
     if (printHealth) {
@@ -192,8 +308,8 @@ int main(int argc, char** argv) {
         while (!stopRequested.load()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
         server.stop();
     } else if (!printHealth) {
-        std::cout << "FO4IDE native Milestone 1 foundation\n"
-                     "Use --headless to serve the existing React UI, --browser to open it, or --health for a quick check.\n";
+        std::cout << "FO4IDE native host\n"
+                     "Use --headless to serve the React UI, --browser to open it, --mcp for stdio MCP, or --health for a quick check.\n";
     }
 #else
     if (runServer) {
@@ -204,7 +320,7 @@ int main(int argc, char** argv) {
 #endif
 
     events.shutdown();
-    log->info("FO4IDE native foundation stopped");
+    log->info("FO4IDE native host stopped");
     fo4ide::logging::shutdown();
     return 0;
 }
