@@ -1,6 +1,5 @@
 #pragma once
 
-#include <filesystem>
 #include <string_view>
 
 #include <fo4ide/assets/NifService.hpp>
@@ -47,8 +46,5 @@ private:
     assets::NifService& service_;
     platform::Services& platform_;
 };
-
-std::filesystem::path locateNifTool(const settings::Settings& settings,
-                                    const std::filesystem::path& executablePath);
 
 }
