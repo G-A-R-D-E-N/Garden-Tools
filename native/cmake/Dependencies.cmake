@@ -58,3 +58,15 @@ if(FO4IDE_BUILD_HTTP)
     )
     FetchContent_MakeAvailable(httplib)
 endif()
+
+if(WIN32)
+    set(FO4IDE_WEBVIEW2_VERSION "1.0.4129.50" CACHE STRING "Pinned Microsoft WebView2 SDK version")
+    FetchContent_Declare(
+        webview2_sdk
+        URL "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/${FO4IDE_WEBVIEW2_VERSION}"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(webview2_sdk)
+    set(FO4IDE_WEBVIEW2_INCLUDE_DIR "${webview2_sdk_SOURCE_DIR}/build/native/include" CACHE INTERNAL "")
+    set(FO4IDE_WEBVIEW2_LOADER_LIB "${webview2_sdk_SOURCE_DIR}/build/native/x64/WebView2LoaderStatic.lib" CACHE INTERNAL "")
+endif()
