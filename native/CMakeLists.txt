@@ -11,7 +11,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
 option(FO4IDE_BUILD_TESTS "Build native tests" ON)
 option(FO4IDE_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
-option(FO4IDE_BUILD_HTTP "Build the native HTTP transport" OFF)
+option(FO4IDE_BUILD_HTTP "Build the native HTTP transport" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(Dependencies)
