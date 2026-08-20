@@ -10,6 +10,7 @@ endfunction()
 
 fo4ide_add_test(fo4ide_test_events unit/EventBusTests.cpp fo4ide_events)
 fo4ide_add_test(fo4ide_test_rpc unit/RpcDispatcherTests.cpp fo4ide_rpc)
+fo4ide_add_test(fo4ide_test_mcp unit/McpServerTests.cpp fo4ide_mcp)
 fo4ide_add_test(fo4ide_test_settings unit/SettingsTests.cpp fo4ide_settings)
 fo4ide_add_test(fo4ide_test_logging unit/LoggerTests.cpp fo4ide_logging)
 fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
