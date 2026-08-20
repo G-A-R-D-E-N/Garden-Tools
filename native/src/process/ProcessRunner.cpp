@@ -1,6 +1,8 @@
 #include <fo4ide/process/ProcessRunner.hpp>
 
 #include <system_error>
+#include <utility>
+#include <vector>
 
 #include <reproc++/run.hpp>
 
@@ -18,9 +20,10 @@ Result<Output> ReprocRunner::run(const Request& request) {
         return std::unexpected(Error{"ProcessStartFailed", "Executable path is empty"});
     }
 
-    reproc::arguments arguments;
+    std::vector<std::string> arguments;
+    arguments.reserve(request.arguments.size() + 1);
     arguments.push_back(request.executable.string());
-    for (const auto& argument : request.arguments) arguments.push_back(argument);
+    arguments.insert(arguments.end(), request.arguments.begin(), request.arguments.end());
 
     reproc::options options;
     const auto workingDirectory = request.workingDirectory.string();
@@ -31,7 +34,6 @@ Result<Output> ReprocRunner::run(const Request& request) {
         ? static_cast<int>(request.timeout.count())
         : 120000;
     const reproc::milliseconds timeout(timeoutCount);
-    options.timeout = timeout;
     options.stop = {
         {reproc::stop::wait, timeout},
         {reproc::stop::terminate, reproc::milliseconds(2000)},
