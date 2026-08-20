@@ -2,7 +2,6 @@
 
 #include <cctype>
 #include <chrono>
-#include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <string>
@@ -57,36 +56,6 @@ nlohmann::json serviceText(Result<std::string> result) {
 nlohmann::json pathResult(Result<std::filesystem::path> result) {
     if (!result) return std::string{};
     return result->string();
-}
-
-std::filesystem::path firstExisting(std::initializer_list<std::filesystem::path> candidates) {
-    for (const auto& candidate : candidates) {
-        if (!candidate.empty() && std::filesystem::is_regular_file(candidate)) return candidate;
-    }
-    return {};
-}
-
-std::filesystem::path findOnPath(std::string_view fileName) {
-    const char* rawPath = std::getenv("PATH");
-    if (!rawPath || !*rawPath) return {};
-    const std::string pathValue(rawPath);
-#if defined(_WIN32)
-    constexpr char separator = ';';
-#else
-    constexpr char separator = ':';
-#endif
-    std::size_t begin = 0;
-    while (begin <= pathValue.size()) {
-        const auto end = pathValue.find(separator, begin);
-        const auto part = pathValue.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
-        if (!part.empty()) {
-            const auto candidate = std::filesystem::path(part) / fileName;
-            if (std::filesystem::is_regular_file(candidate)) return candidate;
-        }
-        if (end == std::string::npos) break;
-        begin = end + 1;
-    }
-    return {};
 }
 
 int base64Value(unsigned char c) {
@@ -165,6 +134,7 @@ Result<nlohmann::json> SettingsTarget::saveSettings(const nlohmann::json& args) 
         updateString(payload, "OllamaUrl", current_.ollamaUrl);
         updateString(payload, "OllamaModel", current_.ollamaModel);
         updatePath(payload, "OutputFolder", current_.outputFolder);
+        updatePath(payload, "Fallout4Path", current_.fallout4Path);
         updatePath(payload, "DataFolder", current_.dataFolder);
         updatePath(payload, "Mo2InstancePath", current_.mo2InstancePath);
         updatePath(payload, "CkWikiPath", current_.ckWikiPath);
@@ -291,31 +261,6 @@ Result<nlohmann::json> NifTarget::stageDroppedFile(const nlohmann::json& args) c
     } catch (const std::exception& ex) {
         return nlohmann::json("ERR:" + std::string(ex.what()));
     }
-}
-
-std::filesystem::path locateNifTool(const settings::Settings& settings,
-                                    const std::filesystem::path& executablePath) {
-    const char* env = std::getenv("NIFTOOL_PATH");
-    const auto base = std::filesystem::absolute(executablePath).parent_path();
-#if defined(_WIN32)
-    const auto local = firstExisting({
-        env && *env ? std::filesystem::path(env) : std::filesystem::path{},
-        settings.nifToolPath,
-        base / "tools" / "niftool" / "niftool.exe",
-        base / "niftool" / "niftool.exe"
-    });
-    if (!local.empty()) return local;
-    return findOnPath("niftool.exe");
-#else
-    const auto local = firstExisting({
-        env && *env ? std::filesystem::path(env) : std::filesystem::path{},
-        settings.nifToolPath,
-        base / "tools" / "niftool" / "niftool",
-        base / "niftool" / "niftool"
-    });
-    if (!local.empty()) return local;
-    return findOnPath("niftool");
-#endif
 }
 
 }
