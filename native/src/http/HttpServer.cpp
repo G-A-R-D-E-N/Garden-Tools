@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <fstream>
 #include <thread>
 #include <utility>
 
@@ -100,12 +99,10 @@ Result<int> HttpServer::start(const Config& config) {
                 using namespace std::chrono_literals;
                 if (const auto event = subscription->waitPop(1s)) {
                     const auto payload = "data: " + eventJson(*event).dump() + "\n\n";
-                    sink.write(payload.data(), payload.size());
-                } else {
-                    static constexpr std::string_view heartbeat = ": keep-alive\n\n";
-                    sink.write(heartbeat.data(), heartbeat.size());
+                    return sink.write(payload.data(), payload.size());
                 }
-                return true;
+                static constexpr std::string_view heartbeat = ": keep-alive\n\n";
+                return sink.write(heartbeat.data(), heartbeat.size());
             });
     });
 
