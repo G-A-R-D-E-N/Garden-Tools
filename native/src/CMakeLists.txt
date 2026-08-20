@@ -35,6 +35,11 @@ target_link_libraries(fo4ide_nif PUBLIC fo4ide_core fo4ide_process nlohmann_json
 fo4ide_enable_warnings(fo4ide_nif)
 fo4ide_enable_sanitizers(fo4ide_nif)
 
+add_library(fo4ide_app app/ServiceTargets.cpp)
+target_link_libraries(fo4ide_app PUBLIC fo4ide_core fo4ide_rpc fo4ide_settings fo4ide_nif)
+fo4ide_enable_warnings(fo4ide_app)
+fo4ide_enable_sanitizers(fo4ide_app)
+
 if(FO4IDE_BUILD_HTTP)
     add_subdirectory(http)
 endif()
