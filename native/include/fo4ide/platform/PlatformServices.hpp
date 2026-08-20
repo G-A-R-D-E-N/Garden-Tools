@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 #include <fo4ide/core/Result.hpp>
 #include <fo4ide/process/ProcessRunner.hpp>
