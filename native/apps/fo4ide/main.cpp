@@ -26,6 +26,7 @@
 #include <fo4ide/logging/Logger.hpp>
 #include <fo4ide/material/MaterialService.hpp>
 #include <fo4ide/mcp/McpServer.hpp>
+#include <fo4ide/platform/NativeWindow.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 #include <fo4ide/process/ProcessRunner.hpp>
@@ -297,15 +298,27 @@ int main(int argc, char** argv) {
     bool printHealth = false;
     bool runServer = false;
     bool openBrowser = false;
+    bool openWindow = false;
     bool runMcp = false;
     int requestedPort = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--health") printHealth = true;
-        if (arg == "--headless" || arg == "--serve" || arg == "--browser") runServer = true;
-        if (arg == "--browser") openBrowser = true;
+        if (arg == "--headless" || arg == "--serve") runServer = true;
+        if (arg == "--browser") { runServer = true; openBrowser = true; }
+        if (arg == "--window") { runServer = true; openWindow = true; }
         if (arg == "--mcp") runMcp = true;
         if (arg == "--port" && i + 1 < argc) requestedPort = std::stoi(argv[++i]);
+    }
+
+    if (!printHealth && !runMcp && !runServer) {
+#if defined(_WIN32)
+        runServer = true;
+        openWindow = true;
+#else
+        runServer = true;
+        openBrowser = true;
+#endif
     }
 
     if (runMcp) {
@@ -346,18 +359,38 @@ int main(int argc, char** argv) {
         const auto url = "http://127.0.0.1:" + std::to_string(*started) + "/#/main";
         std::cout << "FO4IDE native server: " << url << '\n';
         log->info("HTTP server listening at {}", url);
-        if (openBrowser) {
-            auto opened = platformServices.openExternal(url);
-            if (!opened) log->warn("Could not open browser: {}", opened.error().message);
-        }
 
-        std::signal(SIGINT, requestStop);
-        std::signal(SIGTERM, requestStop);
-        while (!stopRequested.load()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        int exitCode = 0;
+        if (openWindow) {
+            fo4ide::platform::NativeWindow window;
+            auto windowResult = window.run({
+                .title = "FO4IDE",
+                .url = url,
+                .userDataDirectory = configDir / "WebView2",
+                .width = 1440,
+                .height = 900,
+            });
+            if (!windowResult) {
+                log->error("Native window failed: {}", windowResult.error().message);
+                std::cerr << "Native window failed: " << windowResult.error().message << '\n';
+                exitCode = 5;
+            } else {
+                exitCode = *windowResult;
+            }
+        } else {
+            if (openBrowser) {
+                auto opened = platformServices.openExternal(url);
+                if (!opened) log->warn("Could not open browser: {}", opened.error().message);
+            }
+            std::signal(SIGINT, requestStop);
+            std::signal(SIGTERM, requestStop);
+            while (!stopRequested.load()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
         server.stop();
-    } else if (!printHealth) {
-        std::cout << "FO4IDE native host\n"
-                     "Use --headless to serve the React UI, --browser to open it, --mcp for stdio MCP, or --health for a quick check.\n";
+        events.shutdown();
+        log->info("FO4IDE native host stopped");
+        fo4ide::logging::shutdown();
+        return exitCode;
     }
 #else
     if (runServer) {
