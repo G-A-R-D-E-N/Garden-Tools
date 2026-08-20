@@ -1,8 +1,10 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <fo4ide/core/Result.hpp>
 #include <fo4ide/process/ProcessRunner.hpp>
