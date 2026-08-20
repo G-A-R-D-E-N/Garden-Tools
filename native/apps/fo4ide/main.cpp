@@ -25,6 +25,7 @@
 #include <fo4ide/process/ProcessRunner.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
+#include <fo4ide/tools/ToolLocator.hpp>
 
 namespace {
 
@@ -120,7 +121,8 @@ int main(int argc, char** argv) {
 
     fo4ide::process::ReprocRunner processRunner;
     fo4ide::platform::NativeServices platformServices(processRunner);
-    const auto nifTool = fo4ide::app::locateNifTool(currentSettings, argv[0]);
+    fo4ide::tools::Locator toolLocator(currentSettings, argv[0]);
+    const auto nifTool = toolLocator.resolve(fo4ide::tools::Tool::NifTool);
     fo4ide::assets::NifService nifService(processRunner, nifTool);
     fo4ide::events::EventBus events;
     fo4ide::plugin::NullPluginBackend plugins;
