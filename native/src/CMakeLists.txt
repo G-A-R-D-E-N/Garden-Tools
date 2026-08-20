@@ -28,6 +28,27 @@ endif()
 fo4ide_enable_warnings(fo4ide_platform)
 fo4ide_enable_sanitizers(fo4ide_platform)
 
+add_library(fo4ide_window platform/NativeWindow.cpp)
+target_link_libraries(fo4ide_window PUBLIC fo4ide_core)
+if(WIN32)
+    target_include_directories(fo4ide_window PRIVATE "${FO4IDE_WEBVIEW2_INCLUDE_DIR}")
+    target_compile_definitions(fo4ide_window PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(
+        fo4ide_window
+        PRIVATE
+            "${FO4IDE_WEBVIEW2_LOADER_LIB}"
+            user32
+            gdi32
+            ole32
+            oleaut32
+            shell32
+            shlwapi
+            version
+    )
+endif()
+fo4ide_enable_warnings(fo4ide_window)
+fo4ide_enable_sanitizers(fo4ide_window)
+
 add_library(fo4ide_mo2 mo2/Mo2Profile.cpp)
 target_link_libraries(fo4ide_mo2 PUBLIC fo4ide_core)
 fo4ide_enable_warnings(fo4ide_mo2)
