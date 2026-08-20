@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <functional>
 #include <thread>
 #include <utility>
 
