@@ -51,6 +51,7 @@ void from_json(const nlohmann::json& json, Settings& settings) {
     settings.ollamaUrl = readString(json, "OllamaUrl");
     settings.ollamaModel = readString(json, "OllamaModel");
     settings.outputFolder = readPath(json, "OutputFolder");
+    settings.fallout4Path = readPath(json, "Fallout4Path");
     settings.dataFolder = readPath(json, "DataFolder");
     settings.mo2InstancePath = readPath(json, "Mo2InstancePath");
     settings.ckWikiPath = readPath(json, "CkWikiPath");
@@ -63,6 +64,7 @@ void from_json(const nlohmann::json& json, Settings& settings) {
     settings.archive2Path = readPath(json, "Archive2Path");
     settings.readLargePluginsIntoMemory = json.value("ReadLargePluginsIntoMemory", false);
 
+    applyEnv(settings.fallout4Path, "FALLOUT4_PATH");
     applyEnv(settings.dataFolder, "FO4_DATA_PATH");
     applyEnv(settings.ckWikiPath, "CK_WIKI_PATH");
     applyEnv(settings.texconvPath, "TEXCONV_PATH");
@@ -85,6 +87,7 @@ void to_json(nlohmann::json& json, const Settings& settings) {
     json["OllamaUrl"] = settings.ollamaUrl;
     json["OllamaModel"] = settings.ollamaModel;
     json["OutputFolder"] = settings.outputFolder.string();
+    json["Fallout4Path"] = settings.fallout4Path.string();
     json["DataFolder"] = settings.dataFolder.string();
     json["Mo2InstancePath"] = settings.mo2InstancePath.string();
     json["CkWikiPath"] = settings.ckWikiPath.string();
