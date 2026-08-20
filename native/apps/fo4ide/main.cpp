@@ -13,8 +13,10 @@
 #include <nlohmann/json.hpp>
 
 #include <fo4ide/app/AppInteropTarget.hpp>
+#include <fo4ide/app/AudioTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/assets/NifService.hpp>
+#include <fo4ide/audio/AudioService.hpp>
 #include <fo4ide/events/EventBus.hpp>
 #if defined(FO4IDE_HAS_HTTP)
 #include <fo4ide/http/HttpServer.hpp>
@@ -124,6 +126,7 @@ int main(int argc, char** argv) {
     fo4ide::tools::Locator toolLocator(currentSettings, argv[0]);
     const auto nifTool = toolLocator.resolve(fo4ide::tools::Tool::NifTool);
     fo4ide::assets::NifService nifService(processRunner, nifTool);
+    fo4ide::audio::AudioService audioService(processRunner, toolLocator);
     fo4ide::events::EventBus events;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::rpc::Dispatcher rpc;
@@ -132,7 +135,8 @@ int main(int argc, char** argv) {
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, nifTool), log) ||
         !registerTarget(rpc, "appInterop", appInteropTarget, log) ||
         !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
-        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log)) {
+        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log) ||
+        !registerTarget(rpc, "audio", std::make_shared<fo4ide::app::AudioTarget>(audioService, platformServices), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }
