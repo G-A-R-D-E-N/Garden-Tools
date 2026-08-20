@@ -8,15 +8,19 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
+#include <fo4ide/app/ServiceTargets.hpp>
+#include <fo4ide/assets/NifService.hpp>
 #include <fo4ide/events/EventBus.hpp>
 #if defined(FO4IDE_HAS_HTTP)
 #include <fo4ide/http/HttpServer.hpp>
 #endif
 #include <fo4ide/logging/Logger.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
+#include <fo4ide/process/ProcessRunner.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
 
@@ -59,7 +63,8 @@ std::filesystem::path webRootFromArgs(int argc, char** argv) {
 
 class AppTarget final : public fo4ide::rpc::Target {
 public:
-    explicit AppTarget(fo4ide::plugin::IPluginBackend& plugins) : plugins_(plugins) {}
+    AppTarget(fo4ide::plugin::IPluginBackend& plugins, std::filesystem::path nifTool)
+        : plugins_(plugins), nifTool_(std::move(nifTool)) {}
 
     fo4ide::Result<nlohmann::json> invoke(std::string_view method,
                                            const nlohmann::json&) override {
@@ -68,7 +73,8 @@ public:
             return nlohmann::json{
                 {"ok", true},
                 {"native", true},
-                {"pluginBackend", capabilities.available}
+                {"pluginBackend", capabilities.available},
+                {"nifTool", !nifTool_.empty()}
             };
         }
         return std::unexpected(fo4ide::Error{"UnknownMethod", "Unknown app RPC method"});
@@ -76,7 +82,18 @@ public:
 
 private:
     fo4ide::plugin::IPluginBackend& plugins_;
+    std::filesystem::path nifTool_;
 };
+
+bool registerTarget(fo4ide::rpc::Dispatcher& rpc,
+                    std::string name,
+                    std::shared_ptr<fo4ide::rpc::Target> target,
+                    const std::shared_ptr<spdlog::logger>& log) {
+    auto registered = rpc.registerTarget(std::move(name), std::move(target));
+    if (registered) return true;
+    log->error("RPC setup failed: {}", registered.error().message);
+    return false;
+}
 
 }
 
@@ -92,15 +109,23 @@ int main(int argc, char** argv) {
     log->info("FO4IDE native Milestone 1 foundation starting");
 
     fo4ide::settings::Store settingsStore(configDir / "settings.json");
-    auto settings = settingsStore.load();
-    if (!settings) log->warn("Settings load failed: {}", settings.error().message);
+    fo4ide::settings::Settings currentSettings;
+    if (auto loaded = settingsStore.load()) {
+        currentSettings = std::move(*loaded);
+    } else {
+        log->warn("Settings load failed: {}", loaded.error().message);
+    }
 
+    fo4ide::process::ReprocRunner processRunner;
+    const auto nifTool = fo4ide::app::locateNifTool(currentSettings, argv[0]);
+    fo4ide::assets::NifService nifService(processRunner, nifTool);
     fo4ide::events::EventBus events;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::rpc::Dispatcher rpc;
-    auto appTarget = std::make_shared<AppTarget>(plugins);
-    if (auto registered = rpc.registerTarget("app", appTarget); !registered) {
-        log->error("RPC setup failed: {}", registered.error().message);
+
+    if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, nifTool), log) ||
+        !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings), log) ||
+        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }
