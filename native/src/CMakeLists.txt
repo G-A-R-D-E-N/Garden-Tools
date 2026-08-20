@@ -51,6 +51,11 @@ target_link_libraries(fo4ide_rpc PUBLIC fo4ide_core nlohmann_json::nlohmann_json
 fo4ide_enable_warnings(fo4ide_rpc)
 fo4ide_enable_sanitizers(fo4ide_rpc)
 
+add_library(fo4ide_mcp mcp/McpServer.cpp)
+target_link_libraries(fo4ide_mcp PUBLIC fo4ide_core fo4ide_rpc nlohmann_json::nlohmann_json)
+fo4ide_enable_warnings(fo4ide_mcp)
+fo4ide_enable_sanitizers(fo4ide_mcp)
+
 add_library(fo4ide_nif assets/NifService.cpp)
 target_link_libraries(fo4ide_nif PUBLIC fo4ide_core fo4ide_process nlohmann_json::nlohmann_json)
 fo4ide_enable_warnings(fo4ide_nif)
