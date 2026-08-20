@@ -7,6 +7,7 @@
 
 #include <WebView2.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 #include <sstream>
@@ -54,6 +55,7 @@ struct WindowState {
 };
 
 LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    static_cast<void>(wParam);
     WindowState* state = reinterpret_cast<WindowState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (message == WM_NCCREATE) {
         const auto* create = reinterpret_cast<CREATESTRUCTW*>(lParam);
