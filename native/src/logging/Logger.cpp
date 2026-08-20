@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace fo4ide::logging {
 namespace {
@@ -50,7 +51,7 @@ std::shared_ptr<spdlog::logger> get(std::string_view category) {
     if (gSink) {
         logger = std::make_shared<spdlog::logger>(key, gSink);
     } else {
-        logger = spdlog::stderr_logger_mt(key);
+        logger = spdlog::stderr_color_mt(key);
     }
     logger->set_level(gLevel);
     logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
