@@ -16,13 +16,13 @@ concurrency:
 jobs:
   linux-clang:
     name: Native Linux Clang
-    runs-on: prisma-light
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Clang compile and tests
+      - name: Configure, build, and test
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -44,24 +44,24 @@ jobs:
           fail_with_log() {
             local context="$1" log="$2" rc="$3"
             local detail
-            detail="$(grep -E '(^|: )(error:|fatal error:|FAILED:|CMake Error|Error:|FAILED|[0-9]+% tests passed)' "$log" | tail -1 | tr '\n' ' ' | cut -c1-130)"
+            detail="$(grep -E '(error:|fatal error:|FAILED:|CMake Error|Error:|FAILED|Timeout|[0-9]+% tests passed)' "$log" | tail -1 | tr '\n' ' ' | cut -c1-130)"
             [[ -n "$detail" ]] || detail="$(tail -1 "$log" | tr '\n' ' ' | cut -c1-130)"
             post_status "$context" failure "$detail"
             cat "$log"
             exit "$rc"
           }
-          clang++ --version | head -1
+          clang_version="$(clang++ --version | head -1)"
           cmake --version | head -1
           rm -rf native/out/linux-clang-debug
           cmake -S native -B native/out/linux-clang-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ -DFO4IDE_BUILD_TESTS=ON > /tmp/native-config.log 2>&1
           rc=$?
           [[ $rc -eq 0 ]] || fail_with_log native-linux-config /tmp/native-config.log "$rc"
-          post_status native-linux-config success "Clang configure passed"
+          post_status native-linux-config success "$clang_version"
           cmake --build native/out/linux-clang-debug --parallel 2 > /tmp/native-build.log 2>&1
           rc=$?
           [[ $rc -eq 0 ]] || fail_with_log native-linux-build /tmp/native-build.log "$rc"
           post_status native-linux-build success "Clang build passed"
-          ctest --test-dir native/out/linux-clang-debug --output-on-failure > /tmp/native-test.log 2>&1
+          timeout 180s ctest --test-dir native/out/linux-clang-debug --output-on-failure --timeout 10 > /tmp/native-test.log 2>&1
           rc=$?
           [[ $rc -eq 0 ]] || fail_with_log native-linux-test /tmp/native-test.log "$rc"
           summary="$(grep -E '[0-9]+% tests passed' /tmp/native-test.log | tail -1 | tr '\n' ' ' | cut -c1-130)"
@@ -73,118 +73,53 @@ jobs:
 
   windows-msvc:
     name: Native Windows MSVC
-    runs-on: [self-hosted, Linux, X64, wine, msvc]
-    timeout-minutes: 40
-    env:
-      TOOLCHAIN_SRC: ${{ vars.TOOLCHAIN_SRC || '/home/nomad/prisma-toolchain/win-build' }}
-      VCVARSALL_PATH: ${{ vars.VCVARSALL_PATH || 'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat' }}
-      XDG_RUNTIME_DIR: /tmp/xdg-runtime-github-actions
+    runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run MSVC compile and tests
-        shell: bash
+      - name: Configure, build, and test
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -uo pipefail
-          post_status() {
-            local context="$1" state="$2" description="$3"
-            python3 - "$context" "$state" "$description" > /tmp/status.json <<'PY'
-          import json, sys
-          print(json.dumps({"state": sys.argv[2], "context": sys.argv[1], "description": sys.argv[3][:140]}))
-          PY
-            curl -fsS -X POST \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-              --data-binary @/tmp/status.json >/dev/null
+          $ErrorActionPreference = 'Stop'
+          function Set-Status([string]$Context, [string]$State, [string]$Description) {
+            if ($Description.Length -gt 140) { $Description = $Description.Substring(0, 140) }
+            $body = @{ state = $State; context = $Context; description = $Description } | ConvertTo-Json -Compress
+            $headers = @{
+              Authorization = "Bearer $env:GH_TOKEN"
+              Accept = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+            }
+            Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/statuses/$env:GITHUB_SHA" -Headers $headers -Body $body -ContentType 'application/json' | Out-Null
           }
-          fail_with_log() {
-            local context="$1" log="$2" rc="$3"
-            local detail
-            detail="$(grep -E '(^|: )(error |error:|fatal error|FAILED:|CMake Error|Error:|FAILED|[0-9]+% tests passed)' "$log" | tail -1 | tr '\n' ' ' | cut -c1-130)"
-            [[ -n "$detail" ]] || detail="$(tail -1 "$log" | tr '\n' ' ' | cut -c1-130)"
-            post_status "$context" failure "$detail"
-            cat "$log"
-            exit "$rc"
+          function Fail-WithLog([string]$Context, [string]$LogPath, [int]$Code) {
+            $lines = Get-Content $LogPath
+            $detail = $lines | Where-Object { $_ -match 'error |error:|fatal error|FAILED:|CMake Error|Error:|FAILED|Timeout|tests passed' } | Select-Object -Last 1
+            if (-not $detail) { $detail = $lines | Select-Object -Last 1 }
+            Set-Status $Context 'failure' ([string]$detail)
+            Get-Content $LogPath
+            exit $Code
           }
-          mkdir -p "$XDG_RUNTIME_DIR"
-          chmod 700 "$XDG_RUNTIME_DIR"
-          WP="${WINEPREFIX:-$HOME/.wine}"
-          link_toolchain() {
-            local link="$WP/drive_c/$1" target="$TOOLCHAIN_SRC/$2"
-            [[ -e "$target" ]] || { post_status native-msvc-config failure "Missing toolchain source: $target"; exit 1; }
-            if [[ ! -L "$link" || "$(readlink -f "$link")" != "$(readlink -f "$target")" ]]; then
-              rm -rf "$link"
-              mkdir -p "$(dirname "$link")"
-              ln -s "$target" "$link"
-            fi
-          }
-          if [[ ! -d "$WP/drive_c" ]]; then
-            mkdir -p "$WP/drive_c/Program Files" "$WP/drive_c/Program Files (x86)" "$WP/drive_c/users"
-            WINEDEBUG=-all wineboot --init >/dev/null 2>&1 || true
-            WINEDEBUG=-all wineserver -w 2>/dev/null || true
-          fi
-          link_toolchain "Program Files/Microsoft Visual Studio" "ProgramFiles/Microsoft Visual Studio"
-          link_toolchain "Program Files (x86)/Windows Kits" "ProgramFilesX86/Windows Kits"
-          link_toolchain "users/Game" "Users/Game"
-          WINEDEBUG=-all wine reg add 'HKLM\SOFTWARE\Microsoft\Windows Kits\Installed Roots' /v KitsRoot10 /t REG_SZ /d 'C:\Program Files (x86)\Windows Kits\10\' /f /reg:64 >/dev/null
-          WINEDEBUG=-all wine reg add 'HKLM\SOFTWARE\Microsoft\Windows Kits\Installed Roots' /v KitsRoot10 /t REG_SZ /d 'C:\Program Files (x86)\Windows Kits\10\' /f /reg:32 >/dev/null
-          deps="$GITHUB_WORKSPACE/.ci-deps"
-          rm -rf "$deps"
-          mkdir -p "$deps"
-          git clone --depth 1 --branch v3.12.0 https://github.com/nlohmann/json.git "$deps/nlohmann_json"
-          git clone --depth 1 --branch v1.17.0 https://github.com/gabime/spdlog.git "$deps/spdlog"
-          git clone --depth 1 --branch v14.2.7 https://github.com/DaanDeMeyer/reproc.git "$deps/reproc"
-          git clone --depth 1 --branch v3.15.3 https://github.com/catchorg/Catch2.git "$deps/Catch2"
-          git clone --depth 1 --branch v0.51.0 https://github.com/yhirose/cpp-httplib.git "$deps/cpp_httplib"
-          winpath() { printf 'Z:%s' "$(echo "$1" | sed 's|/|\\|g')"; }
-          PROJ_WIN="$(winpath "$GITHUB_WORKSPACE")"
-          JSON_WIN="$(winpath "$deps/nlohmann_json")"
-          SPDLOG_WIN="$(winpath "$deps/spdlog")"
-          REPROC_WIN="$(winpath "$deps/reproc")"
-          CATCH_WIN="$(winpath "$deps/Catch2")"
-          HTTPLIB_WIN="$(winpath "$deps/cpp_httplib")"
-          WRAP="$GITHUB_WORKSPACE/.ci-native-msvc.bat"
-          cat > "$WRAP" <<BAT
-          @echo off
-          call "${VCVARSALL_PATH}" x64
-          if errorlevel 1 exit /b %errorlevel%
-          set "CMAKE_EXE=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-          set "CTEST_EXE=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
-          cd /d "${PROJ_WIN}"
-          "%CMAKE_EXE%" -S native -B native\out\windows-msvc-debug -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="${JSON_WIN}" -DFETCHCONTENT_SOURCE_DIR_SPDLOG="${SPDLOG_WIN}" -DFETCHCONTENT_SOURCE_DIR_REPROC="${REPROC_WIN}" -DFETCHCONTENT_SOURCE_DIR_CATCH2="${CATCH_WIN}" -DFETCHCONTENT_SOURCE_DIR_HTTPLIB="${HTTPLIB_WIN}"
-          if errorlevel 1 exit /b 10
-          "%CMAKE_EXE%" --build native\out\windows-msvc-debug --parallel 2
-          if errorlevel 1 exit /b 20
-          "%CTEST_EXE%" --test-dir native\out\windows-msvc-debug --output-on-failure
-          if errorlevel 1 exit /b 30
-          BAT
-          WRAP_WIN="$(winpath "$WRAP")"
-          rm -rf native/out/windows-msvc-debug
-          WINEDEBUG=-all wine cmd /c "$WRAP_WIN" > /tmp/native-msvc.log 2>&1
-          rc=$?
-          rm -f "$WRAP"
-          if [[ $rc -eq 0 ]]; then
-            post_status native-msvc-config success "MSVC configure passed"
-            post_status native-msvc-build success "MSVC build passed"
-            summary="$(grep -E '[0-9]+% tests passed' /tmp/native-msvc.log | tail -1 | tr '\n' ' ' | cut -c1-130)"
-            [[ -n "$summary" ]] || summary="MSVC CTest passed"
-            post_status native-msvc-test success "$summary"
-            cat /tmp/native-msvc.log
-            exit 0
-          fi
-          if [[ $rc -eq 10 ]]; then fail_with_log native-msvc-config /tmp/native-msvc.log "$rc"; fi
-          if [[ $rc -eq 20 ]]; then
-            post_status native-msvc-config success "MSVC configure passed"
-            fail_with_log native-msvc-build /tmp/native-msvc.log "$rc"
-          fi
-          if [[ $rc -eq 30 ]]; then
-            post_status native-msvc-config success "MSVC configure passed"
-            post_status native-msvc-build success "MSVC build passed"
-            fail_with_log native-msvc-test /tmp/native-msvc.log "$rc"
-          fi
-          fail_with_log native-msvc-config /tmp/native-msvc.log "$rc"
+          Remove-Item -Recurse -Force native/out/windows-msvc-debug -ErrorAction SilentlyContinue
+          $configLog = 'native-msvc-config.log'
+          & cmake -S native -B native/out/windows-msvc-debug -G 'Visual Studio 17 2022' -A x64 -DFO4IDE_BUILD_TESTS=ON *>&1 | Tee-Object -FilePath $configLog
+          $rc = $LASTEXITCODE
+          if ($rc -ne 0) { Fail-WithLog 'native-msvc-config' $configLog $rc }
+          $compilerLine = Get-Content $configLog | Where-Object { $_ -match 'CXX compiler identification is MSVC' } | Select-Object -First 1
+          if (-not $compilerLine) { $compilerLine = 'MSVC configure passed' }
+          Set-Status 'native-msvc-config' 'success' ([string]$compilerLine)
+          $buildLog = 'native-msvc-build.log'
+          & cmake --build native/out/windows-msvc-debug --config Debug --parallel 2 *>&1 | Tee-Object -FilePath $buildLog
+          $rc = $LASTEXITCODE
+          if ($rc -ne 0) { Fail-WithLog 'native-msvc-build' $buildLog $rc }
+          Set-Status 'native-msvc-build' 'success' 'MSVC Debug build passed'
+          $testLog = 'native-msvc-test.log'
+          & ctest --test-dir native/out/windows-msvc-debug -C Debug --output-on-failure --timeout 10 *>&1 | Tee-Object -FilePath $testLog
+          $rc = $LASTEXITCODE
+          if ($rc -ne 0) { Fail-WithLog 'native-msvc-test' $testLog $rc }
+          $summary = Get-Content $testLog | Where-Object { $_ -match '[0-9]+% tests passed' } | Select-Object -Last 1
+          if (-not $summary) { $summary = 'CTest passed' }
+          Set-Status 'native-msvc-test' 'success' ([string]$summary)
