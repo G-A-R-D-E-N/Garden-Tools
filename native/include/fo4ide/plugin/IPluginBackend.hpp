@@ -34,7 +34,7 @@ public:
                                   const nlohmann::json&) override {
         return std::unexpected(Error{
             "PluginBackendUnavailable",
-            "Native plugin support is not part of Milestone 1"
+            "Native plugin backend is not connected yet"
         });
     }
 };
