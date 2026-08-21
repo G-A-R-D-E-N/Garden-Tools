@@ -22,6 +22,9 @@ std::optional<std::string> decode_zstring(const std::vector<std::byte>& data,
   if (data.empty()) return std::nullopt;
   if (four_byte_payload_is_opaque && data.size() == 4) return std::nullopt;
   if (data.back() != std::byte{0}) return std::nullopt;
+  if (std::find(data.begin(), data.end() - 1, std::byte{0}) != data.end() - 1) {
+    return std::nullopt;
+  }
   const auto* begin = reinterpret_cast<const char*>(data.data());
   return std::string(begin, begin + data.size() - 1);
 }
@@ -119,7 +122,7 @@ Eyes decode_eyes(const Plugin& plugin, const FormKey& key) {
 
   if (const auto* edid = unique_subrecord(*record, sig_edid, "EDID", false)) {
     const auto decoded = decode_zstring(edid->data, false);
-    if (!decoded.has_value()) throw EyesError("EYES EDID is not a NUL-terminated string");
+    if (!decoded.has_value()) throw EyesError("EYES EDID is not a single NUL-terminated string");
     result.editor_id = *decoded;
   }
 
@@ -129,7 +132,7 @@ Eyes decode_eyes(const Plugin& plugin, const FormKey& key) {
 
   const auto* icon = unique_subrecord(*record, k_icon, "ICON", true);
   const auto decoded_icon = decode_zstring(icon->data, false);
-  if (!decoded_icon.has_value()) throw EyesError("EYES ICON is not a NUL-terminated string");
+  if (!decoded_icon.has_value()) throw EyesError("EYES ICON is not a single NUL-terminated string");
   result.icon = *decoded_icon;
 
   const auto* data = unique_subrecord(*record, sig_data, "DATA", true);
