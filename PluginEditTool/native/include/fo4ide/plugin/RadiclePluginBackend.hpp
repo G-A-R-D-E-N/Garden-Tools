@@ -37,6 +37,7 @@ private:
     Result<nlohmann::json> setField(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
+    Result<nlohmann::json> addMasters(const nlohmann::json& arguments);
     Result<nlohmann::json> getEditablePlugins() const;
     Result<nlohmann::json> getActivePlugins() const;
     Result<nlohmann::json> getRecordTypeIndex() const;
