@@ -88,7 +88,7 @@ TEST(ConflictGraph, TracksOverrideWinnerByLoadOrder) {
   EXPECT_NE(std::find(conflicts.begin(), conflicts.end(), key), conflicts.end());
 }
 
-TEST(ConflictGraph, TracksInboundFormLinks) {
+TEST(ConflictGraph, TracksInboundAndOutboundFormLinks) {
   const auto base = fo4::read_plugin(
       make_plugin({}, "WEAP", 0x00000800),
       "Base.esp");
@@ -109,4 +109,10 @@ TEST(ConflictGraph, TracksInboundFormLinks) {
   EXPECT_EQ(inbound[0].source, source);
   EXPECT_EQ(inbound[0].plugin.filename(), "Reference.esp");
   EXPECT_EQ(inbound[0].subrecord.to_string(), "NAME");
+
+  const auto& outbound = graph.references_from(source);
+  ASSERT_EQ(outbound.size(), 1u);
+  EXPECT_EQ(outbound[0].target, target);
+  EXPECT_EQ(outbound[0].plugin.filename(), "Reference.esp");
+  EXPECT_EQ(outbound[0].subrecord.to_string(), "NAME");
 }
