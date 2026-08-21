@@ -89,6 +89,27 @@ bool is_formid_array_signature(Signature signature) {
          signature == sig_xlkr;
 }
 
+bool perk_epfd_is_formid(const Record& record, const Subrecord& sub) {
+  if (record.header.signature != Signature::from_string("PERK") ||
+      sub.signature != Signature::from_string("EPFD") || sub.data.size() != 4) {
+    return false;
+  }
+
+  int function_type = -1;
+  for (const auto& candidate : record.subrecords) {
+    if (&candidate == &sub) {
+      break;
+    }
+    if (candidate.signature == Signature::from_string("EPFT") && !candidate.data.empty()) {
+      function_type = static_cast<int>(std::to_integer<std::uint8_t>(candidate.data.front()));
+    }
+  }
+
+  // xEdit FO4 wbPERK: EPFT 3 = LVLI, 4 = Add Activate Choice/SPEL,
+  // 5 = Select Spell/SPEL. Other EPFD variants are float/text/non-FormID.
+  return function_type == 3 || function_type == 4 || function_type == 5;
+}
+
 bool visit_tagged_formid_slot(const Subrecord& sub, auto&& fn) {
   if (sub.data.size() < 8) {
     return false;
@@ -134,6 +155,10 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);
     }
+    return;
+  }
+  if (perk_epfd_is_formid(record, sub)) {
+    fn(0);
     return;
   }
   if (is_formid_array_signature(sub.signature) && sub.data.size() % 4 == 0) {
