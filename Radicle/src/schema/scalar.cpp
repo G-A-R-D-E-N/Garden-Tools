@@ -11,7 +11,9 @@
 namespace fo4::schema {
 namespace {
 
-constexpr auto k_xhlt = Signature::from_string("XHLT");
+constexpr ScalarFieldDescriptor k_scalar_fields[] = {
+#include "fo4/schema/generated_scalar_fields.inc"
+};
 
 void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
   out.push_back(std::byte{static_cast<std::uint8_t>(value)});
@@ -81,12 +83,32 @@ std::string format_float(float value) {
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
-  if (subrecord == k_xhlt) {
-    return ScalarDescriptor{
-        k_xhlt, "Health %", ScalarStorage::u32,
-        ScalarPresentation::percent_0_100, 0.0, 100.0};
+  for (const auto& field : k_scalar_fields) {
+    if (field.scalar.subrecord == subrecord) return field.scalar;
   }
   return std::nullopt;
+}
+
+std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
+    Signature record, std::string_view path) noexcept {
+  for (const auto& field : k_scalar_fields) {
+    if (field.record == record && field.path == path) return field;
+  }
+  return std::nullopt;
+}
+
+std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept {
+  std::size_t first = 0;
+  while (first < std::size(k_scalar_fields) && k_scalar_fields[first].record != record) {
+    ++first;
+  }
+  if (first == std::size(k_scalar_fields)) return {};
+
+  std::size_t last = first + 1;
+  while (last < std::size(k_scalar_fields) && k_scalar_fields[last].record == record) {
+    ++last;
+  }
+  return {k_scalar_fields + first, last - first};
 }
 
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
