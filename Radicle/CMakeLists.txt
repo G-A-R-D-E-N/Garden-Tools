@@ -42,6 +42,7 @@ add_library(fo4
   src/binary/cursor.cpp
   src/plugin/tes4.cpp
   src/plugin/reader.cpp
+  src/plugin/master_kinds.cpp
   src/plugin/writer.cpp
   src/schema/form_links.cpp
   src/schema/vmad.cpp
