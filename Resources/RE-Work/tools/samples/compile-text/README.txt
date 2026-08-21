@@ -123,3 +123,8 @@ MISMATCH is a hard failure. Deleting the 0x126C6 line from the input
 TextExport.txt makes the run exit 0 with 4 MATCH + 1 WARNING. The compiled
 binaries are reproducible: re-run cross-check/make_compiled.py after any
 edit (the input .txt files remain the hand-edited source of truth).
+
+Add --verbose to the same command to list all 18 category names with counts
+per table (canonical order, zeros included) under each composition line;
+without it only the dialog set {1,6,7,10} is broken out. The --json variant
+always carries the full per-category counts in cross_check.composition.

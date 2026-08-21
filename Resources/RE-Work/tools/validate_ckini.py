@@ -32,6 +32,10 @@ Usage:
     python3 validate_ckini.py --compile-text \
         samples/compile-text/cross-check/input \
         --strings samples/compile-text/cross-check/STRINGS --json
+    # full 18-category breakdown in composition reports (not just the dialog
+    # set {1,6,7,10}):
+    python3 validate_ckini.py --strings '.../STRINGS' \
+        --text-export '.../TextExport.txt' --verbose
     python3 validate_ckini.py CreationKit.ini --exit-codes
     python3 validate_ckini.py --strings \
         '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
@@ -1055,12 +1059,14 @@ def _composition_data(kind_ids, category_map):
     return out
 
 
-def _composition_lines(header, kind_ids, category_map):
+def _composition_lines(header, kind_ids, category_map, verbose=False):
     """Per-table dialog-category composition lines for one language stem.
 
     Formats ``_composition_data`` for the human-readable report; the
-    structured dict is what --json emits. Returns the lines to append,
-    starting with ``header``.
+    structured dict is what --json emits. With ``verbose`` the per-table
+    report additionally lists all 18 category names with counts (canonical
+    order, zeros included). Returns the lines to append, starting with
+    ``header``.
     """
     lines = [header]
     for kind, d in _composition_data(kind_ids, category_map).items():
@@ -1078,6 +1084,11 @@ def _composition_lines(header, kind_ids, category_map):
         lines.append("  %s: %d IDs, %d attributed (%s), %d unattributed"
                      % (kind, d["ids"], d["attributed"], "; ".join(detail),
                         d["unattributed"]))
+        if verbose:
+            breakdown = ", ".join(
+                "%s=%d" % (name, d["by_category"].get(name, 0))
+                for name in _TEXT_CATEGORIES)
+            lines.append("    category breakdown: %s" % breakdown)
     return lines
 
 
@@ -1194,7 +1205,7 @@ def check_strings_file(path):
     return not errors, lines
 
 
-def check_strings_files(paths, category_map=None):
+def check_strings_files(paths, category_map=None, verbose=False):
     """Validate .STRINGS/.DLSTRINGS/.ILSTRINGS files (or directories of them).
 
     Returns (ok, lines). Directories are scanned for the three kinds. When
@@ -1206,7 +1217,8 @@ def check_strings_files(paths, category_map=None):
     category name (see ``load_text_export_categories``). When supplied, the
     per-stem report also counts, for every table, how many of its IDs were
     routed from each dialog category (indices {1,6,7,10} -> .DLSTRINGS per
-    FUN_140916980's 0x4c2 bitmask) versus the ordinary categories.
+    FUN_140916980's 0x4c2 bitmask) versus the ordinary categories; with
+    ``verbose`` the full 18-category breakdown is listed for every table.
     """
     files = []
     for p in paths:
@@ -1283,7 +1295,7 @@ def check_strings_files(paths, category_map=None):
             lines.extend(_composition_lines(
                 "STRINGS %s: TextExport routed-record composition "
                 "(%d IDs across %d file(s))" % (stem, total, len(group)),
-                kind_ids, category_map))
+                kind_ids, category_map, verbose))
 
     lines.append("VERDICT: %s" % ("PASS" if overall_ok else "FAIL"))
     return overall_ok, lines
@@ -1315,7 +1327,8 @@ def _load_strings_ids(path):
     return ids
 
 
-def cross_check_compile_routes(route_records, strings_paths, esm, language):
+def cross_check_compile_routes(route_records, strings_paths, esm, language,
+                               verbose=False):
     """Verify each predicted output table against real compiled string files.
 
     Returns (ok, lines, summary). ``strings_paths`` may mix files and
@@ -1329,7 +1342,8 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language):
     ``summary`` is the structured machine-consumable result: matched file
     names, per-record verdicts {id, category, source, predicted_ext,
     present_in, verdict}, verdict counts, and the per-language-stem
-    composition (``_composition_data`` dicts).
+    composition (``_composition_data`` dicts). ``verbose`` adds the full
+    18-category breakdown to the human-readable composition lines.
     """
     files = []
     for p in strings_paths:
@@ -1426,7 +1440,7 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language):
         lines.extend(_composition_lines(
             "COMPOSITION %s: %d routed IDs, per compiled table by "
             "routed-record category (dialog set {1,6,7,10} -> .DLSTRINGS)"
-            % (stem, len(route_records)), kind_ids, cat_map))
+            % (stem, len(route_records)), kind_ids, cat_map, verbose))
 
     summary = {
         "files": [os.path.basename(f) for f in sorted(matching)],
@@ -1696,6 +1710,11 @@ def main(argv):
                          "with --strings, the cross-check verdicts and per-language "
                          "composition as structured JSON on stdout (human-readable text "
                          "is suppressed; exit codes unchanged)")
+    ap.add_argument("--verbose", action="store_true",
+                    help="in composition reports (--strings with --text-export, or "
+                         "combined --compile-text --strings) list all 18 TextExport "
+                         "categories with counts per table, not just the dialog set "
+                         "{1,6,7,10}")
     args = ap.parse_args(argv)
 
     if args.json and args.compile_text is None:
@@ -1713,7 +1732,7 @@ def main(argv):
                 print("WARNING: " + w)
         else:
             category_map = None
-        ok, lines = check_strings_files(args.strings, category_map)
+        ok, lines = check_strings_files(args.strings, category_map, args.verbose)
         print("\n".join(lines))
         return 0 if ok else 1
 
@@ -1760,7 +1779,7 @@ def main(argv):
         ok, lines, route_records, summary = check_compile_text_roots(esm, roots, language)
         if args.strings is not None:
             ok2, xlines, xsummary = cross_check_compile_routes(
-                route_records, args.strings, esm, language)
+                route_records, args.strings, esm, language, args.verbose)
             ok = ok and ok2
         else:
             xlines, xsummary = None, None
