@@ -1,0 +1,47 @@
+#pragma once
+
+#include <filesystem>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <fo4/plugin/container.hpp>
+#include <fo4ide/plugin/IPluginBackend.hpp>
+
+namespace fo4ide::plugin {
+
+class RadiclePluginBackend final : public IPluginBackend {
+public:
+    Capabilities capabilities() const noexcept override;
+    Result<nlohmann::json> invoke(std::string_view operation,
+                                  const nlohmann::json& arguments) override;
+
+private:
+    struct LoadedPlugin {
+        std::string name;
+        std::filesystem::path path;
+        std::string source;
+        fo4::Plugin plugin;
+    };
+
+    Result<nlohmann::json> loadEnvironment(const nlohmann::json& arguments);
+    Result<nlohmann::json> getPlugins() const;
+    Result<nlohmann::json> getChildren(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> openRecord(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> openPlugin(const nlohmann::json& arguments);
+    Result<nlohmann::json> savePlugin(const nlohmann::json& arguments);
+    Result<nlohmann::json> getEditablePlugins() const;
+    Result<nlohmann::json> getRecordTypeIndex() const;
+    Result<nlohmann::json> getLoadOrderSummary() const;
+    Result<nlohmann::json> getConflictMatrix(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> listMasters(const nlohmann::json& arguments) const;
+
+    LoadedPlugin* findPlugin(std::string_view name);
+    const LoadedPlugin* findPlugin(std::string_view name) const;
+
+    mutable std::mutex mutex_;
+    std::vector<LoadedPlugin> plugins_;
+};
+
+}
