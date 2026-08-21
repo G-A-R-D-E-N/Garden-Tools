@@ -9,6 +9,7 @@
 #include "fo4/plugin/container.hpp"
 #include "fo4/plugin/load_order.hpp"
 #include "fo4/plugin/master_kinds.hpp"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
