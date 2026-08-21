@@ -164,3 +164,15 @@ commit it together with the change:
         --strings Resources/RE-Work/tools/samples/compile-text/cross-check/STRINGS \
         --composition-out \
         Resources/RE-Work/tools/samples/compile-text/cross-check/composition.golden.json
+
+To inspect drift without committing, diff the current run against the golden
+file directly -- it prints only the changed stems and tables and exits 1 on
+drift (0 when identical):
+
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS \
+        --composition-in samples/compile-text/cross-check/composition.golden.json
+
+This fixture should report VERDICT: IDENTICAL; a DRIFT verdict means the
+validator, the inputs, or the compiled binaries changed the composition.

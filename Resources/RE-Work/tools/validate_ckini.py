@@ -44,6 +44,12 @@ Usage:
         samples/compile-text/cross-check/input \
         --strings samples/compile-text/cross-check/STRINGS \
         --composition-out cross-check-composition.json
+    # diff the current composition against a saved one; prints only the
+    # changed stems and tables, exit 1 on drift:
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS \
+        --composition-in cross-check/composition.golden.json
     python3 validate_ckini.py CreationKit.ini --exit-codes
     python3 validate_ckini.py --strings \
         '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
@@ -1178,6 +1184,104 @@ def write_composition_json(path, stems, meta, ok):
     return None
 
 
+def load_composition_file(path):
+    """Load a --composition-out payload; return (stems_map, error-or-None).
+
+    Accepts either a full write_composition_json payload (has a ``stems``
+    object) or a bare {stem: {kind: dict}} map.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except OSError as exc:
+        return None, "could not read %s: %s" % (path, exc)
+    except ValueError as exc:
+        return None, "%s is not valid JSON: %s" % (path, exc)
+    if not isinstance(payload, dict):
+        return None, "%s does not look like a composition payload (not an object)" % path
+    if "stems" in payload and isinstance(payload["stems"], dict):
+        return payload["stems"], None
+    return payload, None
+
+
+def _fmt_diff_value(value):
+    """Render a changed field value compactly (anomalies -> id list)."""
+    if isinstance(value, list):
+        if value and all(isinstance(x, dict) and "id_hex" in x for x in value):
+            return "[%s]" % ", ".join(x["id_hex"] for x in value)
+        return repr(value)
+    return repr(value)
+
+
+def _diff_dicts(before, after, path, out):
+    """Recursively collect changed/added/removed leaf paths between two dicts."""
+    for key in sorted(set(before) | set(after)):
+        p = "%s.%s" % (path, key)
+        bv, av = before.get(key), after.get(key)
+        if key not in before:
+            out.append("ADD %s = %s" % (p, _fmt_diff_value(av)))
+        elif key not in after:
+            out.append("DEL %s = %s" % (p, _fmt_diff_value(bv)))
+        elif isinstance(bv, dict) and isinstance(av, dict):
+            _diff_dicts(bv, av, p, out)
+        elif bv != av:
+            out.append("CHG %s: %s -> %s" % (p, _fmt_diff_value(bv),
+                                              _fmt_diff_value(av)))
+
+
+def diff_composition(baseline, current):
+    """Diff two stem maps; return (drifted, report-lines).
+
+    Reports only the changed stems and tables (added/removed stems and
+    tables, plus per-table changed fields); unchanged stems are summarized
+    as a count, never listed.
+    """
+    added = sorted(set(current) - set(baseline))
+    removed = sorted(set(baseline) - set(current))
+    common = sorted(set(baseline) & set(current))
+    lines = []
+    changed = 0
+    for stem in removed:
+        lines.append("  REMOVED stem: %s" % stem)
+    for stem in added:
+        lines.append("  ADDED stem: %s" % stem)
+    for stem in common:
+        before, after = baseline[stem], current[stem]
+        diffs = []
+        for table in sorted(set(before) - set(after)):
+            diffs.append("    REMOVED table: %s" % table)
+        for table in sorted(set(after) - set(before)):
+            diffs.append("    ADDED table: %s" % table)
+        for table in sorted(set(before) & set(after)):
+            out = []
+            _diff_dicts(before[table], after[table], table, out)
+            diffs.extend("    " + line for line in out)
+        if diffs:
+            changed += 1
+            lines.append("  CHANGED stem %s:" % stem)
+            lines.extend(diffs)
+    drifted = bool(added or removed or changed)
+    if not drifted:
+        lines.append("  (no changes: %d stem(s) identical)" % len(common))
+        lines.append("VERDICT: IDENTICAL")
+    else:
+        lines.append("VERDICT: DRIFT (%d stem(s) changed, %d added, %d removed)"
+                     % (changed, len(added), len(removed)))
+    return drifted, lines
+
+
+def _emit_composition_diff(composition_in, stems):
+    """Print the drift report vs --composition-in; return the exit code."""
+    baseline, err = load_composition_file(composition_in)
+    if err:
+        print("ERROR: " + err)
+        return 2
+    drifted, lines = diff_composition(baseline, stems)
+    print("COMPOSITION-DIFF vs %s:" % composition_in)
+    print("\n".join(lines))
+    return 1 if drifted else 0
+
+
 def check_strings_file(path):
     """Validate one localized-string file; return (ok, lines)."""
     kind = _strings_kind(path)
@@ -1818,16 +1922,25 @@ def main(argv):
                          "deterministic JSON for CI diffing; requires --strings with "
                          "--text-export, or --compile-text combined with --strings "
                          "(the normal text report still prints to stdout)")
+    ap.add_argument("--composition-in", metavar="FILE", default=None,
+                    help="diff the current run's per-language-stem composition against "
+                         "a --composition-out JSON file (e.g. a committed golden file) "
+                         "and print only the changed stems and tables; exit 1 on drift, "
+                         "0 when identical (replaces the normal text report on stdout)")
     args = ap.parse_args(argv)
 
     if args.json and args.compile_text is None:
         ap.error("--json requires --compile-text (optionally with --strings)")
-    if args.composition_out is not None:
+    if args.composition_in is not None or args.composition_out is not None:
         has_comp = ((args.strings is not None and args.text_export) or
                     (args.compile_text is not None and args.strings is not None))
         if not has_comp:
-            ap.error("--composition-out requires composition data: --strings with "
-                     "--text-export, or --compile-text combined with --strings")
+            ap.error("--composition-in/--composition-out requires composition data: "
+                     "--strings with --text-export, or --compile-text combined with "
+                     "--strings")
+    if args.json and args.composition_in is not None:
+        ap.error("--json cannot be combined with --composition-in (the drift report "
+                 "replaces the JSON payload on stdout)")
 
     if args.strings is not None and args.compile_text is None:
         # Standalone --strings validation. When --compile-text is also given
@@ -1843,6 +1956,8 @@ def main(argv):
             category_map = None
         ok, lines, composition = check_strings_files(args.strings, category_map,
                                                      args.verbose)
+        if args.composition_in is not None:
+            return _emit_composition_diff(args.composition_in, composition)
         print("\n".join(lines))
         if args.composition_out is not None:
             err = write_composition_json(
@@ -1910,6 +2025,9 @@ def main(argv):
             if err:
                 print("ERROR: " + err)
                 return 1
+        if args.composition_in is not None and xsummary is not None:
+            return _emit_composition_diff(args.composition_in,
+                                          xsummary["composition"])
 
         if args.json:
             payload = {
