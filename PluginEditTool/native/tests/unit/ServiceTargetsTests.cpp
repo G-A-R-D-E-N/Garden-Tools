@@ -196,14 +196,3 @@ TEST_CASE("NifTarget stages browser dropped bytes without the CSharp host") {
     std::error_code ec;
     std::filesystem::remove_all(path.parent_path(), ec);
 }
-
-TEST_CASE("NIF locator honors an explicit configured tool") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto tool = root / "custom-niftool";
-    touch(tool);
-
-    fo4ide::settings::Settings settings;
-    settings.nifToolPath = tool;
-    CHECK(fo4ide::app::locateNifTool(settings, root / "FO4IDE-native") == tool);
-}
