@@ -3,6 +3,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <system_error>
@@ -85,6 +86,14 @@ std::string format_float(float value) {
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
   for (const auto& field : k_scalar_fields) {
     if (field.scalar.subrecord == subrecord) return field.scalar;
+  }
+  return std::nullopt;
+}
+
+std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
+    std::string_view path) noexcept {
+  for (const auto& field : k_scalar_fields) {
+    if (field.path == path) return field;
   }
   return std::nullopt;
 }
