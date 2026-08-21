@@ -134,6 +134,19 @@ TEST_CASE("Radicle plugin backend exposes native conflicts references and search
     CHECK(loaded->at("loadedPlugins") == 3);
     CHECK(loaded->at("failedPlugins") == 0);
 
+    const auto editable = parseStringResult(
+        backend.invoke("backend.GetEditablePlugins", nlohmann::json::array()));
+    REQUIRE(editable.size() == 3);
+    CHECK(editable[0] == "Base.esp");
+    CHECK(editable[1] == "Override.esp");
+
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    REQUIRE(active.size() == 3);
+    CHECK(active[0].at("Name") == "Base.esp");
+    CHECK(active[0].at("LoadOrder") == 0);
+    CHECK(active[1].at("LoadOrder") == 1);
+
     const auto conflicts = parseStringResult(
         backend.invoke("backend.GetConflicts", nlohmann::json::array()));
     REQUIRE(conflicts.size() == 1);
@@ -147,6 +160,20 @@ TEST_CASE("Radicle plugin backend exposes native conflicts references and search
     CHECK(matrix.at("Winner") == "Override.esp");
     CHECK(matrix.at("EditorID") == "OverrideWeapon");
     CHECK(matrix.at("Type") == "WEAP");
+    CHECK(matrix.at("Level") == "conflict");
+    REQUIRE(matrix.at("Rows").size() >= 2);
+
+    const auto& matrixRows = matrix.at("Rows");
+    const auto edid = std::find_if(matrixRows.begin(), matrixRows.end(), [](const auto& row) {
+        return row.value("Field", std::string{}) == "Subrecords\\EDID[0]";
+    });
+    REQUIRE(edid != matrixRows.end());
+    REQUIRE(edid->at("Values").size() == 2);
+    CHECK(edid->at("Values")[0] == "BaseWeapon");
+    CHECK(edid->at("Values")[1] == "OverrideWeapon");
+    CHECK(edid->at("Differs") == true);
+    CHECK(edid->at("Statuses")[0] == "master");
+    CHECK(edid->at("Statuses")[1] == "win");
 
     const auto referencedBy = parseStringResult(
         backend.invoke("backend.GetReferencedBy",
