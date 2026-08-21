@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -21,16 +22,24 @@ public:
                                           const nlohmann::json& arguments) = 0;
 };
 
+class RadicleArchiveBackend;
+
 class NullArchiveBackend final : public IArchiveBackend {
 public:
-    bool available() const noexcept override { return false; }
-    Result<nlohmann::json> invoke(std::string_view,
-                                  const nlohmann::json&) override {
-        return std::unexpected(Error{
-            "ArchiveBackendUnavailable",
-            "Native BA2/BSA reading is waiting for the replacement archive backend"
-        });
-    }
+    NullArchiveBackend();
+    ~NullArchiveBackend() override;
+
+    NullArchiveBackend(const NullArchiveBackend&) = delete;
+    NullArchiveBackend& operator=(const NullArchiveBackend&) = delete;
+    NullArchiveBackend(NullArchiveBackend&&) noexcept;
+    NullArchiveBackend& operator=(NullArchiveBackend&&) noexcept;
+
+    bool available() const noexcept override;
+    Result<nlohmann::json> invoke(std::string_view operation,
+                                  const nlohmann::json& arguments) override;
+
+private:
+    std::unique_ptr<RadicleArchiveBackend> backend_;
 };
 
 class ArchiveService {
