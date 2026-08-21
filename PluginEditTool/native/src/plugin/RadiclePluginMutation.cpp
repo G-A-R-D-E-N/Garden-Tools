@@ -18,6 +18,12 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
+bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
+    value = args[index].get<bool>();
+    return true;
+}
+
 std::string asciiLower(std::string_view value) {
     std::string out(value);
     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
@@ -53,6 +59,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     std::string_view method,
     const nlohmann::json& arguments) {
     if (method == "SetField") return setField(arguments);
+    if (method == "CopyAsOverride") return copyAsOverride(arguments);
 
     if (method == "SavePlugin") {
         const auto name = stringArgument(arguments, 0);
@@ -131,6 +138,84 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
             "Updated EDID for " + formKeyText + " in " + pluginName + ".");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"FieldWriteFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
+    const nlohmann::json& arguments) {
+    const auto sourceName = stringArgument(arguments, 0);
+    const auto formKeyText = stringArgument(arguments, 1);
+    const auto targetName = stringArgument(arguments, 2);
+    bool overwrite = false;
+
+    if (sourceName.empty()) {
+        return std::unexpected(Error{"SourcePluginMissing", "Source plugin name is empty"});
+    }
+    if (formKeyText.empty()) {
+        return std::unexpected(Error{"FormKeyMissing", "Record FormKey is empty"});
+    }
+    if (targetName.empty()) {
+        return std::unexpected(Error{"TargetPluginMissing", "Target plugin name is empty"});
+    }
+    if (!boolArgument(arguments, 3, overwrite)) {
+        return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
+    }
+
+    fo4::FormKey key;
+    try {
+        key = fo4::FormKey::parse(formKeyText);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+
+    std::scoped_lock lock(mutex_);
+    const auto* source = findPlugin(sourceName);
+    if (source == nullptr) {
+        return std::unexpected(Error{
+            "SourcePluginNotLoaded",
+            "Source plugin is not loaded: " + sourceName
+        });
+    }
+    auto* target = findPlugin(targetName);
+    if (target == nullptr) {
+        return std::unexpected(Error{
+            "TargetPluginNotLoaded",
+            "Target plugin is not loaded yet: " + targetName
+        });
+    }
+    if (!isEditable(*target)) {
+        return std::unexpected(Error{
+            "PluginReadOnly",
+            "Refusing to write override into protected or game-Data plugin: " + target->name
+        });
+    }
+
+    try {
+        auto mutated = target->plugin;
+        const auto status = fo4::copy_record_as_override(mutated, source->plugin, key, overwrite);
+        switch (status) {
+            case fo4::RecordCopyStatus::source_missing:
+                return std::unexpected(Error{
+                    "RecordNotFound",
+                    "Record is not present in " + sourceName + ": " + formKeyText
+                });
+            case fo4::RecordCopyStatus::already_exists:
+                return nlohmann::json(
+                    "EXISTS: " + targetName + " already contains " + formKeyText + ".");
+            case fo4::RecordCopyStatus::inserted:
+            case fo4::RecordCopyStatus::replaced:
+                break;
+        }
+
+        fo4::write_plugin_file(mutated, target->path);
+        target->plugin = std::move(mutated);
+        rebuildGraphLocked();
+
+        return nlohmann::json(
+            std::string(status == fo4::RecordCopyStatus::replaced ? "Replaced " : "Copied ") +
+            formKeyText + " as override in " + targetName + ".");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"CopyOverrideFailed", error.what()});
     }
 }
 
