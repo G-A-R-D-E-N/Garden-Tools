@@ -12,7 +12,6 @@
 #include <utility>
 #include <vector>
 
-#include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/form_links.hpp>
@@ -322,6 +321,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
     {
         std::scoped_lock lock(mutex_);
         plugins_ = std::move(loaded);
+        rebuildGraphLocked();
     }
 
     return nlohmann::json{
@@ -418,6 +418,18 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
         } else {
             plugins_.push_back({name, std::filesystem::u8path(path), {}, std::move(plugin)});
         }
+
+        std::vector<fo4::MasterDescriptor> knownKinds;
+        knownKinds.reserve(plugins_.size());
+        for (const auto& item : plugins_) {
+            knownKinds.push_back({
+                item.plugin.key,
+                item.plugin.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
+                                                              : fo4::PluginKind::full,
+            });
+        }
+        for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, knownKinds);
+        rebuildGraphLocked();
         return nlohmann::json{{"ok", true}, {"plugin", name}}.dump();
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginReadFailed", error.what()});
@@ -501,15 +513,10 @@ Result<nlohmann::json> RadiclePluginBackend::getLoadOrderSummary() const {
 
 Result<nlohmann::json> RadiclePluginBackend::getConflicts() const {
     std::scoped_lock lock(mutex_);
-    std::vector<const fo4::Plugin*> loadOrder;
-    loadOrder.reserve(plugins_.size());
-    for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
-    const auto graph = fo4::ConflictGraph::build(loadOrder);
-
     nlohmann::json rows = nlohmann::json::array();
-    for (const auto& key : graph.conflicts()) {
-        const auto& versions = graph.versions(key);
-        const auto* winner = graph.winner(key);
+    for (const auto& key : graph_.conflicts()) {
+        const auto& versions = graph_.versions(key);
+        const auto* winner = graph_.winner(key);
         if (winner == nullptr) continue;
 
         nlohmann::json pluginNames = nlohmann::json::array();
@@ -549,12 +556,8 @@ Result<nlohmann::json> RadiclePluginBackend::getConflictMatrix(const nlohmann::j
     }
 
     std::scoped_lock lock(mutex_);
-    std::vector<const fo4::Plugin*> loadOrder;
-    loadOrder.reserve(plugins_.size());
-    for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
-    const auto graph = fo4::ConflictGraph::build(loadOrder);
-    const auto& versions = graph.versions(key);
-    const auto* winner = graph.winner(key);
+    const auto& versions = graph_.versions(key);
+    const auto* winner = graph_.winner(key);
     if (winner == nullptr) return nlohmann::json("");
 
     nlohmann::json pluginNames = nlohmann::json::array();
@@ -597,14 +600,9 @@ Result<nlohmann::json> RadiclePluginBackend::getReferencedBy(const nlohmann::jso
     }
 
     std::scoped_lock lock(mutex_);
-    std::vector<const fo4::Plugin*> loadOrder;
-    loadOrder.reserve(plugins_.size());
-    for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
-    const auto graph = fo4::ConflictGraph::build(loadOrder);
-
     nlohmann::json rows = nlohmann::json::array();
     std::set<std::pair<std::string, std::string>> seen;
-    for (const auto& hit : graph.referenced_by(key)) {
+    for (const auto& hit : graph_.referenced_by(key)) {
         const auto source = hit.source.to_string();
         const auto pluginName = std::string(hit.plugin.filename());
         if (!seen.emplace(pluginName, source).second) continue;
@@ -665,11 +663,7 @@ Result<nlohmann::json> RadiclePluginBackend::searchRecords(const nlohmann::json&
 
 Result<nlohmann::json> RadiclePluginBackend::scanConflicts() const {
     std::scoped_lock lock(mutex_);
-    std::vector<const fo4::Plugin*> loadOrder;
-    loadOrder.reserve(plugins_.size());
-    for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
-    const auto graph = fo4::ConflictGraph::build(loadOrder);
-    const auto count = graph.conflicts().size();
+    const auto count = graph_.conflicts().size();
     return nlohmann::json(
         "Found " + std::to_string(count) + " conflicted record" +
         (count == 1 ? std::string{} : "s") + " across " +
@@ -761,6 +755,13 @@ const RadiclePluginBackend::LoadedPlugin* RadiclePluginBackend::findPlugin(std::
                                      return plugin.name == name || plugin.plugin.key == key;
                                  });
     return it == plugins_.end() ? nullptr : &*it;
+}
+
+void RadiclePluginBackend::rebuildGraphLocked() {
+    std::vector<const fo4::Plugin*> loadOrder;
+    loadOrder.reserve(plugins_.size());
+    for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
+    graph_ = fo4::ConflictGraph::build(loadOrder);
 }
 
 }
