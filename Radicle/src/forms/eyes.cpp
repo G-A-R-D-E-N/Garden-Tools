@@ -1,0 +1,198 @@
+#include "fo4/forms/eyes.hpp"
+
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace fo4::forms {
+namespace {
+
+constexpr auto k_eyes = Signature::from_string("EYES");
+constexpr auto k_full = Signature::from_string("FULL");
+constexpr auto k_icon = Signature::from_string("ICON");
+
+std::optional<std::string> decode_zstring(const std::vector<std::byte>& data,
+                                          bool four_byte_payload_is_opaque) {
+  if (data.empty()) return std::nullopt;
+  if (four_byte_payload_is_opaque && data.size() == 4) return std::nullopt;
+  if (data.back() != std::byte{0}) return std::nullopt;
+  const auto* begin = reinterpret_cast<const char*>(data.data());
+  return std::string(begin, begin + data.size() - 1);
+}
+
+std::vector<std::byte> zstring(std::string_view value) {
+  if (value.find('\0') != std::string_view::npos) {
+    throw EyesError("EYES string fields cannot contain embedded NUL bytes");
+  }
+  std::vector<std::byte> data;
+  data.reserve(value.size() + 1);
+  for (const char ch : value) {
+    data.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  }
+  data.push_back(std::byte{0});
+  return data;
+}
+
+Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
+  Record* found = nullptr;
+  visit_records(plugin, [&](Record& record) {
+    if (found == nullptr && record.header.signature != sig_tes4 &&
+        record.form_key == key) {
+      found = &record;
+    }
+  });
+  return found;
+}
+
+void mark_modified(Plugin& plugin, Record& record) {
+  record.original_bytes.clear();
+  record.decompressed_payload.clear();
+  record.header.data_size = 0;
+  record.uncompressed_size = 0;
+  plugin.original_bytes.clear();
+  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
+}
+
+const Subrecord* unique_subrecord(const Record& record,
+                                  Signature signature,
+                                  std::string_view name,
+                                  bool required) {
+  const Subrecord* found = nullptr;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != signature) continue;
+    if (found != nullptr) {
+      throw EyesError("EYES contains duplicate " + std::string(name) + " subrecords");
+    }
+    found = &subrecord;
+  }
+  if (required && found == nullptr) {
+    throw EyesError("EYES is missing required " + std::string(name) + " subrecord");
+  }
+  return found;
+}
+
+bool replace_string_subrecord(Record& record,
+                              Signature signature,
+                              std::string_view value,
+                              bool insert_before_full) {
+  const auto encoded = zstring(value);
+  for (auto& subrecord : record.subrecords) {
+    if (subrecord.signature != signature) continue;
+    if (subrecord.data == encoded) return false;
+    subrecord.data = encoded;
+    return true;
+  }
+
+  Subrecord created;
+  created.signature = signature;
+  created.data = encoded;
+  if (insert_before_full) {
+    const auto position = std::find_if(record.subrecords.begin(), record.subrecords.end(),
+                                       [](const Subrecord& subrecord) {
+                                         return subrecord.signature == k_full;
+                                       });
+    record.subrecords.insert(position, std::move(created));
+  } else {
+    record.subrecords.push_back(std::move(created));
+  }
+  return true;
+}
+
+}  // namespace
+
+Eyes decode_eyes(const Plugin& plugin, const FormKey& key) {
+  const auto* record = find_record(plugin, key);
+  if (record == nullptr) throw EyesError("EYES record not found: " + key.to_string());
+  if (record->header.signature != k_eyes) {
+    throw EyesError("record is not EYES: " + key.to_string());
+  }
+
+  Eyes result;
+  result.key = key;
+  result.record_flags = record->header.flags;
+
+  if (const auto* edid = unique_subrecord(*record, sig_edid, "EDID", false)) {
+    const auto decoded = decode_zstring(edid->data, false);
+    if (!decoded.has_value()) throw EyesError("EYES EDID is not a NUL-terminated string");
+    result.editor_id = *decoded;
+  }
+
+  const auto* full = unique_subrecord(*record, k_full, "FULL", true);
+  result.full_raw = full->data;
+  result.full_text = decode_zstring(full->data, true);
+
+  const auto* icon = unique_subrecord(*record, k_icon, "ICON", true);
+  const auto decoded_icon = decode_zstring(icon->data, false);
+  if (!decoded_icon.has_value()) throw EyesError("EYES ICON is not a NUL-terminated string");
+  result.icon = *decoded_icon;
+
+  const auto* data = unique_subrecord(*record, sig_data, "DATA", true);
+  if (data->data.size() != 1) throw EyesError("EYES DATA must be exactly one byte");
+  result.data_flags = std::to_integer<std::uint8_t>(data->data.front());
+  return result;
+}
+
+bool set_eyes_text_fields(Plugin& plugin,
+                          const FormKey& key,
+                          std::optional<std::string_view> editor_id,
+                          std::optional<std::string_view> full_text,
+                          std::optional<std::string_view> icon) {
+  assign_record_form_keys(plugin);
+  const auto current = decode_eyes(plugin, key);
+  if (full_text.has_value() && !current.full_text.has_value()) {
+    throw EyesError(
+        "EYES FULL is opaque/localized storage; refusing to reinterpret it as inline text");
+  }
+
+  bool needs_change = false;
+  if (editor_id.has_value() && current.editor_id != std::optional<std::string>{std::string(*editor_id)}) {
+    needs_change = true;
+  }
+  if (full_text.has_value() && current.full_text != std::optional<std::string>{std::string(*full_text)}) {
+    needs_change = true;
+  }
+  if (icon.has_value() && current.icon != *icon) needs_change = true;
+  if (!needs_change) return true;
+
+  auto* record = find_mutable_record(plugin, key);
+  if (record == nullptr) return false;
+  bool changed = false;
+  if (editor_id.has_value()) {
+    changed |= replace_string_subrecord(*record, sig_edid, *editor_id, true);
+  }
+  if (full_text.has_value()) {
+    changed |= replace_string_subrecord(*record, k_full, *full_text, false);
+  }
+  if (icon.has_value()) {
+    changed |= replace_string_subrecord(*record, k_icon, *icon, false);
+  }
+  if (changed) mark_modified(plugin, *record);
+  return true;
+}
+
+bool set_eyes_data_flags(Plugin& plugin,
+                         const FormKey& key,
+                         std::uint8_t flags) {
+  assign_record_form_keys(plugin);
+  const auto current = decode_eyes(plugin, key);
+  if (current.data_flags == flags) return true;
+
+  auto* record = find_mutable_record(plugin, key);
+  if (record == nullptr) return false;
+  for (auto& subrecord : record->subrecords) {
+    if (subrecord.signature != sig_data) continue;
+    if (subrecord.data.size() != 1) throw EyesError("EYES DATA must be exactly one byte");
+    subrecord.data.front() = std::byte{flags};
+    mark_modified(plugin, *record);
+    return true;
+  }
+  throw EyesError("EYES is missing required DATA subrecord");
+}
+
+}  // namespace fo4::forms
