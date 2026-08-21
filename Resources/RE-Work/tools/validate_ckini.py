@@ -20,6 +20,8 @@ Usage:
     python3 validate_ckini.py --compile-text \
         --command '-CompileTextExport:Fallout4.esm ENGLISH backup primary'
     python3 validate_ckini.py --compile-text samples/compile-text/backup samples/compile-text/primary
+    # each run also prints ROUTE lines + a ROUTING SUMMARY predicting the
+    # .STRINGS / .DLSTRINGS / .ILSTRINGS output table per record
     python3 validate_ckini.py CreationKit.ini --exit-codes
     python3 validate_ckini.py --strings \
         '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
@@ -367,6 +369,13 @@ _TEXT_CATEGORIES = [
 ]
 _TEXT_CATEGORIES_LOWER = [c.lower() for c in _TEXT_CATEGORIES]
 
+# The caller's ``0x4c2`` bit test (FUN_140916980) sends exactly these four
+# category indices to the dialog context; every other category goes to the
+# ordinary context. The third .ILSTRINGS context is fed by the supplemental
+# ID-named input files, not by a category name (doc 05 /
+# decompile-CompileTextExport-FUN_140916980.md).
+_TEXT_DIALOG_INDICES = {1, 6, 7, 10}
+
 # The parser's "reserved ID" prefix check: the engine skips the low 16 IDs
 # (0x00000000..0x0000000F, high 28 bits zero) with
 # ``Attempting to use reserved ID 0x%08X. Skipping.``
@@ -498,7 +507,42 @@ def _supplemental_id_from_filename(name):
     return int(stem, 16), None
 
 
-def check_compile_text_roots(esm, roots):
+def _esm_stem(esm):
+    """The output-name stem: input ESM name cut at its final dot (strrchr)."""
+    return esm.rsplit(".", 1)[0]
+
+
+def _compile_output_name(esm, language, ext):
+    """Output path Data/STRINGS/<stem>_<Language><ext> (doc 05 / FUN_14091aa30).
+
+    ``ext`` carries its leading dot (``.STRINGS`` etc.); the engine builds
+    the path as ``Data/%%s/%%s_%%s%%s`` (FUN_14091aa30).
+    """
+    return "Data\\STRINGS\\%s_%s%s" % (_esm_stem(esm), language, ext)
+
+
+def _compile_route(category, from_supplemental, esm, language):
+    """Predict the localized-string output table for one text record.
+
+    TextExport.txt records are routed by category: the dialog bitmask
+    indices {1,6,7,10} land in .DLSTRINGS, everything else in .STRINGS
+    (unknown categories fall back to Misc -> ordinary). Supplemental
+    ID-named files feed the .ILSTRINGS context regardless of category.
+    Returns (extension, output filename) for the record.
+    """
+    if from_supplemental:
+        ext = ".ILSTRINGS"
+    else:
+        cat = (category or "").strip().lower()
+        try:
+            idx = _TEXT_CATEGORIES_LOWER.index(cat)
+        except ValueError:
+            idx = len(_TEXT_CATEGORIES) - 1   # Misc default (index 17)
+        ext = ".DLSTRINGS" if idx in _TEXT_DIALOG_INDICES else ".STRINGS"
+    return ext, _compile_output_name(esm, language, ext)
+
+
+def check_compile_text_roots(esm, roots, language=None):
     """Validate the CompileTextExport input-root set like FUN_140916980.
 
     Returns (ok, lines). For each root (traversed in the engine's
@@ -507,7 +551,13 @@ def check_compile_text_roots(esm, roots):
     ID stem. Records are parsed with the four-field grammar: reserved IDs,
     duplicate IDs, unknown categories, and malformed lines are the engine's
     skip/recovery diagnostics (warnings), not hard failures.
+
+    ``language`` selects the output filename; when omitted (positional-root
+    mode) the DEFAULT_SLANGUAGE value is used so the routing predictions
+    still carry a concrete path.
     """
+    if language is None:
+        language = DEFAULT_SLANGUAGE
     lines = ["COMPILE-TEXT: FUN_140916980 input-root contract"]
     if not esm:
         lines.append("ERROR: no <ESMFilename> for the input path <root>/<ESM>/TextExport.txt")
@@ -516,6 +566,7 @@ def check_compile_text_roots(esm, roots):
         lines.append("ERROR: no input roots")
         return False, lines
     lines.append("ESM: %s" % esm)
+    lines.append("LANGUAGE: %s" % language)
     lines.append("ROOTS (traversal order [backup,] primary): %s" % ", ".join(roots))
 
     seen_ids = {}          # string_id -> (label, line) first seen
@@ -525,6 +576,8 @@ def check_compile_text_roots(esm, roots):
     unknown_categories = []
     errors = []
     warnings = []
+    routes = []            # per-record output-table predictions
+    route_counts = {}      # extension -> record count
 
     for root in roots:
         root_dir = os.path.abspath(root)
@@ -537,8 +590,10 @@ def check_compile_text_roots(esm, roots):
 
         # The worker derives each supplemental file's ID from its 8-hex stem
         # and skips malformed names entirely (``Could not parse ID from
-        # filename: %s. Skipping.``); such files are never read.
-        reads = [("TextExport.txt", mandatory)]
+        # filename: %s. Skipping.``); such files are never read. The third
+        # tuple slot marks the .ILSTRINGS feeder: supplemental ID-named files
+        # (TextExport.txt is the category-routed mandatory input).
+        reads = [("TextExport.txt", mandatory, False)]
         try:
             names = sorted(f for f in os.listdir(esm_dir)
                            if f.lower().endswith(".txt") and f != "TextExport.txt")
@@ -551,10 +606,10 @@ def check_compile_text_roots(esm, roots):
                 warnings.append("Could not parse ID from filename: %s. Skipping (%s)" % (name, reason))
                 continue
             lines.append("  supplemental %s -> file ID 0x%08X" % (name, file_id))
-            reads.append((name, os.path.join(esm_dir, name)))
+            reads.append((name, os.path.join(esm_dir, name), True))
 
-        for label, path in reads:
-            label = "%s/%s" % (os.path.basename(root), label)
+        for fname, path, is_supplemental in reads:
+            label = "%s/%s" % (os.path.basename(root), fname)
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as fh:
                     for lineno, raw in enumerate(fh, 1):
@@ -586,6 +641,16 @@ def check_compile_text_roots(esm, roots):
                                               (string_id, label, lineno, first))
                         else:
                             seen_ids[string_id] = "%s:%d" % (label, lineno)
+                        # Output-table prediction (doc 05 / FUN_140916980
+                        # ``0x4c2`` dialog bitmask + supplemental .ILSTRINGS):
+                        # the compiler would write this record to exactly one
+                        # of the three Data\STRINGS files.
+                        ext, outname = _compile_route(category, is_supplemental,
+                                                      esm, language)
+                        routes.append("%s:%d: 0x%08X [%s] -> %s"
+                                      % (label, lineno, string_id,
+                                         (category or "").strip() or "(none)", outname))
+                        route_counts[ext] = route_counts.get(ext, 0) + 1
             except OSError as exc:
                 errors.append("could not read %s: %s" % (path, exc))
 
@@ -603,6 +668,19 @@ def check_compile_text_roots(esm, roots):
 
     lines.extend("ERROR: " + item for item in errors)
     lines.extend("WARNING: " + item for item in warnings)
+
+    # Output-table prediction summary: every routed record lands in exactly
+    # one of the three Data\STRINGS files (doc 05 / localized-string-file
+    # format doc; FUN_140916980 ``0x4c2`` dialog bitmask for TextExport.txt
+    # records, .ILSTRINGS for supplemental ID-named inputs).
+    if routes:
+        lines.append("ROUTING (predicted output tables):")
+        lines.extend("  ROUTE: " + r for r in routes)
+        total = sum(route_counts.values())
+        lines.append("ROUTING SUMMARY: %d routed records -> %s" % (
+            total, ", ".join("%s=%d" % (k, v)
+                              for k, v in sorted(route_counts.items()))))
+
     if not errors:
         lines.append("VERDICT: PASS")
     else:
@@ -1285,12 +1363,14 @@ def main(argv):
                 print("\n".join("ERROR: " + e for e in parse_errors))
                 return 1
             esm = args2[0]
+            language = args2[1] if len(args2) > 1 else None
             roots = args2[2:] if len(args2) > 2 else []
             print()
         else:
             esm = "Fallout4.esm"
+            language = None
             roots = args.compile_text
-        ok, lines = check_compile_text_roots(esm, roots)
+        ok, lines = check_compile_text_roots(esm, roots, language)
         print("\n".join(lines))
         return 0 if ok else 1
 

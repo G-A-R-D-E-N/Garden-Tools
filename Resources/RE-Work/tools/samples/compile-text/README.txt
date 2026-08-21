@@ -33,3 +33,24 @@ Exercise coverage:
 
 Expected: VERDICT PASS (all diagnostics are skip/recovery); the duplicate,
 reserved-ID, unknown-category, and malformed-line notes are warnings.
+
+Output-table routing (FUN_140916980 ``0x4c2`` dialog bitmask): every record
+with a usable ID also gets a ROUTE line predicting the Data\STRINGS output
+file it would land in.
+
+  * TextExport.txt records route by category -- indices {1,6,7,10} (Quest
+    Stage Log Entry, Book, Description, Message) go to .DLSTRINGS; every
+    other category (and the unknown-category Misc fallback) goes to .STRINGS
+  * supplemental ID-named files feed .ILSTRINGS regardless of category
+    (that is why primary/00010004.txt, a Book-category record, routes to
+    .ILSTRINGS, not .DLSTRINGS)
+
+Expected routing on this fixture set:
+
+    .DLSTRINGS=1 (0x00010002 Quest Stage Log Entry)
+    .ILSTRINGS=2 (backup+primary supplemental files)
+    .STRINGS=5   (Misc, Topic Text, duplicate Misc, Loading Screen Text,
+                  unknown-category fallback)
+
+The output filename uses the <Language> argument when --command is given
+(ENGLISH here) and DEFAULT_SLANGUAGE otherwise.
