@@ -17,10 +17,14 @@ Usage:
     python3 validate_ckini.py --stats        # type/section distribution
     python3 validate_ckini.py --command '-CompileTextExport:Fallout4.esm en Export Fallout4'
     python3 validate_ckini.py --command=-Install:  # no-argument switches
+    python3 validate_ckini.py --compile-text \
+        --command '-CompileTextExport:Fallout4.esm ENGLISH backup primary'
+    python3 validate_ckini.py --compile-text samples/compile-text/backup samples/compile-text/primary
     python3 validate_ckini.py CreationKit.ini --exit-codes
 
-The descriptor table maps `bKey:Section` literals (1,629 in the shipped dump;
-doc 10 counts 1,641 records with static pointers). The type letter is the
+The descriptor table maps 1,629 colon-bearing `bKey:Section` literals plus
+25 byte-verified bare records (whose reader section is `[MAIN]`; doc 10 counts
+1,641 colon-bearing records with static pointers). The type letter is the
 FIRST character of the key name:
 
     b bool | c int8 | h int16 | i int32 | u uint32 | f float |
@@ -91,18 +95,60 @@ TYPE_LETTERS = {
 }
 DEFAULT_SLANGUAGE = "ENGLISH"   # PTR_DAT_143b992d0 (not recovered; usual value)
 
+# The binary contains 25 INI SettingT records whose key literals have no
+# ``:Section`` suffix. FUN_1425c6690 supplies the reader's literal fallback
+# section ``MAIN`` for these records. They are not present in
+# ck-settings-keys.txt because that dump is the 1,629 colon-bearing literal
+# inventory; keep this correction here so the oracle's default schema matches
+# the actual descriptor records without changing the raw string dump.
+NO_SECTION_DESCRIPTORS = (
+    "iBatchWindowMaxRefSelectedRefresh",
+    "uFollowingCompanionFailsBeforeWarpAttempt",
+    "fFollowingCompanionFailsAtDistanceRatio",
+    "fFollowingCompanionPreferredWarpDistance",
+    "bEnableLipLookup",
+    "bSkipFurnitureMarkerVisualization",
+    "bPrimitivesOn",
+    "bUseWaterHDR",
+    "fPrecutMinStepHeight",
+    "sControlsRemapFile",
+    "fMaxBoneSpeedBeforeDefaultStiffness",
+    "bDefaultLandscape_WetnessControl_UseScreenSpaceReflections",
+    "fDefaultLandscape_WetnessControl_SpecScale",
+    "fDefaultLandscape_WetnessControl_SpecPowerScale",
+    "fDefaultLandscape_WetnessControl_SpecMin",
+    "fDefaultLandscape_WetnessControl_EnvMapScale",
+    "fDefaultLandscape_WetnessControl_FresnelPower",
+    "fDefaultLandscape_WetnessControl_Metalness",
+    "uMaxRainSplashPerFrame",
+    "uRainSplashBufferSize",
+    "bRainSplash",
+    "fMinSplashSize",
+    "fMaxSplashSize",
+    "fDensityDistModifier",
+    "fSkyCellRefFadeDistance",
+)
+
 
 # ---------------------------------------------------------------------------
 # Descriptor table
 # ---------------------------------------------------------------------------
 
-def parse_descriptors(path):
-    """Parse the `bKey:Section` literal list into a lookup table.
+def parse_descriptors(path, include_no_section=None):
+    """Parse the descriptor literal list into a lookup table.
 
-    Returns (by_key, by_lower) where:
+    A line containing ``:`` is split as ``key:section``. A bare line is
+    assigned the engine reader's fallback section ``MAIN``. For the shipped
+    CK descriptor dump, the 25 byte-verified bare records are appended from
+    ``NO_SECTION_DESCRIPTORS``; custom fixture tables are left untouched.
+
+    Returns (by_key, by_lower, descs) where:
       by_key   = {(section, key): descriptor-dict}   (canonical case)
       by_lower = {(section_lower, key_lower): descriptor-dict}
     """
+    if include_no_section is None:
+        include_no_section = (os.path.abspath(path) ==
+                              os.path.abspath(DEFAULT_DESCRIPTORS))
     descs = []
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -116,6 +162,15 @@ def parse_descriptors(path):
             descs.append({"key": key, "section": section,
                           "letter": key[:1] if key else "",
                           "descriptor": line})
+
+    if include_no_section:
+        present = {(d["section"].lower(), d["key"].lower()) for d in descs}
+        for key in NO_SECTION_DESCRIPTORS:
+            if ("main", key.lower()) not in present:
+                descs.append({"key": key, "section": "MAIN",
+                              "letter": key[:1] if key else "",
+                              "descriptor": key})
+
     by_key = {(d["section"], d["key"]): d for d in descs}
     by_lower = {(d["section"].lower(), d["key"].lower()): d for d in descs}
     return by_key, by_lower, descs
@@ -296,6 +351,28 @@ _WORLDSPACE_KIND = {"worldspace", "interior"}
 _MAPINFO_KIND = {"doors", "markers", "interiors"}
 _ANIMINFO_OPTIONS = {"--speed", "--stance", "--forceall"}
 
+# The 18-category table FUN_14091f3d0 walks at .rdata 0x143b9bef0 (doc 05 /
+# decompile-CompileTextExport-line-parser-FUN_14091f3d0.md). Index 17 (Misc)
+# is the parser's default when no _stricmp match is found.
+_TEXT_CATEGORIES = [
+    "Response Text", "Quest Stage Log Entry", "Quest Objective Display Text",
+    "Name", "Topic Text", "Game Setting", "Book", "Description",
+    "Faction Rank", "Note", "Message", "Message Box Button",
+    "Ammo Short Name", "Body Part Name", "Alternate Activation Text",
+    "Activate Choice Label", "Loading Screen Text", "Misc",
+]
+_TEXT_CATEGORIES_LOWER = [c.lower() for c in _TEXT_CATEGORIES]
+
+# The parser's "reserved ID" prefix check: the engine skips the low 16 IDs
+# (0x00000000..0x0000000F, high 28 bits zero) with
+# ``Attempting to use reserved ID 0x%08X. Skipping.``
+_TEXT_RESERVED_LIMIT = 0x10
+
+# Doc 05 / FUN_14091f3d0: the reader replaces the first three tab bytes with
+# NUL delimiters. A record without three tabs has no text field and is parsed
+# as a malformed line; the producer emits exactly three tabs.
+_TEXT_TAB_COUNT = 3
+
 # Doc 19's raise-site matrix. The process result is unknown to a static INI
 # oracle, so raising branches report both reachable sentinel codes; the two
 # no-raise branches report the normal process-exit path instead.
@@ -368,6 +445,165 @@ def _quoted_helper(text):
 
 def _nonempty_tokens(tokens, label):
     return ["%s must not be empty" % label] if any(t == "" for t in tokens) else []
+
+
+_COMPILE_FIXTURE_README = ("CompileTextExport input fixtures live in "
+                            "tools/samples/compile-text/ (see its README.txt): "
+                            "primary and backup roots, mandatory TextExport.txt "
+                            "files, 8-hex-stem supplemental files, a malformed "
+                            "supplemental filename, duplicate IDs across roots, "
+                            "a reserved-ID record, an unknown category, and a "
+                            "malformed line.")
+
+
+def _text_root_record(raw_line):
+    """Return (string_id_or_None, category_or_None, notes).
+
+    Mirrors the four-field TextExport.txt record parser FUN_14091f3d0:
+    the first three tabs are structural delimiters, the StringID is parsed
+    as hexadecimal, an invalid/zero StringID yields no usable ID, and an
+    unknown category falls back to index 17 (Misc). Tabs after the third
+    delimiter are ordinary text. The caller decides how unknown categories
+    are routed; here they are surfaced as notes, never as errors.
+    """
+    parts = raw_line.split("\t")
+    if len(parts) < _TEXT_TAB_COUNT + 1:
+        return None, None, ["malformed line (fewer than %d tab fields)" % _TEXT_TAB_COUNT]
+    notes = []
+    m = re.match(r"^0x([0-9A-Fa-f]+)$", parts[0].strip())
+    if not m:
+        return None, None, notes + ["StringID field '%s' is not 0x<hex>" % parts[0].strip()]
+    string_id = int(m.group(1), 16) & 0xFFFFFFFF
+    category = parts[2].strip()
+    if category.lower() not in _TEXT_CATEGORIES_LOWER:
+        notes.append("unknown category '%s' -> falls back to Misc" % category)
+    return string_id, category, notes
+
+
+def _supplemental_id_from_filename(name):
+    """Derive the supplemental-file ID exactly like FUN_140916980.
+
+    The worker strips the final extension and requires the remaining stem to
+    be exactly 8 hexadecimal characters. Returns (id, None) or (None, reason).
+    """
+    stem = name.rsplit(".", 1)[0]
+    if len(stem) != 8:
+        return None, "stem '%s' is not 8 characters" % stem
+    if not re.fullmatch(r"[0-9A-Fa-f]{8}", stem):
+        return None, "stem '%s' is not 8 hexadecimal characters" % stem
+    return int(stem, 16), None
+
+
+def check_compile_text_roots(esm, roots):
+    """Validate the CompileTextExport input-root set like FUN_140916980.
+
+    Returns (ok, lines). For each root (traversed in the engine's
+    ``[backup,] primary`` order) the mandatory ``<root>/<ESM>/TextExport.txt``
+    must exist; supplemental ``*.txt`` files must carry an 8-hex-character
+    ID stem. Records are parsed with the four-field grammar: reserved IDs,
+    duplicate IDs, unknown categories, and malformed lines are the engine's
+    skip/recovery diagnostics (warnings), not hard failures.
+    """
+    lines = ["COMPILE-TEXT: FUN_140916980 input-root contract"]
+    if not esm:
+        lines.append("ERROR: no <ESMFilename> for the input path <root>/<ESM>/TextExport.txt")
+        return False, lines
+    if not roots:
+        lines.append("ERROR: no input roots")
+        return False, lines
+    lines.append("ESM: %s" % esm)
+    lines.append("ROOTS (traversal order [backup,] primary): %s" % ", ".join(roots))
+
+    seen_ids = {}          # string_id -> (label, line) first seen
+    reserved = []
+    duplicates = []
+    malformed_lines = []
+    unknown_categories = []
+    errors = []
+    warnings = []
+
+    for root in roots:
+        root_dir = os.path.abspath(root)
+        esm_dir = os.path.join(root_dir, esm)
+        mandatory = os.path.join(esm_dir, "TextExport.txt")
+        if not os.path.isfile(mandatory):
+            errors.append("mandatory input missing: %s" % mandatory)
+            continue
+        lines.append("ROOT %s: mandatory %s" % (root, mandatory))
+
+        # The worker derives each supplemental file's ID from its 8-hex stem
+        # and skips malformed names entirely (``Could not parse ID from
+        # filename: %s. Skipping.``); such files are never read.
+        reads = [("TextExport.txt", mandatory)]
+        try:
+            names = sorted(f for f in os.listdir(esm_dir)
+                           if f.lower().endswith(".txt") and f != "TextExport.txt")
+        except OSError as exc:
+            errors.append("could not list %s: %s" % (esm_dir, exc))
+            continue
+        for name in names:
+            file_id, reason = _supplemental_id_from_filename(name)
+            if reason:
+                warnings.append("Could not parse ID from filename: %s. Skipping (%s)" % (name, reason))
+                continue
+            lines.append("  supplemental %s -> file ID 0x%08X" % (name, file_id))
+            reads.append((name, os.path.join(esm_dir, name)))
+
+        for label, path in reads:
+            label = "%s/%s" % (os.path.basename(root), label)
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    for lineno, raw in enumerate(fh, 1):
+                        line = raw.rstrip("\r\n")
+                        if not line.strip() or line.lstrip().startswith(";"):
+                            continue
+                        string_id, category, notes = _text_root_record(line)
+                        # The unknown-category fallback is its own warning;
+                        # structural problems (bad StringID, missing tabs)
+                        # are the malformed-line diagnostics.
+                        structural = [n for n in notes
+                                      if not n.startswith("unknown category")]
+                        if structural:
+                            malformed_lines.append("%s:%d: %s" % (label, lineno, "; ".join(structural)))
+                        if string_id is None:
+                            continue
+                        # Reserved IDs are skipped before category routing,
+                        # exactly like the engine's reserved-ID branch.
+                        if string_id < _TEXT_RESERVED_LIMIT:
+                            reserved.append("%s:%d: Attempting to use reserved ID 0x%08X. Skipping." %
+                                            (label, lineno, string_id))
+                            continue
+                        if category and category.lower() not in _TEXT_CATEGORIES_LOWER:
+                            unknown_categories.append("%s:%d: unknown category '%s' -> falls back to Misc" %
+                                                      (label, lineno, category))
+                        first = seen_ids.get(string_id)
+                        if first is not None:
+                            duplicates.append("Duplicate ID found: 0x%08X (%s:%d; first seen %s)" %
+                                              (string_id, label, lineno, first))
+                        else:
+                            seen_ids[string_id] = "%s:%d" % (label, lineno)
+            except OSError as exc:
+                errors.append("could not read %s: %s" % (path, exc))
+
+    for item in reserved:
+        warnings.append(item)
+    for item in duplicates:
+        warnings.append(item)
+    for item in unknown_categories:
+        warnings.append(item)
+    for item in malformed_lines:
+        warnings.append(item)
+    if not errors:
+        warnings.append("all diagnostics above are skip/recovery paths; the aggregate "
+                        "string table is built from %d unique IDs" % len(seen_ids))
+
+    lines.extend("ERROR: " + item for item in errors)
+    lines.extend("WARNING: " + item for item in warnings)
+    if not errors:
+        lines.append("VERDICT: PASS")
+    else:
+        lines.append("VERDICT: FAIL")
+    return not errors, lines
 
 
 def _parse_compile_args(arg_text):
@@ -774,7 +1010,38 @@ def main(argv):
                     help="lint one CK batch command against the doc-05/13 grammar (use --command= for a no-arg switch)")
     ap.add_argument("--exit-codes", action="store_true",
                     help="replay doc 19's 31-switch exit-code matrix; requires the INI gate to be enabled")
+    ap.add_argument("--compile-text", nargs="*", default=None, metavar="ROOT",
+                    help="validate CompileTextExport input roots (mandatory TextExport.txt, "
+                         "8-hex supplemental stems, duplicate/reserved IDs, categories). "
+                         "When --command is also given, the roots are taken from the command; "
+                         "otherwise the positional ROOT directories are used. Fixtures: "
+                         "tools/samples/compile-text/")
     args = ap.parse_args(argv)
+
+    if args.compile_text is not None:
+        # With --command also present, first lint the command line itself
+        # (grammar, quoted FUN_140490960 roots), then validate the input
+        # roots the command names. Without --command, the positional ROOT
+        # directories are checked directly with the default ESM name.
+        if args.batch_command is not None:
+            ok, lines = lint_batch_command(args.batch_command)
+            print("\n".join(lines))
+            if not ok:
+                return 1
+            args2, parse_errors = _parse_compile_args(args.batch_command[args.batch_command.index(":") + 1:]
+                                                      if ":" in args.batch_command else "")
+            if parse_errors:
+                print("\n".join("ERROR: " + e for e in parse_errors))
+                return 1
+            esm = args2[0]
+            roots = args2[2:] if len(args2) > 2 else []
+            print()
+        else:
+            esm = "Fallout4.esm"
+            roots = args.compile_text
+        ok, lines = check_compile_text_roots(esm, roots)
+        print("\n".join(lines))
+        return 0 if ok else 1
 
     if args.batch_command is not None:
         ok, lines = lint_batch_command(args.batch_command)

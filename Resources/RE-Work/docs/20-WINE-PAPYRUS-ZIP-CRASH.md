@@ -81,13 +81,20 @@ that made `NameSpace` return S_OK with NULL.
 ## 5. Why removing the zips does NOT help
 
 - The zip list is a **fixed member array** of the Papyrus editor object
-  (`editor+0x428`, populated by the copy helper `FUN_141126280` from
-  `editor+0x410`), not a directory scan — the loop iterates the group list
-  (Base / CreationClub / DLC01–DLC06 / User, matching the folders already
-  extracted on this install) and builds `…\<group>.zip` paths regardless of
-  whether the files exist.
+  (`editor+0x428`, populated from `editor+0x410` by `FUN_141126280`). The source
+  array is parsed from semicolon-separated `sAdditionalImports:Papyrus`;
+  `$(source)` expands to the configured script-source folder. The installed
+  default is `$(source);.\Data\Scripts\Source\Base`, so the active default
+  groups are `User` and `Base`, generating `PapyrusSource_User` and
+  `PapyrusSource_Base` in that order.
+- Each basename is derived with `PathFindFileNameA`, then the loop builds
+  `<import-path>\\<basename>.zip` and `PapyrusSource_<basename>`. `CreationClub`
+  and `DLC01`–`DLC06` become active only when their paths are added to
+  `sAdditionalImports`; directory presence alone does not activate them.
 - `NameSpace()` of a nonexistent path yields the same S_OK+NULL under Wine, so
-  the fault is independent of the zips' presence on disk.
+  the fault is independent of whether an active configured ZIP exists. Full
+  construction evidence is in
+  [`ghidra-dump/decompile-papyrus-zip-array-population.md`](ghidra-dump/decompile-papyrus-zip-array-population.md).
 
 ## 6. Workarounds (in increasing invasiveness)
 
@@ -104,7 +111,39 @@ that made `NameSpace` return S_OK with NULL.
 3. **Wine override for `shell32`** that makes `NameSpace` of a `.zip` return a
    real `Folder` — requires zip folder support Wine doesn't have; not practical.
 
-## 7. Relationship to the docs
+## 7. The prompt lambda is the clean extraction gate
+
+The callback is `FUN_14112ae80` (RVA `0x112ae80`), RTTI-labeled
+`lambda_71ce1f4350638474a0f15e4607c39b12`. Its closure has the captured zip path
+at `this+0x08`. The complete body is:
+
+```c
+bool operator()() const {
+    char message[0x104];
+    sprintf_s(message, 0x104,
+        "Script source zip \\\"%s\\\" is new or has been updated - unpack?",
+        this->capturedZipPath);
+    return MessageBoxA(NULL, message, "Script Source Extraction", 0x34) == 6;
+}
+```
+
+`0x34` is `MB_YESNO | MB_ICONQUESTION`; `6` is `IDYES`. At
+`FUN_14063ab40+0x128` (`0x14063ac68`), a false callback result branches around
+`CoCreateInstance`, `NameSpace`, `Items`, and `CopyHere`; the normal cleanup and
+stamp path then continues. Thus clicking **No** is a clean per-zip skip, not a
+COM failure. The exact disassembly and helper/RTTI anchors are in
+[`ghidra-dump/decompile-papyrus-zip-prompt-lambda-FUN_14112ae80.md`](ghidra-dump/decompile-papyrus-zip-prompt-lambda-FUN_14112ae80.md).
+
+The lambda and its Papyrus caller read no `CreationKit.ini` descriptor, no
+`CreationKitPrefs.ini` setting, and no batch bit. In particular,
+`bMustConfirmScriptSync:Papyrus`, `bCopyScriptToSource:Papyrus`, and
+`sScriptSourceFolder:Papyrus` do not gate this block in this build; neither does
+any `-Switch`. The path is startup Papyrus initialization, not the CLI batch
+pipeline. A noninteractive always-skip mode therefore needs an external No
+answer or a binary patch; a pre-seeded `[ZipInstall]` stamp remains unreliable
+because the fresh-path expected tuple is read from uninitialized stack.
+
+## 8. Relationship to the docs
 
 - `FUN_14063ab40` is doc 17's `WritePrivateProfileStructA` saver — the
   `[ZipInstall]` census entry now has its full context.
@@ -113,6 +152,9 @@ that made `NameSpace` return S_OK with NULL.
   `1,641-key` descriptor table).
 
 ## Staged decompiles
+
+- `ghidra-dump/decompile-papyrus-zip-prompt-lambda-FUN_14112ae80.md`
+- `ghidra-dump/decompile-papyrus-zip-array-population.md`
 
 - `ghidra-dump/decompile-zipinstall-0x63ab40.log`
 - `ghidra-dump/decompile-papyrusinit-0x1123e20.log`

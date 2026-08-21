@@ -1,0 +1,47 @@
+# Elric PDB SettingT<INISettingCollection> globals -> CK CreationKit.exe descriptor records
+# CK 1.11.137.0, md5 e3e0991eba9babb06bd0006840d7f05c, image base 0x140000000, .data base 0x143b87000
+# record: +0x00 vftable  +0x08 default  +0x10 ptr to key literal (doc 10 layout)
+# census: 1641 key:Section records (1632 unique, 9 dup) across vftables
+#   0x142f8dce8 x1229, 0x142f959b0 x405, 0x142f97230 x7 (the 7 = [Interface]/[General] UI keys)
+#   + 25 no-section records in the 0x142f8dce8 (x24) / 0x142f959b0 (x1) families = [MAIN] default
+#   (the other 5137 bare-name records under 0x142f97230 are the runtime SettingT<GameSettingCollection> table, not ini settings; 7 colon-bearing UI records share that vftable)
+# matched: 35 of 37 PDB symbols; absent: bhavokDebugS, bregisterAllVDBViewersS
+
+  # PDB symbol                                                 CK key                                      recVA   .data+    vftable default
+    ?A0x958245b0::bAllowCharacterBumper                        bAllowCharacterBumper:HAVOK            0x143c39350 +0xb2350 0x142f8dce8 bool 1
+    BSClothUtils::bAnimClothLOD                                bAnimClothLOD:Cloth                    0x143c39238 +0xb2238 0x142f8dce8 bool 1
+    ?A0x6c6a5b86::bDebugMultithreaded                          bDebugMultithreaded:HAVOK              0x143c38c08 +0xb1c08 0x142f8dce8 bool 0
+    BSClothUtils::bDrawClothDeformedBones                      bDrawClothDeformedBones:Cloth          0x143c39208 +0xb2208 0x142f8dce8 bool 0
+    BSClothUtils::bDrawParticleStepPositions                   bDrawParticleStepPositions:Cloth       0x143c39220 +0xb2220 0x142f8dce8 bool 0
+    ?A0xed07f71e::bDrawVDBClosestResults                       bDrawVDBClosestResults:CollisionQuery  0x143c39428 +0xb2428 0x142f8dce8 bool 0
+    ?A0xed07f71e::bDrawVDBContactResults                       bDrawVDBContactResults:CollisionQuery  0x143c39410 +0xb2410 0x142f8dce8 bool 0
+    ?A0xed07f71e::bDrawVDBRaycastResults                       bDrawVDBRaycastResults:CollisionQuery  0x143c393f8 +0xb23f8 0x142f8dce8 bool 1
+    ?A0x6c6a5b86::bEnableContactCaching                        bEnableContactCaching:HAVOK            0x143c38c38 +0xb1c38 0x142f8dce8 bool 1
+    BSClothUtils::bEnablePrediction                            bEnablePrediction:Cloth                0x143c39250 +0xb2250 0x142f8dce8 bool 1
+    BSClothUtils::bEnableScaling                               bEnableScaling:Cloth                   0x143c39268 +0xb2268 0x142f8dce8 bool 1
+    ::bEnableThreadSafetyChecks                                bEnableThreadSafetyChecks:HAVOK        0x143c38bf0 +0xb1bf0 0x142f8dce8 bool 0
+    bhkWorld::bFindContactPointsOnAddS                         bFindContactPointsOnAdd:HAVOK          0x143c38bc0 +0xb1bc0 0x142f8dce8 bool 0
+    ?A0xed07f71e::bForceToPPU                                  bForceToPPU:CollisionQuery             0x143c393e0 +0xb23e0 0x142f8dce8 bool 1
+    BSClothUtils::bLoadLocalSetupData                          bLoadLocalSetupData:Cloth              0x143c391f0 +0xb21f0 0x142f8dce8 bool 0
+    ?A0xe799298d::bUseCastFromOffset                           bUseCastFromOffset:Havok               0x143c56168 +0xcf168 0x142f8dce8 bool 1
+    ?A0xb8c65992::bUseCharRBExtrapolation                      bUseCharRBExtrapolation:HAVOK          0x143c56268 +0xcf268 0x142f8dce8 bool 1
+    bhkCharacterController::bUseCharacterRBS                   bUseCharacterRB:HAVOK                  0x143c39338 +0xb2338 0x142f8dce8 bool 1
+    ?A0x394e5770::bUseUnsupportedCastS                         bUseUnsupportedCast:HAVOK              0x143c56110 +0xcf110 0x142f8dce8 bool 1
+    ?A0x6c6a5b86::bUseWorldLockS                               bUseWorldLock:HAVOK                    0x143c38c20 +0xb1c20 0x142f8dce8 bool 1
+    ::bhavokDebugS                                             (absent)                                 (no descriptor / key literal in binary)
+    ?A0x7dd4a675::bregisterAllVDBViewersS                      (absent)                                 (no descriptor / key literal in binary)
+    ::bshowDisabledAsserts                                     bshowDisabledAsserts:HAVOK             0x143c39190 +0xb2190 0x142f8dce8 bool 0
+    bhkCharacterController::fCharControllerWarpDistSqr         fCharControllerWarpDistSqr:HAVOK       0x143c39320 +0xb2320 0x142f8dce8 float 6000000.0
+    ?A0x958245b0::fGoodPosCastCheckDepthS                      fGoodPosCastCheckDepth:HAVOK           0x143c39380 +0xb2380 0x142f8dce8 float 0.10000000149011612
+    ?A0x958245b0::fGoodPosCheckDepthS                          fGoodPosCheckDepth:HAVOK               0x143c39368 +0xb2368 0x142f8dce8 float 0.10000000149011612
+    ::fHavokWindMultiplier                                     fHavokWindMultiplier:HAVOK             0x143c38bd8 +0xb1bd8 0x142f8dce8 float 1500.0
+    ?A0xb19ccac3::fInAirFallingCharGravityMult                 fInAirFallingCharGravityMult:Havok     0x143c560f0 +0xcf0f0 0x142f8dce8 float 1.850000023841858
+    BSClothUtils::fMaxBoneSpeedBeforeDefaultStiffness          fMaxBoneSpeedBeforeDefaultStiffness    0x143c392b0 +0xb22b0 0x142f8dce8 float 50.0
+    ::fMaxRandomDelay                                          fMaxRandomDelay:HAVOK                  0x143c38c98 +0xb1c98 0x142f8dce8 float -1.0
+    BSClothUtils::fMaxRootAngleBeforeTeleport                  fMaxRootAngleBeforeTeleport:Cloth      0x143c39298 +0xb2298 0x142f8dce8 float 1.5707963705062866
+    BSClothUtils::fMaxRootDistanceBeforeTeleport               fMaxRootDistanceBeforeTeleport:Cloth   0x143c39280 +0xb2280 0x142f8dce8 float 100.0
+    ::fMaxWindActionTimingDifference                           fMaxWindActionTimingDifference:HAVOK   0x143c38c80 +0xb1c80 0x142f8dce8 float 0.800000011920929
+    ?A0x958245b0::fStepHeightModifier                          fStepHeightModifier:HAVOK              0x143c39398 +0xb2398 0x142f8dce8 float 0.5
+    ?A0x394e5770::fUnsupportCastLengthS                        fUnsupportCastLength:HAVOK             0x143c56140 +0xcf140 0x142f8dce8 float 1.0
+    ?A0x394e5770::fUnsupportedGravMultS                        fUnsupportedGravMult:HAVOK             0x143c56128 +0xcf128 0x142f8dce8 float 4.0
+    BSClothJobs::uNumSimSettleSteps                            uNumSimSettleSteps:Cloth               0x143c38c68 +0xb1c68 0x142f8dce8 uint32 10

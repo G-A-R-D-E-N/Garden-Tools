@@ -1,8 +1,8 @@
-# 18 · The Elric SDK symbols — ground truth for the shared engine layer
+# 18 · The Elric SDK PDB — ground truth for the shared engine layer
 
-The Elric package (`/home/ciusr/Downloads/Elric/Elric`, May 2016 build) is
+The Elric package (`/home/ciusr/Downloads/Elric+PDB/Elric`, May 2016 build) is
 Bethesda's NIF/texture processing tool for Fallout 4 — the same engine family
-as the Creation Kit. Its interop symbol table carries **90,090 unique mangled C++
+as the Creation Kit. Its interop PDB carries **90,090 unique mangled C++
 symbols**, which confirm (and correct) the names we assigned to the CK's
 decompiled functions. This doc is the cross-reference.
 
@@ -11,9 +11,9 @@ decompiled functions. This doc is the cross-reference.
 | file | identity |
 |---|---|
 | `Elrich.exe` | PE32 .NET launcher (GUI + CLI) — loads an `.esf` settings file, `-ElricOptions.*` overrides |
-| `ElricInterop.dll` | PE32 .NET C++/CLI interop assembly — **`ElricInterop symbols`, 95 MB = the symbol motherlode** |
-| `ElricUtilities.dll` / `Elrich symbols` (130 KB) | utility assembly / launcher symbols |
-| `BSCore.dll` `BSMain.dll` `BSGraphics.dll` `BSShader.dll` `BSResource.dll` `BSSystem.dll` `ToolLib.dll` | native 32-bit engine DLLs (no debug files shipped) |
+| `ElricInterop.dll` | PE32 .NET C++/CLI interop assembly — **`ElricInterop.pdb`, 95 MB = the symbol motherlode** |
+| `ElricUtilities.dll` / `Elrich.pdb` (130 KB) | utility assembly / launcher symbols |
+| `BSCore.dll` `BSMain.dll` `BSGraphics.dll` `BSShader.dll` `BSResource.dll` `BSSystem.dll` `ToolLib.dll` | native 32-bit engine DLLs (no PDBs shipped) |
 | `NiMain.dll` `NiAnimation.dll` `NiCollision.dll` `NiParticle.dll` `NiStripify.dll` `NiOptimization.dll` `NiSystem.dll` | native NIF pipeline DLLs |
 | `texconv.exe` | Microsoft DirectXTex wrapper (per README) |
 | `Settings/PCMeshes.esf` + `PCFilter.cs` | the tool's own settings / shader-pick filter |
@@ -23,12 +23,12 @@ into a more optimized form Fallout 4 will load … converts Havok data in an
 exported NIF to a format Fallout 4 will be able to load."
 
 **Caveat (important):** this is a **32-bit, May-2016 build**; the CK is
-**64-bit, 2021**. The symbol table confirms *names and semantics* of the shared engine,
-never *addresses* — no RVA in this symbol table maps into the CK.
+**64-bit, 2021**. The PDB confirms *names and semantics* of the shared engine,
+never *addresses* — no RVA in this PDB maps into the CK.
 
 ## 2. Symbol inventory
 
-Extracted: `ghidra-dump/elric-symbols.txt` (90,090 unique mangled names,
+Extracted: `ghidra-dump/elric-pdb-symbols.txt` (90,090 unique mangled names,
 7.6 MB). Families relevant to the CK analysis:
 
 - `bstscattertable.h` — `BSTScatterTableBase` / `BSTScatterTableKernel` /
@@ -54,14 +54,14 @@ table, the CLI parser. Those remain CK-exclusive findings (docs 09/12/13/15).
 
 ## 3. The settings machinery — decompile ↔ symbol map
 
-| CK decompile (64-bit, docs 10/16/17) | Elric symbols symbol | verdict |
+| CK decompile (64-bit, docs 10/16/17) | Elric PDB symbol | verdict |
 |---|---|---|
 | `FUN_1425c7f90` = reader | `INISettingCollection::ReadSetting` | **confirmed** (name, bool-returning, SettingT& arg) |
 | `FUN_1425c7da0` = generic writer | `INISettingCollection::WriteSetting` | **confirmed** |
 | `FUN_1425c6b90` = notify dispatch | (registry machinery — scatter-table base) | consistent |
 | vftable slot 6 = lazy ini-path marker `(coll,1)` | `INISettingCollection::Open(bool)` — `bool (bool)` | **exact** (the `1` arg is the flag) |
 | vftable slot 7 = clear marker | `INISettingCollection::Close()` — `bool ()` | **exact** |
-| vftable slot 10 = ReadAll `bool()` | (not in this symbol table — Elric reads settings directly) | n/a |
+| vftable slot 10 = ReadAll `bool()` | (not in this PDB — Elric reads settings directly) | n/a |
 | virtual set | `~INISettingCollection`, `Open(bool)`, `Close()`, `WriteSetting(Setting&)`, `ReadSetting(Setting&)`, `GetViewerStrings(BSTArray<BSStringT>&)` | all six present in the CK vftable; exact slot numbers differ between builds (the 2021 CK added virtuals), so match by signature, not slot index |
 | type letters b/c/h/i/u/f/s/r/a (doc 10) | `SettingT<INISettingCollection>` ctors: `(char const*, bool)`, `(char const*, unsigned int)`, `(char const*, int)`, `(char const*, float)` | **confirmed** |
 | per-record vftable `SettingT<INISettingCollection>::vftable` | `??_7?$SettingT@VINISettingCollection@@@@6B@` + `Setting` RTTI base (`??_R1A...Setting@@8`) | **confirmed** |
@@ -71,7 +71,7 @@ table, the CLI parser. Those remain CK-exclusive findings (docs 09/12/13/15).
 
 ### 3a. The settings — full symbol ↔ record-address correlation
 
-The symbol table names every `SettingT<INISettingCollection>` global the tool declares:
+The PDB names every `SettingT<INISettingCollection>` global the tool declares:
 **37 symbols** (34 file-scope `@@3V` globals + 3 class-static `@@1V` members).
 Correlating them against the CK's descriptor table by scanning `.data` for
 records whose `+0x10` field points at a `key:Section` literal (or a bare key)
@@ -80,7 +80,7 @@ five years apart. All 35 records are in `.data`, share the single vftable
 `0x142f8dce8`, and decode to known FO4 defaults. Full machine table with
 mangled names: `ghidra-dump/elric-setting-records.txt`.
 
-| Elric symbols symbol (demangled) | CK key:section | record VA | `.data+` | default |
+| Elric PDB symbol (demangled) | CK key:section | record VA | `.data+` | default |
 |---|---|---|---|---|
 | `?A0x958245b0::bAllowCharacterBumper` | `bAllowCharacterBumper:HAVOK` | `0x143c39350` | +0xb2350 | true |
 | `?A0x6c6a5b86::bDebugMultithreaded` | `bDebugMultithreaded:HAVOK` | `0x143c38c08` | +0xb1c08 | false |
@@ -125,8 +125,8 @@ survives (with the same section/target) as the non-static variant.
 `[MAIN]` (doc 10 §1). All 25 no-section records in the two `INISettingCollection`
 vft families are engine settings like this one (companion-follow weights,
 landscape wetness-control overrides, rain splash tuning, `sControlsRemapFile`,
-`fSkyCellRefFadeDistance` in the second-family vft); the unrelated ~5,100-
-record game-value table under vft `0x142f97230` (see census below) is a
+`fSkyCellRefFadeDistance` in the second-family vft); the unrelated 5,137-record bare-name game-value table under vft
+`0x142f97230` (see census below) is a
 different `Setting` family entirely.
 
 **Truly dropped by 2021** (no descriptor record, no key literal anywhere in the
@@ -154,10 +154,14 @@ Two bonuses from the same scan:
   `fPowerArmorWorkbenchMaxPowerArmorDistance`). This independently confirms doc
   10's "1,641 descriptors" figure. **Plus 25 no-section records** in the
   `0x142f8dce8` (×24) / `0x142f959b0` (×1) families (default `[MAIN]`),
-  `fMaxBoneSpeedBeforeDefaultStiffness` among them — and a separate ~5,100-
-  record runtime game-value `Setting` table under `0x142f97230` that is *not*
-  ini settings (its `sYes`/`fAI*`/`fActor*` bare keys are game values, not
-  `bKey:Section` literals). All 35 Elric records use `0x142f8dce8`.
+  `fMaxBoneSpeedBeforeDefaultStiffness` among them — and the separate **5,137-
+  record bare-name runtime game-value table** under `0x142f97230`. Its RTTI type
+  is `SettingT<GameSettingCollection>` (base `Setting`), not the INI
+  `SettingT<INISettingCollection>` family: a `.data` scan finds 5,144 records
+  sharing the vftable, of which 7 are the colon-bearing UI descriptors above and
+  5,137 are bare `sYes`/`fAI*`/`fActor*` game values. Full type, layout, counts,
+  and representative addresses: `ghidra-dump/game-setting-table.md`. All 35
+  Elric records use `0x142f8dce8`.
 - The `.data+0xb1xxx` / `.data+0xcf1xx` offsets cluster the records into the
   per-TU static arrays exactly as the anonymous-namespace hashes predict:
   `?A0x6c6a5b86` + `bhkWorld` + the `fHavokWindMultiplier`-family in one
@@ -179,13 +183,20 @@ run because that symbol's TU (`BSClothJobs`) is a different file than
 
 ## 4. The NIF pipeline (companion to the combined-mesh writer work)
 
-The symbol table names both the physics-geometry class (`bhkNiTriStripsShape`, full
+The CK-specific SCOL/combined path and `_OC`/`_Physics` naming chain are
+cross-referenced in
+[`ghidra-dump/decompile-SCOL-combined-mesh-writer.md`](ghidra-dump/decompile-SCOL-combined-mesh-writer.md).
+That note deliberately separates path construction from the payload serializer;
+this section supplies the shared NiStream wire contract used after the combined
+scene graph has been assembled.
+
+The PDB names both the physics-geometry class (`bhkNiTriStripsShape`, full
 inventory below) and the primitive save/load templates NiStream uses; the
 CK's 64-bit save chain is then verifiable byte-for-byte against those names.
 
-### 4a. Elric symbols — what it names (and what it doesn't)
+### 4a. Elric PDB — what it names (and what it doesn't)
 
-- `NiStream` — **load-side only** in the May-2016 symbols: `InsertObject`,
+- `NiStream` — **load-side only** in the May-2016 PDB: `InsertObject`,
   `GetNumberOfLinkIDs`, `GetObjectFromLinkID`, `LoadCString(AsFixedString)`,
   `Istr()` (binary-stream accessor), plus the per-type primitives
   `NiStreamLoadBinary<T>` / **`NiStreamSaveBinary<T>`** — the generic
@@ -196,7 +207,7 @@ CK's 64-bit save chain is then verifiable byte-for-byte against those names.
   §4e finds the full save/load family (incl. `SaveStream`, `SaveCString`,
   `SaveLinkID`, header/object-size-table writers) as **named exports of
   `NiMain.dll`**, whose x86-2016 bodies are the exact byte-level contract the
-  CK's 64-bit chain re-implements (address-accurate via the symbol import; see §4e).
+  CK's 64-bit chain re-implements (address-accurate via the PDB import; see §4e).
 - `bhkNiTriStripsShape` — **48 symbols, the complete class** (see 4d). The
   Havok geometry block base for the CK's `_Physics` NIFs, and the shape whose
   `SaveBinary`/`RegisterStreamables`/`WriteCInfo`/`LoadBinary`/`LinkObject`
@@ -205,7 +216,7 @@ CK's 64-bit save chain is then verifiable byte-for-byte against those names.
 - `AddObjectFunctor` in anonymous namespace `?A0x7927943b` (ctor
   `(bhkNiTriStripsShape&, int, BSFixedString const&)`, `operator()(NiAVObject*)`,
   `IsSubGeometryName`) — an internal fixture used when walking a scene graph
-  to add sub-shape objects; the only "AddObject" name in the symbol table, and it is
+  to add sub-shape objects; the only "AddObject" name in the PDB, and it is
   **not** `NiStream::AddObject`. Keep the two apart when reading the CK.
 - `BSSubIndexTriShape` — **name-only** (4 hits, all the
   `bhk*ConstraintMotor::IsSubIndexTriShape()` type-check virtuals). The FO4
@@ -234,13 +245,21 @@ defined version.` / `NIF BSversion is newer than is currently supported!`,
 6 = `Endian mismatch.` — i.e. **code 2–4 = header/format errors, 6 = byte
 order**, the same family as the load error contract in doc 14's UVD reader.
 
+The complete mutation census for the three globals is in
+[`ghidra-dump/nistream-version-globals.md`](ghidra-dump/nistream-version-globals.md):
+all eight direct `.text` references are reads, comparisons, or save-header
+address-taking. No normal CK feature mutates them, so the emitted file-version
+u32 remains `0x14020007` / `20.2.0.7`.
+
 The object-save driver (`0x142499070`, the fragment after the header writer)
 is the actual SaveStream core: three per-object passes over the object array
 (`stream+0x320` array, count `+0x328`, counters `+0x3d8..+0x3e0`) calling each
 object's **vftable slot 0xd8** then **slot 0xe0** then **slot 0x110** with
 `(object, stream)` — reproduce the NiObject virtual quintet
 `RegisterStreamables`/`SaveBinary`/`LinkObject` from §4a; the passes match
-name-tracking, binary write, and post-link fixup respectively (slot numbers
+the detailed slot/phase table and RTTI → `SaveBinary` writer catalog are in
+[`ghidra-dump/nistream-block-save-map.md`](ghidra-dump/nistream-block-save-map.md).
+The later stream callback walk is not another `SaveBinary` pass (slot numbers
 are CK-specific, 2021 build).
 
 ### 4c. FaceGen exporter — the save call chain (`0x140ab8a60`, `tesnpc_editor.cpp`)
@@ -256,7 +275,7 @@ Disassembly-verified, top to bottom (RVA trail in parens):
    ("Invalid bone '%s' on NPC '%s' (%08X).").
 2. Stream object: ctor `0x14007854c` (0x1c0 bytes, `0x140ab8d09`); every
    child added via **`NiStream::vftable slot 0x1e0`** (`0x140ab8e71`) = the
-   symbol-implied `AddObject` — each `(object, true)` register call.
+   PDB-implied `AddObject` — each `(object, true)` register call.
 3. Save-prep `0x140abc3b0` (stream, temp-string).
 4. Stack NiStream with vftable `0x142fa4780` (`0x140ab905e`);
    `0x140040403`→`0x142497150` wires the 0x1c0 stream as its output.
@@ -266,10 +285,10 @@ Disassembly-verified, top to bottom (RVA trail in parens):
 
 So the CK's combined-mesh / FaceGen NIF writers funnel every file through the
 same three points — **vftable `0x142fa4780`, slot-6 stub `0x140097e92`, body
-`0x1425fe750`** — and those names are the only pin the 2016 symbols cannot give
+`0x1425fe750`** — and those names are the only pin the 2016 PDB cannot give
 (save-side, 64-bit, 2021).
 
-### 4d. `bhkNiTriStripsShape` — the confirmed class layout (symbols, 32-bit 2016)
+### 4d. `bhkNiTriStripsShape` — the confirmed class layout (PDB, 32-bit 2016)
 
 48 symbols. Virtual quintet driving the §4b save loop, plus the full RTTI /
 cloning / streaming inventory:
@@ -295,13 +314,13 @@ cloning / streaming inventory:
 
 Every one of these names is load- or both-side; the *geometry-buffer* write
 itself (`WriteGeometry`-equivalent, output-array fill) is the CK-only,
-no-symbol part this symbol table cannot cover — the exact place the 64-bit
+no-symbol part this PDB cannot cover — the exact place the 64-bit
 `SaveBinary` body in the save loop implements FO4's `_Physics` NIF layout.
 
 ### 4e. `NiStream` serialization — the exact byte-level wire spec (32-bit 2016, address-accurate)
 
-`ElricInterop symbols` was imported into Ghidra 12.1.3 against `ElricInterop.dll`
-(PE32, mixed-mode; Ghidra symbol analyzer applied → real addresses at image base
+`ElricInterop.pdb` was imported into Ghidra 12.1.3 against `ElricInterop.dll`
+(PE32, mixed-mode; PDB Universal applied → real addresses at image base
 `0x10000000`). As known, `SaveStream`/`AddObject` do **not** live in the
 interop — they are virtuals of `NiStream` in **`NiMain.dll`**, and that DLL
 **exports the whole serialization family by name** (3,308 exports). Resolving
@@ -322,7 +341,7 @@ header). The four scalar/string encodings, disassembly-verified:
 | **CString** | `SaveCString` → body `0x7b360` | `LoadCString` → `0x7b2f0` | `u32 len` (strlen, **no NUL**) + `len` bytes. NULL string → `len 0` only. Loader: `len<=0` → pointer **NULL** (not empty); else alloc `len+1`, read `len`, NUL-term in memory only |
 | **FixedString** | `SaveFixedString` → `0x7b420` | `LoadFixedString` → `0x7b3c0` | `u32 idx` into the per-file fixed-string pool (`stream+0x344` array). `0xFFFFFFFF` (== `NULL_LINKID`) → empty string. Not-yet-registered strings are added via `RegisterFixedString` (`0x7b5b0`) = urgent table hash-scan + `BSTArrayBase::AddUninitialized` |
 | **LinkID** | `SaveLinkID` → `0x17c20` | `ReadLinkID` → `0x7b740`/`ResolveLinkID` `0x7b890` | `u32` = `GetLinkIDFromObject(obj)` (vft `+0x28`, body `0x7b710`). `0xFFFFFFFF` = NULL. Reader pushes live ids onto a pending array (`BSTArray::AddUninitialized` on the per-stream stack at TLS+0x108) for late resolution |
-| **header line** | via `PutS` | `GetLine(buf, 0x80)` | `Gamebryo File Format, Version 20.2.0.7\n` (31 bytes, no length prefix) |
+| **header line** | via `PutS` | `GetLine(buf, 0x80)` | `Gamebryo File Format, Version 20.2.0.7\n` (39 bytes, no length prefix) |
 
 **`NiStream` vftable `0x100a8a5c` (`??_7NiStream@@6B@`) — 23 slots, stub → body:**
 `+0x00` dtor `0x6a9b`; `+0x04` `Load(NiBinaryStream)` `0x4d6d→0x7b1c0`;
@@ -355,14 +374,14 @@ object-groups array + bs-version; `+0x380/0x384/0x388` load-pass counters;
 
 ```
 offset  size  field
-0       31    "Gamebryo File Format, Version 20.2.0.7\n"   (PutS)
-31      4     u32 fileVersion = 0x14020007                 (global 0x100e574c)
-35      1     u8  endian = 1
-36      4     u32 userVersion = 12                         (global 0x100e5750)
-40      4     u32 numRoots  (= stream+0x304)
-44      4     u32 BS uiCurrVersion                         [if userVersion != 0] (= 0x82)
-48      4×n   4 × (u8 len, len bytes) — BS header strings, len INCLUDES the NUL
-48+n   2     u16 numBlockTypes
+0       39    "Gamebryo File Format, Version 20.2.0.7\n"   (PutS)
+39      4     u32 fileVersion = 0x14020007                 (global 0x100e574c)
+43      1     u8  endian = 1
+44      4     u32 userVersion = 12                         (global 0x100e5750)
+48      4     u32 numRoots  (= stream+0x304)
+52      4     u32 BS uiCurrVersion                         [if userVersion != 0] (= 0x82)
+56      4×n   4 × (u8 len, len bytes) — BS header strings, len INCLUDES the NUL
+56+n   2     u16 numBlockTypes
        4     (u32 len, len bytes) × numBlockTypes          block-type (RTTI) names
        2     u16 typeIndex × numRoots                      hi bit 0x8000 = streamable (IsStreamable)
        4     u32 size × numRoots                           0-placeholder; back-filled by SaveObjectSizeTable
@@ -405,17 +424,17 @@ pass (+0x70) → `PostLinkObject` pass (+0x88) → global post-process functions
 > **Cross-build match:** this 32-bit 2016 contract equals the byte-verified 64-bit
 > CK chain in §4b/§4c — same header line + `0x14020007` + endian + user-version
 > 12, and the CK's SaveStream-core tri-pass (object vft slots `0xd8/0xe0/0x110`
-> = the symbol table quintet's `RegisterStreamables`/`SaveBinary`/`LinkObject`) reproduces
+> = the PDB quintet's `RegisterStreamables`/`SaveBinary`/`LinkObject`) reproduces
 > this layout. Slot numbers differ (64-bit 2021 vs 32-bit 2016); the symbol names
 > pin the semantics.
 
 ## 5. How to use it
 
 ```bash
-P="/home/ciusr/Downloads/Elric/Elric/ElricInterop symbols"
+P="/home/ciusr/Downloads/Elric+PDB/Elric/ElricInterop.pdb"
 strings -a "$P" | grep -aE '^\?\?|^\?[A-Za-z_]' | sort -u \
-    > ghidra-dump/elric-symbols.txt     # 90,090 symbols (already staged)
-grep -a "INISettingCollection" ghidra-dump/elric-symbols.txt | llvm-undname
+    > ghidra-dump/elric-pdb-symbols.txt     # 90,090 symbols (already staged)
+grep -a "INISettingCollection" ghidra-dump/elric-pdb-symbols.txt | llvm-undname
 ```
 
 To probe a family: grep the symbols file for the class name, then pipe through
@@ -425,8 +444,8 @@ To probe a family: grep the symbols file for the class name, then pipe through
 
 - Reader internals: `10-SETTINGS-READER.md`; write-back: `16-SETTINGS-WRITEBACK.md`
 - ini census: `17-INI-PATHS.md`; source-tree recovery: `07-SOURCE-TREE.md`
-- Symbol dump: `ghidra-dump/elric-symbols.txt`
-- Symbol↔record-address map: `ghidra-dump/elric-setting-records.txt` (the 37 symbols
+- Symbol dump: `ghidra-dump/elric-pdb-symbols.txt`
+- Symbol↔record-address map: `ghidra-dump/elric-setting-records.txt` (the 37 PDB
   settings → CK descriptor VAs with decoded defaults)
 - Key inventory: `06-SETTINGS-KEYS.md`, `ghidra-dump/ck-settings-keys.txt`
 - NIF save chain: `ghidra-dump/nifwriter-facegen-0x140ab8a60.asm` (FaceGen

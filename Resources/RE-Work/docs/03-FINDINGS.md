@@ -4,6 +4,139 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
 
 ---
 
+## 2026-08-21 — `.STRINGS`/`.DLSTRINGS`/`.ILSTRINGS` binary format decoded and byte-verified
+
+- The three `-CompileTextExport` outputs share one layout: `u32 numStrings`,
+  `u32 dataSize`, then `(stringID, offset)` pairs (8 bytes each) sorted ascending
+  by ID, then a data block of exactly `dataSize` bytes. Total file size is
+  `8 + 8*numStrings + dataSize` — verified on all 33 shipped FO4 samples
+  (11 languages × 3 kinds, extracted from `Fallout4 - Misc.ba2`).
+- Record encoding differs by kind: `.STRINGS` stores NUL-terminated text;
+  `.DLSTRINGS`/`.ILSTRINGS` store `u32 len` + text + NUL records (offset points
+  at the length prefix, offsets land on record boundaries, the block walks
+  cleanly to EOF as `sum(4+len)`). The writer `FUN_14091d790` selects the form
+  with its output-context flag byte `+0x14e`; it builds/sorts `(id, offset)`
+  rows (`FUN_1409186d0`), streams the staged block out, then writes the two
+  header u32s (`0x14091dc1a`/`0x14091dc37`).
+- ID tables are sparse (gaps), and the data block is stored in insertion order,
+  so table offsets are NOT ascending; deduplicated text shares offsets. IDs are
+  globally unique across the three files (`.STRINGS` 1..224469, `.DLSTRINGS`
+  3..224466, `.ILSTRINGS` 75462..223315 on the en reference set; `< 0x10` is
+  reserved). `.DLSTRINGS` holds the dialog-routed categories (1,6,7,10).
+- Loader anchors: `.DLSTRINGS` block loader `FUN_140915000`; the
+  `bKeepDLStringBlocksLoaded:General`/`bKeepILStringBlocksLoaded:General`
+  values are tested at `0x1409155b5`/`0x140915d8b` (+3 sites each). Source
+  path `shared\misc\bgslocalizedstring.cpp`. Durable spec with annotated hex
+  dump: `ghidra-dump/localized-string-file-format.md`.
+
+## 2026-08-21 — `FUN_14091f3d0` TextExport line grammar recovered
+
+- `FUN_14091f3d0`, called by `FUN_140916980` at `0x140916e94`, reads one byte at a time,
+  replaces only the first three tab bytes with NUL delimiters, and stores the fourth-field
+  text pointer at parser-state `+0x28`. Tabs after the third delimiter remain text; CR or LF
+  terminates the record, and there is no quote/backslash escape layer.
+- The accepted line shape is
+  `0x<8-hex-StringID>\t0x<8-hex-FormID>\t<Category>\t<Text>\n`. The producer
+  `FUN_14091bd80` confirms the first two fields are emitted with `0x%08X`, followed by the
+  category and text fields. The compiler parses only field 1 with `_strtoui64(..., 16)`;
+  field 2 is structural metadata and is not numerically validated by this reader.
+- Invalid/zero/no-digit StringIDs become `-1`; unknown or empty category names fall back to
+  category 17 (`Misc`) after case-insensitive `_stricmp` matching. The exact 18-entry index
+  table and the dialog-routing subset `{1, 6, 7, 10}` are in
+  `ghidra-dump/decompile-CompileTextExport-line-parser-FUN_14091f3d0.md`.
+- The line buffer has a `0x100000` reasonable-size guard. Malformed lines and unknown
+  categories are recoverable diagnostics; output-open and mandatory-input failures remain
+  the hard `FUN_140916980` failure paths.
+
+## 2026-08-21 — Duplicate INI descriptor registrations traced
+
+- The nine repeated `bKey:Section` names are separate 0x18-byte records, not
+  one scatter-table entry replaced by another. Their CRT initializers write the
+  per-record vftable and call collection slot `+0x10` with the **record address**.
+  `FUN_1425c75a0` hashes/comparates that address, so same-name descriptors do
+  not collide during registration or notify callback dispatch.
+- Main-INI records use getter `0x14002c539` → `FUN_1402ccbf0`, storage
+  `DAT_14742c170`, record vftable `0x142f8dce8`; preferences records use
+  `0x140069560` → `FUN_14033ab80`, storage `DAT_143f2f9e8`, record vftable
+  `0x142f959b0`. Eight duplicate keys are main-INI pairs; only
+  `fTessFactorMaxDistanceScale:Display` is a preferences pair.
+- Reads still collide at the Win32 profile layer: both records request the same
+  section/key, so a present INI value populates both; an absent value leaves
+  each compiled default (`fMinMouseScale` 0.01/0.05,
+  `fMaxDistanceMoved` 5/50, and tessellation scale 100/500 are the useful
+  divergent cases). Writes likewise target one physical key, so the last
+  `WriteSetting` call wins; mutating/notifying one record does not update its
+  twin. The complete address/init/data-run map and the explicit BudgetCaps
+  pointer-table pair are in `ghidra-dump/duplicate-ini-settings.md`.
+
+## 2026-08-21 — Runtime GameSetting table identified and counted
+
+- The records under vftable `0x142f97230` are the CK RTTI specialization
+  `SettingT<GameSettingCollection>`, with base `Setting`; they are not the
+  `SettingT<INISettingCollection>` descriptor family used by the CreationKit.ini
+  oracle. `GameSettingCollection` derives through
+  `SettingCollectionMap<Setting>` to `SettingCollection<Setting>`.
+- A `.data` qword census finds 5,144 valid 0x18-byte records: 5,137 bare
+  game-value names plus the 7 colon-bearing `[General]`/`[Interface]` UI records
+  that share the specialization. The corrected bare count is 5,137, with
+  `f=3,632`, `s=1,098`, `i=371`, `u=27`, and `b=9`; there are no duplicate bare
+  names. Representative `sYes`, `fAI*`, and `fActor*` record addresses and the
+  full type/layout evidence are in `ghidra-dump/game-setting-table.md`.
+- Elric's PDB confirms the shared `Setting` constructors/accessors and
+  `SettingCollection<Setting>` family, but not the CK-only `GameSettingCollection`
+  class itself. This is a template/base semantic cross-check, not an address
+  claim across the 32-bit Elric and 64-bit CK builds.
+
+## 2026-08-21 — Papyrus ZIP group array traced to `sAdditionalImports`
+
+- `FUN_141123e20` initializes `editor+0x410` and passes the loaded value at
+  `0x143bfb9e8` to `FUN_14112ab00`; the associated descriptor is
+  `sAdditionalImports:Papyrus` (`0x14310b738`, storage cluster around
+  `0x143bfb9f0`). The list is semicolon-separated and configuration-driven,
+  not a hard-coded DLC table or directory scan.
+- `FUN_141126280` copies the parsed entries to `editor+0x428`, replaces the
+  `$(source)` sentinel (`0x14310b870`) with the configured script-source folder,
+  and appends that folder if the sentinel is absent.
+- `FUN_141129aa0` extracts each entry basename with `PathFindFileNameA`, builds
+  `<entry>\\<basename>.zip`, and formats the stamp key
+  `PapyrusSource_<basename>`. The installed default
+  `$(source);.\\Data\\Scripts\\Source\\Base` therefore activates exactly
+  `PapyrusSource_User` and `PapyrusSource_Base` in that order. `CreationClub`
+  and `DLC01`–`DLC06` are generated only if explicitly present in the import
+  list. Full chain: `ghidra-dump/decompile-papyrus-zip-array-population.md`.
+
+## 2026-08-21 — Papyrus zip extraction prompt lambda decompiled: no INI or batch disable
+
+- `FUN_14112ae80` (`0x14112ae80`, RVA `0x112ae80`) is the RTTI-labeled
+  `lambda_71ce1f4350638474a0f15e4607c39b12` callback used by
+  `FUN_14063ab40`. Its closure captures the zip path at `this+0x08`, formats
+  `Script source zip "%s" is new or has been updated - unpack?`, and calls
+  `MessageBoxA(NULL, ..., "Script Source Extraction", 0x34)`.
+- It returns true only for `IDYES` (`6`). `FUN_14063ab40+0x128` enters the
+  Shell COM `NameSpace`/`Items`/`CopyHere` block only for true; **No** skips the
+  COM path cleanly and continues the normal cleanup/stamp path.
+- The callback/caller read no `CreationKit.ini` or `CreationKitPrefs.ini` key and
+  no CLI batch bit. `bMustConfirmScriptSync:Papyrus`,
+  `bCopyScriptToSource:Papyrus`, and `sScriptSourceFolder:Papyrus` do not gate
+  this startup extraction path in this build. Full body and helper anchors:
+  `ghidra-dump/decompile-papyrus-zip-prompt-lambda-FUN_14112ae80.md`.
+
+## 2026-08-21 — Batch pipeline setting dependency map cross-referenced to descriptor value storage (doc 22)
+
+- The CK loads all registered `SettingT<INISettingCollection>` records during startup;
+  “batch dependency” therefore means a direct `record+0x08` value reference from the
+  dispatcher, runner, exporter, or precompute worker, not a second lazy ini reader.
+- Confirmed batch-wide controls are `bThrowProcessCompleteExceptions:General`
+  (`record 0x143b8c880`, value `0x143b8c888`, seven raise-site refs) and
+  `bGeneratePreCombinedGeometryPreVis:General` (`record 0x143b8c868`, value
+  `0x143b8c870`, precompute setup refs). Direct dependencies are tabulated for
+  combined-object levels/physics, PreVis camera and Umbra export, dialogue voice
+  roots, localized-string/animation flags, FaceGen checks, and VCS services.
+- Exact `iPlacedObjectRender` is absent from the 1,629-key literal inventory, binary
+  strings, and descriptor records; it is not a valid CK ini key in this build.
+- Durable map: `22-BATCH-SETTING-DEPENDENCIES.md`; the descriptor/type oracle remains
+  `tools/validate_ckini.py`.
+
 ## 2026-08-19 — `-ExportDialogue` decompiled: raw ESM-only input and human-readable Logs/DialogueExport reports
 
 - The `0x2` dispatcher branch installs `DialogueExporter::vftable` at
@@ -36,15 +169,31 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
   `Data\\STRINGS\\<ESM stem>_<Language>.DLSTRINGS`, and
   `Data\\STRINGS\\<ESM stem>_<Language>.ILSTRINGS`. Each context also stages
   `<final>_temp` and is finalized through `FUN_14091d790`.
-- The ESM stem is cut at the first `.` (`Fallout4.esm` → `Fallout4`), while
-  the language token is passed through verbatim. The third argument is an
+- The ESM stem is cut at the **last** `.` via `strrchr`
+  (`Fallout4.esm` → `Fallout4`), while the language token is passed through
+  verbatim. The third argument is an
   export root; the observed `%s/%s/%s` construction locates
   `<root>/<ESMFilename>/TextExport.txt`. The fourth argument is an additional
-  backup/fallback root, not an output filename.
+  root, not an output filename; a non-empty backup root is appended and
+  traversed **before** the primary root. Only the root tokens are quote-aware:
+  the dispatcher consumes ESM/language with `strtok_s`, then consumes the two
+  roots with `FUN_140490960`.
+- `bValidateStringsOnCompile:General` (`0x143b9c088`) gates an optional
+  character/resource preflight before output construction. The three contexts
+  expose status bytes at `+0x14c/+0x14d`; output-open failures and mandatory
+  `TextExport.txt` read failures set the function's failure path, while malformed
+  supplemental filenames, reserved/duplicate IDs, invalid characters, and
+  unknown categories have explicit skip/recovery diagnostics. The worker calls
+  `FUN_14091f3d0` for line/buffer parsing, `FUN_14091d240` for insertion and
+  character normalization, and `FUN_14091d790` for all three `_temp` finalizers.
+  The caller does not test a return value after finalization, so the late
+  context `+0x14d` status is documented separately rather than promoted to a
+  proven fourth outer failure flag.
 - The compiler produces Bethesda localized-string binaries and routes records
   into the ordinary, dialog, and miscellaneous string tables. Its diagnostics
   explicitly cover malformed lines, invalid/reserved IDs, duplicates, unreadable
-  inputs, oversized files, and output-open failures.
+  inputs, oversized files, and output-open failures. Full caller reconstruction:
+  `ghidra-dump/decompile-CompileTextExport-FUN_140916980.md`.
 
 ## 2026-08-18 — Wine startup crash decoded: Papyrus source-zip extraction faults on a NULL shell `Folder*` (doc 20)
 
@@ -136,12 +285,12 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
   -2494562304/-2494562303 signed). Batch runs still create a window: WM_CREATE
   → dispatcher → nonzero → WM_CLOSE.
 
-## 2026-08-18 — Elric SDK symbols acquired: 90,090 engine symbols confirm the CK decompiles (doc 18)
+## 2026-08-18 — Elric SDK PDB acquired: 90,090 engine symbols confirm the CK decompiles (doc 18)
 
-45. **The Elric 2016 package** (`~/Downloads/Elric/Elric`): the FO4
+45. **The Elric 2016 package** (`~/Downloads/Elric+PDB/Elric`): the FO4
     NIF/texture optimizer (Elrich.exe + ElricInterop.dll + native BSCore/BSMain/
-    BSGraphics/Ni* DLLs). `ElricInterop symbols` (95 MB) = 90,090 unique mangled
-    C++ symbols, extracted to `ghidra-dump/elric-symbols.txt`.
+    BSGraphics/Ni* DLLs). `ElricInterop.pdb` (95 MB) = 90,090 unique mangled
+    C++ symbols, extracted to `ghidra-dump/elric-pdb-symbols.txt`.
 46. **Settings machinery names confirmed**: `INISettingCollection::ReadSetting` /
     `::WriteSetting` (our FUN_1425c7f90 / FUN_1425c7da0), `::Open`/`::Close`
     (the lazy ini-path marker slots), `Setting` base with `operator bool/float/
@@ -150,7 +299,7 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     `(char const*, bool/uint/int/float)` = doc 10's type letters. Source paths
     `exporterpublic\bsmain\setting.h` / `bscore\bstscattertable.h` = the CK's
     embedded `buildagent\...\code\bsmain\setting.h` lineage.
-47. **The descriptor records ARE symbols**: the symbol table names every
+47. **The descriptor records ARE symbols**: the PDB names every
     `SettingT<INISettingCollection>` global — 34 in Elric, **26 of which appear
     in the CK's 1,641-key table with matching sections** (HAVOK/Havok/Cloth/
     CollisionQuery), the anonymous-namespace hashes mapping 1:1 to the CK's
@@ -182,9 +331,10 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     0x142f959b0 ×405 = doc 10 §4's second `INISettingCollection` subclass,
     0x142f97230 ×7 `[Interface]`/`[General]` UI keys) — an independent
     confirmation of doc 10's 1,641 figure — **plus 25 no-section records**
-    (`[MAIN]`) in the two collection families, and a separate ~5,100-record
-    runtime game-value `Setting` table under 0x142f97230 that is *not* ini
-    settings. Nine keys carry two descriptor instances (fMouseScale/fMinMouseScale:
+    (`[MAIN]`) in the two collection families, and a separate 5,137-record
+    bare-name runtime `SettingT<GameSettingCollection>` table under 0x142f97230
+    that is *not* ini settings. Nine keys carry two descriptor instances
+    (fMouseScale/fMinMouseScale:
     General, fMaxDistanceMoved:Pathfinding, sResourcePrefixList:Archive,
     strPluginsFileHeader:General, uMaterialCount:BudgetCaps,
     bSkipInitializationFlows/bSkipProgramFlows:MESSAGES,
@@ -215,10 +365,12 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
 52. **SaveStream core = `0x142499070`**: three per-object passes over the
     object array (stream+0x320, count +0x328, iterators +0x3d8..+0x3e0)
     calling each object's vftable **slot 0xd8**, then **0xe0**, then **0x110**
-    with `(object, stream)` — matching `bhkNiTriStripsShape`'s named
+    with `(object, stream)` — matching `bhkNiTriStripsShape`'s PDB-named
     `RegisterStreamables`/`SaveBinary`/`LinkObject` virtual quintet (the only
-    names the 2016 symbols provides; `NiStream::SaveStream`/`AddObject` themselves
-    are absent from Elric — save-side is CK-only).
+    names the 2016 PDB provides; `NiStream::SaveStream`/`AddObject` themselves
+    are absent from Elric — save-side is CK-only). The detailed block-type →
+    `SaveBinary` catalog and `_Physics` confidence boundaries are now in
+    `ghidra-dump/nistream-block-save-map.md`.
 53. **FaceGen exporter `0x140ab8a60` (= `tesnpc_editor.cpp`) call chain**: 5×
     `CreateDirectoryA` for `Data\Meshes\Actors\Character\FaceGenData\FaceGeom\`
     → sprintf `%s\%08X.NIF` (formID &0xffffff) → NiStream ctor `0x14007854c`
@@ -226,14 +378,14 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     → save-prep `0x140abc3b0` → stack NiStream vft 0x142fa4780 + output wire
     `0x140040403`→`0x142497150` → `call 0x140097e92` (slot-6 stub = the disk
     write). Also decodes the full `bhkNiTriStripsShape` class layout (48
-    symbols symbols: streaming quintet + subpart/`Add` family + `EmptySubpart`
+    PDB symbols: streaming quintet + subpart/`Add` family + `EmptySubpart`
     static + `iCount`/`ms_RTTI`/RTTI chain + `AddObjectFunctor` in
     `?A0x7927943b` — distinct from `NiStream::AddObject`).
 
-## 2026-08-19 — NiStream serialization byte spec from the address-accurate ElricInterop symbols import (doc 18 §4e)
+## 2026-08-19 — NiStream serialization byte spec from the address-accurate ElricInterop.pdb import (doc 18 §4e)
 
-54. **Imported `ElricInterop symbols` into Ghidra 12.1.3 against `ElricInterop.dll`**
-    (PE32 C++/CLI, Ghidra symbol analyzer, symbol addrs at image base 0x10000000) and
+54. **Imported `ElricInterop.pdb` into Ghidra 12.1.3 against `ElricInterop.dll`**
+    (PE32 C++/CLI, PDB Universal, symbol addrs at image base 0x10000000) and
     resolved the full `NiStream` save/load family as **named exports of
     `NiMain.dll`** (3,308 exports): every hot-patch `jmp` stub was resolved to
     its real body and IAT slots were mapped (`Write`/`Read` =
@@ -241,7 +393,7 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     `GetLine`). Extracted the **exact byte-level NIF wire format**: CString =
     `u32 len` (no NUL) + bytes (NULL → 0; load `len<=0` → NULL); FixedString =
     `u32` pool index, `0xFFFFFFFF`=empty; LinkID = `u32`, `0xFFFFFFFF`=NULL;
-    header = 31-byte `Gamebryo File Format, Version 20.2.0.7\n` + u32
+    header = 39-byte `Gamebryo File Format, Version 20.2.0.7\n` + u32
     0x14020007 + u8 endian + u32 user-version 12 + u32 numRoots + u32 BS
     uiCurrVersion(=0x82) + 4×`(u8 len incl. NUL, bytes)`; then u16
     numBlockTypes + `(u32 len,bytes)` names + u16 typeIdx×numRoots (bit 0x8000
@@ -253,14 +405,52 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     header numRoots — no separate count field. Load side skips unloadable
     blocks via the size table; post-load runs `LinkObject`/`PostLinkObject`
     passes + global post-process funcs. Artifacts: `ghidra-dump/nimain-nistream-serial.asm`,
-    `ghidra-dump/nimain-exports.txt`. Corrective note for #52: the name-absent
+    `ghidra-dump/nimain-exports.txt`. Corrective note for #52: the PDB-absent
     `SaveStream`/`AddObject` **do exist** in the product — as NiMain.dll
     exports (32-bit 2016), byte-identical contract to the CK's 64-bit chain.
+
+## 2026-08-21 — SCOL combined-mesh path and `_OC` NIF naming chain (doc 09 / NiStream §4)
+
+55. **The SCOL xrefs `0x140c1d1c2` and `0x140c1f02f` are path-formatting
+    sites**, not the NIF byte serializer. Both use the exact rdata format
+    `SCOL\\%s\\CM%08X.NIF` at VA `0x143075570`; the group string comes from
+    the associated record's `+0x78` and the ID is masked to either 24 or 12
+    bits depending on the owner predicate.
+56. **The cell combined writer exposes the real `_OC` pair**: `FUN_140d4f160`
+    builds `Meshes\\PreCombined\\<Group>\\<OwnerID%08X>_<EntryID%08X>_OC.NIF`
+    and its companion `...\\<OwnerID%08X>_Physics.NIF`. The owner ID is
+    `this+0x14 & 0xffffff`; each entry is a 32-bit value from the array at
+    `[ [this+0x58] + 0x50 ]`, with count at `+0x60`. The same format strings
+    are used by the static-collection routine at `0x14048b70b`/`0x14048b896`.
+57. **Payload boundary corrected**: those helpers construct/dispatch path and
+    collection objects; they do not directly call the NiStream slot-6 wrapper.
+    The delegated output object later uses the normal `0x142fa4780` NiStream
+    chain and the standard FO4 NIF header/object-size/RTTI/link layout from
+    doc 18 §4e. The new artifact records the confirmed fields and the exact
+    unresolved payload-level target.
+
+## 2026-08-21 — CK NIF version globals are read-only in normal code paths
+
+58. **The three CK-side NiStream version globals are not feature-mutated**:
+    `0x143c56a7c` is the minimum accepted file version `0x04020100`,
+    `0x143c56a80` is both the maximum accepted and emitted file-version u32
+    `0x14020007`, and `0x143c56a84` is max/emitted user version `12`.
+    The complete `.text` census finds eight direct references: stream-default
+    loads at `0x142496ef3/0x142496eff`, validator comparisons at
+    `0x142498acd/0x142498ae8/0x142498bcf`, and SaveHeader reads/address-taking
+    at `0x142498e39/0x142498e7f/0x142498ebc`. None writes a global.
+59. **No CK feature selects another emitted NIF file version**. FaceGen,
+    PreCombined, SCOL, `_OC`, and `_Physics` use the common SaveHeader path;
+    only per-file roots, RTTI/object tables, strings, links, and BS-version data
+    vary. A debugger or binary patch could alter the writable `.data` globals,
+    but that is external and would leave the hardcoded textual header line
+    saying `Version 20.2.0.7`. Evidence: `ghidra-dump/nistream-version-globals.md`.
 
 ## 2026-08-18 — CreationKit.ini validator oracle shipped (tools/validate_ckini.py)
 
 43. **`tools/validate_ckini.py`** replays the reader `FUN_1425c7f90` against the
-    1,629-key descriptor table and the `FUN_1425c7210` type-letter switch
+    1,629 colon-bearing descriptor literals **plus all 25 byte-verified bare
+    records as `[MAIN]` settings**, and the `FUN_1425c7210` type-letter switch
     (verified decompile): b/c/h/i/u = GetPrivateProfileIntA (garbage → 0),
     f = sscanf %%f (empty/garbage → default retained, no notify), s = raw
     string (never notifies), r/a = sscanf %%u lists with the engine quirk that a
@@ -271,8 +461,9 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     key, or known key under the wrong section with its registered section
     named) / MISSING / TYPE9-AS-UINT; exit 0 PASS, 1 on any READ-FAIL,
     `--strict` also fails warnings; `--list-keys` reference card and `--stats`
-    (letters b=530 f=554 i=252 s=152 u=141 across 89 sections — the shipped
-    table never uses c/h/r/a). Samples: valid/invalid/extended fixtures;
+    (the default schema reports a 25-key `[MAIN]` section in addition to the
+    colon-bearing sections — the shipped table never uses c/h/r/a). Samples:
+    valid/invalid/extended fixtures plus the no-section fixtures;
     `samples/descriptors-extended.txt` adds c/h/r/a to exercise the full switch.
 
 ## 2026-08-18 — Full ini census: 5 files, every path mapped to its reader; generic WriteSetting found (doc 17)
@@ -434,8 +625,8 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
 **Not packed** — `.text` entropy 5.86 (the game exe from the same era is DRM-encrypted at ~8.0).
 Full MSVC RTTI present (4,438 unique type names).
 
-1. **RSDS path embedded**: `E:\BuildAgent\work\4a2aa37ca4b2ffa3\scripts\_workspace\Code\Build\PC\CreationKit`
-   (GUID `f276f0de-3312-9745-8404-bd4b2df2a9aa`). TeamCity CI build → no public debug file, but the
+1. **PDB path embedded**: `E:\BuildAgent\work\4a2aa37ca4b2ffa3\scripts\_workspace\Code\Build\PC\CreationKit.pdb`
+   (GUID `f276f0de-3312-9745-8404-bd4b2df2a9aa`). TeamCity CI build → no public PDB, but the
    RSDS record is our fingerprint for version matching.
 2. **Import surface** (24 DLLs): the editor is a full game-engine build (d3d9/d3d11/dxgi,
    Godrays/SSAO, X3DAudio/XInput) plus the editor extras: `SSCE5564.dll` (script editor),

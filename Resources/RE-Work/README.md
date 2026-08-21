@@ -17,14 +17,18 @@ What Radicle cares about: form enum, file-load table, factory array, FileSaver /
 - [dumps/tes-classes.txt](dumps/tes-classes.txt)
 
 ### Batch CLI
-Headless switches, parser, exit codes.
+Headless switches, parser, exit codes, CompileTextExport / localized-string outputs.
 
 - [docs/05-BATCH-CLI.md](docs/05-BATCH-CLI.md)
 - [docs/13-CLI-PARSER.md](docs/13-CLI-PARSER.md)
 - [docs/19-BATCH-EXIT-CODES.md](docs/19-BATCH-EXIT-CODES.md)
+- [docs/22-BATCH-SETTING-DEPENDENCIES.md](docs/22-BATCH-SETTING-DEPENDENCIES.md)
+- [dumps/decompile-CompileTextExport-FUN_140916980.md](dumps/decompile-CompileTextExport-FUN_140916980.md)
+- [dumps/decompile-CompileTextExport-line-parser-FUN_14091f3d0.md](dumps/decompile-CompileTextExport-line-parser-FUN_14091f3d0.md)
+- [dumps/localized-string-file-format.md](dumps/localized-string-file-format.md)
 
 ### Settings and INI
-Embedded 1,629-key database, readers, write-back, path census.
+Embedded 1,629-key database, readers, write-back, path census, duplicate descriptors, runtime GameSetting table.
 
 - [docs/01-CREATIONKIT-INI.md](docs/01-CREATIONKIT-INI.md)
 - [docs/06-SETTINGS-KEYS.md](docs/06-SETTINGS-KEYS.md)
@@ -32,6 +36,9 @@ Embedded 1,629-key database, readers, write-back, path census.
 - [docs/16-SETTINGS-WRITEBACK.md](docs/16-SETTINGS-WRITEBACK.md)
 - [docs/17-INI-PATHS.md](docs/17-INI-PATHS.md)
 - [dumps/ck-settings-keys.txt](dumps/ck-settings-keys.txt)
+- [dumps/duplicate-ini-settings.md](dumps/duplicate-ini-settings.md)
+- [dumps/game-setting-table.md](dumps/game-setting-table.md)
+- [dumps/elric-setting-records.txt](dumps/elric-setting-records.txt)
 - [tools/validate_ckini.py](tools/validate_ckini.py)
 
 ### LOD and previs
@@ -44,11 +51,18 @@ CK LOD pipeline, precombined, `.scene` / `.uvd`.
 - [dumps/lod-strings.txt](dumps/lod-strings.txt)
 
 ### Classes and symbols
-RTTI map and Elric engine-symbol facts.
+RTTI map, Elric engine-symbol facts, NIF writer catalog.
 
 - [docs/02-RTTI-CLASS-MAP.md](docs/02-RTTI-CLASS-MAP.md)
 - [docs/18-ELRIC-SYMBOLS.md](docs/18-ELRIC-SYMBOLS.md)
 - [dumps/rtti-classes.txt](dumps/rtti-classes.txt)
+- [dumps/ck-nif-block-format-reference.md](dumps/ck-nif-block-format-reference.md)
+- [dumps/nistream-block-save-map.md](dumps/nistream-block-save-map.md)
+- [dumps/nistream-version-globals.md](dumps/nistream-version-globals.md)
+- [dumps/decompile-SCOL-combined-mesh-writer.md](dumps/decompile-SCOL-combined-mesh-writer.md)
+- [dumps/elric-engine-ghidra-import.md](dumps/elric-engine-ghidra-import.md)
+- [tools/extract_ck_nif_savebinary.py](tools/extract_ck_nif_savebinary.py)
+- [tools/validate_nif.py](tools/validate_nif.py)
 
 ### Binary identity and init
 PE map, source-tree recovery, WinMain init chain, Ghidra query how-to.
@@ -88,9 +102,9 @@ Resources/RE-Work/
 ├── README.md          this category map
 ├── LEGAL.md
 ├── MANIFEST.md
-├── docs/              numbered CK notes
-├── dumps/             RTTI / TES* / settings / srcpath tables
+├── docs/              numbered CK notes (00–22) + index
+├── dumps/             RTTI / TES* / settings / srcpath tables + analysis docs
 ├── scripts/           CK Ghidra Java queries
-├── tools/             PE recon, CreationKit.ini oracle
+├── tools/             PE recon, CreationKit.ini oracle, NIF tools + fixtures
 └── Runtime/           Fallout4.exe notes, scripts, Organized analysis
 ```

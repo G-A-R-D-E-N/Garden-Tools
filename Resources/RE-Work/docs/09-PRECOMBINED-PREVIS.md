@@ -126,13 +126,19 @@ Adjacent settings keys are `bGeneratePreCombinedGeometryPreVis:General` (pipelin
 
 ### PreCombined world generation (`0xd20d90`)
 
-- Ensures `Data\\Meshes` and `Data\\Meshes\\PreCombined` exist, with an optional plugin
-  subdirectory `Data\\Meshes\\PreCombined\\<Plugin>\\`.
+- Ensures `Data\\Meshes` and `Data\\Meshes\\PreCombined` exist, with an optional collection
+  group directory `Data\\Meshes\\PreCombined\\<Group>\\`.
 - Iterates cells and gathers combined-reference-eligible objects.
-- Builds combined geometry through the `BSMeshCombiner` family and writes Havok physics data
-  (`hknpPhysicsSystemData` family).
-- Geometry is named `<FormID%08X>.NIF`; the physics companion is
-  `<FormID%08X>_Physics.NIF` under `Data\\Meshes\\PreCombined`.
+- The combined-output path builder formats one geometry file per entry as
+  `%s\\%08X_%08X_OC.NIF`, where the first ID is the owning form ID masked to
+  24 bits and the second ID is the 32-bit collection entry. The companion is
+  `%s\\%08X_Physics.NIF`.
+- Static-collection output uses the separate `SCOL\\<Group>\\CM%08X.NIF` family;
+  the path xrefs and the distinction between these two naming families are
+  documented in [`ghidra-dump/decompile-SCOL-combined-mesh-writer.md`](ghidra-dump/decompile-SCOL-combined-mesh-writer.md).
+- Geometry is assembled by the delegated collection/output object and then
+  serialized through the common NiStream save chain; the path helper itself is
+  not the NIF byte serializer.
 - `ExtraCombinedRefs` records the cell-to-combined-form mapping persisted in
   `Data\\CombinedObjects.esp`.
 
@@ -153,8 +159,9 @@ worldspace/cell alignment and calls `0x1181210` followed by deferred cleanup `0x
 
 | artifact | path |
 |---|---|
-| combined geometry | `Data\\Meshes\\PreCombined\\<FormID%08X>.NIF` |
-| combined physics | `Data\\Meshes\\PreCombined\\<FormID%08X>_Physics.NIF` |
+| combined geometry | `Data\\Meshes\\PreCombined\\<Group>\\<OwnerID%08X>_<EntryID%08X>_OC.NIF` |
+| combined physics | `Data\\Meshes\\PreCombined\\<Group>\\<OwnerID%08X>_Physics.NIF` |
+| static-collection mesh | `Data\\Meshes\\PreCombined\\SCOL\\<Group>\\CM<ID%08X>.NIF` |
 | combined plugin | `Data\\CombinedObjects.esp` |
 | PreVis scenes | `Data\\Vis\\Scenes\\<Worldspace>_<Plugin>_<x>_<y>.scene` or `Interior_<Cell>.scene` |
 | PreVis plugin | `Data\\PreVis.esp` |

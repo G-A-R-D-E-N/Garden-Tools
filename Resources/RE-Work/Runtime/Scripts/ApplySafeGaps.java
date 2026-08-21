@@ -1,6 +1,6 @@
 // Apply the "safe naming-gap" fills: addresses whose CURRENT name is a generic CommonLib/Ghidra
 // placeholder (Class::FuncN, _NNN, thunk_FUN_..., empty Class::) getting filled in with the real
-// 1.10.155-cross-referenced name. Input is safe_gaps_apply.csv, which has ALREADY been filtered
+// 1.10.155-PDB-cross-referenced name. Input is safe_gaps_apply.csv, which has ALREADY been filtered
 // (by organize_functions.py's companion split) to only the entries where the decoded name's class
 // MATCHES the placeholder's class (pure method-name fill of a vtable slot whose class the RTTI
 // matcher already trusts) plus the class-less placeholders (_NNN/thunk_FUN) and the handful of data

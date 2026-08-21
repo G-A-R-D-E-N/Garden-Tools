@@ -1,7 +1,7 @@
 # 06 — Subsystem Function Index & 155-vs-163 Cross-Reference (2026-07-10)
 
 A browsable organization pass over the workspace's raw RE symbol dumps, plus a cross-reference
-that uses the independent 1.10.155 named project to catch more CommonLib RTTI-matching errors in the
+that uses the independent 1.10.155 PDB to catch more CommonLib RTTI-matching errors in the
 1.10.163 target project — the same bug class that already caught two real ones
 (`PlayerCharacter::ServePrisonTime`/`GoToPrison`, see `05-LABEL-RECOVERY.md` §3).
 
@@ -9,16 +9,16 @@ that uses the independent 1.10.155 named project to catch more CommonLib RTTI-ma
 
 | Artifact | What | Regenerate |
 |---|---|---|
-| `ReverseEngineering\Symbols\1.10.163\Fallout4_163_functions.txt` | Full function export of the **1.10.163 project** (365,059 functions, real addresses — the build we actually hook) in the same browsable format as the existing 1.10.155 named project dump. Didn't exist before this pass — the 1.10.163 project only had query/decompile access, no flat dump. | `ReverseEngineering\Scripts\FW_ExportAll.java` via `run_query.ps1`-style `analyzeHeadless` invocation (pure listing walk, no re-analysis, ~1 min at this scale) |
+| `ReverseEngineering\Symbols\1.10.163\Fallout4_163_functions.txt` | Full function export of the **1.10.163 project** (365,059 functions, real addresses — the build we actually hook) in the same browsable format as the existing 1.10.155 PDB dump. Didn't exist before this pass — the 1.10.163 project only had query/decompile access, no flat dump. | `ReverseEngineering\Scripts\FW_ExportAll.java` via `run_query.ps1`-style `analyzeHeadless` invocation (pure listing walk, no re-analysis, ~1 min at this scale) |
 | `ReverseEngineering\Organized\INDEX.md` | Subsystem breakdown (19 categories: Havok, Scaleform, Papyrus, TES/BGS forms, Actor, NetImmerse graphics, AI/Combat, Pathing, SaveLoad, Input, STL, BS templates, ...) with function counts for **both** 1.10.155 and 1.10.163 side by side | `python ReverseEngineering\Scripts\organize_functions.py` |
 | `ReverseEngineering\Organized\1.10.155\<Category>.txt` / `1.10.163\<Category>.txt` | The actual bucketed function lists — same category set in both versions, so "what does subsystem X look like" is directly comparable across the version gap | same script |
 | `ReverseEngineering\Organized\crossref_163_disagreements_vs_155.csv` | Every one of the 40,073 `label_apply_disagreements.csv` rows (05-LABEL-RECOVERY.md §3) plus a `verdict_vs_1.10.155` column | same script |
 | `ReverseEngineering\Organized\crossref_review_candidates.md` | **313 high-priority candidates** — see below | same script |
 | `ReverseEngineering\Organized\crossref_safe_naming_gaps.md` | **2,803 low-risk candidates** — see below | same script |
 
-`ReverseEngineering\Symbols\` (all of it — exe/symbols/csv/idc + this new `organized\` output, ~1GB+ combined) is now
+`ReverseEngineering\Symbols\` (all of it — exe/pdb/csv/idc + this new `organized\` output, ~1GB+ combined) is now
 gitignored; it's fully regeneratable from the game files + these scripts, and redistributing the
-exe/symbols is licensing-murky. Never commit it.
+exe/PDB is licensing-murky. Never commit it.
 
 ## Why cross-reference against 1.10.155 at all
 
@@ -30,7 +30,7 @@ and so was conservatively left unapplied (05-LABEL-RECOVERY.md's "don't silently
 real name" rule) — those rows are exactly where a genuine CommonLib RTTI-matching error would
 hide, and the original two bugs were found by hand-spot-checking a tiny sample of them.
 
-The 1.10.155 named project is a **third, independent, Microsoft-verified** source (not derived from either
+The 1.10.155 PDB is a **third, independent, Microsoft-verified** source (not derived from either
 CommonLib's RTTI matcher or the community label file). If a disagreement row's community-decoded
 name has an exact match in 1.10.155 but CommonLib's existing name does **not**, that's
 meaningfully stronger evidence than the disagreement alone — the same signature as the two
@@ -41,7 +41,7 @@ already-confirmed bugs.
 1. Exported the 1.10.163 project's full function list (previously only queryable, not dumped) —
    `FW_ExportAll.java`, a plain `FunctionManager.getFunctions()` walk writing
    `Class::Method :: <prototype>` per line, no decompile/re-analysis.
-2. Extracted a fully-qualified name from every 1.10.155 named project signature line (tracking `<...>`
+2. Extracted a fully-qualified name from every 1.10.155 PDB signature line (tracking `<...>`
    template-bracket depth so the name/args boundary is found correctly even through generics).
 3. Bucketed both function lists into 19 subsystem categories by **top-level class prefix**
    (`hk*`/`bhk*` → Havok, `TES*` → Elder Scrolls forms, `BGS*` → Bethesda Game Studio records,

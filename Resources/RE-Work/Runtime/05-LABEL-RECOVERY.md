@@ -50,7 +50,7 @@ re-copy of either).
 Rebuilt as a **fresh import** (not a clone-and-swap of the old project) into
 `E:\F4SE OG\ReverseEngineering\Projects\fwgh_proj_1.10.163_unpacked\` — Ghidra ties analysis state to the originally
 imported bytes, so starting clean is more reliable than trying to graft new bytes onto an existing
-analyzed program. Same recipe as the 1.10.155 named project import (`ReverseEngineering\Symbols\GHIDRA_PROJECT.md`): `mkdir` the
+analyzed program. Same recipe as the 1.10.155 PDB import (`ReverseEngineering\Symbols\GHIDRA_PROJECT.md`): `mkdir` the
 project dir first, 12GB heap, pipe blank stdin to dodge the `pause`-hang gotcha (see `01-SETUP.md`).
 
 Re-verified after import: `.text` entropy back to **6.334** (matches 1.10.155's 6.33), and the same
@@ -94,7 +94,7 @@ and a handful of already-plain linker symbols (`_tls_end`).
 Key design points (see the script itself for the full implementation):
 
 - **Uses Ghidra's own demangler** (`ghidra.app.util.demangler.DemanglerUtil.demangle(Program, String)`
-  → `DemangledObject.applyTo(program, address, options, monitor)`) — the same mechanism symbol import
+  → `DemangledObject.applyTo(program, address, options, monitor)`) — the same mechanism PDB import
   uses internally. This gives applied functions real namespaces and signatures, not bare renames. Falls
   back to a sanitized plain label/rename when a string doesn't demangle (the plain linker symbols).
 - **Precedence rule — never silently overwrite a real name.** An address whose *current* name doesn't

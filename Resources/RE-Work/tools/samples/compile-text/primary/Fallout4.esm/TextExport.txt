@@ -1,0 +1,9 @@
+; CompileTextExport fixture -- PRIMARY root, traversed AFTER the backup root.
+; Exercises reserved IDs, unknown categories, malformed lines, and duplicate
+; IDs against the backup root.
+0x0001000A	0x00000002	Misc	primary wins this duplicate
+0x00010002	0x00000003	Quest Stage Log Entry	dialog-routed record
+0x00010003	0x00000004	Loading Screen Text	plain record
+0x0000000F	0x00000005	Response Text	reserved-ID prefix
+0x00010010	0x00000006	Not A Real Category	falls back to Misc
+this line has no tabs and no id

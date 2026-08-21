@@ -1,6 +1,6 @@
 // Locate a class's vtable data symbol by fuzzy name match (Ghidra "vftable", MSVC-mangled
 // "??_7<Class>@@6B@", or a plain "<Class>::vftable"/"VTABLE_<Class>" form) and dump its slots with
-// each target function's fully-qualified name. Works on both the named 155 project and the
+// each target function's fully-qualified name. Works on both the PDB-named 155 project and the
 // CommonLib-named 163 project regardless of which vtable-naming convention that project uses.
 //
 // Usage: -postScript FindDumpVtable.java <ClassName> [<ClassName2> ...]

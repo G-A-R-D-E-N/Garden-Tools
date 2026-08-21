@@ -18,6 +18,10 @@
 *.log
 *.bundle
 
+# CompileTextExport fixtures use .esm as a directory name (not a plugin)
+!tools/samples/compile-text/**/Fallout4.esm/
+!tools/samples/compile-text/**/Fallout4.esm/*
+
 Decompiles/
 Projects/
 Ghidra/

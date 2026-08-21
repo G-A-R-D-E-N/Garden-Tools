@@ -1,14 +1,42 @@
 # CreationKit.exe — Internal Settings Key Database
 
-The CK embeds its **complete settings database** as `bKey:Section` string literals — 1,629 unique
-keys. These are the settings the editor reads/writes (the `CreationKit.ini` `[Section]`/key pairs
-map onto them). Full list: [`ghidra-dump/ck-settings-keys.txt`](ghidra-dump/ck-settings-keys.txt).
+The CK embeds 1,629 unique colon-bearing `bKey:Section` string literals plus **25 bare
+`SettingT<INISettingCollection>` records** whose reader section defaults to `[MAIN]`. These are
+the settings the editor reads/writes (the `CreationKit.ini` `[Section]`/key pairs map onto them).
+The raw colon-bearing list is [`ghidra-dump/ck-settings-keys.txt`](ghidra-dump/ck-settings-keys.txt);
+`tools/validate_ckini.py` augments it with the 25 byte-verified bare records.
 
 ## The naming convention
 
 - Keys are `b` (bool), `i` (int), `u` (uint), `f` (float), `s` (string) prefixed: `bAllowUnsafeSave:General`, `fLodDistance:LOD`, `uDistantObjectExtraHideDelayMS:LOD`.
 - The **`Section` after the colon is the ini section** — `bGenerateGrassDataFiles:Grass` lives under `[Grass]` in the ini.
 - Value parsing is `GetPrivateProfileStringA`-family (ini text), matching the runtime.
+
+### Bare `[MAIN]` INI records
+
+The 25 no-section records are still INI settings, not GameSetting names. The reader's
+`GetSection` helper supplies the literal `MAIN`, so for example:
+
+```ini
+[MAIN]
+fMaxBoneSpeedBeforeDefaultStiffness=50.0
+sControlsRemapFile=Controls\\ControlMap_Custom.txt
+```
+
+The full names and record addresses are in `18-ELRIC-SYMBOLS.md` and the validator's
+`NO_SECTION_DESCRIPTORS` schema. Fixture coverage is in
+`tools/samples/no-section-creationkit.ini` and
+`tools/samples/invalid-no-section-creationkit.ini`.
+
+## Separate runtime GameSetting registry
+
+The bare game-value names (`sYes`, `fAI...`, `fActor...`, and thousands of other
+`s`/`f`/`i`/`u`/`b` names) are **not** CreationKit.ini keys. They belong to the
+separate `SettingT<GameSettingCollection>` registry under vftable `0x142f97230`.
+A byte census finds 5,137 bare-name records plus the 7 colon-bearing UI records
+that share the specialization. Do not merge these names into the 1,629-key INI
+literal dump or the validator's 1,654-record schema; the full RTTI/layout/census and representative
+record map is in [`ghidra-dump/game-setting-table.md`](ghidra-dump/game-setting-table.md).
 
 ## Section inventory (key counts)
 
@@ -75,7 +103,7 @@ fPreVisCameraBufferNear=       fPreVisCameraZShift=
 [Display]
 bCombinedObjectsAvailableForPicking=
 ```
-Plus the data paths: `Data\Meshes\PreCombined\%08X_*.NIF`, `Data\PreVis.esp`, `CombinedObjects.esp`.
+Plus the data paths: `Data\Meshes\PreCombined\%08X_*.NIF`, `Data\PreVis.esp`, `CombinedObjects.esp`. The direct batch consumers, descriptor VAs, and runtime value references are cross-indexed in [22-BATCH-SETTING-DEPENDENCIES.md](22-BATCH-SETTING-DEPENDENCIES.md).
 
 ## Uses
 
