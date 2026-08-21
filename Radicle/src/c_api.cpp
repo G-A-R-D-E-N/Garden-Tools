@@ -11,6 +11,7 @@
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -34,6 +35,15 @@ radicle_status fail(radicle_status status, const char* message) {
 radicle_status fail_exception(radicle_status status, const std::exception& error) {
   g_last_error = error.what();
   return status;
+}
+
+std::filesystem::path utf8_path(std::string_view value) {
+  std::u8string utf8;
+  utf8.reserve(value.size());
+  for (const unsigned char ch : value) {
+    utf8.push_back(static_cast<char8_t>(ch));
+  }
+  return std::filesystem::path(utf8);
 }
 
 fo4::PluginKind to_plugin_kind(radicle_plugin_kind kind) {
@@ -87,7 +97,7 @@ radicle_status radicle_plugin_read_file(const char* path, radicle_plugin** out_p
 
   *out_plugin = nullptr;
   try {
-    auto plugin = fo4::read_plugin_file(std::filesystem::u8path(path));
+    auto plugin = fo4::read_plugin_file(utf8_path(path));
     *out_plugin = new radicle_plugin{std::move(plugin)};
     return RADICLE_STATUS_OK;
   } catch (const std::bad_alloc& error) {
@@ -111,7 +121,7 @@ radicle_status radicle_plugin_write_file(const radicle_plugin* plugin, const cha
   }
 
   try {
-    fo4::write_plugin_file(plugin->value, std::filesystem::u8path(path));
+    fo4::write_plugin_file(plugin->value, utf8_path(path));
     return RADICLE_STATUS_OK;
   } catch (const std::bad_alloc& error) {
     return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
@@ -176,7 +186,7 @@ radicle_status radicle_plugin_stamp_master_kinds(radicle_plugin* plugin,
       if (!master_paths[i]) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "master path cannot be null");
       }
-      masters.push_back(fo4::read_plugin_file(std::filesystem::u8path(master_paths[i])));
+      masters.push_back(fo4::read_plugin_file(utf8_path(master_paths[i])));
     }
     fo4::stamp_master_kinds(plugin->value, masters);
     return RADICLE_STATUS_OK;
