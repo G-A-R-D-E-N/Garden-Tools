@@ -11,6 +11,7 @@ add_library(
     plugin/RadiclePluginAnalysis.cpp
     plugin/RadiclePluginMasters.cpp
     plugin/RadiclePluginMutation.cpp
+    plugin/RadiclePluginBatchMutation.cpp
 )
 target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4)
 fo4ide_enable_warnings(fo4ide_plugin)
