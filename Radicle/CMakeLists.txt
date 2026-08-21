@@ -111,6 +111,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ctda_strings.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
+    tests/test_navmesh_formlinks.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_conflict_graph.cpp
