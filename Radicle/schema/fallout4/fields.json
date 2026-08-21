@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "signature": "REFR",
+      "fields": [
+        {
+          "path": "REFR\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        }
+      ]
+    }
+  ]
+}
