@@ -459,11 +459,22 @@ void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
 }
 
 std::vector<FormLinkHit> collect_form_links(const Plugin& plugin) {
-  std::vector<FormLinkHit> hits;
+  return collect_form_links_detailed(plugin).links;
+}
+
+FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
+  FormLinkCollection result;
+  auto& hits = result.links;
+  bool current_record_unsupported = false;
   const auto context = plugin_form_id_context(plugin);
   visit_records(plugin, [&](const Record& record) {
+    current_record_unsupported = false;
     std::map<std::uint32_t, std::size_t> ordinals;
     for (const auto& sub : record.subrecords) {
+      if (sub.signature == sig_vmad &&
+          vmad_has_unsupported_properties(sub.data, record.header.signature)) {
+        current_record_unsupported = true;
+      }
       const auto ordinal = ordinals[sub.signature.packed()]++;
       visit_link_offsets(record, sub, false, [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
@@ -484,8 +495,11 @@ std::vector<FormLinkHit> collect_form_links(const Plugin& plugin) {
         hits.push_back(std::move(hit));
       });
     }
+    if (current_record_unsupported) {
+      ++result.records_with_unsupported_vmad;
+    }
   });
-  return hits;
+  return result;
 }
 
 }  // namespace fo4

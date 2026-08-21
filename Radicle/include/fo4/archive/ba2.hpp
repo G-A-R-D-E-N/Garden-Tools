@@ -45,8 +45,9 @@ void write_ba2_general_file(const Ba2GeneralArchive& archive,
                             const std::filesystem::path& path);
 
 std::vector<std::byte> extract_ba2_general_entry(const Ba2GeneralEntry& entry);
+// Not noexcept: path normalization allocates, so OOM surfaces as bad_alloc.
 const Ba2GeneralEntry* find_ba2_general_entry(const Ba2GeneralArchive& archive,
-                                               std::string_view path) noexcept;
+                                               std::string_view path);
 
 Ba2GeneralChunk make_stored_ba2_chunk(std::span<const std::byte> data);
 Ba2GeneralChunk make_compressed_ba2_chunk(std::span<const std::byte> data);

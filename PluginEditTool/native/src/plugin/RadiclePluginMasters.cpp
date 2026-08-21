@@ -90,6 +90,10 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
         auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
         fo4::write_plugin_file(remapped, loaded->path);
         loaded->plugin = std::move(remapped);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
         rebuildGraphLocked();
         return nlohmann::json("Wrote " + name + " with reordered masters.");
     } catch (const std::exception& error) {
@@ -149,6 +153,10 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
 
     try {
         fo4::write_plugin_file(loaded->plugin, loaded->path);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
         return nlohmann::json("Saved " + name + ".");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginWriteFailed", error.what()});

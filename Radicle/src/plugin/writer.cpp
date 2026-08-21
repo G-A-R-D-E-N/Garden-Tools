@@ -1,5 +1,6 @@
 #include "fo4/plugin/writer.hpp"
 
+#include "fo4/io/atomic_write.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/form_links.hpp"
@@ -8,7 +9,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <fstream>
 #include <limits>
 #include <span>
 #include <stdexcept>
@@ -287,15 +287,7 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
 
 void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) {
   const auto bytes = write_plugin(plugin);
-  std::ofstream out{path, std::ios::binary};
-  if (!out) {
-    throw std::runtime_error("unable to write " + path.string());
-  }
-  out.write(reinterpret_cast<const char*>(bytes.data()),
-            static_cast<std::streamsize>(bytes.size()));
-  if (!out) {
-    throw std::runtime_error("unable to write " + path.string());
-  }
+  io::write_file_atomic(path, bytes);
 }
 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {

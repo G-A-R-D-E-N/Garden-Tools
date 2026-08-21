@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -26,6 +27,7 @@ private:
         std::string name;
         std::filesystem::path path;
         std::string source;
+        std::filesystem::file_time_type loadedTime{};
         fo4::Plugin plugin;
     };
 
@@ -67,6 +69,18 @@ private:
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
     bool isEditable(const LoadedPlugin& plugin) const;
+
+    // True when the plugin's file on disk still carries the modification time
+    // observed when it was loaded into the cache. Callers must refuse to save
+    // when this returns false so external edits are not clobbered.
+    bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
+    // Returns an error when `plugin` must not be written: read-only source,
+    // or modified on disk since it was cached. Caller holds mutex_.
+    std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
+    // True when `path` resolves inside a directory that already hosts a
+    // loaded plugin (the MO2 mod dirs / Data dir of the active environment).
+    // Saves outside these roots are rejected.
+    bool isAllowedSaveRoot(const std::filesystem::path& path) const;
     void rebuildGraphLocked();
 
     mutable std::mutex mutex_;

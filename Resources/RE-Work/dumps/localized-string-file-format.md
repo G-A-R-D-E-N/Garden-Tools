@@ -51,14 +51,15 @@ No length prefix is present.
 ### 1b. `.DLSTRINGS` / `.ILSTRINGS` — length-prefixed text records
 
 ```text
-record:  [ u32 len ][ text bytes len long ][ 0x00 ]
+record:  [ u32 len ][ text bytes (len-1) long ][ 0x00 ]
 ```
 
 The data block is a concatenation of records; `offset` points at each record's
-`u32 len`. `len` counts the text **without** the trailing NUL (`len+1` payload
-bytes follow the length field; record footprint is `4 + len`). The data block
-walks cleanly to EOF as `sum(4 + len)`, and every table offset lands on a
-record boundary.
+`u32 len`. **The stored `len` includes the trailing NUL** (`len == strlen+1`;
+the hex dump below shows `len=24` for a 23-char string). The payload following
+the length field is exactly `len` bytes and the record footprint is
+`4 + len`. The data block walks cleanly to EOF as `sum(4 + len)`, and every
+table offset lands on a record boundary.
 
 The writer selects the format with the output context's `+0x14e` flag byte:
 clear → NUL-terminated `.STRINGS` style, set → length-prefixed
@@ -103,7 +104,8 @@ Confirmed from machine code:
    `0x14091da46`).
 4. Per record: writes `u32 stringID` and the data offset to the temp table
    (`+0x38` stream), then, gated on context flag `+0x14e` (`0x14091dcf0`):
-   - flag set  → write `u32 len+1` then the text (`0x14091dd02`/`0x14091dd46`),
+   - flag set  → write `u32 len+1` (text length plus the NUL) then the text
+     and its NUL (`0x14091dd02`/`0x14091dd46`),
      i.e. the length-prefixed record — used for `.DLSTRINGS`/`.ILSTRINGS`;
    - flag clear → write the text only, NUL-terminated `.STRINGS` style.
    Accumulates `dataSize` (`+0x1138`) and the record count (`+0x1134`).

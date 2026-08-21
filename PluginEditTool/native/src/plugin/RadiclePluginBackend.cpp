@@ -1,15 +1,18 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <exception>
 #include <iomanip>
 #include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -257,6 +260,43 @@ Capabilities RadiclePluginBackend::capabilities() const noexcept {
     };
 }
 
+bool RadiclePluginBackend::fileUnchangedSinceLoad(const LoadedPlugin& loaded) const {
+    std::error_code ec;
+    const auto current = std::filesystem::last_write_time(loaded.path, ec);
+    return !ec && current == loaded.loadedTime;
+}
+
+std::optional<Error> RadiclePluginBackend::writeGuard(const LoadedPlugin& loaded) const {
+    if (!isEditable(loaded)) {
+        return Error{
+            "PluginReadOnly",
+            "Refusing to write protected or game-Data plugin: " + loaded.name
+        };
+    }
+    if (!fileUnchangedSinceLoad(loaded)) {
+        return Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded.path.string()
+        };
+    }
+    return std::nullopt;
+}
+
+bool RadiclePluginBackend::isAllowedSaveRoot(const std::filesystem::path& path) const {
+    std::error_code ec;
+    auto target = std::filesystem::weakly_canonical(path, ec);
+    for (const auto& loaded : plugins_) {
+        auto root = std::filesystem::weakly_canonical(loaded.path.parent_path(), ec);
+        auto [rootEnd, nothing] =
+            std::mismatch(root.begin(), root.end(), target.begin(), target.end());
+        if (rootEnd == root.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
                                                      const nlohmann::json& arguments) {
     if (operation == "environment.LoadMo2") return loadEnvironment(arguments);
@@ -267,6 +307,17 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "appInterop.ScanBrokenRefs") return scanBrokenRefs();
     if (operation == "backend.OpenPlugin") return openPlugin(arguments);
     if (operation == "backend.SavePlugin") return savePlugin(arguments);
+    if (operation == "backend.SetField") return setField(arguments);
+    if (operation == "backend.CopyAsOverride") return copyAsOverride(arguments);
+    if (operation == "backend.CopyAsOverrideMany") return copyAsOverrideMany(arguments);
+    if (operation == "backend.AddMasters") return addMasters(arguments);
+    if (operation == "backend.CheckEslEligibility") return checkEslEligibility(arguments);
+    if (operation == "backend.GetPluginRecordTypes") return getPluginRecordTypes(arguments);
+    if (operation == "backend.GetRecordsOfType") return getRecordsOfType(arguments);
+    if (operation == "backend.GetRecordsGrid") return getRecordsGrid(arguments);
+    if (operation == "backend.GetRecordDetails") return getRecordDetails(arguments);
+    if (operation == "backend.GetRecordPluginMatrix") return getRecordPluginMatrix(arguments);
+    if (operation == "backend.GetContainmentPath") return getContainmentPath(arguments);
     if (operation == "backend.GetEditablePlugins") return getEditablePlugins();
     if (operation == "backend.GetActivePlugins") return getActivePlugins();
     if (operation == "backend.GetRecordTypeIndex") return getRecordTypeIndex();
@@ -307,10 +358,12 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         try {
             const auto filePath = utf8Path(path);
             auto plugin = fo4::read_plugin_file(filePath);
+            std::error_code ec;
             loaded.push_back({
                 .name = name,
                 .path = filePath,
                 .source = entry.value("source", std::string{}),
+                .loadedTime = std::filesystem::last_write_time(filePath, ec),
                 .plugin = std::move(plugin),
             });
         } catch (const std::exception& error) {
@@ -368,7 +421,11 @@ Result<nlohmann::json> RadiclePluginBackend::getChildren(const nlohmann::json& a
 
     std::scoped_lock lock(mutex_);
     const auto* loaded = findPlugin(pluginName);
-    if (!loaded) return nlohmann::json("[]");
+    // An unknown plugin must be an error, not an empty tree: the two are
+    // indistinguishable for the client otherwise.
+    if (!loaded) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
 
     nlohmann::json rows = nlohmann::json::array();
     const auto records = fo4::collect_records(loaded->plugin);
@@ -419,19 +476,36 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
     const auto path = stringArgument(arguments, 0);
     if (path.empty()) return std::unexpected(Error{"PluginPathMissing", "Plugin path is empty"});
 
+    static constexpr std::array<std::string_view, 3> k_pluginExtensions{".esp", ".esm", ".esl"};
+    const auto lowerPath = asciiLower(path);
+    const bool knownExtension =
+        std::any_of(k_pluginExtensions.begin(), k_pluginExtensions.end(),
+                    [&](const std::string_view extension) {
+                        return lowerPath.ends_with(extension);
+                    });
+    if (!knownExtension) {
+        return std::unexpected(Error{
+            "InvalidPluginExtension",
+            "Only .esp, .esm, and .esl files can be opened: " + path
+        });
+    }
+
     try {
         const auto filePath = utf8Path(path);
         auto plugin = fo4::read_plugin_file(filePath);
         std::string name = plugin.key.filename().empty()
             ? filePath.filename().string()
             : std::string(plugin.key.filename());
+        std::error_code ec;
+        const auto loadedTime = std::filesystem::last_write_time(filePath, ec);
         std::scoped_lock lock(mutex_);
         auto* existing = findPlugin(name);
         if (existing) {
             existing->path = filePath;
+            existing->loadedTime = loadedTime;
             existing->plugin = std::move(plugin);
         } else {
-            plugins_.push_back({name, filePath, {}, std::move(plugin)});
+            plugins_.push_back({name, filePath, {}, loadedTime, std::move(plugin)});
         }
 
         std::vector<fo4::MasterDescriptor> knownKinds;
@@ -459,10 +533,24 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
     std::scoped_lock lock(mutex_);
     auto* loaded = findPlugin(name);
     if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    // Guards live here, not only in the RPC shim: every dispatch path into
+    // savePlugin gets the same protection.
+    if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
     const auto output = requestedPath.empty() ? loaded->path : utf8Path(requestedPath);
+    // "Save As" may only land next to plugins of the active environment;
+    // otherwise this endpoint would be an arbitrary-file overwrite primitive.
+    if (!isAllowedSaveRoot(output)) {
+        return std::unexpected(Error{
+            "SavePathNotAllowed",
+            "Refusing to save outside the directories hosting loaded plugins: " +
+                output.string()
+        });
+    }
     try {
         fo4::write_plugin_file(loaded->plugin, output);
         loaded->path = output;
+        std::error_code ec;
+        loaded->loadedTime = std::filesystem::last_write_time(output, ec);
         return nlohmann::json{{"ok", true}, {"plugin", name}, {"path", output.string()}}.dump();
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginWriteFailed", error.what()});
@@ -575,7 +663,12 @@ Result<nlohmann::json> RadiclePluginBackend::getConflictMatrix(const nlohmann::j
     std::scoped_lock lock(mutex_);
     const auto& versions = graph_.versions(key);
     const auto* winner = graph_.winner(key);
-    if (winner == nullptr) return nlohmann::json("");
+    if (winner == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "No loaded plugin contains this FormKey: " + formKeyText
+        });
+    }
 
     nlohmann::json pluginNames = nlohmann::json::array();
     std::vector<const fo4::Record*> records;
@@ -698,8 +791,11 @@ Result<nlohmann::json> RadiclePluginBackend::scanBrokenRefs() const {
     }
 
     std::set<std::string> missing;
+    std::size_t recordsWithUnsupportedVmad = 0;
     for (const auto& loaded : plugins_) {
-        for (const auto& link : fo4::collect_form_links(loaded.plugin)) {
+        const auto collection = fo4::collect_form_links_detailed(loaded.plugin);
+        recordsWithUnsupportedVmad += collection.records_with_unsupported_vmad;
+        for (const auto& link : collection.links) {
             if (link.key.owner().empty() || knownRecords.contains(link.key)) continue;
             const auto source = link.record.owner().empty()
                 ? std::string("<TES4>")
@@ -714,6 +810,11 @@ Result<nlohmann::json> RadiclePluginBackend::scanBrokenRefs() const {
     report << "Loaded plugins: " << plugins_.size() << '\n';
     report << "Indexed records: " << knownRecords.size() << '\n';
     report << "Dangling FormLinks: " << missing.size() << "\n\n";
+    if (recordsWithUnsupportedVmad != 0) {
+        report << "NOTE: " << recordsWithUnsupportedVmad
+               << " record(s) contain VMAD script data using property types Radicle cannot"
+               << " scan yet; FormLinks inside those records are NOT included below.\n\n";
+    }
 
     if (missing.empty()) {
         report << "No dangling FormLinks were found in the currently loaded plugin set.";
@@ -742,11 +843,14 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
     nlohmann::json masters = nlohmann::json::array();
     for (std::size_t index = 0; index < loaded->plugin.header.masters.size(); ++index) {
         const auto& master = loaded->plugin.header.masters[index];
+        // Expose the resolved kind so clients (and tests) can catch a
+        // full/light mis-stamp before a later remap bakes wrong FormIDs.
         masters.push_back({
             {"index", index},
             {"name", std::string(master.key.filename())},
             {"size", master.data_size},
-            {"used", true}
+            {"used", true},
+            {"kind", master.kind == fo4::PluginKind::light ? "light" : "full"}
         });
     }
     return nlohmann::json(nlohmann::json{

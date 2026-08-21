@@ -161,11 +161,16 @@ nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 
 Result<nlohmann::json> RadiclePluginBackend::getPluginRecordTypes(
     const nlohmann::json& arguments) const {
     const auto pluginName = stringArgument(arguments, 0);
-    if (pluginName.empty()) return nlohmann::json("[]");
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
 
     std::scoped_lock lock(mutex_);
     const auto* loaded = findPlugin(pluginName);
-    if (loaded == nullptr) return nlohmann::json("[]");
+    // A typo'd plugin name must not be reported as "plugin with no records".
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
 
     std::map<std::string, std::size_t> counts;
     for (const auto* record : fo4::collect_records(loaded->plugin)) {

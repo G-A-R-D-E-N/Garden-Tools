@@ -114,6 +114,21 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
             "Refusing to write overrides into protected or game-Data plugin: " + target->name
         });
     }
+    // Same restriction as single-record copyAsOverride: batch writes must not
+    // slip past the ONAM safety guard that single copy enforces.
+    if (target->plugin.header.tes4_flags.is_master()) {
+        return std::unexpected(Error{
+            "MasterOverrideWriteUnsupported",
+            "Native override insertion into master-flagged targets is disabled until TES4 ONAM override metadata is maintained"
+        });
+    }
+    if (!fileUnchangedSinceLoad(*target)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Target plugin was modified on disk after it was loaded; reload it before writing: " +
+                target->path.string()
+        });
+    }
 
     nlohmann::json existing = nlohmann::json::array();
     if (!overwrite) {
@@ -187,6 +202,10 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
         try {
             fo4::write_plugin_file(mutated, target->path);
             target->plugin = std::move(mutated);
+            {
+                std::error_code ec;
+                target->loadedTime = std::filesystem::last_write_time(target->path, ec);
+            }
             rebuildGraphLocked();
         } catch (const std::exception& error) {
             return std::unexpected(Error{"BatchCopyWriteFailed", error.what()});

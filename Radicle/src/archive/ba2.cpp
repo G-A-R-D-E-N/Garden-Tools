@@ -1,6 +1,7 @@
 #include "fo4/archive/ba2.hpp"
 
 #include "fo4/binary/cursor.hpp"
+#include "fo4/io/atomic_write.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -21,6 +22,11 @@ constexpr std::uint16_t k_general_chunk_header_size = 0x10u;
 constexpr std::size_t k_header_size = 24;
 constexpr std::size_t k_entry_size = 16;
 constexpr std::size_t k_chunk_record_size = 20;
+
+// Upper bound on a single entry's decompressed size. Far above anything a
+// real FO4 asset needs, but small enough that a hostile archive cannot turn
+// a few packed bytes into an unbounded allocation.
+constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
 
 std::uint64_t read_u64(binary::Cursor& cursor) {
   const auto low = static_cast<std::uint64_t>(cursor.read_u32());
@@ -236,6 +242,14 @@ std::vector<std::byte> extract_ba2_general_entry(const Ba2GeneralEntry& entry) {
     }
     total += static_cast<std::size_t>(chunk.decompressed_size);
   }
+  // decompressed_size is attacker-controlled per chunk and the chunk count is
+  // unbounded, so cap the total before allocating anything. A few MB BA2 can
+  // otherwise demand many GB of RAM.
+  if (total > k_max_extract_total_bytes) {
+    throw Ba2Error("BA2 entry exceeds the " +
+                   std::to_string(k_max_extract_total_bytes) +
+                   "-byte extraction limit");
+  }
 
   std::vector<std::byte> output;
   output.reserve(total);
@@ -263,7 +277,9 @@ std::vector<std::byte> extract_ba2_general_entry(const Ba2GeneralEntry& entry) {
 }
 
 const Ba2GeneralEntry* find_ba2_general_entry(const Ba2GeneralArchive& archive,
-                                               std::string_view path) noexcept {
+                                               std::string_view path) {
+  // Not noexcept: normalized_path allocates, and an allocation failure must
+  // propagate as bad_alloc instead of terminating via an escaping exception.
   const auto wanted = normalized_path(path);
   for (const auto& entry : archive.entries) {
     if (normalized_path(entry.path) == wanted) {
@@ -411,20 +427,7 @@ std::vector<std::byte> write_ba2_general(const Ba2GeneralArchive& archive) {
 void write_ba2_general_file(const Ba2GeneralArchive& archive,
                             const std::filesystem::path& path) {
   const auto bytes = write_ba2_general(archive);
-  if (!path.parent_path().empty()) {
-    std::filesystem::create_directories(path.parent_path());
-  }
-  std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-  if (!stream) {
-    throw Ba2Error("could not create BA2: " + path.string());
-  }
-  if (!bytes.empty()) {
-    stream.write(reinterpret_cast<const char*>(bytes.data()),
-                 static_cast<std::streamsize>(bytes.size()));
-  }
-  if (!stream) {
-    throw Ba2Error("could not write BA2: " + path.string());
-  }
+  io::write_file_atomic(path, bytes);
 }
 
 }  // namespace fo4::archive

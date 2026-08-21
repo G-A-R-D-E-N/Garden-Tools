@@ -40,12 +40,6 @@ std::string asciiLower(std::string_view value) {
     return out;
 }
 
-std::string pluginKind(const fo4::Plugin& plugin) {
-    if (plugin.header.tes4_flags.is_small_file()) return "light";
-    if (plugin.header.tes4_flags.is_master()) return "master";
-    return "plugin";
-}
-
 bool officialPluginName(std::string_view name) {
     const auto lower = asciiLower(name);
     if (lower == "fallout4.esm" ||
@@ -132,6 +126,8 @@ bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
 Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     std::string_view method,
     const nlohmann::json& arguments) {
+    // All write guards live inside the mutating functions themselves, so this
+    // shim is a pure name mapping and cannot be bypassed to skip protection.
     if (method == "SetField") return setField(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
@@ -143,45 +139,6 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "GetRecordDetails") return getRecordDetails(arguments);
     if (method == "GetRecordPluginMatrix") return getRecordPluginMatrix(arguments);
     if (method == "GetContainmentPath") return getContainmentPath(arguments);
-
-    if (method == "GetEditablePlugins") {
-        nlohmann::json rows = nlohmann::json::array();
-        std::scoped_lock lock(mutex_);
-        for (const auto& loaded : plugins_) {
-            if (isEditable(loaded)) rows.push_back(loaded.name);
-        }
-        return nlohmann::json(rows.dump());
-    }
-
-    if (method == "GetActivePlugins") {
-        nlohmann::json rows = nlohmann::json::array();
-        std::scoped_lock lock(mutex_);
-        for (std::size_t index = 0; index < plugins_.size(); ++index) {
-            const auto& loaded = plugins_[index];
-            rows.push_back({
-                {"Name", loaded.name},
-                {"Kind", pluginKind(loaded.plugin)},
-                {"LoadOrder", index},
-                {"Editable", isEditable(loaded)},
-                {"Size", loaded.plugin.original_bytes.size()}
-            });
-        }
-        return nlohmann::json(rows.dump());
-    }
-
-    if (method == "SavePlugin") {
-        const auto name = stringArgument(arguments, 0);
-        {
-            std::scoped_lock lock(mutex_);
-            const auto* loaded = findPlugin(name);
-            if (loaded != nullptr && !isEditable(*loaded)) {
-                return std::unexpected(Error{
-                    "PluginReadOnly",
-                    "Refusing to write protected or game-Data plugin: " + loaded->name
-                });
-            }
-        }
-    }
 
     return invoke("backend." + std::string(method), arguments);
 }
@@ -230,6 +187,13 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
         return std::unexpected(Error{
             "PluginReadOnly",
             "Refusing to edit protected or game-Data plugin: " + loaded->name
+        });
+    }
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
         });
     }
 
@@ -350,6 +314,10 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
 
         fo4::write_plugin_file(mutated, loaded->path);
         loaded->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
         rebuildGraphLocked();
         return nlohmann::json(std::move(status));
     } catch (const fo4::forms::EyesError& error) {
@@ -409,6 +377,13 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
             "Refusing to write override into protected or game-Data plugin: " + target->name
         });
     }
+    if (!fileUnchangedSinceLoad(*target)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Target plugin was modified on disk after it was loaded; reload it before writing: " +
+                target->path.string()
+        });
+    }
     if (target->plugin.header.tes4_flags.is_master()) {
         return std::unexpected(Error{
             "MasterOverrideWriteUnsupported",
@@ -435,6 +410,10 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
 
         fo4::write_plugin_file(mutated, target->path);
         target->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            target->loadedTime = std::filesystem::last_write_time(target->path, ec);
+        }
         rebuildGraphLocked();
 
         return nlohmann::json(

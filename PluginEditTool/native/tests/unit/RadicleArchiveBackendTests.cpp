@@ -112,16 +112,12 @@ TEST_CASE("Radicle archive backend lists GNRL entries using the existing UI cont
     CHECK(result->at("entries")[0].at("size") == 2048);
 }
 
-TEST_CASE("Legacy archive backend construction delegates to Radicle") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = writeArchive(root, "legacy.ba2", {entry("A.txt", "one")});
-
+TEST_CASE("Null archive backend is genuinely unavailable") {
     fo4ide::archive::NullArchiveBackend backend;
-    CHECK(backend.available());
-    const auto result = backend.invoke("list", listArguments(path));
-    REQUIRE(result.has_value());
-    CHECK(result->at("shownCount") == 1);
+    CHECK_FALSE(backend.available());
+    const auto result = backend.invoke("list", nlohmann::json::array());
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ArchiveBackendUnavailable");
 }
 
 TEST_CASE("Radicle archive backend extracts selected entries under the chosen root") {

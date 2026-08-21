@@ -28,12 +28,28 @@ void clear_error() {
 }
 
 radicle_status fail(radicle_status status, const char* message) {
-  g_last_error = message ? message : "Unknown Radicle error";
+  try {
+    g_last_error = message ? message : "Unknown Radicle error";
+  } catch (...) {
+    // Allocation failed while storing the message; the status code still
+    // reports the failure. Never let an exception escape extern "C".
+  }
   return status;
 }
 
 radicle_status fail_exception(radicle_status status, const std::exception& error) {
-  g_last_error = error.what();
+  try {
+    g_last_error = error.what();
+  } catch (const std::bad_alloc&) {
+    // Out of memory on this very path: keep whatever previous text is
+    // present rather than throwing through the C boundary. Callers must
+    // treat the status code as authoritative regardless of last_error.
+  } catch (...) {
+    try {
+      g_last_error.clear();
+    } catch (...) {
+    }
+  }
   return status;
 }
 

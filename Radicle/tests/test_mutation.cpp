@@ -124,8 +124,10 @@ TEST(Mutation, InsertsMissingEditorId) {
 TEST(Mutation, NoOpStillReportsRecordFound) {
   auto plugin = fo4::read_plugin(make_plugin(true), "Patch.esp");
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
+  const auto original = plugin.original_bytes;
   ASSERT_TRUE(fo4::set_record_editor_id(plugin, key, "OldEditorId"));
-  EXPECT_FALSE(plugin.original_bytes.empty());
+  // A same-value write must not dirty the serialized payload.
+  EXPECT_EQ(plugin.original_bytes, original);
 }
 
 TEST(Mutation, MissingRecordReturnsFalseAndDoesNotDirtyPlugin) {

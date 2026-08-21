@@ -23,9 +23,15 @@ include(Sanitizers)
 # native test directories as well as Radicle's subdirectory.
 find_package(ZLIB REQUIRED)
 
+set(RADICLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Radicle")
+if(NOT EXISTS "${RADICLE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR
+        "Radicle sources not found at ${RADICLE_DIR}. "
+        "PluginEditTool/native expects the sibling Radicle checkout from the same repository.")
+endif()
 set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../Radicle" "${CMAKE_BINARY_DIR}/radicle")
+add_subdirectory("${RADICLE_DIR}" "${CMAKE_BINARY_DIR}/radicle")
 
 add_subdirectory(src)
 add_subdirectory(apps/fo4ide)

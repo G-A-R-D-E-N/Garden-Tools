@@ -20,6 +20,7 @@
 #include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/archive/ArchiveService.hpp>
+#include <fo4ide/archive/RadicleArchiveBackend.hpp>
 #include <fo4ide/assets/NifService.hpp>
 #include <fo4ide/audio/AudioService.hpp>
 #include <fo4ide/events/EventBus.hpp>
@@ -318,7 +319,7 @@ int main(int argc, char** argv) {
     fo4ide::assets::NifService nifService(processRunner, nifTool);
     fo4ide::audio::AudioService audioService(processRunner, toolLocator);
     fo4ide::material::MaterialService materialService;
-    fo4ide::archive::NullArchiveBackend archiveBackend;
+    fo4ide::archive::RadicleArchiveBackend archiveBackend;
     fo4ide::archive::ArchiveService archiveService(processRunner, toolLocator, archiveBackend);
     fo4ide::events::EventBus events;
     fo4ide::plugin::RadiclePluginBackend plugins;

@@ -57,11 +57,12 @@ jobs:
           sudo apt-get install --yes ninja-build zlib1g-dev
 
       - name: Configure PluginEditTool native host
+        # HTTP stays ON here so the rewritten HttpServerTests (HTTP/SSE/RPC
+        # envelope) run in hosted CI, not only on the self-hosted lane.
         run: >-
           cmake -S PluginEditTool/native -B build/plugin-edit-native -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DFO4IDE_BUILD_TESTS=ON
-          -DFO4IDE_BUILD_HTTP=OFF
 
       - name: Build PluginEditTool native host
         run: cmake --build build/plugin-edit-native --parallel

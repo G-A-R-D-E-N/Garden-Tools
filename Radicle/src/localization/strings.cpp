@@ -1,5 +1,7 @@
 #include "fo4/localization/strings.hpp"
 
+#include "fo4/io/atomic_write.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <limits>
@@ -250,13 +252,7 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
 void write_string_table_file(const LocalizedStringTable& table,
                              const std::filesystem::path& path) {
   const auto bytes = write_string_table(table);
-  std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-  if (!stream) throw StringTableError("could not open localized string file for writing");
-  if (!bytes.empty()) {
-    stream.write(reinterpret_cast<const char*>(bytes.data()),
-                 static_cast<std::streamsize>(bytes.size()));
-  }
-  if (!stream) throw StringTableError("could not write localized string file");
+  io::write_file_atomic(path, bytes);
 }
 
 const LocalizedStringEntry* find_string(const LocalizedStringTable& table,

@@ -121,6 +121,10 @@ Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& ar
         auto mutated = fo4::remap_plugin_masters(target->plugin, std::move(masters));
         fo4::write_plugin_file(mutated, target->path);
         target->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            target->loadedTime = std::filesystem::last_write_time(target->path, ec);
+        }
         rebuildGraphLocked();
         return nlohmann::json(
             "Added " + std::to_string(added) + " master" +

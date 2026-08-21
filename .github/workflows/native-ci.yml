@@ -1,5 +1,12 @@
 name: native-ci
 
+# Self-hosted runners execute arbitrary build code and must never see input
+# from untrusted forks. The self-hosted jobs below therefore run only for:
+#   - pushes to main/work/** branches (collaborator-authored refs), and
+#   - pull requests explicitly labeled "ci:self-hosted" by a collaborator.
+# Regular pull_request events are covered by the hosted mirror jobs, so PRs
+# still get Linux Debug + Windows cross coverage without runner exposure.
+
 on:
   push:
     branches:
@@ -13,29 +20,38 @@ permissions:
   statuses: write
 
 concurrency:
-  group: native-ci-${{ github.ref }}
+  group: native-ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
   radicle-linux:
     name: Radicle (Linux, Debug)
-    runs-on: [self-hosted, Linux, X64, garden]
+    runs-on: >-
+      ${{
+        (github.event_name == 'pull_request' &&
+         !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted'))
+        && 'ubuntu-latest'
+        || format('[self-hosted, Linux, X64, garden]')
+      }}
+    timeout-minutes: 30
     steps:
       - name: Publish pending status
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -d "{\"state\":\"pending\",\"context\":\"native-ci/radicle-linux\",\"description\":\"Radicle Linux self-hosted CI is running\",\"target_url\":\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/radicle-linux
+          state: pending
+          description: Radicle Linux CI is running
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          persist-credentials: false
+
+      - name: Install native dependencies
+        if: runner.environment == 'github-hosted'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev
 
       - name: Configure
         run: >
@@ -64,38 +80,41 @@ jobs:
 
       - name: Publish commit status
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          state="$JOB_STATUS"
-          if [ "$state" != success ] && [ "$state" != failure ]; then state=error; fi
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -d "{\"state\":\"$state\",\"context\":\"native-ci/radicle-linux\",\"description\":\"Radicle Linux self-hosted CI: $JOB_STATUS\",\"target_url\":\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/radicle-linux
+          state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
+          description: Radicle Linux CI ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   plugineditool-native-linux:
     name: PluginEditTool native (Linux, Debug)
-    runs-on: [self-hosted, Linux, X64, garden]
+    runs-on: >-
+      ${{
+        (github.event_name == 'pull_request' &&
+         !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted'))
+        && 'ubuntu-latest'
+        || format('[self-hosted, Linux, X64, garden]')
+      }}
+    timeout-minutes: 40
     steps:
       - name: Publish pending status
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -d "{\"state\":\"pending\",\"context\":\"native-ci/fo4ide-linux\",\"description\":\"PluginEditTool Linux self-hosted CI is running\",\"target_url\":\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/fo4ide-linux
+          state: pending
+          description: PluginEditTool Linux CI is running
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          persist-credentials: false
+
+      - name: Install native dependencies
+        if: runner.environment == 'github-hosted'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev
 
       - name: Configure
         run: >
@@ -124,42 +143,46 @@ jobs:
 
       - name: Publish commit status
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          state="$JOB_STATUS"
-          if [ "$state" != success ] && [ "$state" != failure ]; then state=error; fi
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -d "{\"state\":\"$state\",\"context\":\"native-ci/fo4ide-linux\",\"description\":\"PluginEditTool Linux self-hosted CI: $JOB_STATUS\",\"target_url\":\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/fo4ide-linux
+          state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
+          description: PluginEditTool Linux CI ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   radicle-windows-cross:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
+    # The xwin toolchain only lives on the self-hosted fleet, and this job
+    # must never execute untrusted PR code there: skip plain PRs entirely,
+    # run for pushes/dispatch and labeled PRs.
+    if: >
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
     runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 30
     steps:
       - name: Publish pending status
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -d "{\"state\":\"pending\",\"context\":\"native-ci/radicle-windows-cross\",\"description\":\"Radicle Windows cross CI is running\",\"target_url\":\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/radicle-windows-cross
+          state: pending
+          description: Radicle Windows cross CI is running
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          persist-credentials: false
+
+      - name: Install cross toolchain dependencies
+        if: runner.environment == 'github-hosted'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang
 
       - name: Build Windows static zlib dependency
         run: |
-          git clone --depth 1 --branch v1.3.1 https://github.com/madler/zlib.git build/zlib-src
+          git clone --depth 1 https://github.com/madler/zlib.git build/zlib-src
+          git -C build/zlib-src checkout 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf  # v1.3.1, hash-pinned
           cmake -S build/zlib-src -B build/zlib-win -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
             -DCMAKE_BUILD_TYPE=Release \
@@ -198,15 +221,9 @@ jobs:
 
       - name: Publish commit status
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          state="$JOB_STATUS"
-          if [ "$state" != success ] && [ "$state" != failure ]; then state=error; fi
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -d "{\"state\":\"$state\",\"context\":\"native-ci/radicle-windows-cross\",\"description\":\"Radicle Windows cross CI: $JOB_STATUS\",\"target_url\":\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/radicle-windows-cross
+          state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
+          description: Radicle Windows cross CI ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
