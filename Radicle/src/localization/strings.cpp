@@ -4,6 +4,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -41,9 +42,14 @@ std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
   if (!stream) throw StringTableError("could not open localized string file");
 
   const auto end = stream.tellg();
-  if (end < 0) throw StringTableError("could not determine localized string file size");
-  const auto size = static_cast<std::uintmax_t>(end);
-  if (size > static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max())) {
+  if (end == std::streampos(-1)) {
+    throw StringTableError("could not determine localized string file size");
+  }
+  const auto signed_size = static_cast<std::streamoff>(end);
+  if (signed_size < 0) throw StringTableError("localized string file size is negative");
+  const auto size = static_cast<std::uintmax_t>(signed_size);
+  if (size > static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max()) ||
+      size > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
     throw StringTableError("localized string file is too large for this process");
   }
 
@@ -191,10 +197,11 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
   rows.reserve(table.entries.size());
   std::vector<std::byte> data;
   std::map<std::vector<std::byte>, std::uint32_t> deduplicated;
+  std::set<std::uint32_t> ids;
 
   for (const auto& entry : table.entries) {
     validate_text_bytes(entry.text);
-    if (std::any_of(rows.begin(), rows.end(), [&](const auto& row) { return row.id == entry.id; })) {
+    if (!ids.insert(entry.id).second) {
       throw StringTableError("localized string table contains a duplicate string ID");
     }
 
@@ -254,12 +261,9 @@ void write_string_table_file(const LocalizedStringTable& table,
 
 const LocalizedStringEntry* find_string(const LocalizedStringTable& table,
                                         std::uint32_t id) noexcept {
-  const auto it = std::lower_bound(table.entries.begin(), table.entries.end(), id,
-                                   [](const auto& entry, std::uint32_t wanted) {
-                                     return entry.id < wanted;
-                                   });
-  if (it == table.entries.end() || it->id != id) return nullptr;
-  return &*it;
+  const auto it = std::find_if(table.entries.begin(), table.entries.end(),
+                               [id](const auto& entry) { return entry.id == id; });
+  return it == table.entries.end() ? nullptr : &*it;
 }
 
 }  // namespace fo4::localization
