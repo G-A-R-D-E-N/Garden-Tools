@@ -5,7 +5,11 @@ target_link_libraries(fo4ide_core INTERFACE nlohmann_json::nlohmann_json)
 add_library(fo4ide_plugin_api INTERFACE)
 target_link_libraries(fo4ide_plugin_api INTERFACE fo4ide_core)
 
-add_library(fo4ide_plugin plugin/RadiclePluginBackend.cpp)
+add_library(
+    fo4ide_plugin
+    plugin/RadiclePluginBackend.cpp
+    plugin/RadiclePluginAnalysis.cpp
+)
 target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4)
 fo4ide_enable_warnings(fo4ide_plugin)
 fo4ide_enable_sanitizers(fo4ide_plugin)
