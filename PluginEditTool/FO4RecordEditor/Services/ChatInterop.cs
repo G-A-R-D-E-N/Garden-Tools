@@ -20,6 +20,7 @@ namespace FO4RecordEditor.Services;
 
 [ClassInterface(ClassInterfaceType.AutoDual)]
 [ComVisible(true)]
+[RpcExpose]
 public class ChatInterop
 {
     private readonly ShellViewModel _shell;

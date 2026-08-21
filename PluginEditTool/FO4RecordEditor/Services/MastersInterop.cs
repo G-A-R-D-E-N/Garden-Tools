@@ -14,6 +14,7 @@ namespace FO4RecordEditor.Services;
 
 [ClassInterface(ClassInterfaceType.AutoDual)]
 [ComVisible(true)]
+[RpcExpose]
 public class MastersInterop
 {
     private readonly ShellViewModel _shell;

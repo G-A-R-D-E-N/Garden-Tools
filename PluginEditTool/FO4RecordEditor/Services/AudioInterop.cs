@@ -12,6 +12,7 @@ namespace FO4RecordEditor.Services;
 
 [ClassInterface(ClassInterfaceType.AutoDual)]
 [ComVisible(true)]
+[RpcExpose]
 public class AudioInterop
 {
     public string BrowseForFile(string title, string filter)
@@ -64,6 +65,7 @@ public class AudioInterop
         });
 
 
+    [RpcHidden]
     public string OpenFolder(string path)
     {
         try
