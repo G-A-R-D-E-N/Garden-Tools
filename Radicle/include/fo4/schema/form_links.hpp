@@ -17,6 +17,10 @@ struct FormLinkHit {
   FormKey key;
 };
 
+void remap_record_form_links(Record& record,
+                             const PluginFormIdContext& old_context,
+                             const PluginFormIdContext& new_context);
+
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context);
 
