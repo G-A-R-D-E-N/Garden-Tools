@@ -11,6 +11,7 @@ namespace FO4RecordEditor.Services;
 
 [ClassInterface(ClassInterfaceType.AutoDual)]
 [ComVisible(true)]
+[RpcExpose]
 public class ArchiveInterop
 {
     public string BrowseForFile(string title, string filter)
@@ -96,6 +97,7 @@ public class ArchiveInterop
         });
 
 
+    [RpcHidden]
     public string OpenFolder(string path)
     {
         try

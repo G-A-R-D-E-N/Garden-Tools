@@ -4,9 +4,9 @@ import './SettingsModal.css';
 
 interface Settings {
   AiProvider: string;
-  AnthropicApiKey: string;
+  hasAnthropicApiKey: boolean;
   Model: string;
-  GeminiApiKey: string;
+  hasGeminiApiKey: boolean;
   GeminiModel: string;
   ClaudeCodePath: string;
   OllamaUrl: string;
@@ -44,6 +44,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [s, setS] = useState<Settings | null>(null);
   const [status, setStatus] = useState('');
   const [claudeTest, setClaudeTest] = useState('');
+  const [anthropicDraft, setAnthropicDraft] = useState('');
+  const [geminiDraft, setGeminiDraft] = useState('');
+  const httpBridge = (window as unknown as { __FO4IDE_HTTP_BRIDGE__?: boolean }).__FO4IDE_HTTP_BRIDGE__ ?? false;
 
   useEffect(() => {
     (async () => {
@@ -60,7 +63,12 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     const h = host();
     if (!h || !s) return;
     setStatus('Saving…');
-    try { setStatus(await h.SaveSettings(JSON.stringify(s))); }
+    try {
+      const payload: Record<string, unknown> = { ...s };
+      if (anthropicDraft.trim()) payload.AnthropicApiKey = anthropicDraft.trim();
+      if (geminiDraft.trim()) payload.GeminiApiKey = geminiDraft.trim();
+      setStatus(await h.SaveSettings(JSON.stringify(payload)));
+    }
     catch (e: any) { setStatus('Save failed: ' + (e?.message || e)); }
   };
 
@@ -131,9 +139,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
               {s.AiProvider === 'anthropic' && (
                 <label className="settings-field">
-                  <span>Anthropic API Key</span>
-                  <input type="password" value={s.AnthropicApiKey}
-                    onChange={e => set('AnthropicApiKey', e.target.value)} placeholder="sk-ant-…" />
+                  <span>Anthropic API Key {s.hasAnthropicApiKey ? <em>(configured ✓)</em> : <em>(not set)</em>}</span>
+                  <input type="password" value={anthropicDraft}
+                    onChange={e => setAnthropicDraft(e.target.value)}
+                    placeholder={s.hasAnthropicApiKey ? 'leave blank to keep the current key' : 'sk-ant-…'} />
                 </label>
               )}
 
@@ -159,9 +168,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     );
                   })()}
                   <label className="settings-field">
-                    <span>Gemini API Key</span>
-                    <input type="password" value={s.GeminiApiKey}
-                      onChange={e => set('GeminiApiKey', e.target.value)} placeholder="AIza…" />
+                    <span>Gemini API Key {s.hasGeminiApiKey ? <em>(configured ✓)</em> : <em>(not set)</em>}</span>
+                    <input type="password" value={geminiDraft}
+                      onChange={e => setGeminiDraft(e.target.value)}
+                      placeholder={s.hasGeminiApiKey ? 'leave blank to keep the current key' : 'AIza…'} />
                   </label>
                 </>
               )}
@@ -172,10 +182,12 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     <span>Claude Code Path</span>
                     <input value={s.ClaudeCodePath} onChange={e => set('ClaudeCodePath', e.target.value)} placeholder="claude" />
                   </label>
-                  <div className="settings-inline">
-                    <button className="settings-btn" onClick={testClaude}>Test CLI</button>
-                    <span className="settings-test">{claudeTest}</span>
-                  </div>
+                  {!httpBridge && (
+                    <div className="settings-inline">
+                      <button className="settings-btn" onClick={testClaude}>Test CLI</button>
+                      <span className="settings-test">{claudeTest}</span>
+                    </div>
+                  )}
                 </>
               )}
 

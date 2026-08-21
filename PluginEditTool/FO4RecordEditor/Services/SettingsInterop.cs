@@ -13,6 +13,7 @@ namespace FO4RecordEditor.Services;
 
 [ClassInterface(ClassInterfaceType.AutoDual)]
 [ComVisible(true)]
+[RpcExpose]
 public class SettingsInterop
 {
     private readonly ShellViewModel _shell;
@@ -27,9 +28,9 @@ public class SettingsInterop
         return JsonConvert.SerializeObject(new
         {
             s.AiProvider,
-            s.AnthropicApiKey,
+            hasAnthropicApiKey = !string.IsNullOrWhiteSpace(s.AnthropicApiKey),
             s.Model,
-            s.GeminiApiKey,
+            hasGeminiApiKey = !string.IsNullOrWhiteSpace(s.GeminiApiKey),
             s.GeminiModel,
             s.ClaudeCodePath,
             s.OllamaUrl,
@@ -113,6 +114,7 @@ public class SettingsInterop
     }
 
 
+    [RpcHidden]
     public async Task<string> TestClaude(string path)
     {
         path = string.IsNullOrWhiteSpace(path) ? "claude" : path;

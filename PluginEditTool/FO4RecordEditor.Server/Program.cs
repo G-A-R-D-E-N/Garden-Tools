@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using FO4RecordEditor.Server;
 using FO4RecordEditor.Services;
 using FO4RecordEditor.Services.Rendering;
@@ -67,6 +68,20 @@ PluginToolExecutor.ToolCompleted += ev => events.Push(new
 var host = ArgValue("--host") ?? "127.0.0.1";
 var port = int.TryParse(ArgValue("--port"), out var p) && p > 0 ? p : FreePort(host);
 
+var operatorToken = ArgValue("--token") ?? Environment.GetEnvironmentVariable("FO4IDE_TOKEN");
+bool hasOperatorToken = !string.IsNullOrWhiteSpace(operatorToken);
+var token = hasOperatorToken ? operatorToken!
+    : Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+if (!IsLoopbackHost(host) && !hasOperatorToken)
+{
+    Console.Error.WriteLine($"Refusing to bind to non-loopback host '{host}': the /rpc control plane would be exposed " +
+                            "without authentication. Pass --token <secret> (or set FO4IDE_TOKEN) to bind non-loopback.");
+    return;
+}
+if (!IsLoopbackHost(host))
+    Console.Error.WriteLine($"WARNING: binding to '{host}' with an operator-provided token; the RPC surface is reachable on the network.");
+
 var builder = WebApplication.CreateBuilder();
 builder.Logging.ClearProviders();
 builder.WebHost.UseUrls($"http://{host}:{port}");
@@ -84,6 +99,8 @@ app.UseStaticFiles(new StaticFileOptions { FileProvider = files, ServeUnknownFil
 
 app.MapPost("/rpc", async (HttpContext ctx) =>
 {
+    if (!TokenAccepted(ctx, token))
+        return Results.Json(new { ok = false, error = "unauthorized" }, statusCode: 401);
     using var reader = new StreamReader(ctx.Request.Body);
     var body = await reader.ReadToEndAsync();
     try
@@ -111,6 +128,11 @@ app.MapPost("/rpc", async (HttpContext ctx) =>
 
 app.MapGet("/events", async (HttpContext ctx, CancellationToken ct) =>
 {
+    if (!TokenAccepted(ctx, token))
+    {
+        ctx.Response.StatusCode = 401;
+        return;
+    }
     ctx.Response.Headers.ContentType = "text/event-stream";
     ctx.Response.Headers.CacheControl = "no-cache";
     ctx.Response.Headers["X-Accel-Buffering"] = "no";
@@ -128,7 +150,7 @@ app.MapGet("/events", async (HttpContext ctx, CancellationToken ct) =>
     finally { events.Unsubscribe(queue); }
 });
 
-app.MapGet("/api/health", () => Results.Json(new { ok = true, targets = rpc.TargetNames }));
+app.MapGet("/api/health", () => Results.Json(new { ok = true }));
 
 
 
@@ -148,7 +170,7 @@ app.MapFallback(async ctx =>
     await ctx.Response.SendFileAsync(Path.Combine(webRoot, "index.html"));
 });
 
-var url = $"http://{host}:{port}/#/main";
+var url = $"http://{host}:{port}/?t={token}#/main";
 Console.WriteLine($"FO4IDE is running at {url}");
 Console.WriteLine($"Log: {DebugLog.Path}");
 
@@ -177,6 +199,25 @@ static int FreePort(string host)
     var port = ((IPEndPoint)l.LocalEndpoint).Port;
     l.Stop();
     return port;
+}
+
+
+static bool IsLoopbackHost(string host)
+{
+    if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
+    return IPAddress.TryParse(host, out var addr) && IPAddress.IsLoopback(addr);
+}
+
+
+static bool TokenAccepted(HttpContext ctx, string token)
+{
+    var provided = ctx.Request.Headers["X-FO4IDE-Token"].ToString();
+    if (string.IsNullOrWhiteSpace(provided)) provided = ctx.Request.Query["t"].ToString();
+    if (string.IsNullOrWhiteSpace(provided)) return false;
+    var expected = System.Text.Encoding.UTF8.GetBytes(token);
+    var actual = System.Text.Encoding.UTF8.GetBytes(provided);
+    return expected.Length == actual.Length &&
+           CryptographicOperations.FixedTimeEquals(expected, actual);
 }
 
 

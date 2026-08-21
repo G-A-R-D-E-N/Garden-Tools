@@ -62,9 +62,11 @@ public sealed class RpcDispatcher
 
     private static MethodInfo? Resolve(Type type, string name, int argc)
     {
+        if (type.GetCustomAttribute<RpcExposeAttribute>() == null) return null;
         MethodInfo? loose = null;
         foreach (var m in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
         {
+            if (m.GetCustomAttribute<RpcHiddenAttribute>() != null) continue;
             if (!string.Equals(m.Name, name, StringComparison.Ordinal)) continue;
             var ps = m.GetParameters();
             if (ps.Length == argc) return m;

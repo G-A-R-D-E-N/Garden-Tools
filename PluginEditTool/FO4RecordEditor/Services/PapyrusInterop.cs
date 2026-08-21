@@ -18,6 +18,7 @@ namespace FO4RecordEditor.Services;
 
 [ClassInterface(ClassInterfaceType.AutoDual)]
 [ComVisible(true)]
+[RpcExpose]
 public class PapyrusInterop
 {
     private readonly ShellViewModel _shell;
@@ -149,6 +150,7 @@ public class PapyrusInterop
         });
 
 
+    [RpcHidden]
     public string OpenFolder(string path)
     {
         try

@@ -15,10 +15,14 @@ const HOST_OBJECTS = [
   'nif', 'material', 'masters', 'archive', 'audio', 'cell', 'graph',
 ] as const;
 
+const TOKEN = new URLSearchParams(window.location.search).get('t') ?? '';
+
 async function call(target: string, method: string, args: unknown[]): Promise<unknown> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (TOKEN) headers['X-FO4IDE-Token'] = TOKEN;
   const res = await fetch('/rpc', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ target, method, args }),
   });
   if (!res.ok) throw new Error(`${target}.${method}: HTTP ${res.status} ${res.statusText}`);
@@ -50,9 +54,10 @@ function install() {
   };
 
   (window as unknown as { chrome: unknown }).chrome = { ...(window as any).chrome, webview };
+  (window as unknown as { __FO4IDE_HTTP_BRIDGE__: boolean }).__FO4IDE_HTTP_BRIDGE__ = true;
 
 
-  const source = new EventSource('/events');
+  const source = new EventSource('/events' + (TOKEN ? `?t=${encodeURIComponent(TOKEN)}` : ''));
   source.onmessage = ev => {
     let data: unknown;
     try { data = JSON.parse(ev.data); } catch { data = ev.data; }
