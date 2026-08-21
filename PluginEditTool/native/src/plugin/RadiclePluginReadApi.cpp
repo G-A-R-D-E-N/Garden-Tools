@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <exception>
 #include <iomanip>
 #include <map>
 #include <sstream>
