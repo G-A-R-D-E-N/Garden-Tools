@@ -196,12 +196,12 @@ TEST_CASE("Native AddMasters rejects self master and unknown ESP kind") {
     const auto self = backend.invokeBackend(
         "AddMasters", nlohmann::json::array({"Target.esp", "Target.esp"}));
     REQUIRE_FALSE(self.has_value());
-    CHECK(self.error().code == "SelfMaster");
+    CHECK(self.error().type == "SelfMaster");
 
     const auto unknown = backend.invokeBackend(
         "AddMasters", nlohmann::json::array({"Target.esp", "Unknown.esp"}));
     REQUIRE_FALSE(unknown.has_value());
-    CHECK(unknown.error().code == "MasterNotLoaded");
+    CHECK(unknown.error().type == "MasterNotLoaded");
     CHECK(fo4::read_plugin_file(targetPath).header.masters.empty());
 }
 
@@ -226,6 +226,6 @@ TEST_CASE("Native AddMasters refuses protected target") {
     const auto result = backend.invokeBackend(
         "AddMasters", nlohmann::json::array({"Target.esp", "Master.esm"}));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "PluginReadOnly");
+    CHECK(result.error().type == "PluginReadOnly");
     CHECK(fo4::read_plugin_file(targetPath).original_bytes == before);
 }
