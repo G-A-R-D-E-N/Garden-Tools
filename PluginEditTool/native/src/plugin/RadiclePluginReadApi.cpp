@@ -120,16 +120,24 @@ Result<fo4::FormKey> formKeyArgument(const nlohmann::json& arguments) {
     }
 }
 
-nlohmann::json gridColumns(std::string_view signature) {
-    if (signature == "LVSP") {
-        return nlohmann::json::array({
-            "EDID",
-            "LVSP\\ChanceNone",
-            "LVSP\\MaxCount",
-            "LVSP\\Flags"
-        });
+nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 0) {
+    if (signature != "LVSP") return nlohmann::json::array({"EDID"});
+
+    nlohmann::json columns = nlohmann::json::array({
+        "EDID",
+        "LVSP\\ChanceNone",
+        "LVSP\\MaxCount",
+        "LVSP\\Flags",
+        "LVSP\\EntryCount"
+    });
+    for (std::size_t index = 0; index < maxEntries; ++index) {
+        const auto prefix = "LVSP\\Entries[" + std::to_string(index) + "]\\";
+        columns.push_back(prefix + "Level");
+        columns.push_back(prefix + "Spell");
+        columns.push_back(prefix + "Count");
+        columns.push_back(prefix + "ChanceNone");
     }
-    return nlohmann::json::array({"EDID"});
+    return columns;
 }
 
 }
@@ -162,13 +170,12 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
     const auto signature = stringArgument(arguments, 1);
     const auto limit = sizeArgument(arguments, 2, 200, 1000);
     const auto offset = sizeArgument(arguments, 3, 0, 1000000);
-    const auto columns = gridColumns(signature);
 
     std::scoped_lock lock(mutex_);
     const auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr || signature.empty()) {
         return nlohmann::json(nlohmann::json{
-            {"columns", columns},
+            {"columns", gridColumns(signature)},
             {"rows", nlohmann::json::array()},
             {"total", 0},
             {"offset", offset}
@@ -181,33 +188,75 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
         if (record->header.signature.to_string() == signature) matching.push_back(record);
     }
 
-    nlohmann::json rows = nlohmann::json::array();
     const auto begin = std::min(offset, matching.size());
     const auto end = std::min(begin + limit, matching.size());
+    std::vector<fo4::forms::LeveledSpell> lvspModels;
+    std::size_t maxEntries = 0;
+    if (signature == "LVSP") {
+        lvspModels.reserve(end - begin);
+        for (std::size_t index = begin; index < end; ++index) {
+            try {
+                auto model = fo4::forms::decode_leveled_spell(
+                    loaded->plugin, matching[index]->form_key);
+                maxEntries = std::max(maxEntries, model.entries.size());
+                lvspModels.push_back(std::move(model));
+            } catch (const fo4::forms::LeveledSpellError& error) {
+                return std::unexpected(Error{
+                    "LeveledSpellReadFailed",
+                    matching[index]->form_key.to_string() + ": " + error.what()
+                });
+            }
+        }
+    }
+
+    const auto columns = gridColumns(signature, maxEntries);
+    nlohmann::json rows = nlohmann::json::array();
     for (std::size_t index = begin; index < end; ++index) {
         const auto* record = matching[index];
         const auto editor = editorId(*record);
         nlohmann::json cells = nlohmann::json::array({editor});
+        nlohmann::json editable = nlohmann::json::array({true});
 
         if (signature == "LVSP") {
-            try {
-                const auto model = fo4::forms::decode_leveled_spell(
-                    loaded->plugin, record->form_key);
-                cells.push_back(std::to_string(model.chance_none));
-                cells.push_back(std::to_string(model.max_count));
-                cells.push_back(std::to_string(model.flags));
-            } catch (const fo4::forms::LeveledSpellError& error) {
-                return std::unexpected(Error{
-                    "LeveledSpellReadFailed",
-                    record->form_key.to_string() + ": " + error.what()
-                });
+            const auto& model = lvspModels[index - begin];
+            cells.push_back(std::to_string(model.chance_none));
+            cells.push_back(std::to_string(model.max_count));
+            cells.push_back(std::to_string(model.flags));
+            cells.push_back(std::to_string(model.entries.size()));
+            editable.push_back(true);
+            editable.push_back(true);
+            editable.push_back(true);
+            editable.push_back(false);
+
+            for (std::size_t entryIndex = 0; entryIndex < maxEntries; ++entryIndex) {
+                if (entryIndex < model.entries.size()) {
+                    const auto& entry = model.entries[entryIndex];
+                    cells.push_back(std::to_string(entry.level));
+                    cells.push_back(entry.spell.to_string());
+                    cells.push_back(std::to_string(entry.count));
+                    cells.push_back(std::to_string(entry.chance_none));
+                    editable.push_back(true);
+                    editable.push_back(true);
+                    editable.push_back(true);
+                    editable.push_back(true);
+                } else {
+                    cells.push_back("");
+                    cells.push_back("");
+                    cells.push_back("");
+                    cells.push_back("");
+                    editable.push_back(false);
+                    editable.push_back(false);
+                    editable.push_back(false);
+                    editable.push_back(false);
+                }
             }
         }
 
         rows.push_back({
             {"formKey", record->form_key.to_string()},
             {"editorId", editor},
-            {"cells", std::move(cells)}
+            {"cells", std::move(cells)},
+            {"editable", std::move(editable)}
         });
     }
 
