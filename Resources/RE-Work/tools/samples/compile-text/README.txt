@@ -54,3 +54,23 @@ Expected routing on this fixture set:
 
 The output filename uses the <Language> argument when --command is given
 (ENGLISH here) and DEFAULT_SLANGUAGE otherwise.
+
+Cross-check against real compiled output
+----------------------------------------
+
+Combine --compile-text with --strings to verify the predictions against
+real compiled .STRINGS/.DLSTRINGS/.ILSTRINGS files (e.g. the shipped
+Fallout4 STRINGS extracted from Fallout4 - Misc.ba2):
+
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/backup samples/compile-text/primary \
+        --strings '.../TEMP_BSA_FILES/*/STRINGS'
+
+For every routed record the ID must be present in its predicted table
+(MATCH); an ID found in a *different* table is a MISMATCH (hard failure),
+and an ID absent from all matching compiled files is a WARNING (the
+compiled set may predate the export). Files are matched to the compile by
+<ESM stem>_ prefix, so shipped language-code names (Fallout4_en.*) match a
+Fallout4.esm compile regardless of the CLI language spelling. The shipped
+fixtures' synthetic IDs (0x1000A etc.) are not in the game files, so a
+cross-check run reports them as not-found warnings rather than mismatches.

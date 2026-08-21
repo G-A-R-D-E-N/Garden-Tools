@@ -22,6 +22,9 @@ Usage:
     python3 validate_ckini.py --compile-text samples/compile-text/backup samples/compile-text/primary
     # each run also prints ROUTE lines + a ROUTING SUMMARY predicting the
     # .STRINGS / .DLSTRINGS / .ILSTRINGS output table per record
+    # combine with --strings to cross-check predictions against real outputs:
+    python3 validate_ckini.py --compile-text samples/compile-text/backup \
+        samples/compile-text/primary --strings '.../STRINGS'
     python3 validate_ckini.py CreationKit.ini --exit-codes
     python3 validate_ckini.py --strings \
         '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
@@ -577,6 +580,7 @@ def check_compile_text_roots(esm, roots, language=None):
     errors = []
     warnings = []
     routes = []            # per-record output-table predictions
+    route_records = []     # structured {id, ext, source, category} for cross-check
     route_counts = {}      # extension -> record count
 
     for root in roots:
@@ -650,6 +654,12 @@ def check_compile_text_roots(esm, roots, language=None):
                         routes.append("%s:%d: 0x%08X [%s] -> %s"
                                       % (label, lineno, string_id,
                                          (category or "").strip() or "(none)", outname))
+                        route_records.append({
+                            "id": string_id,
+                            "ext": ext,
+                            "source": "%s:%d" % (label, lineno),
+                            "category": (category or "").strip() or "(none)",
+                        })
                         route_counts[ext] = route_counts.get(ext, 0) + 1
             except OSError as exc:
                 errors.append("could not read %s: %s" % (path, exc))
@@ -685,7 +695,7 @@ def check_compile_text_roots(esm, roots, language=None):
         lines.append("VERDICT: PASS")
     else:
         lines.append("VERDICT: FAIL")
-    return not errors, lines
+    return not errors, lines, route_records
 
 
 def _parse_compile_args(arg_text):
@@ -1099,6 +1109,105 @@ def check_strings_files(paths):
     return overall_ok, lines
 
 
+def _load_strings_ids(path):
+    """Return {stringID: kind} for one compiled localized-string file.
+
+    Reuses the same header/table parse as check_strings_file; returns {}
+    for unreadable or foreign files so callers can treat them as absent.
+    """
+    kind = _strings_kind(path)
+    if kind is None:
+        return {}
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError:
+        return {}
+    if len(data) < 8:
+        return {}
+    num, _ = struct.unpack_from("<II", data, 0)
+    if num > _STRINGS_MAX_ROWS or len(data) < 8 + 8 * num:
+        return {}
+    ids = {}
+    for i in range(num):
+        sid, _ = struct.unpack_from("<II", data, 8 + 8 * i)
+        ids[sid] = kind
+    return ids
+
+
+def cross_check_compile_routes(route_records, strings_paths, esm, language):
+    """Verify each predicted output table against real compiled string files.
+
+    Returns (ok, lines). ``strings_paths`` may mix files and directories;
+    only files whose ``<ESM>_<Language>`` stem matches the compile's esm/
+    language (or the default language when none was given) are considered.
+    For every routed record the ID must be present in the predicted table;
+    a record found in a *different* table is a routing discrepancy (hard
+    failure), and a record missing from all matching compiled files is a
+    warning (the compiled set may predate the export).
+    """
+    files = []
+    for p in strings_paths:
+        if os.path.isdir(p):
+            for name in sorted(os.listdir(p)):
+                full = os.path.join(p, name)
+                if os.path.isfile(full) and _strings_kind(full):
+                    files.append(full)
+        else:
+            files.append(p)
+
+    # Match compiled files by ESM stem prefix: shipped files use language
+    # codes (Fallout4_en.STRINGS) while the CLI language argument may be a
+    # full name (ENGLISH), so match <stem>_* rather than the exact spelling.
+    prefix = _esm_stem(esm).lower() + "_"
+    matching = [f for f in files if _strings_lang_stem(f).startswith(prefix)]
+    if not matching:
+        lines = ["CROSS-CHECK: no compiled %s* string files match the compile "
+                 "(esm=%s language=%s); skipped" % (_esm_stem(esm), esm, language)]
+        return True, lines
+
+    by_kind = {k: {} for k in _STRINGS_KINDS}
+    for path in sorted(matching):
+        ids = _load_strings_ids(path)
+        by_kind[_strings_kind(path)].update(ids)
+
+    if len(matching) <= 4:
+        file_list = ", ".join(os.path.basename(f) for f in sorted(matching))
+    else:
+        file_list = "%d files (first: %s ...)" % (
+            len(matching), ", ".join(os.path.basename(f)
+                                     for f in sorted(matching)[:3]))
+    lines = ["CROSS-CHECK: predicted output tables vs compiled files (%s):"
+             % file_list]
+    ok = True
+    matched = 0
+    missing = []
+    wrong = []
+    for rec in route_records:
+        sid = rec["id"]
+        predicted = rec["ext"]
+        present = [k for k in _STRINGS_KINDS if sid in by_kind[k]]
+        if predicted in present:
+            matched += 1
+        elif present:
+            wrong.append("%s: 0x%08X [%s] predicted %s but found in %s"
+                         % (rec["source"], sid, rec["category"],
+                            predicted, ",".join(present)))
+        else:
+            missing.append("%s: 0x%08X [%s] not in any compiled table"
+                           % (rec["source"], sid, rec["category"]))
+
+    if matched:
+        lines.append("  MATCH: %d record(s) present in their predicted table" % matched)
+    for item in wrong:
+        ok = False
+        lines.append("  MISMATCH: " + item)
+    for item in missing:
+        lines.append("  WARNING: " + item)
+    lines.append("VERDICT: %s" % ("PASS" if ok else "FAIL"))
+    return ok, lines
+
+
 # ---------------------------------------------------------------------------
 # Exit-code matrix oracle (doc 19)
 # ---------------------------------------------------------------------------
@@ -1338,11 +1447,15 @@ def main(argv):
                          ".ILSTRINGS) or directories of them against the byte format from "
                          "ghidra-dump/localized-string-file-format.md: header/size invariant, "
                          "sorted ID table, offset bounds, per-kind record encoding, and the "
-                         "per-language stringID partition. Real samples: "
-                         ".../TEMP_BSA_FILES/*/STRINGS/")
+                         "per-language stringID partition. Combined with --compile-text, "
+                         "cross-checks the predicted output tables against the compiled "
+                         "files. Real samples: .../TEMP_BSA_FILES/*/STRINGS/")
     args = ap.parse_args(argv)
 
-    if args.strings is not None:
+    if args.strings is not None and args.compile_text is None:
+        # Standalone --strings validation. When --compile-text is also given
+        # the strings block is skipped: the compile-text branch runs first and
+        # then cross-checks its route predictions against these files.
         ok, lines = check_strings_files(args.strings)
         print("\n".join(lines))
         return 0 if ok else 1
@@ -1370,8 +1483,14 @@ def main(argv):
             esm = "Fallout4.esm"
             language = None
             roots = args.compile_text
-        ok, lines = check_compile_text_roots(esm, roots, language)
+        ok, lines, route_records = check_compile_text_roots(esm, roots, language)
         print("\n".join(lines))
+        if args.strings is not None:
+            print()
+            ok2, xlines = cross_check_compile_routes(
+                route_records, args.strings, esm, language)
+            print("\n".join(xlines))
+            ok = ok and ok2
         return 0 if ok else 1
 
     if args.batch_command is not None:
