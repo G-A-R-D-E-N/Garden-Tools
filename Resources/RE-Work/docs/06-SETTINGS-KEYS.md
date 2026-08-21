@@ -23,7 +23,7 @@ fMaxBoneSpeedBeforeDefaultStiffness=50.0
 sControlsRemapFile=Controls\\ControlMap_Custom.txt
 ```
 
-The full names and record addresses are in `18-ELRIC-SYMBOLS.md` and the validator's
+The full record addresses are tracked in the validator's
 `NO_SECTION_DESCRIPTORS` schema. Fixture coverage is in
 `tools/samples/no-section-creationkit.ini` and
 `tools/samples/invalid-no-section-creationkit.ini`.

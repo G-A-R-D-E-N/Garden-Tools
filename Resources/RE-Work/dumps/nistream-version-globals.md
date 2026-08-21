@@ -110,6 +110,6 @@ is written, but is also not feature-selected.
 
 - `ghidra-dump/nistream-savecore-0x142498a30.asm`
 - complete `CreationKit.exe` `.text` disassembly reference census
-- `18-ELRIC-SYMBOLS.md §4b–§4e`
+- `ghidra-dump/elric-pdb-symbols.txt` (local) §4b–§4e
 - `ghidra-dump/decompile-SCOL-combined-mesh-writer.md §4`
 - `ghidra-dump/nifwriter-facegen-0x140ab8a60.asm`

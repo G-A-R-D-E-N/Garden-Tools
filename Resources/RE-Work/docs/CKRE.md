@@ -30,7 +30,6 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | [15-BATCH-PROCESSES.md](15-BATCH-PROCESSES.md) | batch process internals — MasterfileOptimizer/Tagifier, MapMaker, CheckItInChappy, FileSaver + the `-SaveDefaultPlugin` masterfile pipeline |
 | [16-SETTINGS-WRITEBACK.md](16-SETTINGS-WRITEBACK.md) | the settings write-back — notify setter FUN_1425c6b90, scatter-table registry API, the generic WriteSetting, and the read/write round-trip |
 | [17-INI-PATHS.md](17-INI-PATHS.md) | the ini file census — all 5 touched .ini paths, each mapped to its reader function, with the full Get/WritePrivateProfile call-site tables |
-| [18-ELRIC-SYMBOLS.md](18-ELRIC-SYMBOLS.md) | the Elric SDK PDB ground truth — 90,090 engine symbols confirming the CK decompiles (ReadSetting/WriteSetting, SettingT globals, BSTScatterTable, NiStream) |
 | [../dumps/game-setting-table.md](../dumps/game-setting-table.md) | RTTI and byte census of the 5,137 bare-name runtime `GameSetting` records under `SettingT<GameSettingCollection>` |
 | [../dumps/duplicate-ini-settings.md](../dumps/duplicate-ini-settings.md) | all nine duplicated `bKey:Section` descriptors — registration targets, initializer/data runs, and read/write collision semantics |
 | [19-BATCH-EXIT-CODES.md](19-BATCH-EXIT-CODES.md) | the batch exit-code contract — `bThrowProcessCompleteExceptions:General` gate setting, all 7 RaiseException sites, the 31-bit exit-code matrix, and the minidump termination path |
@@ -50,14 +49,12 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | `srcpaths.txt` | all 1,116 embedded `__FILE__` paths |
 | `ck-src-files.txt` | the 86 `construction set` source files |
 | `lod-strings.txt` | the 273 LOD-related strings |
-| `elric-setting-records.txt` | the 35 of 37 PDB `SettingT<INISettingCollection>` globals matched to CK descriptor records (record VA, vftable family, type, default) |
 | `scenewriter-*.log`, `previs-generator-0x1181210.log` | `.scene` writer wrapper/serializer/element decompiles (§14) |
 | `decompile-SCOL-combined-mesh-writer.md` | SCOL/`_OC`/`_Physics` path decompile and NiStream payload boundary |
 | `nistream-version-globals.md` | all version-global xrefs, mutation census, and emitted-version conclusion |
 | `nistream-block-save-map.md` | SaveStream `0xd8/0xe0/0x110` dispatch and the RTTI → `SaveBinary` writer catalog for `_Physics` NIFs |
 | `ck-nif-block-format-reference.md` | exhaustive factory-backed CK block-type inventory, 64-bit slot-`0xe0` body addresses/ranges, disassembly-derived payload patterns, and unresolved/helper-type boundaries |
 | `decompile-CompileTextExport-line-parser-FUN_14091f3d0.md` | annotated `TextExport.txt` line parser, delimiter behavior, StringID rules, and the 18-category table |
-| `elric-engine-ghidra-import.md` | persistent Ghidra project containing ElricInterop plus the complete native Ni/BS engine DLL layer and coverage report |
 | `batch-runner-fun1404906a0.log`, `vd-*.log`, `w?-*.log`, `checkitin-fun14048d4e0-full.txt` | batch-process runner/vtable/Execute decompiles (§15) |
 | `scene-samples/Vis_Fallout4.esm_*.UVD` | 3 real shipped `.uvd` previs samples extracted from `Fallout4 - MeshesExtra.ba2` |
 | `../scripts/Query.java` | headless ghidra query script (substring/addr/decompile) |

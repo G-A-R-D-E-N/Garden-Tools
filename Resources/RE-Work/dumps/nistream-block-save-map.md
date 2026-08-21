@@ -134,8 +134,8 @@ writer must still preserve the exact per-class payload and link references.
 
 - `ghidra-dump/nistream-savecore-0x142498a30.asm`, `0x1424991f0`–`0x1424992de`:
   the three x64 dispatch loops;
-- `18-ELRIC-SYMBOLS.md §4a–§4e`: NiStream contract and cross-build virtual names;
-- `ghidra-dump/elric-pdb-symbols.txt`: `SaveBinary`, `RegisterStreamables`,
+- `ghidra-dump/elric-pdb-symbols.txt` (local): NiStream contract, cross-build
+  virtual names, `SaveBinary`, `RegisterStreamables`,
   and `LinkObject` inventories for the `bhk*`, `hkPackedNiTriStripsData`,
   `NiNode`, and `BS*` families;
 - `ghidra-dump/strings-asc.txt`: combined-cell diagnostics, shape catalog,

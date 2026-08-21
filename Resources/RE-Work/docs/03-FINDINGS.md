@@ -312,11 +312,11 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     stay CK-exclusive. Caveat: 32-bit 2016 build confirms names/semantics, not
     addresses.
 
-## 2026-08-19 — Elric SettingT globals mapped to CK record addresses (doc 18 §3a)
+## 2026-08-19 — Elric SettingT globals mapped to CK record addresses
 
 49. **35 of 37 Elric `SettingT<INISettingCollection>` symbols resolve to CK
-    descriptor records**, each mapped to its `.data` record VA (doc 18 §3a
-    table; machine dump `ghidra-dump/elric-setting-records.txt`). The draft's
+    descriptor records**, each mapped to its `.data` record VA (the symbol
+    cross-reference is maintained locally). The draft's
     "26 of 34 survive" was an undercount: the VDB wildcard is 3 keys, eight
     `S`-suffixed 2016 statics survive **S-stripped** (`bUseUnsupportedCast`,
     `bUseWorldLock`, `fGoodPosCheckDepth`, `fGoodPosCastCheckDepth`,

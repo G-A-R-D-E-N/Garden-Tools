@@ -38,7 +38,6 @@ Embedded 1,629-key database, readers, write-back, path census, duplicate descrip
 - [dumps/ck-settings-keys.txt](dumps/ck-settings-keys.txt)
 - [dumps/duplicate-ini-settings.md](dumps/duplicate-ini-settings.md)
 - [dumps/game-setting-table.md](dumps/game-setting-table.md)
-- [dumps/elric-setting-records.txt](dumps/elric-setting-records.txt)
 - [tools/validate_ckini.py](tools/validate_ckini.py)
 
 ### LOD and previs
@@ -54,13 +53,11 @@ CK LOD pipeline, precombined, `.scene` / `.uvd`.
 RTTI map, Elric engine-symbol facts, NIF writer catalog.
 
 - [docs/02-RTTI-CLASS-MAP.md](docs/02-RTTI-CLASS-MAP.md)
-- [docs/18-ELRIC-SYMBOLS.md](docs/18-ELRIC-SYMBOLS.md)
 - [dumps/rtti-classes.txt](dumps/rtti-classes.txt)
 - [dumps/ck-nif-block-format-reference.md](dumps/ck-nif-block-format-reference.md)
 - [dumps/nistream-block-save-map.md](dumps/nistream-block-save-map.md)
 - [dumps/nistream-version-globals.md](dumps/nistream-version-globals.md)
 - [dumps/decompile-SCOL-combined-mesh-writer.md](dumps/decompile-SCOL-combined-mesh-writer.md)
-- [dumps/elric-engine-ghidra-import.md](dumps/elric-engine-ghidra-import.md)
 - [tools/extract_ck_nif_savebinary.py](tools/extract_ck_nif_savebinary.py)
 - [tools/validate_nif.py](tools/validate_nif.py)
 

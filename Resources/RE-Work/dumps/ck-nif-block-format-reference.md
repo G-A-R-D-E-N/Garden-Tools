@@ -212,7 +212,8 @@ at `0x30`, and BS version at `0x34`.
   extraction;
 - `ghidra-dump/nistream-block-save-map.md`: earlier `_Physics`-focused writer
   map and stream contract;
-- `18-ELRIC-SYMBOLS.md`: cross-build NiStream method names and class layout;
+- `ghidra-dump/elric-pdb-symbols.txt` (local): cross-build NiStream method
+  names and class layout;
 - `decompile-SCOL-combined-mesh-writer.md`: SCOL/`_OC`/`_Physics` writer
   boundary.
 

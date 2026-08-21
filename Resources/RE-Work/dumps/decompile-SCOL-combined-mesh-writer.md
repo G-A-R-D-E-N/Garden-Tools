@@ -151,7 +151,8 @@ entries to NIF blocks.
 ## 4. Relationship to the confirmed NiStream save chain
 
 Once the delegated output object has a root scene graph, its disk write follows
-the CK NiStream chain documented in `18-ELRIC-SYMBOLS.md §4b–§4e`:
+the CK NiStream chain (cross-build contract in the local Elric symbol
+cross-reference, `ghidra-dump/elric-pdb-symbols.txt` §4b–§4e):
 
 1. Stack/heap NiStream is initialized with vftable `0x142fa4780`.
 2. Child objects are registered through the CK's `AddObject`-equivalent
@@ -209,7 +210,7 @@ Primary evidence:
 - static-collection routine `FUN_14048a890`, xrefs `0x14048b70b` and
   `0x14048b896`;
 - `ghidra-dump/nifwriter-facegen-0x140ab8a60.asm` and the NiStream save-chain
-  section of `18-ELRIC-SYMBOLS.md`.
+  section of the local Elric symbol cross-reference.
 
 The next payload-level target is the delegated output object's call site that
 constructs the combined `NiNode`/geometry root before invoking the common

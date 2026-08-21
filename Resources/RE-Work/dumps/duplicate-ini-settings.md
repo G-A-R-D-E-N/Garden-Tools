@@ -161,5 +161,4 @@ records and read order, but does not show a special duplicate policy.
 - Main collection getter: `0x1402ccbf0`, recovered in the BudgetCaps read-all
   decompile; preferences getter: `SETWRITE-PREFSCOLL-FUN_14033ab80.txt`
 - Explicit BudgetCaps traversal: `READALL-FUN_14092b990-BudgetCaps.txt`
-- Full descriptor/type census: `ghidra-dump/ck-settings-keys.txt` and
-  `ghidra-dump/elric-setting-records.txt`
+- Full descriptor/type census: `ghidra-dump/ck-settings-keys.txt`
