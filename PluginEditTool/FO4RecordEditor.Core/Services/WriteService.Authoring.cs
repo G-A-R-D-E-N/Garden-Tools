@@ -30,6 +30,7 @@ public static partial class WriteService
     private static IFallout4MajorRecord? CreateForScriptCore(string patchPlugin, object? env, string sig, string editorId)
     {
         var (name, path) = NormalizePlugin(patchPlugin);
+        if (ProtectedPlugins.IsProtected(name)) return null;
         if (GetMutable(name) == null)
         {
             bool existsOnDisk = (path != null && File.Exists(path))
