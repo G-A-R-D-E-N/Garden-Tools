@@ -31,7 +31,7 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | [20-WINE-PAPYRUS-ZIP-CRASH.md](20-WINE-PAPYRUS-ZIP-CRASH.md) | the Wine startup crash explained — Papyrus source-zip extraction via Shell COM (`IShellDispatch::NameSpace` returns S_OK + NULL `Folder*`), with patch/workaround analysis |
 | [21-UVD-FORMAT.md](21-UVD-FORMAT.md) | the compiled PreVis `.uvd` scene format (magic `0xD6000012`) — CRC-32C framing, full 0x150 header field map, and version string, verified against 3 shipped samples + the writer decompiles |
 
-## Data dumps (`ghidra-dump/`)
+## Data dumps (`../dumps/`)
 
 | File | Contents |
 |---|---|
@@ -44,14 +44,16 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | `scenewriter-*.log`, `previs-generator-0x1181210.log` | `.scene` writer wrapper/serializer/element decompiles (§14) |
 | `batch-runner-fun1404906a0.log`, `vd-*.log`, `w?-*.log`, `checkitin-fun14048d4e0-full.txt` | batch-process runner/vtable/Execute decompiles (§15) |
 | `scene-samples/Vis_Fallout4.esm_*.UVD` | 3 real shipped `.uvd` previs samples extracted from `Fallout4 - MeshesExtra.ba2` |
-| `Query.java` | headless ghidra query script (substring/addr/decompile) |
+| `../scripts/Query.java` | headless ghidra query script (substring/addr/decompile) |
+
+Decompile logs, `.uvd` samples, and PDB dumps stay local. They are not in this repo.
 
 ## Tools
 
 | Tool | Purpose |
 |---|---|
-| `tools/pe_recon.py` | PE header/sections/entropy/PDB/imports recon |
-| `tools/validate_ckini.py` | CreationKit.ini oracle — replays the reader (`FUN_1425c7f90`) against the 1,629-key table + type letters; `--list-keys`/`--stats`, `--command`/`--batch-command` for doc-05/13 grammar, and `--exit-codes` for the doc-19 31-switch sentinel matrix; samples under `tools/samples/` |
+| `../tools/pe_recon.py` | PE header/sections/entropy/PDB/imports recon |
+| `../tools/validate_ckini.py` | CreationKit.ini oracle — replays the reader (`FUN_1425c7f90`) against the 1,629-key table + type letters; `--list-keys`/`--stats`, `--command`/`--batch-command` for doc-05/13 grammar, and `--exit-codes` for the doc-19 31-switch sentinel matrix; samples under `../tools/samples/` |
 
 ## Status
 
