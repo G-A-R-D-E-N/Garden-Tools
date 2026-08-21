@@ -6,6 +6,8 @@ This folder is docs, fact tables, and owner scripts. Game binaries, Ghidra proje
 
 CK numbered notes live in `docs/` so their cross-links stay valid. Start from [docs/CKRE.md](docs/CKRE.md) or the categories below. Runtime notes live in [Runtime/](Runtime/).
 
+Status of every doc and tool — completion state and next open questions: [STATUS.md](STATUS.md).
+
 ## Categories
 
 ### Records and plugins
