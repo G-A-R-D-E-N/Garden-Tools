@@ -32,6 +32,12 @@ std::string asciiLower(std::string_view value) {
     return out;
 }
 
+std::string pluginKind(const fo4::Plugin& plugin) {
+    if (plugin.header.tes4_flags.is_small_file()) return "light";
+    if (plugin.header.tes4_flags.is_master()) return "master";
+    return "plugin";
+}
+
 bool officialPluginName(std::string_view name) {
     const auto lower = asciiLower(name);
     if (lower == "fallout4.esm" ||
@@ -60,6 +66,31 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     const nlohmann::json& arguments) {
     if (method == "SetField") return setField(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
+
+    if (method == "GetEditablePlugins") {
+        nlohmann::json rows = nlohmann::json::array();
+        std::scoped_lock lock(mutex_);
+        for (const auto& loaded : plugins_) {
+            if (isEditable(loaded)) rows.push_back(loaded.name);
+        }
+        return nlohmann::json(rows.dump());
+    }
+
+    if (method == "GetActivePlugins") {
+        nlohmann::json rows = nlohmann::json::array();
+        std::scoped_lock lock(mutex_);
+        for (std::size_t index = 0; index < plugins_.size(); ++index) {
+            const auto& loaded = plugins_[index];
+            rows.push_back({
+                {"Name", loaded.name},
+                {"Kind", pluginKind(loaded.plugin)},
+                {"LoadOrder", index},
+                {"Editable", isEditable(loaded)},
+                {"Size", loaded.plugin.original_bytes.size()}
+            });
+        }
+        return nlohmann::json(rows.dump());
+    }
 
     if (method == "SavePlugin") {
         const auto name = stringArgument(arguments, 0);
