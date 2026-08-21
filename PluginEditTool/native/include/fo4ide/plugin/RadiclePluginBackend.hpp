@@ -32,6 +32,7 @@ private:
     Result<nlohmann::json> openPlugin(const nlohmann::json& arguments);
     Result<nlohmann::json> savePlugin(const nlohmann::json& arguments);
     Result<nlohmann::json> getEditablePlugins() const;
+    Result<nlohmann::json> getActivePlugins() const;
     Result<nlohmann::json> getRecordTypeIndex() const;
     Result<nlohmann::json> getLoadOrderSummary() const;
     Result<nlohmann::json> getConflicts() const;
