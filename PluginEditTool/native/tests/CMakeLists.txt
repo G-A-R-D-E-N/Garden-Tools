@@ -24,6 +24,7 @@ add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
     unit/RadiclePluginMastersTests.cpp
+    unit/RadiclePluginMutationTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
