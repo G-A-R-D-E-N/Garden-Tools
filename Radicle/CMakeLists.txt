@@ -100,6 +100,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_real_plugin.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
+    tests/test_master_metadata.cpp
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
     tests/test_writer.cpp
