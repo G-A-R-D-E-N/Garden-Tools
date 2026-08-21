@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 
+#include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/container.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
@@ -45,9 +46,11 @@ private:
 
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
+    void rebuildGraphLocked();
 
     mutable std::mutex mutex_;
     std::vector<LoadedPlugin> plugins_;
+    fo4::ConflictGraph graph_;
 };
 
 }
