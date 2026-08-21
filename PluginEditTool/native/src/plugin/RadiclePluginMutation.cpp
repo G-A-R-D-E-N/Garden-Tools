@@ -6,10 +6,14 @@
 #include <cstdint>
 #include <exception>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <type_traits>
 #include <utility>
 
+#include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/writer.hpp>
@@ -113,6 +117,11 @@ bool isLvspField(std::string_view field) {
            field == "LVSP\\Flags" || parseLvspEntryPath(field, ignored);
 }
 
+bool isEyesField(std::string_view field) {
+    return field == "EYES\\Full" || field == "EYES\\Icon" ||
+           field == "EYES\\DataFlags";
+}
+
 }
 
 bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
@@ -190,11 +199,12 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
         return std::unexpected(Error{"FormKeyMissing", "Record FormKey is empty"});
     }
     const bool edidField = field == "Subrecords\\EDID[0]" || field == "EDID";
+    const bool eyesField = isEyesField(field);
     const bool lvspField = isLvspField(field);
-    if (!edidField && !lvspField) {
+    if (!edidField && !eyesField && !lvspField) {
         return std::unexpected(Error{
             "FieldWriteUnsupported",
-            "Native Radicle editing supports EDID and typed LVSP fields only"
+            "Native Radicle editing supports EDID plus typed EYES and LVSP fields only"
         });
     }
     if (edidField && value.find('\0') != std::string::npos) {
@@ -235,6 +245,24 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
                 });
             }
             status = "Updated EDID for " + formKeyText + " in " + pluginName + ".";
+        } else if (eyesField) {
+            if (field == "EYES\\Full") {
+                fo4::forms::set_eyes_text_fields(
+                    mutated, key, std::nullopt, std::string_view{value}, std::nullopt);
+            } else if (field == "EYES\\Icon") {
+                fo4::forms::set_eyes_text_fields(
+                    mutated, key, std::nullopt, std::nullopt, std::string_view{value});
+            } else {
+                std::uint8_t parsed = 0;
+                if (!parseUnsigned(value, parsed)) {
+                    return std::unexpected(Error{
+                        "InvalidFieldValue",
+                        "EYES DATA flags must be 0..255"
+                    });
+                }
+                fo4::forms::set_eyes_data_flags(mutated, key, parsed);
+            }
+            status = "Updated " + field + " for " + formKeyText + " in " + pluginName + ".";
         } else {
             auto model = fo4::forms::decode_leveled_spell(mutated, key);
             if (field == "LVSP\\ChanceNone") {
@@ -324,6 +352,8 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
         loaded->plugin = std::move(mutated);
         rebuildGraphLocked();
         return nlohmann::json(std::move(status));
+    } catch (const fo4::forms::EyesError& error) {
+        return std::unexpected(Error{"EyesWriteFailed", error.what()});
     } catch (const fo4::forms::LeveledSpellError& error) {
         return std::unexpected(Error{"LeveledSpellWriteFailed", error.what()});
     } catch (const std::exception& error) {
