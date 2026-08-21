@@ -4,13 +4,90 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace {
 
 std::filesystem::path testdata(const char* name) {
   return std::filesystem::path{FO4_TESTDATA_DIR} / name;
+}
+
+struct SubrecordSnapshot {
+  fo4::Signature signature{};
+  std::vector<std::byte> data;
+  bool extended_size{false};
+
+  friend bool operator==(const SubrecordSnapshot&, const SubrecordSnapshot&) = default;
+};
+
+struct RecordPayloadSnapshot {
+  fo4::FormKey key;
+  fo4::Signature signature{};
+  std::vector<SubrecordSnapshot> subrecords;
+
+  friend bool operator==(const RecordPayloadSnapshot&, const RecordPayloadSnapshot&) = default;
+};
+
+std::vector<RecordPayloadSnapshot> masked_record_payloads(const fo4::Plugin& plugin) {
+  const auto links = fo4::collect_form_links(plugin);
+  std::vector<RecordPayloadSnapshot> snapshots;
+
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->header.signature == fo4::sig_tes4 || record->form_key.owner().empty()) {
+      continue;
+    }
+
+    RecordPayloadSnapshot snapshot;
+    snapshot.key = record->form_key;
+    snapshot.signature = record->header.signature;
+    snapshot.subrecords.reserve(record->subrecords.size());
+
+    for (const auto& subrecord : record->subrecords) {
+      SubrecordSnapshot sub{
+          .signature = subrecord.signature,
+          .data = subrecord.data,
+          .extended_size = subrecord.extended_size,
+      };
+
+      // FormLinkHit intentionally reports exact byte offsets but not a repeated-
+      // subrecord ordinal. Mask the reported 4-byte slots in every matching
+      // signature occurrence; every other byte remains required to match.
+      for (const auto& link : links) {
+        if (link.record != record->form_key || link.subrecord != subrecord.signature) {
+          continue;
+        }
+        if (link.offset + 4 > sub.data.size()) continue;
+        std::fill_n(sub.data.begin() + static_cast<std::ptrdiff_t>(link.offset),
+                    4, std::byte{0});
+      }
+      snapshot.subrecords.push_back(std::move(sub));
+    }
+    snapshots.push_back(std::move(snapshot));
+  }
+
+  std::ranges::sort(snapshots, {}, [](const RecordPayloadSnapshot& value) {
+    return value.key.to_string();
+  });
+  return snapshots;
+}
+
+void expect_same_logical_links(const std::vector<fo4::FormLinkHit>& before,
+                               const std::vector<fo4::FormLinkHit>& after,
+                               bool* raw_changed = nullptr) {
+  ASSERT_EQ(before.size(), after.size());
+  bool changed = false;
+  for (std::size_t i = 0; i < before.size(); ++i) {
+    EXPECT_EQ(after[i].record, before[i].record);
+    EXPECT_EQ(after[i].subrecord, before[i].subrecord);
+    EXPECT_EQ(after[i].offset, before[i].offset);
+    EXPECT_EQ(after[i].key, before[i].key);
+    changed = changed || after[i].raw != before[i].raw;
+  }
+  if (raw_changed != nullptr) *raw_changed = changed;
 }
 
 }  // namespace
@@ -67,12 +144,7 @@ TEST(RealPlugin, HeatherRemapSameMastersPreservesFormKeys) {
   }
   plugin = fo4::remap_plugin_masters(std::move(plugin), std::move(masters));
   const auto after = fo4::collect_form_links(plugin);
-  ASSERT_EQ(before.size(), after.size());
-  for (std::size_t i = 0; i < before.size(); ++i) {
-    EXPECT_EQ(after[i].key, before[i].key);
-    EXPECT_EQ(after[i].subrecord, before[i].subrecord);
-    EXPECT_EQ(after[i].offset, before[i].offset);
-  }
+  expect_same_logical_links(before, after);
 }
 
 TEST(RealPlugin, SlowTimeRemapSameMastersPreservesFormKeys) {
@@ -86,10 +158,51 @@ TEST(RealPlugin, SlowTimeRemapSameMastersPreservesFormKeys) {
   }
   plugin = fo4::remap_plugin_masters(std::move(plugin), std::move(masters));
   const auto after = fo4::collect_form_links(plugin);
-  ASSERT_EQ(before.size(), after.size());
-  for (std::size_t i = 0; i < before.size(); ++i) {
-    EXPECT_EQ(after[i].key, before[i].key);
-    EXPECT_EQ(after[i].subrecord, before[i].subrecord);
-    EXPECT_EQ(after[i].offset, before[i].offset);
+  expect_same_logical_links(before, after);
+}
+
+TEST(RealPlugin, HeatherReverseMasterRemapPreservesAllNonFormLinkPayloadBytes) {
+  const auto path = testdata("FW_HeatherSurvivalPatch.esp");
+  auto plugin = fo4::read_plugin_file(path);
+  ASSERT_EQ(plugin.header.masters.size(), 3u);
+
+  const auto before_links = fo4::collect_form_links(plugin);
+  ASSERT_FALSE(before_links.empty());
+  const auto before_payloads = masked_record_payloads(plugin);
+  ASSERT_FALSE(before_payloads.empty());
+
+  std::vector<fo4::PluginKey> reversed_masters;
+  reversed_masters.reserve(plugin.header.masters.size());
+  for (auto it = plugin.header.masters.rbegin(); it != plugin.header.masters.rend(); ++it) {
+    reversed_masters.push_back(it->key);
   }
+
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reversed_masters);
+  ASSERT_EQ(plugin.header.masters.size(), 3u);
+  EXPECT_EQ(plugin.header.masters[0].key,
+            fo4::PluginKey::from_filename("Survival Mode Overhaul.esp"));
+  EXPECT_EQ(plugin.header.masters[1].key,
+            fo4::PluginKey::from_filename("llamaCompanionHeatherv2.esp"));
+  EXPECT_EQ(plugin.header.masters[2].key,
+            fo4::PluginKey::from_filename("Fallout4.esm"));
+
+  const auto remapped_links = fo4::collect_form_links(plugin);
+  bool raw_changed = false;
+  expect_same_logical_links(before_links, remapped_links, &raw_changed);
+  EXPECT_TRUE(raw_changed) << "real fixture did not exercise a changed MAST ordinal";
+  EXPECT_EQ(masked_record_payloads(plugin), before_payloads);
+
+  const auto serialized = fo4::write_plugin(plugin);
+  const auto reread = fo4::read_plugin(serialized, path);
+  ASSERT_EQ(reread.header.masters.size(), 3u);
+  EXPECT_EQ(reread.header.masters[0].key,
+            fo4::PluginKey::from_filename("Survival Mode Overhaul.esp"));
+  EXPECT_EQ(reread.header.masters[1].key,
+            fo4::PluginKey::from_filename("llamaCompanionHeatherv2.esp"));
+  EXPECT_EQ(reread.header.masters[2].key,
+            fo4::PluginKey::from_filename("Fallout4.esm"));
+
+  const auto reread_links = fo4::collect_form_links(reread);
+  expect_same_logical_links(before_links, reread_links);
+  EXPECT_EQ(masked_record_payloads(reread), before_payloads);
 }
