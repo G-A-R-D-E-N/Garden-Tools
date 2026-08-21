@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 
 project(FO4IDENative VERSION 0.1.0 LANGUAGES CXX)
 
@@ -17,6 +17,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(Dependencies)
 include(CompilerWarnings)
 include(Sanitizers)
+
+set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../Radicle" "${CMAKE_BINARY_DIR}/radicle")
 
 add_subdirectory(src)
 add_subdirectory(apps/fo4ide)
