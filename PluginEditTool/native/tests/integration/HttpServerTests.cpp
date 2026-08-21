@@ -57,7 +57,7 @@ struct ServerFixture {
 TEST_CASE("HTTP health reports native RPC targets") {
     ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
-    auto response = client.Get("/health");
+    auto response = client.Get("/api/health");
     REQUIRE(response);
     REQUIRE(response->status == 200);
     const auto json = nlohmann::json::parse(response->body);
