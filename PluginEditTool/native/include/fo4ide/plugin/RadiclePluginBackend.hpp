@@ -38,6 +38,7 @@ private:
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
     Result<nlohmann::json> addMasters(const nlohmann::json& arguments);
+    Result<nlohmann::json> checkEslEligibility(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getEditablePlugins() const;
     Result<nlohmann::json> getActivePlugins() const;
     Result<nlohmann::json> getRecordTypeIndex() const;
