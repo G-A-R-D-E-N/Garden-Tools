@@ -12,9 +12,11 @@ C++ namespace is still `fo4`. The library is meant to replace Mutagen inside FO4
 
 ## Status
 
-Generic lossless plugin container, FormKey identity, preservation writer, master remap, and FormLink rewrite (`NAME`/`KWDA`/`CTDA`/`VMAD` plus structured slots such as `CNTO`/`LVLO`/`XTEL`). Light plugins are TES4 SmallFile when known, otherwise `.esl` filename. Inspect CLI and GoogleTests.
+Generic lossless plugin container, FormKey identity, preservation writer, master remap, schema-aware FormLink rewrite, load-order/conflict graph, stable C ABI, and the native PluginEditTool backend are implemented. FormLink coverage includes `NAME`/`KWDA`/`CTDA`/`VMAD`, discriminator-controlled package/PERK payloads, and structured slots such as `CNTO`/`LVLO`/`XTEL`.
 
-Not yet: typed WEAP/ARMO classes, FO4IDE C adapter, BA2, conflict graph.
+BA2 support currently covers the proven Fallout 4 version-1 `BTDX/GNRL` layout: list/read, stored and zlib-compressed chunks, extraction, path lookup, and write/read round trips. PluginEditTool's native Archive panel now uses this Radicle reader through its archive backend seam. DX10 texture archives and next-generation v7/v8 layouts remain deliberately unsupported until their fields are verified.
+
+Still incomplete: broad typed record schemas/authoring, safe ESL compaction, remaining mixed-layout FormID surfaces such as NAVM/NAVI, localized string-table support, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
 
 ## Build
 
@@ -63,5 +65,7 @@ See `docs/FORMID_MODEL.md`.
 - `docs/RE_INVENTORY.md`
 - `docs/FORMAT_NOTES.md`
 - `docs/FORMID_MODEL.md`
+- `docs/FORM_LINK_EVIDENCE.md`
+- `docs/BA2.md`
 - `docs/TEST_STRATEGY.md`
 - `docs/OPEN_QUESTIONS.md`
