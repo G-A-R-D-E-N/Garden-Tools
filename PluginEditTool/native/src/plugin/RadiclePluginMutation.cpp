@@ -67,6 +67,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "SetField") return setField(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
+    if (method == "AddMasters") return addMasters(arguments);
 
     if (method == "GetEditablePlugins") {
         nlohmann::json rows = nlohmann::json::array();
