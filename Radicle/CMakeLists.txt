@@ -45,6 +45,7 @@ add_library(fo4
   src/plugin/master_kinds.cpp
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
+  src/plugin/mutation.cpp
   src/plugin/writer.cpp
   src/schema/form_links.cpp
   src/schema/vmad.cpp
@@ -103,6 +104,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_master_metadata.cpp
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
+    tests/test_mutation.cpp
     tests/test_writer.cpp
     tests/test_formlinks.cpp
     tests/test_vmad.cpp
