@@ -1,6 +1,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -52,7 +53,7 @@ void addEyes(fo4::test::ByteWriter& out,
     } else {
         fo4::test::write_subrecord(out, "FULL", std::string_view{"Inline Eyes\0", 12});
     }
-    fo4::test::write_subrecord(out, "ICON", std::string_view{"Textures\\Eyes\\eye.dds\0", 23});
+    fo4::test::write_subrecord(out, "ICON", std::string_view{"Textures\\Eyes\\eye.dds\0", 22});
     const std::array<std::byte, 1> data{std::byte{flags}};
     fo4::test::write_subrecord(out, "DATA", data);
     fo4::test::end_record(out, record);
