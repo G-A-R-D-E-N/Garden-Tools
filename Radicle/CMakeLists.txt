@@ -131,6 +131,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scalar_mutation.cpp
     tests/test_writer.cpp
     tests/test_formlinks.cpp
+    tests/test_formlink_ordinals.cpp
     tests/test_scalar.cpp
     tests/test_ctda_strings.cpp
     tests/test_package_targets.cpp
