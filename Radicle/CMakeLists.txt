@@ -109,6 +109,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
     tests/test_mutation.cpp
+    tests/test_scalar_mutation.cpp
     tests/test_writer.cpp
     tests/test_formlinks.cpp
     tests/test_scalar.cpp
