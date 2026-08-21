@@ -14,7 +14,8 @@
 namespace {
 
 std::vector<std::byte> make_eyes_plugin(bool with_edid = true,
-                                        bool opaque_full = false) {
+                                        bool opaque_full = false,
+                                        bool embedded_nul_full = false) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
@@ -34,6 +35,11 @@ std::vector<std::byte> make_eyes_plugin(bool with_edid = true,
     const std::array<std::byte, 4> string_id{
         std::byte{0x34}, std::byte{0x12}, std::byte{0x00}, std::byte{0x00}};
     fo4::test::write_subrecord(out, "FULL", string_id);
+  } else if (embedded_nul_full) {
+    const std::array<std::byte, 9> ambiguous{
+        std::byte{'B'}, std::byte{'l'}, std::byte{'u'}, std::byte{'e'},
+        std::byte{0}, std::byte{'X'}, std::byte{'Y'}, std::byte{'Z'}, std::byte{0}};
+    fo4::test::write_subrecord(out, "FULL", ambiguous);
   } else {
     fo4::test::write_subrecord(out, "FULL", std::string_view{"Blue Eyes\0", 10});
   }
@@ -135,6 +141,21 @@ TEST(Eyes, FourByteFullStaysOpaqueAndCannotBeReinterpretedAsText) {
   EXPECT_THROW(
       fo4::forms::set_eyes_text_fields(
           plugin, key, std::nullopt, std::string_view{"Unsafe Guess"}, std::nullopt),
+      fo4::forms::EyesError);
+  EXPECT_EQ(plugin.original_bytes, original);
+}
+
+TEST(Eyes, EmbeddedNulFullStaysOpaqueAndCannotEraseTrailingBytes) {
+  auto plugin = fo4::read_plugin(make_eyes_plugin(true, false, true), "EyesPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:EyesPatch.esp");
+  const auto model = fo4::forms::decode_eyes(plugin, key);
+  EXPECT_FALSE(model.full_text.has_value());
+  ASSERT_EQ(model.full_raw.size(), 9u);
+  const auto original = plugin.original_bytes;
+
+  EXPECT_THROW(
+      fo4::forms::set_eyes_text_fields(
+          plugin, key, std::nullopt, std::string_view{"Unsafe Rewrite"}, std::nullopt),
       fo4::forms::EyesError);
   EXPECT_EQ(plugin.original_bytes, original);
 }
