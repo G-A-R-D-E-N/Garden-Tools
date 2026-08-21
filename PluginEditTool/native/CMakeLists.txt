@@ -18,6 +18,11 @@ include(Dependencies)
 include(CompilerWarnings)
 include(Sanitizers)
 
+# Radicle and the native backend tests both consume zlib. Resolve it in the
+# top-level directory so the imported ZLIB::ZLIB target is visible to sibling
+# native test directories as well as Radicle's subdirectory.
+find_package(ZLIB REQUIRED)
+
 set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../Radicle" "${CMAKE_BINARY_DIR}/radicle")
