@@ -1,0 +1,154 @@
+#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+
+#include <algorithm>
+#include <exception>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/writer.hpp>
+
+namespace fo4ide::plugin {
+namespace {
+
+std::string stringArgument(const nlohmann::json& args, std::size_t index) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
+    return args[index].get<std::string>();
+}
+
+bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
+    value = args[index].get<bool>();
+    return true;
+}
+
+std::vector<fo4::MasterDescriptor> knownMasterKinds(
+    const std::vector<RadiclePluginBackend::LoadedPlugin>& plugins) {
+    std::vector<fo4::MasterDescriptor> known;
+    known.reserve(plugins.size());
+    for (const auto& item : plugins) {
+        known.push_back({
+            item.plugin.key,
+            item.plugin.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
+                                                          : fo4::PluginKind::full,
+        });
+    }
+    return known;
+}
+
+}
+
+Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    const auto orderText = stringArgument(arguments, 1);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    if (orderText.empty()) return std::unexpected(Error{"MasterOrderMissing", "Master order is empty"});
+
+    nlohmann::json requestedJson;
+    try {
+        requestedJson = nlohmann::json::parse(orderText);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidMasterOrder", error.what()});
+    }
+    if (!requestedJson.is_array()) {
+        return std::unexpected(Error{"InvalidMasterOrder", "Master order must be a JSON array"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+    if (requestedJson.size() != loaded->plugin.header.masters.size()) {
+        return std::unexpected(Error{"InvalidMasterOrder", "Master order must contain every existing master exactly once"});
+    }
+
+    std::vector<fo4::MasterDescriptor> requested;
+    requested.reserve(requestedJson.size());
+    std::set<fo4::PluginKey> seen;
+    for (const auto& value : requestedJson) {
+        if (!value.is_string() || value.get<std::string>().empty()) {
+            return std::unexpected(Error{"InvalidMasterOrder", "Master names must be non-empty strings"});
+        }
+        auto key = fo4::PluginKey::from_filename(value.get<std::string>());
+        if (!seen.insert(key).second) {
+            return std::unexpected(Error{"InvalidMasterOrder", "Master order contains a duplicate: " + std::string(key.filename())});
+        }
+
+        const auto current = std::find_if(
+            loaded->plugin.header.masters.begin(), loaded->plugin.header.masters.end(),
+            [&](const auto& master) { return master.key == key; });
+        if (current == loaded->plugin.header.masters.end()) {
+            return std::unexpected(Error{"InvalidMasterOrder", "Master order contains an unknown master: " + std::string(key.filename())});
+        }
+        requested.push_back({std::move(key), current->kind});
+    }
+
+    for (const auto& master : loaded->plugin.header.masters) {
+        if (!seen.contains(master.key)) {
+            return std::unexpected(Error{"InvalidMasterOrder", "Master order omitted: " + std::string(master.key.filename())});
+        }
+    }
+
+    try {
+        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
+        fo4::write_plugin_file(remapped, loaded->path);
+        loaded->plugin = std::move(remapped);
+        rebuildGraphLocked();
+        return nlohmann::json("Wrote " + name + " with reordered masters.");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"MasterReorderFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    bool light = false;
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    if (!boolArgument(arguments, 1, light)) {
+        return std::unexpected(Error{"InvalidLightFlag", "Light flag must be boolean"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+
+    try {
+        auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
+        loaded->plugin = std::move(mutated);
+
+        const auto known = knownMasterKinds(plugins_);
+        for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, known);
+        rebuildGraphLocked();
+
+        return nlohmann::json(
+            light ? "Set the ESL flag on " + name + ". Save Plugin to persist it."
+                  : "Cleared the ESL flag on " + name + ". Save Plugin to persist it.");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"SetLightFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+
+    try {
+        fo4::write_plugin_file(loaded->plugin, loaded->path);
+        return nlohmann::json("Saved " + name + ".");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"PluginWriteFailed", error.what()});
+    }
+}
+
+}
