@@ -350,7 +350,125 @@ collision handling — not cell-specific.
 (`thunk_FUN_14087d2d0`), and calls `thunk_FUN_140d55ca0` (probably cell →
 worldspace association).
 
-## 9. Known record strings (load/save surface)
+## 9. Exterior cell loading — the `exteriorcellloader.cpp` streaming contract
+
+Source: `shared\tesforms\world\exteriorcellloader.cpp` (confirmed `__FILE__`
+string). Three layers cooperate: a **task queue** (`CellLoaderTask`), the
+**cell-grid manager** that owns the loaded cells, and the **file walk**
+(`BGSConstructFormsInFileMap::ConstructForms`) that walks the WRLD GRUP tree
+and queues blocks/sub-blocks.
+
+### 9a. CellLoaderTask — queue + run
+
+Task object layout (from `FUN_140ccf770` / `FUN_140cd11d0` / `FUN_140ccf610`):
+
+| offset | field | role |
+|---|---|---|
+| `+0x48` | interior cell ptr | the cell when loading an interior (else 0) |
+| `+0x50`/`+0x54` | int32 x, y | exterior cell grid coords |
+| `+0x58` | uint state | 3 = queued → 4 = running → 5 = done (PostProcess) |
+| `+0x5D` | bool | interior flag (0 = exterior) |
+| `+0x60` | worldspace ptr | owner worldspace (exterior coords keyed to it) |
+
+`FUN_140ccf770` — **task name virtual**: exterior →
+`"CellLoaderTask for cell ( %i, %i )"`; interior →
+`"CellLoaderTask for interior cell '%s' (%08X)"` (name via `vftable+0x238`,
+formID at `+0x14`); missing interior cell → `"... interior cell NONE
+(canceled)"`.
+
+`FUN_140cd11d0` — **LoadCellData** (assert line 0x279):
+
+```
+if interior flag == 0 (exterior):
+    if task.cell == 0: task.cell = GetCellFromCellCoord(worldspace, x, y)   # FUN_1405b9850
+else if interior flag != 0 and task.cell == 0:
+    assert "Found queued interior cell load without interior cell."       # canceled task
+if task.cell == 0:
+    task.cell = TESDataHandler::NewCell(worldspace, 0, x, y)              # FUN_14085ae30
+if task.cell != 0:
+    FUN_140d1a5e0()            # TESObjectCELL node-tree build (see §9b)
+    if exterior:
+        grid = GetCellGrid(cell); set grid flags +0x50 |= 2 (visible);
+        distance check via FUN_140d1cbc0 clears the bit when too far
+        cell->+0x53 = 1        # "in grid" flag
+```
+
+`FUN_140ccf610` — **PostProcess** (assert line 0xd2): CAS `+0x58` 3→4;
+for exterior calls `FUN_140cd1030(worldspace, x, y)`, for interior
+`FUN_140cd10b0(worldspace, formID)` (both resolve the cell), registers the
+cell into `TESDataHandler` (`FUN_140838780`/`FUN_140844a20`), sets state 5.
+
+### 9b. Cell node-tree build (`FUN_140d1a5e0`, `tesobjectcell.cpp` 0xffa)
+
+Called from `LoadCellData` on first load of a cell; builds the full NiNode
+scene graph for the cell (`CellGrid` → child nodes):
+
+```
+CellGridNode ("Cell \"%s\" (%d, %d)" / "(Interior)")          0x150 alloc
+├─ ActorNode
+├─ MarkerNode
+├─ LightMarker Node
+├─ SoundMarker Node
+├─ LandNode + "Land 0..3" children
+├─ StaticNode
+├─ CombinedNode
+├─ DynamicNode
+├─ EditorStaticNode / EditorDynamicNode / EditorWaterNode
+├─ OcclusionPlane Node, Portal Node, MultiBoundNode Node,
+│  Collision Node, Small Object Node
+└─ (child list grows to exactly 10)
+```
+
+Every node gets `NiBound` set (`0x3f800000` radius, assert via `nibound.inl`
+0x2b) and flag bits `0x800|0x2000`. At the end the child count is validated:
+`*(short*)(cellNode + 0x132) != 10` → assert
+`"Improperly sized cell node array."` (`tesobjectcell.cpp` 0x113e). For
+interiors it also loads precomputed visibility:
+`Data\Vis\%s\%08X.uvd` (worldspace name, cell formID & 0xFFFFFF).
+
+### 9c. Cell-grid manager (`FUN_140ffc050` + `FUN_140ff9450`)
+
+`FUN_140ff9450` is the manager update (drives the `DAT_143df22b0` BST
+singleton, checks `+0x240`); it calls `FUN_140ffc050` on the grid array
+(`param_1 + 0x100`). `FUN_140ffc050` builds the `BSTArray` of grids:
+
+```
+copy singleton +0x88 -> grid array +0x23            # count/version
+alloc BSTArray (8-byte elems, cap = singleton +0x50)
+for each entry i in singleton array (+0x40, count +0x50):
+    grid = FUN_140ffc870(owner, entry[i])           # build one cell grid
+    if grid: push into BSTArray
+for each built grid: FUN_140ffd360(owner, grid)     # attach/init
+log "Constructed %u cell grids in %.2f ms"          # +0xff9cd0
+```
+
+### 9d. The block/sub-block walk (`FUN_140900e40`, `bgsconstructformsinallfilesmap.cpp`)
+
+`BGSConstructFormsInFileMap::ConstructForms` walks the WRLD record's GRUP
+tree, dispatching on the group type at `group+0x2B0` (the GRUP record's type
+slot — same enum as §6) and using the group label (`+0x2AC`) as the map key:
+
+| group type | key / lookup | behavior |
+|---|---|---|
+| 0 | form type name | `FUN_140906660` (forms map) |
+| 1 | worldspace formID | `+0x38`/`+0x40` worldspace maps |
+| 2/4 | block label | `FUN_140906380` — "NULL current cell **blocks** map" (0x313) |
+| 3/5 | sub-block label | `FUN_1409064f0` — "NULL current cell **sub-blocks** map" (0x323) |
+| 6 | cell formID | cell children; persistent/temporary split on flag bit 1 |
+
+Each non-empty group is descended (`FUN_14087de20(param, 1)` = descend;
+`FUN_14087d930` = skip), so the walk is: WRLD → Exterior/Interior **Block**
+(type 2/4) → **Sub-block** (3/5) → **Cell** (6) → REFR/LAND/etc. records. The
+sub-record data is appended into 0x10-byte scrap-array entries (`+0x2B4`,
+`BSScrapArrayAllocator`). The label format strings live in the group-name
+formatter `FUN_140676cd0` (§6).
+
+Practical contract: cell grids are **lazily created on demand** (LoadCellData
+→ NewCell on miss), **built eagerly in bulk** at world load (grid manager
+"Constructed %u cell grids"), and the GRUP walk only **queues** work keyed by
+block/sub-block labels — the task queue owns the streaming.
+
+## 10. Known record strings (load/save surface)
 
 CELL: `XCLC` (coords), `XCLW`, `XCLL` (lighting), `XCLR`, `XCLP`, `XCLS`,
 `XCMO`, `XCWT` (water), `XCCM`, `XCGD`, `XCIM`, `XCET`, `XCHG`, `XCNT`,
@@ -371,17 +489,14 @@ variations), `ATXT`/`BTXT`/`XTXT` (layer textures), `LNAM`, `MNAM`, `NAM0`.
 (All verified present as ASCII strings in the binary; the subrecord compare
 constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 
-## 10. Open questions
+## 11. Open questions
 
 - Exact `LoadRecord`/`SaveRecord` slot indices per class (the virtuals at
   slots 23+ need per-slot naming via decompile + source-string anchors).
 - The 0x20/0x88-byte cell-data block internals (what lives in the 0x88
   exterior block beyond the coords + 1.0f seeds; the `0x79F` at +0x58).
-- The `exteriorcellloader.cpp` streaming contract (cell-grid construction:
-  `"Constructed %u cell grids in %.2f ms"`, `"Improperly sized cell node
-  array."`).
 - Whether any CK feature writes WRLD/CELL records with non-standard subrecords
-  (editor-only `EditorWarnings.txt` paths noted in §9 of doc 03).
+  (editor-only `EditorWarnings.txt` paths noted in §10 of doc 03).
 
 ## Artifacts
 
@@ -397,3 +512,10 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
   `decompile-REFRSerializer-slots.txt`, `decompile-REFR-serializer-thunks.txt`,
   `decompile-serializer-virtuals.txt`, `decompile-factory-compare.txt`,
   `decompile-json-registry.txt`, `callers-{REFRFactory-ctor,REFRFactory-Create,serializer-read,serializer-reg,json-registry}.txt` (raw decompiles; local only)
+- `ghidra-dump/decompile-exteriorcellloader.txt` (grid ctor FUN_140ffc050 +
+  node-tree FUN_140d1a5e0), `decompile-CellLoaderTask.txt` (task name),
+  `decompile-CellLoaderTask-run.txt` (LoadCellData + PostProcess),
+  `decompile-GRUP-walk-FUN_140680320.txt` (group label formatter),
+  `decompile-ConstructForms.txt` (block/sub-block walk),
+  `decompile-grid-manager.txt`, `callers-grid-ctor.txt` (raw decompiles; local only)
+- `ghidra-dump/FindCodeRefsTo.java` (code xref finder)
