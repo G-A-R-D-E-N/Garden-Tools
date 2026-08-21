@@ -224,7 +224,7 @@ TEST_CASE("Native LVSP Spell edit refuses non-spell targets without touching dis
         "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[0]\\Spell", "000456:Master.esp"
     }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "InvalidLeveledSpellReference");
+    CHECK(result.error().type == "InvalidLeveledSpellReference");
     CHECK(fo4::read_plugin_file(patchPath).original_bytes == before);
 }
 
@@ -243,17 +243,17 @@ TEST_CASE("Native LVSP edits validate numeric widths and defined flag bits") {
         "Patch.esp", "000800:Patch.esp", "LVSP\\ChanceNone", "256"
     }));
     REQUIRE_FALSE(chance.has_value());
-    CHECK(chance.error().code == "InvalidFieldValue");
+    CHECK(chance.error().type == "InvalidFieldValue");
 
     const auto flags = backend.invokeBackend("SetField", nlohmann::json::array({
         "Patch.esp", "000800:Patch.esp", "LVSP\\Flags", "8"
     }));
     REQUIRE_FALSE(flags.has_value());
-    CHECK(flags.error().code == "InvalidFieldValue");
+    CHECK(flags.error().type == "InvalidFieldValue");
 
     const auto level = backend.invokeBackend("SetField", nlohmann::json::array({
         "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[0]\\Level", "65536"
     }));
     REQUIRE_FALSE(level.has_value());
-    CHECK(level.error().code == "InvalidFieldValue");
+    CHECK(level.error().type == "InvalidFieldValue");
 }
