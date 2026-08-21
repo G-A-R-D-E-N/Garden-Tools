@@ -1,0 +1,292 @@
+#include "fo4/schema/vmad.hpp"
+
+#include "fo4/error.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <vector>
+
+namespace fo4 {
+namespace {
+
+class Slice {
+public:
+  explicit Slice(std::span<const std::byte> data) : data_(data) {}
+
+  std::size_t position() const noexcept { return pos_; }
+  bool at_end() const noexcept { return pos_ >= data_.size(); }
+
+  std::uint8_t u8() {
+    require(1);
+    return std::to_integer<std::uint8_t>(data_[pos_++]);
+  }
+
+  std::uint16_t u16() {
+    const auto lo = static_cast<std::uint16_t>(u8());
+    const auto hi = static_cast<std::uint16_t>(u8());
+    return static_cast<std::uint16_t>(lo | (hi << 8));
+  }
+
+  std::int16_t i16() { return static_cast<std::int16_t>(u16()); }
+
+  std::uint32_t u32() {
+    const auto b0 = static_cast<std::uint32_t>(u8());
+    const auto b1 = static_cast<std::uint32_t>(u8());
+    const auto b2 = static_cast<std::uint32_t>(u8());
+    const auto b3 = static_cast<std::uint32_t>(u8());
+    return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+  }
+
+  void skip(std::size_t count) {
+    require(count);
+    pos_ += count;
+  }
+
+  void skip_wstring() {
+    const auto n = u16();
+    skip(n);
+  }
+
+private:
+  void require(std::size_t count) const {
+    if (count > data_.size() - pos_) {
+      throw parse_error(pos_, "truncated VMAD");
+    }
+  }
+
+  std::span<const std::byte> data_;
+  std::size_t pos_{0};
+};
+
+constexpr std::uint8_t k_type_object = 1;
+constexpr std::uint8_t k_type_string = 2;
+constexpr std::uint8_t k_type_int = 3;
+constexpr std::uint8_t k_type_float = 4;
+constexpr std::uint8_t k_type_bool = 5;
+constexpr std::uint8_t k_type_variable = 6;
+constexpr std::uint8_t k_type_struct = 7;
+constexpr std::uint8_t k_type_object_array = 11;
+constexpr std::uint8_t k_type_string_array = 12;
+constexpr std::uint8_t k_type_int_array = 13;
+constexpr std::uint8_t k_type_float_array = 14;
+constexpr std::uint8_t k_type_bool_array = 15;
+constexpr std::uint8_t k_type_variable_array = 16;
+constexpr std::uint8_t k_type_struct_array = 17;
+
+void walk_object(Slice& slice, std::int16_t object_format,
+                 std::vector<std::size_t>& offsets) {
+  if (object_format == 2) {
+    slice.u16();
+    slice.u16();
+    offsets.push_back(slice.position());
+    slice.u32();
+  } else if (object_format == 1) {
+    offsets.push_back(slice.position());
+    slice.u32();
+    slice.u16();
+    slice.u16();
+  } else {
+    throw parse_error(slice.position(), "unknown VMAD object format");
+  }
+}
+
+void walk_property(Slice& slice, std::int16_t object_format,
+                   std::vector<std::size_t>& offsets);
+
+void walk_properties(Slice& slice, std::int16_t object_format, std::uint32_t count,
+                     std::vector<std::size_t>& offsets) {
+  for (std::uint32_t i = 0; i < count; ++i) {
+    walk_property(slice, object_format, offsets);
+  }
+}
+
+void walk_property(Slice& slice, std::int16_t object_format,
+                   std::vector<std::size_t>& offsets) {
+  slice.skip_wstring();
+  const auto type = slice.u8();
+  slice.u8();  // flags
+  switch (type) {
+    case 0:
+    case k_type_variable:
+      break;
+    case k_type_object:
+      walk_object(slice, object_format, offsets);
+      break;
+    case k_type_string:
+      slice.skip_wstring();
+      break;
+    case k_type_int:
+    case k_type_float:
+      slice.u32();
+      break;
+    case k_type_bool:
+      slice.u8();
+      break;
+    case k_type_struct:
+      walk_properties(slice, object_format, slice.u32(), offsets);
+      break;
+    case k_type_object_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        walk_object(slice, object_format, offsets);
+      }
+      break;
+    }
+    case k_type_string_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        slice.skip_wstring();
+      }
+      break;
+    }
+    case k_type_int_array:
+    case k_type_float_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        slice.u32();
+      }
+      break;
+    }
+    case k_type_bool_array: {
+      const auto n = slice.u32();
+      slice.skip(n);
+      break;
+    }
+    case k_type_variable_array:
+      slice.u32();
+      break;
+    case k_type_struct_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        walk_properties(slice, object_format, slice.u32(), offsets);
+      }
+      break;
+    }
+    default:
+      throw parse_error(slice.position(), "unknown VMAD property type");
+  }
+}
+
+void walk_script_entry(Slice& slice, std::int16_t object_format,
+                       std::vector<std::size_t>& offsets) {
+  const auto name_len = slice.u16();
+  slice.skip(name_len);
+  if (name_len == 0) {
+    return;
+  }
+  slice.u8();
+  walk_properties(slice, object_format, slice.u16(), offsets);
+}
+
+void walk_scripts(Slice& slice, std::int16_t object_format, std::uint16_t count,
+                  std::vector<std::size_t>& offsets) {
+  for (std::uint16_t i = 0; i < count; ++i) {
+    walk_script_entry(slice, object_format, offsets);
+  }
+}
+
+void walk_quest_extra(Slice& slice, std::int16_t object_format,
+                      std::vector<std::size_t>& offsets) {
+  slice.u8();  // extra bind
+  const auto fragment_count = slice.u16();
+  const auto script_name_len = slice.u16();
+  slice.skip(script_name_len);
+  if (script_name_len != 0) {
+    slice.u8();
+    walk_properties(slice, object_format, slice.u16(), offsets);
+  }
+  for (std::uint16_t i = 0; i < fragment_count; ++i) {
+    slice.u16();
+    slice.u16();
+    slice.u32();
+    slice.u8();
+    slice.skip_wstring();
+    slice.skip_wstring();
+  }
+  const auto alias_count = slice.u16();
+  for (std::uint16_t i = 0; i < alias_count; ++i) {
+    walk_object(slice, object_format, offsets);
+    slice.i16();  // version
+    const auto alias_format = slice.i16();
+    walk_scripts(slice, alias_format, slice.u16(), offsets);
+  }
+}
+
+void walk_perk_extra(Slice& slice, std::int16_t object_format,
+                     std::vector<std::size_t>& offsets) {
+  slice.u8();
+  walk_script_entry(slice, object_format, offsets);
+  const auto n = slice.u16();
+  for (std::uint16_t i = 0; i < n; ++i) {
+    slice.u16();
+    slice.u16();
+    slice.u8();
+    slice.skip_wstring();
+    slice.skip_wstring();
+  }
+}
+
+void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
+                            std::vector<std::size_t>& offsets, bool scene) {
+  slice.u8();  // extra bind
+  const auto flags = slice.u8();
+  walk_script_entry(slice, object_format, offsets);
+  unsigned count = 0;
+  auto bits = flags;
+  for (int i = 0; i < 8; ++i) {
+    if ((bits & 1u) != 0) {
+      ++count;
+    }
+    bits = static_cast<std::uint8_t>(bits >> 1);
+  }
+  for (unsigned i = 0; i < count; ++i) {
+    slice.u8();
+    slice.skip_wstring();
+    slice.skip_wstring();
+  }
+  if (scene && !slice.at_end()) {
+    const auto phases = slice.u16();
+    for (std::uint16_t i = 0; i < phases; ++i) {
+      slice.u8();
+      slice.u8();
+      slice.u16();
+      slice.u8();
+      slice.u8();
+      slice.skip_wstring();
+      slice.skip_wstring();
+    }
+  }
+}
+
+}  // namespace
+
+std::vector<std::size_t> vmad_formid_offsets(std::span<const std::byte> data,
+                                             Signature record_signature) {
+  std::vector<std::size_t> offsets;
+  if (data.size() < 6) {
+    return offsets;
+  }
+  try {
+    Slice slice{data};
+    slice.i16();  // version
+    const auto object_format = slice.i16();
+    walk_scripts(slice, object_format, slice.u16(), offsets);
+    if (slice.at_end()) {
+      return offsets;
+    }
+    if (record_signature == sig_qust) {
+      walk_quest_extra(slice, object_format, offsets);
+    } else if (record_signature == sig_perk) {
+      walk_perk_extra(slice, object_format, offsets);
+    } else if (record_signature == sig_pack || record_signature == sig_info) {
+      walk_flagged_fragments(slice, object_format, offsets, false);
+    } else if (record_signature == sig_scen) {
+      walk_flagged_fragments(slice, object_format, offsets, true);
+    }
+  } catch (const parse_error&) {
+  }
+  return offsets;
+}
+
+}  // namespace fo4
