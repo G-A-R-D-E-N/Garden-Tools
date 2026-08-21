@@ -6,6 +6,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -140,8 +141,9 @@ TEST_CASE("Native EYES SetField persists FULL ICON and DATA while preserving rec
     CHECK(model.icon == "Textures\\Actors\\Character\\Eyes\\new.dds");
     CHECK(model.data_flags == 5u);
     CHECK(model.record_flags.value() == 0x00000004u);
-    CHECK(unknownData(reloaded) ==
-          std::vector<std::byte>{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}});
+    const std::vector<std::byte> expectedUnknown{
+        std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}};
+    CHECK(unknownData(reloaded) == expectedUnknown);
 }
 
 TEST_CASE("Native EYES FULL edit refuses opaque four-byte storage without touching disk") {
