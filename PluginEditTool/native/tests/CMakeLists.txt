@@ -43,6 +43,18 @@ fo4ide_enable_warnings(fo4ide_test_plugin_backend)
 fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
 catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT 10)
 
+add_executable(
+    fo4ide_test_archive_backend
+    unit/RadicleArchiveBackendTests.cpp
+)
+target_link_libraries(
+    fo4ide_test_archive_backend
+    PRIVATE fo4ide_archive fo4 Catch2::Catch2WithMain
+)
+fo4ide_enable_warnings(fo4ide_test_archive_backend)
+fo4ide_enable_sanitizers(fo4ide_test_archive_backend)
+catch_discover_tests(fo4ide_test_archive_backend PROPERTIES TIMEOUT 10)
+
 add_executable(fo4ide_fake_process helpers/fake_process.cpp)
 fo4ide_enable_warnings(fo4ide_fake_process)
 fo4ide_enable_sanitizers(fo4ide_fake_process)
