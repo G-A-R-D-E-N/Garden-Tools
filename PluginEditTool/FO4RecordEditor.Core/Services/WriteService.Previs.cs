@@ -32,6 +32,11 @@ public static partial class WriteService
 {
     public static string DisablePrevis(object? env, string cellId, string patchPlugin, bool apply)
     {
+        return PluginGraphGate.Run(patchPlugin, () => DisablePrevisCore(env, cellId, patchPlugin, apply));
+    }
+
+    private static string DisablePrevisCore(object? env, string cellId, string patchPlugin, bool apply)
+    {
         if (!ResolveFk(env, cellId, out var fk))
             return ToolError.Fail($"'{cellId}' is not a FormKey and no loaded record has that EditorID.");
 

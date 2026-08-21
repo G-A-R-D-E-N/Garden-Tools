@@ -47,7 +47,9 @@ public static partial class MutagenLoader
 
 
 
-    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> PluginSourcePaths = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> EmptyPluginSourcePaths = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly Dictionary<string, bool> EmptyMasterIsEsl = new(StringComparer.OrdinalIgnoreCase);
 
 
 
@@ -57,13 +59,29 @@ public static partial class MutagenLoader
 
 
 
-    public static Mutagen.Bethesda.Plugins.Cache.ILinkCache? LinkCache;
+    public static Mutagen.Bethesda.Plugins.Cache.ILinkCache? LinkCache
+        => EnvironmentState.Current?.LinkCache;
 
+    public static IReadOnlyDictionary<string, bool> MasterIsEsl
+        => EnvironmentState.Current?.MasterIsEsl ?? EmptyMasterIsEsl;
 
+    public static IReadOnlyDictionary<string, string> PluginSourcePaths
+        => EnvironmentState.Current?.PluginSourcePaths ?? EmptyPluginSourcePaths;
 
+    internal static void SeedEnvironmentForTest(
+        Mutagen.Bethesda.Plugins.Cache.ILinkCache? linkCache = null,
+        IReadOnlyDictionary<string, bool>? masterIsEsl = null,
+        IReadOnlyDictionary<string, string>? pluginSourcePaths = null)
+        => EnvironmentState.Publish(new EnvironmentSnapshot(
+            linkCache, masterIsEsl ?? EmptyMasterIsEsl, pluginSourcePaths ?? EmptyPluginSourcePaths, Array.Empty<string>()));
 
-    public static readonly System.Collections.Generic.Dictionary<string, bool> MasterIsEsl =
-        new(System.StringComparer.OrdinalIgnoreCase);
+    internal static void PublishLinkCache(Mutagen.Bethesda.Plugins.Cache.ILinkCache? linkCache)
+    {
+        var current = EnvironmentState.Current;
+        EnvironmentState.Publish(current == null
+            ? new EnvironmentSnapshot(linkCache, EmptyMasterIsEsl, EmptyPluginSourcePaths, Array.Empty<string>())
+            : current.WithLinkCache(linkCache));
+    }
 
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, PropertyInfo?> _nameProp = new();
@@ -337,12 +355,13 @@ public static partial class MutagenLoader
 
 
 
-    private static void RegisterPluginSourcePath(string modName, string dataFolder)
+    private static void RegisterPluginSourcePath(
+        string modName, string dataFolder, IDictionary<string, string> target)
     {
         try
         {
             var path = System.IO.Path.Combine(dataFolder, modName);
-            if (System.IO.File.Exists(path)) PluginSourcePaths[modName] = path;
+            if (System.IO.File.Exists(path)) target[modName] = path;
         }
         catch { }
     }
@@ -577,6 +596,17 @@ public static partial class MutagenLoader
         _modIndexCache.Values.Sum(v => v.RetainedRecords);
 
     public static RecordNode LoadEsp(string espPath, IProgress<(string message, double? percent)>? progress = null)
+        => EnvironmentLifecycleGate.Run(() =>
+            PluginGraphGate.Run(Path.GetFileName(espPath), () => LoadEspCore(espPath, progress)));
+
+    public static async Task<RecordNode> LoadEspAsync(
+        string espPath, IProgress<(string message, double? percent)>? progress = null)
+        => await EnvironmentLifecycleGate.RunAsync(() =>
+            Task.Run(() =>
+                PluginGraphGate.Run(Path.GetFileName(espPath), () => LoadEspCore(espPath, progress))));
+
+    private static RecordNode LoadEspCore(
+        string espPath, IProgress<(string message, double? percent)>? progress)
     {
         var fileName = Path.GetFileName(espPath);
         var root = new RecordNode { Key = fileName, FilePath = espPath };
@@ -615,9 +645,19 @@ public static partial class MutagenLoader
     public static (object env, List<string> plugins) BuildEnvironment(
         IProgress<(string message, double? percent)>? progress = null,
         string? dataFolderOverride = null)
+        => EnvironmentLifecycleGate.Run(() => BuildEnvironmentCore(progress, dataFolderOverride));
+
+    public static async Task<(object env, List<string> plugins)> BuildEnvironmentAsync(
+        IProgress<(string message, double? percent)>? progress = null,
+        string? dataFolderOverride = null)
+        => await EnvironmentLifecycleGate.RunAsync(
+            () => Task.Run(() => BuildEnvironmentCore(progress, dataFolderOverride)));
+
+    private static (object env, List<string> plugins) BuildEnvironmentCore(
+        IProgress<(string message, double? percent)>? progress,
+        string? dataFolderOverride)
     {
         progress?.Report(("Initializing Game Environment...", 0));
-        _modIndexCache.Clear();
         var builder = GameEnvironment.Typical.Builder<IFallout4Mod, IFallout4ModGetter>(GameRelease.Fallout4);
         if (!string.IsNullOrWhiteSpace(dataFolderOverride))
         {
@@ -635,22 +675,20 @@ public static partial class MutagenLoader
 
             throw TranslateEnvironmentError(ex);
         }
-        LinkCache = env.LinkCache;
 
         var plugins = new List<string>();
-        MasterIsEsl.Clear();
-        PluginSourcePaths.Clear();
+        var masterIsEsl = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var pluginSourcePaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var l in env.LoadOrder.ListedOrder)
             if (l.Mod != null)
             {
                 plugins.Add(l.ModKey.FileName.String);
-                MasterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
-                RegisterPluginSourcePath(l.ModKey.FileName.String, env.DataFolderPath.Path);
+                masterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
+                RegisterPluginSourcePath(l.ModKey.FileName.String, env.DataFolderPath.Path, pluginSourcePaths);
             }
 
+        ApplyEnvironmentPublish(env.LinkCache, masterIsEsl, pluginSourcePaths, new[] { env.DataFolderPath.Path });
 
-
-        try { TextureService.SetSessionRoots(new[] { env.DataFolderPath.Path }); } catch { }
         try { AssetResolver.SetSessionDataRoots(new[] { env.DataFolderPath.Path }); } catch { }
 
         progress?.Report(($"Found {plugins.Count} plugins.", null));
@@ -658,17 +696,29 @@ public static partial class MutagenLoader
     }
 
     public static (RecordNode root, object env) LoadEnvironment(IProgress<(string message, double? percent)>? progress = null)
+        => EnvironmentLifecycleGate.Run(() => LoadEnvironmentCore(progress));
+
+    public static async Task<(RecordNode root, object env)> LoadEnvironmentAsync(
+        IProgress<(string message, double? percent)>? progress = null)
+        => await EnvironmentLifecycleGate.RunAsync(() => Task.Run(() => LoadEnvironmentCore(progress)));
+
+    private static (RecordNode root, object env) LoadEnvironmentCore(
+        IProgress<(string message, double? percent)>? progress)
     {
         progress?.Report(("Initializing Game Environment...", 0));
-        _modIndexCache.Clear();
         var env = GameEnvironment.Typical.Builder<IFallout4Mod, IFallout4ModGetter>(GameRelease.Fallout4).Build();
+
+        var pluginSourcePaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var l in env.LoadOrder.ListedOrder)
+            if (l.Mod != null)
+                RegisterPluginSourcePath(l.ModKey.FileName.String, env.DataFolderPath.Path, pluginSourcePaths);
+
+        ApplyEnvironmentPublish(
+            null, new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase), pluginSourcePaths,
+            new[] { env.DataFolderPath.Path });
 
         var root = new RecordNode { Key = "Load Order" };
         var listed = env.LoadOrder.ListedOrder.ToList();
-        PluginSourcePaths.Clear();
-        foreach (var l in listed)
-            if (l.Mod != null) RegisterPluginSourcePath(l.ModKey.FileName.String, env.DataFolderPath.Path);
-
         for (int i = 0; i < listed.Count; i++)
         {
             var modListing = listed[i];
@@ -691,7 +741,23 @@ public static partial class MutagenLoader
         return (root, env);
     }
 
+    internal static void ApplyEnvironmentPublish(
+        Mutagen.Bethesda.Plugins.Cache.ILinkCache? linkCache,
+        IReadOnlyDictionary<string, bool> masterIsEsl,
+        IReadOnlyDictionary<string, string> pluginSourcePaths,
+        IReadOnlyList<string> assetRoots)
+    {
+        _modIndexCache.Clear();
+        EnvironmentState.Publish(new EnvironmentSnapshot(linkCache, masterIsEsl, pluginSourcePaths, assetRoots));
+        try { TextureService.SetSessionRoots(assetRoots); } catch { }
+    }
+
     public static List<RecordNode> GetGroups(string modName, object? envObj, RecordNode pluginNode, Action<string>? progress = null)
+    {
+        return PluginGraphGate.Run(modName, () => GetGroupsCore(modName, envObj, pluginNode, progress));
+    }
+
+    private static List<RecordNode> GetGroupsCore(string modName, object? envObj, RecordNode pluginNode, Action<string>? progress)
     {
         var mod = ResolveMod(modName, envObj);
         if (mod == null) return [];
@@ -719,6 +785,11 @@ public static partial class MutagenLoader
     }
 
     public static List<RecordNode> GetRecords(string modName, string sig, object? envObj, RecordNode groupNode, Action<string>? progress = null)
+    {
+        return PluginGraphGate.Run(modName, () => GetRecordsCore(modName, sig, envObj, groupNode, progress));
+    }
+
+    private static List<RecordNode> GetRecordsCore(string modName, string sig, object? envObj, RecordNode groupNode, Action<string>? progress)
     {
         var mod = ResolveMod(modName, envObj);
         if (mod == null) return [];
@@ -750,6 +821,11 @@ public static partial class MutagenLoader
     }
 
     public static void PopulateNode(RecordNode node, object? envObj, string modName = "")
+    {
+        PluginGraphGate.Run(modName, () => PopulateNodeCore(node, envObj, modName));
+    }
+
+    private static void PopulateNodeCore(RecordNode node, object? envObj, string modName = "")
     {
 
         var flag = node.GetChild("_HasData");
@@ -814,6 +890,11 @@ public static partial class MutagenLoader
 
     public static List<RecordNode> BuildPopulatedFields(string formKeyStr, object? envObj, string modName, string? sig = null)
     {
+        return PluginGraphGate.Run(modName, () => BuildPopulatedFieldsCore(formKeyStr, envObj, modName, sig));
+    }
+
+    private static List<RecordNode> BuildPopulatedFieldsCore(string formKeyStr, object? envObj, string modName, string? sig = null)
+    {
         var temp = new RecordNode { Key = "temp" };
         if (!FormKey.TryFactory(formKeyStr, out var formKey)) return [];
         if (string.IsNullOrEmpty(modName)) modName = formKey.ModKey.FileName.String;
@@ -835,6 +916,12 @@ public static partial class MutagenLoader
 
 
     public static Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? GetRecordVersion(
+        object? envObj, string plugin, FormKey fk)
+    {
+        return PluginGraphGate.Run(plugin, () => GetRecordVersionCore(envObj, plugin, fk));
+    }
+
+    private static Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter? GetRecordVersionCore(
         object? envObj, string plugin, FormKey fk)
     {
         foreach (var (p, rec) in GetRecordContexts(envObj, fk))
@@ -1064,6 +1151,12 @@ public static partial class MutagenLoader
 
     public static List<(FormKey fk, string editorId, string sig)> EnumerateOverrides(
         object? envObj, string plugin, string? sig = null)
+    {
+        return PluginGraphGate.Run(plugin, () => EnumerateOverridesCore(envObj, plugin, sig));
+    }
+
+    private static List<(FormKey fk, string editorId, string sig)> EnumerateOverridesCore(
+        object? envObj, string plugin, string? sig)
     {
         var result = new List<(FormKey, string, string)>();
         if (ResolveMod(plugin, envObj) is not Mutagen.Bethesda.Plugins.Records.IModGetter mod) return result;
@@ -1353,6 +1446,11 @@ public static partial class MutagenLoader
 
     public static IReadOnlyList<string> QueryRecordTypes(object? envObj, string plugin)
     {
+        return PluginGraphGate.Run(plugin, () => QueryRecordTypesCore(envObj, plugin));
+    }
+
+    private static IReadOnlyList<string> QueryRecordTypesCore(object? envObj, string plugin)
+    {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
 
@@ -1365,6 +1463,12 @@ public static partial class MutagenLoader
     public static IReadOnlyList<(string formKey, string editorId)> QueryRecordsOfType(
         object? envObj, string plugin, string sig, int limit = 100, int offset = 0)
     {
+        return PluginGraphGate.Run(plugin, () => QueryRecordsOfTypeCore(envObj, plugin, sig, limit, offset));
+    }
+
+    private static IReadOnlyList<(string formKey, string editorId)> QueryRecordsOfTypeCore(
+        object? envObj, string plugin, string sig, int limit, int offset)
+    {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
         var idx = GetModIndex(mod, plugin);
@@ -1374,6 +1478,11 @@ public static partial class MutagenLoader
 
 
     public static int CountRecordsOfType(object? envObj, string plugin, string sig)
+    {
+        return PluginGraphGate.Run(plugin, () => CountRecordsOfTypeCore(envObj, plugin, sig));
+    }
+
+    private static int CountRecordsOfTypeCore(object? envObj, string plugin, string sig)
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return 0;
@@ -1387,6 +1496,11 @@ public static partial class MutagenLoader
 
 
     public static string QueryRecordSummaries(object? envObj, string plugin, string sig, int limit, int offset = 0)
+    {
+        return PluginGraphGate.Run(plugin, () => QueryRecordSummariesCore(envObj, plugin, sig, limit, offset));
+    }
+
+    private static string QueryRecordSummariesCore(object? envObj, string plugin, string sig, int limit, int offset = 0)
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return ToolError.Fail($"Plugin '{plugin}' not found.");
@@ -1496,6 +1610,12 @@ public static partial class MutagenLoader
     public static IReadOnlyList<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> GetRecordsForBatch(
         object? envObj, string plugin, string sig)
     {
+        return PluginGraphGate.Run(plugin, () => GetRecordsForBatchCore(envObj, plugin, sig));
+    }
+
+    private static IReadOnlyList<Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter> GetRecordsForBatchCore(
+        object? envObj, string plugin, string sig)
+    {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
         var idx = GetModIndex(mod, plugin);
@@ -1504,6 +1624,12 @@ public static partial class MutagenLoader
 
     public static IReadOnlyList<(string formKey, string editorId, string type)> QuerySearch(
         object? envObj, string plugin, string query, int limit = 50, int offset = 0)
+    {
+        return PluginGraphGate.Run(plugin, () => QuerySearchCore(envObj, plugin, query, limit, offset));
+    }
+
+    private static IReadOnlyList<(string formKey, string editorId, string type)> QuerySearchCore(
+        object? envObj, string plugin, string query, int limit, int offset)
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return [];
@@ -1524,15 +1650,16 @@ public static partial class MutagenLoader
         return hits;
     }
 
-    public sealed record SearchHit(string FormKey, string EditorID, string Type, string Plugin, string Name = "");
+    public sealed record SearchHit(string FormKey, string EditorID, string Type, string Plugin, string Name = "");    public static List<SearchHit> SearchAllRecords(object? envObj, string query, string? typeFilter = null, int limit = 200)
+    {
+        return PluginGraphGate.Run(EditableMods.Keys, () => SearchAllRecordsCore(envObj, query, typeFilter, limit));
+    }
 
-
-
-
-    public static List<SearchHit> SearchAllRecords(object? envObj, string query, string? typeFilter = null, int limit = 200)
+    private static List<SearchHit> SearchAllRecordsCore(object? envObj, string query, string? typeFilter, int limit)
     {
         if (envObj == null) return new List<SearchHit>();
         query ??= "";
+
 
 
 
@@ -1664,6 +1791,11 @@ public static partial class MutagenLoader
 
     public static string QueryRecordFields(object? envObj, string plugin, string formKeyOrEditorId)
     {
+        return PluginGraphGate.Run(plugin, () => QueryRecordFieldsCore(envObj, plugin, formKeyOrEditorId));
+    }
+
+    private static string QueryRecordFieldsCore(object? envObj, string plugin, string formKeyOrEditorId)
+    {
 
 
         var candidates = new List<(string name, object mod)>();
@@ -1712,6 +1844,11 @@ public static partial class MutagenLoader
 
 
     public static string CheckPlugin(object? envObj, string plugin)
+    {
+        return PluginGraphGate.Run(plugin, () => CheckPluginCore(envObj, plugin));
+    }
+
+    private static string CheckPluginCore(object? envObj, string plugin)
     {
         var mod = ResolveMod(plugin, envObj);
         if (mod == null) return $"(plugin '{plugin}' is not loaded)";
@@ -1821,6 +1958,11 @@ public static partial class MutagenLoader
 
     public static string ScanErrorsDeep(object? envObj, string plugin)
     {
+        return PluginGraphGate.Run(plugin, () => ScanErrorsDeepCore(envObj, plugin));
+    }
+
+    private static string ScanErrorsDeepCore(object? envObj, string plugin)
+    {
         if (envObj == null) return "Deep error scan needs the loaded game environment. Use 'Load Env' first.";
         if (ResolveMod(plugin, envObj) is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod)
             return $"(plugin '{plugin}' is not loaded)";
@@ -1854,6 +1996,11 @@ public static partial class MutagenLoader
 
 
     public static string ScanBrokenRefs(object? envObj, string plugin)
+    {
+        return PluginGraphGate.Run(plugin, () => ScanBrokenRefsCore(envObj, plugin));
+    }
+
+    private static string ScanBrokenRefsCore(object? envObj, string plugin)
     {
         if (envObj == null) return "scan_broken_refs needs the loaded game environment. Use 'Load Env' first.";
         if (ResolveMod(plugin, envObj) is not Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod)
@@ -1945,6 +2092,11 @@ public static partial class MutagenLoader
 
     public static string ScanAllPluginsForBrokenRefs(object? envObj)
     {
+        return PluginGraphGate.Run(EditableMods.Keys, () => ScanAllPluginsForBrokenRefsCore(envObj));
+    }
+
+    private static string ScanAllPluginsForBrokenRefsCore(object? envObj)
+    {
         if (envObj == null) return "scan_all_plugins needs the loaded game environment. Use 'Load Env' first.";
 
         var cache = (Mutagen.Bethesda.Plugins.Cache.ILinkCache)((dynamic)envObj).LinkCache;
@@ -1974,6 +2126,11 @@ public static partial class MutagenLoader
 
 
     public static string ScanConflicts(object? envObj, string plugin)
+    {
+        return PluginGraphGate.Run(plugin, () => ScanConflictsCore(envObj, plugin));
+    }
+
+    private static string ScanConflictsCore(object? envObj, string plugin)
     {
         if (envObj == null) return "Conflict scan needs the loaded game environment. Use 'Load Env' first.";
         dynamic env = envObj;

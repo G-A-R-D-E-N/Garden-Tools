@@ -114,15 +114,13 @@ public sealed class ShellViewModel
             : null;
     }
 
-    private bool _isLoadingEsp;
-    public async Task LoadEspAsync(string path, IProgress<(string message, double? percent)>? progress = null)
-    {
-        if (_isLoadingEsp) return;
-        _isLoadingEsp = true;
-        try
+    private readonly EnvironmentLifecycleCoordinator _envCoord = new();
+
+    public Task LoadEspAsync(string path, IProgress<(string message, double? percent)>? progress = null)
+        => _envCoord.RunAsync("LoadEsp:" + System.IO.Path.GetFileName(path), async () =>
         {
             Log.Log(LogCategory.App, LogLevel.Info, $"Loading {System.IO.Path.GetFileName(path)}...");
-            var node = await Task.Run(() => MutagenLoader.LoadEsp(path, progress));
+            var node = await MutagenLoader.LoadEspAsync(path, progress);
             Plugins.Add(node);
 
             int recCount = 0;
@@ -131,12 +129,7 @@ public sealed class ShellViewModel
 
             Log.Log(LogCategory.App, LogLevel.Info,
                 $"Loaded {node.Key}: ~{recCount} records (lazy loaded).");
-        }
-        finally
-        {
-            _isLoadingEsp = false;
-        }
-    }
+        });
 
 
 
@@ -175,68 +168,58 @@ public sealed class ShellViewModel
         PopulatePluginTree(names);
     }
 
-    public async Task<List<string>> LoadEnvironmentAsync(IProgress<(string message, double? percent)>? progress = null)
-    {
-        if (_isLoadingEsp) return new();
-        _isLoadingEsp = true;
-        try
+    public Task<List<string>> LoadEnvironmentAsync(IProgress<(string message, double? percent)>? progress = null)
+        => _envCoord.RunAsync("LoadEnv", async () =>
         {
-            var dataFolder = Settings.Current.DataFolder;
-            Log.Log(LogCategory.App, LogLevel.Info,
-                string.IsNullOrWhiteSpace(dataFolder)
-                    ? "Building Load Order environment (auto-detect / MO2 VFS)..."
-                    : $"Building Load Order environment from data folder: {dataFolder}");
-            var (env, plugins) = await Task.Run(() => MutagenLoader.BuildEnvironment(progress, dataFolder));
-            GameEnvironment = env;
-            PopulatePluginTree(plugins);
-            Log.Log(LogCategory.App, LogLevel.Info, $"Environment ready: {plugins.Count} plugins.");
-            return plugins;
-        }
-        catch (Exception ex)
-        {
-            Log.Log(LogCategory.App, LogLevel.Error, $"Environment load failed: {ex.Message}");
+            try
+            {
+                var dataFolder = Settings.Current.DataFolder;
+                Log.Log(LogCategory.App, LogLevel.Info,
+                    string.IsNullOrWhiteSpace(dataFolder)
+                        ? "Building Load Order environment (auto-detect / MO2 VFS)..."
+                        : $"Building Load Order environment from data folder: {dataFolder}");
+                var (env, plugins) = await MutagenLoader.BuildEnvironmentAsync(progress, dataFolder);
+                GameEnvironment = env;
+                PopulatePluginTree(plugins);
+                Log.Log(LogCategory.App, LogLevel.Info, $"Environment ready: {plugins.Count} plugins.");
+                return plugins;
+            }
+            catch (Exception ex)
+            {
+                Log.Log(LogCategory.App, LogLevel.Error, $"Environment load failed: {ex.Message}");
 
 
-            throw;
-        }
-        finally
-        {
-            _isLoadingEsp = false;
-        }
-    }
+                throw;
+            }
+        });
 
 
 
-    public async Task<List<string>> LoadMo2ProfileAsync(
+    public Task<List<string>> LoadMo2ProfileAsync(
         string instancePath, IProgress<(string message, double? percent)>? progress = null)
-    {
-        if (_isLoadingEsp) return new();
-        _isLoadingEsp = true;
-        try
+        => _envCoord.RunAsync("LoadMo2Profile:" + instancePath, async () =>
         {
-            var info = Mo2ProfileLoader.ReadInstanceInfo(instancePath);
-            Log.Log(LogCategory.App, LogLevel.Info,
-                $"Loading MO2 profile '{info.Profile}' from {instancePath} (data: {info.GameDataFolder})...");
-            var (env, plugins) = await Task.Run(() =>
-                Mo2ProfileLoader.Load(instancePath, info.Profile, info.GameDataFolder, progress));
-            GameEnvironment = env;
-            PopulatePluginTree(plugins);
-            Settings.Current.Mo2InstancePath = instancePath;
-            Settings.Save();
-            UpdateOverwriteFolder(instancePath);
-            Log.Log(LogCategory.App, LogLevel.Info, $"MO2 environment ready: {plugins.Count} plugins.");
-            return plugins;
-        }
-        catch (Exception ex)
-        {
-            Log.Log(LogCategory.App, LogLevel.Error, $"MO2 profile load failed: {ex.Message}");
-            return new();
-        }
-        finally
-        {
-            _isLoadingEsp = false;
-        }
-    }
+            try
+            {
+                var info = Mo2ProfileLoader.ReadInstanceInfo(instancePath);
+                Log.Log(LogCategory.App, LogLevel.Info,
+                    $"Loading MO2 profile '{info.Profile}' from {instancePath} (data: {info.GameDataFolder})...");
+                var (env, plugins) = await Mo2ProfileLoader.LoadAsync(
+                    instancePath, info.Profile, info.GameDataFolder, progress);
+                GameEnvironment = env;
+                PopulatePluginTree(plugins);
+                Settings.Current.Mo2InstancePath = instancePath;
+                Settings.Save();
+                UpdateOverwriteFolder(instancePath);
+                Log.Log(LogCategory.App, LogLevel.Info, $"MO2 environment ready: {plugins.Count} plugins.");
+                return plugins;
+            }
+            catch (Exception ex)
+            {
+                Log.Log(LogCategory.App, LogLevel.Error, $"MO2 profile load failed: {ex.Message}");
+                return new();
+            }
+        });
 
     private bool _isScanning;
     public async Task RunErrorScanAsync()

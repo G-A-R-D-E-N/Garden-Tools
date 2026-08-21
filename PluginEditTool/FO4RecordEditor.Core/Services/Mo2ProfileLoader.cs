@@ -123,6 +123,16 @@ public static class Mo2ProfileLoader
     public static bool TryReplaceLoadedPluginFile(
         object? env, string pluginName, string tempPath, string targetPath, out string error)
     {
+        string coreError = "";
+        var result = EnvironmentLifecycleGate.Run(() => TryReplaceLoadedPluginFileCore(
+            env, pluginName, tempPath, targetPath, out coreError));
+        error = coreError;
+        return result;
+    }
+
+    private static bool TryReplaceLoadedPluginFileCore(
+        object? env, string pluginName, string tempPath, string targetPath, out string error)
+    {
         error = "";
         if (env is not Mo2GameEnvironment mo2)
         {
@@ -191,7 +201,7 @@ public static class Mo2ProfileLoader
     {
         var rebuilt = lo.ToImmutableLinkCache<IFallout4Mod, IFallout4ModGetter>();
         mo2.LinkCache = rebuilt;
-        MutagenLoader.LinkCache = rebuilt;
+        MutagenLoader.PublishLinkCache(rebuilt);
     }
 
 
@@ -301,6 +311,17 @@ public static class Mo2ProfileLoader
     public static (object env, List<string> plugins) Load(
         string instancePath, string profile, string gameDataFolder,
         IProgress<(string message, double? percent)>? progress = null)
+        => EnvironmentLifecycleGate.Run(() => LoadCore(instancePath, profile, gameDataFolder, progress));
+
+    public static async Task<(object env, List<string> plugins)> LoadAsync(
+        string instancePath, string profile, string gameDataFolder,
+        IProgress<(string message, double? percent)>? progress = null)
+        => await EnvironmentLifecycleGate.RunAsync(
+            () => Task.Run(() => LoadCore(instancePath, profile, gameDataFolder, progress)));
+
+    private static (object env, List<string> plugins) LoadCore(
+        string instancePath, string profile, string gameDataFolder,
+        IProgress<(string message, double? percent)>? progress)
     {
         progress?.Report(("Reading MO2 profile...", 0));
 
@@ -378,7 +399,6 @@ public static class Mo2ProfileLoader
 
         var failedToLoad = new List<(string name, string reason)>();
         var pluginPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        MutagenLoader.PluginSourcePaths.Clear();
         for (int i = 0; i < loadOrder.Count; i++)
         {
             var name = loadOrder[i];
@@ -407,7 +427,6 @@ public static class Mo2ProfileLoader
                 listings.Add(new ModListing<IFallout4ModGetter>(modKey, mod, enabled: true, ghostSuffix: string.Empty));
                 loaded.Add(name);
                 pluginPaths[name] = path;
-                MutagenLoader.PluginSourcePaths[name] = path;
             }
             catch (Exception ex)
             {
@@ -423,13 +442,12 @@ public static class Mo2ProfileLoader
 
         var lo = new LoadOrder<IModListingGetter<IFallout4ModGetter>>(listings, disposeItems: true);
         var linkCache = lo.ToImmutableLinkCache<IFallout4Mod, IFallout4ModGetter>();
-        MutagenLoader.LinkCache = linkCache;
-
-
-
-        MutagenLoader.MasterIsEsl.Clear();
+        var masterIsEsl = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         foreach (var l in listings)
-            if (l.Mod != null) MutagenLoader.MasterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
+            if (l.Mod != null) masterIsEsl[l.ModKey.FileName.String] = l.Mod.IsSmallMaster;
+        MutagenLoader.ApplyEnvironmentPublish(
+            linkCache, masterIsEsl, pluginPaths,
+            new[] { gameDataFolder, modsDir, ResolveOverwriteFolder(instancePath) });
 
         var summary = $"Loaded {loaded.Count} plugins from MO2 profile '{profile}'."
             + (missing.Count > 0
@@ -445,9 +463,6 @@ public static class Mo2ProfileLoader
         FailedToLoad = failedToLoad;
         progress?.Report((summary, 100));
 
-
-
-        TextureService.SetSessionRoots(new[] { gameDataFolder, modsDir, ResolveOverwriteFolder(instancePath) });
 
 
 

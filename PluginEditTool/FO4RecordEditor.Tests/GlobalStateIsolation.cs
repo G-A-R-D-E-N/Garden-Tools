@@ -46,12 +46,13 @@ public sealed class GlobalStateIsolation : IDisposable
 
     public void Dispose()
     {
-        MutagenLoader.LinkCache = _linkCache;
+        MutagenLoader.SeedEnvironmentForTest(
+            _linkCache,
+            _masterIsEsl.ToDictionary(p => p.Key, p => p.Value),
+            _pluginSourcePaths.ToDictionary(p => p.Key, p => p.Value));
         Restore(MutagenLoader.LooseMods, _looseMods);
         Restore(MutagenLoader.LooseModPaths, _looseModPaths);
-        Restore(MutagenLoader.PluginSourcePaths, _pluginSourcePaths);
         Restore(MutagenLoader.EditableMods, _editableMods);
-        Restore(MutagenLoader.MasterIsEsl, _masterIsEsl);
         MutagenLoader.MaxCachedModIndexes = _maxCachedModIndexes;
         MutagenLoader.MaxCachedIndexRecords = _maxCachedIndexRecords;
         MutagenLoader.ClearModIndexCacheForTest();

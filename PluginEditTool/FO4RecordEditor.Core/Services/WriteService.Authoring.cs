@@ -24,6 +24,11 @@ public static partial class WriteService
 
     public static IFallout4MajorRecord? CreateForScript(string patchPlugin, object? env, string sig, string editorId)
     {
+        return PluginGraphGate.Run(patchPlugin, () => CreateForScriptCore(patchPlugin, env, sig, editorId));
+    }
+
+    private static IFallout4MajorRecord? CreateForScriptCore(string patchPlugin, object? env, string sig, string editorId)
+    {
         var (name, path) = NormalizePlugin(patchPlugin);
         if (GetMutable(name) == null)
         {
@@ -45,6 +50,12 @@ public static partial class WriteService
 
 
     public static string AddLeveledEntry(string plugin, string recordId, string reference,
+        int level, int count, double chanceNonePercent, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => AddLeveledEntryCore(plugin, recordId, reference, level, count, chanceNonePercent, env));
+    }
+
+    private static string AddLeveledEntryCore(string plugin, string recordId, string reference,
         int level, int count, double chanceNonePercent, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
@@ -93,6 +104,11 @@ public static partial class WriteService
 
 
     public static string SetPerkEffects(string plugin, string recordId, string json, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetPerkEffectsCore(plugin, recordId, json, env));
+    }
+
+    private static string SetPerkEffectsCore(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
@@ -206,6 +222,11 @@ public static partial class WriteService
 
     public static string SetMagicEffects(string plugin, string recordId, string json, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => SetMagicEffectsCore(plugin, recordId, json, env));
+    }
+
+    private static string SetMagicEffectsCore(string plugin, string recordId, string json, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
@@ -258,6 +279,11 @@ public static partial class WriteService
 
     public static string SetQuestAliases(string plugin, string recordId, string json, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => SetQuestAliasesCore(plugin, recordId, json, env));
+    }
+
+    private static string SetQuestAliasesCore(string plugin, string recordId, string json, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Quest q) return $"set_quest_aliases requires a QUST record, got {rec.GetType().Name}.";
@@ -296,6 +322,11 @@ public static partial class WriteService
 
     public static string SetQuestStages(string plugin, string recordId, string json, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => SetQuestStagesCore(plugin, recordId, json, env));
+    }
+
+    private static string SetQuestStagesCore(string plugin, string recordId, string json, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Quest q) return $"set_quest_stages requires a QUST record, got {rec.GetType().Name}.";
@@ -332,6 +363,11 @@ public static partial class WriteService
 
     public static string SetQuestObjectives(string plugin, string recordId, string json, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => SetQuestObjectivesCore(plugin, recordId, json, env));
+    }
+
+    private static string SetQuestObjectivesCore(string plugin, string recordId, string json, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
         if (rec is not Quest q) return $"set_quest_objectives requires a QUST record, got {rec.GetType().Name}.";
@@ -366,6 +402,11 @@ public static partial class WriteService
 
 
     public static string SetMessageButtons(string plugin, string recordId, string json, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetMessageButtonsCore(plugin, recordId, json, env));
+    }
+
+    private static string SetMessageButtonsCore(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
@@ -409,6 +450,11 @@ public static partial class WriteService
 
 
     public static string SetFurnitureMarkers(string plugin, string recordId, string json, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetFurnitureMarkersCore(plugin, recordId, json, env));
+    }
+
+    private static string SetFurnitureMarkersCore(string plugin, string recordId, string json, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");

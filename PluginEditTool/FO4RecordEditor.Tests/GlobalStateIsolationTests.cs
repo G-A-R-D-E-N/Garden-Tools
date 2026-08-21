@@ -43,7 +43,7 @@ public class GlobalStateIsolationTests
     {
 
         var previous = BuildEnv("Prev.esp", editorId: "PrevWeapon", out var prevFk);
-        MutagenLoader.LinkCache = previous.LinkCache;
+        MutagenLoader.SeedEnvironmentForTest(previous.LinkCache);
 
         try
         {
@@ -52,7 +52,7 @@ public class GlobalStateIsolationTests
             {
 
                 var leaked = BuildEnv("Leak.esp", editorId: "LeakWeapon", out leakFk);
-                MutagenLoader.LinkCache = leaked.LinkCache;
+                MutagenLoader.SeedEnvironmentForTest(leaked.LinkCache);
 
 
 
@@ -65,7 +65,7 @@ public class GlobalStateIsolationTests
         }
         finally
         {
-            MutagenLoader.LinkCache = null;
+            MutagenLoader.SeedEnvironmentForTest(null);
         }
     }
 
@@ -84,10 +84,10 @@ public class GlobalStateIsolationTests
 
             MutagenLoader.LooseMods["A.esp"] = "loose-mod";
             MutagenLoader.LooseModPaths["A.esp"] = @"C:\mods\A.esp";
-            MutagenLoader.PluginSourcePaths["A.esp"] = @"C:\mods\A.esp";
+            MutagenLoader.SeedEnvironmentForTest(
+                masterIsEsl: new Dictionary<string, bool> { ["Fallout4.esm"] = false, ["MyPatch.esp"] = true },
+                pluginSourcePaths: new Dictionary<string, string> { ["A.esp"] = @"C:\mods\A.esp" });
             MutagenLoader.EditableMods["MyPatch.esp"] = "editable-copy";
-            MutagenLoader.MasterIsEsl["Fallout4.esm"] = false;
-            MutagenLoader.MasterIsEsl["MyPatch.esp"] = true;
             MutagenLoader.MaxCachedModIndexes = 7;
             MutagenLoader.MaxCachedIndexRecords = 12_345;
 
@@ -97,10 +97,10 @@ public class GlobalStateIsolationTests
                 MutagenLoader.LooseMods["B.esp"] = "leaked";
                 MutagenLoader.LooseMods.TryRemove("A.esp", out _);
                 MutagenLoader.LooseModPaths["B.esp"] = @"C:\mods\B.esp";
-                MutagenLoader.PluginSourcePaths["B.esp"] = @"C:\mods\B.esp";
+                MutagenLoader.SeedEnvironmentForTest(
+                    masterIsEsl: new Dictionary<string, bool> { ["B.esp"] = true },
+                    pluginSourcePaths: new Dictionary<string, string> { ["B.esp"] = @"C:\mods\B.esp" });
                 MutagenLoader.EditableMods["B.esp"] = "leaked";
-                MutagenLoader.MasterIsEsl["B.esp"] = true;
-                MutagenLoader.MasterIsEsl.Remove("Fallout4.esm");
                 MutagenLoader.MaxCachedModIndexes = 99;
                 MutagenLoader.MaxCachedIndexRecords = 99;
                 MutagenLoader.SeedModIndexForTest("B.esp", new object());

@@ -64,6 +64,11 @@ public static partial class WriteService
 
     public static string AuditAssetUsage(string plugin, object? env, int recordLimit = 3000)
     {
+        return PluginGraphGate.Run(plugin, () => AuditAssetUsageCore(plugin, env, recordLimit));
+    }
+
+    private static string AuditAssetUsageCore(string plugin, object? env, int recordLimit = 3000)
+    {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var (name, _) = NormalizePlugin(plugin);
 

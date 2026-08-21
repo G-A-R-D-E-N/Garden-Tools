@@ -21,6 +21,11 @@ public static partial class WriteService
 
     public static string GetConditionsJson(object? env, string plugin, string recordId)
     {
+        return PluginGraphGate.Run(plugin, () => GetConditionsJsonCore(env, plugin, recordId));
+    }
+
+    private static string GetConditionsJsonCore(object? env, string plugin, string recordId)
+    {
         IMajorRecordGetter? rec = null;
 
         if (!string.IsNullOrWhiteSpace(plugin))

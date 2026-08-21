@@ -76,11 +76,14 @@ public class Fallout4FileFormIdTests
         var savedLightFlags = MutagenLoader.MasterIsEsl.ToArray();
         try
         {
-            MutagenLoader.LinkCache = env.LinkCache;
-            MutagenLoader.MasterIsEsl.Clear();
-            MutagenLoader.MasterIsEsl["Fallout4.esm"] = false;
-            MutagenLoader.MasterIsEsl[fullName] = false;
-            MutagenLoader.MasterIsEsl[lightName] = true;
+            MutagenLoader.SeedEnvironmentForTest(
+                env.LinkCache,
+                new Dictionary<string, bool>
+                {
+                    ["Fallout4.esm"] = false,
+                    [fullName] = false,
+                    [lightName] = true,
+                });
 
             WriteService.SavePlugin(patchName, output, env).Should().Contain("Saved");
             WriteService.ReadMasterNames(output).Should().Equal("Fallout4.esm", fullName, lightName);
@@ -91,8 +94,8 @@ public class Fallout4FileFormIdTests
         }
         finally
         {
-            MutagenLoader.LinkCache = savedCache;
-            RestoreLightFlags(savedLightFlags);
+            MutagenLoader.SeedEnvironmentForTest(
+                savedCache, savedLightFlags.ToDictionary(p => p.Key, p => p.Value));
             try { File.Delete(output); } catch { }
         }
     }
@@ -152,11 +155,14 @@ public class Fallout4FileFormIdTests
         var savedLightFlags = MutagenLoader.MasterIsEsl.ToArray();
         try
         {
-            MutagenLoader.LinkCache = env.LinkCache;
-            MutagenLoader.MasterIsEsl.Clear();
-            MutagenLoader.MasterIsEsl["Fallout4.esm"] = false;
-            MutagenLoader.MasterIsEsl[fullName] = false;
-            MutagenLoader.MasterIsEsl[lightName] = true;
+            MutagenLoader.SeedEnvironmentForTest(
+                env.LinkCache,
+                new Dictionary<string, bool>
+                {
+                    ["Fallout4.esm"] = false,
+                    [fullName] = false,
+                    [lightName] = true,
+                });
 
             WriteService.SavePlugin(pluginName, pluginPath, env).Should().Contain("Saved");
             WriteService.ReadMasterNames(pluginPath).Should().Equal("Fallout4.esm", fullName, lightName);
@@ -175,8 +181,8 @@ public class Fallout4FileFormIdTests
         }
         finally
         {
-            MutagenLoader.LinkCache = savedCache;
-            RestoreLightFlags(savedLightFlags);
+            MutagenLoader.SeedEnvironmentForTest(
+                savedCache, savedLightFlags.ToDictionary(p => p.Key, p => p.Value));
             try { File.Delete(pluginPath); } catch { }
             try { Directory.Delete(outputDir, recursive: true); } catch { }
         }
@@ -220,10 +226,4 @@ public class Fallout4FileFormIdTests
         return BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset + 6 + 12, 4));
     }
 
-    private static void RestoreLightFlags(KeyValuePair<string, bool>[] saved)
-    {
-        MutagenLoader.MasterIsEsl.Clear();
-        foreach (var pair in saved)
-            MutagenLoader.MasterIsEsl[pair.Key] = pair.Value;
-    }
 }

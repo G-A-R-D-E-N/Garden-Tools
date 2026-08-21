@@ -110,6 +110,11 @@ public static class ElementService
 
     public static string AddElement(string plugin, string recordId, string path, string? template, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => AddElementCore(plugin, recordId, path, template, env));
+    }
+
+    private static string AddElementCore(string plugin, string recordId, string path, string? template, object? env)
+    {
         var mod = WriteService.GetMutableFor(plugin, env, out var openMsg);
         if (mod == null) return ToolError.Fail(openMsg);
         var rec = WriteService.FindRecordIn(mod, recordId);
@@ -139,6 +144,11 @@ public static class ElementService
 
     public static string RemoveElement(string plugin, string recordId, string path, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => RemoveElementCore(plugin, recordId, path, env));
+    }
+
+    private static string RemoveElementCore(string plugin, string recordId, string path, object? env)
+    {
         var mod = WriteService.GetMutableFor(plugin, env, out var openMsg);
         if (mod == null) return ToolError.Fail(openMsg);
         var rec = WriteService.FindRecordIn(mod, recordId);
@@ -157,6 +167,11 @@ public static class ElementService
     }
 
     public static string MoveElement(string plugin, string recordId, string path, int delta, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => MoveElementCore(plugin, recordId, path, delta, env));
+    }
+
+    private static string MoveElementCore(string plugin, string recordId, string path, int delta, object? env)
     {
         var mod = WriteService.GetMutableFor(plugin, env, out var openMsg);
         if (mod == null) return ToolError.Fail(openMsg);
@@ -180,6 +195,11 @@ public static class ElementService
     }
 
     public static string ClearElement(string plugin, string recordId, string path, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => ClearElementCore(plugin, recordId, path, env));
+    }
+
+    private static string ClearElementCore(string plugin, string recordId, string path, object? env)
     {
         var mod = WriteService.GetMutableFor(plugin, env, out var openMsg);
         if (mod == null) return ToolError.Fail(openMsg);

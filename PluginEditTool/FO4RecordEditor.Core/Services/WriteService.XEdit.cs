@@ -25,6 +25,11 @@ public static partial class WriteService
 
     public static string CopyAsNewRecord(object? env, string sourcePlugin, string id, string targetPlugin, string? newEditorId)
     {
+        return PluginGraphGate.Run([sourcePlugin, targetPlugin], () => CopyAsNewRecordCore(env, sourcePlugin, id, targetPlugin, newEditorId));
+    }
+
+    private static string CopyAsNewRecordCore(object? env, string sourcePlugin, string id, string targetPlugin, string? newEditorId)
+    {
         if (!ResolveFk(env, id, out var fk))
             return ToolError.Fail($"'{id}' is not a FormKey and no loaded record has that EditorID.");
 
@@ -103,6 +108,11 @@ public static partial class WriteService
 
 
     public static string RemoveIdenticalToMaster(object? env, string plugin, bool apply, int limit = 2000)
+    {
+        return PluginGraphGate.Run(plugin, () => RemoveIdenticalToMasterCore(env, plugin, apply, limit));
+    }
+
+    private static string RemoveIdenticalToMasterCore(object? env, string plugin, bool apply, int limit = 2000)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return ToolError.Fail(openMsg);
@@ -189,6 +199,11 @@ public static partial class WriteService
 
 
     public static string CreateMergedPatch(object? env, string plugins, string patchPlugin, bool apply, int limit = 5000)
+    {
+        return PluginGraphGate.Run(patchPlugin, () => CreateMergedPatchCore(env, plugins, patchPlugin, apply, limit));
+    }
+
+    private static string CreateMergedPatchCore(object? env, string plugins, string patchPlugin, bool apply, int limit = 5000)
     {
         if (string.IsNullOrWhiteSpace(patchPlugin))
             return ToolError.Fail("Choose a patch plugin to write the merged records into.");
