@@ -2,15 +2,26 @@
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32"}
 PRESENTATIONS = {"identity", "percent_0_100"}
-INSERTIONS = {"existing_only", "schema_ordered"}
+# Missing-field insertion is intentionally not generated yet. Safe insertion
+# requires record-level subrecord ordering metadata, not only a scalar field row.
+INSERTIONS = {"existing_only"}
+INTEGER_BOUNDS = {
+    "u8": (0, 0xFF),
+    "u16": (0, 0xFFFF),
+    "u32": (0, 0xFFFFFFFF),
+    "i32": (-0x80000000, 0x7FFFFFFF),
+}
 
 
 def cpp_string(value: str) -> str:
-    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    # JSON string escaping is valid for the ASCII field metadata currently
+    # accepted here and avoids hand-written backslash/quote escaping bugs.
+    return json.dumps(value, ensure_ascii=True)
 
 
 def cpp_number(value) -> str:
@@ -20,23 +31,70 @@ def cpp_number(value) -> str:
     return repr(number)
 
 
+def numeric(value, name: str, path: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{name} must be numeric for {path!r}")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be finite for {path!r}")
+    return number
+
+
+def valid_signature(value: str) -> bool:
+    return len(value) == 4 and all(0x20 <= ord(ch) <= 0x7E for ch in value)
+
+
 def load_fields(schema_path: Path):
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     if document.get("version") != 1:
         raise ValueError("unsupported Fallout 4 field schema version")
 
-    fields = []
-    for record in document.get("records", []):
-        record_signature = record.get("signature", "")
-        if len(record_signature) != 4:
-            raise ValueError(f"record signature must be four characters: {record_signature!r}")
+    records = document.get("records")
+    if not isinstance(records, list):
+        raise ValueError("schema records must be an array")
 
-        for field in record.get("fields", []):
+    fields = []
+    seen_paths = set()
+    seen_record_subrecords = set()
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("schema record entries must be objects")
+        record_signature = record.get("signature", "")
+        if not isinstance(record_signature, str) or not valid_signature(record_signature):
+            raise ValueError(f"record signature must be four printable ASCII characters: {record_signature!r}")
+
+        record_fields = record.get("fields")
+        if not isinstance(record_fields, list):
+            raise ValueError(f"record fields must be an array: {record_signature}")
+
+        for field in record_fields:
+            if not isinstance(field, dict):
+                raise ValueError(f"field entries must be objects: {record_signature}")
             if field.get("kind") != "scalar":
                 raise ValueError(f"unsupported field kind: {field.get('kind')!r}")
+
+            path = field.get("path", "")
+            label = field.get("label", "")
+            if not isinstance(path, str) or not path:
+                raise ValueError("schema field path is required")
+            if not path.startswith(record_signature + "\\"):
+                raise ValueError(
+                    f"field path must be qualified by {record_signature}\\: {path!r}")
+            if path in seen_paths:
+                raise ValueError(f"duplicate schema field path: {path!r}")
+            seen_paths.add(path)
+            if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
+                raise ValueError(f"schema field label is invalid: {label!r}")
+
             subrecord = field.get("subrecord", "")
-            if len(subrecord) != 4:
-                raise ValueError(f"subrecord signature must be four characters: {subrecord!r}")
+            if not isinstance(subrecord, str) or not valid_signature(subrecord):
+                raise ValueError(f"subrecord signature must be four printable ASCII characters: {subrecord!r}")
+            subrecord_key = (record_signature, subrecord)
+            if subrecord_key in seen_record_subrecords:
+                raise ValueError(
+                    f"duplicate scalar subrecord mapping for {record_signature}.{subrecord}")
+            seen_record_subrecords.add(subrecord_key)
+
             storage = field.get("storage")
             presentation = field.get("presentation")
             insertion = field.get("insertion")
@@ -45,15 +103,25 @@ def load_fields(schema_path: Path):
             if presentation not in PRESENTATIONS:
                 raise ValueError(f"unsupported scalar presentation: {presentation!r}")
             if insertion not in INSERTIONS:
-                raise ValueError(f"unsupported insertion policy: {insertion!r}")
-            minimum = field.get("minimum")
-            maximum = field.get("maximum")
-            if minimum is None or maximum is None or float(minimum) > float(maximum):
-                raise ValueError(f"invalid scalar bounds for {field.get('path')!r}")
-            path = field.get("path", "")
-            label = field.get("label", "")
-            if not path or not label:
-                raise ValueError("schema field path and label are required")
+                raise ValueError(
+                    f"unsupported insertion policy until record ordering exists: {insertion!r}")
+
+            minimum = numeric(field.get("minimum"), "minimum", path)
+            maximum = numeric(field.get("maximum"), "maximum", path)
+            if minimum > maximum:
+                raise ValueError(f"invalid scalar bounds for {path!r}")
+
+            if storage in INTEGER_BOUNDS:
+                low, high = INTEGER_BOUNDS[storage]
+                if not minimum.is_integer() or not maximum.is_integer():
+                    raise ValueError(f"integer storage requires integer bounds for {path!r}")
+                if minimum < low or maximum > high:
+                    raise ValueError(
+                        f"schema bounds exceed {storage} storage for {path!r}")
+
+            if presentation == "percent_0_100" and (minimum < 0 or maximum > 100):
+                raise ValueError(
+                    f"percent_0_100 bounds must stay within 0..100 for {path!r}")
 
             fields.append({
                 "record": record_signature,
@@ -64,7 +132,7 @@ def load_fields(schema_path: Path):
                 "presentation": presentation,
                 "minimum": minimum,
                 "maximum": maximum,
-                "can_insert": insertion == "schema_ordered",
+                "can_insert": False,
             })
 
     fields.sort(key=lambda item: (item["record"], item["path"]))
