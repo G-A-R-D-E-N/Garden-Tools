@@ -129,7 +129,7 @@ void loadBackend(fo4ide::plugin::RadiclePluginBackend& backend,
     CHECK(loaded->at("loadedPlugins") == 3);
 }
 
-}  // namespace
+}
 
 TEST_CASE("Masters reorder writes immediately and preserves logical FormLinks") {
     const auto root = tempRoot();
@@ -201,13 +201,13 @@ TEST_CASE("Masters reorder rejects incomplete or duplicate orders without writin
         "masters.Reorder",
         nlohmann::json::array({"Patch.esp", "[\"MasterA.esm\"]"}));
     REQUIRE_FALSE(incomplete.has_value());
-    CHECK(incomplete.error().code == "InvalidMasterOrder");
+    CHECK(incomplete.error().type == "InvalidMasterOrder");
 
     const auto duplicate = backend.invoke(
         "masters.Reorder",
         nlohmann::json::array({"Patch.esp", "[\"MasterA.esm\",\"MasterA.esm\"]"}));
     REQUIRE_FALSE(duplicate.has_value());
-    CHECK(duplicate.error().code == "InvalidMasterOrder");
+    CHECK(duplicate.error().type == "InvalidMasterOrder");
 
     const auto reloaded = fo4::read_plugin_file(patch);
     REQUIRE(reloaded.header.masters.size() == 2);
