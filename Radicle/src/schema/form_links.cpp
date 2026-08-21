@@ -96,9 +96,6 @@ bool visit_tagged_formid_slot(const Subrecord& sub, auto&& fn) {
 
   const auto type = read_u32(sub.data, 0);
   if (sub.signature == Signature::from_string("PTDT")) {
-    // xEdit package Target 1: type 0 Specific Reference and type 1 Object ID
-    // store FormIDs at +4; type 2 Object Type and type 3 Linked Reference are
-    // non-FormID payloads in the legacy package layout.
     if (type == 0 || type == 1) {
       fn(4);
     }
@@ -106,8 +103,6 @@ bool visit_tagged_formid_slot(const Subrecord& sub, auto&& fn) {
   }
 
   if (sub.signature == Signature::from_string("PDTO")) {
-    // xEdit FO4 Topic Data: type 0 Topic Ref is a FormID at +4; type 1 is a
-    // four-byte Topic Subtype string and must remain opaque.
     if (type == 0) {
       fn(4);
     }
@@ -130,7 +125,7 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
 }
 
 void visit_link_offsets(const Record& record, const Subrecord& sub,
-                        auto&& fn) {
+                        bool strict_vmad, auto&& fn) {
   if (sub.signature == sig_xxxx || sub.data.empty()) {
     return;
   }
@@ -158,8 +153,19 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     return;
   }
   if (sub.signature == sig_vmad) {
-    for (const auto offset : vmad_formid_offsets(sub.data, record.header.signature)) {
-      fn(offset);
+    if (strict_vmad) {
+      auto offsets = vmad_formid_offsets_for_remap(sub.data, record.header.signature);
+      if (!offsets.has_value()) {
+        throw FormIdError(
+            "cannot safely remap VMAD containing unsupported Variable/Variable Array property types");
+      }
+      for (const auto offset : *offsets) {
+        fn(offset);
+      }
+    } else {
+      for (const auto offset : vmad_formid_offsets(sub.data, record.header.signature)) {
+        fn(offset);
+      }
     }
     return;
   }
@@ -208,7 +214,7 @@ void remap_record_form_links(Record& record,
                              const PluginFormIdContext& new_context) {
   for (auto& sub : record.subrecords) {
     auto bytes = std::span<std::byte>(sub.data);
-    visit_link_offsets(record, sub, [&](std::size_t offset) {
+    visit_link_offsets(record, sub, true, [&](std::size_t offset) {
       remap_raw(bytes, offset, old_context, new_context);
     });
   }
@@ -226,7 +232,7 @@ std::vector<FormLinkHit> collect_form_links(const Plugin& plugin) {
   const auto context = plugin_form_id_context(plugin);
   visit_records(plugin, [&](const Record& record) {
     for (const auto& sub : record.subrecords) {
-      visit_link_offsets(record, sub, [&](std::size_t offset) {
+      visit_link_offsets(record, sub, false, [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
           return;
         }
