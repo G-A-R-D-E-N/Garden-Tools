@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <map>
 #include <span>
 
 namespace fo4 {
@@ -269,7 +270,9 @@ std::vector<FormLinkHit> collect_form_links(const Plugin& plugin) {
   std::vector<FormLinkHit> hits;
   const auto context = plugin_form_id_context(plugin);
   visit_records(plugin, [&](const Record& record) {
+    std::map<std::uint32_t, std::size_t> ordinals;
     for (const auto& sub : record.subrecords) {
+      const auto ordinal = ordinals[sub.signature.packed()]++;
       visit_link_offsets(record, sub, false, [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
           return;
@@ -277,6 +280,7 @@ std::vector<FormLinkHit> collect_form_links(const Plugin& plugin) {
         FormLinkHit hit;
         hit.record = record.form_key;
         hit.subrecord = sub.signature;
+        hit.subrecord_ordinal = ordinal;
         hit.offset = offset;
         hit.raw = RawFormId{read_u32(sub.data, offset)};
         if (!hit.raw.is_null()) {
