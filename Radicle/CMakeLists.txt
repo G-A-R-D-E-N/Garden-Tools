@@ -45,6 +45,8 @@ add_library(fo4
   src/schema/vmad.cpp
 )
 
+set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 target_include_directories(fo4
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -54,6 +56,13 @@ target_include_directories(fo4
 target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
+
+add_library(radicle_c SHARED src/c_api.cpp)
+target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
+target_link_libraries(radicle_c PRIVATE fo4)
+set_target_properties(radicle_c PROPERTIES OUTPUT_NAME radicle)
+fo4_apply_warnings(radicle_c)
+fo4_apply_sanitizers(radicle_c)
 
 add_executable(fo4inspect tools/inspect/main.cpp)
 target_link_libraries(fo4inspect PRIVATE fo4)
@@ -84,10 +93,11 @@ if(BUILD_TESTING)
     tests/test_writer.cpp
     tests/test_formlinks.cpp
     tests/test_vmad.cpp
+    tests/test_c_api.cpp
     tests/plugin_bytes.cpp
   )
   target_include_directories(fo4_tests PRIVATE tests)
-  target_link_libraries(fo4_tests PRIVATE fo4 GTest::gtest_main ZLIB::ZLIB)
+  target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
     FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
   )
