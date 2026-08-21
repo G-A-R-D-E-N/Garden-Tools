@@ -46,6 +46,9 @@ private:
     Result<nlohmann::json> scanConflicts() const;
     Result<nlohmann::json> scanBrokenRefs() const;
     Result<nlohmann::json> listMasters(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> reorderMasters(const nlohmann::json& arguments);
+    Result<nlohmann::json> setLight(const nlohmann::json& arguments);
+    Result<nlohmann::json> saveMastersPlugin(const nlohmann::json& arguments);
 
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
