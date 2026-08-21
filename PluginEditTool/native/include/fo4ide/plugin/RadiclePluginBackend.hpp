@@ -19,6 +19,7 @@ public:
                                   const nlohmann::json& arguments) override;
     Result<nlohmann::json> invokeBackend(std::string_view method,
                                          const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
 
 private:
     struct LoadedPlugin {
