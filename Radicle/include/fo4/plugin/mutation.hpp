@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <string_view>
 
@@ -24,6 +25,12 @@ enum class ScalarMutationStatus {
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,
                           std::string_view editor_id);
+
+ScalarMutationStatus set_record_scalar(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::ScalarFieldDescriptor& field,
+    std::string_view value);
 
 ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
