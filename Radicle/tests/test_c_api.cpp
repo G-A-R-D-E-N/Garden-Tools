@@ -131,9 +131,10 @@ TEST(CApi, ReadsSerializesAndCollectsFormKeys) {
 TEST(CApi, RemapsMastersWritesAndReloadsStableFormKeys) {
   const auto root = temp_root();
   Cleanup cleanup{root};
-  const auto input = root / "Patch.esp";
-  const auto output = root / "Patch-remapped.esp";
+  const auto input = root / "input" / "Patch.esp";
+  const auto output = root / "output" / "Patch.esp";
   write_bytes(input, make_remap_fixture());
+  std::filesystem::create_directories(output.parent_path());
 
   radicle_plugin* plugin = nullptr;
   ASSERT_EQ(radicle_plugin_read_file(input.string().c_str(), &plugin), RADICLE_STATUS_OK)
@@ -159,7 +160,7 @@ TEST(CApi, RemapsMastersWritesAndReloadsStableFormKeys) {
       << radicle_last_error();
   ASSERT_NE(plugin, nullptr);
   const auto after = collect_form_keys(plugin);
-  EXPECT_TRUE(after.contains("000800:Patch-remapped.esp"));
+  EXPECT_TRUE(after.contains("000800:Patch.esp"));
   EXPECT_TRUE(after.contains("00009A:Keep.esp"));
   radicle_plugin_destroy(plugin);
 }
