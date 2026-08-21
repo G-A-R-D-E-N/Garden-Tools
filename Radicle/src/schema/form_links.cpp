@@ -89,6 +89,13 @@ bool is_formid_array_signature(Signature signature) {
          signature == sig_xlkr;
 }
 
+bool record_specific_formid_array(const Record& record, const Subrecord& sub) {
+  // xEdit FO4 NAVM: ONAM is Base Objects, an array of FormIDs. PNAM and NNAM
+  // beside it are arrays of u16 vertex indexes and must not be scanned as IDs.
+  return record.header.signature == Signature::from_string("NAVM") &&
+         sub.signature == sig_onam;
+}
+
 bool perk_epfd_is_formid(const Record& record, const Subrecord& sub) {
   if (record.header.signature != Signature::from_string("PERK") ||
       sub.signature != Signature::from_string("EPFD") || sub.data.size() != 4) {
@@ -152,6 +159,12 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   }
   if (record.header.signature == sig_tes4 && sub.signature == sig_onam &&
       sub.data.size() % 4 == 0) {
+    for (std::size_t i = 0; i < sub.data.size(); i += 4) {
+      fn(i);
+    }
+    return;
+  }
+  if (record_specific_formid_array(record, sub) && sub.data.size() % 4 == 0) {
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);
     }
