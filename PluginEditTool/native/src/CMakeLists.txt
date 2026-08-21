@@ -107,8 +107,16 @@ target_link_libraries(fo4ide_material PUBLIC fo4ide_core nlohmann_json::nlohmann
 fo4ide_enable_warnings(fo4ide_material)
 fo4ide_enable_sanitizers(fo4ide_material)
 
-add_library(fo4ide_archive archive/ArchiveService.cpp)
-target_link_libraries(fo4ide_archive PUBLIC fo4ide_core fo4ide_process fo4ide_tools nlohmann_json::nlohmann_json)
+add_library(
+    fo4ide_archive
+    archive/ArchiveService.cpp
+    archive/RadicleArchiveBackend.cpp
+)
+target_link_libraries(
+    fo4ide_archive
+    PUBLIC fo4ide_core fo4ide_process fo4ide_tools nlohmann_json::nlohmann_json
+    PRIVATE fo4
+)
 fo4ide_enable_warnings(fo4ide_archive)
 fo4ide_enable_sanitizers(fo4ide_archive)
 
