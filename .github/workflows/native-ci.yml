@@ -1,0 +1,129 @@
+name: native-ci
+
+# Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runner
+# (label `garden`). Hosted runners are intentionally avoided: both orgs are over
+# the Free Actions minutes allowance (GHRUNNER#24), and hosted jobs fail silently
+# once exhausted. Self-hosted minutes are free.
+
+on:
+  push:
+    branches:
+      - main
+      - "work/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: native-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  radicle-linux:
+    name: Radicle (Linux, Debug)
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: >
+          cmake -S Radicle -B build/radicle -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DRADICLE_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build/radicle
+
+      - name: Test
+        run: ctest --test-dir build/radicle --output-on-failure
+
+      - name: Upload logs and binaries on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radicle-linux-failure
+          path: |
+            build/radicle/Testing/**
+            build/radicle/**/*.log
+            build/radicle/bin/**
+          if-no-files-found: ignore
+          retention-days: 14
+
+  plugineditool-native-linux:
+    name: PluginEditTool native (Linux, Debug)
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: >
+          cmake -S PluginEditTool/native -B build/fo4ide -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DFO4IDE_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build/fo4ide
+
+      - name: Test
+        run: ctest --test-dir build/fo4ide --output-on-failure
+
+      - name: Upload logs and binaries on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fo4ide-native-linux-failure
+          path: |
+            build/fo4ide/Testing/**
+            build/fo4ide/**/*.log
+            build/fo4ide/bin/**
+          if-no-files-found: ignore
+          retention-days: 14
+
+  radicle-windows-cross:
+    name: Radicle (Windows cross, clang-cl/xwin, build-only)
+    runs-on: [self-hosted, Linux, X64, garden]
+    # Cross-compiles the Windows x64 build from Linux with clang-cl + the xwin
+    # CRT/SDK (GHRUNNER#17) -- the same method used elsewhere on this host. Wine
+    # is retired, so Windows binaries cannot be executed here: this job proves
+    # the code COMPILES and LINKS for Windows (tests OFF). Native MSVC/WebView2
+    # test execution still needs a real Windows runner if ever wanted.
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure (clang-cl / xwin, Release)
+        # xwin ships the release CRT only, so Release is required (see the
+        # toolchain file). /opt/xwin is provided host-wide by GHRUNNER.
+        run: >
+          cmake -S Radicle -B build/radicle-win -G Ninja
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
+          -DCMAKE_BUILD_TYPE=Release
+          -DRADICLE_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build/radicle-win
+
+      - name: Upload Windows binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radicle-windows-x64
+          path: |
+            build/radicle-win/**/*.exe
+            build/radicle-win/**/*.dll
+            build/radicle-win/**/*.lib
+          if-no-files-found: warn
+          retention-days: 14
+
+  # PluginEditTool's native backend is Windows/WebView2. The WebView2 SDK is NOT
+  # part of xwin, so a clang-cl/xwin cross build will only work once WebView2's
+  # headers/import libs are staged on the host (or vendored). Left out until that
+  # dependency is sorted; the Linux native job above still exercises the shared
+  # non-Windows code.
