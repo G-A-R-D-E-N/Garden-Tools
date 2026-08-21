@@ -92,9 +92,7 @@ std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
   return bytes;
 }
 
-}  // namespace
-
-Ba2GeneralArchive read_ba2_general(std::span<const std::byte> data) {
+Ba2GeneralArchive read_ba2_general_impl(std::span<const std::byte> data) {
   if (data.size() < k_header_size) {
     throw Ba2Error("archive truncated before BA2 header");
   }
@@ -119,6 +117,13 @@ Ba2GeneralArchive read_ba2_general(std::span<const std::byte> data) {
   const auto file_count = cursor.read_u32();
   const auto string_table_offset_raw = read_u64(cursor);
   archive.has_string_table = string_table_offset_raw != 0;
+
+  // Every GNRL file entry consumes at least its fixed 16-byte header before
+  // any chunk records. Prove that minimum table can physically fit before
+  // reserving attacker-controlled file_count entries.
+  if (static_cast<std::size_t>(file_count) > cursor.remaining() / k_entry_size) {
+    throw Ba2Error("BA2 file count exceeds the minimum entry table that fits in the archive");
+  }
 
   struct ChunkLocation {
     std::size_t entry_index;
@@ -151,6 +156,11 @@ Ba2GeneralArchive read_ba2_general(std::span<const std::byte> data) {
                        }
                        return text;
                      }(chunk_header_size));
+    }
+
+    if (static_cast<std::size_t>(chunk_count) > cursor.remaining() / k_chunk_record_size) {
+      throw Ba2Error("GNRL entry " + std::to_string(file_index) +
+                     " chunk count exceeds the remaining chunk table bytes");
     }
 
     entry.chunks.reserve(chunk_count);
@@ -199,6 +209,18 @@ Ba2GeneralArchive read_ba2_general(std::span<const std::byte> data) {
   }
 
   return archive;
+}
+
+}  // namespace
+
+Ba2GeneralArchive read_ba2_general(std::span<const std::byte> data) {
+  try {
+    return read_ba2_general_impl(data);
+  } catch (const parse_error& error) {
+    throw Ba2Error(
+        "BA2 parse error at byte " + std::to_string(error.offset()) + ": " +
+        error.parse_message());
+  }
 }
 
 Ba2GeneralArchive read_ba2_general_file(const std::filesystem::path& path) {
