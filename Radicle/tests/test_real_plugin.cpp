@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -45,19 +46,21 @@ std::vector<RecordPayloadSnapshot> masked_record_payloads(const fo4::Plugin& plu
     snapshot.key = record->form_key;
     snapshot.signature = record->header.signature;
     snapshot.subrecords.reserve(record->subrecords.size());
+    std::map<std::uint32_t, std::size_t> ordinals;
 
     for (const auto& subrecord : record->subrecords) {
+      const auto ordinal = ordinals[subrecord.signature.packed()]++;
       SubrecordSnapshot sub{
           .signature = subrecord.signature,
           .data = subrecord.data,
           .extended_size = subrecord.extended_size,
       };
 
-      // FormLinkHit intentionally reports exact byte offsets but not a repeated-
-      // subrecord ordinal. Mask the reported 4-byte slots in every matching
-      // signature occurrence; every other byte remains required to match.
+      // Mask only the exact reported FormLink occurrence and four-byte slot.
+      // Every byte in every other repeated subrecord remains required to match.
       for (const auto& link : links) {
-        if (link.record != record->form_key || link.subrecord != subrecord.signature) {
+        if (link.record != record->form_key || link.subrecord != subrecord.signature ||
+            link.subrecord_ordinal != ordinal) {
           continue;
         }
         if (link.offset + 4 > sub.data.size()) continue;
@@ -83,6 +86,7 @@ void expect_same_logical_links(const std::vector<fo4::FormLinkHit>& before,
   for (std::size_t i = 0; i < before.size(); ++i) {
     EXPECT_EQ(after[i].record, before[i].record);
     EXPECT_EQ(after[i].subrecord, before[i].subrecord);
+    EXPECT_EQ(after[i].subrecord_ordinal, before[i].subrecord_ordinal);
     EXPECT_EQ(after[i].offset, before[i].offset);
     EXPECT_EQ(after[i].key, before[i].key);
     changed = changed || after[i].raw != before[i].raw;
