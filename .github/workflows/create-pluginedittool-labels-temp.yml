@@ -1,0 +1,46 @@
+name: Create PluginEditTool migration labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/create-pluginedittool-labels-temp.yml
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh label create "tool:pluginedittool" --repo "$GH_REPO" --color "0969DA" --description "PluginEditTool / FO4IDE work" --force
+          gh label create "roadmap" --repo "$GH_REPO" --color "0052CC" --description "Tracked by an active roadmap" --force
+          gh label create "native-cpp" --repo "$GH_REPO" --color "0969DA" --description "Native C++ rewrite" --force
+          gh label create "path:native-runtime" --repo "$GH_REPO" --color "1D76DB" --description "Native host, platform, environment, transport, and tool services" --force
+          gh label create "path:plugin-core" --repo "$GH_REPO" --color "5319E7" --description "Plugin parser, writer, schema, indexing, conflicts, and authoring" --force
+          gh label create "path:ck-re" --repo "$GH_REPO" --color "B60205" --description "Creation Kit reverse engineering and world-generation parity" --force
+          gh label create "path:papyrus" --repo "$GH_REPO" --color "D4C5F9" --description "Papyrus compiler, decompiler, PEX, and fidelity work" --force
+          gh label create "path:ui-workflow" --repo "$GH_REPO" --color "0E8A16" --description "React UI and xEdit workflow parity" --force
+          gh label create "path:ecosystem" --repo "$GH_REPO" --color "C2E0C6" --description "External integrations and ecosystem diagnostics" --force
+          gh label create "status:active" --repo "$GH_REPO" --color "0E8A16" --description "Current critical path or actively actionable" --force
+          gh label create "status:blocked" --repo "$GH_REPO" --color "B60205" --description "Blocked on a prerequisite or verified research result" --force
+          gh label create "status:deferred" --repo "$GH_REPO" --color "FBCA04" --description "Valid work intentionally deferred" --force
+          gh label create "status:rewrite-acceptance" --repo "$GH_REPO" --color "D4C5F9" --description "Acceptance requirement for the native backend" --force
+          gh label create "status:sidecar" --repo "$GH_REPO" --color "7057FF" --description "Preserve current sidecar implementation until later migration" --force
+          gh label create "P1" --repo "$GH_REPO" --color "D93F0B" --force
+          gh label create "P2" --repo "$GH_REPO" --color "FBCA04" --force
+          gh label create "P3" --repo "$GH_REPO" --color "C2E0C6" --force
+          gh label create "xedit-parity" --repo "$GH_REPO" --color "5319E7" --description "Feature xEdit has that PluginEditTool does not" --force
+          gh label create "record-definitions" --repo "$GH_REPO" --color "5319E7" --description "FO4 record/subrecord model and binary layout gaps" --force
+          gh label create "housecarl-pull" --repo "$GH_REPO" --color "1D76DB" --description "Adapted concept from houseCARL" --force
+          gh label create "creation-lib-pull" --repo "$GH_REPO" --color "1D76DB" --description "Capability adapted from py-creation-lib" --force
+          gh label create "tech-debt" --repo "$GH_REPO" --color "5319E7" --force
