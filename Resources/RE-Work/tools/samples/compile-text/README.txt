@@ -106,6 +106,18 @@ MISMATCH, and WARNING paths without the shipped Fallout4 STRINGS:
                                            table, NUL-terminated vs
                                            length-prefixed records)
 
+The combined run also prints a per-table dialog-category composition per
+language stem, attributing every compiled ID back to its routed record's
+category (indices {1,6,7,10}):
+
+    COMPOSITION fallout4_en: 7 routed IDs, per compiled table by
+    routed-record category (dialog set {1,6,7,10} -> .DLSTRINGS)
+      .STRINGS: 2 IDs, 2 attributed (ordinary-routed=2), 0 unattributed
+      .DLSTRINGS: 2 IDs, 2 attributed (dialog-routed=2 (Quest Stage Log
+      Entry=1, Description=1)), 0 unattributed
+      .ILSTRINGS: 2 IDs, 2 attributed (dialog-routed=2 (Book=2)),
+      0 unattributed
+
 Expected: 5 MATCH, 1 MISMATCH, 1 WARNING -- the run exits 1 because the
 MISMATCH is a hard failure. Deleting the 0x126C6 line from the input
 TextExport.txt makes the run exit 0 with 4 MATCH + 1 WARNING. The compiled

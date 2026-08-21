@@ -22,7 +22,9 @@ Usage:
     python3 validate_ckini.py --compile-text samples/compile-text/backup samples/compile-text/primary
     # each run also prints ROUTE lines + a ROUTING SUMMARY predicting the
     # .STRINGS / .DLSTRINGS / .ILSTRINGS output table per record
-    # combine with --strings to cross-check predictions against real outputs:
+    # combine with --strings to cross-check predictions against real outputs
+    # (the combined run also reports the per-table dialog-category
+    # composition, per language stem):
     python3 validate_ckini.py --compile-text samples/compile-text/backup \
         samples/compile-text/primary --strings '.../STRINGS'
     python3 validate_ckini.py CreationKit.ini --exit-codes
@@ -983,6 +985,47 @@ def load_text_export_categories(paths):
     return id_to_cat, warnings
 
 
+def _composition_lines(header, kind_ids, category_map):
+    """Per-table dialog-category composition lines for one language stem.
+
+    ``kind_ids`` maps each of _STRINGS_KINDS to the list of compiled
+    stringIDs in that table; ``category_map`` maps stringID -> canonical
+    TextExport category name. For every non-empty table the report counts
+    how many IDs came from the dialog categories (indices {1,6,7,10},
+    listed individually when non-zero), how many from the ordinary
+    categories, and how many are unattributed (no category source).
+    Returns the lines to append, starting with ``header``.
+    """
+    lines = [header]
+    for kind in _STRINGS_KINDS:
+        ids = kind_ids[kind]
+        if not ids:
+            continue
+        by_cat = {}
+        for sid in ids:
+            cat = category_map.get(sid)
+            if cat is not None:
+                by_cat[cat] = by_cat.get(cat, 0) + 1
+        attr = sum(by_cat.values())
+        dialog = sum(by_cat.get(_TEXT_CATEGORIES[i], 0)
+                     for i in _TEXT_DIALOG_INDICES)
+        ordinary = attr - dialog
+        detail = []
+        if dialog:
+            parts = ["%s=%d" % (_TEXT_CATEGORIES[i], by_cat.get(_TEXT_CATEGORIES[i], 0))
+                     for i in sorted(_TEXT_DIALOG_INDICES)
+                     if by_cat.get(_TEXT_CATEGORIES[i])]
+            detail.append("dialog-routed=%d (%s)" % (dialog, ", ".join(parts)))
+        if ordinary:
+            detail.append("ordinary-routed=%d" % ordinary)
+        if not detail:
+            detail.append("none attributed")
+        lines.append("  %s: %d IDs, %d attributed (%s), %d unattributed"
+                     % (kind, len(ids), attr, "; ".join(detail),
+                        len(ids) - attr))
+    return lines
+
+
 def check_strings_file(path):
     """Validate one localized-string file; return (ok, lines)."""
     kind = _strings_kind(path)
@@ -1182,34 +1225,10 @@ def check_strings_files(paths, category_map=None):
         # versus the ordinary categories, attributed via TextExport records.
         if category_map:
             total = sum(len(ids) for ids in kind_ids.values())
-            lines.append("STRINGS %s: TextExport routed-record composition "
-                         "(%d IDs across %d file(s))" % (stem, total, len(group)))
-            for kind in _STRINGS_KINDS:
-                ids = kind_ids[kind]
-                if not ids:
-                    continue
-                by_cat = {}
-                for sid in ids:
-                    cat = category_map.get(sid)
-                    if cat is not None:
-                        by_cat[cat] = by_cat.get(cat, 0) + 1
-                attr = sum(by_cat.values())
-                dialog = sum(by_cat.get(_TEXT_CATEGORIES[i], 0)
-                             for i in _TEXT_DIALOG_INDICES)
-                ordinary = attr - dialog
-                detail = []
-                if dialog:
-                    parts = ["%s=%d" % (_TEXT_CATEGORIES[i], by_cat.get(_TEXT_CATEGORIES[i], 0))
-                             for i in sorted(_TEXT_DIALOG_INDICES)
-                             if by_cat.get(_TEXT_CATEGORIES[i])]
-                    detail.append("dialog-routed=%d (%s)" % (dialog, ", ".join(parts)))
-                if ordinary:
-                    detail.append("ordinary-routed=%d" % ordinary)
-                if not detail:
-                    detail.append("none attributed")
-                lines.append("  %s: %d IDs, %d attributed (%s), %d unattributed"
-                             % (kind, len(ids), attr, "; ".join(detail),
-                                len(ids) - attr))
+            lines.extend(_composition_lines(
+                "STRINGS %s: TextExport routed-record composition "
+                "(%d IDs across %d file(s))" % (stem, total, len(group)),
+                kind_ids, category_map))
 
     lines.append("VERDICT: %s" % ("PASS" if overall_ok else "FAIL"))
     return overall_ok, lines
@@ -1310,6 +1329,32 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language):
         lines.append("  MISMATCH: " + item)
     for item in missing:
         lines.append("  WARNING: " + item)
+
+    # Per-table dialog-category composition: attribute every compiled ID
+    # back to its routed record's category (canonicalized like the
+    # TextExport parser; unknown/empty -> Misc). Reported per language stem
+    # so a multi-language compiled set does not double-count the same IDs.
+    cat_map = {}
+    for rec in route_records:
+        cat = (rec["category"] or "").strip()
+        try:
+            cat = _TEXT_CATEGORIES[_TEXT_CATEGORIES_LOWER.index(cat.lower())]
+        except ValueError:
+            cat = _TEXT_CATEGORIES[-1]   # Misc fallback
+        cat_map[rec["id"]] = cat
+    stems = {}
+    for path in sorted(matching):
+        stems.setdefault(_strings_lang_stem(path), []).append(path)
+    for stem in sorted(stems):
+        kind_ids = {k: [] for k in _STRINGS_KINDS}
+        for path in stems[stem]:
+            ids = _load_strings_ids(path)
+            kind_ids[_strings_kind(path)].extend(ids.keys())
+        lines.extend(_composition_lines(
+            "COMPOSITION %s: %d routed IDs, per compiled table by "
+            "routed-record category (dialog set {1,6,7,10} -> .DLSTRINGS)"
+            % (stem, len(route_records)), kind_ids, cat_map))
+
     lines.append("VERDICT: %s" % ("PASS" if ok else "FAIL"))
     return ok, lines
 
@@ -1555,8 +1600,10 @@ def main(argv):
                          "sorted ID table, offset bounds, per-kind record encoding, and the "
                          "per-language stringID partition. Combined with --compile-text, "
                          "cross-checks the predicted output tables against the compiled "
-                         "files. With --text-export, the partition report also counts how "
-                         "many IDs per table came from each dialog category. Real samples: "
+                         "files and reports the per-table dialog-category composition per "
+                         "language stem (no --text-export needed there). With --text-export, "
+                         "the partition report also counts how many IDs per table came from "
+                         "each dialog category. Real samples: "
                          ".../TEMP_BSA_FILES/*/STRINGS/")
     ap.add_argument("--text-export", nargs="*", default=None, metavar="FILE",
                     help="TextExport.txt file(s) (or directories walked for them) whose "
