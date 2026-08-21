@@ -200,6 +200,9 @@ TEST_CASE("Native record details and plugin matrix describe the winner chain") {
     CHECK(details.at("Winner") == "Override.esp");
     CHECK(details.at("OverrideCount") == 1);
     CHECK(details.at("FormId") == "0x00000801");
+    // Override records must resolve their base form to the origin definition.
+    CHECK(details.at("BaseFormKey") == "000801:Base.esp");
+    CHECK(details.at("BaseForm") == "BaseWeapon (Base.esp)");
 
     const auto matrix = parseResult(backend.invokeBackend(
         "GetRecordPluginMatrix", nlohmann::json::array({"000801:Base.esp"})));

@@ -1,6 +1,7 @@
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cctype>
 #include <filesystem>
@@ -14,6 +15,11 @@
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#if !defined(_WIN32)
+  #include <fcntl.h>
+  #include <unistd.h>
+#endif
 
 #include <fo4/archive/ba2.hpp>
 
@@ -189,36 +195,115 @@ std::filesystem::path destinationFor(const std::filesystem::path& root,
     return destination;
 }
 
+// Creates the temporary staging file without following symlinks on POSIX
+// (O_NOFOLLOW) and exclusively everywhere (O_EXCL), so a raced symlink or
+// pre-existing file at the temp path can never be written through.
+class StagedFile {
+public:
+    StagedFile(std::filesystem::path path, std::span<const std::byte> bytes)
+        : path_(std::move(path)) {
+#if !defined(_WIN32)
+        fd_ = ::open(path_.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
+                     0644);
+        if (fd_ < 0) {
+            throw std::runtime_error("could not create staged output: " + path_.string());
+        }
+        const auto* data = reinterpret_cast<const char*>(bytes.data());
+        std::size_t remaining = bytes.size();
+        while (remaining > 0) {
+            const auto written = ::write(fd_, data, remaining);
+            if (written <= 0) {
+                close();
+                throw std::runtime_error("could not write staged output: " + path_.string());
+            }
+            data += written;
+            remaining -= static_cast<std::size_t>(written);
+        }
+#else
+        ofstream_.emplace(path_, std::ios::binary | std::ios::trunc);
+        if (!*ofstream_) {
+            throw std::runtime_error("could not create staged output: " + path_.string());
+        }
+        if (!bytes.empty()) {
+            ofstream_->write(reinterpret_cast<const char*>(bytes.data()),
+                             static_cast<std::streamsize>(bytes.size()));
+        }
+        if (!*ofstream_) {
+            throw std::runtime_error("could not write staged output: " + path_.string());
+        }
+        ofstream_->close();
+#endif
+    }
+
+    ~StagedFile() { close(); }
+
+    // Confirms the staged file is still a regular file and holds exactly the
+    // expected byte count before it may replace the destination.
+    void verify(std::size_t expectedSize) const {
+        std::error_code ec;
+        const auto status = std::filesystem::symlink_status(path_, ec);
+        if (ec || !std::filesystem::is_regular_file(status) ||
+            std::filesystem::is_symlink(status)) {
+            throw std::runtime_error("staged output is no longer a regular file: " +
+                                     path_.string());
+        }
+        const auto size = std::filesystem::file_size(path_, ec);
+        if (ec || size != expectedSize) {
+            throw std::runtime_error("staged output size mismatch: " + path_.string());
+        }
+    }
+
+    const std::filesystem::path& path() const noexcept { return path_; }
+
+private:
+    void close() noexcept {
+#if !defined(_WIN32)
+        if (fd_ >= 0) {
+            ::close(fd_);
+            fd_ = -1;
+        }
+#endif
+    }
+
+    std::filesystem::path path_;
+#if !defined(_WIN32)
+    int fd_{-1};
+#else
+    std::optional<std::ofstream> ofstream_;
+#endif
+};
+
 void writeAtomically(const std::filesystem::path& destination,
                      std::span<const std::byte> bytes) {
     if (destination.empty()) throw std::invalid_argument("output path is empty");
     const auto parent = destination.parent_path();
     if (!parent.empty()) {
-        rejectSymlinkPath(std::filesystem::absolute(parent).lexically_normal());
         std::filesystem::create_directories(parent);
+        // Re-check immediately after creation: create_directories follows
+        // symlinks, so a raced component must abort before anything is
+        // staged. This narrows the check-to-use window as far as portable
+        // C++ allows; the final rename never follows the destination itself.
+        rejectSymlinkPath(std::filesystem::absolute(parent).lexically_normal());
     }
-    std::error_code statusError;
-    const auto existingStatus = std::filesystem::symlink_status(destination, statusError);
-    if (!statusError && std::filesystem::exists(existingStatus) &&
-        (std::filesystem::is_symlink(existingStatus) || std::filesystem::is_directory(existingStatus))) {
-        throw std::invalid_argument("refusing to replace non-regular output path: " + destination.string());
+    {
+        std::error_code statusError;
+        const auto existingStatus = std::filesystem::symlink_status(destination, statusError);
+        if (!statusError && std::filesystem::exists(existingStatus) &&
+            (std::filesystem::is_symlink(existingStatus) || std::filesystem::is_directory(existingStatus))) {
+            throw std::invalid_argument("refusing to replace non-regular output path: " + destination.string());
+        }
     }
 
-    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    static std::atomic<std::uint64_t> stagingCounter{0};
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count() ^
+                        (stagingCounter.fetch_add(1) << 32u);
     auto temporary = destination;
     temporary += ".radicle-" + std::to_string(unique) + ".tmp";
     auto backup = destination;
     backup += ".radicle-" + std::to_string(unique) + ".bak";
 
-    {
-        std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
-        if (!stream) throw std::runtime_error("could not create temporary output: " + temporary.string());
-        if (!bytes.empty()) {
-            stream.write(reinterpret_cast<const char*>(bytes.data()),
-                         static_cast<std::streamsize>(bytes.size()));
-        }
-        if (!stream) throw std::runtime_error("could not write temporary output: " + temporary.string());
-    }
+    StagedFile staged(temporary, bytes);
+    staged.verify(bytes.size());
 
     bool movedOriginal = false;
     try {
@@ -226,6 +311,8 @@ void writeAtomically(const std::filesystem::path& destination,
             std::filesystem::rename(destination, backup);
             movedOriginal = true;
         }
+        // rename(2)/MoveFileEx replace the destination entry atomically and
+        // never traverse a symlink planted at the destination.
         std::filesystem::rename(temporary, destination);
         if (movedOriginal) std::filesystem::remove(backup);
     } catch (...) {

@@ -124,3 +124,62 @@ TEST_CASE("Native editable plugin APIs agree on protected and writable plugins")
     CHECK(directActive[2].at("Name") == "Patch.esp");
     CHECK(directActive[2].at("Editable") == true);
 }
+
+TEST_CASE("Native editable check protects plugins physically inside the Data directory") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto dataDir = root / "Fallout 4" / "Data";
+
+    // A plugin whose MO2 source tag is missing or wrong must still be
+    // protected when the file itself lives inside the registered Data dir.
+    const auto vanilla = dataDir / "Vanilla.esp";
+    writeBytes(vanilla, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(dataDir);
+
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Vanilla.esp", vanilla, "")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    REQUIRE(active.size() == 1);
+    CHECK(active[0].at("Name") == "Vanilla.esp");
+    CHECK(active[0].at("Editable") == false);
+
+    const auto save = backend.invokeBackend(
+        "SavePlugin", nlohmann::json::array({"Vanilla.esp", ""}));
+    REQUIRE_FALSE(save.has_value());
+    CHECK(save.error().type == "PluginReadOnly");
+}
+
+TEST_CASE("Native editable check keeps plugins outside the Data directory writable") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto dataDir = root / "Fallout 4" / "Data";
+    const auto modDir = root / "mods" / "MyMod";
+    std::filesystem::create_directories(dataDir);
+
+    // Same basename as a hypothetical Data plugin, but living in a mod dir.
+    const auto modded = modDir / "Modded.esp";
+    writeBytes(modded, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(dataDir);
+
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Modded.esp", modded, "MyMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto editable = parseStringResult(
+        backend.invoke("backend.GetEditablePlugins", nlohmann::json::array()));
+    REQUIRE(editable.size() == 1);
+    CHECK(editable[0] == "Modded.esp");
+}

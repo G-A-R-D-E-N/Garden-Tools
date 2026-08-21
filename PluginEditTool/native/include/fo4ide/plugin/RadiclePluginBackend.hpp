@@ -19,8 +19,13 @@ public:
     Result<nlohmann::json> invoke(std::string_view operation,
                                   const nlohmann::json& arguments) override;
     Result<nlohmann::json> invokeBackend(std::string_view method,
-                                         const nlohmann::json& arguments) override;
+                                          const nlohmann::json& arguments) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
+
+    // Registers the game's Data directory. Any plugin whose file resolves
+    // beneath it is treated as read-only regardless of its reported MO2
+    // source. Call once during setup, before the backend serves requests.
+    void setDataDirectory(std::filesystem::path dataDirectory);
 
 private:
     struct LoadedPlugin {
@@ -86,6 +91,8 @@ private:
     mutable std::mutex mutex_;
     std::vector<LoadedPlugin> plugins_;
     fo4::ConflictGraph graph_;
+    // Written once during setup via setDataDirectory, read-only afterwards.
+    std::filesystem::path dataDirectory_;
 };
 
 }

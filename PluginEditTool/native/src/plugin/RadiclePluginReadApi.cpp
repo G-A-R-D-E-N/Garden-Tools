@@ -447,14 +447,37 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
     }
 
     const auto& versions = graph_.versions(key);
+
+    // Resolve the base form for override records: the earliest definition in
+    // load order. All overrides share the FormKey, so the UI can navigate to
+    // the base record inside any plugin that contains it.
+    std::string baseForm;
+    std::string baseFormKey;
+    if (versions.size() > 1) {
+        const auto& origin = versions.front();
+        baseFormKey = key.to_string();
+        const auto* originLoaded = findPlugin(origin.plugin.filename());
+        if (originLoaded != nullptr) {
+            if (const auto* originRecord = fo4::find_record(originLoaded->plugin, key)) {
+                auto editor = editorId(*originRecord);
+                if (editor.empty()) editor = key.to_string();
+                baseForm = std::move(editor) + " (" +
+                           std::string(origin.plugin.filename()) + ")";
+            }
+        }
+        if (baseForm.empty()) {
+            baseForm = std::string(origin.plugin.filename());
+        }
+    }
+
     return nlohmann::json(nlohmann::json{
         {"FormKey", key.to_string()},
         {"FormId", rawFormIdText(record->header.form_id)},
         {"EditorId", editorId(*record)},
         {"Signature", record->header.signature.to_string()},
         {"ClassName", record->header.signature.to_string()},
-        {"BaseForm", ""},
-        {"BaseFormKey", ""},
+        {"BaseForm", std::move(baseForm)},
+        {"BaseFormKey", std::move(baseFormKey)},
         {"File", loaded->name},
         {"Winner", loaded->name},
         {"OverrideCount", versions.empty() ? 0 : versions.size() - 1}
