@@ -1,0 +1,319 @@
+#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <iomanip>
+#include <map>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include <fo4/plugin/reader.hpp>
+
+namespace fo4ide::plugin {
+namespace {
+
+std::string stringArgument(const nlohmann::json& args, std::size_t index) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
+    return args[index].get<std::string>();
+}
+
+std::size_t sizeArgument(const nlohmann::json& args,
+                         std::size_t index,
+                         std::size_t fallback,
+                         std::size_t maximum = 5000) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) {
+        return fallback;
+    }
+    const auto raw = args[index].get<long long>();
+    if (raw < 0) return fallback;
+    return std::min(static_cast<std::size_t>(raw), maximum);
+}
+
+std::string editorId(const fo4::Record& record) {
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
+        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
+        const auto* end = begin + subrecord.data.size();
+        const auto* nul = std::find(begin, end, '\0');
+        return std::string(begin, nul);
+    }
+    return {};
+}
+
+std::string asciiLower(std::string_view value) {
+    std::string out(value);
+    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return out;
+}
+
+bool containsInsensitive(std::string_view value, std::string_view needle) {
+    if (needle.empty()) return true;
+    return asciiLower(value).find(asciiLower(needle)) != std::string::npos;
+}
+
+std::string pluginKind(const fo4::Plugin& plugin) {
+    if (plugin.header.tes4_flags.is_small_file()) return "light";
+    if (plugin.header.tes4_flags.is_master()) return "master";
+    return "plugin";
+}
+
+std::string rawFormIdText(fo4::RawFormId formId) {
+    std::ostringstream out;
+    out << "0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+        << formId.value();
+    return out.str();
+}
+
+using SubrecordMap = std::map<std::pair<std::string, std::size_t>, std::vector<std::byte>>;
+
+SubrecordMap subrecordMap(const fo4::Record* record) {
+    SubrecordMap out;
+    if (record == nullptr) return out;
+    std::map<std::string, std::size_t> ordinals;
+    for (const auto& subrecord : record->subrecords) {
+        const auto signature = subrecord.signature.to_string();
+        out.emplace(std::make_pair(signature, ordinals[signature]++), subrecord.data);
+    }
+    return out;
+}
+
+std::size_t changedSubrecordCount(const fo4::Record* previous, const fo4::Record* current) {
+    const auto before = subrecordMap(previous);
+    const auto after = subrecordMap(current);
+    std::map<std::pair<std::string, std::size_t>, bool> keys;
+    for (const auto& [key, value] : before) {
+        static_cast<void>(value);
+        keys.emplace(key, true);
+    }
+    for (const auto& [key, value] : after) {
+        static_cast<void>(value);
+        keys.emplace(key, true);
+    }
+
+    std::size_t changed = 0;
+    for (const auto& [key, unused] : keys) {
+        static_cast<void>(unused);
+        const auto lhs = before.find(key);
+        const auto rhs = after.find(key);
+        if (lhs == before.end() || rhs == after.end() || lhs->second != rhs->second) ++changed;
+    }
+    return changed;
+}
+
+Result<fo4::FormKey> formKeyArgument(const nlohmann::json& arguments) {
+    const auto text = stringArgument(arguments, 0);
+    if (text.empty()) {
+        return std::unexpected(Error{"FormKeyMissing", "FormKey is empty"});
+    }
+    try {
+        return fo4::FormKey::parse(text);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+}
+
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getPluginRecordTypes(
+    const nlohmann::json& arguments) const {
+    const auto pluginName = stringArgument(arguments, 0);
+    if (pluginName.empty()) return nlohmann::json("[]");
+
+    std::scoped_lock lock(mutex_);
+    const auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) return nlohmann::json("[]");
+
+    std::map<std::string, std::size_t> counts;
+    for (const auto* record : fo4::collect_records(loaded->plugin)) {
+        if (record->header.signature == fo4::sig_tes4) continue;
+        ++counts[record->header.signature.to_string()];
+    }
+
+    nlohmann::json rows = nlohmann::json::array();
+    for (const auto& [signature, count] : counts) {
+        rows.push_back(signature + " (" + std::to_string(count) + ")");
+    }
+    return nlohmann::json(rows.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
+    const nlohmann::json& arguments) const {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto signature = stringArgument(arguments, 1);
+    const auto limit = sizeArgument(arguments, 2, 200, 1000);
+    const auto offset = sizeArgument(arguments, 3, 0, 1000000);
+
+    std::scoped_lock lock(mutex_);
+    const auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr || signature.empty()) {
+        return nlohmann::json(nlohmann::json{
+            {"columns", nlohmann::json::array({"EDID"})},
+            {"rows", nlohmann::json::array()},
+            {"total", 0},
+            {"offset", offset}
+        }.dump());
+    }
+
+    std::vector<const fo4::Record*> matching;
+    for (const auto* record : fo4::collect_records(loaded->plugin)) {
+        if (record->header.signature == fo4::sig_tes4 || record->form_key.owner().empty()) continue;
+        if (record->header.signature.to_string() == signature) matching.push_back(record);
+    }
+
+    nlohmann::json rows = nlohmann::json::array();
+    const auto begin = std::min(offset, matching.size());
+    const auto end = std::min(begin + limit, matching.size());
+    for (std::size_t index = begin; index < end; ++index) {
+        const auto* record = matching[index];
+        const auto editor = editorId(*record);
+        rows.push_back({
+            {"formKey", record->form_key.to_string()},
+            {"editorId", editor},
+            {"cells", nlohmann::json::array({editor})}
+        });
+    }
+
+    return nlohmann::json(nlohmann::json{
+        {"columns", nlohmann::json::array({"EDID"})},
+        {"rows", std::move(rows)},
+        {"total", matching.size()},
+        {"offset", begin}
+    }.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getRecordsOfType(
+    const nlohmann::json& arguments) const {
+    const auto signature = stringArgument(arguments, 0);
+    const auto filter = stringArgument(arguments, 1);
+    const auto limit = sizeArgument(arguments, 2, 200, 5000);
+    const auto offset = sizeArgument(arguments, 3, 0, 1000000);
+    if (signature.empty()) return nlohmann::json("[]");
+
+    struct WinnerRow {
+        const LoadedPlugin* plugin{nullptr};
+        const fo4::Record* record{nullptr};
+    };
+
+    std::scoped_lock lock(mutex_);
+    std::map<fo4::FormKey, WinnerRow> winners;
+    for (const auto& loaded : plugins_) {
+        for (const auto* record : fo4::collect_records(loaded.plugin)) {
+            if (record->header.signature == fo4::sig_tes4 || record->form_key.owner().empty()) continue;
+            if (record->header.signature.to_string() != signature) continue;
+            winners[record->form_key] = WinnerRow{&loaded, record};
+        }
+    }
+
+    std::vector<WinnerRow> filtered;
+    filtered.reserve(winners.size());
+    for (const auto& [key, row] : winners) {
+        const auto keyText = key.to_string();
+        const auto editor = editorId(*row.record);
+        if (!containsInsensitive(keyText, filter) && !containsInsensitive(editor, filter)) continue;
+        filtered.push_back(row);
+    }
+
+    nlohmann::json rows = nlohmann::json::array();
+    const auto begin = std::min(offset, filtered.size());
+    const auto end = std::min(begin + limit, filtered.size());
+    for (std::size_t index = begin; index < end; ++index) {
+        const auto& row = filtered[index];
+        rows.push_back({
+            {"FormKey", row.record->form_key.to_string()},
+            {"EditorID", editorId(*row.record)},
+            {"Type", row.record->header.signature.to_string()},
+            {"Plugin", row.plugin->name}
+        });
+    }
+    return nlohmann::json(rows.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
+    const nlohmann::json& arguments) const {
+    auto keyResult = formKeyArgument(arguments);
+    if (!keyResult) return std::unexpected(keyResult.error());
+    const auto& key = *keyResult;
+
+    std::scoped_lock lock(mutex_);
+    const auto* winner = graph_.winner(key);
+    if (winner == nullptr) return nlohmann::json("{}");
+    const auto* loaded = findPlugin(winner->plugin.filename());
+    if (loaded == nullptr) return nlohmann::json("{}");
+    const auto* record = fo4::find_record(loaded->plugin, key);
+    if (record == nullptr) return nlohmann::json("{}");
+
+    const auto& versions = graph_.versions(key);
+    return nlohmann::json(nlohmann::json{
+        {"FormKey", key.to_string()},
+        {"FormId", rawFormIdText(record->header.form_id)},
+        {"EditorId", editorId(*record)},
+        {"Signature", record->header.signature.to_string()},
+        {"ClassName", record->header.signature.to_string()},
+        {"BaseForm", ""},
+        {"BaseFormKey", ""},
+        {"File", loaded->name},
+        {"Winner", loaded->name},
+        {"OverrideCount", versions.empty() ? 0 : versions.size() - 1}
+    }.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getRecordPluginMatrix(
+    const nlohmann::json& arguments) const {
+    auto keyResult = formKeyArgument(arguments);
+    if (!keyResult) return std::unexpected(keyResult.error());
+    const auto& key = *keyResult;
+
+    std::scoped_lock lock(mutex_);
+    const auto& versions = graph_.versions(key);
+    nlohmann::json rows = nlohmann::json::array();
+    const fo4::Record* previous = nullptr;
+
+    for (std::size_t index = 0; index < versions.size(); ++index) {
+        const auto& version = versions[index];
+        const auto* loaded = findPlugin(version.plugin.filename());
+        const auto* record = loaded == nullptr ? nullptr : fo4::find_record(loaded->plugin, key);
+        const auto changes = index == 0 ? 0 : changedSubrecordCount(previous, record);
+        rows.push_back({
+            {"Plugin", std::string(version.plugin.filename())},
+            {"LoadOrder", version.load_order},
+            {"Kind", loaded == nullptr ? "plugin" : pluginKind(loaded->plugin)},
+            {"Changes", changes},
+            {"Conflicts", changes},
+            {"IsOverride", index != 0},
+            {"IsWinner", index + 1 == versions.size()},
+            {"LastModified", ""}
+        });
+        previous = record;
+    }
+    return nlohmann::json(rows.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getContainmentPath(
+    const nlohmann::json& arguments) const {
+    auto keyResult = formKeyArgument(arguments);
+    if (!keyResult) return std::unexpected(keyResult.error());
+    const auto& key = *keyResult;
+
+    std::scoped_lock lock(mutex_);
+    const auto* winner = graph_.winner(key);
+    if (winner == nullptr) return nlohmann::json("[]");
+    const auto* loaded = findPlugin(winner->plugin.filename());
+    if (loaded == nullptr) return nlohmann::json("[]");
+    const auto* record = fo4::find_record(loaded->plugin, key);
+    if (record == nullptr) return nlohmann::json("[]");
+
+    const auto editor = editorId(*record);
+    return nlohmann::json(nlohmann::json::array({
+        {{"Kind", "Plugin"}, {"Label", loaded->name}, {"FormKey", ""}},
+        {{"Kind", "RecordType"}, {"Label", record->header.signature.to_string()}, {"FormKey", ""}},
+        {{"Kind", "Record"}, {"Label", editor.empty() ? key.to_string() : editor}, {"FormKey", key.to_string()}}
+    }).dump());
+}
+
+}
