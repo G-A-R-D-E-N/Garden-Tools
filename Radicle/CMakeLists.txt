@@ -51,6 +51,7 @@ add_library(fo4
   src/plugin/mutation.cpp
   src/plugin/writer.cpp
   src/schema/form_links.cpp
+  src/schema/scalar.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
 )
@@ -110,6 +111,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_mutation.cpp
     tests/test_writer.cpp
     tests/test_formlinks.cpp
+    tests/test_scalar.cpp
     tests/test_ctda_strings.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
