@@ -53,6 +53,7 @@ CK LOD pipeline, precombined, `.scene` / `.uvd`.
 RTTI map, Elric engine-symbol facts, NIF writer catalog.
 
 - [docs/02-RTTI-CLASS-MAP.md](docs/02-RTTI-CLASS-MAP.md)
+- [docs/18-ELRIC-SYMBOLS.md](docs/18-ELRIC-SYMBOLS.md)
 - [dumps/rtti-classes.txt](dumps/rtti-classes.txt)
 - [dumps/ck-nif-block-format-reference.md](dumps/ck-nif-block-format-reference.md)
 - [dumps/nistream-block-save-map.md](dumps/nistream-block-save-map.md)

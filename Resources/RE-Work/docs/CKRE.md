@@ -30,6 +30,7 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | [15-BATCH-PROCESSES.md](15-BATCH-PROCESSES.md) | batch process internals — MasterfileOptimizer/Tagifier, MapMaker, CheckItInChappy, FileSaver + the `-SaveDefaultPlugin` masterfile pipeline |
 | [16-SETTINGS-WRITEBACK.md](16-SETTINGS-WRITEBACK.md) | the settings write-back — notify setter FUN_1425c6b90, scatter-table registry API, the generic WriteSetting, and the read/write round-trip |
 | [17-INI-PATHS.md](17-INI-PATHS.md) | the ini file census — all 5 touched .ini paths, each mapped to its reader function, with the full Get/WritePrivateProfile call-site tables |
+| [18-ELRIC-SYMBOLS.md](18-ELRIC-SYMBOLS.md) | the Elric SDK PDB ground truth — 90,090 engine symbols confirming the CK decompiles (ReadSetting/WriteSetting, SettingT globals, BSTScatterTable, NiStream) |
 | [../dumps/game-setting-table.md](../dumps/game-setting-table.md) | RTTI and byte census of the 5,137 bare-name runtime `GameSetting` records under `SettingT<GameSettingCollection>` |
 | [../dumps/duplicate-ini-settings.md](../dumps/duplicate-ini-settings.md) | all nine duplicated `bKey:Section` descriptors — registration targets, initializer/data runs, and read/write collision semantics |
 | [19-BATCH-EXIT-CODES.md](19-BATCH-EXIT-CODES.md) | the batch exit-code contract — `bThrowProcessCompleteExceptions:General` gate setting, all 7 RaiseException sites, the 31-bit exit-code matrix, and the minidump termination path |
