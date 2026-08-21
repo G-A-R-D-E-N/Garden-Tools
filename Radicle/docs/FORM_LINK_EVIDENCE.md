@@ -36,6 +36,20 @@ xEdit defines:
 
 Radicle visits offset 4 only for type 0. Type 1 remains opaque bytes. Payloads shorter than 8 bytes are skipped.
 
+## PERK EPFT / EPFD entry-point parameters
+
+Oracle: xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas`, PERK `Function Parameters` and `EPFD` union.
+
+`EPFT` selects the meaning of the following `EPFD` payload. xEdit defines the FormID-bearing variants as:
+
+- EPFT `3` -> `LVLI` FormID in 4-byte EPFD
+- EPFT `4` -> `SPEL` FormID in 4-byte EPFD (`Add Activate Choice`)
+- EPFT `5` -> `SPEL` FormID in 4-byte EPFD (`Select Spell`)
+
+Other EPFD variants contain floats, text, localized text or other non-FormID data. For Add Activate Choice, `EPF2` is the button label and `EPF3` is integer flags; neither is a FormID.
+
+Radicle therefore tracks the most recent EPFT within the PERK record and visits EPFD offset 0 only for types 3, 4 or 5 and only when EPFD is exactly 4 bytes.
+
 ## CTDA CIS1 / CIS2
 
 `CIS1` and `CIS2` are separate string subrecords associated with a CTDA condition. They are not part of the 32-byte CTDA payload and are not visited as FormID storage.
@@ -59,6 +73,7 @@ This prevents a master reorder from rewriting only the references encountered be
 ## Tests
 
 - `tests/test_package_targets.cpp`
+- `tests/test_perk_entrypoints.cpp`
 - `tests/test_ctda_strings.cpp`
 - `tests/test_formlinks.cpp`
 - `tests/test_vmad.cpp`
