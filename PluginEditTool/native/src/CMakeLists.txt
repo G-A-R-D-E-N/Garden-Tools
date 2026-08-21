@@ -110,6 +110,7 @@ fo4ide_enable_sanitizers(fo4ide_material)
 add_library(
     fo4ide_archive
     archive/ArchiveService.cpp
+    archive/ArchiveBackendCompatibility.cpp
     archive/RadicleArchiveBackend.cpp
 )
 target_link_libraries(
