@@ -60,17 +60,16 @@ FormKey resolve_plugin_form_id(RawFormId raw, const PluginFormIdContext& context
 
   // On-disk plugin FormIDs are always indexed through the plugin's MAST table.
   // 0xFE has no special light-plugin meaning in this address space; runtime FE
-  // encoding is handled only by resolve_runtime_form_id().
+  // encoding is handled only by resolve_runtime_form_id(). Keep the full local
+  // value here; light validity/masking belongs to the encode boundary until the
+  // engine's small-file validity predicate is fully recovered.
   const auto index = raw.index_byte();
   const auto local = LocalFormId{raw.local_24()};
   if (index < context.masters.size()) {
     return FormKey{context.masters[index].key, local};
   }
   if (index == context.masters.size()) {
-    const auto localValue = context.current_kind == PluginKind::light
-                                ? raw.local_24() & k_light_local_mask
-                                : raw.local_24();
-    return FormKey{context.current_plugin, LocalFormId{localValue}};
+    return FormKey{context.current_plugin, local};
   }
   throw FormIdError("master index " + std::to_string(index) +
                     " is outside this plugin's master table");
