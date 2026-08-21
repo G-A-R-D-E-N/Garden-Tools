@@ -27,6 +27,11 @@ Usage:
     # composition, per language stem):
     python3 validate_ckini.py --compile-text samples/compile-text/backup \
         samples/compile-text/primary --strings '.../STRINGS'
+    # machine-consumable: routing predictions + cross-check verdicts as JSON
+    # (human-readable text suppressed; exit codes unchanged):
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS --json
     python3 validate_ckini.py CreationKit.ini --exit-codes
     python3 validate_ckini.py --strings \
         '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
@@ -86,6 +91,7 @@ platform/MapInfo/PreVis enum checks.
 """
 
 import argparse
+import json
 import os
 import re
 import struct
@@ -555,12 +561,19 @@ def _compile_route(category, from_supplemental, esm, language):
 def check_compile_text_roots(esm, roots, language=None):
     """Validate the CompileTextExport input-root set like FUN_140916980.
 
-    Returns (ok, lines). For each root (traversed in the engine's
-    ``[backup,] primary`` order) the mandatory ``<root>/<ESM>/TextExport.txt``
-    must exist; supplemental ``*.txt`` files must carry an 8-hex-character
-    ID stem. Records are parsed with the four-field grammar: reserved IDs,
-    duplicate IDs, unknown categories, and malformed lines are the engine's
-    skip/recovery diagnostics (warnings), not hard failures.
+    Returns (ok, lines, route_records, summary). For each root (traversed in
+    the engine's ``[backup,] primary`` order) the mandatory
+    ``<root>/<ESM>/TextExport.txt`` must exist; supplemental ``*.txt`` files
+    must carry an 8-hex-character ID stem. Records are parsed with the
+    four-field grammar: reserved IDs, duplicate IDs, unknown categories, and
+    malformed lines are the engine's skip/recovery diagnostics (warnings),
+    not hard failures.
+
+    ``route_records`` is the structured per-record list {id, ext, source,
+    category, output} consumed by the cross-check and --json; ``summary``
+    carries the structured diagnostics (reserved/duplicates/
+    unknown-categories/malformed-lines/supplemental-files/errors/
+    route_counts) for machine consumption.
 
     ``language`` selects the output filename; when omitted (positional-root
     mode) the DEFAULT_SLANGUAGE value is used so the routing predictions
@@ -571,23 +584,24 @@ def check_compile_text_roots(esm, roots, language=None):
     lines = ["COMPILE-TEXT: FUN_140916980 input-root contract"]
     if not esm:
         lines.append("ERROR: no <ESMFilename> for the input path <root>/<ESM>/TextExport.txt")
-        return False, lines
+        return False, lines, [], {}
     if not roots:
         lines.append("ERROR: no input roots")
-        return False, lines
+        return False, lines, [], {}
     lines.append("ESM: %s" % esm)
     lines.append("LANGUAGE: %s" % language)
     lines.append("ROOTS (traversal order [backup,] primary): %s" % ", ".join(roots))
 
     seen_ids = {}          # string_id -> (label, line) first seen
-    reserved = []
-    duplicates = []
-    malformed_lines = []
-    unknown_categories = []
+    reserved = []          # structured: {id, source}
+    duplicates = []        # structured: {id, source, first_seen}
+    malformed_lines = []   # structured: {source, note}
+    unknown_categories = []  # structured: {id, category, source}
+    supplemental_files = []  # structured: {file, id}
     errors = []
     warnings = []
     routes = []            # per-record output-table predictions
-    route_records = []     # structured {id, ext, source, category} for cross-check
+    route_records = []     # structured {id, ext, source, category, output}
     route_counts = {}      # extension -> record count
 
     for root in roots:
@@ -617,6 +631,7 @@ def check_compile_text_roots(esm, roots, language=None):
                 warnings.append("Could not parse ID from filename: %s. Skipping (%s)" % (name, reason))
                 continue
             lines.append("  supplemental %s -> file ID 0x%08X" % (name, file_id))
+            supplemental_files.append({"file": name, "id": file_id})
             reads.append((name, os.path.join(esm_dir, name), True))
 
         for fname, path, is_supplemental in reads:
@@ -634,22 +649,27 @@ def check_compile_text_roots(esm, roots, language=None):
                         structural = [n for n in notes
                                       if not n.startswith("unknown category")]
                         if structural:
-                            malformed_lines.append("%s:%d: %s" % (label, lineno, "; ".join(structural)))
+                            malformed_lines.append({
+                                "source": "%s:%d" % (label, lineno),
+                                "note": "; ".join(structural)})
                         if string_id is None:
                             continue
                         # Reserved IDs are skipped before category routing,
                         # exactly like the engine's reserved-ID branch.
                         if string_id < _TEXT_RESERVED_LIMIT:
-                            reserved.append("%s:%d: Attempting to use reserved ID 0x%08X. Skipping." %
-                                            (label, lineno, string_id))
+                            reserved.append({"id": string_id,
+                                             "source": "%s:%d" % (label, lineno)})
                             continue
                         if category and category.lower() not in _TEXT_CATEGORIES_LOWER:
-                            unknown_categories.append("%s:%d: unknown category '%s' -> falls back to Misc" %
-                                                      (label, lineno, category))
+                            unknown_categories.append({
+                                "id": string_id,
+                                "category": category,
+                                "source": "%s:%d" % (label, lineno)})
                         first = seen_ids.get(string_id)
                         if first is not None:
-                            duplicates.append("Duplicate ID found: 0x%08X (%s:%d; first seen %s)" %
-                                              (string_id, label, lineno, first))
+                            duplicates.append({"id": string_id,
+                                               "source": "%s:%d" % (label, lineno),
+                                               "first_seen": first})
                         else:
                             seen_ids[string_id] = "%s:%d" % (label, lineno)
                         # Output-table prediction (doc 05 / FUN_140916980
@@ -666,19 +686,23 @@ def check_compile_text_roots(esm, roots, language=None):
                             "ext": ext,
                             "source": "%s:%d" % (label, lineno),
                             "category": (category or "").strip() or "(none)",
+                            "output": outname,
                         })
                         route_counts[ext] = route_counts.get(ext, 0) + 1
             except OSError as exc:
                 errors.append("could not read %s: %s" % (path, exc))
 
     for item in reserved:
-        warnings.append(item)
+        warnings.append("%s: Attempting to use reserved ID 0x%08X. Skipping."
+                        % (item["source"], item["id"]))
     for item in duplicates:
-        warnings.append(item)
+        warnings.append("Duplicate ID found: 0x%08X (%s; first seen %s)"
+                        % (item["id"], item["source"], item["first_seen"]))
     for item in unknown_categories:
-        warnings.append(item)
+        warnings.append("%s: unknown category '%s' -> falls back to Misc"
+                        % (item["source"], item["category"]))
     for item in malformed_lines:
-        warnings.append(item)
+        warnings.append("%s: %s" % (item["source"], item["note"]))
     if not errors:
         warnings.append("all diagnostics above are skip/recovery paths; the aggregate "
                         "string table is built from %d unique IDs" % len(seen_ids))
@@ -702,7 +726,20 @@ def check_compile_text_roots(esm, roots, language=None):
         lines.append("VERDICT: PASS")
     else:
         lines.append("VERDICT: FAIL")
-    return not errors, lines, route_records
+    summary = {
+        "esm": esm,
+        "language": language,
+        "roots": roots,
+        "unique_ids": len(seen_ids),
+        "reserved": reserved,
+        "duplicates": duplicates,
+        "unknown_categories": unknown_categories,
+        "malformed_lines": malformed_lines,
+        "supplemental_files": supplemental_files,
+        "errors": list(errors),
+        "route_counts": dict(route_counts),
+    }
+    return not errors, lines, route_records, summary
 
 
 def _parse_compile_args(arg_text):
@@ -985,18 +1022,16 @@ def load_text_export_categories(paths):
     return id_to_cat, warnings
 
 
-def _composition_lines(header, kind_ids, category_map):
-    """Per-table dialog-category composition lines for one language stem.
+def _composition_data(kind_ids, category_map):
+    """Structured per-table composition for one language stem.
 
-    ``kind_ids`` maps each of _STRINGS_KINDS to the list of compiled
-    stringIDs in that table; ``category_map`` maps stringID -> canonical
-    TextExport category name. For every non-empty table the report counts
-    how many IDs came from the dialog categories (indices {1,6,7,10},
-    listed individually when non-zero), how many from the ordinary
-    categories, and how many are unattributed (no category source).
-    Returns the lines to append, starting with ``header``.
+    Returns {kind: {ids, attributed, by_category, dialog, ordinary,
+    unattributed}} for every non-empty table, where ``dialog`` counts the
+    IDs attributed to categories {1,6,7,10}. ``kind_ids`` maps each of
+    _STRINGS_KINDS to the list of compiled stringIDs; ``category_map`` maps
+    stringID -> canonical TextExport category name.
     """
-    lines = [header]
+    out = {}
     for kind in _STRINGS_KINDS:
         ids = kind_ids[kind]
         if not ids:
@@ -1009,20 +1044,40 @@ def _composition_lines(header, kind_ids, category_map):
         attr = sum(by_cat.values())
         dialog = sum(by_cat.get(_TEXT_CATEGORIES[i], 0)
                      for i in _TEXT_DIALOG_INDICES)
-        ordinary = attr - dialog
+        out[kind] = {
+            "ids": len(ids),
+            "attributed": attr,
+            "by_category": dict(sorted(by_cat.items())),
+            "dialog": dialog,
+            "ordinary": attr - dialog,
+            "unattributed": len(ids) - attr,
+        }
+    return out
+
+
+def _composition_lines(header, kind_ids, category_map):
+    """Per-table dialog-category composition lines for one language stem.
+
+    Formats ``_composition_data`` for the human-readable report; the
+    structured dict is what --json emits. Returns the lines to append,
+    starting with ``header``.
+    """
+    lines = [header]
+    for kind, d in _composition_data(kind_ids, category_map).items():
         detail = []
-        if dialog:
-            parts = ["%s=%d" % (_TEXT_CATEGORIES[i], by_cat.get(_TEXT_CATEGORIES[i], 0))
-                     for i in sorted(_TEXT_DIALOG_INDICES)
-                     if by_cat.get(_TEXT_CATEGORIES[i])]
-            detail.append("dialog-routed=%d (%s)" % (dialog, ", ".join(parts)))
-        if ordinary:
-            detail.append("ordinary-routed=%d" % ordinary)
+        if d["dialog"]:
+            parts = ["%s=%d" % (name, d["by_category"].get(name, 0))
+                     for name in (_TEXT_CATEGORIES[i]
+                                  for i in sorted(_TEXT_DIALOG_INDICES))
+                     if d["by_category"].get(name)]
+            detail.append("dialog-routed=%d (%s)" % (d["dialog"], ", ".join(parts)))
+        if d["ordinary"]:
+            detail.append("ordinary-routed=%d" % d["ordinary"])
         if not detail:
             detail.append("none attributed")
         lines.append("  %s: %d IDs, %d attributed (%s), %d unattributed"
-                     % (kind, len(ids), attr, "; ".join(detail),
-                        len(ids) - attr))
+                     % (kind, d["ids"], d["attributed"], "; ".join(detail),
+                        d["unattributed"]))
     return lines
 
 
@@ -1263,13 +1318,18 @@ def _load_strings_ids(path):
 def cross_check_compile_routes(route_records, strings_paths, esm, language):
     """Verify each predicted output table against real compiled string files.
 
-    Returns (ok, lines). ``strings_paths`` may mix files and directories;
-    only files whose ``<ESM>_<Language>`` stem matches the compile's esm/
-    language (or the default language when none was given) are considered.
-    For every routed record the ID must be present in the predicted table;
-    a record found in a *different* table is a routing discrepancy (hard
-    failure), and a record missing from all matching compiled files is a
-    warning (the compiled set may predate the export).
+    Returns (ok, lines, summary). ``strings_paths`` may mix files and
+    directories; only files whose ``<ESM>_<Language>`` stem matches the
+    compile's esm/language (or the default language when none was given) are
+    considered. For every routed record the ID must be present in the
+    predicted table; a record found in a *different* table is a routing
+    discrepancy (hard failure), and a record missing from all matching
+    compiled files is a warning (the compiled set may predate the export).
+
+    ``summary`` is the structured machine-consumable result: matched file
+    names, per-record verdicts {id, category, source, predicted_ext,
+    present_in, verdict}, verdict counts, and the per-language-stem
+    composition (``_composition_data`` dicts).
     """
     files = []
     for p in strings_paths:
@@ -1306,29 +1366,40 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language):
              % file_list]
     ok = True
     matched = 0
-    missing = []
-    wrong = []
+    results = []
     for rec in route_records:
         sid = rec["id"]
         predicted = rec["ext"]
         present = [k for k in _STRINGS_KINDS if sid in by_kind[k]]
         if predicted in present:
+            verdict = "MATCH"
             matched += 1
         elif present:
-            wrong.append("%s: 0x%08X [%s] predicted %s but found in %s"
-                         % (rec["source"], sid, rec["category"],
-                            predicted, ",".join(present)))
+            verdict = "MISMATCH"
+            ok = False
         else:
-            missing.append("%s: 0x%08X [%s] not in any compiled table"
-                           % (rec["source"], sid, rec["category"]))
+            verdict = "WARNING"
+        results.append({
+            "id": sid,
+            "id_hex": "0x%08X" % sid,
+            "category": rec["category"],
+            "source": rec["source"],
+            "predicted_ext": predicted,
+            "present_in": present,
+            "verdict": verdict,
+        })
 
     if matched:
         lines.append("  MATCH: %d record(s) present in their predicted table" % matched)
-    for item in wrong:
-        ok = False
-        lines.append("  MISMATCH: " + item)
-    for item in missing:
-        lines.append("  WARNING: " + item)
+    for r in results:
+        if r["verdict"] == "MISMATCH":
+            lines.append("  MISMATCH: %s: 0x%08X [%s] predicted %s but found in %s"
+                         % (r["source"], r["id"], r["category"],
+                            r["predicted_ext"], ",".join(r["present_in"])))
+    for r in results:
+        if r["verdict"] == "WARNING":
+            lines.append("  WARNING: %s: 0x%08X [%s] not in any compiled table"
+                         % (r["source"], r["id"], r["category"]))
 
     # Per-table dialog-category composition: attribute every compiled ID
     # back to its routed record's category (canonicalized like the
@@ -1345,18 +1416,28 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language):
     stems = {}
     for path in sorted(matching):
         stems.setdefault(_strings_lang_stem(path), []).append(path)
+    composition = {}
     for stem in sorted(stems):
         kind_ids = {k: [] for k in _STRINGS_KINDS}
         for path in stems[stem]:
             ids = _load_strings_ids(path)
             kind_ids[_strings_kind(path)].extend(ids.keys())
+        composition[stem] = _composition_data(kind_ids, cat_map)
         lines.extend(_composition_lines(
             "COMPOSITION %s: %d routed IDs, per compiled table by "
             "routed-record category (dialog set {1,6,7,10} -> .DLSTRINGS)"
             % (stem, len(route_records)), kind_ids, cat_map))
 
+    summary = {
+        "files": [os.path.basename(f) for f in sorted(matching)],
+        "records": results,
+        "match_count": matched,
+        "mismatch_count": sum(1 for r in results if r["verdict"] == "MISMATCH"),
+        "warning_count": sum(1 for r in results if r["verdict"] == "WARNING"),
+        "composition": composition,
+    }
     lines.append("VERDICT: %s" % ("PASS" if ok else "FAIL"))
-    return ok, lines
+    return ok, lines, summary
 
 
 # ---------------------------------------------------------------------------
@@ -1610,7 +1691,15 @@ def main(argv):
                          "records attribute compiled string IDs back to their source "
                          "category in the --strings partition report (dialog categories "
                          "{1,6,7,10} -> .DLSTRINGS per FUN_140916980)")
+    ap.add_argument("--json", action="store_true",
+                    help="emit the compile-text routing predictions and, when combined "
+                         "with --strings, the cross-check verdicts and per-language "
+                         "composition as structured JSON on stdout (human-readable text "
+                         "is suppressed; exit codes unchanged)")
     args = ap.parse_args(argv)
+
+    if args.json and args.compile_text is None:
+        ap.error("--json requires --compile-text (optionally with --strings)")
 
     if args.strings is not None and args.compile_text is None:
         # Standalone --strings validation. When --compile-text is also given
@@ -1633,32 +1722,86 @@ def main(argv):
         # (grammar, quoted FUN_140490960 roots), then validate the input
         # roots the command names. Without --command, the positional ROOT
         # directories are checked directly with the default ESM name.
+        # --json switches the whole compile-text output to one structured
+        # JSON payload on stdout (exit codes unchanged).
+        command_lint = None
         if args.batch_command is not None:
-            ok, lines = lint_batch_command(args.batch_command)
-            print("\n".join(lines))
+            ok, command_lint = lint_batch_command(args.batch_command)
             if not ok:
+                if args.json:
+                    print(json.dumps({
+                        "tool": "validate_ckini", "mode": "compile-text",
+                        "command": args.batch_command,
+                        "command_lint": command_lint, "verdict": "FAIL"},
+                        indent=2, sort_keys=True))
+                else:
+                    print("\n".join(command_lint))
                 return 1
             args2, parse_errors = _parse_compile_args(args.batch_command[args.batch_command.index(":") + 1:]
                                                       if ":" in args.batch_command else "")
             if parse_errors:
-                print("\n".join("ERROR: " + e for e in parse_errors))
+                if args.json:
+                    print(json.dumps({
+                        "tool": "validate_ckini", "mode": "compile-text",
+                        "command": args.batch_command,
+                        "command_parse_errors": parse_errors, "verdict": "FAIL"},
+                        indent=2, sort_keys=True))
+                else:
+                    print("\n".join("ERROR: " + e for e in parse_errors))
                 return 1
             esm = args2[0]
             language = args2[1] if len(args2) > 1 else None
             roots = args2[2:] if len(args2) > 2 else []
-            print()
         else:
             esm = "Fallout4.esm"
             language = None
             roots = args.compile_text
-        ok, lines, route_records = check_compile_text_roots(esm, roots, language)
-        print("\n".join(lines))
+
+        ok, lines, route_records, summary = check_compile_text_roots(esm, roots, language)
         if args.strings is not None:
-            print()
-            ok2, xlines = cross_check_compile_routes(
+            ok2, xlines, xsummary = cross_check_compile_routes(
                 route_records, args.strings, esm, language)
-            print("\n".join(xlines))
             ok = ok and ok2
+        else:
+            xlines, xsummary = None, None
+
+        if args.json:
+            payload = {
+                "tool": "validate_ckini",
+                "mode": "cross-check" if xsummary is not None else "compile-text",
+                "esm": esm,
+                "language": language,
+                "roots": roots,
+                "command": args.batch_command,
+                "command_lint": command_lint,
+                "records": [
+                    {"id": r["id"], "id_hex": "0x%08X" % r["id"],
+                     "category": r["category"], "source": r["source"],
+                     "predicted_ext": r["ext"], "output": r["output"]}
+                    for r in route_records
+                ],
+                "routing_summary": summary["route_counts"],
+                "routed_total": sum(summary["route_counts"].values()),
+                "diagnostics": {
+                    "unique_ids": summary["unique_ids"],
+                    "reserved_ids": summary["reserved"],
+                    "duplicates": summary["duplicates"],
+                    "unknown_categories": summary["unknown_categories"],
+                    "malformed_lines": summary["malformed_lines"],
+                    "supplemental_files": summary["supplemental_files"],
+                    "errors": summary["errors"],
+                },
+                "verdict": "PASS" if ok else "FAIL",
+            }
+            if xsummary is not None:
+                payload["cross_check"] = xsummary
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0 if ok else 1
+
+        print("\n".join(lines))
+        if xlines is not None:
+            print()
+            print("\n".join(xlines))
         return 0 if ok else 1
 
     if args.batch_command is not None:
