@@ -204,7 +204,7 @@ TEST_CASE("Native SetField rejects opaque raw fields without touching disk") {
             "unsafe"
         }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "FieldWriteUnsupported");
+    CHECK(result.error().type == "FieldWriteUnsupported");
 
     const auto reloaded = fo4::read_plugin_file(path);
     const auto* record = fo4::find_record(
@@ -231,7 +231,7 @@ TEST_CASE("Native SetField reports missing records") {
             "Missing"
         }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "RecordNotFound");
+    CHECK(result.error().type == "RecordNotFound");
 }
 
 TEST_CASE("Native writes refuse plugins resolved directly from game Data") {
@@ -253,12 +253,12 @@ TEST_CASE("Native writes refuse plugins resolved directly from game Data") {
             "Blocked"
         }));
     REQUIRE_FALSE(edit.has_value());
-    CHECK(edit.error().code == "PluginReadOnly");
+    CHECK(edit.error().type == "PluginReadOnly");
 
     const auto save = backend.invokeBackend(
         "SavePlugin", nlohmann::json::array({"Patch.esp", ""}));
     REQUIRE_FALSE(save.has_value());
-    CHECK(save.error().code == "PluginReadOnly");
+    CHECK(save.error().type == "PluginReadOnly");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
@@ -368,6 +368,6 @@ TEST_CASE("Native CopyAsOverride refuses protected destination plugins") {
             false
         }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "PluginReadOnly");
+    CHECK(result.error().type == "PluginReadOnly");
     CHECK(fo4::read_plugin_file(targetPath).original_bytes == before);
 }
