@@ -8,6 +8,7 @@ namespace {
 
 const std::vector<RecordVersion> k_empty_versions;
 const std::vector<ReferencedByHit> k_empty_references;
+const std::vector<OutgoingReferenceHit> k_empty_outgoing_references;
 
 bool has_identity(const FormKey& key) {
   return !key.owner().empty();
@@ -47,6 +48,13 @@ ConflictGraph ConflictGraph::build(std::span<const Plugin* const> load_order) {
           link.offset,
           index,
       });
+      graph.outbound_[link.record].push_back({
+          link.key,
+          plugin->key,
+          link.subrecord,
+          link.offset,
+          index,
+      });
     }
   }
 
@@ -66,6 +74,12 @@ const RecordVersion* ConflictGraph::winner(const FormKey& key) const noexcept {
 const std::vector<ReferencedByHit>& ConflictGraph::referenced_by(const FormKey& key) const noexcept {
   const auto it = inbound_.find(key);
   return it == inbound_.end() ? k_empty_references : it->second;
+}
+
+const std::vector<OutgoingReferenceHit>& ConflictGraph::references_from(
+    const FormKey& key) const noexcept {
+  const auto it = outbound_.find(key);
+  return it == outbound_.end() ? k_empty_outgoing_references : it->second;
 }
 
 std::vector<FormKey> ConflictGraph::conflicts() const {
