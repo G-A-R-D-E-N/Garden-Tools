@@ -1,6 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
