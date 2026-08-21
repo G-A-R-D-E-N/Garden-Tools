@@ -24,6 +24,13 @@ bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     return true;
 }
 
+std::unexpected<Error> readOnlyError(std::string_view name) {
+    return std::unexpected(Error{
+        "PluginReadOnly",
+        "Refusing to modify protected or game-Data plugin: " + std::string(name)
+    });
+}
+
 }
 
 Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json& arguments) {
@@ -47,6 +54,7 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
     if (requestedJson.size() != loaded->plugin.header.masters.size()) {
         return std::unexpected(Error{"InvalidMasterOrder", "Master order must contain every existing master exactly once"});
     }
@@ -102,6 +110,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
 
     try {
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
@@ -136,6 +145,7 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
 
     try {
         fo4::write_plugin_file(loaded->plugin, loaded->path);
