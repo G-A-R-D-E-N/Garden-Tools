@@ -1,5 +1,7 @@
 #include "fo4/plugin/load_order.hpp"
 
+#include <utility>
+
 namespace fo4 {
 
 RuntimeFormIdContext build_runtime_form_id_context(
