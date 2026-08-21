@@ -35,7 +35,7 @@ Legend: ✅ done/verified · 🟡 partial (known gaps in-doc) · 🔴 blocked/no
 | 20-WINE-PAPYRUS-ZIP-CRASH | ✅ root cause (Shell COM `NameSpace` → NULL `Folder*`) + workaround analysis | a working Wine launch would unblock several runtime verifications |
 | 21-UVD-FORMAT | ✅ magic `0xD6000012`, CRC-32C framing, 0x150 header map, verified on 3 shipped samples | — |
 | 22-BATCH-SETTING-DEPENDENCIES | ✅ direct descriptor reads per batch process, negative `iPlacedObjectRender` result, dependency tiers | — |
-| 23-CELL-WORLDSPACE | ✅ RTTI→vftable inventory for WRLD/CELL/LAND/REFR, factory correction (doc 12), CreateForm/NewCell dispatch, GRUP enum, source mapping, full TESObjectCELL member layout from ctor + NewCell setter chain (form-type byte at +0x26, cell-data blocks, worldspace bounds) | per-slot naming of the LoadRecord/SaveRecord virtuals (slots 23+), 0x20/0x88 cell-data block internals, REFR serializer path |
+| 23-CELL-WORLDSPACE | ✅ RTTI→vftable inventory for WRLD/CELL/LAND/REFR, factory correction (doc 12), CreateForm/NewCell dispatch, GRUP enum, source mapping, full TESObjectCELL member layout from ctor + NewCell setter chain (form-type byte at +0x26, cell-data blocks, worldspace bounds), REFR factory/JSON-serializer split, exteriorcellloader streaming contract (§9), LoadRecord/SaveRecord slots 24/27 named with `__FILE__` anchors (§10: load anchors in class `.cpp`, save anchors in `tesform.cpp`/`tesform.h`) | 0x20/0x88 cell-data block internals; whether any CK feature emits non-standard WRLD/CELL subrecords |
 
 ## Analysis docs (`ghidra-dump/`)
 

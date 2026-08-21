@@ -486,18 +486,18 @@ code):
 
 ### 10a. TESObjectCELL overrides (primary vftable `0x309c780`)
 
-| slot | function | name | evidence |
-|---|---|---|---|
-| 23 | `FUN_140d13f00` | `ClearItem`-family | `tesobjectcell.cpp` assert; frees cell data `+0x58` via `FUN_1407d2060`, checks flag `+0x50` bit 0 |
-| **24** | `FUN_140d146d0` | **`LoadRecord`** | 14× `FUN_14087e870` (reads); dispatches the CELL subrecord set; `"Cell flag data is not a short or char"`; calls the cell-data allocator `FUN_140d18510`; assert `tesobjectcell.cpp` |
-| 27 | `FUN_140d44ba0` | **`SaveRecord`** | 13× `FUN_1408c7710` (subrecord writer) |
-| 28 | `FUN_140d44f00` | flag/ref-count helper | `FUN_14087f240` (flag bit `+0x33C`), `FUN_1408be010` (form lookup), refcount asserts |
-| 30 | `FUN_140d45150` | form-registration helper | `FUN_14087ec50`, `FUN_14087d2d0`, `FUN_140d55ca0` (TESDataHandler register path) |
-| 31 | `FUN_140d45400` | handle→form resolver | type check vs `DAT_143b9a580`, switch on `param_2[3]` (TESFile handle decode) |
-| 32 | `FUN_140d451d0` | ref-iteration predicate | `FUN_140d169e0`/`FUN_140d16a70` (ref list walk), `FUN_140d268d0` (GetWorldspace) |
-| 33 | `FUN_140d14040` | alloc/copy helper | `tesobjectcell.cpp` assert; array allocs |
-| 35 | `FUN_140d153d0` | cell-validation/dangling-check | `tesobjectcell.cpp` asserts; `"Bad cell value. Attempting to create new cell."`, `"Cell at (%i, %i) in world %s (%08X) may be a dangling cell."`, `"Unable to delete invalid coord cell ..."`, cell-name-length check |
-| 38 | `FUN_140d17dc0` | cell-label formatter | `"'%s' (%08X)"`, `"Persistent cell '%s' (%08X) (%i, %i) in WorldSpace '%s' (%08X)"` (editor cell label) |
+| slot | function | name | evidence | `__FILE__` anchors |
+|---|---|---|---|---|
+| 23 | `FUN_140d13f00` | `ClearItem`-family | frees cell data `+0x58` via `FUN_1407d2060`, checks flag `+0x50` bit 0 | `tesobjectcell.cpp:0x49f` |
+| **24** | `FUN_140d146d0` | **`LoadRecord`** | 14× `FUN_14087e870` (reads); dispatches the CELL subrecord set; `"Cell flag data is not a short or char"`; calls the cell-data allocator `FUN_140d18510` | `tesobjectcell.cpp:0x4d7, 0x4ee, 0x555` |
+| 27 | `FUN_140d44ba0` | **`SaveRecord`** | 13× `FUN_1408c7710` (subrecord writer); workhorse calls anchored in `tesform.cpp` — **no `tesobjectcell.cpp` anchors** (see below) | — |
+| 28 | `FUN_140d44f00` | flag/ref-count helper | `FUN_14087f240` (flag bit `+0x33C`), `FUN_1408be010` (form lookup), refcount asserts | — |
+| 30 | `FUN_140d45150` | form-registration helper | `FUN_14087ec50`, `FUN_14087d2d0`, `FUN_140d55ca0` (TESDataHandler register path) | — |
+| 31 | `FUN_140d45400` | handle→form resolver | type check vs `DAT_143b9a580`, switch on `param_2[3]` (TESFile handle decode) | — |
+| 32 | `FUN_140d451d0` | ref-iteration predicate | `FUN_140d169e0`/`FUN_140d16a70` (ref list walk), `FUN_140d268d0` (GetWorldspace) | — |
+| 33 | `FUN_140d14040` | alloc/copy helper | array allocs, cell-data realloc | `tesobjectcell.cpp:0x133a` |
+| 35 | `FUN_140d153d0` | cell-validation/dangling-check | `"Bad cell value. Attempting to create new cell."`, `"Cell at (%i, %i) in world %s (%08X) may be a dangling cell."`, `"Unable to delete invalid coord cell ..."`, cell-name-length check | `tesobjectcell.cpp:0x5f9, 0x1350` |
+| 38 | `FUN_140d17dc0` | cell-label formatter | `"'%s' (%08X)"`, `"Persistent cell '%s' (%08X) (%i, %i) in WorldSpace '%s' (%08X)"` (editor cell label) | — |
 
 CELL `LoadRecord` dispatches: `CNAM`, `DATA`, `EDID`, `FULL`, `LNAM`,
 `LTMP`, `MHDT`, `OBLT`, `OBML`, `OBND`, `OBTE`, `PBTE`, `PCMB`, `PTRN`,
@@ -510,17 +510,17 @@ CELL `SaveRecord` writes: `VISI`, `RVIS`, `PCMB`, `DATA`, `XCLC`, `CNAM`,
 
 ### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
 
-| slot | function | name | evidence |
-|---|---|---|---|
-| 22 | `FUN_140e4a070` | ref-count/ownership helper | `FUN_1408bef30` |
-| 23 | `FUN_140e4a1f0` | `ClearItem`-family | `FUN_140e4db70`, `FUN_140d3c040`/`d3bc30` |
-| **24** | `FUN_140e4a750` | **`LoadRecord`** | 26× `FUN_14087e870` (reads); `"Found invalid cell level data in file."`, `"Loading cell level data over top of existing data"` |
-| 25 | `FUN_140e4b040` | flag getter | returns byte (flag accessor) |
-| 27 | `FUN_140e54420` | **`SaveRecord`** | 23× `FUN_1408c7710` (subrecord writer) |
-| 31 | `FUN_140e54b20` | handle→form resolver | type check + `FUN_1408bcfc0`/`FUN_1408bdd20` (mirror of CELL slot 31) |
-| 32 | `FUN_140e549d0` | form-comparison predicate | `FUN_1408bcfa0`, `FUN_140d268d0` |
-| 33 | `FUN_140e4a320` | cell-map iterator/insert | `FUN_140e4d180` (worldspace cell-map insert — §8.3), `FUN_140e53eb0`, `FUN_140d196a0` |
-| 35 | `FUN_140e4b080` | cell-grid child iteration | 9× `FUN_1408be010` (form lookup) + `FUN_1408c68d0`/`FUN_1408bdd20` — walks the cell array |
+| slot | function | name | evidence | `__FILE__` anchors |
+|---|---|---|---|---|
+| 22 | `FUN_140e4a070` | ref-count/ownership helper | `FUN_1408bef30` | — |
+| 23 | `FUN_140e4a1f0` | `ClearItem`-family | `FUN_140e4db70`, `FUN_140d3c040`/`d3bc30` | — |
+| **24** | `FUN_140e4a750` | **`LoadRecord`** | 26× `FUN_14087e870` (reads); `"Found invalid cell level data in file."`, `"Loading cell level data over top of existing data"`, `"Cell level data in file '%s' for worldspace '%s' (%08X) does not match dimensions in file..."` | `tesworldspace.cpp:0x360, 0x378, 0x4b2, 0x4ba, 0x4ca` |
+| 25 | `FUN_140e4b040` | flag getter | returns byte (flag accessor) | `tesworldspace.cpp:0x316` |
+| 27 | `FUN_140e54420` | **`SaveRecord`** | 23× `FUN_1408c7710` (subrecord writer); asserts carry **`tesform.h:0x56e`** (header-inline save helpers) — **no `tesworldspace.cpp` anchors** (see below) | — |
+| 31 | `FUN_140e54b20` | handle→form resolver | type check + `FUN_1408bcfc0`/`FUN_1408bdd20` (mirror of CELL slot 31) | — |
+| 32 | `FUN_140e549d0` | form-comparison predicate | `FUN_1408bcfa0`, `FUN_140d268d0` | — |
+| 33 | `FUN_140e4a320` | cell-map iterator/insert | `FUN_140e4d180` (worldspace cell-map insert — §8.3), `FUN_140e53eb0`, `FUN_140d196a0` | `tesworldspace.cpp:0x62a` |
+| 35 | `FUN_140e4b080` | cell-grid child iteration | 9× `FUN_1408be010` (form lookup) + `FUN_1408c68d0`/`FUN_1408bdd20` — walks the cell array | `tesworldspace.cpp:0x50d` |
 
 WRLD `LoadRecord` dispatches: `ATDM`, `BTDM`, `CNAM`, `DATA`, `DNAM`, `EDID`,
 `FULL`, `ICON`, `LTMP`, `MHDT`, `MNAM`, `NAM2`, `NAM3`, `NAM4`, `NAMA`,
@@ -543,6 +543,42 @@ WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
 - Subrecord codes are inline immediates in the Load/Save bodies — the
   `strings` inventory in §11 is a superset (includes codes the CK never
   emits via these two functions).
+
+### 10d. Anchor asymmetry: Load anchors in the class, Save anchors in `tesform`
+
+Every override was checked against its `__FILE__` assert strings (the
+`thunk_FUN_141ffb470`/`141ffa0a0` assert machinery — file path + line
+hex). The result is asymmetric in a way that confirms the slot naming:
+
+- **`LoadRecord` anchors in the class file.** CELL `LoadRecord` carries
+  `tesobjectcell.cpp:0x4d7/0x4ee/0x555` (the `0x555` assert is the
+  `"Cell flag data is not a short or char"` DATA-flag check); WRLD
+  `LoadRecord` carries `tesworldspace.cpp:0x360/0x378/0x4b2/0x4ba/0x4ca`
+  (cell-level-data asserts). Read paths assert against their own
+  subrecord/flag layout, so the file string is the class's `.cpp`.
+- **`SaveRecord` has no class-file anchors.** CELL `SaveRecord`
+  (`FUN_140d44ba0`) contains *zero* assert calls and zero string
+  literals — it is a straight 13× call chain into the shared writer.
+  WRLD `SaveRecord` (`FUN_140e54420`) does assert, but the file string
+  is `tesform.h:0x56e` — the header-inline form-component save helpers
+  (`MANA`/`MNAM` subrecord saves), not `tesworldspace.cpp`. Write paths
+  delegate to `TESForm` machinery, so the assert anchors live in the
+  base layer.
+- **The save workhorses, decompiled (both in `tesform.cpp`):**
+
+  | function | anchor | role |
+  |---|---|---|
+  | `FUN_1408c7a70` | `tesform.cpp:0x9a4` | form-header writer — allocates the 0x18 header block, writes formID/version/flags, emits `EDID`, then calls the vtable save slots (`+0x1b0` subrecords, `+0x3b8` → `PTRN`-family `FUN_14036d7c0`, `+0x3c0` → `STCP`-family `FUN_1403706a0`) |
+  | `FUN_1408c7710` | (write primitive) | subrecord writer — appends 4CC + u16 size + data to `DAT_143d4a470` |
+  | `FUN_1408c7bf0` | `tesform.cpp:0x9e0` | subrecord close / size-patch — rewinds the buffer size (`DAT_143d4a470+4 = DAT_143d4a46c - 0x18`) unless form flag `+0x10` bit 0xe is set |
+  | `FUN_140d18490` | — | CELL exterior cell-data getter (`+0x60`), `0` if interior (`+0x50 & 1`) — called 5× inside CELL `SaveRecord` |
+
+  So CELL `SaveRecord` = `FUN_140d18490` (get cell data) + 13×
+  `FUN_1408c7710` + 3× `FUN_1408c7bf0` (close each subrecord), with the
+  form header handled by the `FUN_1408c7a70` family in the caller.
+- **Anchor `0x62`/`0x67` in the assert thunks is the severity/kind
+  constant, not a source line** — the first pass briefly misread those
+  as line anchors; the real line is the hex after the file string.
 
 ## 11. Known record strings (load/save surface)
 
@@ -578,6 +614,8 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - `ghidra-dump/FindVftable.java` (RTTI → vftable resolver),
   `FindStringXrefs.java`, `FindCallers.java` (also mirrored to `scripts/`)
 - `ghidra-dump/decompile-GRUP-reader-FUN_140676cd0.txt`
+- `ghidra-dump/decompile-CELL-overrides.txt` / `decompile-WorldSpace-overrides.txt` (all slot-23+ override bodies with `__FILE__` anchors)
+- `ghidra-dump/decompile-save-helpers.txt` (`FUN_1408c7a70` form-header writer, `FUN_1408c7bf0` subrecord close, `FUN_140d18490` cell-data getter)
 - `ghidra-dump/decompile-TESDataHandler-CreateForm-FUN_140865b10.txt`
 - `ghidra-dump/decompile-TESObjectCELL-LoadRecord-candidate.txt`
 - `ghidra-dump/cell-ctor-0xd13940.txt`, `cell-setters.txt`,
