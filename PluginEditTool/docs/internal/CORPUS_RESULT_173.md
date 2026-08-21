@@ -1,7 +1,21 @@
 # PR #173 corpus result artifact
 
 Auditable record of the inherited auto-property backing-variable fix (#173) against the
-vanilla differential. Regenerate per `docs/internal/PAPYRUS.md` corpus B instructions.
+vanilla differential.
+
+> **Read `regressed_count 0` precisely.** It means **no script flipped identical->differing among
+> the scripts whose identity changed** across the fix. It does NOT examine scripts that were
+> non-identical BOTH before and after, so it is not a proof that nothing worsened inside the
+> always-differing set. The load-bearing evidence is the aggregate moving strictly up
+> (7182 -> 7242, net +60), which establishes a **net fidelity improvement** only -- see
+> `docs/internal/PAPYRUS.md`.
+>
+> **Reproducibility is partial.** The standard differential test emits aggregate counts plus the
+> first 30 differences only; it does NOT emit the full matched/unmatched set, so this exact 60/0
+> `fixed`/`regressed` breakdown is not regenerable from the documented command alone. It was
+> produced by a one-off per-script set-diff between the base and head runs against the pinned corpus
+> B build (buildid `20686350`, hashes below). Reproducing the aggregate figures needs that same
+> pinned build; reproducing the per-script lists needs the set-diff step too.
 
 ```
 base_sha         bd39825 (#172, corpus B baseline)

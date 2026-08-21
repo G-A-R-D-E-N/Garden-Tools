@@ -5,6 +5,52 @@ stopped most of the time, and what to do when CI queues forever.
 
 For the still-unregistered Windows leg see [`WINDOWS_CI_RUNNER.md`](WINDOWS_CI_RUNNER.md).
 
+> **Security -- absolute rule: no self-hosted runner or runner group may be reachable by a
+> PUBLIC repo.** Anyone can fork a public repo and open a PR; a self-hosted job would then
+> build/test that untrusted fork code on this box -- which also hosts a production GitLab
+> and has passwordless sudo (GitHub's own docs: self-hosted runners "should almost never be
+> used for public repositories"). This is an infrastructure rule, enforced at registration,
+> not a workflow convention:
+>
+> 1. **Remove any repo-level self-hosted runner registered on a public repo**, and
+> 2. **Exclude every public repo from the org runner groups** that expose this fleet
+>    (`PRISMA-USER-INTERFACE-FRAMEWORK`, `G-A-R-D-E-N`, `Fallout-Anomaly`). An org runner
+>    is reachable by any repo the runner group allows; "public repos = no access" must be
+>    set on the group.
+>
+> The public mirror `G-A-R-D-E-N/FO4IDE` runs its CI on **GitHub-hosted** runners
+> (`ubuntu-latest` / `windows-latest`), free and unlimited on public repos. The guard
+> workflow `.github/workflows/no-self-hosted-guard.yml` on that repo is **defense-in-depth
+> only** -- it fails CI if a workflow reintroduces a `self-hosted` label, but it CANNOT stop
+> a self-hosted job from *executing first* if a runner is actually reachable, so it is not a
+> substitute for removing the registration / scoping the runner group.
+>
+> **Verification status (2026-08-16): CLOSED across all three orgs.** Audited via the API.
+> The `Default` runner group (id 1) of **every** org that shares this fleet was
+> `visibility=all`, so each org's self-hosted runner was reachable by that org's PUBLIC
+> repos -- the real hole, below the workflow-level fix:
+> - `G-A-R-D-E-N`: public `BGS`, `FO4IDE`, `.github`
+> - `PRISMA-USER-INTERFACE-FRAMEWORK`: public `PrismaVRFork`, `Prisma2.0`, `PRISMADESIGNER`
+> - `Fallout-Anomaly`: public `roadmap`, `changelog`, `fallenworld-website`
+>
+> Remediated: **all three** `Default` groups are now `visibility=selected`, scoped to that
+> org's PRIVATE repos only; no public repo is selected in any of them (re-verified: 0 public
+> repos in any group). No repo-level self-hosted runner is registered on any public repo
+> (checked `FO4IDE`, `BGS`, `.github` -- all empty). The stale hyphenated
+> `G-A-R-D-E-N/FO4-IDE` runner has since been removed from the host (no unit/dir/systemd record)
+> and its two mappings dropped from `ghrunnerd.py`. Commands used
+> (per org, group id 1; keep-list = that org's private repo ids):
+>
+> ```bash
+> gh api -X PATCH orgs/G-A-R-D-E-N/actions/runner-groups/1 -f visibility=selected
+> echo '{"selected_repository_ids":[<8 private repo ids>]}' | \
+>   gh api -X PUT orgs/G-A-R-D-E-N/actions/runner-groups/1/repositories --input -
+> ```
+>
+> Re-audit if a new public repo is added to the org: it will NOT auto-join the group now
+> (that is the point), but confirm no one flips the group back to `all`. See the memory note
+> `project-public-repo-github-hosted-only`.
+
 ## Where the runners live
 
 Everything runs on one Debian VPS, reachable as the `gitlab` alias in `~/.ssh/config`
@@ -12,9 +58,11 @@ Everything runs on one Debian VPS, reachable as the `gitlab` alias in `~/.ssh/co
 That box also serves a public GitLab, so it is not a disposable CI box -- treat changes
 there with care.
 
-Six runners under `/opt/actions-runner-*`, each a systemd unit named
+Five active runners under `/opt/actions-runner-*`, each a systemd unit named
 `actions.runner.<ORG>[-<REPO>].<runner-name>.service` running as user `github-actions`.
-Two of them serve this repo:
+Two of them serve this repo. (A sixth unit, `G-A-R-D-E-N-FO4-IDE.debian-wine-msvc-fo4-ide-2`,
+was removed 2026-08-16: it was bound to `G-A-R-D-E-N/FO4-IDE`, which does not exist -- the repo
+was renamed to the PUBLIC `FO4IDE`, orphaning it. Its mappings are gone from `ghrunnerd.py`.)
 
 | Unit (suffix after `actions.runner.`) | Scope | GitHub target |
 | --- | --- | --- |
@@ -23,7 +71,6 @@ Two of them serve this repo:
 | `Fallout-Anomaly.debian-wine-msvc` | org | `Fallout-Anomaly` |
 | `G-A-R-D-E-N.debian-wine-msvc` | org | `G-A-R-D-E-N` |
 | `G-A-R-D-E-N-CO-BETA.debian-wine-msvc-2` | repo | `G-A-R-D-E-N/CO-BETA` |
-| `G-A-R-D-E-N-FO4-IDE.debian-wine-msvc-fo4-ide-2` | repo | `G-A-R-D-E-N/FO4-IDE` |
 
 The runner labels are `self-hosted, Linux, X64, wine, msvc`. `portable-core-and-web`
 asks for `[self-hosted, Linux, X64]` and `windows-compile` for the full label set, so
