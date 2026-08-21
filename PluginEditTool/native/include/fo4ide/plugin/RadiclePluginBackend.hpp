@@ -34,7 +34,12 @@ private:
     Result<nlohmann::json> getEditablePlugins() const;
     Result<nlohmann::json> getRecordTypeIndex() const;
     Result<nlohmann::json> getLoadOrderSummary() const;
+    Result<nlohmann::json> getConflicts() const;
     Result<nlohmann::json> getConflictMatrix(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getReferencedBy(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> searchRecords(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> scanConflicts() const;
+    Result<nlohmann::json> scanBrokenRefs() const;
     Result<nlohmann::json> listMasters(const nlohmann::json& arguments) const;
 
     LoadedPlugin* findPlugin(std::string_view name);
