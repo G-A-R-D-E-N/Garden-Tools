@@ -4,12 +4,23 @@
 
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
+
+std::vector<std::byte> bytes_from_string(std::string_view text) {
+  std::vector<std::byte> bytes;
+  bytes.reserve(text.size());
+  for (const char ch : text) {
+    bytes.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  }
+  return bytes;
+}
 
 std::vector<std::byte> make_ctda(std::uint16_t function, std::uint32_t param1) {
   fo4::test::ByteWriter ctda;
@@ -91,19 +102,6 @@ TEST(FormLink, CtdaCisStringsRemainOpaqueAcrossMasterRemap) {
   std::memcpy(&remapped, ctda->data.data() + 12, 4);
   EXPECT_EQ(remapped, 0x01000812u);
 
-  const std::vector<std::byte> expectedCis1 = [] {
-    const std::string_view text{"KeepMe.esm|SomeString\0", 22};
-    return std::vector<std::byte>(
-        reinterpret_cast<const std::byte*>(text.data()),
-        reinterpret_cast<const std::byte*>(text.data() + text.size()));
-  }();
-  const std::vector<std::byte> expectedCis2 = [] {
-    const std::string_view text{"02000812 is text\0", 17};
-    return std::vector<std::byte>(
-        reinterpret_cast<const std::byte*>(text.data()),
-        reinterpret_cast<const std::byte*>(text.data() + text.size()));
-  }();
-
-  EXPECT_EQ(cis1->data, expectedCis1);
-  EXPECT_EQ(cis2->data, expectedCis2);
+  EXPECT_EQ(cis1->data, bytes_from_string(std::string_view{"KeepMe.esm|SomeString\0", 22}));
+  EXPECT_EQ(cis2->data, bytes_from_string(std::string_view{"02000812 is text\0", 17}));
 }
