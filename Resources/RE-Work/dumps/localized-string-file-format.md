@@ -128,8 +128,14 @@ From the reference samples (en):
 | `.ILSTRINGS` | 74,953 | 75,462 .. 223,315 | u32-length-prefixed |
 
 IDs are globally unique across the game's three tables (a string ID lives in
-exactly one file). IDs below `0x10` are reserved and skipped by the compiler
-(`Attempting to use reserved ID 0x%08X. Skipping.`). The `.DLSTRINGS` set
+exactly one file) **with one known shipped exception**: every shipped language
+set carries the two Enclave Creation-Club paint descriptions (IDs `0x36CB7`
+and `0x36CB9`) in *both* `.STRINGS` (English text) and `.DLSTRINGS` (localized
+text). The engine tolerates the collision; treat the uniqueness rule as a
+writer invariant with those two exceptions. IDs below `0x10` are reserved and
+skipped by the compiler (`Attempting to use reserved ID 0x%08X. Skipping.`) —
+this is an input-side rule; compiled files legitimately contain low IDs
+(`.STRINGS` starts at 1, `.DLSTRINGS` at 3). The `.DLSTRINGS` set
 (dialogue/voice lines) and `.ILSTRINGS` set (misc localizable UI) are disjoint
 ranges; `.STRINGS` carries the ordinary text. The compiler routes categories
 `Quest Stage Log Entry`, `Book`, `Description`, `Message` (indices 1,6,7,10 of
@@ -138,17 +144,14 @@ ordinary table.
 
 ## 5. Loader / consumer notes
 
-- `.DLSTRINGS` block loader `FUN_140915000` (RVA 0x915000) resolves the
+- `.DLSTRINGS` block loader `FUN_140915000` (RVA `0x915000`) resolves the
   language-specific file, reads `numStrings` into `+0x790`/`+0x798`, then reads
   `8*numStrings` bytes for the table and per-row `(stringID, offset)` lookup;
-  the `bKeepDLStringBlocksLoaded:General` value (`0x143b9c040`) is tested at
-  `0x1409155b5`/`0x140915b0a`/`0x14091652a`, and the IL counterpart
-  `bKeepILStringBlocksLoaded:General` (`0x143b9c058`) at
-  `0x140915d8b`/`0x1409161c0`/`0x1409165cd`.
+  the `bKeepDLStringBlocksLoaded:General`/`bKeepILStringBlocksLoaded:General`
+  values are tested at `0x1409155b5`/`0x140915d8b` (+3 sites each).
 - Compiler guard: `Text Compile: string file too large skipping: %s`
-  (`0x1430164b8` region) bounds oversized tables.
-- The engine source of the machinery is `shared\misc\bgslocalizedstring.cpp`
-  (embedded `__FILE__` path in the binary).
+  bounds oversized tables.
+- The engine source of the machinery is `shared\misc\bgslocalizedstring.cpp`.
 
 ## 6. Verification
 
@@ -159,18 +162,10 @@ languages × 3 kinds):
 - table rows ascending by ID, offsets in-bounds, every offset valid
   (`.STRINGS`: NUL present; DL/IL: offset on a length-prefix boundary) — 33/33;
 - DL/IL data blocks walk to EOF as `sum(4+len)` — 22/22;
-- all texts decode (UTF-8 or legacy ANSI; CJK/Russian files verified).
+- all texts decode (UTF-8 or legacy ANSI; CJK/Russian files verified);
+- stringID partition across the three tables — 33/33 modulo the two known
+  Enclave-paint exceptions (§4) present in every language set.
 
-Parsing pseudocode:
-
-```python
-import struct
-count, size = struct.unpack_from('<II', f, 0)
-table = [(struct.unpack_from('<II', f, 8+i*8)) for i in range(count)]   # (id, off)
-data  = f[8 + 8*count:]
-def strings_text(id_off):            # .STRINGS
-    off = dict((i, o) for i, o in id_off)
-    return [data[o:data.index(b'\0', o)] for o in sorted(off.values())]
-def dlistrings_text(id_off):         # .DLSTRINGS / .ILSTRINGS
-    return [data[o+4:o+4+struct.unpack_from('<I', data, o)[0]] for _, o in id_off]
-```
+The `--strings` mode of `tools/validate_ckini.py` re-checks all of the above
+per file plus the per-language cross-file partition, surfacing the Enclave
+exceptions as a documented warning rather than a failure.
