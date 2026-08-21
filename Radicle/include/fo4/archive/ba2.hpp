@@ -26,6 +26,7 @@ struct Ba2GeneralEntry {
   std::uint32_t name_hash{0};
   std::uint32_t extension_hash{0};
   std::uint32_t directory_hash{0};
+  std::uint8_t unknown{0};
   std::string path;
   std::vector<Ba2GeneralChunk> chunks;
 };
