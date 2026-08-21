@@ -26,6 +26,7 @@ add_executable(
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
     unit/RadiclePluginBatchMutationTests.cpp
+    unit/RadiclePluginAddMastersTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
