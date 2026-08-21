@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fo4/archive/ba2.hpp"
 #include "fo4/binary/cursor.hpp"
 #include "fo4/error.hpp"
 #include "fo4/flags.hpp"
