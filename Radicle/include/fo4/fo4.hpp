@@ -5,6 +5,7 @@
 #include "fo4/error.hpp"
 #include "fo4/flags.hpp"
 #include "fo4/formid.hpp"
+#include "fo4/forms/eyes.hpp"
 #include "fo4/forms/leveled_spell.hpp"
 #include "fo4/graph/conflict_graph.hpp"
 #include "fo4/headers.hpp"
