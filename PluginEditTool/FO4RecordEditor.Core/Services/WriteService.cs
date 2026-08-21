@@ -170,11 +170,24 @@ public static partial class WriteService
 
     private static string CreatePluginCore(string fileName, string? explicitPath)
     {
+        var notCreatable = EnsureCreatable(fileName);
+        if (notCreatable != null) return notCreatable;
+
         var mod = new Fallout4Mod(ModKey.FromNameAndExtension(fileName), Fallout4Release.Fallout4);
         Register(fileName, mod);
         if (explicitPath != null) _sourcePath[fileName] = explicitPath;
         NotifyChanged(fileName);
         return $"Created new plugin '{fileName}'. Add records with create_record, then call save_plugin to write it.";
+    }
+
+    private static string? EnsureCreatable(string fileName)
+    {
+        if (ProtectedPlugins.IsProtected(fileName))
+            return ToolError.Fail(ProtectedPlugins.RefusalMessage(fileName));
+        if (_mutable.ContainsKey(fileName))
+            return ToolError.Fail(
+                $"'{fileName}' is already open for editing. Use it directly, or reload_plugin before creating a new plugin with the same name.");
+        return null;
     }
 
 
