@@ -147,3 +147,20 @@ report still prints to stdout:
 
 Run it twice and diff the outputs to catch any change in how records are
 routed or attributed across runs/builds.
+
+Golden file (CI drift check)
+----------------------------
+
+composition.golden.json is the committed output of that command for THIS
+fixture set (expected: verdict FAIL, anomaly_count 1 -- the intentional
+0x126C6 MISMATCH). GitHub Actions (.github/workflows/validate-ckini-golden.yml)
+regenerates the composition from the committed fixture and fails the build if
+it drifts. After any intended change to the validator, the fixture inputs, or
+make_compiled.py output, regenerate the golden file from the repo root and
+commit it together with the change:
+
+    python3 Resources/RE-Work/tools/validate_ckini.py \
+        --compile-text Resources/RE-Work/tools/samples/compile-text/cross-check/input \
+        --strings Resources/RE-Work/tools/samples/compile-text/cross-check/STRINGS \
+        --composition-out \
+        Resources/RE-Work/tools/samples/compile-text/cross-check/composition.golden.json
