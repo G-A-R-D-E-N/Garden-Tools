@@ -173,24 +173,93 @@ The reference is split across four source files (`tesobjectrefr.cpp`,
 the dedicated `TESObjectREFRSerializer` rather than the generic
 `ConcreteFormFactory` Create path.
 
-## 8. Cell-object layout hints (from decompiled overrides)
+## 8. TESObjectCELL member layout (constructor + setters)
 
-`FUN_140d13f00` (`tesobjectcell.cpp` assert 0x49f — cell teardown/clear) reads:
+Recovered from the constructor `FUN_140d13940` (`tesobjectcell.cpp`) plus the
+NewCell helper chain. `param_1` is an 8-byte slot pointer, so `param_1[N]`
+reads as `+8N`; byte/word fields are named at their absolute offset.
 
-| offset | meaning |
-|---|---|
-| +0x10 | form flags (`>>14 & 1` = has-multibound?; `>>3 & 1`; `>>1 & 1` = …) |
-| +0x50 | byte flag (`& 1` = persistent-data loaded?); the `*cell` flags field |
-| +0x58 | per-cell resource handle |
-| +0x60 | cell ref-array pointer (released via `FUN_140f8d1f0`) |
-| +0x150 | multibound / linked collection (cleared via `thunk_FUN_1408c0210`) |
-| +0x16C | int reset to 0 |
+### 8.1 Constructor (`FUN_140d13940`)
+
+| offset | size | init | meaning |
+|---|---:|---:|---|
+| +0x00 | 8 | `TESObjectCELL::vftable` | primary vftable (`0x309c780`) |
+| +0x28 | 8 | `TESObjectCELL::vftable` | **second vftable** (`0x309cc30`, secondary base) |
+| +0x30 | 16 | ctor `thunk_FUN_140914c20` | sub-object (`TESFullName` slot written first at +0x28, then overwritten) |
+| +0x40 | 4 | 0 | |
+| +0x44 | 4 | 0 | |
+| +0x48 | 4 | 0 | |
+| +0x4C | 4 | 0 | |
+| +0x50 | 2 | 0 | **cell flags** (bit0 interior, bit1 exterior) |
+| +0x54 | 1 | 0 | |
+| +0x58 | 8 | 0x20-byte alloc | cell-data **handle** (refcounted: `*ptr + 1` under lock) |
+| +0x60 | 8 | 0 → alloc in `FUN_140d18510` | **cell-data pointer** (block type per +0x50 bit0) |
+| +0x80 | — | ctor `thunk_FUN_141ffc960` | ref array container |
+| +0x90 | — | ctor `thunk_FUN_141ffc4f0` | secondary container |
+| +0x98 | 8 | 0 | |
+| +0xB8 | 8 | `&DAT_143bd5c24` | static marker |
+| +0xC0 | 4 | 0 | |
+| +0xD0 | 8 | 0 | |
+| +0xF0 | 8 | `&DAT_143b99df8` | static marker |
+| +0x108 | 8 | 0 | |
+| +0x128 | 8 | `&DAT_143bd5c38` | static marker |
+| +0x130 | 4 | 0 | |
+| +0x140 | 8 | 0 | |
+| +0x148 | 8 | 0 | |
+| +0x150 | 8 | 0 | multibound / linked collection (cleared in teardown) |
+| +0x158 | 8 | 0 | |
+| +0x160 | 8 | 0 | |
+| +0x168 | 4 | 0xFFFFFFFF (-1) | |
+| +0x16C | 4 | 0 | |
+| +0x26 | 1 | **0x3F = 63** | **form-type byte = CELL** (matches `formEnumString` index) |
+| +0x10 | 4 | (from TESForm base) | form flags (`>>14&1`, `>>3&1`, `>>1&1` read in teardown) |
+
+Notable: the form-type byte at **+0x26** is set to 0x3F (63 = CELL) right in
+this constructor — the same value `TESDataHandler::CreateForm` passes to the
+factory getter, closing the loop between the enum table and the object.
+
+### 8.2 The NewCell helper chain
+
+`FUN_14085ae30` calls, in order:
+
+1. **ctor** `thunk_FUN_140d13940` (above).
+2. **`FUN_140d1d2e0(cell, 0)`** — interior-flag setter: writes `cell+0x50`
+   word bit0 = (param != 0). NewCell passes 0, so a fresh cell is **exterior**.
+3. **`*(ushort*)(cell+0x50) |= 2`** — sets exterior bit1 directly.
+4. **`FUN_140d18510(cell)`** — cell-data allocator:
+   - if `+0x50 & 1` (interior): allocates a **0x20-byte** block, zeroed.
+   - else (exterior): allocates a **0x88-byte** block via
+     `thunk_FUN_140911970` with float scale/identity seeds at +0x1C, +0x24,
+     +0x4C, +0x70, +0x74, +0x78, +0x7C (all `0x3f800000` = 1.0f) and
+     `*(u64*)(+0x58) = 0x79F`.
+   - stores the new block at **cell+0x60**, after releasing any previous one.
+5. **`FUN_140d197c0(cell, x, y)`** — coordinate setter: only when exterior
+   (`+0x50 & 1 == 0`), writes `*(int*)(cell+0x60) = x`, `*(int*)(+0x64) = y`
+   (cell-data block offsets 0/4). Interior cells carry coords in their record
+   instead.
+6. **`FUN_140e4d180(worldspace, cell)`** — worldspace cell-map insert (see §8.3).
+
+`FUN_1408bfb80` (called with the cell + an editor-ID string) is the generic
+`TESForm` EDID setter (`tesform.cpp` assert 0x1078) with DUPLICATE%03i
+collision handling — not cell-specific.
+
+### 8.3 Worldspace cell-map insert (`FUN_140e4d180`, `tesworldspace.cpp`)
+
+- Guard: `cell != 0 && (cell+0x50 & 1) == 0` (exterior only).
+- Looks up the cell in the worldspace's cell map at **worldspace+0x70** via
+  `thunk_FUN_140e539e0` (coord key).
+- Not present: reads the cell's world position (`thunk_FUN_140d19770`), grows
+  the worldspace bounds **+0x140…+0x14C** (minX, minY, maxX, maxY floats), and
+  adds the cell. Duplicate → log `"Cell (%08X) %s already exists at coord
+  (%i, %i)."`.
+- If the cell is interior and worldspace+0xA0 is empty: stores it there
+  (single interior-cell slot).
 
 `FUN_140d44f00` (ref-registration / InitItem path) walks the cell's ref array
-at `+0x10` (`count at param_1[0x12]` → 0x48) and IncRef/DecRefs each via
-`BSHandleRefObject` (`bshandlerefobject.inl`), then registers with the data
-handler (`thunk_FUN_14087d2d0`), and calls `thunk_FUN_140d55ca0` (probably
-cell → worldspace association). Cell coord setter is `thunk_FUN_140d197c0`.
+(`count at cell+0x48`) and IncRef/DecRefs each ref via `BSHandleRefObject`
+(`bshandlerefobject.inl`), then registers with the data handler
+(`thunk_FUN_14087d2d0`), and calls `thunk_FUN_140d55ca0` (probably cell →
+worldspace association).
 
 ## 9. Known record strings (load/save surface)
 
@@ -217,7 +286,8 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 
 - Exact `LoadRecord`/`SaveRecord` slot indices per class (the virtuals at
   slots 23+ need per-slot naming via decompile + source-string anchors).
-- Full `TESObjectCELL` member layout (only the offsets above are pinned).
+- The 0x20/0x88-byte cell-data block internals (what lives in the 0x88
+  exterior block beyond the coords + 1.0f seeds; the `0x79F` at +0x58).
 - `TESObjectREFRSerializer`'s record path vs the generic factory path.
 - The `exteriorcellloader.cpp` streaming contract (cell-grid construction:
   `"Constructed %u cell grids in %.2f ms"`, `"Improperly sized cell node
@@ -233,3 +303,5 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - `ghidra-dump/decompile-GRUP-reader-FUN_140676cd0.txt`
 - `ghidra-dump/decompile-TESDataHandler-CreateForm-FUN_140865b10.txt`
 - `ghidra-dump/decompile-TESObjectCELL-LoadRecord-candidate.txt`
+- `ghidra-dump/cell-ctor-0xd13940.txt`, `cell-setters.txt`,
+  `worldspace-cellmap-insert-0xe4d180.txt` (raw decompiles; local only)
