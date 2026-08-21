@@ -112,35 +112,23 @@ std::string decode_scalar(std::span<const std::byte> data,
         std::string(descriptor.field_name) + " has unexpected binary width");
   }
 
+  // Read existing bytes losslessly. Descriptor min/max constrain new authored
+  // values only; unusual existing values must remain inspectable/preservable.
   switch (descriptor.storage) {
-    case ScalarStorage::u8: {
-      const auto value = std::to_integer<std::uint8_t>(data[0]);
-      validate_range(value, descriptor);
-      return std::to_string(value);
-    }
-    case ScalarStorage::u16: {
-      const auto value = read_u16(data);
-      validate_range(value, descriptor);
-      return std::to_string(value);
-    }
-    case ScalarStorage::u32: {
-      const auto value = read_u32(data);
-      validate_range(static_cast<double>(value), descriptor);
-      return std::to_string(value);
-    }
-    case ScalarStorage::i32: {
-      const auto raw = read_u32(data);
-      const auto value = static_cast<std::int32_t>(raw);
-      validate_range(static_cast<double>(value), descriptor);
-      return std::to_string(value);
-    }
+    case ScalarStorage::u8:
+      return std::to_string(std::to_integer<std::uint8_t>(data[0]));
+    case ScalarStorage::u16:
+      return std::to_string(read_u16(data));
+    case ScalarStorage::u32:
+      return std::to_string(read_u32(data));
+    case ScalarStorage::i32:
+      return std::to_string(static_cast<std::int32_t>(read_u32(data)));
     case ScalarStorage::f32: {
       const auto bits = read_u32(data);
       float value = 0.0F;
       static_assert(sizeof(value) == sizeof(bits));
       std::memcpy(&value, &bits, sizeof(value));
       if (!std::isfinite(value)) throw ScalarError("stored scalar float is not finite");
-      validate_range(value, descriptor);
       return format_float(value);
     }
   }
