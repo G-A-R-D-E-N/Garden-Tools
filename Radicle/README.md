@@ -58,6 +58,7 @@ See `docs/FORMID_MODEL.md`.
 
 ## Docs
 
+- `ROADMAP.md`
 - `docs/ARCHITECTURE.md`
 - `docs/RE_INVENTORY.md`
 - `docs/FORMAT_NOTES.md`
