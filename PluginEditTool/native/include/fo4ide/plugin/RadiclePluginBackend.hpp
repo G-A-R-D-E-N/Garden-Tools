@@ -17,6 +17,8 @@ public:
     Capabilities capabilities() const noexcept override;
     Result<nlohmann::json> invoke(std::string_view operation,
                                   const nlohmann::json& arguments) override;
+    Result<nlohmann::json> invokeBackend(std::string_view method,
+                                         const nlohmann::json& arguments) override;
 
 private:
     struct LoadedPlugin {
@@ -32,6 +34,7 @@ private:
     Result<nlohmann::json> openRecord(const nlohmann::json& arguments) const;
     Result<nlohmann::json> openPlugin(const nlohmann::json& arguments);
     Result<nlohmann::json> savePlugin(const nlohmann::json& arguments);
+    Result<nlohmann::json> setField(const nlohmann::json& arguments);
     Result<nlohmann::json> getEditablePlugins() const;
     Result<nlohmann::json> getActivePlugins() const;
     Result<nlohmann::json> getRecordTypeIndex() const;
