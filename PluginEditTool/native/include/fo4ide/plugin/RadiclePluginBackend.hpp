@@ -33,6 +33,11 @@ private:
         std::filesystem::path path;
         std::string source;
         std::filesystem::file_time_type loadedTime{};
+        // True only for plugins that arrived through the trusted
+        // environment.LoadMo2 snapshot. Plugins loaded ad hoc via
+        // backend.OpenPlugin are never trusted: their directories do not
+        // become Save-As roots.
+        bool trusted{false};
         fo4::Plugin plugin;
     };
 

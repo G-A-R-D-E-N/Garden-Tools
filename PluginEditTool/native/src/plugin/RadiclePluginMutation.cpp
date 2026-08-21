@@ -120,17 +120,20 @@ bool isEyesField(std::string_view field) {
 
 bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
     if (asciiLower(loaded.source) == "data") return false;
-    // Path-based protection: even with a missing/lying source tag, a plugin
-    // that physically lives inside the game's Data directory is read-only.
+    // Path-based protection, failing closed: if the Data directory is
+    // configured but either path cannot be canonicalized, the plugin is
+    // treated as protected rather than skipping the check.
     if (!dataDirectory_.empty()) {
-        std::error_code ec;
-        const auto dataDir = std::filesystem::weakly_canonical(dataDirectory_, ec);
-        const auto pluginPath = std::filesystem::weakly_canonical(loaded.path, ec);
-        if (!dataDir.empty() && !pluginPath.empty()) {
-            const auto [dataEnd, nothing] = std::mismatch(
-                dataDir.begin(), dataDir.end(), pluginPath.begin(), pluginPath.end());
-            if (dataEnd == dataDir.end()) return false;
+        std::error_code dataEc;
+        std::error_code pluginEc;
+        const auto dataDir = std::filesystem::weakly_canonical(dataDirectory_, dataEc);
+        const auto pluginPath = std::filesystem::weakly_canonical(loaded.path, pluginEc);
+        if (dataEc || pluginEc || dataDir.empty() || pluginPath.empty()) {
+            return false;
         }
+        const auto [dataEnd, nothing] = std::mismatch(
+            dataDir.begin(), dataDir.end(), pluginPath.begin(), pluginPath.end());
+        if (dataEnd == dataDir.end()) return false;
     }
     return !officialPluginName(loaded.name);
 }

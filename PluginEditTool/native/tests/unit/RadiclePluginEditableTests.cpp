@@ -183,3 +183,47 @@ TEST_CASE("Native editable check keeps plugins outside the Data directory writab
     REQUIRE(editable.size() == 1);
     CHECK(editable[0] == "Modded.esp");
 }
+
+TEST_CASE("OpenPlugin never grants Save-As authority over its directory") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    std::filesystem::create_directories(root / "trusted-mod");
+    std::filesystem::create_directories(root / "untrusted-dir");
+
+    // Trusted: arrives through the LoadMo2 environment snapshot.
+    const auto trustedPath = root / "trusted-mod" / "Patch.esp";
+    writeBytes(trustedPath, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", trustedPath, "Trusted Mod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    // Untrusted: opened ad hoc from an arbitrary directory.
+    const auto openedPath = root / "untrusted-dir" / "Opened.esp";
+    writeBytes(openedPath, makePlugin());
+    REQUIRE(backend.invoke(
+        "backend.OpenPlugin", nlohmann::json::array({openedPath.string()})).has_value());
+
+    // Save-As into the trusted plugin's directory works.
+    const auto allowed = backend.invokeBackend(
+        "SavePlugin",
+        nlohmann::json::array({"Patch.esp", (root / "trusted-mod" / "Copy.esp").string()}));
+    REQUIRE(allowed.has_value());
+
+    // Save-As into the OpenPlugin'd file's directory is refused: opening a
+    // random file must not bootstrap an arbitrary write root.
+    const auto denied = backend.invokeBackend(
+        "SavePlugin",
+        nlohmann::json::array({"Opened.esp", (root / "untrusted-dir" / "Out.esp").string()}));
+    REQUIRE_FALSE(denied.has_value());
+    CHECK(denied.error().type == "SavePathNotAllowed");
+
+    // In-place saves of the opened plugin itself still work (same path).
+    const auto inPlace = backend.invokeBackend(
+        "SavePlugin", nlohmann::json::array({"Opened.esp", ""}));
+    CHECK(inPlace.has_value());
+}

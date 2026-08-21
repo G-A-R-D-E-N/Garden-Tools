@@ -162,6 +162,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_mutation.cpp
     tests/test_scalar_mutation.cpp
     tests/test_writer.cpp
+    tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
     tests/test_formlinks.cpp
     tests/test_formlink_ordinals.cpp
