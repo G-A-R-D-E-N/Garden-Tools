@@ -44,10 +44,6 @@ UNITS = {
         P + "G-A-R-D-E-N.debian-wine-msvc.service",
     "repo:G-A-R-D-E-N/CO-BETA":
         P + "G-A-R-D-E-N-CO-BETA.debian-wine-msvc-2.service",
-    "repo:G-A-R-D-E-N/FO4IDE":
-        P + "G-A-R-D-E-N-FO4-IDE.debian-wine-msvc-fo4-ide-2.service",
-    "repo:G-A-R-D-E-N/FO4-IDE":
-        P + "G-A-R-D-E-N-FO4-IDE.debian-wine-msvc-fo4-ide-2.service",
 }
 ALL_UNITS = sorted(set(UNITS.values()))
 

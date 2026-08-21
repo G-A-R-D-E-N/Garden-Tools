@@ -69,18 +69,37 @@ historical extraction; B is depot build `20686350` (Misc.ba2 sha256 `a70c5820…
 sha256 `80712380…`) staged Base+DLC. Do not read the A→B delta as progress. The valid #151
 comparison is the commit ladder against the ONE fixed corpus B (identical/compiled of 7,543):
 `c7ce8d1`=7175, `078efa1`=7165 (the #168 regression), `bd39825` (#172)=7182, `c124d8c` (#173,
-inherited auto-property backing var)=7242 (96.01%), zero regressions. Per-script before/after
-set-diff for #173 is committed as `CORPUS_RESULT_173.md`.
+inherited auto-property backing var)=7242 (96.01%). The per-script before/after set-diff for #173
+is committed as `CORPUS_RESULT_173.md`. Read "no regressions" precisely: the set-diff shows **no
+script flipped identical->differing** across the change, but it only inspects scripts whose identity
+changed -- scripts that were non-identical BOTH before and after are not examined, so this is not a
+proof that nothing regressed within that always-differing set. The aggregate counts (7182 -> 7242,
+strictly up) establish a **net fidelity improvement** -- they do NOT establish the absence of
+individual regressions, since a batch of improvements could numerically mask a smaller number of
+identical->differing regressions. Neither measurement proves nothing worsened inside the
+always-differing population; the "zero regressions" phrasing used earlier overstated it.
 
-The residual GotoState/state-name casing class (~106 diffs) is a **measurement ceiling, not a
-fixable gap**: running the real CK toolchain (PapyrusCompiler 2.8.0.4 / PapyrusAssembler 2.7.0.2)
-on the vanilla sources does NOT reproduce the shipped `.pex` for those cases -- e.g.
-`WorkshopSwitchIntervalScript` (`state Off`) compiles to `"Off"` under the current CK but ships as
-`"off"`, while `Counting`/`Done` match. So the shipped scripts were built by an OLDER toolchain
-whose casing differs; the current CK (and our compiler, emitting source casing) cannot match them.
-The clean fidelity oracle is a corpus C compiled from the current on-disk CK, not the mixed-vintage
-shipped `.pex`. Evidence: `off`/`on` lowercasing is absent from both current CK tools; not a
-string-table mechanism we can implement.
+The residual GotoState/state-name casing class (~106 diffs) is a **real string-table mechanism,
+partially reverse-engineered (#176)** -- NOT the "old-toolchain measurement ceiling" this section
+used to claim (that framing was over-concluded from one example and is retracted). Ghidra on
+`PapyrusAssembler.exe` (all 9,339 functions) showed the string table is a **case-insensitive INTERN
+table**: the only `tolower`/`towlower` uses are inside CRC-hash routines that compute a
+case-insensitive hash for dedup, so `"Off"`/`"off"` collide to one slot and the **first-inserted
+spelling wins**; stored bytes are never transformed. The casing itself originates in PCompiler,
+which lowercases the `.state` DECLARATION directive (`State Off` -> `.state off`) but keeps SOURCE
+casing for the GotoState ARG; whichever is interned first wins. What is **directly established** is
+the CURRENT assembler's interning mechanism (Ghidra) and that the shipped older output differs from
+what the current toolchain produces. The **older** toolchain's exact mechanism and insertion order
+have NOT been reverse-engineered to the same standard -- we observe different results, we have not
+proven the same interning path produced them. Do not write "both toolchain versions do this."
+
+The corollary corrects the old "corpus C is the clean oracle" claim: we match the SHIPPED game 96%
+(corpus B) but a corpus C compiled from the CURRENT on-disk CK only **47.6%** (1,301 scripts), so
+corpus C is a **different target** (a different toolchain vintage), NOT a cleaner oracle -- chasing
+it would steer us toward the current CK and AWAY from the shipped game. **Still open:** the exact
+string-insertion ORDER that decides which spelling is interned first (the hash routines are located;
+the insert-order caller is not). Full record: issue #176; the earlier "not a string-table mechanism"
+line was wrong.
 
 `FO4RecordEditor.Core.Tests` is 936 tests and runs on Linux. `FO4RecordEditor.Tests` targets
 `net9.0-windows` through its WPF reference and its host does not start here, so put anything testable
@@ -230,10 +249,11 @@ Kit folds constants" is not a fact anyone can check and "28,073 against 1" is.
   the variable the condition reads. Emitting it on both was worth 503 of 22,587 properties, and
   correcting it closed that bucket exactly.
 
-### An observation whose mechanism is unresolved: string table case
+### String-table case: mechanism partially resolved (#176)
 
-Recorded because the measurements are solid and the conclusion is not, and because without this note
-the same four experiments are cheap to repeat and expensive to finish.
+Recorded because the measurements are solid; the "unresolved / not a table question" conclusion that
+originally closed this section has since been advanced by the #176 Ghidra work (see the summary box
+at the top of this doc). The measurements below stand; the interpretation under them is updated.
 
 **Measured, and not in doubt:**
 
@@ -249,15 +269,25 @@ the same four experiments are cheap to repeat and expensive to finish.
   themselves disagree with their own source spelling in 170 of 656 cases, so they are a consumer of
   whatever the rule is rather than its source.
 
-**Current hypothesis, unproven.** The spelling appears to travel with the symbol from wherever it is
-declared, which is frequently another file: the kept spelling is often absent from the calling source
-entirely, and the cases that lose to a local first occurrence are type and function names such as
-`Keyword`, `Bool` and `Enable`, whose declarations live in the scripts that define them.
+**Hypothesis, still unproven: the spelling travels with the symbol from where it is declared.** The
+kept spelling is often absent from the calling source, and the cases that lose to a local first
+occurrence are type/function names such as `Keyword`, `Bool` and `Enable`, whose declarations live in
+the scripts that define them. #176 advanced the MECHANISM around this hypothesis without proving the
+hypothesis itself: Ghidra on `PapyrusAssembler.exe` showed the table is a **case-insensitive intern
+table** (dedup via a case-insensitive CRC hash; stored bytes untransformed; **first-inserted spelling
+wins**), and PCompiler's per-symbol casing is established (lowercases the `.state` declaration, keeps
+source casing for GotoState args). What is NOT established is the **insertion-order caller** -- what
+order symbols are handed to the intern table -- and that order is exactly what would confirm or refute
+"spelling travels with the declaration." So this is BOTH a table property (interning) AND a front-end
+property (PCompiler casing) -- the old "not a table question" framing was too strong -- but the
+declaration-travels claim remains a hypothesis until the insertion order is pinned down.
 
-**Status: intentionally not implemented.** This investigation was concluded without a change because
-every measured local winner rule was disproved. Further work means modelling compiler-wide symbol
-canonicalisation rather than local string interning, which is a front end question and not a table
-question.
+**Status: mechanism understood, exact insertion ORDER still open, intentionally not implemented.**
+Every *local* winner rule was correctly disproved; the real selector is intern insertion order across
+the compilation, which #176 has not yet pinned down (the hash routines are located; the insert-order
+caller is not). Note the target trap: our compiler matches the SHIPPED game 96% (corpus B) but the
+current on-disk CK only 47.6% (corpus C) -- corpus C is a *different toolchain vintage*, not a
+cleaner oracle, so do not retarget to it.
 
 Two further reasons it was not worth carrying on at the time. The remaining difference is about 123
 scripts of 7,585, roughly 1.6%, and it is cosmetic: Papyrus compares strings and resolves states case
