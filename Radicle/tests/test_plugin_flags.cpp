@@ -21,6 +21,18 @@ std::vector<std::byte> make_plugin(std::uint32_t flags) {
   return out.bytes;
 }
 
+std::vector<std::byte> make_plugin_with_owned_record(std::uint32_t form_id) {
+  auto bytes = make_plugin(0);
+  fo4::test::ByteWriter group;
+  const auto group_header = fo4::test::begin_group(group, "KYWD", 0);
+  const auto record = fo4::test::begin_record(group, "KYWD", 0, form_id);
+  fo4::test::write_subrecord(group, "EDID", std::string_view{"OwnedRecord\0", 12});
+  fo4::test::end_record(group, record);
+  fo4::test::end_group(group, group_header);
+  bytes.insert(bytes.end(), group.bytes.begin(), group.bytes.end());
+  return bytes;
+}
+
 }  // namespace
 
 TEST(PluginFlags, SetsAndClearsSmallFileFlagThroughSerialization) {
@@ -42,4 +54,13 @@ TEST(PluginFlags, SetsAndClearsSmallFileFlagThroughSerialization) {
   const auto cleared = fo4::read_plugin(fo4::write_plugin(reloaded), "Flagged.esp");
   EXPECT_FALSE(cleared.header.tes4_flags.is_small_file());
   EXPECT_FALSE(cleared.tes4.header.flags.is_small_file());
+}
+
+TEST(PluginFlags, RejectsLightFlagWhenOwnedLocalIdExceedsTwelveBits) {
+  auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00001234), "TooLarge.esp");
+  ASSERT_EQ(plugin.groups.size(), 1u);
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::set_plugin_light_flag(std::move(plugin), true)),
+      fo4::FormIdError);
 }
