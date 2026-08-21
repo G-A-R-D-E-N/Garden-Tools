@@ -20,6 +20,23 @@ fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
 fo4ide_add_test(fo4ide_test_app_interop unit/AppInteropTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 
+add_executable(
+    fo4ide_test_plugin_backend
+    unit/RadiclePluginBackendTests.cpp
+    "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
+)
+target_include_directories(
+    fo4ide_test_plugin_backend
+    PRIVATE "${PROJECT_SOURCE_DIR}/../../Radicle/tests"
+)
+target_link_libraries(
+    fo4ide_test_plugin_backend
+    PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
+)
+fo4ide_enable_warnings(fo4ide_test_plugin_backend)
+fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
+catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT 10)
+
 add_executable(fo4ide_fake_process helpers/fake_process.cpp)
 fo4ide_enable_warnings(fo4ide_fake_process)
 fo4ide_enable_sanitizers(fo4ide_fake_process)
