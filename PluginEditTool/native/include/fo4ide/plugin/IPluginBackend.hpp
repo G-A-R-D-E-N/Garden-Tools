@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 
 #include <nlohmann/json.hpp>
@@ -22,6 +23,11 @@ public:
     virtual Capabilities capabilities() const noexcept = 0;
     virtual Result<nlohmann::json> invoke(std::string_view operation,
                                           const nlohmann::json& arguments) = 0;
+
+    virtual Result<nlohmann::json> invokeBackend(std::string_view method,
+                                                 const nlohmann::json& arguments) {
+        return invoke("backend." + std::string(method), arguments);
+    }
 };
 
 class NullPluginBackend final : public IPluginBackend {
