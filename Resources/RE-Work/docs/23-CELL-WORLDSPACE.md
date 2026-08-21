@@ -468,7 +468,83 @@ Practical contract: cell grids are **lazily created on demand** (LoadCellData
 "Constructed %u cell grids"), and the GRUP walk only **queues** work keyed by
 block/sub-block labels — the task queue owns the streaming.
 
-## 10. Known record strings (load/save surface)
+## 10. LoadRecord / SaveRecord virtual slots (CELL + WRLD)
+
+Method: diffed each class's primary vftable against `TESForm`'s; slots whose
+function differs from the base are genuine overrides. Base `TESForm` slots 24
+and 27 are stubs (`FUN_140720ac0` = `return 1`, `FUN_140720ad0` = `return`) —
+so **slot 24 = LoadRecord, slot 27 = SaveRecord** is the inherited convention,
+and both world classes override exactly those slots with the real file I/O.
+
+The two file-I/O primitives (both in the `TESFile`-family, `bscore`/`bsresource`
+code):
+
+| function | role |
+|---|---|
+| `FUN_14087e870(file, dst, size)` | **read** `size` bytes into `dst` (LoadRecord's workhorse — also the `TESFile` read used by every record) |
+| `FUN_1408c7710(4CC, data, size)` | **write subrecord** — appends 4CC + u16 size + data to the output buffer `DAT_143d4a470` (SaveRecord's workhorse) |
+
+### 10a. TESObjectCELL overrides (primary vftable `0x309c780`)
+
+| slot | function | name | evidence |
+|---|---|---|---|
+| 23 | `FUN_140d13f00` | `ClearItem`-family | `tesobjectcell.cpp` assert; frees cell data `+0x58` via `FUN_1407d2060`, checks flag `+0x50` bit 0 |
+| **24** | `FUN_140d146d0` | **`LoadRecord`** | 14× `FUN_14087e870` (reads); dispatches the CELL subrecord set; `"Cell flag data is not a short or char"`; calls the cell-data allocator `FUN_140d18510`; assert `tesobjectcell.cpp` |
+| 27 | `FUN_140d44ba0` | **`SaveRecord`** | 13× `FUN_1408c7710` (subrecord writer) |
+| 28 | `FUN_140d44f00` | flag/ref-count helper | `FUN_14087f240` (flag bit `+0x33C`), `FUN_1408be010` (form lookup), refcount asserts |
+| 30 | `FUN_140d45150` | form-registration helper | `FUN_14087ec50`, `FUN_14087d2d0`, `FUN_140d55ca0` (TESDataHandler register path) |
+| 31 | `FUN_140d45400` | handle→form resolver | type check vs `DAT_143b9a580`, switch on `param_2[3]` (TESFile handle decode) |
+| 32 | `FUN_140d451d0` | ref-iteration predicate | `FUN_140d169e0`/`FUN_140d16a70` (ref list walk), `FUN_140d268d0` (GetWorldspace) |
+| 33 | `FUN_140d14040` | alloc/copy helper | `tesobjectcell.cpp` assert; array allocs |
+| 35 | `FUN_140d153d0` | cell-validation/dangling-check | `tesobjectcell.cpp` asserts; `"Bad cell value. Attempting to create new cell."`, `"Cell at (%i, %i) in world %s (%08X) may be a dangling cell."`, `"Unable to delete invalid coord cell ..."`, cell-name-length check |
+| 38 | `FUN_140d17dc0` | cell-label formatter | `"'%s' (%08X)"`, `"Persistent cell '%s' (%08X) (%i, %i) in WorldSpace '%s' (%08X)"` (editor cell label) |
+
+CELL `LoadRecord` dispatches: `CNAM`, `DATA`, `EDID`, `FULL`, `LNAM`,
+`LTMP`, `MHDT`, `OBLT`, `OBML`, `OBND`, `OBTE`, `PBTE`, `PCMB`, `PTRN`,
+`RNAM`, `RVIS`, `STCP`, `SVIS`, `TTCP`, `TVDT`, `UVDT`, `VISI`, `VMAD`,
+`XACR`, `XACT`, `XALP`, `XAMC`, `XAMT`, `XAPD`, `XAPR`, `XATP`, `XATR`,
+`XBSD`, `XCAS`, `XCCM`, `XCET`, `XCGD`, `XCHG`, `XCIM`, `XCLC` …
+
+CELL `SaveRecord` writes: `VISI`, `RVIS`, `PCMB`, `DATA`, `XCLC`, `CNAM`,
+`MHDT`, `LTMP`, `XCLW`.
+
+### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
+
+| slot | function | name | evidence |
+|---|---|---|---|
+| 22 | `FUN_140e4a070` | ref-count/ownership helper | `FUN_1408bef30` |
+| 23 | `FUN_140e4a1f0` | `ClearItem`-family | `FUN_140e4db70`, `FUN_140d3c040`/`d3bc30` |
+| **24** | `FUN_140e4a750` | **`LoadRecord`** | 26× `FUN_14087e870` (reads); `"Found invalid cell level data in file."`, `"Loading cell level data over top of existing data"` |
+| 25 | `FUN_140e4b040` | flag getter | returns byte (flag accessor) |
+| 27 | `FUN_140e54420` | **`SaveRecord`** | 23× `FUN_1408c7710` (subrecord writer) |
+| 31 | `FUN_140e54b20` | handle→form resolver | type check + `FUN_1408bcfc0`/`FUN_1408bdd20` (mirror of CELL slot 31) |
+| 32 | `FUN_140e549d0` | form-comparison predicate | `FUN_1408bcfa0`, `FUN_140d268d0` |
+| 33 | `FUN_140e4a320` | cell-map iterator/insert | `FUN_140e4d180` (worldspace cell-map insert — §8.3), `FUN_140e53eb0`, `FUN_140d196a0` |
+| 35 | `FUN_140e4b080` | cell-grid child iteration | 9× `FUN_1408be010` (form lookup) + `FUN_1408c68d0`/`FUN_1408bdd20` — walks the cell array |
+
+WRLD `LoadRecord` dispatches: `ATDM`, `BTDM`, `CNAM`, `DATA`, `DNAM`, `EDID`,
+`FULL`, `ICON`, `LTMP`, `MHDT`, `MNAM`, `NAM2`, `NAM3`, `NAM4`, `NAMA`,
+`NNAM`, `OBLT`, `OBML`, `OBND`, `OBTE`, `ONAM`, `PNAM`, `PTRN`, `RNAM`,
+`STCP`, `TNAM`, `TTCP`, `UNAM`, `VMAD`, `WCTR`, `WLEV`, `WMAD`, `WNAM`,
+`XEZN`, `XLCN`, `XWEM`, `ZNAM`.
+
+WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
+`NAM0`, `NAM2`, `NAM3`, `NAM4`, `NAM9`, `NAMA`, `ONAM`, `PNAM`, `WCTR`,
+`WLEV`, `WNAM`, `XEZN`, `XLCN`, `ZNAM`.
+
+### 10c. What the diff teaches
+
+- The shared `TESForm` surface (slots 25/26/29/34/36–49…) is *identical*
+  across CELL/WRLD — the class-specific bits are concentrated in slots
+  22–35.
+- The editor extras (labels, dangling-cell validation, cell-map insert)
+  occupy the low override slots; the I/O pair sits at the fixed 24/27
+  positions inherited from `TESForm`.
+- Subrecord codes are inline immediates in the Load/Save bodies — the
+  `strings` inventory in §11 is a superset (includes codes the CK never
+  emits via these two functions).
+
+## 11. Known record strings (load/save surface)
 
 CELL: `XCLC` (coords), `XCLW`, `XCLL` (lighting), `XCLR`, `XCLP`, `XCLS`,
 `XCMO`, `XCWT` (water), `XCCM`, `XCGD`, `XCIM`, `XCET`, `XCHG`, `XCNT`,
@@ -489,10 +565,8 @@ variations), `ATXT`/`BTXT`/`XTXT` (layer textures), `LNAM`, `MNAM`, `NAM0`.
 (All verified present as ASCII strings in the binary; the subrecord compare
 constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 
-## 11. Open questions
+## 12. Open questions
 
-- Exact `LoadRecord`/`SaveRecord` slot indices per class (the virtuals at
-  slots 23+ need per-slot naming via decompile + source-string anchors).
 - The 0x20/0x88-byte cell-data block internals (what lives in the 0x88
   exterior block beyond the coords + 1.0f seeds; the `0x79F` at +0x58).
 - Whether any CK feature writes WRLD/CELL records with non-standard subrecords
@@ -519,3 +593,6 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
   `decompile-ConstructForms.txt` (block/sub-block walk),
   `decompile-grid-manager.txt`, `callers-grid-ctor.txt` (raw decompiles; local only)
 - `ghidra-dump/FindCodeRefsTo.java` (code xref finder)
+- `ghidra-dump/decompile-CELL-overrides.txt` (all 10 CELL slots 23+),
+  `decompile-WorldSpace-overrides.txt` (all 9 WRLD override slots) —
+  raw decompiles; local only
