@@ -74,3 +74,40 @@ compiled set may predate the export). Files are matched to the compile by
 Fallout4.esm compile regardless of the CLI language spelling. The shipped
 fixtures' synthetic IDs (0x1000A etc.) are not in the game files, so a
 cross-check run reports them as not-found warnings rather than mismatches.
+
+Committed cross-check fixture (no game files needed)
+----------------------------------------------------
+
+cross-check/ contains a self-contained set that reproduces the MATCH,
+MISMATCH, and WARNING paths without the shipped Fallout4 STRINGS:
+
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS
+
+  * input/Fallout4.esm/TextExport.txt      six records whose IDs were
+                                           chosen to hit each path:
+                                           0x12/0x13 -> .STRINGS (MATCH),
+                                           0x10/0x36 -> .DLSTRINGS (MATCH),
+                                           0x126C6 (Book) predicted
+                                           .DLSTRINGS but present only in
+                                           .ILSTRINGS (MISMATCH -- mirrors
+                                           the shipped Enclave paint), and
+                                           0x345678 absent from every
+                                           compiled table (WARNING)
+  * input/Fallout4.esm/000126c5.txt        supplemental file -> .ILSTRINGS
+                                           (MATCH) regardless of its Book
+                                           category
+  * STRINGS/Fallout4_en.{STRINGS,
+    DLSTRINGS,ILSTRINGS}                   tiny valid compiled files built
+                                           by make_compiled.py from the
+                                           localized-string-file-format.md
+                                           byte spec (header, ascending ID
+                                           table, NUL-terminated vs
+                                           length-prefixed records)
+
+Expected: 5 MATCH, 1 MISMATCH, 1 WARNING -- the run exits 1 because the
+MISMATCH is a hard failure. Deleting the 0x126C6 line from the input
+TextExport.txt makes the run exit 0 with 4 MATCH + 1 WARNING. The compiled
+binaries are reproducible: re-run cross-check/make_compiled.py after any
+edit (the input .txt files remain the hand-edited source of truth).
