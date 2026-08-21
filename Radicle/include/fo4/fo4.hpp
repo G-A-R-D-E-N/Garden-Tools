@@ -16,5 +16,6 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "fo4/plugin_key.hpp"
 #include "fo4/signature.hpp"
