@@ -6,6 +6,7 @@
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <set>
@@ -64,7 +65,18 @@ void clear_group_originals(Plugin& plugin) {
   visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
 }
 
+Record* find_mutable_record(Plugin& plugin, const FormKey& record_key) {
+  Record* target = nullptr;
+  visit_records(plugin, [&](Record& record) {
+    if (target == nullptr && record.header.signature != sig_tes4 &&
+        record.form_key == record_key) {
+      target = &record;
+    }
+  });
+  return target;
 }
+
+}  // namespace
 
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,
@@ -105,44 +117,38 @@ bool set_record_editor_id(Plugin& plugin,
   return true;
 }
 
-ScalarMutationStatus set_record_scalar(Plugin& plugin,
-                                       const FormKey& record_key,
-                                       Signature subrecord_signature,
-                                       std::string_view value) {
-  const auto descriptor = schema::scalar_descriptor(subrecord_signature);
-  if (!descriptor.has_value()) {
-    throw schema::ScalarError(
-        "subrecord is not registered in the scalar schema: " +
-        subrecord_signature.to_string());
-  }
-
+ScalarMutationStatus set_record_scalar(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::ScalarFieldDescriptor& field,
+    std::string_view value) {
   assign_record_form_keys(plugin);
-  Record* target = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (target == nullptr && record.header.signature != sig_tes4 &&
-        record.form_key == record_key) {
-      target = &record;
-    }
-  });
+  auto* target = find_mutable_record(plugin, record_key);
   if (target == nullptr) return ScalarMutationStatus::record_missing;
+
+  if (target->header.signature != field.record) {
+    throw schema::ScalarError(
+        std::string(field.path) + " does not apply to " +
+        target->header.signature.to_string() + " records");
+  }
 
   Subrecord* found = nullptr;
   for (auto& subrecord : target->subrecords) {
-    if (subrecord.signature != subrecord_signature) continue;
+    if (subrecord.signature != field.scalar.subrecord) continue;
     if (found != nullptr) {
       throw schema::ScalarError(
           "record contains duplicate scalar subrecords: " +
-          subrecord_signature.to_string());
+          field.scalar.subrecord.to_string());
     }
     found = &subrecord;
   }
   if (found == nullptr) return ScalarMutationStatus::subrecord_missing;
 
-  // Validate existing width before mutation, then encode the new value through
-  // the same schema descriptor. Missing fields are not inserted here because
-  // safe subrecord ordering belongs to the record schema/codegen layer.
-  static_cast<void>(schema::decode_scalar(found->data, *descriptor));
-  const auto encoded = schema::encode_scalar(value, *descriptor);
+  // Existing bytes are read faithfully, but new values are validated by the
+  // exact record-qualified field descriptor. Missing fields are not inserted
+  // until schema/codegen also carries proven subrecord ordering.
+  static_cast<void>(schema::decode_scalar(found->data, field.scalar));
+  const auto encoded = schema::encode_scalar(value, field.scalar);
   if (found->data == encoded) return ScalarMutationStatus::unchanged;
 
   found->data = encoded;
@@ -153,6 +159,26 @@ ScalarMutationStatus set_record_scalar(Plugin& plugin,
   plugin.original_bytes.clear();
   clear_group_originals(plugin);
   return ScalarMutationStatus::updated;
+}
+
+ScalarMutationStatus set_record_scalar(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       Signature subrecord_signature,
+                                       std::string_view value) {
+  assign_record_form_keys(plugin);
+  auto* target = find_mutable_record(plugin, record_key);
+  if (target == nullptr) return ScalarMutationStatus::record_missing;
+
+  const auto fields = schema::scalar_fields(target->header.signature);
+  const auto match = std::find_if(fields.begin(), fields.end(), [&](const auto& field) {
+    return field.scalar.subrecord == subrecord_signature;
+  });
+  if (match == fields.end()) {
+    throw schema::ScalarError(
+        "subrecord is not registered for this record type in the scalar schema: " +
+        subrecord_signature.to_string());
+  }
+  return set_record_scalar(plugin, record_key, *match, value);
 }
 
 RecordCopyStatus copy_record_as_override(Plugin& destination,
