@@ -21,6 +21,9 @@ Usage:
         --command '-CompileTextExport:Fallout4.esm ENGLISH backup primary'
     python3 validate_ckini.py --compile-text samples/compile-text/backup samples/compile-text/primary
     python3 validate_ckini.py CreationKit.ini --exit-codes
+    python3 validate_ckini.py --strings \
+        '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
+    python3 validate_ckini.py --strings '.../STRINGS'   # whole language dir
 
 The descriptor table maps 1,629 colon-bearing `bKey:Section` literals plus
 25 byte-verified bare records (whose reader section is `[MAIN]`; doc 10 counts
@@ -73,6 +76,7 @@ platform/MapInfo/PreVis enum checks.
 import argparse
 import os
 import re
+import struct
 import sys
 
 DEFAULT_DESCRIPTORS = os.path.join(
@@ -783,6 +787,241 @@ def lint_batch_command(command):
 
 
 # ---------------------------------------------------------------------------
+# Localized-string files (.STRINGS / .DLSTRINGS / .ILSTRINGS)
+# ---------------------------------------------------------------------------
+# Byte-level format documented in
+# ghidra-dump/localized-string-file-format.md (writer FUN_14091d790, loader
+# FUN_140915000):
+#
+#     offset  size  field
+#     0x00    4     u32 numStrings
+#     0x04    4     u32 dataSize
+#     0x08    8*N   rows { u32 stringID; u32 offset; }   (N == numStrings)
+#     0x08+8N  D    data block (D == dataSize)
+#
+# invariant: len(file) == 8 + 8*numStrings + dataSize
+# table rows sorted ascending by stringID; offsets point into the data block
+# (insertion order, not ID order; identical text dedups to one offset).
+# .STRINGS      records:  NUL-terminated text, offset -> first byte
+# .DL/.ILSTRINGS records:  u32 len + text (len INCLUDES the trailing NUL),
+#                          offset -> the u32 len; block walks to EOF as
+#                          sum(4 + len).
+
+_STRINGS_KINDS = (".STRINGS", ".DLSTRINGS", ".ILSTRINGS")
+_STRINGS_MAX_ROWS = 10_000_000
+
+# Shipped Fallout 4 files (all 11 languages) contain exactly two stringIDs
+# that live in BOTH the .STRINGS and .DLSTRINGS tables: the Enclave
+# Creation-Club weapon/armor paint descriptions (English text in .STRINGS,
+# localized text in .DLSTRINGS). The engine tolerates the collision; the
+# "globally unique" rule is a writer invariant with these two known shipped
+# exceptions.
+_STRINGS_KNOWN_PARTITION_EXCEPTIONS = {0x36CB7, 0x36CB9}
+
+
+def _strings_kind(path):
+    """Return one of _STRINGS_KINDS (upper-cased) or None for a foreign file."""
+    base = os.path.basename(path)
+    upper = base.upper()
+    for kind in _STRINGS_KINDS:
+        if upper.endswith(kind):
+            return kind
+    return None
+
+
+def _strings_lang_stem(path):
+    """Group key: the '<ESM>_<Language>' stem shared by the three kinds."""
+    base = os.path.basename(path)
+    return base.rsplit(".", 1)[0].lower()
+
+
+def check_strings_file(path):
+    """Validate one localized-string file; return (ok, lines)."""
+    kind = _strings_kind(path)
+    lines = ["STRINGS %s [%s]" % (os.path.basename(path), kind)]
+    if kind is None:
+        return False, lines + ["ERROR: extension is not .STRINGS/.DLSTRINGS/.ILSTRINGS"]
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError as exc:
+        return False, lines + ["ERROR: %s" % exc]
+    errors, warnings, notes = [], [], []
+
+    if len(data) < 8:
+        errors.append("file is %d bytes, shorter than the 8-byte header" % len(data))
+        return False, lines + ["ERROR: " + e for e in errors]
+
+    num_strings, data_size = struct.unpack_from("<II", data, 0)
+    table_size = 8 * num_strings
+    file_expected = 8 + table_size + data_size
+    if num_strings > _STRINGS_MAX_ROWS:
+        errors.append("numStrings %d exceeds the %d-row sanity bound"
+                      % (num_strings, _STRINGS_MAX_ROWS))
+    if file_expected != len(data):
+        errors.append("size invariant violated: file is %d bytes, "
+                      "8 + 8*numStrings(%d) + dataSize(%d) = %d"
+                      % (len(data), num_strings, data_size, file_expected))
+    if len(data) < 8 + table_size:
+        errors.append("file ends inside the offset table "
+                      "(need %d bytes for %d rows)" % (8 + table_size, num_strings))
+    if errors:
+        return False, lines + ["ERROR: " + e for e in errors]
+
+    notes.append("numStrings=%d dataSize=%d (invariant holds)" % (num_strings, data_size))
+    rows = [struct.unpack_from("<II", data, 8 + 8 * i) for i in range(num_strings)]
+    ids = [r[0] for r in rows]
+
+    # Table rows must be sorted ascending by stringID (writer FUN_1409186d0).
+    if any(a >= b for a, b in zip(ids, ids[1:])):
+        first_bad = next(i for i in range(1, len(ids))
+                         if ids[i] <= ids[i - 1])
+        warnings.append("offset table not strictly ascending by stringID "
+                        "(first violation at row %d: 0x%08X -> 0x%08X)"
+                        % (first_bad, ids[first_bad - 1], ids[first_bad]))
+    elif num_strings > 1 and ids[0] == ids[-1]:
+        warnings.append("all %d rows share one stringID 0x%08X"
+                        % (num_strings, ids[0]))
+
+    # Offsets must point inside the data block.
+    data_block = data[8 + table_size:]
+    bad_off = ["0x%08X@0x%x" % (r[0], r[1]) for r in rows if r[1] >= data_size]
+    if bad_off:
+        errors.append("%d offset(s) outside data block: %s"
+                      % (len(bad_off), ", ".join(bad_off[:8])))
+    unique_offs = sorted({r[1] for r in rows})
+
+    if kind == ".STRINGS":
+        # NUL-terminated: every offset must point at a string with a NUL
+        # before the block end.
+        if not errors:
+            for off in unique_offs:
+                nul = data_block.find(b"\x00", off)
+                if nul < 0:
+                    errors.append("no NUL terminator for offset 0x%x" % off)
+                    break
+        if not errors:
+            lens = [data_block.find(b"\x00", off) - off for off in unique_offs]
+            empty = sum(1 for l in lens if l == 0)
+            notes.append("%d unique offsets, %d empty string(s), "
+                         "max text length %d" % (len(unique_offs), empty, max(lens)))
+    else:
+        # Length-prefixed: offset must land on a record boundary and the data
+        # block must walk to EOF as sum(4 + len). len INCLUDES the NUL.
+        boundaries = {}
+        pos = 0
+        while pos < len(data_block) and not errors:
+            if pos + 4 > len(data_block):
+                errors.append("record header overruns data block at 0x%x" % pos)
+                break
+            rec_len = struct.unpack_from("<I", data_block, pos)[0]
+            if pos + 4 + rec_len > len(data_block):
+                errors.append("record at 0x%x (len %d) overruns data block"
+                              % (pos, rec_len))
+                break
+            if data_block[pos + 4 + rec_len - 1] != 0:
+                warnings.append("record at 0x%x (len %d) is not NUL-terminated"
+                                % (pos, rec_len))
+            boundaries[pos] = rec_len
+            pos += 4 + rec_len
+        if not errors and pos != len(data_block):
+            errors.append("data block does not walk to EOF: ended at 0x%x of 0x%x"
+                          % (pos, len(data_block)))
+        if not errors:
+            off_records = [r for r in rows if r[1] not in boundaries]
+            if off_records:
+                errors.append("%d table offset(s) not on a record boundary: %s"
+                              % (len(off_records),
+                                 ", ".join("0x%08X@0x%x" % r for r in off_records[:8])))
+        if not errors:
+            notes.append("%d unique offsets, %d data records, "
+                         "block walks to EOF as sum(4+len)"
+                         % (len(unique_offs), len(boundaries)))
+
+    lines.extend("NOTE: " + n for n in notes)
+    lines.extend("WARNING: " + w for w in warnings)
+    lines.extend("ERROR: " + e for e in errors)
+    if not errors:
+        lines.append("VERDICT: PASS")
+    else:
+        lines.append("VERDICT: FAIL")
+    return not errors, lines
+
+
+def check_strings_files(paths):
+    """Validate .STRINGS/.DLSTRINGS/.ILSTRINGS files (or directories of them).
+
+    Returns (ok, lines). Directories are scanned for the three kinds. When
+    several files share the same ``<ESM>_<Language>`` stem, their stringID
+    sets are cross-checked for the global-uniqueness partition (a string ID
+    lives in exactly one of the three tables).
+    """
+    files = []
+    for p in paths:
+        if os.path.isdir(p):
+            for name in sorted(os.listdir(p)):
+                full = os.path.join(p, name)
+                if os.path.isfile(full) and _strings_kind(full):
+                    files.append(full)
+        else:
+            files.append(p)
+    if not files:
+        return False, ["STRINGS: no .STRINGS/.DLSTRINGS/.ILSTRINGS files found"]
+
+    lines = ["STRINGS: localized-string file validation (format doc: "
+             "ghidra-dump/localized-string-file-format.md)"]
+    by_stem = {}
+    overall_ok = True
+    for path in sorted(files):
+        ok, sub = check_strings_file(path)
+        lines.extend(sub)
+        lines.append("")
+        overall_ok = overall_ok and ok
+        if _strings_kind(path):
+            by_stem.setdefault(_strings_lang_stem(path), []).append(path)
+
+    # Cross-file ID partition per language stem: a stringID must appear in
+    # exactly one table.
+    for stem, group in sorted(by_stem.items()):
+        if len(group) < 2:
+            continue
+        seen = {}
+        collisions = []
+        for path in group:
+            kind = _strings_kind(path)
+            with open(path, "rb") as fh:
+                head = fh.read(8)
+            if len(head) < 8:
+                continue
+            num, _ = struct.unpack_from("<II", head, 0)
+            with open(path, "rb") as fh:
+                data = fh.read()
+            for i in range(num):
+                sid, _ = struct.unpack_from("<II", data, 8 + 8 * i)
+                if sid in seen and seen[sid] != kind:
+                    collisions.append("0x%08X in both %s and %s"
+                                      % (sid, seen[sid], kind))
+                seen.setdefault(sid, kind)
+        if collisions:
+            known = [c for c in collisions
+                     if int(c.split(" ")[0], 16) in _STRINGS_KNOWN_PARTITION_EXCEPTIONS]
+            if len(known) == len(collisions):
+                lines.append("WARNING: STRINGS %s: %d known shipped exception(s) "
+                             "(Enclave Creation-Club paints, present in every language): %s"
+                             % (stem, len(collisions), "; ".join(collisions)))
+            else:
+                overall_ok = False
+                lines.append("STRINGS %s: stringID partition violated (%d collision(s)): %s"
+                             % (stem, len(collisions), "; ".join(collisions[:6])))
+        else:
+            lines.append("STRINGS %s: %d files, stringID partition holds "
+                         "(%d unique IDs)" % (stem, len(group), len(seen)))
+
+    lines.append("VERDICT: %s" % ("PASS" if overall_ok else "FAIL"))
+    return overall_ok, lines
+
+
+# ---------------------------------------------------------------------------
 # Exit-code matrix oracle (doc 19)
 # ---------------------------------------------------------------------------
 
@@ -1016,7 +1255,19 @@ def main(argv):
                          "When --command is also given, the roots are taken from the command; "
                          "otherwise the positional ROOT directories are used. Fixtures: "
                          "tools/samples/compile-text/")
+    ap.add_argument("--strings", nargs="*", default=None, metavar="PATH",
+                    help="validate compiled localized-string files (.STRINGS/.DLSTRINGS/"
+                         ".ILSTRINGS) or directories of them against the byte format from "
+                         "ghidra-dump/localized-string-file-format.md: header/size invariant, "
+                         "sorted ID table, offset bounds, per-kind record encoding, and the "
+                         "per-language stringID partition. Real samples: "
+                         ".../TEMP_BSA_FILES/*/STRINGS/")
     args = ap.parse_args(argv)
+
+    if args.strings is not None:
+        ok, lines = check_strings_files(args.strings)
+        print("\n".join(lines))
+        return 0 if ok else 1
 
     if args.compile_text is not None:
         # With --command also present, first lint the command line itself

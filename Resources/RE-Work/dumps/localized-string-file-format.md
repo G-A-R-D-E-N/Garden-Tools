@@ -128,8 +128,14 @@ From the reference samples (en):
 | `.ILSTRINGS` | 74,953 | 75,462 .. 223,315 | u32-length-prefixed |
 
 IDs are globally unique across the game's three tables (a string ID lives in
-exactly one file). IDs below `0x10` are reserved and skipped by the compiler
-(`Attempting to use reserved ID 0x%08X. Skipping.`). The `.DLSTRINGS` set
+exactly one file) **with one known shipped exception**: every shipped language
+set carries the two Enclave Creation-Club paint descriptions (IDs `0x36CB7`
+and `0x36CB9`) in *both* `.STRINGS` (English text) and `.DLSTRINGS` (localized
+text). The engine tolerates the collision; treat the uniqueness rule as a
+writer invariant with those two exceptions. IDs below `0x10` are reserved and
+skipped by the compiler (`Attempting to use reserved ID 0x%08X. Skipping.`) —
+this is an input-side rule; compiled files legitimately contain low IDs
+(`.STRINGS` starts at 1, `.DLSTRINGS` at 3). The `.DLSTRINGS` set
 (dialogue/voice lines) and `.ILSTRINGS` set (misc localizable UI) are disjoint
 ranges; `.STRINGS` carries the ordinary text. The compiler routes categories
 `Quest Stage Log Entry`, `Book`, `Description`, `Message` (indices 1,6,7,10 of
@@ -159,7 +165,14 @@ languages × 3 kinds):
 - table rows ascending by ID, offsets in-bounds, every offset valid
   (`.STRINGS`: NUL present; DL/IL: offset on a length-prefix boundary) — 33/33;
 - DL/IL data blocks walk to EOF as `sum(4+len)` — 22/22;
-- all texts decode (UTF-8 or legacy ANSI; CJK/Russian files verified).
+- all texts decode (UTF-8 or legacy ANSI; CJK/Russian files verified);
+- stringID partition across the three tables — 33/33 modulo the two known
+  Enclave-paint exceptions (§4) present in every language set.
+
+The `--strings` mode of `tools/validate_ckini.py` re-checks all of the above
+per file (header, size invariant, sorted table, offset bounds, per-kind record
+encoding, EOF walk) plus the per-language cross-file partition, surfacing the
+Enclave exceptions as a documented warning rather than a failure.
 
 Parsing pseudocode:
 
