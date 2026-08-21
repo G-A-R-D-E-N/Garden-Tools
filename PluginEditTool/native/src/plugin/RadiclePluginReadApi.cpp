@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
 
 namespace fo4ide::plugin {
@@ -119,6 +120,18 @@ Result<fo4::FormKey> formKeyArgument(const nlohmann::json& arguments) {
     }
 }
 
+nlohmann::json gridColumns(std::string_view signature) {
+    if (signature == "LVSP") {
+        return nlohmann::json::array({
+            "EDID",
+            "LVSP\\ChanceNone",
+            "LVSP\\MaxCount",
+            "LVSP\\Flags"
+        });
+    }
+    return nlohmann::json::array({"EDID"});
+}
+
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getPluginRecordTypes(
@@ -149,12 +162,13 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
     const auto signature = stringArgument(arguments, 1);
     const auto limit = sizeArgument(arguments, 2, 200, 1000);
     const auto offset = sizeArgument(arguments, 3, 0, 1000000);
+    const auto columns = gridColumns(signature);
 
     std::scoped_lock lock(mutex_);
     const auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr || signature.empty()) {
         return nlohmann::json(nlohmann::json{
-            {"columns", nlohmann::json::array({"EDID"})},
+            {"columns", columns},
             {"rows", nlohmann::json::array()},
             {"total", 0},
             {"offset", offset}
@@ -173,15 +187,32 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
     for (std::size_t index = begin; index < end; ++index) {
         const auto* record = matching[index];
         const auto editor = editorId(*record);
+        nlohmann::json cells = nlohmann::json::array({editor});
+
+        if (signature == "LVSP") {
+            try {
+                const auto model = fo4::forms::decode_leveled_spell(
+                    loaded->plugin, record->form_key);
+                cells.push_back(std::to_string(model.chance_none));
+                cells.push_back(std::to_string(model.max_count));
+                cells.push_back(std::to_string(model.flags));
+            } catch (const fo4::forms::LeveledSpellError& error) {
+                return std::unexpected(Error{
+                    "LeveledSpellReadFailed",
+                    record->form_key.to_string() + ": " + error.what()
+                });
+            }
+        }
+
         rows.push_back({
             {"formKey", record->form_key.to_string()},
             {"editorId", editor},
-            {"cells", nlohmann::json::array({editor})}
+            {"cells", std::move(cells)}
         });
     }
 
     return nlohmann::json(nlohmann::json{
-        {"columns", nlohmann::json::array({"EDID"})},
+        {"columns", columns},
         {"rows", std::move(rows)},
         {"total", matching.size()},
         {"offset", begin}
