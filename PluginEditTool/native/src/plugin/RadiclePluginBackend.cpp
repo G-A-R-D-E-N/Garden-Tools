@@ -9,6 +9,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,6 +23,15 @@ namespace {
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
     return args[index].get<std::string>();
+}
+
+std::filesystem::path utf8Path(std::string_view value) {
+    std::u8string utf8;
+    utf8.reserve(value.size());
+    for (const unsigned char ch : value) {
+        utf8.push_back(static_cast<char8_t>(ch));
+    }
+    return std::filesystem::path(utf8);
 }
 
 std::string pluginKind(const fo4::Plugin& plugin) {
@@ -295,10 +305,11 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         if (name.empty() || path.empty()) continue;
 
         try {
-            auto plugin = fo4::read_plugin_file(std::filesystem::u8path(path));
+            const auto filePath = utf8Path(path);
+            auto plugin = fo4::read_plugin_file(filePath);
             loaded.push_back({
                 .name = name,
-                .path = std::filesystem::u8path(path),
+                .path = filePath,
                 .source = entry.value("source", std::string{}),
                 .plugin = std::move(plugin),
             });
@@ -409,17 +420,18 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
     if (path.empty()) return std::unexpected(Error{"PluginPathMissing", "Plugin path is empty"});
 
     try {
-        auto plugin = fo4::read_plugin_file(std::filesystem::u8path(path));
+        const auto filePath = utf8Path(path);
+        auto plugin = fo4::read_plugin_file(filePath);
         std::string name = plugin.key.filename().empty()
-            ? std::filesystem::u8path(path).filename().string()
+            ? filePath.filename().string()
             : std::string(plugin.key.filename());
         std::scoped_lock lock(mutex_);
         auto* existing = findPlugin(name);
         if (existing) {
-            existing->path = std::filesystem::u8path(path);
+            existing->path = filePath;
             existing->plugin = std::move(plugin);
         } else {
-            plugins_.push_back({name, std::filesystem::u8path(path), {}, std::move(plugin)});
+            plugins_.push_back({name, filePath, {}, std::move(plugin)});
         }
 
         std::vector<fo4::MasterDescriptor> knownKinds;
@@ -447,7 +459,7 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
     std::scoped_lock lock(mutex_);
     auto* loaded = findPlugin(name);
     if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
-    const auto output = requestedPath.empty() ? loaded->path : std::filesystem::u8path(requestedPath);
+    const auto output = requestedPath.empty() ? loaded->path : utf8Path(requestedPath);
     try {
         fo4::write_plugin_file(loaded->plugin, output);
         loaded->path = output;
@@ -460,7 +472,9 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
 Result<nlohmann::json> RadiclePluginBackend::getEditablePlugins() const {
     nlohmann::json rows = nlohmann::json::array();
     std::scoped_lock lock(mutex_);
-    for (const auto& loaded : plugins_) rows.push_back(loaded.name);
+    for (const auto& loaded : plugins_) {
+        if (isEditable(loaded)) rows.push_back(loaded.name);
+    }
     return nlohmann::json(rows.dump());
 }
 
@@ -473,7 +487,7 @@ Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
             {"Name", loaded.name},
             {"Kind", pluginKind(loaded.plugin)},
             {"LoadOrder", index},
-            {"Editable", true},
+            {"Editable", isEditable(loaded)},
             {"Size", loaded.plugin.original_bytes.size()}
         });
     }
