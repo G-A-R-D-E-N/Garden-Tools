@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
 
@@ -121,6 +122,14 @@ Result<fo4::FormKey> formKeyArgument(const nlohmann::json& arguments) {
 }
 
 nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 0) {
+    if (signature == "EYES") {
+        return nlohmann::json::array({
+            "EDID",
+            "EYES\\Full",
+            "EYES\\Icon",
+            "EYES\\DataFlags"
+        });
+    }
     if (signature != "LVSP") return nlohmann::json::array({"EDID"});
 
     nlohmann::json columns = nlohmann::json::array({
@@ -217,7 +226,28 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
         nlohmann::json cells = nlohmann::json::array({editor});
         nlohmann::json editable = nlohmann::json::array({true});
 
-        if (signature == "LVSP") {
+        if (signature == "EYES") {
+            try {
+                const auto model = fo4::forms::decode_eyes(
+                    loaded->plugin, record->form_key);
+                if (model.full_text.has_value()) {
+                    cells.push_back(*model.full_text);
+                    editable.push_back(true);
+                } else {
+                    cells.push_back("<opaque/localized>");
+                    editable.push_back(false);
+                }
+                cells.push_back(model.icon);
+                cells.push_back(std::to_string(model.data_flags));
+                editable.push_back(true);
+                editable.push_back(true);
+            } catch (const fo4::forms::EyesError& error) {
+                return std::unexpected(Error{
+                    "EyesReadFailed",
+                    record->form_key.to_string() + ": " + error.what()
+                });
+            }
+        } else if (signature == "LVSP") {
             const auto& model = lvspModels[index - begin];
             cells.push_back(std::to_string(model.chance_none));
             cells.push_back(std::to_string(model.max_count));
