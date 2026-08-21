@@ -270,6 +270,9 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "backend.GetHistory") return getHistory(arguments);
     if (operation == "masters.GetPlugins") return getEditablePlugins();
     if (operation == "masters.List") return listMasters(arguments);
+    if (operation == "masters.Reorder") return reorderMasters(arguments);
+    if (operation == "masters.SetLight") return setLight(arguments);
+    if (operation == "masters.SavePlugin") return saveMastersPlugin(arguments);
 
     return std::unexpected(Error{
         "RadicleOperationNotImplemented",
