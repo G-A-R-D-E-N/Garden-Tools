@@ -24,20 +24,6 @@ bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     return true;
 }
 
-std::vector<fo4::MasterDescriptor> knownMasterKinds(
-    const std::vector<RadiclePluginBackend::LoadedPlugin>& plugins) {
-    std::vector<fo4::MasterDescriptor> known;
-    known.reserve(plugins.size());
-    for (const auto& item : plugins) {
-        known.push_back({
-            item.plugin.key,
-            item.plugin.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
-                                                          : fo4::PluginKind::full,
-        });
-    }
-    return known;
-}
-
 }
 
 Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json& arguments) {
@@ -121,7 +107,15 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
         loaded->plugin = std::move(mutated);
 
-        const auto known = knownMasterKinds(plugins_);
+        std::vector<fo4::MasterDescriptor> known;
+        known.reserve(plugins_.size());
+        for (const auto& item : plugins_) {
+            known.push_back({
+                item.plugin.key,
+                item.plugin.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
+                                                              : fo4::PluginKind::full,
+            });
+        }
         for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, known);
         rebuildGraphLocked();
 
