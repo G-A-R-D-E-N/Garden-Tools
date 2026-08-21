@@ -128,7 +128,7 @@ TEST_CASE("Native schema SetField rejects invalid REFR percentage without touchi
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "101"
     }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "ScalarFieldWriteFailed");
+    CHECK(result.error().type == "ScalarFieldWriteFailed");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
@@ -146,7 +146,7 @@ TEST_CASE("Native schema SetField refuses missing XHLT rather than guessing inse
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "50"
     }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "ScalarFieldMissing");
+    CHECK(result.error().type == "ScalarFieldMissing");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
@@ -163,7 +163,7 @@ TEST_CASE("Native schema SetField requires REFR record type") {
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "50"
     }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "ScalarFieldRecordMismatch");
+    CHECK(result.error().type == "ScalarFieldRecordMismatch");
 }
 
 TEST_CASE("Native schema SetField refuses protected Data plugin") {
@@ -180,6 +180,6 @@ TEST_CASE("Native schema SetField refuses protected Data plugin") {
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
     }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "PluginReadOnly");
+    CHECK(result.error().type == "PluginReadOnly");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
