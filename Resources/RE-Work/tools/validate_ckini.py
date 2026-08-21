@@ -38,6 +38,12 @@ Usage:
     # TextExport-derived ID in .ILSTRINGS):
     python3 validate_ckini.py --strings '.../STRINGS' \
         --text-export '.../TextExport.txt' --verbose
+    # write the per-language-stem composition to a deterministic JSON file
+    # (sorted keys, no timestamps) for CI diffing across runs:
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS \
+        --composition-out cross-check-composition.json
     python3 validate_ckini.py CreationKit.ini --exit-codes
     python3 validate_ckini.py --strings \
         '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
@@ -1145,6 +1151,33 @@ def _composition_lines(header, kind_ids, category_map, verbose=False,
     return lines
 
 
+def write_composition_json(path, stems, meta, ok):
+    """Write the per-language-stem composition to a JSON file for CI diffing.
+
+    ``stems`` maps stem -> {kind: ``_composition_data`` dict}; ``meta`` is a
+    small context dict (source/esm/language/roots) folded into the payload.
+    The output is deterministic (sorted keys, no timestamps), so the file
+    can be committed and diffed across runs. Returns an error message, or
+    None on success.
+    """
+    payload = {
+        "tool": "validate_ckini",
+        "mode": "composition",
+        "verdict": "PASS" if ok else "FAIL",
+        "anomaly_count": sum(len(kind.get("anomalies", []))
+                              for stem in stems.values()
+                              for kind in stem.values()),
+    }
+    payload.update(meta)
+    payload["stems"] = stems
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    except OSError as exc:
+        return "could not write %s: %s" % (path, exc)
+    return None
+
+
 def check_strings_file(path):
     """Validate one localized-string file; return (ok, lines)."""
     kind = _strings_kind(path)
@@ -1261,10 +1294,10 @@ def check_strings_file(path):
 def check_strings_files(paths, category_map=None, verbose=False):
     """Validate .STRINGS/.DLSTRINGS/.ILSTRINGS files (or directories of them).
 
-    Returns (ok, lines). Directories are scanned for the three kinds. When
-    several files share the same ``<ESM>_<Language>`` stem, their stringID
-    sets are cross-checked for the global-uniqueness partition (a string ID
-    lives in exactly one of the three tables).
+    Returns (ok, lines, composition). Directories are scanned for the three
+    kinds. When several files share the same ``<ESM>_<Language>`` stem,
+    their stringID sets are cross-checked for the global-uniqueness
+    partition (a string ID lives in exactly one of the three tables).
 
     ``category_map`` (optional) maps stringID -> canonical TextExport
     category name (see ``load_text_export_categories``). When supplied, the
@@ -1291,6 +1324,7 @@ def check_strings_files(paths, category_map=None, verbose=False):
              "ghidra-dump/localized-string-file-format.md)"]
     by_stem = {}
     overall_ok = True
+    composition = {}         # stem -> _composition_data dict (for --composition-out)
     for path in sorted(files):
         ok, sub = check_strings_file(path)
         lines.extend(sub)
@@ -1347,13 +1381,14 @@ def check_strings_files(paths, category_map=None, verbose=False):
         # versus the ordinary categories, attributed via TextExport records.
         if category_map:
             total = sum(len(ids) for ids in kind_ids.values())
+            composition[stem] = _composition_data(kind_ids, category_map)
             lines.extend(_composition_lines(
                 "STRINGS %s: TextExport routed-record composition "
                 "(%d IDs across %d file(s))" % (stem, total, len(group)),
                 kind_ids, category_map, verbose))
 
     lines.append("VERDICT: %s" % ("PASS" if overall_ok else "FAIL"))
-    return overall_ok, lines
+    return overall_ok, lines, composition
 
 
 def _load_strings_ids(path):
@@ -1419,7 +1454,9 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language,
     if not matching:
         lines = ["CROSS-CHECK: no compiled %s* string files match the compile "
                  "(esm=%s language=%s); skipped" % (_esm_stem(esm), esm, language)]
-        return True, lines
+        empty = {"files": [], "records": [], "match_count": 0,
+                 "mismatch_count": 0, "warning_count": 0, "composition": {}}
+        return True, lines, empty
 
     by_kind = {k: {} for k in _STRINGS_KINDS}
     for path in sorted(matching):
@@ -1775,10 +1812,22 @@ def main(argv):
                          "combined --compile-text --strings) list all 18 TextExport "
                          "categories with counts per table, not just the dialog set "
                          "{1,6,7,10}")
+    ap.add_argument("--composition-out", metavar="FILE", default=None,
+                    help="write the per-language-stem composition (per-table counts, "
+                         "dialog/ordinary splits, routing anomalies) to FILE as "
+                         "deterministic JSON for CI diffing; requires --strings with "
+                         "--text-export, or --compile-text combined with --strings "
+                         "(the normal text report still prints to stdout)")
     args = ap.parse_args(argv)
 
     if args.json and args.compile_text is None:
         ap.error("--json requires --compile-text (optionally with --strings)")
+    if args.composition_out is not None:
+        has_comp = ((args.strings is not None and args.text_export) or
+                    (args.compile_text is not None and args.strings is not None))
+        if not has_comp:
+            ap.error("--composition-out requires composition data: --strings with "
+                     "--text-export, or --compile-text combined with --strings")
 
     if args.strings is not None and args.compile_text is None:
         # Standalone --strings validation. When --compile-text is also given
@@ -1792,8 +1841,17 @@ def main(argv):
                 print("WARNING: " + w)
         else:
             category_map = None
-        ok, lines = check_strings_files(args.strings, category_map, args.verbose)
+        ok, lines, composition = check_strings_files(args.strings, category_map,
+                                                     args.verbose)
         print("\n".join(lines))
+        if args.composition_out is not None:
+            err = write_composition_json(
+                args.composition_out, composition,
+                {"source": "strings --text-export",
+                 "esm": None, "language": None, "roots": None}, ok)
+            if err:
+                print("ERROR: " + err)
+                return 1
         return 0 if ok else 1
 
     if args.compile_text is not None:
@@ -1843,6 +1901,15 @@ def main(argv):
             ok = ok and ok2
         else:
             xlines, xsummary = None, None
+
+        if args.composition_out is not None and xsummary is not None:
+            err = write_composition_json(
+                args.composition_out, xsummary["composition"],
+                {"source": "compile-text cross-check",
+                 "esm": esm, "language": language, "roots": roots}, ok)
+            if err:
+                print("ERROR: " + err)
+                return 1
 
         if args.json:
             payload = {

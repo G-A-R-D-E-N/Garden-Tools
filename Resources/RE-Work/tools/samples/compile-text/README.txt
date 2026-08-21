@@ -134,3 +134,16 @@ Add --verbose to the same command to list all 18 category names with counts
 per table (canonical order, zeros included) under each composition line;
 without it only the dialog set {1,6,7,10} is broken out. The --json variant
 always carries the full per-category counts in cross_check.composition.
+
+For CI diffing, --composition-out FILE writes the per-language-stem
+composition (per-table counts, dialog/ordinary splits, anomalies) to a
+deterministic JSON file -- sorted keys, no timestamps -- while the text
+report still prints to stdout:
+
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS \
+        --composition-out cross-check-composition.json
+
+Run it twice and diff the outputs to catch any change in how records are
+routed or attributed across runs/builds.
