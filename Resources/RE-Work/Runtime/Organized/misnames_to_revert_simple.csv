@@ -1,0 +1,14 @@
+address,revert_to_name
+0x1428CE3A0,ImageSpaceEffectGetHit::Render
+0x142483B20,Movie::GetCurrentFrame
+0x1420B9C30,Scaleform::GFx::Value::ObjectRelease
+0x141D7E930,bhkCharacterController::ClearCollectorDataImpl
+0x141D7E7D0,bhkCharacterController::ApplyMoveImmediately
+0x141B1A4E0,MemoryHeap::GetStats
+0x141B1A490,MemoryHeap::FreeSysDirect
+0x141B1A420,MemoryHeap::AllocSysDirect
+0x141B1A360,MemoryHeap::GetAllocHeap
+0x140C20130,PipboyManager::OnMouseMoveEvent
+0x140BEA9B0,ExamineMenu::OnThumbstickEvent
+0x14015CED0,TESLeveledList::GetCanContainFormsOfType
+0x140077D70,MagicItem::CopyMagicItemData
