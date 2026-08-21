@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fo4 {
@@ -27,12 +28,14 @@ bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,
                           std::string_view editor_id) {
   assign_record_form_keys(plugin);
+  bool found = false;
   bool changed = false;
 
   visit_records(plugin, [&](Record& record) {
-    if (changed || record.header.signature == sig_tes4 || record.form_key != record_key) {
+    if (found || record.header.signature == sig_tes4 || record.form_key != record_key) {
       return;
     }
+    found = true;
 
     for (auto& subrecord : record.subrecords) {
       if (subrecord.signature != sig_edid) continue;
@@ -52,11 +55,11 @@ bool set_record_editor_id(Plugin& plugin,
     changed = true;
   });
 
-  if (!changed) return false;
-
-  plugin.original_bytes.clear();
-  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
-  return true;
+  if (changed) {
+    plugin.original_bytes.clear();
+    visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
+  }
+  return found;
 }
 
 }  // namespace fo4
