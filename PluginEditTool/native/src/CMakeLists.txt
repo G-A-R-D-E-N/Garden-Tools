@@ -9,6 +9,7 @@ add_library(
     fo4ide_plugin
     plugin/RadiclePluginBackend.cpp
     plugin/RadiclePluginAnalysis.cpp
+    plugin/RadiclePluginMasters.cpp
 )
 target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4)
 fo4ide_enable_warnings(fo4ide_plugin)
