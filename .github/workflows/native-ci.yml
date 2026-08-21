@@ -1,15 +1,16 @@
 name: native-ci
 
-# Self-hosted runners execute arbitrary build code and must never see input
-# from untrusted forks. Each lane therefore has two jobs sharing one composite
-# build action:
-#
-#   *-hosted      plain pull_request events, on ephemeral GitHub-hosted runners
-#   *-selfhosted  pushes to main/work/**, workflow_dispatch, and PRs labeled
-#                 "ci:self-hosted" by a collaborator, on the garden fleet
-#
-# Windows cross-compilation requires the self-hosted xwin toolchain and is
-# skipped entirely for unlabeled PRs (no hosted replacement; see radicle.yml).
+# Self-hosted only, deliberately. GARDEN-TOOLS is a private repo: nobody
+# outside the org/collaborators can open a PR against it, so there is no
+# untrusted-fork threat to isolate from with a hosted lane -- and hosted
+# runners are not a safe fallback anyway: both G-A-R-D-E-N and
+# PRISMA-USER-INTERFACE-FRAMEWORK are well over the GitHub Free plan's 2,000
+# Actions minutes/month allowance, so a hosted job fails instantly, every
+# time, with no steps and no log (GHRUNNER#24). A prior version of this file
+# added ubuntu-latest lanes for PR-triggered builds specifically to keep
+# arbitrary PR code off the self-hosted fleet; that threat model doesn't
+# apply to a private repo's own collaborators, and the "fallback" was in
+# practice a guaranteed failure, not a safety net.
 
 on:
   push:
@@ -28,54 +29,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  radicle-linux-hosted:
-    name: Radicle (Linux, Debug, hosted)
-    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Publish pending status
-        uses: ./.github/actions/commit-status
-        with:
-          context: native-ci/radicle-linux
-          state: pending
-          description: Radicle Linux CI is running
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and test
-        uses: ./.github/actions/radicle-linux-ci
-        with:
-          install-deps: 'true'
-
-      - name: Upload failure diagnostics
-        if: failure()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: radicle-linux-hosted-failure
-          path: |
-            build/radicle/Testing/**
-            build/radicle/**/*.log
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Publish commit status
-        if: always()
-        uses: ./.github/actions/commit-status
-        with:
-          context: native-ci/radicle-linux
-          state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
-          description: Radicle Linux CI ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  radicle-linux-selfhosted:
-    name: Radicle (Linux, Debug, self-hosted)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
+  radicle-linux:
+    name: Radicle (Linux, Debug)
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 30
     steps:
@@ -118,54 +73,8 @@ jobs:
           description: Radicle Linux CI ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  fo4ide-linux-hosted:
-    name: PluginEditTool native (Linux, Debug, hosted)
-    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Publish pending status
-        uses: ./.github/actions/commit-status
-        with:
-          context: native-ci/fo4ide-linux
-          state: pending
-          description: PluginEditTool Linux CI is running
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and test
-        uses: ./.github/actions/fo4ide-linux-ci
-        with:
-          install-deps: 'true'
-
-      - name: Upload failure diagnostics
-        if: failure()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: fo4ide-native-linux-hosted-failure
-          path: |
-            build/fo4ide/Testing/**
-            build/fo4ide/**/*.log
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Publish commit status
-        if: always()
-        uses: ./.github/actions/commit-status
-        with:
-          context: native-ci/fo4ide-linux
-          state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
-          description: PluginEditTool Linux CI ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  fo4ide-linux-selfhosted:
-    name: PluginEditTool native (Linux, Debug, self-hosted)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
+  fo4ide-linux:
+    name: PluginEditTool native (Linux, Debug)
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 40
     steps:
@@ -210,10 +119,6 @@ jobs:
 
   radicle-windows-cross:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
-    # The xwin toolchain only lives on the self-hosted fleet; never run
-    # untrusted PR code there. No hosted replacement exists — this lane is a
-    # push/dispatch/labeled-PR gate only.
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 30
     steps:
@@ -279,3 +184,9 @@ jobs:
           state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
           description: Radicle Windows cross CI ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  # PluginEditTool's native backend is Windows/WebView2. The WebView2 SDK is NOT
+  # part of xwin, so a clang-cl/xwin cross build will only work once WebView2's
+  # headers/import libs are staged on the host (or vendored). Left out until that
+  # dependency is sorted; the Linux native job above still exercises the shared
+  # non-Windows code.
