@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/plugin/reader.hpp>
+#include <fo4/schema/form_links.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -57,6 +58,50 @@ std::vector<std::byte> makePlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> makeSourceOverride() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Master.esm\0", 11});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "WEAP", 0);
+    const auto record = fo4::test::begin_record(out, "WEAP", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"SourceWeapon\0", 13});
+    fo4::test::ByteWriter name;
+    name.u32(0x00000801);
+    fo4::test::write_subrecord(out, "NAME", name.bytes);
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
+std::vector<std::byte> makeTargetPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x811);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "MISC", 0);
+    const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000810);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"TargetLocal\0", 12});
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 std::string editorId(const fo4::Record& record) {
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != fo4::sig_edid) continue;
@@ -74,15 +119,24 @@ nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& result) {
     return nlohmann::json::parse(result->get<std::string>());
 }
 
+nlohmann::json pluginEntry(std::string name,
+                           const std::filesystem::path& path,
+                           std::string source = "test") {
+    return {
+        {"name", std::move(name)},
+        {"path", path.string()},
+        {"source", std::move(source)},
+        {"resolved", true}
+    };
+}
+
 void loadBackend(fo4ide::plugin::RadiclePluginBackend& backend,
-                 const std::filesystem::path& pluginPath) {
+                 const std::filesystem::path& pluginPath,
+                 std::string source = "test") {
     const nlohmann::json environment{
-        {"plugins", nlohmann::json::array({{
-            {"name", "Patch.esp"},
-            {"path", pluginPath.string()},
-            {"source", "test"},
-            {"resolved", true}
-        }})}
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, std::move(source))
+        })}
     };
     auto loaded = backend.invoke("environment.LoadMo2", environment);
     REQUIRE(loaded.has_value());
@@ -178,4 +232,142 @@ TEST_CASE("Native SetField reports missing records") {
         }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code == "RecordNotFound");
+}
+
+TEST_CASE("Native writes refuse plugins resolved directly from game Data") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin());
+    const auto before = fo4::read_plugin_file(path).original_bytes;
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path, "Data");
+
+    const auto edit = backend.invokeBackend(
+        "SetField",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            "Subrecords\\EDID[0]",
+            "Blocked"
+        }));
+    REQUIRE_FALSE(edit.has_value());
+    CHECK(edit.error().code == "PluginReadOnly");
+
+    const auto save = backend.invokeBackend(
+        "SavePlugin", nlohmann::json::array({"Patch.esp", ""}));
+    REQUIRE_FALSE(save.has_value());
+    CHECK(save.error().code == "PluginReadOnly");
+    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+}
+
+TEST_CASE("Native CopyAsOverride persists a destination-safe override") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Source.esp";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(sourcePath, makeSourceOverride());
+    writeBytes(targetPath, makeTargetPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Source.esp", sourcePath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto copied = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({
+            "Source.esp",
+            "000800:Master.esm",
+            "Target.esp",
+            false
+        }));
+    REQUIRE(copied.has_value());
+    CHECK(copied->get<std::string>().find("Copied") == 0);
+
+    const auto reloaded = fo4::read_plugin_file(targetPath);
+    REQUIRE(reloaded.header.masters.size() == 1);
+    CHECK(reloaded.header.masters[0].key.filename() == "Master.esm");
+
+    const auto* local = fo4::find_record(
+        reloaded, fo4::FormKey::parse("000810:Target.esp"));
+    REQUIRE(local != nullptr);
+    CHECK(local->header.form_id == fo4::RawFormId{0x01000810});
+
+    const auto* overrideRecord = fo4::find_record(
+        reloaded, fo4::FormKey::parse("000800:Master.esm"));
+    REQUIRE(overrideRecord != nullptr);
+    CHECK(editorId(*overrideRecord) == "SourceWeapon");
+
+    const auto links = fo4::collect_form_links(reloaded);
+    const auto link = std::find_if(links.begin(), links.end(), [](const auto& hit) {
+        return hit.record == fo4::FormKey::parse("000800:Master.esm") &&
+               hit.subrecord.to_string() == "NAME";
+    });
+    REQUIRE(link != links.end());
+    CHECK(link->key == fo4::FormKey::parse("000801:Master.esm"));
+
+    const auto exists = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({
+            "Source.esp",
+            "000800:Master.esm",
+            "Target.esp",
+            false
+        }));
+    REQUIRE(exists.has_value());
+    CHECK(exists->get<std::string>().find("EXISTS:") == 0);
+
+    const auto replaced = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({
+            "Source.esp",
+            "000800:Master.esm",
+            "Target.esp",
+            true
+        }));
+    REQUIRE(replaced.has_value());
+    CHECK(replaced->get<std::string>().find("Replaced") == 0);
+
+    const auto matrix = parseStringResult(
+        backend.invoke("backend.GetConflictMatrix",
+                       nlohmann::json::array({"000800:Master.esm"})));
+    CHECK(matrix.at("Winner") == "Target.esp");
+    REQUIRE(matrix.at("Plugins").size() == 2);
+}
+
+TEST_CASE("Native CopyAsOverride refuses protected destination plugins") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Source.esp";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(sourcePath, makeSourceOverride());
+    writeBytes(targetPath, makeTargetPlugin());
+    const auto before = fo4::read_plugin_file(targetPath).original_bytes;
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Source.esp", sourcePath),
+            pluginEntry("Target.esp", targetPath, "Data")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto result = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({
+            "Source.esp",
+            "000800:Master.esm",
+            "Target.esp",
+            false
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().code == "PluginReadOnly");
+    CHECK(fo4::read_plugin_file(targetPath).original_bytes == before);
 }
