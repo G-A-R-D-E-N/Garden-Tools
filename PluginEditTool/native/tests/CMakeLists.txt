@@ -23,6 +23,7 @@ fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginMastersTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
