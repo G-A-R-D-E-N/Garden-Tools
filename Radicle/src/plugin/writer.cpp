@@ -6,6 +6,7 @@
 
 #include <zlib.h>
 
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <span>
@@ -236,6 +237,7 @@ void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
   assign_record_form_keys(plugin);
   const auto old_context = plugin_form_id_context(plugin);
+  const auto old_masters = plugin.header.masters;
 
   plugin.header.masters.clear();
   plugin.header.masters.reserve(new_masters.size());
@@ -243,6 +245,13 @@ Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_mas
     MasterReference master;
     master.key = std::move(desc.key);
     master.kind = desc.kind;
+    const auto old = std::find_if(old_masters.begin(), old_masters.end(), [&](const auto& item) {
+      return item.key == master.key;
+    });
+    if (old != old_masters.end()) {
+      master.data_size = old->data_size;
+      master.data_bytes = old->data_bytes;
+    }
     plugin.header.masters.push_back(std::move(master));
   }
 
