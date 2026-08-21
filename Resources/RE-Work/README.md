@@ -14,9 +14,11 @@ Status of every doc and tool — completion state and next open questions: [STAT
 What Radicle cares about: form enum, file-load table, factory array, FileSaver / masterfile write.
 
 - [docs/12-RECORD-DEFINITION.md](docs/12-RECORD-DEFINITION.md)
+- [docs/23-CELL-WORLDSPACE.md](docs/23-CELL-WORLDSPACE.md) (WRLD/CELL/LAND/REFR vtables, factories, dispatch)
 - [docs/record-definition-table.txt](docs/record-definition-table.txt)
 - [docs/15-BATCH-PROCESSES.md](docs/15-BATCH-PROCESSES.md) (`-SaveDefaultPlugin`, MasterfileOptimizer)
 - [dumps/tes-classes.txt](dumps/tes-classes.txt)
+- [dumps/cell-worldspace-vtables/](dumps/cell-worldspace-vtables/) (FindVftable RTTI→vftable resolver + raw dumps)
 
 ### Batch CLI
 Headless switches, parser, exit codes, CompileTextExport / localized-string outputs.

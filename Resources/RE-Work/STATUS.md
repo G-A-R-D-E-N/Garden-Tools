@@ -24,7 +24,7 @@ Legend: ✅ done/verified · 🟡 partial (known gaps in-doc) · 🔴 blocked/no
 | 09-PRECOMBINED-PREVIS | ✅ chunking, mesh naming, `.scene` output walk | precombined NIF geometry details live in `ck-nif-block-format-reference.md` |
 | 10-SETTINGS-READER | ✅ reader FUN_1425c7f90, type-letter table, registration pipeline | — |
 | 11-INIT-CHAIN | ✅ full WinMain subsystem init chain | — |
-| 12-RECORD-DEFINITION | 🟡 formEnumString enum, file-load table, factory array, RTTI map | full record load/save set via the ghidra-demangled factory symbols (last in-progress thread) |
+| 12-RECORD-DEFINITION | 🟡 formEnumString enum, file-load table, factory array, RTTI map | full record load/save set via the ghidra-demangled factory symbols; doc 23 corrects the CELL/WRLD/LAND "no factory" rows (they have `ConcreteFormFactory`; only REFR is special-cased) |
 | 13-CLI-PARSER | ✅ token→bitmask parser, 31-switch table, bit→process map | — |
 | 14-SCENE-FORMAT | ✅ `.scene` from writer decompile + shipped `.uvd` byte parse | real `.scene` generation blocked — CK won't run under Wine (doc 20); format rests on writer decompile + `.uvd` siblings |
 | 15-BATCH-PROCESSES | ✅ MasterfileOptimizer/Tagifier, MapMaker, CheckItInChappy, FileSaver, `-SaveDefaultPlugin` | — |
@@ -35,6 +35,7 @@ Legend: ✅ done/verified · 🟡 partial (known gaps in-doc) · 🔴 blocked/no
 | 20-WINE-PAPYRUS-ZIP-CRASH | ✅ root cause (Shell COM `NameSpace` → NULL `Folder*`) + workaround analysis | a working Wine launch would unblock several runtime verifications |
 | 21-UVD-FORMAT | ✅ magic `0xD6000012`, CRC-32C framing, 0x150 header map, verified on 3 shipped samples | — |
 | 22-BATCH-SETTING-DEPENDENCIES | ✅ direct descriptor reads per batch process, negative `iPlacedObjectRender` result, dependency tiers | — |
+| 23-CELL-WORLDSPACE | ✅ RTTI→vftable inventory for WRLD/CELL/LAND/REFR, factory correction (doc 12), CreateForm/NewCell dispatch, GRUP enum, source mapping | per-slot naming of the LoadRecord/SaveRecord virtuals (slots 23+), full TESObjectCELL member layout, REFR serializer path |
 
 ## Analysis docs (`ghidra-dump/`)
 
