@@ -18,15 +18,13 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
-constexpr auto k_refr = fo4::Signature::from_string("REFR");
-constexpr auto k_xhlt = fo4::Signature::from_string("XHLT");
-
 }
 
 Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     const nlohmann::json& arguments) {
-    const auto field = stringArgument(arguments, 2);
-    if (field != "REFR\\HealthPercent") {
+    const auto fieldPath = stringArgument(arguments, 2);
+    const auto field = fo4::schema::scalar_field_descriptor(fieldPath);
+    if (!field.has_value()) {
         return setField(arguments);
     }
 
@@ -69,16 +67,17 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
             "Record is not present in " + pluginName + ": " + formKeyText
         });
     }
-    if (record->header.signature != k_refr) {
+    if (record->header.signature != field->record) {
         return std::unexpected(Error{
             "ScalarFieldRecordMismatch",
-            "REFR\\HealthPercent can only be written on a REFR record"
+            std::string(field->path) + " can only be written on a " +
+                field->record.to_string() + " record"
         });
     }
 
     try {
         auto mutated = loaded->plugin;
-        const auto status = fo4::set_record_scalar(mutated, key, k_xhlt, value);
+        const auto status = fo4::set_record_scalar(mutated, key, *field, value);
         switch (status) {
             case fo4::ScalarMutationStatus::record_missing:
                 return std::unexpected(Error{
@@ -88,7 +87,9 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
             case fo4::ScalarMutationStatus::subrecord_missing:
                 return std::unexpected(Error{
                     "ScalarFieldMissing",
-                    "REFR has no XHLT subrecord; Radicle will not guess a missing subrecord insertion position"
+                    field->record.to_string() + " has no " +
+                        field->scalar.subrecord.to_string() +
+                        " subrecord; Radicle will not guess a missing subrecord insertion position"
                 });
             case fo4::ScalarMutationStatus::updated:
             case fo4::ScalarMutationStatus::unchanged:
@@ -101,7 +102,8 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
             rebuildGraphLocked();
         }
         return nlohmann::json(
-            "Updated REFR Health % for " + formKeyText + " in " + pluginName + ".");
+            "Updated " + std::string(field->path) + " for " + formKeyText +
+            " in " + pluginName + ".");
     } catch (const fo4::schema::ScalarError& error) {
         return std::unexpected(Error{"ScalarFieldWriteFailed", error.what()});
     } catch (const std::exception& error) {
