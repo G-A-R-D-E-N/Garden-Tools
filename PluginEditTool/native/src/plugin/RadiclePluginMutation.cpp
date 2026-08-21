@@ -68,6 +68,12 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "AddMasters") return addMasters(arguments);
+    if (method == "GetPluginRecordTypes") return getPluginRecordTypes(arguments);
+    if (method == "GetRecordsOfType") return getRecordsOfType(arguments);
+    if (method == "GetRecordsGrid") return getRecordsGrid(arguments);
+    if (method == "GetRecordDetails") return getRecordDetails(arguments);
+    if (method == "GetRecordPluginMatrix") return getRecordPluginMatrix(arguments);
+    if (method == "GetContainmentPath") return getContainmentPath(arguments);
 
     if (method == "GetEditablePlugins") {
         nlohmann::json rows = nlohmann::json::array();
