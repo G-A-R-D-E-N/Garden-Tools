@@ -41,6 +41,12 @@ private:
     Result<nlohmann::json> getEditablePlugins() const;
     Result<nlohmann::json> getActivePlugins() const;
     Result<nlohmann::json> getRecordTypeIndex() const;
+    Result<nlohmann::json> getPluginRecordTypes(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getRecordsOfType(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getRecordsGrid(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getRecordDetails(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getRecordPluginMatrix(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getContainmentPath(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getLoadOrderSummary() const;
     Result<nlohmann::json> getConflicts() const;
     Result<nlohmann::json> getConflictMatrix(const nlohmann::json& arguments) const;
