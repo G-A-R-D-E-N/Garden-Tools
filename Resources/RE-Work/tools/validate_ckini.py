@@ -29,6 +29,11 @@ Usage:
     python3 validate_ckini.py --strings \
         '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
     python3 validate_ckini.py --strings '.../STRINGS'   # whole language dir
+    # attribute compiled IDs back to their TextExport categories, so the
+    # partition report also counts how many IDs per table came from each
+    # dialog category (indices {1,6,7,10} -> .DLSTRINGS):
+    python3 validate_ckini.py --strings '.../STRINGS' \
+        --text-export '.../TextExport.txt' ['.../more/TextExport.txt' ...]
 
 The descriptor table maps 1,629 colon-bearing `bKey:Section` literals plus
 25 byte-verified bare records (whose reader section is `[MAIN]`; doc 10 counts
@@ -923,6 +928,61 @@ def _strings_lang_stem(path):
     return base.rsplit(".", 1)[0].lower()
 
 
+def load_text_export_categories(paths):
+    """Build {stringID: canonical-category} from TextExport.txt file(s).
+
+    Reuses the four-field FUN_14091f3d0 record parser. Reserved IDs (below
+    0x10) are skipped exactly like the compiler, so they never show up as
+    attributed. Category names are canonicalized (case-insensitive match,
+    unknown -> Misc, the parser's index-17 default), so the dialog lookups
+    in the composition report are exact. A directory argument is walked
+    recursively for files named TextExport.txt. Unreadable paths surface as
+    warnings, not failures -- the map only enriches the --strings partition
+    report.
+
+    Returns (id_to_category, warnings).
+    """
+    id_to_cat = {}
+    warnings = []
+    for p in paths:
+        if os.path.isdir(p):
+            names = []
+            for root, _dirs, files in os.walk(p):
+                for name in files:
+                    if name.lower() == "textexport.txt":
+                        names.append(os.path.join(root, name))
+            if not names:
+                warnings.append("no TextExport.txt found under %s" % p)
+            files = sorted(names)
+        else:
+            files = [p]
+        for path in files:
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    for lineno, raw in enumerate(fh, 1):
+                        line = raw.rstrip("\r\n")
+                        if not line.strip() or line.lstrip().startswith(";"):
+                            continue
+                        string_id, category, notes = _text_root_record(line)
+                        if string_id is None:
+                            for n in notes:
+                                if not n.startswith("unknown category"):
+                                    warnings.append("%s:%d: %s"
+                                                    % (os.path.basename(path), lineno, n))
+                            continue
+                        if string_id < _TEXT_RESERVED_LIMIT:
+                            continue
+                        cat = (category or "").strip()
+                        try:
+                            cat = _TEXT_CATEGORIES[_TEXT_CATEGORIES_LOWER.index(cat.lower())]
+                        except ValueError:
+                            cat = _TEXT_CATEGORIES[-1]   # Misc fallback
+                        id_to_cat[string_id] = cat
+            except OSError as exc:
+                warnings.append("could not read %s: %s" % (path, exc))
+    return id_to_cat, warnings
+
+
 def check_strings_file(path):
     """Validate one localized-string file; return (ok, lines)."""
     kind = _strings_kind(path)
@@ -1036,13 +1096,19 @@ def check_strings_file(path):
     return not errors, lines
 
 
-def check_strings_files(paths):
+def check_strings_files(paths, category_map=None):
     """Validate .STRINGS/.DLSTRINGS/.ILSTRINGS files (or directories of them).
 
     Returns (ok, lines). Directories are scanned for the three kinds. When
     several files share the same ``<ESM>_<Language>`` stem, their stringID
     sets are cross-checked for the global-uniqueness partition (a string ID
     lives in exactly one of the three tables).
+
+    ``category_map`` (optional) maps stringID -> canonical TextExport
+    category name (see ``load_text_export_categories``). When supplied, the
+    per-stem report also counts, for every table, how many of its IDs were
+    routed from each dialog category (indices {1,6,7,10} -> .DLSTRINGS per
+    FUN_140916980's 0x4c2 bitmask) versus the ordinary categories.
     """
     files = []
     for p in paths:
@@ -1069,12 +1135,11 @@ def check_strings_files(paths):
             by_stem.setdefault(_strings_lang_stem(path), []).append(path)
 
     # Cross-file ID partition per language stem: a stringID must appear in
-    # exactly one table.
+    # exactly one table. The routed-record composition (when TextExport
+    # categories are available) is reported for every stem, including stems
+    # that hold a single file.
     for stem, group in sorted(by_stem.items()):
-        if len(group) < 2:
-            continue
-        seen = {}
-        collisions = []
+        kind_ids = {k: [] for k in _STRINGS_KINDS}
         for path in group:
             kind = _strings_kind(path)
             with open(path, "rb") as fh:
@@ -1086,24 +1151,65 @@ def check_strings_files(paths):
                 data = fh.read()
             for i in range(num):
                 sid, _ = struct.unpack_from("<II", data, 8 + 8 * i)
-                if sid in seen and seen[sid] != kind:
-                    collisions.append("0x%08X in both %s and %s"
-                                      % (sid, seen[sid], kind))
-                seen.setdefault(sid, kind)
-        if collisions:
-            known = [c for c in collisions
-                     if int(c.split(" ")[0], 16) in _STRINGS_KNOWN_PARTITION_EXCEPTIONS]
-            if len(known) == len(collisions):
-                lines.append("WARNING: STRINGS %s: %d known shipped exception(s) "
-                             "(Enclave Creation-Club paints, present in every language): %s"
-                             % (stem, len(collisions), "; ".join(collisions)))
+                kind_ids[kind].append(sid)
+
+        if len(group) >= 2:
+            seen = {}
+            collisions = []
+            for kind, ids in kind_ids.items():
+                for sid in ids:
+                    if sid in seen and seen[sid] != kind:
+                        collisions.append("0x%08X in both %s and %s"
+                                          % (sid, seen[sid], kind))
+                    seen.setdefault(sid, kind)
+            if collisions:
+                known = [c for c in collisions
+                         if int(c.split(" ")[0], 16) in _STRINGS_KNOWN_PARTITION_EXCEPTIONS]
+                if len(known) == len(collisions):
+                    lines.append("WARNING: STRINGS %s: %d known shipped exception(s) "
+                                 "(Enclave Creation-Club paints, present in every language): %s"
+                                 % (stem, len(collisions), "; ".join(collisions)))
+                else:
+                    overall_ok = False
+                    lines.append("STRINGS %s: stringID partition violated (%d collision(s)): %s"
+                                 % (stem, len(collisions), "; ".join(collisions[:6])))
             else:
-                overall_ok = False
-                lines.append("STRINGS %s: stringID partition violated (%d collision(s)): %s"
-                             % (stem, len(collisions), "; ".join(collisions[:6])))
-        else:
-            lines.append("STRINGS %s: %d files, stringID partition holds "
-                         "(%d unique IDs)" % (stem, len(group), len(seen)))
+                lines.append("STRINGS %s: %d files, stringID partition holds "
+                             "(%d unique IDs)" % (stem, len(group), len(seen)))
+
+        # Routed-record composition per table: how many of this stem's
+        # compiled IDs came from each dialog category (indices {1,6,7,10})
+        # versus the ordinary categories, attributed via TextExport records.
+        if category_map:
+            total = sum(len(ids) for ids in kind_ids.values())
+            lines.append("STRINGS %s: TextExport routed-record composition "
+                         "(%d IDs across %d file(s))" % (stem, total, len(group)))
+            for kind in _STRINGS_KINDS:
+                ids = kind_ids[kind]
+                if not ids:
+                    continue
+                by_cat = {}
+                for sid in ids:
+                    cat = category_map.get(sid)
+                    if cat is not None:
+                        by_cat[cat] = by_cat.get(cat, 0) + 1
+                attr = sum(by_cat.values())
+                dialog = sum(by_cat.get(_TEXT_CATEGORIES[i], 0)
+                             for i in _TEXT_DIALOG_INDICES)
+                ordinary = attr - dialog
+                detail = []
+                if dialog:
+                    parts = ["%s=%d" % (_TEXT_CATEGORIES[i], by_cat.get(_TEXT_CATEGORIES[i], 0))
+                             for i in sorted(_TEXT_DIALOG_INDICES)
+                             if by_cat.get(_TEXT_CATEGORIES[i])]
+                    detail.append("dialog-routed=%d (%s)" % (dialog, ", ".join(parts)))
+                if ordinary:
+                    detail.append("ordinary-routed=%d" % ordinary)
+                if not detail:
+                    detail.append("none attributed")
+                lines.append("  %s: %d IDs, %d attributed (%s), %d unattributed"
+                             % (kind, len(ids), attr, "; ".join(detail),
+                                len(ids) - attr))
 
     lines.append("VERDICT: %s" % ("PASS" if overall_ok else "FAIL"))
     return overall_ok, lines
@@ -1449,14 +1555,29 @@ def main(argv):
                          "sorted ID table, offset bounds, per-kind record encoding, and the "
                          "per-language stringID partition. Combined with --compile-text, "
                          "cross-checks the predicted output tables against the compiled "
-                         "files. Real samples: .../TEMP_BSA_FILES/*/STRINGS/")
+                         "files. With --text-export, the partition report also counts how "
+                         "many IDs per table came from each dialog category. Real samples: "
+                         ".../TEMP_BSA_FILES/*/STRINGS/")
+    ap.add_argument("--text-export", nargs="*", default=None, metavar="FILE",
+                    help="TextExport.txt file(s) (or directories walked for them) whose "
+                         "records attribute compiled string IDs back to their source "
+                         "category in the --strings partition report (dialog categories "
+                         "{1,6,7,10} -> .DLSTRINGS per FUN_140916980)")
     args = ap.parse_args(argv)
 
     if args.strings is not None and args.compile_text is None:
         # Standalone --strings validation. When --compile-text is also given
         # the strings block is skipped: the compile-text branch runs first and
-        # then cross-checks its route predictions against these files.
-        ok, lines = check_strings_files(args.strings)
+        # then cross-checks its route predictions against these files. With
+        # --text-export the partition report additionally attributes every
+        # compiled ID back to its TextExport category.
+        if args.text_export:
+            category_map, te_warnings = load_text_export_categories(args.text_export)
+            for w in te_warnings:
+                print("WARNING: " + w)
+        else:
+            category_map = None
+        ok, lines = check_strings_files(args.strings, category_map)
         print("\n".join(lines))
         return 0 if ok else 1
 
