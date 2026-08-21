@@ -72,7 +72,8 @@ std::int32_t append_optional_string(
     TerrainBtrBuildOptions& options,
     const std::string& value) {
     if (value.empty()) return -1;
-    const auto index = 1U + options.additional_strings.size();
+    const auto index = static_cast<std::size_t>(options.reserved_string_count) +
+                       options.additional_strings.size();
     if (index > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max())) return -2;
     options.additional_strings.push_back(value);
     return static_cast<std::int32_t>(index);

@@ -45,6 +45,8 @@ add_library(f4lod_core
     src/core/lod_settings.cpp
     src/core/nif.cpp
     src/core/nif_writer.cpp
+    src/core/object_lod.cpp
+    src/core/object_static.cpp
     src/core/pipeline.cpp
     src/core/plugin.cpp
     src/core/record_data.cpp
@@ -61,6 +63,7 @@ add_library(f4lod_core
     src/core/terrain_profile.cpp
     src/core/terrain_quality.cpp
     src/core/terrain_simplify.cpp
+    src/core/terrain_skirts.cpp
     src/core/terrain_source_audit.cpp
     src/core/terrain_texture_graph.cpp
     src/core/terrain_unseen.cpp
@@ -118,6 +121,7 @@ if(F4LOD_BUILD_TESTS)
     f4lod_add_smoke(f4lod_terrain_greedy_smoke tests/terrain_greedy_smoke.cpp terrain-greedy-smoke)
     f4lod_add_smoke(f4lod_terrain_simplify_smoke tests/terrain_simplify_smoke.cpp terrain-simplify-smoke)
     f4lod_add_smoke(f4lod_terrain_quality_smoke tests/terrain_quality_smoke.cpp terrain-quality-smoke)
+    f4lod_add_smoke(f4lod_terrain_skirts_smoke tests/terrain_skirts_smoke.cpp terrain-skirts-smoke)
     f4lod_add_smoke(f4lod_terrain_unseen_smoke tests/terrain_unseen_smoke.cpp terrain-unseen-smoke)
     f4lod_add_smoke(f4lod_terrain_source_audit_smoke tests/terrain_source_audit_smoke.cpp terrain-source-audit-smoke)
     f4lod_add_smoke(f4lod_terrain_profile_smoke tests/terrain_profile_smoke.cpp terrain-profile-smoke)
@@ -135,4 +139,6 @@ if(F4LOD_BUILD_TESTS)
     f4lod_add_smoke(f4lod_btr_probe_smoke tests/btr_probe_smoke.cpp btr-probe-smoke)
     f4lod_add_smoke(f4lod_btr_calibration_smoke tests/btr_calibration_smoke.cpp btr-calibration-smoke)
     f4lod_add_smoke(f4lod_commonwealth_calibration_report_smoke tests/commonwealth_calibration_report_smoke.cpp commonwealth-calibration-report-smoke)
+    f4lod_add_smoke(f4lod_object_lod_smoke tests/object_lod_smoke.cpp object-lod-smoke)
+    f4lod_add_smoke(f4lod_object_static_smoke tests/object_static_smoke.cpp object-static-smoke)
 endif()

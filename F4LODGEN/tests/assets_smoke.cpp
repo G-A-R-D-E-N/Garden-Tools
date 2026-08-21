@@ -96,6 +96,15 @@ int main() {
     assert(ambiguous.matching_archives[1].type == f4lod::Ba2ArchiveType::general);
 
     f4lod::AssetResolver resolver(data, {low, high});
+    auto resolution = resolver.resolve("lodsettings/Commonwealth.lod");
+    assert(resolution.valid);
+    assert(resolution.candidates_low_to_high.size() == 2U);
+    assert(resolution.candidates_low_to_high[0].container == low_path);
+    assert(resolution.candidates_low_to_high[1].container == high_path);
+    assert(resolution.winner() != nullptr);
+    assert(resolution.winner()->container == high_path);
+    assert(resolution.winner()->kind == f4lod::AssetSourceKind::general_ba2);
+
     auto result = resolver.read("lodsettings/Commonwealth.lod");
     assert(result.valid);
     assert(result.source.kind == f4lod::AssetSourceKind::general_ba2);
@@ -113,11 +122,27 @@ int main() {
     assert(loose_discovery.loose_exists);
     assert(loose_discovery.matching_archives.empty());
 
+    resolution = resolver.resolve("lodsettings/Commonwealth.lod");
+    assert(resolution.valid);
+    assert(resolution.candidates_low_to_high.size() == 3U);
+    assert(resolution.candidates_low_to_high[0].container == low_path);
+    assert(resolution.candidates_low_to_high[1].container == high_path);
+    assert(resolution.candidates_low_to_high[2].kind == f4lod::AssetSourceKind::loose);
+    assert(resolution.winner() != nullptr);
+    assert(resolution.winner()->kind == f4lod::AssetSourceKind::loose);
+    assert(resolution.winner()->container == data / "lodsettings" / "Commonwealth.lod");
+
     result = resolver.read("lodsettings/Commonwealth.lod");
     assert(result.valid);
     assert(result.source.kind == f4lod::AssetSourceKind::loose);
     assert(text(result) == "loose");
 
+    const auto missing = resolver.resolve("missing.bin");
+    assert(missing.valid);
+    assert(missing.candidates_low_to_high.empty());
+    assert(missing.winner() == nullptr);
+
+    assert(!resolver.resolve("../outside.bin").valid);
     assert(!resolver.read("../outside.bin").valid);
     assert(!resolver.read("C:\\absolute.bin").valid);
     assert(!resolver.read("missing.bin").valid);

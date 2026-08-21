@@ -13,6 +13,36 @@ bool underwater_vertex(const TerrainBlockMesh& mesh, std::uint32_t index) noexce
     return std::isfinite(water) && mesh.vertices[index].z < water;
 }
 
+std::size_t square_side(std::size_t count) noexcept {
+    const auto side = static_cast<std::size_t>(std::llround(std::sqrt(static_cast<double>(count))));
+    return side != 0U && side * side == count ? side : 0U;
+}
+
+bool diagonals_all_below_water(
+    const TerrainBlockMesh& mesh,
+    std::size_t side,
+    std::size_t x,
+    std::size_t y) noexcept {
+    for (int dy : {-1, 1}) {
+        for (int dx : {-1, 1}) {
+            const auto nx_signed = static_cast<std::ptrdiff_t>(x) + dx;
+            const auto ny_signed = static_cast<std::ptrdiff_t>(y) + dy;
+            if (nx_signed < 0 || ny_signed < 0 ||
+                nx_signed >= static_cast<std::ptrdiff_t>(side) ||
+                ny_signed >= static_cast<std::ptrdiff_t>(side)) {
+                continue;
+            }
+            const auto nx = static_cast<std::size_t>(nx_signed);
+            const auto ny = static_cast<std::size_t>(ny_signed);
+            const auto index = ny * side + nx;
+            if (index >= mesh.vertices.size() || index >= mesh.vertex_water_height.size()) return false;
+            const float water = mesh.vertex_water_height[index];
+            if (!std::isfinite(water) || mesh.vertices[index].z >= water) return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 TerrainUnseenResult optimize_unseen_terrain(
@@ -41,28 +71,63 @@ TerrainUnseenResult optimize_unseen_terrain(
     }
 
     result.mesh = source;
+    result.ignored_vertices.assign(source.vertices.size(), 0U);
+    result.forced_vertices.assign(source.vertices.size(), 0U);
     if (options.water_delta < 0.0F) {
         result.output_triangles = result.source_triangles;
         result.valid = true;
         return result;
     }
 
+    const auto side = square_side(source.vertices.size());
+    if (side == 0U) {
+        result.error = "Optimize Unseen requires the complete regular terrain heightfield.";
+        return result;
+    }
+
     result.enabled = true;
 
-    // Recovered LODGen order applies WaterDelta to the regular terrain
-    // heightfield before greedy triangulation. Do not pre-simplify or compact
-    // the mesh here: doing so destroys the (32*LOD+1)^2 grid that Terrain/
-    // GreedySubdivision consumes.
-    if (options.water_delta > 0.0F) {
-        for (std::size_t i = 0; i < result.mesh.vertices.size(); ++i) {
+    // TerrainLOD.GenerateQuad operates in quad-local Z. F4LODGen keeps the
+    // working mesh in world units until the greedy reducer, so the reference
+    // delta/lodLevel conversion cancels when expressed here: underwater target
+    // = water - WaterDelta, above-water nudge = WaterDelta / 100.
+    const float above_water_nudge = options.water_delta / 100.0F;
+    for (std::size_t y = 0; y < side; ++y) {
+        for (std::size_t x = 0; x < side; ++x) {
+            const auto i = y * side + x;
             const float water = result.mesh.vertex_water_height[i];
             if (!std::isfinite(water)) continue;
+
             auto& z = result.mesh.vertices[i].z;
-            if (z >= water) continue;
+            if (z >= water) {
+                if (above_water_nudge > 0.0F) {
+                    z += above_water_nudge;
+                    ++result.raised_vertices;
+                }
+                continue;
+            }
+
             const float target = water - options.water_delta;
             if (z > target) {
                 z = target;
                 ++result.shifted_vertices;
+            }
+
+            const bool protected_cell_border =
+                options.protect_cell_borders && source.lod_level == 4U &&
+                source.cell_border[i] != 0U;
+            // The reference classifies the point from the original water/land
+            // relation before the current sample is flattened or lowered.
+            if (diagonals_all_below_water(source, side, x, y) && !protected_cell_border) {
+                result.ignored_vertices[i] = 1U;
+            }
+
+            // The reference engine forces underwater points on the outer quad
+            // boundary when Optimize Unseen is active so neighboring blocks
+            // retain matching seams.
+            if (source.outer_border[i] != 0U) {
+                result.forced_vertices[i] = 1U;
+                result.ignored_vertices[i] = 0U;
             }
         }
     }
@@ -83,13 +148,11 @@ TerrainUnseenResult optimize_unseen_terrain(
         }
     }
 
-    // Coarsening is intentionally left to the same terrain Quality reducer as
-    // visible terrain, matching the recovered engine flow. The exact
-    // WaterDelta=0 heightfield mutation remains an oracle item until the
-    // decompiled routine is fully characterized.
+    // Geometry remains a complete regular heightfield here. Ignored/forced
+    // point states are consumed by the greedy reducer rather than deleting or
+    // compacting source triangles before Quality refinement.
     result.output_triangles = result.source_triangles;
     result.valid = true;
-    (void) options.protect_cell_borders;
     (void) options.regularize;
     return result;
 }

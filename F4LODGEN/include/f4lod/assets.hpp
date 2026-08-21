@@ -2,7 +2,9 @@
 
 #include "f4lod/ba2.hpp"
 
+#include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -29,6 +31,16 @@ struct AssetReadResult {
     std::vector<unsigned char> data;
 };
 
+struct AssetResolution {
+    bool valid{};
+    std::string error;
+    std::string game_path;
+    std::vector<AssetSource> candidates_low_to_high;
+    std::optional<std::size_t> winner_index;
+
+    [[nodiscard]] const AssetSource* winner() const noexcept;
+};
+
 struct AssetArchiveDiscovery {
     bool valid{};
     std::string error;
@@ -50,6 +62,7 @@ public:
 
     [[nodiscard]] const std::filesystem::path& data_root() const noexcept;
     [[nodiscard]] std::span<const Ba2Inspection> archives() const noexcept;
+    [[nodiscard]] AssetResolution resolve(const std::string& game_path) const;
     [[nodiscard]] AssetReadResult read(const std::string& game_path) const;
 
 private:

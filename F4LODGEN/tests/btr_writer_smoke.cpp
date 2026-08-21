@@ -3,6 +3,7 @@
 #include "f4lod/nif.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <filesystem>
 
 int main() {
@@ -40,15 +41,18 @@ int main() {
     assert(btr.valid);
     assert(btr.nif.blocks.size() == 4);
     assert(btr.terrain_shape == 1);
+    assert(btr.nif.blocks[1].type == "BSTriShape");
     assert(btr.bounds_position[0] == 1064.0F);
     assert(btr.bounds_position[1] == 2064.0F);
 
     const auto geometry = f4lod::inspect_fallout4_btr_geometry(path, btr.terrain_shape);
     assert(geometry.valid);
+    assert(geometry.type == "BSTriShape");
     assert(geometry.vertex_count == 4);
     assert(geometry.triangle_count == 2);
     assert(geometry.full_precision_positions);
     assert(geometry.vertex_stride == 24);
+    assert(geometry.vertex_size_words == 5U);
     assert(geometry.data_size == 108);
     assert(geometry.translation[0] == 1000.0F);
     assert(geometry.translation[1] == 2000.0F);
@@ -57,8 +61,9 @@ int main() {
     assert(geometry.position_max[0] == 128.0F);
     assert(geometry.position_min[1] == 0.0F);
     assert(geometry.position_max[1] == 128.0F);
-    assert(geometry.subindex_triangle_count == 2);
-    assert(geometry.subindex_a == 0);
+    assert(geometry.vertex_flag3 == 0U);
+    assert(geometry.subindex_triangle_count == 0U);
+    assert(geometry.subindex_a == 0U);
     assert(geometry.shader_properties[0] == -1);
 
     auto half_options = options;
@@ -72,8 +77,67 @@ int main() {
     assert(half_geometry.valid);
     assert(!half_geometry.full_precision_positions);
     assert(half_geometry.vertex_stride == 16U);
-    assert(half_geometry.vertex_size_words == 4U);
+    assert(half_geometry.vertex_size_words == 5U);
     assert(half_geometry.float_size_words == 2U);
+
+    // Generated terrain does not use an arbitrary world transform. TerrainLOD
+    // stores the mesh in 0..4096 quad-local space and applies lodLevel as the
+    // node scale. ShiftZ centers the local Z values and ZSHIFT is added to the
+    // node translation only.
+    f4lod::TerrainSimplifiedMesh recovered_mesh;
+    recovered_mesh.valid = true;
+    constexpr float origin_x = -16384.0F;
+    constexpr float origin_y = 32768.0F;
+    recovered_mesh.vertices = {
+        {origin_x,          origin_y,          64.0F},
+        {origin_x + 512.0F, origin_y,          72.0F},
+        {origin_x + 512.0F, origin_y + 512.0F, 80.0F},
+        {origin_x,          origin_y + 512.0F, 68.0F},
+    };
+    recovered_mesh.indices = {0, 1, 2, 0, 2, 3};
+
+    f4lod::TerrainBtrBuildOptions recovered;
+    recovered.use_recovered_terrain_block_space = true;
+    recovered.lod_level = 4U;
+    recovered.block_origin_x = origin_x;
+    recovered.block_origin_y = origin_y;
+    recovered.z_shift = 12.0F;
+    recovered.reserved_string_count = 2U;
+
+    const auto recovered_path = root / "RecoveredBlock.btr";
+    const auto recovered_write = f4lod::write_fallout4_terrain_btr(
+        recovered_path, recovered_mesh, recovered);
+    assert(recovered_write.valid);
+    const auto recovered_btr = f4lod::inspect_fallout4_btr(recovered_path);
+    assert(recovered_btr.valid);
+    assert(recovered_btr.nif.strings.size() >= 2U);
+    assert(recovered_btr.nif.strings[0] == "chunk");
+    assert(recovered_btr.nif.strings[1] == "Land");
+    assert(recovered_btr.nif.blocks[1].type == "BSTriShape");
+
+    const auto recovered_geometry = f4lod::inspect_fallout4_btr_geometry(
+        recovered_path, recovered_btr.terrain_shape);
+    assert(recovered_geometry.valid);
+    assert(!recovered_geometry.full_precision_positions);
+    assert(recovered_geometry.vertex_size_words == 5U);
+    assert(recovered_geometry.float_size_words == 2U);
+    assert(std::fabs(recovered_geometry.translation[0]) < 0.001F);
+    assert(std::fabs(recovered_geometry.translation[1]) < 0.001F);
+    assert(std::fabs(recovered_geometry.translation[2] - 84.0F) < 0.001F);
+    assert(std::fabs(recovered_geometry.scale - 4.0F) < 0.001F);
+    assert(std::fabs(recovered_geometry.position_min[0]) < 0.001F);
+    assert(std::fabs(recovered_geometry.position_max[0] - 128.0F) < 0.01F);
+    assert(std::fabs(recovered_geometry.position_min[1]) < 0.001F);
+    assert(std::fabs(recovered_geometry.position_max[1] - 128.0F) < 0.01F);
+    assert(std::fabs(recovered_geometry.position_min[2] + 2.0F) < 0.01F);
+    assert(std::fabs(recovered_geometry.position_max[2] - 2.0F) < 0.01F);
+    assert(std::fabs(recovered_geometry.uv_min[0]) < 0.001F);
+    assert(std::fabs(recovered_geometry.uv_max[0] - 0.03125F) < 0.001F);
+    assert(std::fabs(recovered_geometry.uv_min[1] - 0.96875F) < 0.001F);
+    assert(std::fabs(recovered_geometry.uv_max[1] - 1.0F) < 0.001F);
+    assert(std::fabs(recovered_btr.bounds_position[0] - 256.0F) < 0.01F);
+    assert(std::fabs(recovered_btr.bounds_position[1] - 256.0F) < 0.01F);
+    assert(std::fabs(recovered_btr.bounds_position[2]) < 0.01F);
 
     auto material_options = options;
     material_options.additional_blocks.push_back({"BSLightingShaderProperty", {0x00}});

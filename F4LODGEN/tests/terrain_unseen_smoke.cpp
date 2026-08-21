@@ -55,8 +55,23 @@ int main() {
     assert(unchanged.valid);
     assert(!unchanged.enabled);
     assert(unchanged.shifted_vertices == 0U);
+    assert(unchanged.raised_vertices == 0U);
     assert(unchanged.mesh.vertices.size() == source.vertices.size());
     assert(unchanged.mesh.indices.size() == source.indices.size());
+
+    // WaterDelta=0 is active Optimize Unseen: submerged heights flatten to the
+    // water plane and interior underwater samples become ineligible for greedy
+    // insertion. It is not equivalent to WaterDelta=-1.
+    f4lod::TerrainUnseenOptions zero;
+    zero.water_delta = 0.0F;
+    const auto flattened = f4lod::optimize_unseen_terrain(source, zero);
+    assert(flattened.valid);
+    assert(flattened.enabled);
+    assert(flattened.raised_vertices == 0U);
+    const std::size_t center = 4U * 9U + 4U;
+    assert(std::fabs(flattened.mesh.vertices[center].z - 10.0F) < 0.001F);
+    assert(flattened.ignored_vertices[center] == 1U);
+    assert(flattened.forced_vertices[center] == 0U);
 
     f4lod::TerrainUnseenOptions shallow;
     shallow.water_delta = 5.0F;
@@ -64,20 +79,33 @@ int main() {
     assert(optimized.valid);
     assert(optimized.enabled);
     assert(optimized.shifted_vertices > 0U);
+    assert(optimized.raised_vertices > 0U);
     assert(optimized.underwater_triangles > 0U);
-    assert(optimized.output_triangles <= optimized.source_triangles);
+    assert(optimized.output_triangles == optimized.source_triangles);
+    assert(std::fabs(optimized.mesh.vertices[center].z - 5.0F) < 0.001F);
+    assert(optimized.ignored_vertices[center] == 1U);
 
-    // Visible shoreline is never shifted below its original height.
-    for (const auto& vertex : optimized.mesh.vertices) {
-        const bool shoreline = vertex.x == 0.0F || vertex.y == 0.0F ||
-                               vertex.x == 1024.0F || vertex.y == 1024.0F;
-        if (shoreline) {
-            assert(std::fabs(vertex.z - 20.0F) < 0.001F);
-        } else if (vertex.z < 10.0F) {
-            // Shallow submerged samples are pushed to at least water - delta.
-            assert(vertex.z <= 5.001F);
-        }
-    }
+    // Above-water samples receive the reference engine's WaterDelta/100 nudge.
+    assert(std::fabs(optimized.mesh.vertices.front().z - 20.05F) < 0.001F);
+
+    // An underwater outer-boundary sample is forced rather than ignored so
+    // adjacent terrain blocks can retain a matching seam.
+    auto boundary_source = source;
+    boundary_source.vertices.front().z = 8.0F;
+    const auto boundary = f4lod::optimize_unseen_terrain(boundary_source, shallow);
+    assert(boundary.valid);
+    assert(boundary.forced_vertices.front() == 1U);
+    assert(boundary.ignored_vertices.front() == 0U);
+    assert(std::fabs(boundary.mesh.vertices.front().z - 5.0F) < 0.001F);
+
+    auto protected_source = source;
+    protected_source.lod_level = 4U;
+    protected_source.cell_border[center] = 1U;
+    auto protected_options = zero;
+    protected_options.protect_cell_borders = true;
+    const auto protected_result = f4lod::optimize_unseen_terrain(protected_source, protected_options);
+    assert(protected_result.valid);
+    assert(protected_result.ignored_vertices[center] == 0U);
 
     auto invalid = shallow;
     invalid.water_delta = -2.0F;

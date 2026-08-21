@@ -4,35 +4,34 @@
 #include "f4lod/terrain_simplify.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 namespace f4lod {
 
 struct TerrainQualityOptions {
-    // Recovered LODGen semantics: -1 = full LOD4 geometry. For 0..N, Quality
-    // is the greedy triangulator's maximum Z deviation in quad-local units.
-    // The heightfield is scaled by 1/LOD before evaluation, so normal world
-    // tolerance is Quality * LOD. With LOD4 ProtectCellBorders, the engine
-    // divides the threshold by four while reducing each CELL separately.
     int quality{0};
-    std::size_t max_vertices{32767};
-    std::size_t max_triangles{65535};
+    // Reference Program.cs caps configured MaxVerts at the NIF ushort index
+    // range. The normal default remains 32767.
+    std::size_t max_vertices{32767U};
+    std::size_t max_triangles{std::numeric_limits<std::uint32_t>::max()};
     bool protect_cell_borders{false};
     bool regularize{false};
-    // WaterDelta is applied to the regular heightfield before greedy Quality.
     float water_delta{-1.0F};
+    // TerrainLOD reserves 2000 reducer points for any non-zero skirt setting,
+    // with a floor of 512 points. FO4's GUI writes Skirts=256.
+    float skirts{256.0F};
 };
 
 struct TerrainQualityResult {
     bool valid{};
     std::string error;
     int requested_quality{};
-    // Compatibility alias: effective_error is quad-local, matching LODGen.
     float effective_error{};
     float effective_error_quad_units{};
     float effective_error_world_units{};
     bool full_geometry{};
-    // True when MaxVerts stops greedy insertion before Quality is met.
     bool forced_by_limits{};
     bool optimize_unseen{};
     float water_delta{-1.0F};

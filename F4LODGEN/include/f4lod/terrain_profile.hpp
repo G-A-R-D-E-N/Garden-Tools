@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -17,10 +18,15 @@ struct TerrainLodLevelProfile {
     std::uint32_t lod_level{};
     int quality{};
     std::size_t max_vertices{32767U};
-    std::size_t max_triangles{65535U};
+    // FO4 uses uint32 triangle counts. The 65535 limit belongs to non-FO4
+    // modes; land chunking is driven by the 65535-vertex ushort index limit.
+    std::size_t max_triangles{std::numeric_limits<std::uint32_t>::max()};
     bool protect_cell_borders{};
     bool regularize{};
     float water_delta{-1.0F};
+    // Recovered ZSHIFTLOD4/8/16/32 semantics. This is applied only as terrain
+    // and water node translation; it never mutates source/generated vertices.
+    float z_shift{};
 };
 
 struct TerrainLodProfile {
@@ -43,18 +49,12 @@ struct TerrainProfileValidation {
     [[nodiscard]] std::size_t error_count() const noexcept;
 };
 
-// Fallout 4 v0.1 defaults based on the xLODGen behavior already implemented in
-// the compiler. The four levels are intentionally represented as one profile;
-// they are not independent presets.
 [[nodiscard]] TerrainLodProfile default_v01_terrain_lod_profile();
 
 [[nodiscard]] const TerrainLodLevelProfile* find_terrain_lod_level(
     const TerrainLodProfile& profile,
     std::uint32_t lod_level) noexcept;
 
-// Validates both file-format constraints and cross-level coherence. Typical
-// xLODGen guidance is reported as warnings, not hard errors, because unusual
-// profiles can be intentional.
 [[nodiscard]] TerrainProfileValidation validate_terrain_lod_profile(
     const TerrainLodProfile& profile);
 

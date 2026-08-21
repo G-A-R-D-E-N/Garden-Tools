@@ -1,9 +1,11 @@
 #include "f4lod/terrain_quality.hpp"
 
 #include "f4lod/terrain_greedy.hpp"
+#include "f4lod/terrain_skirts.hpp"
 #include "f4lod/terrain_unseen.hpp"
 
 #include <cmath>
+#include <limits>
 #include <utility>
 
 namespace f4lod {
@@ -19,14 +21,6 @@ TerrainSimplifiedMesh copy_source(const TerrainBlockMesh& source) {
     result.vertices = source.vertices;
     result.indices = source.indices;
     return result;
-}
-
-bool fits_limits(
-    const TerrainSimplifiedMesh& mesh,
-    const TerrainQualityOptions& options) noexcept {
-    return mesh.valid &&
-           mesh.vertices.size() <= options.max_vertices &&
-           mesh.indices.size() / 3U <= options.max_triangles;
 }
 
 } // namespace
@@ -56,20 +50,21 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
         result.error = "xLODGen terrain Quality must be -1 or greater.";
         return result;
     }
-    if (options.quality == -1 && source.lod_level != 4U) {
-        result.error = "Recovered LODGen behavior only permits Quality -1 full geometry for LOD4.";
+    if (options.max_vertices < 4U || options.max_vertices > 65535U) {
+        result.error = "xLODGen terrain MaxVerts must be between 4 and 65535.";
         return result;
     }
-    if (options.max_vertices < 4U || options.max_vertices > 32767U) {
-        result.error = "xLODGen terrain MaxVerts must be between 4 and 32767.";
-        return result;
-    }
-    if (options.max_triangles == 0U || options.max_triangles > 65535U) {
-        result.error = "Terrain triangle safety ceiling must be between 1 and 65535.";
+    const auto max_fo4_triangles = static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
+    if (options.max_triangles == 0U || options.max_triangles > max_fo4_triangles) {
+        result.error = "FO4 terrain triangle ceiling must fit the format's uint32 triangle count.";
         return result;
     }
     if (!std::isfinite(options.water_delta) || options.water_delta < -1.0F) {
         result.error = "WaterDelta must be -1 (off), 0, or a positive distance.";
+        return result;
+    }
+    if (!std::isfinite(options.skirts)) {
+        result.error = "Skirts must be finite.";
         return result;
     }
 
@@ -87,10 +82,13 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
     result.underwater_triangles = unseen.underwater_triangles;
     const auto& working = unseen.mesh;
 
-    if (options.quality == -1) {
+    // Only LOD4 has the pre-triangulated full-geometry path. MaxVerts is a
+    // greedy insertion target and does not constrain this special path; the
+    // BTR writer splits final land geometry when the ushort index range needs it.
+    if (options.quality == -1 && source.lod_level == 4U) {
         result.mesh = copy_source(working);
-        if (!fits_limits(result.mesh, options)) {
-            result.error = "Full LOD4 terrain geometry exceeds the configured MaxVerts/triangle safety limits.";
+        if (result.mesh.indices.size() / 3U > options.max_triangles) {
+            result.error = "Full LOD4 terrain geometry exceeds the configured FO4 triangle ceiling.";
             result.mesh.valid = false;
             return result;
         }
@@ -103,9 +101,12 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
     }
 
     TerrainGreedyOptions greedy_options;
-    greedy_options.quality = options.quality;
-    greedy_options.point_limit = options.max_vertices;
+    greedy_options.quality = options.quality < 0 ? 0 : options.quality;
+    greedy_options.point_limit = recovered_terrain_reducer_budget(
+        options.max_vertices, options.skirts);
     greedy_options.protect_cell_borders = options.protect_cell_borders;
+    greedy_options.forced_points = unseen.forced_vertices;
+    greedy_options.ignored_points = unseen.ignored_vertices;
     auto greedy = reduce_terrain_greedy(working, greedy_options);
     if (!greedy.valid) {
         result.error = "Greedy terrain Quality reduction failed: " + greedy.error;
@@ -113,19 +114,20 @@ TerrainQualityResult simplify_terrain_xlodgen_quality(
     }
 
     if (greedy.mesh.indices.size() / 3U > options.max_triangles) {
-        result.error = "Greedy terrain output exceeds the configured triangle safety ceiling.";
+        result.error = "Greedy terrain output exceeds the configured FO4 triangle ceiling.";
         return result;
     }
 
     result.effective_error = greedy.max_error_quad_units;
     result.effective_error_quad_units = greedy.max_error_quad_units;
     result.effective_error_world_units = greedy.max_error_world_units;
-    result.forced_by_limits = greedy.point_limit_reached;
+    result.forced_by_limits = greedy.point_limit_reached ||
+                              greedy.selected_points > greedy_options.point_limit;
     result.greedy_insertions = greedy.greedy_insertions;
     result.full_geometry = greedy.mesh.vertices.size() == working.vertices.size();
     result.mesh = std::move(greedy.mesh);
     result.valid = true;
-    (void) options.regularize; // not part of recovered Terrain/GreedySubdivision stopping contract
+    (void) options.regularize;
     return result;
 }
 

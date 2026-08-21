@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -10,7 +11,7 @@ namespace f4lod {
 namespace {
 
 constexpr std::array<std::uint32_t, 4> kExpectedLevels{4U, 8U, 16U, 32U};
-constexpr std::size_t kMaxTerrainVertices = 32767U;
+constexpr std::size_t kMaxTerrainVertices = 65535U;
 
 void add(
     TerrainProfileValidation& result,
@@ -56,11 +57,12 @@ std::size_t TerrainProfileValidation::error_count() const noexcept {
 TerrainLodProfile default_v01_terrain_lod_profile() {
     TerrainLodProfile profile;
     profile.name = "F4LODGen v0.1 Balanced";
+    const auto max_triangles = static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
     profile.levels = {{
-        TerrainLodLevelProfile{4U, 0, 32767U, 65535U, true, false, -1.0F},
-        TerrainLodLevelProfile{8U, 5, 32767U, 65535U, false, false, 0.0F},
-        TerrainLodLevelProfile{16U, 5, 32767U, 65535U, false, false, 0.0F},
-        TerrainLodLevelProfile{32U, 10, 32767U, 65535U, false, false, 550.0F},
+        TerrainLodLevelProfile{4U, 0, 32767U, max_triangles, true, false, -1.0F, 0.0F},
+        TerrainLodLevelProfile{8U, 5, 32767U, max_triangles, false, false, 0.0F, 0.0F},
+        TerrainLodLevelProfile{16U, 5, 32767U, max_triangles, false, false, 0.0F, 0.0F},
+        TerrainLodLevelProfile{32U, 10, 32767U, max_triangles, false, false, 550.0F, 0.0F},
     }};
     return profile;
 }
@@ -100,6 +102,7 @@ TerrainProfileValidation validate_terrain_lod_profile(
         }
     }
 
+    const auto max_fo4_triangles = static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
     for (const auto& level : profile.levels) {
         const bool known_level = std::find(
             kExpectedLevels.begin(), kExpectedLevels.end(), level.lod_level) != kExpectedLevels.end();
@@ -115,11 +118,6 @@ TerrainProfileValidation validate_terrain_lod_profile(
                 "quality-invalid",
                 "Quality must be -1 or a non-negative quad-local Z-deviation threshold.", level.lod_level);
         }
-        if (level.quality == -1 && level.lod_level != 4U) {
-            add(result, TerrainProfileSeverity::error,
-                "quality-full-non-lod4",
-                "Quality -1 full geometry is only valid for LOD4.", level.lod_level);
-        }
         if (level.quality > typical_quality_max(level.lod_level)) {
             add(result, TerrainProfileSeverity::warning,
                 "quality-above-typical-range",
@@ -129,22 +127,28 @@ TerrainProfileValidation validate_terrain_lod_profile(
         if (level.max_vertices < 4U || level.max_vertices > kMaxTerrainVertices) {
             add(result, TerrainProfileSeverity::error,
                 "maxverts-invalid",
-                "MaxVerts must be between 4 and 32767 for the recovered LODGen terrain reducer.",
+                "MaxVerts must be between 4 and 65535; 32767 remains the normal xLODGen default.",
                 level.lod_level);
         }
-        if (level.max_triangles == 0U) {
+        if (level.max_triangles == 0U || level.max_triangles > max_fo4_triangles) {
             add(result, TerrainProfileSeverity::error,
                 "maxtriangles-invalid",
-                "Terrain triangle safety ceiling must be greater than zero.", level.lod_level);
+                "FO4 terrain triangle ceiling must fit the format's uint32 triangle count.", level.lod_level);
         }
         if (!std::isfinite(level.water_delta) || level.water_delta < -1.0F) {
             add(result, TerrainProfileSeverity::error,
                 "waterdelta-invalid",
                 "WaterDelta must be finite and at least -1.", level.lod_level);
         }
+        if (!std::isfinite(level.z_shift)) {
+            add(result, TerrainProfileSeverity::error,
+                "zshift-invalid",
+                "ZSHIFT must be finite and is applied only as terrain/water node translation.",
+                level.lod_level);
+        }
 
         if (level.lod_level == 4U) {
-            if (!level.protect_cell_borders) {
+            if (!level.protect_cell_borders && level.quality != -1) {
                 add(result, TerrainProfileSeverity::warning,
                     "lod4-protect-borders-disabled",
                     "LOD4 normally protects cell borders to avoid visible terrain drops at the nearest LOD transition.",
@@ -159,7 +163,7 @@ TerrainProfileValidation validate_terrain_lod_profile(
         if (level.lod_level == 32U && level.water_delta == 0.0F) {
             add(result, TerrainProfileSeverity::warning,
                 "lod32-waterdelta-zero",
-                "LOD32 is also used for the map; a positive WaterDelta is commonly useful for distant coastlines and water separation.",
+                "LOD32 is also used for the map; WaterDelta=0 actively flattens interior underwater samples rather than disabling Optimize Unseen.",
                 level.lod_level);
         }
     }
@@ -169,26 +173,33 @@ TerrainProfileValidation validate_terrain_lod_profile(
     const auto* lod16 = find_terrain_lod_level(profile, 16U);
     const auto* lod32 = find_terrain_lod_level(profile, 32U);
     if (lod4 && lod8 && lod16) {
-        if (lod8->quality < lod4->quality) {
+        const int q4 = lod4->quality < 0 ? 0 : lod4->quality;
+        const int q8 = lod8->quality < 0 ? 0 : lod8->quality;
+        const int q16 = lod16->quality < 0 ? 0 : lod16->quality;
+        if (q8 < q4) {
             add(result, TerrainProfileSeverity::warning,
                 "lod8-higher-quality-than-lod4",
-                "LOD8 uses a lower Quality threshold than LOD4. This is valid but unusual because farther terrain is being refined more aggressively.", 8U);
+                "LOD8 uses a lower effective Quality threshold than LOD4. This is valid but unusual because farther terrain is being refined more aggressively.", 8U);
         }
-        if (lod16->quality < lod8->quality) {
+        if (q16 < q8) {
             add(result, TerrainProfileSeverity::warning,
                 "lod16-higher-quality-than-lod8",
-                "LOD16 uses a lower Quality threshold than LOD8. This is valid but may be an accidental cross-level mismatch.", 16U);
+                "LOD16 uses a lower effective Quality threshold than LOD8. This is valid but may be an accidental cross-level mismatch.", 16U);
         }
-        if (lod16->quality - lod8->quality > 8) {
+        if (q16 - q8 > 8) {
             add(result, TerrainProfileSeverity::warning,
                 "lod16-quality-jump",
                 "LOD8 to LOD16 Quality changes very sharply; inspect transitions before accepting the profile.", 16U);
         }
     }
-    if (lod32 && lod16 && lod32->quality < lod16->quality) {
-        add(result, TerrainProfileSeverity::warning,
-            "lod32-higher-quality-than-lod16",
-            "LOD32 is map/farthest terrain and is configured with a lower Quality threshold than LOD16. This may be intentional for map coastline detail.", 32U);
+    if (lod32 && lod16) {
+        const int q32 = lod32->quality < 0 ? 0 : lod32->quality;
+        const int q16 = lod16->quality < 0 ? 0 : lod16->quality;
+        if (q32 < q16) {
+            add(result, TerrainProfileSeverity::warning,
+                "lod32-higher-quality-than-lod16",
+                "LOD32 is map/farthest terrain and is configured with a lower effective Quality threshold than LOD16. This may be intentional for map coastline detail.", 32U);
+        }
     }
 
     return result;

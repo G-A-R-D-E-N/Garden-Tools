@@ -59,6 +59,14 @@ bool archive_contains(const Ba2Inspection& archive, const std::string& key) {
     return false;
 }
 
+AssetSourceKind archive_source_kind(Ba2ArchiveType type) noexcept {
+    switch (type) {
+    case Ba2ArchiveType::general: return AssetSourceKind::general_ba2;
+    case Ba2ArchiveType::texture: return AssetSourceKind::texture_ba2;
+    default: return AssetSourceKind::none;
+    }
+}
+
 AssetReadResult read_loose_file(
     const std::filesystem::path& path,
     const std::string& game_path) {
@@ -101,6 +109,11 @@ AssetReadResult read_loose_file(
 
 } // namespace
 
+const AssetSource* AssetResolution::winner() const noexcept {
+    if (!winner_index.has_value() || *winner_index >= candidates_low_to_high.size()) return nullptr;
+    return &candidates_low_to_high[*winner_index];
+}
+
 AssetResolver::AssetResolver(
     std::filesystem::path data_root,
     std::vector<Ba2Inspection> archives_low_to_high)
@@ -114,6 +127,44 @@ const std::filesystem::path& AssetResolver::data_root() const noexcept {
 
 std::span<const Ba2Inspection> AssetResolver::archives() const noexcept {
     return archives_low_to_high_;
+}
+
+AssetResolution AssetResolver::resolve(const std::string& game_path) const {
+    AssetResolution result;
+    const auto normalized = normalize_game_path(game_path);
+    if (!normalized.has_value()) {
+        result.error = "Asset path is empty, absolute, or contains path traversal.";
+        return result;
+    }
+    result.game_path = *normalized;
+    const auto key = lower_ascii(*normalized);
+
+    for (const auto& archive : archives_low_to_high_) {
+        if (!archive.valid || !archive_contains(archive, key)) continue;
+        const auto kind = archive_source_kind(archive.type);
+        if (kind == AssetSourceKind::none) continue;
+        result.candidates_low_to_high.push_back(AssetSource{
+            kind,
+            archive.path,
+            *normalized,
+        });
+    }
+
+    const auto loose_path = data_root_ / std::filesystem::path(*normalized);
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(loose_path, ec) && !ec) {
+        result.candidates_low_to_high.push_back(AssetSource{
+            AssetSourceKind::loose,
+            loose_path,
+            *normalized,
+        });
+    }
+
+    if (!result.candidates_low_to_high.empty()) {
+        result.winner_index = result.candidates_low_to_high.size() - 1U;
+    }
+    result.valid = true;
+    return result;
 }
 
 AssetReadResult AssetResolver::read(const std::string& game_path) const {

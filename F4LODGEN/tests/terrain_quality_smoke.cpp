@@ -82,17 +82,19 @@ int main() {
     assert(quality20_result.mesh.vertices.size() < quality4_result.mesh.vertices.size());
     assert(quality20_result.effective_error_quad_units < 20.0F);
 
-    // Quality 0 cannot satisfy MaxError < 0, so the recovered GoalMet contract
-    // stops on MaxVerts instead. Keep the fixture budget small so CI does not
-    // intentionally expand all 16,641 LOD4 source vertices.
+    // MaxVerts is a stopping target, not a post-result ceiling. With skirts
+    // disabled and MaxVerts=4, the recovered scripted outline already puts the
+    // point count above the target. GoalMet therefore reports a limit stop while
+    // preserving those required boundary points.
     auto forced = quality4;
     forced.quality = 0;
-    forced.max_vertices = 600U;
+    forced.max_vertices = 4U;
     forced.max_triangles = 65535U;
+    forced.skirts = 0.0F;
     const auto forced_result = f4lod::simplify_terrain_xlodgen_quality(source, forced);
     assert(forced_result.valid);
     assert(forced_result.forced_by_limits);
-    assert(forced_result.mesh.vertices.size() <= forced.max_vertices);
+    assert(forced_result.mesh.vertices.size() > forced.max_vertices);
     assert(forced_result.effective_error_quad_units >= 0.0F);
 
     auto protected_lod4 = quality4;

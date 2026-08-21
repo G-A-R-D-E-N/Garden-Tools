@@ -1,6 +1,7 @@
 #include "f4lod/terrain_profile.hpp"
 
 #include <cassert>
+#include <limits>
 #include <string>
 
 int main() {
@@ -22,15 +23,30 @@ int main() {
     assert(lod4->protect_cell_borders);
     assert(lod4->water_delta == -1.0F);
     assert(lod32->water_delta == 550.0F);
+    assert(lod4->z_shift == 0.0F);
+    assert(lod8->z_shift == 0.0F);
+    assert(lod16->z_shift == 0.0F);
+    assert(lod32->z_shift == 0.0F);
+
+    // The reference engine only gives LOD4 a dedicated full-geometry path.
+    // At LOD8/16/32, -1 is accepted and normalized to effective threshold 0.
+    auto normalized = defaults;
+    normalized.levels[1].quality = -1;
+    normalized.levels[2].quality = -1;
+    normalized.levels[3].quality = -1;
+    normalized.levels[2].z_shift = -64.0F;
+    const auto normalized_result = f4lod::validate_terrain_lod_profile(normalized);
+    assert(normalized_result.valid);
+    assert(normalized_result.error_count() == 0U);
 
     auto invalid = defaults;
-    invalid.levels[0].quality = -1;
-    invalid.levels[1].quality = -1;
+    invalid.levels[0].quality = -2;
     invalid.levels[2].lod_level = 8U;
     invalid.levels[3].max_vertices = 65535U;
+    invalid.levels[1].z_shift = std::numeric_limits<float>::infinity();
     const auto invalid_result = f4lod::validate_terrain_lod_profile(invalid);
     assert(!invalid_result.valid);
-    assert(invalid_result.error_count() >= 3U);
+    assert(invalid_result.error_count() >= 4U);
 
     auto unusual = defaults;
     unusual.levels[0].protect_cell_borders = false;

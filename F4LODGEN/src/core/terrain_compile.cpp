@@ -3,6 +3,7 @@
 #include "f4lod/terrain_block_mesh.hpp"
 #include "f4lod/terrain_profile.hpp"
 #include "f4lod/terrain_quality.hpp"
+#include "f4lod/terrain_skirts.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -37,7 +38,13 @@ void set_btr_defaults(
     options.btr.uv_origin_y = block_origin_y;
     options.btr.uv_span_x = block_span;
     options.btr.uv_span_y = block_span;
-    options.btr.shape_name = "obj";
+    options.btr.shape_name = "Land";
+    options.btr.use_recovered_terrain_block_space = true;
+    options.btr.lod_level = plan.lod_level;
+    options.btr.block_origin_x = block_origin_x;
+    options.btr.block_origin_y = block_origin_y;
+    options.btr.z_shift = 0.0F;
+    options.btr.reserved_string_count = 2U; // "chunk", "Land"
 }
 
 } // namespace
@@ -57,6 +64,7 @@ TerrainBlockCompileOptions terrain_block_options_from_level_profile(
     options.triangle_budget = 65536U;
     options.target_error = 0.01F;
     set_btr_defaults(options, plan);
+    options.btr.z_shift = level.z_shift;
     (void) worldspace_editor_id;
     return options;
 }
@@ -86,13 +94,10 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
         worldspace_editor_id, plan.lod_level, plan.x, plan.y);
     result.requested_quality = options.quality;
     result.water_delta = options.water_delta;
+    result.skirts = options.skirts;
 
     if (worldspace_editor_id.empty()) {
         result.error = "Terrain block compilation requires a worldspace EditorID.";
-        return result;
-    }
-    if (options.use_xlodgen_quality && options.quality == -1 && plan.lod_level != 4U) {
-        result.error = "xLODGen Quality -1 (full terrain geometry) is supported only for LOD4.";
         return result;
     }
 
@@ -112,6 +117,7 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
         quality.protect_cell_borders = options.lock_cell_borders;
         quality.regularize = options.regularize;
         quality.water_delta = options.water_delta;
+        quality.skirts = options.skirts;
 
         auto quality_result = simplify_terrain_xlodgen_quality(source, quality);
         if (!quality_result.valid) {
@@ -127,6 +133,20 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
         result.underwater_triangles = quality_result.underwater_triangles;
         result.greedy_insertions = quality_result.greedy_insertions;
         result.mesh = std::move(quality_result.mesh);
+
+        TerrainSkirtOptions skirt_options;
+        skirt_options.lod_level = plan.lod_level;
+        skirt_options.block_origin_x = static_cast<float>(plan.x) * 4096.0F;
+        skirt_options.block_origin_y = static_cast<float>(plan.y) * 4096.0F;
+        skirt_options.skirts = options.skirts;
+        auto skirted = add_recovered_terrain_skirts(result.mesh, skirt_options);
+        if (!skirted.valid) {
+            result.error = "Could not add recovered terrain skirts: " + skirted.error;
+            return result;
+        }
+        result.skirt_vertices = skirted.added_vertices;
+        result.skirt_triangles = skirted.added_triangles;
+        result.mesh = std::move(skirted.mesh);
     } else {
         if (options.triangle_budget == 0U) {
             result.error = "Terrain block triangle budget must be greater than zero.";
@@ -160,8 +180,16 @@ TerrainBlockCompileResult compile_terrain_block_in_memory(
 
     result.output_vertices = result.mesh.vertices.size();
     result.output_triangles = result.mesh.indices.size() / 3U;
-    if (result.output_vertices > options.max_vertices) {
-        result.error = "Terrain block compiler exceeded the configured MaxVerts point budget.";
+    // MaxVerts is the recovered greedy point target, not a post-generation
+    // serialization ceiling. GoalMet permits one final insertion before
+    // PointCount > MaxVerts stops refinement. Keep the configured limit as an
+    // absolute ceiling only for the unrelated legacy simplifier.
+    if (!options.use_xlodgen_quality && result.output_vertices > options.max_vertices) {
+        result.error = "Legacy terrain simplification exceeded its configured vertex ceiling.";
+        return result;
+    }
+    if (result.output_vertices > 65535U) {
+        result.error = "Terrain block requires 65535-vertex BTR chunk splitting that is not enabled yet.";
         return result;
     }
     if (result.output_triangles > options.max_triangles) {

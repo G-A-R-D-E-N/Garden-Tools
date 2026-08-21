@@ -144,18 +144,18 @@ std::string format_commonwealth_calibration_json(
                 << ",\"vertexFlag5\":" << static_cast<unsigned int>(c.vertex_flag5)
                 << ",\"vertexFlag8\":" << static_cast<unsigned int>(c.vertex_flag8)
                 << ",\"subindexEntries\":" << c.source_subindex_entries << ',';
-            out << "\"transform":{";
+            out << "\"transform\":{";
             out << "\"translation\":["
                 << c.shape_transform.translation_x << ','
                 << c.shape_transform.translation_y << ','
                 << c.shape_transform.translation_z << "],";
             out << "\"rotation\":"; json_float9(out, c.shape_transform.rotation); out << ',';
             out << "\"scale\":" << c.shape_transform.scale << "},";
-            out << "\"positionRange":{";
+            out << "\"positionRange\":{";
             out << "\"present\":"; json_bool(out, c.has_position_range); out << ',';
             out << "\"min\":"; json_float3(out, c.position_min); out << ',';
             out << "\"max\":"; json_float3(out, c.position_max); out << "},";
-            out << "\"uvRange":{";
+            out << "\"uvRange\":{";
             out << "\"present\":"; json_bool(out, c.has_uv_range); out << ',';
             out << "\"min\":[" << c.uv_min[0] << ',' << c.uv_min[1] << "],";
             out << "\"max\":[" << c.uv_max[0] << ',' << c.uv_max[1] << "]},";
