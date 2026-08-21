@@ -39,6 +39,7 @@ endfunction()
 add_library(fo4
   src/plugin_key.cpp
   src/formid.cpp
+  src/archive/ba2.cpp
   src/binary/cursor.cpp
   src/plugin/tes4.cpp
   src/plugin/reader.cpp
@@ -113,6 +114,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_conflict_graph.cpp
+    tests/test_ba2.cpp
     tests/test_c_api.cpp
     tests/plugin_bytes.cpp
   )
