@@ -57,6 +57,7 @@ add_library(fo4
   src/binary/cursor.cpp
   src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
+  src/localization/strings.cpp
   src/plugin/tes4.cpp
   src/plugin/reader.cpp
   src/plugin/master_kinds.cpp
@@ -141,6 +142,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad_unsupported.cpp
     tests/test_conflict_graph.cpp
     tests/test_ba2.cpp
+    tests/test_localized_strings.cpp
     tests/test_c_api.cpp
     tests/plugin_bytes.cpp
   )
