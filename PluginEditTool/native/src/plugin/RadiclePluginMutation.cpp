@@ -68,6 +68,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "AddMasters") return addMasters(arguments);
+    if (method == "CheckEslEligibility") return checkEslEligibility(arguments);
     if (method == "GetPluginRecordTypes") return getPluginRecordTypes(arguments);
     if (method == "GetRecordsOfType") return getRecordsOfType(arguments);
     if (method == "GetRecordsGrid") return getRecordsGrid(arguments);
@@ -226,6 +227,12 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
         return std::unexpected(Error{
             "PluginReadOnly",
             "Refusing to write override into protected or game-Data plugin: " + target->name
+        });
+    }
+    if (target->plugin.header.tes4_flags.is_master()) {
+        return std::unexpected(Error{
+            "MasterOverrideWriteUnsupported",
+            "Native override insertion into master-flagged targets is disabled until TES4 ONAM override metadata is maintained"
         });
     }
 
