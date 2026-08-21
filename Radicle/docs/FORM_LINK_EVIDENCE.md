@@ -42,10 +42,26 @@ Radicle visits offset 4 only for type 0. Type 1 remains opaque bytes. Payloads s
 
 The regression test intentionally places FormID-looking text in `CIS1`/`CIS2`, removes a master, and verifies that the CTDA FormID slot remaps while both strings remain byte-for-byte identical.
 
+## VMAD Variable / Variable Array
+
+Oracle: xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsCommon.pas`.
+
+xEdit identifies VMAD property type `16` as `Array of Variable (FO76, Not Implemented)`. Type `6` is the corresponding dynamically typed Variable property. Neither has a fixed value layout that Radicle can safely walk without a nested type discriminator definition.
+
+Radicle therefore treats property types 6 and 16 differently depending on the operation:
+
+- read-only FormLink collection remains tolerant and reports no VMAD links from that VMAD block;
+- master-table remapping fails closed rather than returning or rewriting a partial set of offsets;
+- malformed/truncated VMAD retains the existing tolerant read behavior and clears any offsets collected before the parse failure.
+
+This prevents a master reorder from rewriting only the references encountered before an unsupported dynamic property and leaving the rest of the VMAD in the old master-index space.
+
 ## Tests
 
 - `tests/test_package_targets.cpp`
 - `tests/test_ctda_strings.cpp`
 - `tests/test_formlinks.cpp`
+- `tests/test_vmad.cpp`
+- `tests/test_vmad_unsupported.cpp`
 
-These tests are intended to fail if a later generic scanner starts treating discriminator-controlled integers or strings as FormIDs.
+These tests are intended to fail if a later generic scanner starts treating discriminator-controlled integers or strings as FormIDs, or if unsupported VMAD layouts become partially remapped.
