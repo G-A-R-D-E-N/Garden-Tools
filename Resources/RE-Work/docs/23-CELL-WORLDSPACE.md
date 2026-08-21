@@ -46,7 +46,7 @@ classes; the earlier dump regex missed the `?$`-prefixed template mangling
 | `TESObjectCELL` | `.?AV?$ConcreteFormFactory@VTESObjectCELL@@$0DP@@@` | `$0DP` | D=3, P=15 → **0x3F = 63 = CELL** |
 | `TESWorldSpace` | `.?AV?$ConcreteFormFactory@VTESWorldSpace@@$0EK@@@` | `$0EK` | E=4, K=10 → **0x4A = 74 = WRLD** |
 | `TESObjectLAND` | `.?AV?$ConcreteFormFactory@VTESObjectLAND@@$0EL@@@` | `$0EL` | E=4, L=11 → **0x4B = 75 = LAND** |
-| `TESObjectREFR` | *no* `ConcreteFormFactory` — has **`TESObjectREFRFactory`** + **`TESObjectREFRSerializer`** RTTI (`.?AVTESObjectREFRFactory@`, `.?AVTESObjectREFRSerializer@`) | — | special-cased; see §7 |
+| `TESObjectREFR` | *no* `ConcreteFormFactory` — has **`TESObjectREFRFactory`** + **`TESObjectREFRSerializer`** RTTI (full names carry the anonymous-namespace hash: `.?AVTESObjectREFRFactory@?A0xd5936d08@@`, `.?AVTESObjectREFRSerializer@?A0xd5936d08@@`) | — | special-cased; see §7 |
 
 The MSVC template-int encoding is per-nibble `0-9→'0'-'9'`, `10-15→'A'-'F'`…
 empirically `A=0..P=15` by position (`$0JH`=151=AORU cross-checks from doc 12;
@@ -54,14 +54,34 @@ empirically `A=0..P=15` by position (`$0JH`=151=AORU cross-checks from doc 12;
 *registration call* (`thunk_FUN_1408bc350(idx, ...)`) is the ground truth, and
 for these three it matches the formEnumString index.
 
-Factory vftable (e.g. CELL at RVA `0x309c540`):
+Factory vftable (CELL at RVA `0x309c540`; REFR's hand-written analog at
+`0x30a0a88` — identical slot shape). Slot numbering follows the finder's
+convention (slot 0 = COL, slot 1 = vftable+8, …), and `CreateForm` dispatches
+through `vftable+8` **= slot 2**:
 
 | slot | function | role |
 |---|---|---|
 | 0 | COL | RTTI |
-| 1 | `thunk_FUN_140d13850` | **Create** — `*this = ConcreteFormFactory<TESObjectCELL,63>::vftable; factory_slot_clear(0x3F); ...` |
-| 2 | `thunk_FUN_140d135c0` | (template ctor helper) |
-| 5–7 | `FUN_1408bc290/2a0/2b0` | registry getter/setter/clear (doc 12 family) |
+| 1 | `thunk_FUN_140d13850` (CELL) / `FUN_140d64b80` (REFR) | **factory scalar-deleting dtor / ctor** — `*this = <Factory>::vftable; factory_slot_clear(type); IFormFactory::vftable; delete-if-flag`. The `factory_slot_clear` call is the un-registration hook; not the form Create. |
+| 2 | `thunk_FUN_140d135c0` (CELL) / `FUN_140d64ae0` (REFR) | **Create** — the virtual `CreateForm` actually calls: `alloc(0x170 CELL / 0x130 REFR) + in-place ctor` (`FUN_140d64f50` for REFR: the full multi-inheritance vftable chain) |
+| 3 | `FUN_140d64b60` (REFR) | GetFormTypeName → `"Reference"` |
+| 4 | `FUN_140d64b70` (REFR) | GetFormType → `0x40` |
+| 5–8 | `FUN_1408bc290/2a0/2b0/2c0` | IFormFactory interface slots (return constants — see §7) |
+
+Earlier versions of this table labeled slot 1 "Create" and slot 2 "template
+ctor helper" — that was a one-slot shift. `CreateForm` calls `vftable[+8]`
+(slot 2); slot 1 is the factory's own scalar-deleting ctor/dtor (it clears
+the factory registry slot for its type — the un-registration hook).
+
+The factory registry itself is a flat 0x9F-entry pointer array at
+`DAT_143d49cd0` (lazily zeroed, guard byte `DAT_143d49cc8`), with the classic
+triplet:
+
+| function | role |
+|---|---|
+| `FUN_1408bc2f0(type)` | **getter** — returns `reg[type]` (the pointer `CreateForm` dereferences) |
+| `FUN_1408bc350(type, factory)` | **setter** — `reg[type] = factory` (the registration call) |
+| `FUN_1408bc3b0(type)` | **clear** — `reg[type] = 0` (called by the factory dtor) |
 
 ## 3. The TESForm base surface (slots 2–22)
 
@@ -160,18 +180,87 @@ type."` for bad group headers.
 
 ## 7. TESObjectREFR — the special case
 
-REFR has **no** `ConcreteFormFactory`; instead RTTI shows
-`TESObjectREFRFactory` and `TESObjectREFRSerializer`. Its 9 vtables reflect the
-reference's multiple interfaces. RTTI also shows the reference-typed
-functors: `.?AUIDecalRefFunctor@TESObjectCELL@@`,
+REFR has **no** `ConcreteFormFactory`; instead RTTI shows two hand-written
+anonymous-namespace classes, `TESObjectREFRFactory` and
+`TESObjectREFRSerializer` (both mangled with the same TU hash
+`@?A0xd5936d08@@`, so they live in one source file — almost certainly
+`tesobjectrefr_editor.cpp`, the construction-set side of the reference). Its
+9 vtables reflect the reference's multiple interfaces. RTTI also shows the
+reference-typed functors: `.?AUIDecalRefFunctor@TESObjectCELL@@`,
 `.?AVIAliasFunctor@TESObjectREFRDef@@`,
 `.?AVILinkedReferenceFunctor@TESObjectREFRDef@@`,
 `.?AVHandleOutfitItemsFunctor@TESObjectREFR@@`.
 
 The reference is split across four source files (`tesobjectrefr.cpp`,
-`_animation`, `_events`, `_extradata`), and its serialization is handled by
-the dedicated `TESObjectREFRSerializer` rather than the generic
-`ConcreteFormFactory` Create path.
+`_animation`, `_events`, `_extradata`). Unlike CELL/WRLD/LAND, its creation
+and serialization are handled by **two separate dedicated classes** instead
+of the single `ConcreteFormFactory<T,N>` template.
+
+### 7a. TESObjectREFRFactory — vftable `0x30a0a88` (RTTI `0x3c95a20`)
+
+Slot shape is identical to the template `ConcreteFormFactory` (see §2), but
+hand-written:
+
+| slot | function | role |
+|---|---|---|
+| 0 | COL | RTTI |
+| 1 | `FUN_140d64b80` | ctor/dtor — sets `_anon_D5936D08::TESObjectREFRFactory::vftable`, clears registry slot `0x40` |
+| 2 | `FUN_140d64ae0` | **Create** — `alloc(0x130, 0x10, 1)` + `FUN_140d64f50` in-place ctor |
+| 3 | `FUN_140d64b60` | `GetFormTypeName` → `"Reference"` |
+| 4 | `FUN_140d64b70` | `GetFormType` → `0x40` (64 = REFR) |
+| 5–8 | `FUN_1408bc290/2a0/2b0/2c0` | IFormFactory interface slots |
+
+`FUN_140d64f50` is the full in-place `TESObjectREFR` constructor: it lays
+down the whole multiple-inheritance vftable chain (`TESChildCell` →
+`NiRefObject`/`BSHandleRefObject` → `BSTEventSink<...>` ×3 →
+`IKeywordFormBase` → `ActorValueOwner` → `TESObjectREFR::vftable` for every
+subobject), so the factory's Create is the *complete* object builder — not a
+stub.
+
+### 7b. TESObjectREFRSerializer — vftable `0x30a0940` (RTTI `0x3c95a68`)
+
+This is the key difference from the factory flow. `FUN_140d64a80` (serializer
+ctor) sets `JSONSerializerBase<_anon_D5936D08::TESObjectREFRSerializer,
+TESObjectREFR, 64>::vftable`, registers form type `0x40` in the **JSON
+serializer registry** (`FUN_140396a50(0x40)` → `FUN_140399700` singleton,
+hash map at `DAT_143d1b0d0`, entry size 0x18), then sets the `IJSONSerializer`
+base (`FUN_1403969e0`).
+
+| slot | function | role |
+|---|---|---|
+| 1 | `FUN_140d64a80` | ctor — JSONSerializerBase vftable + register `0x40` |
+| 2 | `FUN_140d649d0` → `FUN_140d82720` | **JSON read** (record → object): big body reading `pBaseObject`, resolving the base object via `vftable[0x1d0]`, form-type byte at `+0x26` |
+| 3 | `FUN_140d649f0` → `FUN_140d85830` | **JSON write** (object → record), alloca-heavy |
+| 4 | `FUN_140d64a70` → `FUN_140d87d90` | **JSON schema builder**: registers ~150 named properties with human-readable labels + descriptions + JSON keys (`pBaseObject`, `pMultiboundRef`, `pSpawnContainer`, `pAcousticParent`, …) |
+
+`FUN_140d87d90`'s property list is the REFR JSON surface: `Pos X/Y/Z`,
+`Rot X/Y/Z`, `Scale`, `Bound X/Y/Z` (half-extents), `Base Object`,
+`Encounter Zone`, `Owner Faction`, `Owner Actor`, `Locked` / `Lock Level`,
+`Enable State Parent`, `Linked Reference`, `Linked Door`, `Multibound Ref`,
+`Spawn Container`, `Acoustic Parent`, `Radiation`, `Health`, `Ammo Count`,
+light/emittance fields, physics (Linear/Angular Velocity), etc.
+
+### 7c. Two paths, not one
+
+- **Binary record load** (`.esm`/`.esp` via `TESFile`): `CreateForm(type)`
+  → `factory_getter(0x40)` → **factory** vftable slot 2 (`FUN_140d64ae0`)
+  → alloc + full ctor. This is the same dispatch CELL/WRLD/LAND use — the
+  REFR factory just replaces the template.
+- **JSON record serialization**: looked up through the *serializer* registry
+  (a separate hash map keyed by form type, populated by
+  `FUN_140396a50`), dispatched through `IJSONSerializer` virtuals. REFR is
+  one of **10** JSON-serializer classes in the binary (`TESObjectWEAP`,
+  `Explosion`, `Projectile`, `BGSKeyword`, `BGSAimModel`, `BGSMod_Object`,
+  `CameraShot`, `SoundCat`, `SoundDesc`, `TESObjectREFR`), all in anonymous
+  namespaces — the JSON system is a parallel, opt-in record surface, not the
+  file-format loader.
+
+So the practical answer: REFR records are **created** through the same
+factory-registry path as every other form (CreateForm → vftable slot 2), and
+the `TESObjectREFRSerializer` is a *separate* JSON serialization surface used
+for the JSON record format — the reason REFR gets the hand-written pair is
+that its editor needs both, and the template's fixed name/type accessors
+aren't enough for the JSON schema.
 
 ## 8. TESObjectCELL member layout (constructor + setters)
 
@@ -288,7 +377,6 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
   slots 23+ need per-slot naming via decompile + source-string anchors).
 - The 0x20/0x88-byte cell-data block internals (what lives in the 0x88
   exterior block beyond the coords + 1.0f seeds; the `0x79F` at +0x58).
-- `TESObjectREFRSerializer`'s record path vs the generic factory path.
 - The `exteriorcellloader.cpp` streaming contract (cell-grid construction:
   `"Constructed %u cell grids in %.2f ms"`, `"Improperly sized cell node
   array."`).
@@ -305,3 +393,7 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - `ghidra-dump/decompile-TESObjectCELL-LoadRecord-candidate.txt`
 - `ghidra-dump/cell-ctor-0xd13940.txt`, `cell-setters.txt`,
   `worldspace-cellmap-insert-0xe4d180.txt` (raw decompiles; local only)
+- `ghidra-dump/decompile-REFRFactory-slots.txt`,
+  `decompile-REFRSerializer-slots.txt`, `decompile-REFR-serializer-thunks.txt`,
+  `decompile-serializer-virtuals.txt`, `decompile-factory-compare.txt`,
+  `decompile-json-registry.txt`, `callers-{REFRFactory-ctor,REFRFactory-Create,serializer-read,serializer-reg,json-registry}.txt` (raw decompiles; local only)
