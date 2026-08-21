@@ -124,16 +124,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build Windows zlib dependency
+      - name: Build Windows static zlib dependency
         run: |
           git clone --depth 1 --branch v1.3.1 https://github.com/madler/zlib.git build/zlib-src
           cmake -S build/zlib-src -B build/zlib-win -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/build/zlib-win-install \
             -DZLIB_BUILD_EXAMPLES=OFF
-          cmake --build build/zlib-win
-          cmake --install build/zlib-win
+          cmake --build build/zlib-win --target zlibstatic
+          cp build/zlib-src/zlib.h build/zlib-win/zlib.h
+          test -f build/zlib-win/zconf.h
+          test -f build/zlib-win/zlibstatic.lib
 
       - name: Configure
         run: >
@@ -141,9 +142,10 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
           -DCMAKE_BUILD_TYPE=Release
           -DRADICLE_BUILD_TESTS=OFF
-          -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win-install/include
-          -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win-install/lib/zlibstatic.lib
-          -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win-install/lib/zlibstatic.lib
+          -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win
+          -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
+          -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
+          -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
 
       - name: Build
         run: cmake --build build/radicle-win
