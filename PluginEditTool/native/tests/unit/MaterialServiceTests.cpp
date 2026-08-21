@@ -188,5 +188,5 @@ TEST_CASE("Native material service refuses layout-changing version edits") {
     const std::map<std::string, std::string, std::less<>> changes{{"Version", "22"}};
     const auto changed = service.setFields(source, changes);
     REQUIRE_FALSE(changed.has_value());
-    CHECK(changed.error().code == "MaterialFieldParseFailed");
+    CHECK(changed.error().type == "MaterialFieldParseFailed");
 }
