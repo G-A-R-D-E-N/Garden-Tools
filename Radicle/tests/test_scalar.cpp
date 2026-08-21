@@ -8,8 +8,28 @@
 
 namespace {
 
+constexpr auto k_refr = fo4::Signature::from_string("REFR");
+constexpr auto k_misc = fo4::Signature::from_string("MISC");
 constexpr auto k_xhlt = fo4::Signature::from_string("XHLT");
 
+}
+
+TEST(ScalarSchema, GeneratedRefrHealthFieldIsRecordQualified) {
+  const auto byPath = fo4::schema::scalar_field_descriptor("REFR\\HealthPercent");
+  ASSERT_TRUE(byPath.has_value());
+  EXPECT_EQ(byPath->record, k_refr);
+  EXPECT_EQ(byPath->path, "REFR\\HealthPercent");
+  EXPECT_EQ(byPath->scalar.subrecord, k_xhlt);
+  EXPECT_FALSE(byPath->can_insert);
+
+  const auto exact = fo4::schema::scalar_field_descriptor(k_refr, "REFR\\HealthPercent");
+  ASSERT_TRUE(exact.has_value());
+  EXPECT_EQ(exact->record, k_refr);
+  EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_misc, "REFR\\HealthPercent").has_value());
+
+  const auto fields = fo4::schema::scalar_fields(k_refr);
+  ASSERT_EQ(fields.size(), 1u);
+  EXPECT_EQ(fields.front().path, "REFR\\HealthPercent");
 }
 
 TEST(ScalarSchema, XhltIsU32HumanPercent) {
