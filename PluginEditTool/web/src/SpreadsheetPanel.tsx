@@ -7,7 +7,7 @@ import './SpreadsheetPanel.css';
 const LS = (k: string, d: string) => localStorage.getItem('spreadsheet.' + k) ?? d;
 const setLS = (k: string, v: string) => localStorage.setItem('spreadsheet.' + k, v);
 
-interface GridRow { formKey: string; editorId: string; cells: string[]; }
+interface GridRow { formKey: string; editorId: string; cells: string[]; editable?: boolean[]; }
 interface GridData { columns: string[]; rows: GridRow[]; total: number; offset: number; error?: string; }
 
 export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
@@ -179,11 +179,14 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
                     {grid.columns.map((col, i) => {
                       const key = cellKey(row.formKey, col);
                       const dirty = edits.has(key);
+                      const canEdit = row.editable?.[i] ?? true;
                       return (
                         <td key={col} className={dirty ? 'spreadsheet-dirty' : ''}>
                           <input
                             className="spreadsheet-cell-input"
                             value={dirty ? edits.get(key)! : row.cells[i]}
+                            disabled={!canEdit}
+                            title={canEdit ? undefined : 'Read-only'}
                             onChange={e => onEdit(row.formKey, col, e.target.value)}
                           />
                         </td>
