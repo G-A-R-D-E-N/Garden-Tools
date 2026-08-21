@@ -56,6 +56,72 @@ Radicle therefore tracks the most recent EPFT within the PERK record and visits 
 
 The regression test intentionally places FormID-looking text in `CIS1`/`CIS2`, removes a master, and verifies that the CTDA FormID slot remaps while both strings remain byte-for-byte identical.
 
+## NAVM NVNM and NAVI NVMI/NVPP/NVSI
+
+Oracle: xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas`, plus xEdit `TwbArrayDef` behavior from `wbInterface.pas` / `wbImplementation.pas`.
+
+The critical rule is that `wbArray(..., -1)` is not "consume to end". A negative count of `-1` uses a four-byte little-endian element-count prefix. This makes the mixed navmesh payloads structurally walkable without scanning arbitrary uint32 values.
+
+### NAVM `NVNM`
+
+The pinned FO4 definition is:
+
+- `u32 Version`
+- Pathing Cell:
+  - `u32 CRC`
+  - `FormID Parent World`
+  - four-byte union selected by Parent World:
+    - nonzero Parent World -> `s16 Grid Y`, `s16 Grid X`
+    - zero Parent World -> `FormID Parent Cell`
+- u32-counted Vertices, 12 bytes each
+- u32-counted Triangles, 21 bytes each
+- u32-counted Edge Links, 11 bytes each:
+  - `u32 Type`
+  - `FormID Navmesh` at element offset `+4`
+  - `s16 Triangle`
+  - `u8 Edge Index`
+- u32-counted Door Links, 10 bytes each:
+  - `s16 Triangle`
+  - `u32 CRC`
+  - `FormID Door Ref` at element offset `+6`
+- u32-counted Cover Array, 8 bytes each
+- u32-counted Cover Triangle Mappings, 4 bytes each
+- u32-counted Waypoints, 18 bytes each
+- Navmesh Grid:
+  - `u32 Divisor`
+  - two floats grid size
+  - two vec3 bounds
+  - `Divisor * Divisor` cells, each a u32-counted array of `u16` triangle indexes
+
+`wbNavmeshGridCounter` bounds the divisor to `0..12` and returns `divisor * divisor`. Radicle validates the entire NVNM payload to exact end-of-buffer before accepting any offsets. A malformed count, invalid divisor, truncated array, or trailing payload therefore causes read-only FormLink discovery to report no NVNM links and causes remap to throw instead of partially rewriting the record.
+
+### NAVI `NVMI`
+
+The pinned definition contains these FormID-bearing slots:
+
+- `FormID Navmesh` at offset `0`
+- u32-counted Edge Links, each a NAVM FormID
+- u32-counted Preferred Edge Links, each a NAVM FormID
+- u32-counted Door Links `{u32 CRC, FormID Door Ref}`
+- Pathing Cell `FormID Parent World`; when it is zero the four-byte union is `FormID Parent Cell`, otherwise the union is two s16 grid coordinates
+
+Optional island data is selected by an explicit u8 boolean and contains bounds plus u32-counted triangle/vertex arrays, none of which are FormIDs.
+
+### NAVI `NVPP`
+
+`NVPP` contains:
+
+- u32-counted precomputed paths; each path is itself a u32-counted NAVM FormID array
+- u32-counted Road Marker entries `{FormID Navmesh, u32 Index}`
+
+Both nesting levels are bounds-checked before any FormID is visited.
+
+### NAVI `NVSI`
+
+`NVSI` is a plain subrecord array of NAVM FormIDs. Radicle requires the payload size to be divisible by four and visits every four-byte element.
+
+This support intentionally does not infer FormIDs from NAVM vertex indexes, triangle indexes, CRC values, floats, flags, bounds, or grid data.
+
 ## VMAD Variable / Variable Array
 
 Oracle: xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsCommon.pas`.
@@ -76,7 +142,9 @@ This prevents a master reorder from rewriting only the references encountered be
 - `tests/test_perk_entrypoints.cpp`
 - `tests/test_ctda_strings.cpp`
 - `tests/test_formlinks.cpp`
+- `tests/test_navmesh_formlinks.cpp`
+- `tests/test_formlink_ordinals.cpp`
 - `tests/test_vmad.cpp`
 - `tests/test_vmad_unsupported.cpp`
 
-These tests are intended to fail if a later generic scanner starts treating discriminator-controlled integers or strings as FormIDs, or if unsupported VMAD layouts become partially remapped.
+These tests are intended to fail if a later generic scanner starts treating discriminator-controlled integers or strings as FormIDs, if unsupported VMAD layouts become partially remapped, or if malformed mixed NAVM/NAVI payloads are ever scanned heuristically.
