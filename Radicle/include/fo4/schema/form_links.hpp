@@ -12,6 +12,7 @@ namespace fo4 {
 struct FormLinkHit {
   FormKey record;
   Signature subrecord{};
+  std::size_t subrecord_ordinal{0};
   std::size_t offset{0};
   RawFormId raw{};
   FormKey key;
