@@ -26,6 +26,14 @@ struct ReferencedByHit {
   std::size_t load_order{0};
 };
 
+struct OutgoingReferenceHit {
+  FormKey target;
+  PluginKey plugin;
+  Signature subrecord{};
+  std::size_t offset{0};
+  std::size_t load_order{0};
+};
+
 class ConflictGraph {
 public:
   static ConflictGraph build(std::span<const Plugin* const> load_order);
@@ -33,11 +41,13 @@ public:
   const std::vector<RecordVersion>& versions(const FormKey& key) const noexcept;
   const RecordVersion* winner(const FormKey& key) const noexcept;
   const std::vector<ReferencedByHit>& referenced_by(const FormKey& key) const noexcept;
+  const std::vector<OutgoingReferenceHit>& references_from(const FormKey& key) const noexcept;
   std::vector<FormKey> conflicts() const;
 
 private:
   std::map<FormKey, std::vector<RecordVersion>> records_;
   std::map<FormKey, std::vector<ReferencedByHit>> inbound_;
+  std::map<FormKey, std::vector<OutgoingReferenceHit>> outbound_;
 };
 
 }  // namespace fo4
