@@ -134,7 +134,9 @@ LocalizedStringTable read_string_table(std::span<const std::byte> bytes,
 
   const auto count = read_u32(bytes, 0);
   const auto data_size = read_u32(bytes, 4);
-  if (count > (std::numeric_limits<std::size_t>::max() - 8) / 8) {
+  // Widen before comparing so the check is meaningful (and warning-clean)
+  // on 64-bit hosts where the constant exceeds the u32 operand's range.
+  if (static_cast<std::size_t>(count) > (std::numeric_limits<std::size_t>::max() - 8) / 8) {
     throw StringTableError("localized string table row count overflows address space");
   }
   const auto table_size = static_cast<std::size_t>(count) * 8;
