@@ -1,7 +1,9 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <cstddef>
 #include <exception>
 #include <string>
+#include <utility>
 
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
