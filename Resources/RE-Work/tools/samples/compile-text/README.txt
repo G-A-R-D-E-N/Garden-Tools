@@ -124,6 +124,12 @@ TextExport.txt makes the run exit 0 with 4 MATCH + 1 WARNING. The compiled
 binaries are reproducible: re-run cross-check/make_compiled.py after any
 edit (the input .txt files remain the hand-edited source of truth).
 
+The composition report also flags routing anomalies as warnings (per table,
+capped at five): 0x126C6 is TextExport-routed but sits in .ILSTRINGS
+(supplemental-only), so this fixture shows one anomaly line under
+.ILSTRINGS. The two known shipped partition exceptions (Enclave
+Creation-Club paints) are exempt from the cross-routing check.
+
 Add --verbose to the same command to list all 18 category names with counts
 per table (canonical order, zeros included) under each composition line;
 without it only the dialog set {1,6,7,10} is broken out. The --json variant

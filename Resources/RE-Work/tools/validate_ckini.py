@@ -33,7 +33,9 @@ Usage:
         samples/compile-text/cross-check/input \
         --strings samples/compile-text/cross-check/STRINGS --json
     # full 18-category breakdown in composition reports (not just the dialog
-    # set {1,6,7,10}):
+    # set {1,6,7,10}); composition reports also flag routing anomalies as
+    # warnings (dialog ID in .STRINGS, ordinary ID in .DLSTRINGS,
+    # TextExport-derived ID in .ILSTRINGS):
     python3 validate_ckini.py --strings '.../STRINGS' \
         --text-export '.../TextExport.txt' --verbose
     python3 validate_ckini.py CreationKit.ini --exit-codes
@@ -691,6 +693,7 @@ def check_compile_text_roots(esm, roots, language=None):
                             "source": "%s:%d" % (label, lineno),
                             "category": (category or "").strip() or "(none)",
                             "output": outname,
+                            "supplemental": is_supplemental,
                         })
                         route_counts[ext] = route_counts.get(ext, 0) + 1
             except OSError as exc:
@@ -1026,14 +1029,40 @@ def load_text_export_categories(paths):
     return id_to_cat, warnings
 
 
-def _composition_data(kind_ids, category_map):
+def _routing_anomaly(kind, category_idx, supplemental_ids, sid):
+    """Return a routing-anomaly reason for one (kind, category) attribution.
+
+    The engine's FUN_140916980 ``0x4c2`` bitmask routes the dialog
+    categories {1,6,7,10} to .DLSTRINGS and every other category to
+    .STRINGS; .ILSTRINGS is fed only by the supplemental ID-named inputs,
+    whose categories are unconstrained. ``supplemental_ids`` marks IDs with
+    supplemental provenance (combined mode); None means every attributed ID
+    is TextExport-derived, so any .ILSTRINGS attribution is anomalous.
+    Returns None when the attribution is clean.
+    """
+    if kind == ".STRINGS" and category_idx in _TEXT_DIALOG_INDICES:
+        return "dialog-category ID in .STRINGS (expected .DLSTRINGS)"
+    if kind == ".DLSTRINGS" and category_idx not in _TEXT_DIALOG_INDICES:
+        return "ordinary-category ID in .DLSTRINGS (expected .STRINGS)"
+    if kind == ".ILSTRINGS" and (supplemental_ids is None
+                                 or sid not in supplemental_ids):
+        return "TextExport-routed ID in .ILSTRINGS (supplemental-only table)"
+    return None
+
+
+def _composition_data(kind_ids, category_map, supplemental_ids=None):
     """Structured per-table composition for one language stem.
 
     Returns {kind: {ids, attributed, by_category, dialog, ordinary,
-    unattributed}} for every non-empty table, where ``dialog`` counts the
-    IDs attributed to categories {1,6,7,10}. ``kind_ids`` maps each of
-    _STRINGS_KINDS to the list of compiled stringIDs; ``category_map`` maps
-    stringID -> canonical TextExport category name.
+    unattributed, anomalies}} for every non-empty table, where ``dialog``
+    counts the IDs attributed to categories {1,6,7,10} and ``anomalies``
+    lists routing violations {id, id_hex, category, reason}: a dialog ID in
+    .STRINGS, an ordinary ID in .DLSTRINGS, or a TextExport-derived ID in
+    .ILSTRINGS (the two known shipped partition exceptions are exempt).
+    ``kind_ids`` maps each of _STRINGS_KINDS to the list of compiled
+    stringIDs; ``category_map`` maps stringID -> canonical TextExport
+    category name; ``supplemental_ids`` marks supplemental-provenance IDs
+    (combined mode; None = all attributed IDs are TextExport-derived).
     """
     out = {}
     for kind in _STRINGS_KINDS:
@@ -1041,10 +1070,22 @@ def _composition_data(kind_ids, category_map):
         if not ids:
             continue
         by_cat = {}
+        anomalies = []
         for sid in ids:
             cat = category_map.get(sid)
-            if cat is not None:
-                by_cat[cat] = by_cat.get(cat, 0) + 1
+            if cat is None:
+                continue
+            by_cat[cat] = by_cat.get(cat, 0) + 1
+            if sid in _STRINGS_KNOWN_PARTITION_EXCEPTIONS:
+                continue
+            try:
+                idx = _TEXT_CATEGORIES_LOWER.index(cat.lower())
+            except ValueError:
+                idx = len(_TEXT_CATEGORIES) - 1   # Misc fallback
+            reason = _routing_anomaly(kind, idx, supplemental_ids, sid)
+            if reason:
+                anomalies.append({"id": sid, "id_hex": "0x%08X" % sid,
+                                  "category": cat, "reason": reason})
         attr = sum(by_cat.values())
         dialog = sum(by_cat.get(_TEXT_CATEGORIES[i], 0)
                      for i in _TEXT_DIALOG_INDICES)
@@ -1055,21 +1096,25 @@ def _composition_data(kind_ids, category_map):
             "dialog": dialog,
             "ordinary": attr - dialog,
             "unattributed": len(ids) - attr,
+            "anomalies": anomalies,
         }
     return out
 
 
-def _composition_lines(header, kind_ids, category_map, verbose=False):
+def _composition_lines(header, kind_ids, category_map, verbose=False,
+                       supplemental_ids=None):
     """Per-table dialog-category composition lines for one language stem.
 
     Formats ``_composition_data`` for the human-readable report; the
     structured dict is what --json emits. With ``verbose`` the per-table
     report additionally lists all 18 category names with counts (canonical
-    order, zeros included). Returns the lines to append, starting with
-    ``header``.
+    order, zeros included). Routing anomalies (see ``_composition_data``)
+    are surfaced as per-table WARNING lines, capped at five per table.
+    Returns the lines to append, starting with ``header``.
     """
     lines = [header]
-    for kind, d in _composition_data(kind_ids, category_map).items():
+    for kind, d in _composition_data(kind_ids, category_map,
+                                     supplemental_ids).items():
         detail = []
         if d["dialog"]:
             parts = ["%s=%d" % (name, d["by_category"].get(name, 0))
@@ -1089,6 +1134,14 @@ def _composition_lines(header, kind_ids, category_map, verbose=False):
                 "%s=%d" % (name, d["by_category"].get(name, 0))
                 for name in _TEXT_CATEGORIES)
             lines.append("    category breakdown: %s" % breakdown)
+        shown = d["anomalies"][:5]
+        for a in shown:
+            lines.append("    WARNING: routing anomaly: %s: %s (%s) %s"
+                         % (kind, a["id_hex"], a["category"], a["reason"]))
+        extra = len(d["anomalies"]) - len(shown)
+        if extra:
+            lines.append("    WARNING: ... and %d more routing anomaly(s) in %s"
+                         % (extra, kind))
     return lines
 
 
@@ -1217,8 +1270,10 @@ def check_strings_files(paths, category_map=None, verbose=False):
     category name (see ``load_text_export_categories``). When supplied, the
     per-stem report also counts, for every table, how many of its IDs were
     routed from each dialog category (indices {1,6,7,10} -> .DLSTRINGS per
-    FUN_140916980's 0x4c2 bitmask) versus the ordinary categories; with
-    ``verbose`` the full 18-category breakdown is listed for every table.
+    FUN_140916980's 0x4c2 bitmask) versus the ordinary categories, flags
+    routing anomalies as warnings (dialog ID in .STRINGS, ordinary ID in
+    .DLSTRINGS, TextExport-derived ID in .ILSTRINGS), and -- with
+    ``verbose`` -- lists the full 18-category breakdown for every table.
     """
     files = []
     for p in paths:
@@ -1342,8 +1397,9 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language,
     ``summary`` is the structured machine-consumable result: matched file
     names, per-record verdicts {id, category, source, predicted_ext,
     present_in, verdict}, verdict counts, and the per-language-stem
-    composition (``_composition_data`` dicts). ``verbose`` adds the full
-    18-category breakdown to the human-readable composition lines.
+    composition (``_composition_data`` dicts, whose per-kind ``anomalies``
+    list routing violations). ``verbose`` adds the full 18-category
+    breakdown to the human-readable composition lines.
     """
     files = []
     for p in strings_paths:
@@ -1420,6 +1476,7 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language,
     # TextExport parser; unknown/empty -> Misc). Reported per language stem
     # so a multi-language compiled set does not double-count the same IDs.
     cat_map = {}
+    supplemental_ids = set()
     for rec in route_records:
         cat = (rec["category"] or "").strip()
         try:
@@ -1427,6 +1484,8 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language,
         except ValueError:
             cat = _TEXT_CATEGORIES[-1]   # Misc fallback
         cat_map[rec["id"]] = cat
+        if rec.get("supplemental"):
+            supplemental_ids.add(rec["id"])
     stems = {}
     for path in sorted(matching):
         stems.setdefault(_strings_lang_stem(path), []).append(path)
@@ -1436,11 +1495,12 @@ def cross_check_compile_routes(route_records, strings_paths, esm, language,
         for path in stems[stem]:
             ids = _load_strings_ids(path)
             kind_ids[_strings_kind(path)].extend(ids.keys())
-        composition[stem] = _composition_data(kind_ids, cat_map)
+        composition[stem] = _composition_data(kind_ids, cat_map, supplemental_ids)
         lines.extend(_composition_lines(
             "COMPOSITION %s: %d routed IDs, per compiled table by "
             "routed-record category (dialog set {1,6,7,10} -> .DLSTRINGS)"
-            % (stem, len(route_records)), kind_ids, cat_map, verbose))
+            % (stem, len(route_records)), kind_ids, cat_map, verbose,
+            supplemental_ids))
 
     summary = {
         "files": [os.path.basename(f) for f in sorted(matching)],
@@ -1796,7 +1856,8 @@ def main(argv):
                 "records": [
                     {"id": r["id"], "id_hex": "0x%08X" % r["id"],
                      "category": r["category"], "source": r["source"],
-                     "predicted_ext": r["ext"], "output": r["output"]}
+                     "predicted_ext": r["ext"], "output": r["output"],
+                     "supplemental": bool(r.get("supplemental"))}
                     for r in route_records
                 ],
                 "routing_summary": summary["route_counts"],
