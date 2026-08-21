@@ -200,7 +200,11 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
   std::vector<TableRow> rows;
   rows.reserve(table.entries.size());
   std::vector<std::byte> data;
-  std::map<std::vector<std::byte>, std::uint32_t> deduplicated;
+  // Keyed by std::string rather than std::vector<std::byte>: GCC 14's
+  // -Wstringop-overread mis-reports the memcmp bound inside libstdc++'s
+  // vector<byte> three-way comparison at -O3 (false positive that breaks
+  // -Werror builds). The bytes are opaque payload, so string is equivalent.
+  std::map<std::string, std::uint32_t> deduplicated;
   std::set<std::uint32_t> ids;
 
   for (const auto& entry : table.entries) {
@@ -209,7 +213,13 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
       throw StringTableError("localized string table contains a duplicate string ID");
     }
 
-    auto found = deduplicated.find(entry.text);
+    const auto text_key = [](const std::vector<std::byte>& bytes) {
+      if (bytes.empty()) return std::string{};
+      const auto* data = reinterpret_cast<const char*>(bytes.data());
+      return std::string(data, bytes.size());
+    };
+
+    auto found = deduplicated.find(text_key(entry.text));
     std::uint32_t offset = 0;
     if (found != deduplicated.end()) {
       offset = found->second;
@@ -226,7 +236,7 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
       }
       data.insert(data.end(), entry.text.begin(), entry.text.end());
       data.push_back(std::byte{0});
-      deduplicated.emplace(entry.text, offset);
+      deduplicated.emplace(text_key(entry.text), offset);
     }
     rows.push_back({entry.id, offset});
   }
