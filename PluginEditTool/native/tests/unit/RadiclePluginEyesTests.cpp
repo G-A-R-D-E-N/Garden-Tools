@@ -162,7 +162,7 @@ TEST_CASE("Native EYES FULL edit refuses opaque four-byte storage without touchi
             "EyesPatch.esp", "000800:EyesPatch.esp", "EYES\\Full", "Unsafe Rewrite"
         }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "EyesWriteFailed");
+    CHECK(result.error().type == "EyesWriteFailed");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
@@ -181,7 +181,7 @@ TEST_CASE("Native EYES SetField validates DATA byte range") {
             "EyesPatch.esp", "000800:EyesPatch.esp", "EYES\\DataFlags", "256"
         }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "InvalidFieldValue");
+    CHECK(result.error().type == "InvalidFieldValue");
 }
 
 TEST_CASE("Native EYES writes refuse game Data plugins") {
@@ -200,6 +200,6 @@ TEST_CASE("Native EYES writes refuse game Data plugins") {
             "EyesPatch.esp", "000800:EyesPatch.esp", "EYES\\Icon", "blocked.dds"
         }));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code == "PluginReadOnly");
+    CHECK(result.error().type == "PluginReadOnly");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
