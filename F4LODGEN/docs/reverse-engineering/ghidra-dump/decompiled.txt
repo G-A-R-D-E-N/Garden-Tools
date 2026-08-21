@@ -1,0 +1,53 @@
+===== 0x15fdc1c : entry =====
+
+void entry(void)
+
+{
+  undefined *puVar1;
+  char cVar2;
+  LPCWSTR lpIconName;
+  HICON pHVar3;
+  undefined4 *in_FS_OFFSET;
+  undefined4 uStackY_24;
+  undefined1 *puVar4;
+  code *UNRECOVERED_JUMPTABLE;
+  
+  puVar4 = &stack0xfffffffc;
+  FUN_004133a4(&DAT_015e273c);
+  puVar1 = PTR_DAT_0163e78c;
+  *PTR_DAT_0163dfac = 1;
+  *(undefined2 *)(PTR_DAT_0163ee80 + 0xc2) = 0x2e;
+  FUN_00704d98(*(undefined4 *)puVar1);
+  FUN_00706d84(*(undefined4 *)puVar1,1);
+  *(undefined1 *)(*(int *)puVar1 + 0x6d) = 0;
+  *(undefined4 *)(*(int *)puVar1 + 0x88) = 10000;
+  FUN_01385250();
+  cVar2 = FUN_013850e4();
+  if (cVar2 != '\0') {
+    if (*(int *)PTR_DAT_0163e3e4 != 0) {
+      lpIconName = (LPCWSTR)FUN_0040c294(*(undefined4 *)PTR_DAT_0163e3e4);
+      uStackY_24 = 0x15fdc9f;
+      pHVar3 = LoadIconW(DAT_0164363c,lpIconName);
+      if (pHVar3 != (HICON)0x0) {
+        FUN_005bfde4(*(undefined4 *)(*(int *)puVar1 + 0xb8),pHVar3);
+      }
+    }
+    FUN_007047d0(*(undefined4 *)puVar1,*(undefined4 *)PTR_DAT_0163e070);
+    uStackY_24 = *in_FS_OFFSET;
+    *in_FS_OFFSET = &uStackY_24;
+    FUN_00704db0(*(undefined4 *)puVar1,PTR_PTR_014e6e48,PTR_DAT_0163dc0c);
+    FUN_00704f10(*(undefined4 *)puVar1);
+    *in_FS_OFFSET = uStackY_24;
+    UNRECOVERED_JUMPTABLE = (code *)0x15fdd04;
+    FUN_014f4e14(0,uStackY_24,puVar4);
+                    /* WARNING: Could not recover jumptable at 0x015fdcfb. Too many branches */
+                    /* WARNING: Treating indirect jump as call */
+    (*UNRECOVERED_JUMPTABLE)(UNRECOVERED_JUMPTABLE);
+    return;
+  }
+                    /* WARNING: Subroutine does not return */
+  FUN_0040b12c();
+}
+
+
+
