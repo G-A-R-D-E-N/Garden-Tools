@@ -18,16 +18,6 @@ std::uint32_t parse_hex(std::string_view text) {
   return value;
 }
 
-const MasterDescriptor* find_master(const std::vector<MasterDescriptor>& masters,
-                                    const PluginKey& key) {
-  for (const auto& master : masters) {
-    if (master.key == key) {
-      return &master;
-    }
-  }
-  return nullptr;
-}
-
 }  // namespace
 
 std::string FormKey::to_string() const {
@@ -68,21 +58,19 @@ FormKey resolve_plugin_form_id(RawFormId raw, const PluginFormIdContext& context
     throw FormIdError("created/save FormIDs (index 0xFF) are not plugin identities");
   }
 
-  if (raw.is_runtime_light()) {
-    if (context.current_kind != PluginKind::light) {
-      throw FormIdError(
-          "on-disk FormID uses FE encoding but the current plugin is not light");
-    }
-    return FormKey{context.current_plugin, LocalFormId{raw.light_local()}};
-  }
-
+  // On-disk plugin FormIDs are always indexed through the plugin's MAST table.
+  // 0xFE has no special light-plugin meaning in this address space; runtime FE
+  // encoding is handled only by resolve_runtime_form_id().
   const auto index = raw.index_byte();
   const auto local = LocalFormId{raw.local_24()};
   if (index < context.masters.size()) {
     return FormKey{context.masters[index].key, local};
   }
   if (index == context.masters.size()) {
-    return FormKey{context.current_plugin, local};
+    const auto localValue = context.current_kind == PluginKind::light
+                                ? raw.local_24() & k_light_local_mask
+                                : raw.local_24();
+    return FormKey{context.current_plugin, LocalFormId{localValue}};
   }
   throw FormIdError("master index " + std::to_string(index) +
                     " is outside this plugin's master table");
@@ -127,7 +115,7 @@ FormKey resolve_runtime_form_id(RawFormId raw, const RuntimeFormIdContext& conte
   if (raw.is_runtime_light()) {
     const auto slot = raw.light_slot();
     if (slot >= context.light_plugins.size()) {
-      throw FormIdError("light slot 0x" + std::to_string(slot) +
+      throw FormIdError("light slot " + std::to_string(slot) +
                         " is outside the runtime light table");
     }
     return FormKey{context.light_plugins[slot].key, LocalFormId{raw.light_local()}};
@@ -138,8 +126,6 @@ FormKey resolve_runtime_form_id(RawFormId raw, const RuntimeFormIdContext& conte
     throw FormIdError("compile index " + std::to_string(index) +
                       " is outside the runtime full-plugin table");
   }
-  const auto* full = find_master(context.full_plugins, context.full_plugins[index].key);
-  (void)full;
   return FormKey{context.full_plugins[index].key, LocalFormId{raw.local_24()}};
 }
 
