@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <optional>
