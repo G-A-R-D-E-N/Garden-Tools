@@ -265,9 +265,9 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "backend.GetConflictMatrix") return getConflictMatrix(arguments);
     if (operation == "backend.GetReferencedBy") return getReferencedBy(arguments);
     if (operation == "backend.SearchRecords") return searchRecords(arguments);
-    if (operation == "backend.GetProblems") return nlohmann::json("[]");
-    if (operation == "backend.GetDependencies") return nlohmann::json("[]");
-    if (operation == "backend.GetHistory") return nlohmann::json("[]");
+    if (operation == "backend.GetProblems") return getProblems(arguments);
+    if (operation == "backend.GetDependencies") return getDependencies(arguments);
+    if (operation == "backend.GetHistory") return getHistory(arguments);
     if (operation == "masters.GetPlugins") return getEditablePlugins();
     if (operation == "masters.List") return listMasters(arguments);
 
