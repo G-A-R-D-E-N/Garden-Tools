@@ -1,6 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <exception>
 #include <map>
 #include <set>
