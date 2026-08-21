@@ -2,14 +2,11 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <stdexcept>
 #include <string>
-#include <string_view>
 #include <thread>
 
 #include <catch2/catch_test_macros.hpp>
 #include <httplib.h>
-#include <nlohmann/json.hpp>
 
 #include <fo4ide/events/EventBus.hpp>
 #include <fo4ide/http/HttpServer.hpp>
@@ -22,91 +19,86 @@ namespace {
 class EchoTarget final : public fo4ide::rpc::Target {
 public:
     fo4ide::Result<nlohmann::json> invoke(std::string_view method,
-                                           const nlohmann::json& args) override {
-        if (method == "Echo") return args.at(0);
-        return std::unexpected(fo4ide::Error{"UnknownMethod", "unknown"});
+                                          const nlohmann::json& args) override {
+        return nlohmann::json{{"method", method}, {"args", args}};
     }
 };
 
-std::filesystem::path tempWebRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    const auto root = std::filesystem::temp_directory_path() / ("fo4ide_http_test_" + std::to_string(id));
-    std::filesystem::create_directories(root);
-    std::ofstream(root / "index.html") << "<html><body>native ui</body></html>";
-    std::ofstream(root / "app.js") << "console.log('native');";
-    return root;
-}
-
-struct Fixture {
+struct ServerFixture {
+    std::filesystem::path root;
     fo4ide::events::EventBus events;
     fo4ide::rpc::Dispatcher rpc;
-    fo4ide::http::HttpServer server{rpc, events};
-    std::filesystem::path webRoot{tempWebRoot()};
+    fo4ide::http::HttpServer server;
     int port{0};
 
-    Fixture() {
-        auto registered = rpc.registerTarget("test", std::make_shared<EchoTarget>());
-        if (!registered) throw std::runtime_error(registered.error().message);
-        auto started = server.start({.host = "127.0.0.1", .port = 0, .webRoot = webRoot});
-        if (!started) throw std::runtime_error(started.error().message);
+    ServerFixture()
+        : root(std::filesystem::temp_directory_path() /
+               ("fo4ide_http_" + std::to_string(
+                   std::chrono::steady_clock::now().time_since_epoch().count()))),
+          server(rpc, events) {
+        std::filesystem::create_directories(root / "assets");
+        std::ofstream(root / "index.html") << "<html>native</html>";
+        std::ofstream(root / "assets" / "app.js") << "console.log('native');";
+        REQUIRE(rpc.registerTarget("echo", std::make_shared<EchoTarget>()).has_value());
+        auto started = server.start({.host = "127.0.0.1", .port = 0, .webRoot = root});
+        REQUIRE(started.has_value());
         port = *started;
     }
 
-    ~Fixture() {
+    ~ServerFixture() {
         server.stop();
-        events.shutdown();
         std::error_code ec;
-        std::filesystem::remove_all(webRoot, ec);
+        std::filesystem::remove_all(root, ec);
     }
 };
 
 }
 
 TEST_CASE("HTTP health reports native RPC targets") {
-    Fixture fixture;
+    ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
-    auto response = client.Get("/api/health");
-
+    auto response = client.Get("/health");
     REQUIRE(response);
-    CHECK(response->status == 200);
+    REQUIRE(response->status == 200);
     const auto json = nlohmann::json::parse(response->body);
     CHECK(json.at("ok") == true);
-    CHECK(json.at("native") == true);
-    CHECK(json.at("targets") == nlohmann::json::array({"test"}));
+    CHECK(json.at("targets")[0] == "echo");
 }
 
 TEST_CASE("HTTP RPC preserves the existing JSON envelope") {
-    Fixture fixture;
+    ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
     const nlohmann::json request{
-        {"target", "test"},
-        {"method", "Echo"},
-        {"args", nlohmann::json::array({"hello"})}
+        {"target", "echo"},
+        {"method", "Run"},
+        {"args", nlohmann::json::array({"one", 2})}
     };
-
     auto response = client.Post("/rpc", request.dump(), "application/json");
     REQUIRE(response);
-    CHECK(response->status == 200);
-    CHECK(nlohmann::json::parse(response->body) == nlohmann::json{{"ok", true}, {"value", "hello"}});
+    REQUIRE(response->status == 200);
+    const auto json = nlohmann::json::parse(response->body);
+    CHECK(json.at("ok") == true);
+    CHECK(json.at("value").at("method") == "Run");
+    CHECK(json.at("value").at("args")[0] == "one");
 }
 
 TEST_CASE("HTTP server serves the existing web bundle shape") {
-    Fixture fixture;
+    ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
 
     auto index = client.Get("/");
     REQUIRE(index);
     CHECK(index->status == 200);
-    CHECK(index->body.find("native ui") != std::string::npos);
+    CHECK(index->body == "<html>native</html>");
 
-    auto asset = client.Get("/app.js");
+    auto asset = client.Get("/assets/app.js");
     REQUIRE(asset);
     CHECK(asset->status == 200);
-    CHECK(asset->body.find("console.log") != std::string::npos);
+    CHECK(asset->body == "console.log('native');");
 }
 
 TEST_CASE("SSE emits existing Type plus payload fields") {
-    Fixture fixture;
+    ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
     client.set_read_timeout(2s);
 
@@ -131,7 +123,7 @@ TEST_CASE("HTTP refuses non-loopback binds") {
     fo4ide::events::EventBus events;
     fo4ide::rpc::Dispatcher rpc;
     fo4ide::http::HttpServer server(rpc, events);
-    auto result = server.start({.host = "0.0.0.0", .port = 0});
+    auto result = server.start({.host = "0.0.0.0", .port = 0, .webRoot = {}});
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "UnsafeHttpBind");
 }
