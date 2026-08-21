@@ -172,15 +172,21 @@ void remap_raw(std::span<std::byte> data, std::size_t offset,
 
 }  // namespace
 
+void remap_record_form_links(Record& record,
+                             const PluginFormIdContext& old_context,
+                             const PluginFormIdContext& new_context) {
+  for (auto& sub : record.subrecords) {
+    auto bytes = std::span<std::byte>(sub.data);
+    visit_link_offsets(record, sub, [&](std::size_t offset) {
+      remap_raw(bytes, offset, old_context, new_context);
+    });
+  }
+}
+
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context) {
   visit_records(plugin, [&](Record& record) {
-    for (auto& sub : record.subrecords) {
-      auto bytes = std::span<std::byte>(sub.data);
-      visit_link_offsets(record, sub, [&](std::size_t offset) {
-        remap_raw(bytes, offset, old_context, new_context);
-      });
-    }
+    remap_record_form_links(record, old_context, new_context);
   });
 }
 
