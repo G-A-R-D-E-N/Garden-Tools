@@ -217,3 +217,34 @@ TEST_CASE("Radicle plugin backend reports dangling FormLinks") {
     CHECK(report->get<std::string>().find("Dangling FormLinks: 1") != std::string::npos);
     CHECK(report->get<std::string>().find("000999:Base.esp") != std::string::npos);
 }
+
+TEST_CASE("Radicle plugin backend refreshes the cached graph when the environment changes") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+
+    const auto basePath = root / "Base.esp";
+    const auto overridePath = root / "Override.esp";
+    writeBytes(basePath, makePlugin({}, "WEAP", 0x00000800, "BaseWeapon"));
+    writeBytes(overridePath,
+               makePlugin("Base.esp", "WEAP", 0x00000800, "OverrideWeapon"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json withOverride{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esp", basePath, "Base"),
+            pluginEntry("Override.esp", overridePath, "Override")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", withOverride).has_value());
+    CHECK(parseStringResult(
+              backend.invoke("backend.GetConflicts", nlohmann::json::array())).size() == 1);
+
+    const nlohmann::json baseOnly{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esp", basePath, "Base")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", baseOnly).has_value());
+    CHECK(parseStringResult(
+              backend.invoke("backend.GetConflicts", nlohmann::json::array())).empty());
+}
