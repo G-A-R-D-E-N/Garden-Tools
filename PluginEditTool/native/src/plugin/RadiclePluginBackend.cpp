@@ -1,8 +1,8 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <exception>
 #include <map>
-#include <set>
 #include <string>
 #include <utility>
 
@@ -155,7 +155,7 @@ Result<nlohmann::json> RadiclePluginBackend::getChildren(const nlohmann::json& a
     for (const auto* record : records) {
         if (record->header.signature.to_string() != normalizedSignature) continue;
         const auto key = record->form_key.owner().empty()
-            ? ("0x" + std::to_string(record->header.form_id))
+            ? ("0x" + std::to_string(record->header.form_id.value()))
             : record->form_key.to_string();
         rows.push_back({
             {"Key", key},
@@ -182,9 +182,9 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
 
     try {
         auto plugin = fo4::read_plugin_file(std::filesystem::u8path(path));
-        const auto name = plugin.key.filename().empty()
+        std::string name = plugin.key.filename().empty()
             ? std::filesystem::u8path(path).filename().string()
-            : plugin.key.filename();
+            : std::string(plugin.key.filename());
         std::scoped_lock lock(mutex_);
         auto* existing = findPlugin(name);
         if (existing) {
@@ -300,7 +300,7 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
         const auto& master = loaded->plugin.header.masters[index];
         masters.push_back({
             {"index", index},
-            {"name", master.key.filename()},
+            {"name", std::string(master.key.filename())},
             {"size", master.data_size},
             {"used", true}
         });
