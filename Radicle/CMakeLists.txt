@@ -96,6 +96,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_compression.cpp
     tests/test_real_plugin.cpp
     tests/test_formkey_load.cpp
+    tests/test_master_kinds.cpp
     tests/test_writer.cpp
     tests/test_formlinks.cpp
     tests/test_vmad.cpp
