@@ -55,6 +55,7 @@ private:
 
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
+    bool isEditable(const LoadedPlugin& plugin) const;
     void rebuildGraphLocked();
 
     mutable std::mutex mutex_;
