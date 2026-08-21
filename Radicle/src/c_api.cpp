@@ -9,6 +9,7 @@
 #include <exception>
 #include <filesystem>
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
