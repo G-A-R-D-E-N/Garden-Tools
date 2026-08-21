@@ -15,6 +15,7 @@
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/schema/scalar.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -122,6 +123,12 @@ Result<fo4::FormKey> formKeyArgument(const nlohmann::json& arguments) {
 }
 
 nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 0) {
+    if (signature == "REFR") {
+        return nlohmann::json::array({
+            "EDID",
+            "REFR\\HealthPercent"
+        });
+    }
     if (signature == "EYES") {
         return nlohmann::json::array({
             "EDID",
@@ -226,7 +233,42 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
         nlohmann::json cells = nlohmann::json::array({editor});
         nlohmann::json editable = nlohmann::json::array({true});
 
-        if (signature == "EYES") {
+        if (signature == "REFR") {
+            const auto xhltSignature = fo4::Signature::from_string("XHLT");
+            const fo4::Subrecord* xhlt = nullptr;
+            for (const auto& subrecord : record->subrecords) {
+                if (subrecord.signature != xhltSignature) continue;
+                if (xhlt != nullptr) {
+                    return std::unexpected(Error{
+                        "ScalarReadFailed",
+                        record->form_key.to_string() + ": duplicate REFR XHLT subrecords"
+                    });
+                }
+                xhlt = &subrecord;
+            }
+
+            if (xhlt == nullptr) {
+                cells.push_back("");
+                editable.push_back(false);
+            } else {
+                try {
+                    const auto descriptor = fo4::schema::scalar_descriptor(xhltSignature);
+                    if (!descriptor.has_value()) {
+                        return std::unexpected(Error{
+                            "ScalarReadFailed",
+                            "REFR XHLT is missing its Radicle scalar descriptor"
+                        });
+                    }
+                    cells.push_back(fo4::schema::decode_scalar(xhlt->data, *descriptor));
+                    editable.push_back(true);
+                } catch (const fo4::schema::ScalarError& error) {
+                    return std::unexpected(Error{
+                        "ScalarReadFailed",
+                        record->form_key.to_string() + ": " + error.what()
+                    });
+                }
+            }
+        } else if (signature == "EYES") {
             try {
                 const auto model = fo4::forms::decode_eyes(
                     loaded->plugin, record->form_key);
