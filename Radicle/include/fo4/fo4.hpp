@@ -7,6 +7,7 @@
 #include "fo4/graph/conflict_graph.hpp"
 #include "fo4/headers.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/plugin/load_order.hpp"
 #include "fo4/plugin/master_kinds.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
