@@ -9,7 +9,10 @@ PluginBackendTarget::PluginBackendTarget(plugin::IPluginBackend& backend, std::s
 
 Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                                                     const nlohmann::json& args) {
-    if (targetNamespace_ == "backend") return backend_.invokeBackend(method, args);
+    if (targetNamespace_ == "backend") {
+        if (method == "SetField") return backend_.setFieldValue(args);
+        return backend_.invokeBackend(method, args);
+    }
     if (targetNamespace_ == "masters" && method == "GetPlugins") {
         return backend_.invokeBackend("GetEditablePlugins", args);
     }
