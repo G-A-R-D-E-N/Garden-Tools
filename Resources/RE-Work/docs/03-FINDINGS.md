@@ -136,12 +136,12 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
   -2494562304/-2494562303 signed). Batch runs still create a window: WM_CREATE
   → dispatcher → nonzero → WM_CLOSE.
 
-## 2026-08-18 — Elric SDK PDB acquired: 90,090 engine symbols confirm the CK decompiles (doc 18)
+## 2026-08-18 — Elric SDK symbols acquired: 90,090 engine symbols confirm the CK decompiles (doc 18)
 
-45. **The Elric 2016 package** (`~/Downloads/Elric+PDB/Elric`): the FO4
+45. **The Elric 2016 package** (`~/Downloads/Elric/Elric`): the FO4
     NIF/texture optimizer (Elrich.exe + ElricInterop.dll + native BSCore/BSMain/
-    BSGraphics/Ni* DLLs). `ElricInterop.pdb` (95 MB) = 90,090 unique mangled
-    C++ symbols, extracted to `ghidra-dump/elric-pdb-symbols.txt`.
+    BSGraphics/Ni* DLLs). `ElricInterop symbols` (95 MB) = 90,090 unique mangled
+    C++ symbols, extracted to `ghidra-dump/elric-symbols.txt`.
 46. **Settings machinery names confirmed**: `INISettingCollection::ReadSetting` /
     `::WriteSetting` (our FUN_1425c7f90 / FUN_1425c7da0), `::Open`/`::Close`
     (the lazy ini-path marker slots), `Setting` base with `operator bool/float/
@@ -150,7 +150,7 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     `(char const*, bool/uint/int/float)` = doc 10's type letters. Source paths
     `exporterpublic\bsmain\setting.h` / `bscore\bstscattertable.h` = the CK's
     embedded `buildagent\...\code\bsmain\setting.h` lineage.
-47. **The descriptor records ARE symbols**: the PDB names every
+47. **The descriptor records ARE symbols**: the symbol table names every
     `SettingT<INISettingCollection>` global — 34 in Elric, **26 of which appear
     in the CK's 1,641-key table with matching sections** (HAVOK/Havok/Cloth/
     CollisionQuery), the anonymous-namespace hashes mapping 1:1 to the CK's
@@ -215,9 +215,9 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
 52. **SaveStream core = `0x142499070`**: three per-object passes over the
     object array (stream+0x320, count +0x328, iterators +0x3d8..+0x3e0)
     calling each object's vftable **slot 0xd8**, then **0xe0**, then **0x110**
-    with `(object, stream)` — matching `bhkNiTriStripsShape`'s PDB-named
+    with `(object, stream)` — matching `bhkNiTriStripsShape`'s named
     `RegisterStreamables`/`SaveBinary`/`LinkObject` virtual quintet (the only
-    names the 2016 PDB provides; `NiStream::SaveStream`/`AddObject` themselves
+    names the 2016 symbols provides; `NiStream::SaveStream`/`AddObject` themselves
     are absent from Elric — save-side is CK-only).
 53. **FaceGen exporter `0x140ab8a60` (= `tesnpc_editor.cpp`) call chain**: 5×
     `CreateDirectoryA` for `Data\Meshes\Actors\Character\FaceGenData\FaceGeom\`
@@ -226,14 +226,14 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     → save-prep `0x140abc3b0` → stack NiStream vft 0x142fa4780 + output wire
     `0x140040403`→`0x142497150` → `call 0x140097e92` (slot-6 stub = the disk
     write). Also decodes the full `bhkNiTriStripsShape` class layout (48
-    PDB symbols: streaming quintet + subpart/`Add` family + `EmptySubpart`
+    symbols symbols: streaming quintet + subpart/`Add` family + `EmptySubpart`
     static + `iCount`/`ms_RTTI`/RTTI chain + `AddObjectFunctor` in
     `?A0x7927943b` — distinct from `NiStream::AddObject`).
 
-## 2026-08-19 — NiStream serialization byte spec from the address-accurate ElricInterop.pdb import (doc 18 §4e)
+## 2026-08-19 — NiStream serialization byte spec from the address-accurate ElricInterop symbols import (doc 18 §4e)
 
-54. **Imported `ElricInterop.pdb` into Ghidra 12.1.3 against `ElricInterop.dll`**
-    (PE32 C++/CLI, PDB Universal, symbol addrs at image base 0x10000000) and
+54. **Imported `ElricInterop symbols` into Ghidra 12.1.3 against `ElricInterop.dll`**
+    (PE32 C++/CLI, Ghidra symbol analyzer, symbol addrs at image base 0x10000000) and
     resolved the full `NiStream` save/load family as **named exports of
     `NiMain.dll`** (3,308 exports): every hot-patch `jmp` stub was resolved to
     its real body and IAT slots were mapped (`Write`/`Read` =
@@ -253,7 +253,7 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
     header numRoots — no separate count field. Load side skips unloadable
     blocks via the size table; post-load runs `LinkObject`/`PostLinkObject`
     passes + global post-process funcs. Artifacts: `ghidra-dump/nimain-nistream-serial.asm`,
-    `ghidra-dump/nimain-exports.txt`. Corrective note for #52: the PDB-absent
+    `ghidra-dump/nimain-exports.txt`. Corrective note for #52: the name-absent
     `SaveStream`/`AddObject` **do exist** in the product — as NiMain.dll
     exports (32-bit 2016), byte-identical contract to the CK's 64-bit chain.
 
@@ -434,8 +434,8 @@ Dated entries, newest first. Facts land here first, then get expanded into dedic
 **Not packed** — `.text` entropy 5.86 (the game exe from the same era is DRM-encrypted at ~8.0).
 Full MSVC RTTI present (4,438 unique type names).
 
-1. **PDB path embedded**: `E:\BuildAgent\work\4a2aa37ca4b2ffa3\scripts\_workspace\Code\Build\PC\CreationKit.pdb`
-   (GUID `f276f0de-3312-9745-8404-bd4b2df2a9aa`). TeamCity CI build → no public PDB, but the
+1. **RSDS path embedded**: `E:\BuildAgent\work\4a2aa37ca4b2ffa3\scripts\_workspace\Code\Build\PC\CreationKit`
+   (GUID `f276f0de-3312-9745-8404-bd4b2df2a9aa`). TeamCity CI build → no public debug file, but the
    RSDS record is our fingerprint for version matching.
 2. **Import surface** (24 DLLs): the editor is a full game-engine build (d3d9/d3d11/dxgi,
    Godrays/SSAO, X3DAudio/XInput) plus the editor extras: `SSCE5564.dll` (script editor),

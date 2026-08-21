@@ -3,9 +3,9 @@
 **Target**: `CreationKit.exe` — the Fallout 4 Creation Kit (the "CK"), Steam edition
 **Location**: `.../steamapps/common/Fallout 4 1946160/CreationKit.exe`
 **FileVersion / ProductVersion**: `1.11.137.0` (VS_VERSION_INFO resource)
-**PDB path embedded** (CODEVIEW/RSDS): `E:\BuildAgent\work\4a2aa37ca4b2ffa3\scripts\_workspace\Code\Build\PC\CreationKit.pdb`
-**PDB GUID**: `f276f0de-3312-9745-8404-bd4b2df2a9aa` (age `01`)
-**Build provenance**: TeamCity BuildAgent path → CI-built MSVC release binary. No public PDB.
+**RSDS path embedded** (CODEVIEW/RSDS): `E:\BuildAgent\work\4a2aa37ca4b2ffa3\scripts\_workspace\Code\Build\PC\CreationKit`
+**RSDS GUID**: `f276f0de-3312-9745-8404-bd4b2df2a9aa` (age `01`)
+**Build provenance**: TeamCity BuildAgent path → CI-built MSVC release binary. No public debug file.
 
 ## Binary identity
 
@@ -18,7 +18,7 @@
 | RTTI | Present — full MSVC RTTI type names recoverable (`.?AVBGSRenderWindowLandscapeEditModule@@`, `.?AVTESRegionDataLandscape@@`, `.?AVBSResource::CacheDrive@@` …) |
 | Section map | `.text` / `.interpr` (57 KB stub) / `.rdata` / `.data` (71 MB BSS — huge static data) / `.pdata` / `.idata` / `.tls` / `.00cfg` / `_RDATA` / `.rsrc` (1.7 MB) / `.reloc` |
 | TLS | Callbacks at `0x142f8b4f0` (TLSDirectory) |
-| Debug | RSDS record only (no embedded PDB) |
+| Debug | RSDS record only (no embedded debug file) |
 
 ## Import table (DLL surface)
 

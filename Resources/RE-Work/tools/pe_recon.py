@@ -6,7 +6,7 @@ Usage:
     python3 pe_recon.py /path/to/CreationKit.exe --imports
     python3 pe_recon.py /path/to/CreationKit.exe --strings   # writes strings to cwd
 
-Prints: PE header, section map with entropy, PDB (RSDS) record, import DLL surface.
+Prints: PE header, section map with entropy, symbols (RSDS) record, import DLL surface.
 """
 import struct, sys, math, os
 from collections import Counter
@@ -49,7 +49,7 @@ def main():
                 return rptr + (rva - va)
         return None
 
-    # Debug dir -> PDB path
+    # Debug dir -> RSDS path
     dbg_va, dbg_sz = ddir(6)
     raw_off = rva2off(dbg_va)
     for k in range(dbg_sz // 28):
@@ -57,7 +57,7 @@ def main():
         typ, sz, addr, ptr = struct.unpack_from("<IIII", e, 12)
         if typ == 2:  # CODEVIEW
             cv = data[ptr:ptr + sz]
-            print("PDB:", cv[24:].split(b"\0")[0].decode(errors="replace"), "GUID", cv[4:20].hex())
+            print("symbols:", cv[24:].split(b"\0")[0].decode(errors="replace"), "GUID", cv[4:20].hex())
 
     # Imports
     imp_rva, imp_sz = ddir(1)

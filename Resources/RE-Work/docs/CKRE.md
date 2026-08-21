@@ -26,7 +26,7 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | [15-BATCH-PROCESSES.md](15-BATCH-PROCESSES.md) | batch process internals — MasterfileOptimizer/Tagifier, MapMaker, CheckItInChappy, FileSaver + the `-SaveDefaultPlugin` masterfile pipeline |
 | [16-SETTINGS-WRITEBACK.md](16-SETTINGS-WRITEBACK.md) | the settings write-back — notify setter FUN_1425c6b90, scatter-table registry API, the generic WriteSetting, and the read/write round-trip |
 | [17-INI-PATHS.md](17-INI-PATHS.md) | the ini file census — all 5 touched .ini paths, each mapped to its reader function, with the full Get/WritePrivateProfile call-site tables |
-| [18-ELRIC-PDB.md](18-ELRIC-PDB.md) | the Elric SDK PDB ground truth — 90,090 engine symbols confirming the CK decompiles (ReadSetting/WriteSetting, SettingT globals, BSTScatterTable, NiStream) |
+| [18-ELRIC-SYMBOLS.md](18-ELRIC-SYMBOLS.md) | the Elric SDK symbols ground truth — 90,090 engine symbols confirming the CK decompiles (ReadSetting/WriteSetting, SettingT globals, BSTScatterTable, NiStream) |
 | [19-BATCH-EXIT-CODES.md](19-BATCH-EXIT-CODES.md) | the batch exit-code contract — `bThrowProcessCompleteExceptions:General` gate setting, all 7 RaiseException sites, the 31-bit exit-code matrix, and the minidump termination path |
 | [20-WINE-PAPYRUS-ZIP-CRASH.md](20-WINE-PAPYRUS-ZIP-CRASH.md) | the Wine startup crash explained — Papyrus source-zip extraction via Shell COM (`IShellDispatch::NameSpace` returns S_OK + NULL `Folder*`), with patch/workaround analysis |
 | [21-UVD-FORMAT.md](21-UVD-FORMAT.md) | the compiled PreVis `.uvd` scene format (magic `0xD6000012`) — CRC-32C framing, full 0x150 header field map, and version string, verified against 3 shipped samples + the writer decompiles |
@@ -46,18 +46,18 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | `scene-samples/Vis_Fallout4.esm_*.UVD` | 3 real shipped `.uvd` previs samples extracted from `Fallout4 - MeshesExtra.ba2` |
 | `../scripts/Query.java` | headless ghidra query script (substring/addr/decompile) |
 
-Decompile logs, `.uvd` samples, and PDB dumps stay local. They are not in this repo.
+Decompile logs, `.uvd` samples, and symbol dumps stay local. They are not in this repo.
 
 ## Tools
 
 | Tool | Purpose |
 |---|---|
-| `../tools/pe_recon.py` | PE header/sections/entropy/PDB/imports recon |
+| `../tools/pe_recon.py` | PE header/sections/entropy/symbols/imports recon |
 | `../tools/validate_ckini.py` | CreationKit.ini oracle — replays the reader (`FUN_1425c7f90`) against the 1,629-key table + type letters; `--list-keys`/`--stats`, `--command`/`--batch-command` for doc-05/13 grammar, and `--exit-codes` for the doc-19 31-switch sentinel matrix; samples under `../tools/samples/` |
 
 ## Status
 
-- [x] Binary identity (not packed; PDB fingerprint; CI build)
+- [x] Binary identity (not packed; symbols fingerprint; CI build)
 - [x] Import/DLL surface + third-party SDK inventory
 - [x] RTTI class map (4,438 classes)
 - [x] Ini + embedded settings database (1,629 keys)

@@ -1,10 +1,10 @@
-# CKRE
+# RE-Work
 
-Creation Kit reverse engineering for `CreationKit.exe` **1.11.137.0** (Fallout 4 Steam CK).
+Creation Kit and Fallout 4 runtime reverse-engineering notes for GARDEN tools.
 
-This folder is docs, fact tables, and owner scripts. Game binaries, PDBs, Ghidra project databases, and decompiled function bodies stay on the local workstation. See [LEGAL.md](LEGAL.md).
+This folder is docs, fact tables, and owner scripts. Game binaries, Ghidra project databases, and decompiled function bodies stay on the local workstation. See [LEGAL.md](LEGAL.md).
 
-Numbered notes live in `docs/` so their cross-links stay valid. Start from [docs/CKRE.md](docs/CKRE.md) for the original inventory, or use the categories below.
+CK numbered notes live in `docs/` so their cross-links stay valid. Start from [docs/CKRE.md](docs/CKRE.md) or the categories below. Runtime notes live in [Runtime/](Runtime/).
 
 ## Categories
 
@@ -44,10 +44,10 @@ CK LOD pipeline, precombined, `.scene` / `.uvd`.
 - [dumps/lod-strings.txt](dumps/lod-strings.txt)
 
 ### Classes and symbols
-RTTI map, Elric PDB facts (no PDB file).
+RTTI map and Elric engine-symbol facts.
 
 - [docs/02-RTTI-CLASS-MAP.md](docs/02-RTTI-CLASS-MAP.md)
-- [docs/18-ELRIC-PDB.md](docs/18-ELRIC-PDB.md)
+- [docs/18-ELRIC-SYMBOLS.md](docs/18-ELRIC-SYMBOLS.md)
 - [dumps/rtti-classes.txt](dumps/rtti-classes.txt)
 
 ### Binary identity and init
@@ -68,7 +68,18 @@ Dated fact log, plus the Wine Papyrus-zip startup crash.
 - [docs/20-WINE-PAPYRUS-ZIP-CRASH.md](docs/20-WINE-PAPYRUS-ZIP-CRASH.md)
 
 ### Scripts
-Owner Ghidra headless helpers: [scripts/](scripts/).
+CK Ghidra headless helpers: [scripts/](scripts/).
+
+## Runtime (`Fallout4.exe`)
+
+OG 1.10.163 and AE 1.11.221. FormID / TESFile, layouts, naming.
+
+- [Runtime/README.md](Runtime/README.md)
+- [Runtime/03-FINDINGS.md](Runtime/03-FINDINGS.md)
+- [Runtime/06-FUNCTION-INDEX.md](Runtime/06-FUNCTION-INDEX.md)
+- [Runtime/Organized/INDEX.md](Runtime/Organized/INDEX.md)
+- [Runtime/Organized/1.10.163/](Runtime/Organized/1.10.163/) subsystem notes (landscape, quests, HUD, workshop)
+- [Runtime/Scripts/](Runtime/Scripts/)
 
 ## Layout
 
@@ -79,6 +90,7 @@ Resources/RE-Work/
 ├── MANIFEST.md
 ├── docs/              numbered CK notes
 ├── dumps/             RTTI / TES* / settings / srcpath tables
-├── scripts/           Ghidra Java queries
-└── tools/             PE recon, CreationKit.ini oracle
+├── scripts/           CK Ghidra Java queries
+├── tools/             PE recon, CreationKit.ini oracle
+└── Runtime/           Fallout4.exe notes, scripts, Organized analysis
 ```
