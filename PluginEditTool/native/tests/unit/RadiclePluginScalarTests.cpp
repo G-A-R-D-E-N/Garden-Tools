@@ -1,6 +1,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -41,7 +42,10 @@ void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>&
     REQUIRE(stream.good());
 }
 
-std::vector<std::byte> makePlugin(bool withXhlt = true, bool miscRecord = false) {
+std::vector<std::byte> makePlugin(bool withXhlt = true,
+                                  bool miscRecord = false,
+                                  std::uint32_t healthValue = 50,
+                                  bool duplicateXhlt = false) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
     fo4::test::ByteWriter hedr;
@@ -56,8 +60,13 @@ std::vector<std::byte> makePlugin(bool withXhlt = true, bool miscRecord = false)
     const auto record = fo4::test::begin_record(out, signature, 0, 0x00000800);
     if (withXhlt) {
         fo4::test::ByteWriter health;
-        health.u32(50);
+        health.u32(healthValue);
         fo4::test::write_subrecord(out, "XHLT", health.bytes);
+        if (duplicateXhlt) {
+            fo4::test::ByteWriter duplicate;
+            duplicate.u32(healthValue);
+            fo4::test::write_subrecord(out, "XHLT", duplicate.bytes);
+        }
     }
     const std::array<std::byte, 2> unknown{std::byte{0xAA}, std::byte{0xBB}};
     fo4::test::write_subrecord(out, "ZZZZ", unknown);
@@ -94,6 +103,14 @@ std::string readHealth(const std::filesystem::path& path) {
         return fo4::schema::decode_scalar(subrecord.data, *descriptor);
     }
     return {};
+}
+
+nlohmann::json grid(fo4ide::plugin::RadiclePluginBackend& backend) {
+    const auto result = backend.invokeBackend(
+        "GetRecordsGrid", nlohmann::json::array({"Patch.esp", "REFR", 200, 0}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    return nlohmann::json::parse(result->get<std::string>());
 }
 
 }
@@ -182,4 +199,67 @@ TEST_CASE("Native schema SetField refuses protected Data plugin") {
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "PluginReadOnly");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
+}
+
+TEST_CASE("REFR spreadsheet exposes HealthPercent from existing XHLT") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin(true, false, 50));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto value = grid(backend);
+    REQUIRE(value.at("columns").size() == 2);
+    CHECK(value.at("columns")[0] == "EDID");
+    CHECK(value.at("columns")[1] == "REFR\\HealthPercent");
+    REQUIRE(value.at("rows").size() == 1);
+    CHECK(value.at("rows")[0].at("cells")[1] == "50");
+    CHECK(value.at("rows")[0].at("editable")[1] == true);
+}
+
+TEST_CASE("REFR spreadsheet keeps missing XHLT blank and read-only") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin(false));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto value = grid(backend);
+    REQUIRE(value.at("rows").size() == 1);
+    CHECK(value.at("rows")[0].at("cells")[1] == "");
+    CHECK(value.at("rows")[0].at("editable")[1] == false);
+}
+
+TEST_CASE("REFR spreadsheet preserves unusual existing XHLT values") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin(true, false, 150));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto value = grid(backend);
+    REQUIRE(value.at("rows").size() == 1);
+    CHECK(value.at("rows")[0].at("cells")[1] == "150");
+    CHECK(value.at("rows")[0].at("editable")[1] == true);
+}
+
+TEST_CASE("REFR spreadsheet rejects duplicate XHLT rather than choosing one") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin(true, false, 50, true));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto result = backend.invokeBackend(
+        "GetRecordsGrid", nlohmann::json::array({"Patch.esp", "REFR", 200, 0}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ScalarReadFailed");
 }
