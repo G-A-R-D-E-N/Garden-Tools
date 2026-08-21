@@ -1,12 +1,16 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
+#include <cstdint>
 #include <exception>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/writer.hpp>
 
@@ -52,6 +56,61 @@ bool officialPluginName(std::string_view name) {
     }
     return lower.starts_with("cc") &&
            (lower.ends_with(".esm") || lower.ends_with(".esp") || lower.ends_with(".esl"));
+}
+
+template <class UInt>
+bool parseUnsigned(std::string_view text, UInt& value) {
+    static_assert(std::is_unsigned_v<UInt>);
+    if (text.empty()) return false;
+    std::uint64_t parsed = 0;
+    const auto* begin = text.data();
+    const auto* end = begin + text.size();
+    const auto [ptr, error] = std::from_chars(begin, end, parsed, 10);
+    if (error != std::errc{} || ptr != end ||
+        parsed > static_cast<std::uint64_t>(std::numeric_limits<UInt>::max())) {
+        return false;
+    }
+    value = static_cast<UInt>(parsed);
+    return true;
+}
+
+enum class LvspEntryField {
+    level,
+    spell,
+    count,
+    chanceNone,
+};
+
+struct LvspEntryPath {
+    std::size_t index{0};
+    LvspEntryField field{LvspEntryField::level};
+};
+
+bool parseLvspEntryPath(std::string_view field, LvspEntryPath& result) {
+    constexpr std::string_view prefix = "LVSP\\Entries[";
+    if (!field.starts_with(prefix)) return false;
+    const auto close = field.find(']', prefix.size());
+    if (close == std::string_view::npos || close + 2 >= field.size() ||
+        field[close + 1] != '\\') {
+        return false;
+    }
+
+    std::size_t index = 0;
+    if (!parseUnsigned(field.substr(prefix.size(), close - prefix.size()), index)) return false;
+    const auto member = field.substr(close + 2);
+    if (member == "Level") result.field = LvspEntryField::level;
+    else if (member == "Spell") result.field = LvspEntryField::spell;
+    else if (member == "Count") result.field = LvspEntryField::count;
+    else if (member == "ChanceNone") result.field = LvspEntryField::chanceNone;
+    else return false;
+    result.index = index;
+    return true;
+}
+
+bool isLvspField(std::string_view field) {
+    LvspEntryPath ignored;
+    return field == "LVSP\\ChanceNone" || field == "LVSP\\MaxCount" ||
+           field == "LVSP\\Flags" || parseLvspEntryPath(field, ignored);
 }
 
 }
@@ -130,13 +189,15 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
     if (formKeyText.empty()) {
         return std::unexpected(Error{"FormKeyMissing", "Record FormKey is empty"});
     }
-    if (field != "Subrecords\\EDID[0]" && field != "EDID") {
+    const bool edidField = field == "Subrecords\\EDID[0]" || field == "EDID";
+    const bool lvspField = isLvspField(field);
+    if (!edidField && !lvspField) {
         return std::unexpected(Error{
             "FieldWriteUnsupported",
-            "Native Radicle editing currently supports EDID only"
+            "Native Radicle editing supports EDID and typed LVSP fields only"
         });
     }
-    if (value.find('\0') != std::string::npos) {
+    if (edidField && value.find('\0') != std::string::npos) {
         return std::unexpected(Error{"InvalidEditorId", "EDID cannot contain an embedded NUL"});
     }
 
@@ -164,18 +225,107 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
 
     try {
         auto mutated = loaded->plugin;
-        if (!fo4::set_record_editor_id(mutated, key, value)) {
-            return std::unexpected(Error{
-                "RecordNotFound",
-                "Record is not present in " + pluginName + ": " + formKeyText
-            });
+        std::string status;
+
+        if (edidField) {
+            if (!fo4::set_record_editor_id(mutated, key, value)) {
+                return std::unexpected(Error{
+                    "RecordNotFound",
+                    "Record is not present in " + pluginName + ": " + formKeyText
+                });
+            }
+            status = "Updated EDID for " + formKeyText + " in " + pluginName + ".";
+        } else {
+            auto model = fo4::forms::decode_leveled_spell(mutated, key);
+            if (field == "LVSP\\ChanceNone") {
+                std::uint8_t parsed = 0;
+                if (!parseUnsigned(value, parsed)) {
+                    return std::unexpected(Error{"InvalidFieldValue", "LVSP ChanceNone must be 0..255"});
+                }
+                fo4::forms::set_leveled_spell_settings(
+                    mutated, key, parsed, model.max_count, model.flags);
+            } else if (field == "LVSP\\MaxCount") {
+                std::uint8_t parsed = 0;
+                if (!parseUnsigned(value, parsed)) {
+                    return std::unexpected(Error{"InvalidFieldValue", "LVSP MaxCount must be 0..255"});
+                }
+                fo4::forms::set_leveled_spell_settings(
+                    mutated, key, model.chance_none, parsed, model.flags);
+            } else if (field == "LVSP\\Flags") {
+                std::uint8_t parsed = 0;
+                if (!parseUnsigned(value, parsed) || (parsed & ~0x07u) != 0) {
+                    return std::unexpected(Error{
+                        "InvalidFieldValue",
+                        "LVSP Flags must use only defined bits 0x01, 0x02, and 0x04"
+                    });
+                }
+                fo4::forms::set_leveled_spell_settings(
+                    mutated, key, model.chance_none, model.max_count, parsed);
+            } else {
+                LvspEntryPath path;
+                if (!parseLvspEntryPath(field, path) || path.index >= model.entries.size()) {
+                    return std::unexpected(Error{
+                        "FieldWriteUnsupported",
+                        "LVSP entry field path is invalid or outside the entry list"
+                    });
+                }
+                auto& entry = model.entries[path.index];
+                switch (path.field) {
+                    case LvspEntryField::level: {
+                        std::uint16_t parsed = 0;
+                        if (!parseUnsigned(value, parsed)) {
+                            return std::unexpected(Error{"InvalidFieldValue", "LVSP entry Level must be 0..65535"});
+                        }
+                        entry.level = parsed;
+                        break;
+                    }
+                    case LvspEntryField::count: {
+                        std::uint16_t parsed = 0;
+                        if (!parseUnsigned(value, parsed)) {
+                            return std::unexpected(Error{"InvalidFieldValue", "LVSP entry Count must be 0..65535"});
+                        }
+                        entry.count = parsed;
+                        break;
+                    }
+                    case LvspEntryField::chanceNone: {
+                        std::uint8_t parsed = 0;
+                        if (!parseUnsigned(value, parsed)) {
+                            return std::unexpected(Error{"InvalidFieldValue", "LVSP entry ChanceNone must be 0..255"});
+                        }
+                        entry.chance_none = parsed;
+                        break;
+                    }
+                    case LvspEntryField::spell: {
+                        fo4::FormKey target;
+                        try {
+                            target = fo4::FormKey::parse(value);
+                        } catch (const std::exception& error) {
+                            return std::unexpected(Error{"InvalidFieldValue", error.what()});
+                        }
+                        const auto* winner = graph_.winner(target);
+                        if (winner == nullptr ||
+                            (winner->signature != fo4::Signature::from_string("SPEL") &&
+                             winner->signature != fo4::Signature::from_string("LVSP"))) {
+                            return std::unexpected(Error{
+                                "InvalidLeveledSpellReference",
+                                "LVSP entry Spell must resolve to a loaded SPEL or LVSP record"
+                            });
+                        }
+                        entry.spell = std::move(target);
+                        break;
+                    }
+                }
+                fo4::forms::replace_leveled_spell_entries(mutated, key, model.entries);
+            }
+            status = "Updated " + field + " for " + formKeyText + " in " + pluginName + ".";
         }
 
         fo4::write_plugin_file(mutated, loaded->path);
         loaded->plugin = std::move(mutated);
         rebuildGraphLocked();
-        return nlohmann::json(
-            "Updated EDID for " + formKeyText + " in " + pluginName + ".");
+        return nlohmann::json(std::move(status));
+    } catch (const fo4::forms::LeveledSpellError& error) {
+        return std::unexpected(Error{"LeveledSpellWriteFailed", error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"FieldWriteFailed", error.what()});
     }
