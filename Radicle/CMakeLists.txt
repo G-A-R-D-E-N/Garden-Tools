@@ -41,6 +41,7 @@ add_library(fo4
   src/formid.cpp
   src/archive/ba2.cpp
   src/binary/cursor.cpp
+  src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
   src/plugin/tes4.cpp
   src/plugin/reader.cpp
@@ -113,6 +114,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_navmesh_formlinks.cpp
+    tests/test_eyes.cpp
     tests/test_lvsp.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
