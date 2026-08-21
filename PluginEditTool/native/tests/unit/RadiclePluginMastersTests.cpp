@@ -113,10 +113,10 @@ std::string textResult(const fo4ide::Result<nlohmann::json>& result) {
     return result->get<std::string>();
 }
 
-fo4ide::plugin::RadiclePluginBackend loadBackend(const std::filesystem::path& masterA,
-                                                  const std::filesystem::path& masterB,
-                                                  const std::filesystem::path& patch) {
-    fo4ide::plugin::RadiclePluginBackend backend;
+void loadBackend(fo4ide::plugin::RadiclePluginBackend& backend,
+                 const std::filesystem::path& masterA,
+                 const std::filesystem::path& masterB,
+                 const std::filesystem::path& patch) {
     const nlohmann::json environment{
         {"plugins", nlohmann::json::array({
             pluginEntry("MasterA.esm", masterA),
@@ -127,7 +127,6 @@ fo4ide::plugin::RadiclePluginBackend loadBackend(const std::filesystem::path& ma
     auto loaded = backend.invoke("environment.LoadMo2", environment);
     REQUIRE(loaded.has_value());
     CHECK(loaded->at("loadedPlugins") == 3);
-    return backend;
 }
 
 }  // namespace
@@ -142,7 +141,8 @@ TEST_CASE("Masters reorder writes immediately and preserves logical FormLinks") 
     writeBytes(masterB, makeMaster("MasterBKeyword"));
     writeBytes(patch, makePatch());
 
-    auto backend = loadBackend(masterA, masterB, patch);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, masterA, masterB, patch);
 
     auto before = parseStringResult(
         backend.invoke("masters.List", nlohmann::json::array({"Patch.esp"})));
@@ -194,7 +194,8 @@ TEST_CASE("Masters reorder rejects incomplete or duplicate orders without writin
     writeBytes(masterB, makeMaster("MasterBKeyword"));
     writeBytes(patch, makePatch());
 
-    auto backend = loadBackend(masterA, masterB, patch);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, masterA, masterB, patch);
 
     const auto incomplete = backend.invoke(
         "masters.Reorder",
@@ -224,7 +225,8 @@ TEST_CASE("Masters light toggle is in memory until Save Plugin persists it") {
     writeBytes(masterB, makeMaster("MasterBKeyword"));
     writeBytes(patch, makePatch());
 
-    auto backend = loadBackend(masterA, masterB, patch);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, masterA, masterB, patch);
     REQUIRE_FALSE(fo4::read_plugin_file(patch).header.tes4_flags.is_small_file());
 
     const auto toggled = textResult(
