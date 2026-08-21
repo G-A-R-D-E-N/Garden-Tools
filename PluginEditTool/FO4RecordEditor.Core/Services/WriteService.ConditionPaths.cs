@@ -18,6 +18,11 @@ public static partial class WriteService
 
     public static string GetConditionsAtPath(object? env, string plugin, string recordId, string path)
     {
+        return PluginGraphGate.Run(plugin, () => GetConditionsAtPathCore(env, plugin, recordId, path));
+    }
+
+    private static string GetConditionsAtPathCore(object? env, string plugin, string recordId, string path)
+    {
         if (string.IsNullOrWhiteSpace(path) || path.Equals("Conditions", StringComparison.OrdinalIgnoreCase))
             return GetConditionsJson(env, plugin, recordId);
 
@@ -37,6 +42,11 @@ public static partial class WriteService
 
 
     public static string SetConditionsAtPath(string plugin, string recordId, string path, string conditionsJson, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetConditionsAtPathCore(plugin, recordId, path, conditionsJson, env));
+    }
+
+    private static string SetConditionsAtPathCore(string plugin, string recordId, string path, string conditionsJson, object? env)
     {
         if (string.IsNullOrWhiteSpace(path) || path.Equals("Conditions", StringComparison.OrdinalIgnoreCase))
             return SetConditions(plugin, recordId, conditionsJson, env);

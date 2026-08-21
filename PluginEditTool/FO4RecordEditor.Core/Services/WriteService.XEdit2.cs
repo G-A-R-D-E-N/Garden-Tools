@@ -25,6 +25,11 @@ public static partial class WriteService
 
     public static string AddMasters(string plugin, string[] masters, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => AddMastersCore(plugin, masters, env));
+    }
+
+    private static string AddMastersCore(string plugin, string[] masters, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return ToolError.Fail(openMsg);
         var (name, _) = NormalizePlugin(plugin);
@@ -83,6 +88,11 @@ public static partial class WriteService
 
 
     public static string RenumberPluginFormIds(string plugin, string startHex, bool apply, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => RenumberPluginFormIdsCore(plugin, startHex, apply, env));
+    }
+
+    private static string RenumberPluginFormIdsCore(string plugin, string startHex, bool apply, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return ToolError.Fail(openMsg);
@@ -151,6 +161,11 @@ public static partial class WriteService
 
     public static string CreateSeqFile(object? env, string plugin, string? outputDir)
     {
+        return PluginGraphGate.Run(plugin, () => CreateSeqFileCore(env, plugin, outputDir));
+    }
+
+    private static string CreateSeqFileCore(object? env, string plugin, string? outputDir)
+    {
         var (name, _) = NormalizePlugin(plugin);
 
         IFallout4ModGetter? mod = GetMutable(name);
@@ -207,6 +222,11 @@ public static partial class WriteService
 
 
     public static string CheckCircularLeveledLists(object? env, string plugin, int limit = 200)
+    {
+        return PluginGraphGate.Run(plugin, () => CheckCircularLeveledListsCore(env, plugin, limit));
+    }
+
+    private static string CheckCircularLeveledListsCore(object? env, string plugin, int limit = 200)
     {
         var (filterName, _) = string.IsNullOrWhiteSpace(plugin) ? ("", (string?)null) : NormalizePlugin(plugin);
 

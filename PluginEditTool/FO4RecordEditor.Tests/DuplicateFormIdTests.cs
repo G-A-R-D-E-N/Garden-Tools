@@ -56,7 +56,7 @@ public class DuplicateFormIdTests
                 .And.Contain("last occurrence");
 
             var env = BuildEnvironment(overlay, path);
-            MutagenLoader.LinkCache = env.LinkCache;
+            MutagenLoader.SeedEnvironmentForTest(env.LinkCache);
 
             MutagenLoader.GetRecordProblems(env, loaded[0].FormKey.ToString())
                 .Should().ContainSingle(p => p.Description.Contains("DUPLICATE FORMID 00000800"));
@@ -67,7 +67,7 @@ public class DuplicateFormIdTests
         }
         finally
         {
-            MutagenLoader.LinkCache = null;
+            MutagenLoader.SeedEnvironmentForTest(null);
             MutagenLoader.ReleaseLooseMod(plugin);
             MutagenLoader.LooseModPaths.TryRemove(plugin, out _);
             DuplicateFormIdScanner.Invalidate(path);

@@ -38,6 +38,12 @@ public static partial class WriteService
     public static string DeepCopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin,
         bool apply, bool overwrite = false, int cap = 200)
     {
+        return PluginGraphGate.Run([sourcePlugin, patchPlugin], () => DeepCopyAsOverrideCore(env, sourcePlugin, id, patchPlugin, apply, overwrite, cap));
+    }
+
+    private static string DeepCopyAsOverrideCore(object? env, string sourcePlugin, string id, string patchPlugin,
+        bool apply, bool overwrite = false, int cap = 200)
+    {
         if (!ResolveFk(env, id, out var rootFk))
             return ToolError.Fail($"'{id}' is not a FormKey and no loaded record has that EditorID.");
 
@@ -154,6 +160,11 @@ public static partial class WriteService
 
 
     public static string ChangeReferencingRecords(object? env, string fromId, string toId, string patchPlugin, bool apply, int cap = 300)
+    {
+        return PluginGraphGate.Run(patchPlugin, () => ChangeReferencingRecordsCore(env, fromId, toId, patchPlugin, apply, cap));
+    }
+
+    private static string ChangeReferencingRecordsCore(object? env, string fromId, string toId, string patchPlugin, bool apply, int cap = 300)
     {
         if (!ResolveFk(env, fromId, out var fromFk))
             return ToolError.Fail($"'{fromId}' is not a FormKey and no loaded record has that EditorID.");

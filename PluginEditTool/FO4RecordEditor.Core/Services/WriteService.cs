@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -23,9 +24,9 @@ public static partial class WriteService
 {
     private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
 
-    private static readonly Dictionary<string, IFallout4Mod> _mutable = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, IFallout4Mod> _mutable = new(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> _sourcePath = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, string> _sourcePath = new(StringComparer.OrdinalIgnoreCase);
 
 
     public static string? OutputFolderOverride { get; set; }
@@ -71,6 +72,11 @@ public static partial class WriteService
     }
 
     public static string OpenPlugin(string plugin, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => OpenPluginCore(plugin, env));
+    }
+
+    private static string OpenPluginCore(string plugin, object? env)
     {
         if (string.IsNullOrWhiteSpace(plugin)) return "Provide a plugin name.";
         var (name, explicitPath) = NormalizePlugin(plugin);
@@ -159,6 +165,11 @@ public static partial class WriteService
             !fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase))
             fileName += ".esp";
 
+        return PluginGraphGate.Run(fileName, () => CreatePluginCore(fileName, explicitPath));
+    }
+
+    private static string CreatePluginCore(string fileName, string? explicitPath)
+    {
         var mod = new Fallout4Mod(ModKey.FromNameAndExtension(fileName), Fallout4Release.Fallout4);
         Register(fileName, mod);
         if (explicitPath != null) _sourcePath[fileName] = explicitPath;
@@ -179,6 +190,11 @@ public static partial class WriteService
 
     public static string CreateRecord(string plugin, string sig, string editorId, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => CreateRecordCore(plugin, sig, editorId, env));
+    }
+
+    private static string CreateRecordCore(string plugin, string sig, string editorId, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return openMsg;
         if (string.IsNullOrWhiteSpace(editorId)) return "Provide an editorId for the new record.";
@@ -198,6 +214,11 @@ public static partial class WriteService
     }
 
     public static string SetField(string plugin, string recordId, string field, string value, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetFieldCore(plugin, recordId, field, value, env));
+    }
+
+    private static string SetFieldCore(string plugin, string recordId, string field, string value, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return openMsg;
@@ -231,6 +252,11 @@ public static partial class WriteService
     }
 
     public static string AddListItem(string plugin, string recordId, string field, string value, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => AddListItemCore(plugin, recordId, field, value, env));
+    }
+
+    private static string AddListItemCore(string plugin, string recordId, string field, string value, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return openMsg;
@@ -306,6 +332,11 @@ public static partial class WriteService
 
     public static string CompactToEsl(string plugin, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => CompactToEslCore(plugin, env));
+    }
+
+    private static string CompactToEslCore(string plugin, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
 
 
@@ -346,6 +377,11 @@ public static partial class WriteService
 
 
     public static string CheckEslEligibility(string plugin, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => CheckEslEligibilityCore(plugin, env));
+    }
+
+    private static string CheckEslEligibilityCore(string plugin, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
 
@@ -464,6 +500,11 @@ public static partial class WriteService
 
     public static string SetLightFlag(string plugin, bool light, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => SetLightFlagCore(plugin, light, env));
+    }
+
+    private static string SetLightFlagCore(string plugin, bool light, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var (name, _) = NormalizePlugin(plugin);
 
@@ -502,6 +543,11 @@ public static partial class WriteService
 
 
     public static string SetLocalizedFlag(string plugin, bool localized, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetLocalizedFlagCore(plugin, localized, env));
+    }
+
+    private static string SetLocalizedFlagCore(string plugin, bool localized, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var (name, path) = NormalizePlugin(plugin);
@@ -544,6 +590,12 @@ public static partial class WriteService
 
 
     public static string RenumberFormId(string plugin, string recordId, string newIdHex, object? env,
+        bool repointRefs = true)
+    {
+        return PluginGraphGate.Run(plugin, () => RenumberFormIdCore(plugin, recordId, newIdHex, env, repointRefs));
+    }
+
+    private static string RenumberFormIdCore(string plugin, string recordId, string newIdHex, object? env,
         bool repointRefs = true)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
@@ -609,6 +661,11 @@ public static partial class WriteService
 
     public static string CleanPlugin(string plugin, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => CleanPluginCore(plugin, env));
+    }
+
+    private static string CleanPluginCore(string plugin, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
 
         int undeleted = 0, skipped = 0;
@@ -636,6 +693,11 @@ public static partial class WriteService
 
     public static string AttachScript(string plugin, string recordId, string scriptName, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => AttachScriptCore(plugin, recordId, scriptName, env));
+    }
+
+    private static string AttachScriptCore(string plugin, string recordId, string scriptName, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
 
@@ -651,6 +713,12 @@ public static partial class WriteService
     }
 
     public static string SetScriptProperty(string plugin, string recordId, string scriptName,
+        string propName, string value, string? type, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetScriptPropertyCore(plugin, recordId, scriptName, propName, value, type, env));
+    }
+
+    private static string SetScriptPropertyCore(string plugin, string recordId, string scriptName,
         string propName, string value, string? type, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
@@ -750,6 +818,11 @@ public static partial class WriteService
 
     public static string BackupPlugin(string plugin)
     {
+        return PluginGraphGate.Run(plugin, () => BackupPluginCore(plugin));
+    }
+
+    private static string BackupPluginCore(string plugin)
+    {
         var (name, _) = NormalizePlugin(plugin);
         if (!_sourcePath.TryGetValue(name, out var sourcePath) || string.IsNullOrWhiteSpace(sourcePath))
             return $"'{name}' has no on-disk source path -- it may be a newly created plugin that hasn't been saved yet. No backup needed.";
@@ -799,6 +872,11 @@ public static partial class WriteService
     }
 
     public static string SavePlugin(string plugin, string? path, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SavePluginCore(plugin, path, env));
+    }
+
+    private static string SavePluginCore(string plugin, string? path, object? env)
     {
         var (name, explicitPath) = NormalizePlugin(plugin);
         if (ProtectedPlugins.IsProtected(name)) return ToolError.Fail(ProtectedPlugins.RefusalMessage(name));
@@ -949,11 +1027,16 @@ public static partial class WriteService
 
     public static string ReloadPlugin(string plugin, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => ReloadPluginCore(plugin, env));
+    }
+
+    private static string ReloadPluginCore(string plugin, object? env)
+    {
         var (name, _) = NormalizePlugin(plugin);
         if (!_sourcePath.TryGetValue(name, out var path))
             return $"'{name}' is not open for editing. Use open_plugin first.";
-        _mutable.Remove(name);
-        _sourcePath.Remove(name);
+        _mutable.TryRemove(name, out _);
+        _sourcePath.TryRemove(name, out _);
         MutagenLoader.EditableMods.TryRemove(name, out _);
 
 
@@ -968,6 +1051,11 @@ public static partial class WriteService
 
 
     public static string StripMastersClean(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun, object? env)
+    {
+        return PluginGraphGate.Run(sourcePath, () => StripMastersCleanCore(sourcePath, mastersToStrip, outputPath, dryRun, env));
+    }
+
+    private static string StripMastersCleanCore(string sourcePath, string[] mastersToStrip, string outputPath, bool dryRun, object? env)
     {
         if (!File.Exists(sourcePath))
             return $"Source file not found: '{sourcePath}'.";
@@ -1076,6 +1164,11 @@ public static partial class WriteService
 
     public static string ListMasters(string plugin, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => ListMastersCore(plugin, env));
+    }
+
+    private static string ListMastersCore(string plugin, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var (name, _) = NormalizePlugin(plugin);
 
@@ -1108,6 +1201,11 @@ public static partial class WriteService
 
 
     public static string ListMastersJson(string plugin, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => ListMastersJsonCore(plugin, env));
+    }
+
+    private static string ListMastersJsonCore(string plugin, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var msg);
         if (mod == null) return JsonConvert.SerializeObject(new { error = msg });
@@ -1153,6 +1251,11 @@ public static partial class WriteService
 
 
     public static string ReorderMasters(string plugin, string[] order, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => ReorderMastersCore(plugin, order, env));
+    }
+
+    private static string ReorderMastersCore(string plugin, string[] order, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
         var (name, explicitPath) = NormalizePlugin(plugin);
@@ -1475,6 +1578,13 @@ public static partial class WriteService
     public static string ResolveConflict(object? env, string formKeyStr, string winningPlugin, string patchPlugin,
         bool overwrite)
     {
+        return PluginGraphGate.Run([winningPlugin, patchPlugin],
+            () => ResolveConflictCore(env, formKeyStr, winningPlugin, patchPlugin, overwrite));
+    }
+
+    private static string ResolveConflictCore(object? env, string formKeyStr, string winningPlugin, string patchPlugin,
+        bool overwrite)
+    {
         if (!FormKey.TryFactory(formKeyStr, out var fk)) return "Invalid FormKey.";
         if (string.IsNullOrWhiteSpace(patchPlugin)) return "Choose a patch plugin to write the resolution into.";
 
@@ -1701,6 +1811,12 @@ public static partial class WriteService
     public static string CopyAsOverride(object? env, string sourcePlugin, string id, string patchPlugin,
         bool overwrite = false)
     {
+        return PluginGraphGate.Run([sourcePlugin, patchPlugin], () => CopyAsOverrideCore(env, sourcePlugin, id, patchPlugin, overwrite));
+    }
+
+    private static string CopyAsOverrideCore(object? env, string sourcePlugin, string id, string patchPlugin,
+        bool overwrite = false)
+    {
         if (!ResolveFk(env, id, out var fk))
             return $"'{id}' is not a FormKey and no loaded record has that EditorID.";
         return ResolveConflict(env, fk.ToString(), sourcePlugin, patchPlugin, overwrite);
@@ -1808,27 +1924,36 @@ public static partial class WriteService
 
         int ok = 0;
         var failures = new List<(string formKey, string reason)>();
-        foreach (var item in items)
+        var keys = items.Select(i => i.source).Append(patchPlugin);
+        return PluginGraphGate.Run(keys, () =>
         {
-            var msg = ResolveConflict(env, item.formKey, item.source, patchPlugin, overwrite);
-            if (msg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase)) ok++;
-            else failures.Add((item.formKey, msg));
-        }
+            foreach (var item in items)
+            {
+                var msg = ResolveConflict(env, item.formKey, item.source, patchPlugin, overwrite);
+                if (msg.StartsWith("Copied", StringComparison.OrdinalIgnoreCase)) ok++;
+                else failures.Add((item.formKey, msg));
+            }
 
-        return JsonSerializer.Serialize(new
-        {
-            total = items.Count,
-            ok,
-            failed = items.Count - ok,
-            requiresOverwrite = false,
-            existing = Array.Empty<object>(),
-            failures = failures.Select(f => new { formKey = f.formKey, reason = f.reason }).ToArray(),
+            return JsonSerializer.Serialize(new
+            {
+                total = items.Count,
+                ok,
+                failed = items.Count - ok,
+                requiresOverwrite = false,
+                existing = Array.Empty<object>(),
+                failures = failures.Select(f => new { formKey = f.formKey, reason = f.reason }).ToArray(),
+            });
         });
     }
 
 
 
     public static string DeleteRecord(string plugin, string recordId, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => DeleteRecordCore(plugin, recordId, env));
+    }
+
+    private static string DeleteRecordCore(string plugin, string recordId, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
@@ -1852,6 +1977,11 @@ public static partial class WriteService
 
 
     public static string RemoveListItem(string plugin, string recordId, string field, string value, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => RemoveListItemCore(plugin, recordId, field, value, env));
+    }
+
+    private static string RemoveListItemCore(string plugin, string recordId, string field, string value, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
@@ -1883,6 +2013,11 @@ public static partial class WriteService
 
 
     public static string SetComponents(string plugin, string recordId, string componentsJson, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetComponentsCore(plugin, recordId, componentsJson, env));
+    }
+
+    private static string SetComponentsCore(string plugin, string recordId, string componentsJson, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
@@ -1934,6 +2069,11 @@ public static partial class WriteService
 
 
     public static string SetConditions(string plugin, string recordId, string conditionsJson, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetConditionsCore(plugin, recordId, conditionsJson, env));
+    }
+
+    private static string SetConditionsCore(string plugin, string recordId, string conditionsJson, object? env)
     {
         var mod = EnsureOpen(plugin, env, out var openMsg); if (mod == null) return openMsg;
         var rec = FindMutableRecord(mod, recordId); if (rec == null) return ToolError.Fail($"Record '{recordId}' not found in {plugin}.");
@@ -2047,6 +2187,12 @@ public static partial class WriteService
     public static string RevertOverridesFrom(object? env, string badPlugin, string patchPlugin,
         string? sig, string? containsComponent, bool apply, int limit)
     {
+        return PluginGraphGate.Run([badPlugin, patchPlugin], () => RevertOverridesFromCore(env, badPlugin, patchPlugin, sig, containsComponent, apply, limit));
+    }
+
+    private static string RevertOverridesFromCore(object? env, string badPlugin, string patchPlugin,
+        string? sig, string? containsComponent, bool apply, int limit)
+    {
         if (string.IsNullOrWhiteSpace(badPlugin)) return "Provide the plugin whose overrides to revert.";
         FormKey? compFk = null;
         if (!string.IsNullOrWhiteSpace(containsComponent))
@@ -2139,6 +2285,14 @@ public static partial class WriteService
 
 
     public static string BatchPatchRecords(
+        object? env, string patchPlugin, string sourcePlugin, string sig,
+        string operationsJson, string? filterField, string? filterValue,
+        bool dryRun, int limit)
+    {
+        return PluginGraphGate.Run([patchPlugin, sourcePlugin], () => BatchPatchRecordsCore(env, patchPlugin, sourcePlugin, sig, operationsJson, filterField, filterValue, dryRun, limit));
+    }
+
+    private static string BatchPatchRecordsCore(
         object? env, string patchPlugin, string sourcePlugin, string sig,
         string operationsJson, string? filterField, string? filterValue,
         bool dryRun, int limit)
@@ -2292,6 +2446,11 @@ public static partial class WriteService
 
     public static IFallout4MajorRecord? OverrideForScript(string patchPlugin, object? env, IMajorRecordGetter getter)
     {
+        return PluginGraphGate.Run(patchPlugin, () => OverrideForScriptCore(patchPlugin, env, getter));
+    }
+
+    private static IFallout4MajorRecord? OverrideForScriptCore(string patchPlugin, object? env, IMajorRecordGetter getter)
+    {
         var (patchName, patchPath) = NormalizePlugin(patchPlugin);
         if (GetMutable(patchName) == null)
         {
@@ -2308,6 +2467,11 @@ public static partial class WriteService
 
     public static string SaveScriptPatch(string patchPlugin, object? env)
     {
+        return PluginGraphGate.Run(patchPlugin, () => SaveScriptPatchCore(patchPlugin, env));
+    }
+
+    private static string SaveScriptPatchCore(string patchPlugin, object? env)
+    {
         var (name, _) = NormalizePlugin(patchPlugin);
         MutagenLoader.InvalidateModIndex(name);
         NotifyChanged(name);
@@ -2318,9 +2482,14 @@ public static partial class WriteService
 
     public static void DiscardScriptPatch(string patchPlugin)
     {
+        PluginGraphGate.Run(patchPlugin, () => DiscardScriptPatchCore(patchPlugin));
+    }
+
+    private static void DiscardScriptPatchCore(string patchPlugin)
+    {
         var (name, _) = NormalizePlugin(patchPlugin);
-        _mutable.Remove(name);
-        _sourcePath.Remove(name);
+        _mutable.TryRemove(name, out _);
+        _sourcePath.TryRemove(name, out _);
         MutagenLoader.EditableMods.TryRemove(name, out _);
 
 

@@ -25,6 +25,11 @@ public static partial class WriteService
 
     public static string CreateCell(string plugin, string editorId, string? name, object? env)
     {
+        return PluginGraphGate.Run(plugin, () => CreateCellCore(plugin, editorId, name, env));
+    }
+
+    private static string CreateCellCore(string plugin, string editorId, string? name, object? env)
+    {
         var mod = EnsureOpen(plugin, env, out var openMsg);
         if (mod == null) return openMsg;
         if (string.IsNullOrWhiteSpace(editorId)) return "Provide an editorId for the new cell.";
@@ -69,6 +74,16 @@ public static partial class WriteService
             env);
 
     public static string CreatePlacedObject(
+        string plugin, string cellId, string baseId, string? editorId,
+        float x, float y, float z, float rotX, float rotY, float rotZ,
+        bool persistent, bool initiallyDisabled,
+        string? mapMarkerName, string? mapMarkerType, bool mapMarkerVisible,
+        object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => CreatePlacedObjectCore(plugin, cellId, baseId, editorId, x, y, z, rotX, rotY, rotZ, persistent, initiallyDisabled, mapMarkerName, mapMarkerType, mapMarkerVisible, env));
+    }
+
+    private static string CreatePlacedObjectCore(
         string plugin, string cellId, string baseId, string? editorId,
         float x, float y, float z, float rotX, float rotY, float rotZ,
         bool persistent, bool initiallyDisabled,

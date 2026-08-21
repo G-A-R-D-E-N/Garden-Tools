@@ -33,7 +33,7 @@ public class RecordCountCacheTests : IDisposable
         RecordCountCache.ResetForTest();
         MutagenLoader.EditableMods.Clear();
         MutagenLoader.LooseModPaths.Clear();
-        MutagenLoader.PluginSourcePaths.Clear();
+        MutagenLoader.SeedEnvironmentForTest();
     }
 
     public void Dispose()
@@ -42,7 +42,7 @@ public class RecordCountCacheTests : IDisposable
         Environment.SetEnvironmentVariable("FO4RE_COUNT_CACHE", _originalOverride);
         MutagenLoader.EditableMods.Clear();
         MutagenLoader.LooseModPaths.Clear();
-        MutagenLoader.PluginSourcePaths.Clear();
+        MutagenLoader.SeedEnvironmentForTest();
         try { Directory.Delete(_dir, recursive: true); } catch { }
     }
 
@@ -187,7 +187,8 @@ public class RecordCountCacheTests : IDisposable
     [Fact]
     public void An_actively_edited_plugin_is_never_cached()
     {
-        MutagenLoader.PluginSourcePaths["MyPatch.esp"] = MakePlugin("MyPatch.esp");
+        MutagenLoader.SeedEnvironmentForTest(
+            pluginSourcePaths: new Dictionary<string, string> { ["MyPatch.esp"] = MakePlugin("MyPatch.esp") });
         MutagenLoader.EditableMods["MyPatch.esp"] = new object();
 
         MutagenLoader.CountsCacheKeyFor("MyPatch.esp").Should().BeNull();
@@ -208,7 +209,8 @@ public class RecordCountCacheTests : IDisposable
     public void A_load_order_plugin_is_keyed_by_where_the_loader_read_it()
     {
         var path = MakePlugin("FromModlist.esp");
-        MutagenLoader.PluginSourcePaths["FromModlist.esp"] = path;
+        MutagenLoader.SeedEnvironmentForTest(
+            pluginSourcePaths: new Dictionary<string, string> { ["FromModlist.esp"] = path });
 
         MutagenLoader.CountsCacheKeyFor("FromModlist.esp").Should().Be(path);
     }

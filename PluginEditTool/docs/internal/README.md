@@ -27,6 +27,7 @@ The end-user documentation is `../MCP_SETUP.md`, plus `README.md`, `LICENSE` and
 | Doc | What it is |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How the app is put together. |
+| [CONCURRENCY.md](CONCURRENCY.md) | The three-layer concurrency model (per-plugin graph gate, environment lifecycle gate + coordinator, atomic environment snapshot), what each guarantees, and the contracts contributors must keep. |
 | [CONFLICT_ENGINE.md](CONFLICT_ENGINE.md) | How conflict detection works, and why it compares `DisplaySortKey` rather than strings. |
 | [PAPYRUS.md](PAPYRUS.md) | The Papyrus subsystem, end to end: lexer, parser, script index, resolver, type checker, code generator, `.pex` reader/writer, and the two engines behind `compile_papyrus`. What is measured, the language rules the wiki gets wrong, and why the differential test compares instructions rather than bytes. |
 | [MUTAGEN.md](MUTAGEN.md) | Notes on the Mutagen record library. |

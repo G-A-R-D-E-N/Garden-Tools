@@ -379,32 +379,35 @@ public static class CellService
             WriteService.OpenPlugin(patchPlugin, env);
             if (WriteService.GetMutable(patchName) == null) WriteService.CreatePlugin(patchPlugin);
         }
-        var patch = WriteService.GetMutable(patchName);
-        if (patch == null) return JsonConvert.SerializeObject(new { error = $"Could not open or create patch plugin '{patchName}'." });
-
-        if (!cache.TryResolveContext<ICell, ICellGetter>(fk, out var ctx))
-            return JsonConvert.SerializeObject(new { error = $"Could not resolve {fk}'s parent chain via the link cache." });
-
-        ICell ovr;
-        try { ovr = ctx.GetOrAddAsOverride(patch); }
-        catch (Exception ex) { return JsonConvert.SerializeObject(new { error = $"Could not create the cell override in '{patchName}': {ex.Message}" }); }
-
-        var removeSet = new HashSet<FormKey>(toRemove.Select(r => r.formKey));
-        var before = ovr.Persistent.Count + ovr.Temporary.Count;
-        ovr.Persistent.RemoveWhere(p => removeSet.Contains(p.FormKey));
-        ovr.Temporary.RemoveWhere(p => removeSet.Contains(p.FormKey));
-        var removed = before - (ovr.Persistent.Count + ovr.Temporary.Count);
-
-        MutagenLoader.InvalidateModIndex(patchName);
-        WriteService.NotifyPluginChanged(patchName);
-
-        return JsonConvert.SerializeObject(new
+        return PluginGraphGate.Run(patchName, () =>
         {
-            dryRun = false,
-            cellFormKey = fk.ToString(),
-            removed,
-            planned = toRemove.Count,
-            plan = toRemove.Select(r => new { formKey = r.formKey.ToString(), reason = r.reason }),
+            var patch = WriteService.GetMutable(patchName);
+            if (patch == null) return JsonConvert.SerializeObject(new { error = $"Could not open or create patch plugin '{patchName}'." });
+
+            if (!cache.TryResolveContext<ICell, ICellGetter>(fk, out var ctx))
+                return JsonConvert.SerializeObject(new { error = $"Could not resolve {fk}'s parent chain via the link cache." });
+
+            ICell ovr;
+            try { ovr = ctx.GetOrAddAsOverride(patch); }
+            catch (Exception ex) { return JsonConvert.SerializeObject(new { error = $"Could not create the cell override in '{patchName}': {ex.Message}" }); }
+
+            var removeSet = new HashSet<FormKey>(toRemove.Select(r => r.formKey));
+            var before = ovr.Persistent.Count + ovr.Temporary.Count;
+            ovr.Persistent.RemoveWhere(p => removeSet.Contains(p.FormKey));
+            ovr.Temporary.RemoveWhere(p => removeSet.Contains(p.FormKey));
+            var removed = before - (ovr.Persistent.Count + ovr.Temporary.Count);
+
+            MutagenLoader.InvalidateModIndex(patchName);
+            WriteService.NotifyPluginChanged(patchName);
+
+            return JsonConvert.SerializeObject(new
+            {
+                dryRun = false,
+                cellFormKey = fk.ToString(),
+                removed,
+                planned = toRemove.Count,
+                plan = toRemove.Select(r => new { formKey = r.formKey.ToString(), reason = r.reason }),
+            });
         });
     }
 }

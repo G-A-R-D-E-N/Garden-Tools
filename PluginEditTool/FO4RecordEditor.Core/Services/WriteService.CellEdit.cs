@@ -33,6 +33,13 @@ public static partial class WriteService
         object? env, string formKeyStr, string patchPlugin,
         float x, float y, float z, float rx, float ry, float rz)
     {
+        return PluginGraphGate.Run(patchPlugin, () => SetPlacedReferenceTransformCore(env, formKeyStr, patchPlugin, x, y, z, rx, ry, rz));
+    }
+
+    private static string SetPlacedReferenceTransformCore(
+        object? env, string formKeyStr, string patchPlugin,
+        float x, float y, float z, float rx, float ry, float rz)
+    {
         if (!FormKey.TryFactory(formKeyStr, out var fk)) return "Invalid FormKey.";
         if (string.IsNullOrWhiteSpace(patchPlugin)) return "Choose a patch plugin to save into.";
 

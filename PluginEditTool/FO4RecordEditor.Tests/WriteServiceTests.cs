@@ -470,7 +470,8 @@ public class WriteServiceTests
         var savedCache = MutagenLoader.LinkCache;
         try
         {
-            MutagenLoader.LinkCache = ((IFallout4ModGetter)src).ToMutableLinkCache<IFallout4Mod, IFallout4ModGetter>();
+            MutagenLoader.SeedEnvironmentForTest(
+                ((IFallout4ModGetter)src).ToMutableLinkCache<IFallout4Mod, IFallout4ModGetter>());
 
             var result = WriteService.SetPlacedReferenceTransform(
                 null, fk.ToString(), patchPlugin, 111f, 222f, 333f, 0.1f, 0.2f, 0.3f);
@@ -501,7 +502,7 @@ public class WriteServiceTests
         }
         finally
         {
-            MutagenLoader.LinkCache = savedCache;
+            MutagenLoader.SeedEnvironmentForTest(savedCache);
         }
     }
 
@@ -511,11 +512,11 @@ public class WriteServiceTests
         var savedCache = MutagenLoader.LinkCache;
         try
         {
-            MutagenLoader.LinkCache = null;
+            MutagenLoader.SeedEnvironmentForTest(null);
             WriteService.SetPlacedReferenceTransform(null, "000801:Fallout4.esm", "AnyPatch.esp",
                 0, 0, 0, 0, 0, 0).Should().Contain("No environment loaded");
         }
-        finally { MutagenLoader.LinkCache = savedCache; }
+        finally { MutagenLoader.SeedEnvironmentForTest(savedCache); }
     }
 
     [Fact]

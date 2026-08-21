@@ -33,6 +33,11 @@ public static class ConflictScanner
 
     public static List<ConflictEntry> Scan(object env, Action<string>? progress = null)
     {
+        return PluginGraphGate.Run(MutagenLoader.EditableMods.Keys, () => ScanCore(env, progress));
+    }
+
+    private static List<ConflictEntry> ScanCore(object env, Action<string>? progress)
+    {
         dynamic e = env;
         var order = new List<(string name, Mutagen.Bethesda.Fallout4.IFallout4ModGetter mod)>();
         foreach (var l in (IEnumerable)e.LoadOrder.ListedOrder)
