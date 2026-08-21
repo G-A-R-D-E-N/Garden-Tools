@@ -10,7 +10,6 @@ const setLS = (k: string, v: string) => localStorage.setItem('spreadsheet.' + k,
 interface GridRow { formKey: string; editorId: string; cells: string[]; }
 interface GridData { columns: string[]; rows: GridRow[]; total: number; offset: number; error?: string; }
 
-
 export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
   const backend = getBackend();
   const unavailable = !backend;
@@ -31,26 +30,23 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!backend) return;
-
-
-
-
-    const app = window.chrome?.webview?.hostObjects?.appInterop;
+    let cancelled = false;
     void (async () => {
-      const names = new Set<string>();
       try {
-        const tree = JSON.parse(await app?.GetPlugins() ?? '[]') as { Key: string }[];
-        for (const n of tree) if (n?.Key) names.add(n.Key);
-      } catch {  }
-      try {
-        for (const n of JSON.parse(await backend.GetEditablePlugins()) as string[]) if (n) names.add(n);
-      } catch {  }
-      setPlugins([...names]);
+        const names = (JSON.parse(await backend.GetEditablePlugins()) as string[])
+          .filter((name): name is string => typeof name === 'string' && name.length > 0);
+        if (cancelled) return;
+        setPlugins(names);
+        setPlugin(current => names.includes(current) ? current : '');
+      } catch {
+        if (!cancelled) {
+          setPlugins([]);
+          setPlugin('');
+        }
+      }
     })();
+    return () => { cancelled = true; };
   }, [backend]);
-
-
-
 
   useEffect(() => {
     if (!backend) return;
@@ -58,7 +54,6 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
     let cancelled = false;
     void (async () => {
       try {
-
         const raw = JSON.parse(await backend.GetPluginRecordTypes(plugin.trim())) as string[];
         const parsed = raw.map(s => {
           const m = /^(.*?)\s*\((\d+)\)\s*$/.exec(s);
@@ -117,8 +112,6 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           failures.push(`${formKey}.${col}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
-
-
 
       let saveMsg = '';
       if (ok > 0) {
