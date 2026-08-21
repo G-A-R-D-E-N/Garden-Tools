@@ -4,6 +4,7 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -102,6 +103,56 @@ bool set_record_editor_id(Plugin& plugin,
   plugin.original_bytes.clear();
   clear_group_originals(plugin);
   return true;
+}
+
+ScalarMutationStatus set_record_scalar(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       Signature subrecord_signature,
+                                       std::string_view value) {
+  const auto descriptor = schema::scalar_descriptor(subrecord_signature);
+  if (!descriptor.has_value()) {
+    throw schema::ScalarError(
+        "subrecord is not registered in the scalar schema: " +
+        subrecord_signature.to_string());
+  }
+
+  assign_record_form_keys(plugin);
+  Record* target = nullptr;
+  visit_records(plugin, [&](Record& record) {
+    if (target == nullptr && record.header.signature != sig_tes4 &&
+        record.form_key == record_key) {
+      target = &record;
+    }
+  });
+  if (target == nullptr) return ScalarMutationStatus::record_missing;
+
+  Subrecord* found = nullptr;
+  for (auto& subrecord : target->subrecords) {
+    if (subrecord.signature != subrecord_signature) continue;
+    if (found != nullptr) {
+      throw schema::ScalarError(
+          "record contains duplicate scalar subrecords: " +
+          subrecord_signature.to_string());
+    }
+    found = &subrecord;
+  }
+  if (found == nullptr) return ScalarMutationStatus::subrecord_missing;
+
+  // Validate existing width before mutation, then encode the new value through
+  // the same schema descriptor. Missing fields are not inserted here because
+  // safe subrecord ordering belongs to the record schema/codegen layer.
+  static_cast<void>(schema::decode_scalar(found->data, *descriptor));
+  const auto encoded = schema::encode_scalar(value, *descriptor);
+  if (found->data == encoded) return ScalarMutationStatus::unchanged;
+
+  found->data = encoded;
+  target->original_bytes.clear();
+  target->decompressed_payload.clear();
+  target->header.data_size = 0;
+  target->uncompressed_size = 0;
+  plugin.original_bytes.clear();
+  clear_group_originals(plugin);
+  return ScalarMutationStatus::updated;
 }
 
 RecordCopyStatus copy_record_as_override(Plugin& destination,
