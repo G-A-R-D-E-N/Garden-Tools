@@ -185,6 +185,26 @@ TEST_CASE("Radicle plugin backend exposes native conflicts references and search
     CHECK(referencedBy[0].at("FormKey") == "000801:Reference.esp");
     CHECK(referencedBy[0].at("EditorID") == "ReferenceRecord");
 
+    const auto dependencies = parseStringResult(
+        backend.invoke("backend.GetDependencies",
+                       nlohmann::json::array({"000801:Reference.esp"})));
+    REQUIRE(dependencies.size() == 1);
+    CHECK(dependencies[0].at("Kind") == "link");
+    CHECK(dependencies[0].at("FormKey") == "000800:Base.esp");
+    CHECK(dependencies[0].at("EditorId") == "OverrideWeapon");
+    CHECK(dependencies[0].at("Type") == "WEAP");
+    CHECK(dependencies[0].at("Plugin") == "Override.esp");
+
+    const auto history = parseStringResult(
+        backend.invoke("backend.GetHistory",
+                       nlohmann::json::array({"000800:Base.esp"})));
+    REQUIRE(history.size() == 2);
+    CHECK(history[0].at("Plugin") == "Base.esp");
+    CHECK(history[0].at("Action") == "Origin");
+    CHECK(history[1].at("Plugin") == "Override.esp");
+    CHECK(history[1].at("Action") == "Winning override");
+    CHECK(history[1].at("ChangedFields").get<std::size_t>() >= 1);
+
     const auto search = parseStringResult(
         backend.invoke("backend.SearchRecords",
                        nlohmann::json::array({"ReferenceRecord", ""})));
@@ -216,6 +236,20 @@ TEST_CASE("Radicle plugin backend reports dangling FormLinks") {
     REQUIRE(report->is_string());
     CHECK(report->get<std::string>().find("Dangling FormLinks: 1") != std::string::npos);
     CHECK(report->get<std::string>().find("000999:Base.esp") != std::string::npos);
+
+    const auto dependencies = parseStringResult(
+        backend.invoke("backend.GetDependencies",
+                       nlohmann::json::array({"000801:Broken.esp"})));
+    REQUIRE(dependencies.size() == 1);
+    CHECK(dependencies[0].at("Kind") == "missing");
+    CHECK(dependencies[0].at("FormKey") == "000999:Base.esp");
+
+    const auto problems = parseStringResult(
+        backend.invoke("backend.GetProblems",
+                       nlohmann::json::array({"000801:Broken.esp"})));
+    REQUIRE(problems.size() == 1);
+    CHECK(problems[0].at("Severity") == "critical");
+    CHECK(problems[0].at("Description").get<std::string>().find("000999:Base.esp") != std::string::npos);
 }
 
 TEST_CASE("Radicle plugin backend refreshes the cached graph when the environment changes") {
