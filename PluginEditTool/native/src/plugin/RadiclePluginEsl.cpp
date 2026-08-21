@@ -1,0 +1,70 @@
+#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+
+#include <cstddef>
+#include <string>
+#include <string_view>
+
+#include <fo4/plugin/reader.hpp>
+
+namespace fo4ide::plugin {
+namespace {
+
+std::string stringArgument(const nlohmann::json& args, std::size_t index) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
+    return args[index].get<std::string>();
+}
+
+}
+
+Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
+    const nlohmann::json& arguments) const {
+    const auto name = stringArgument(arguments, 0);
+    if (name.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    const auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+
+    constexpr std::size_t capacity = 0x1000u - 0x800u;
+    std::size_t nativeCount = 0;
+    std::size_t outOfRange = 0;
+
+    for (const auto* record : fo4::collect_records(loaded->plugin)) {
+        if (record->header.signature == fo4::sig_tes4 ||
+            record->form_key.owner() != loaded->plugin.key) {
+            continue;
+        }
+        ++nativeCount;
+        if (record->form_key.local().value() > fo4::k_light_local_mask) {
+            ++outOfRange;
+        }
+    }
+
+    if (outOfRange == 0) {
+        return nlohmann::json(
+            "'" + name + "' is already ESL-compatible: all " +
+            std::to_string(nativeCount) +
+            " native record(s) use 12-bit object IDs (<= 0xFFF). "
+            "Native compact_to_esl would be a no-op.");
+    }
+
+    if (nativeCount > capacity) {
+        return nlohmann::json(
+            "'" + name + "' CANNOT fit the ESL compacted range: " +
+            std::to_string(nativeCount) + " native record(s) exceed the " +
+            std::to_string(capacity) +
+            "-slot 0x800-0xFFF capacity. Native compact_to_esl must refuse this plugin.");
+    }
+
+    return nlohmann::json(
+        "'" + name + "' can fit the ESL compacted range by remapping " +
+        std::to_string(outOfRange) + " of " + std::to_string(nativeCount) +
+        " native record(s) into 0x800-0xFFF. This check is read-only; native "
+        "compact_to_esl remains disabled until record re-keying and external-reference safeguards are complete.");
+}
+
+}
