@@ -17,6 +17,20 @@ option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_BUILD_TESTS "Build Radicle tests" ${PROJECT_IS_TOP_LEVEL})
 
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_custom_target(radicle_schema_check ALL
+    COMMAND
+      "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tools/schema_codegen.py"
+      --schema "${CMAKE_CURRENT_SOURCE_DIR}/schema/fallout4/fields.json"
+      --output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/generated_scalar_fields.inc"
+      --check
+    COMMENT "Checking generated Fallout 4 scalar field schema"
+    VERBATIM
+  )
+endif()
+
 function(fo4_apply_warnings target)
   if(MSVC)
     target_compile_options(${target} PRIVATE /W4 /permissive-)
@@ -55,6 +69,10 @@ add_library(fo4
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
 )
+
+if(TARGET radicle_schema_check)
+  add_dependencies(fo4 radicle_schema_check)
+endif()
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
