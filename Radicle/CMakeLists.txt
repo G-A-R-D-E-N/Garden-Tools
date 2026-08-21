@@ -107,6 +107,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_mutation.cpp
     tests/test_writer.cpp
     tests/test_formlinks.cpp
+    tests/test_ctda_strings.cpp
     tests/test_vmad.cpp
     tests/test_conflict_graph.cpp
     tests/test_c_api.cpp
