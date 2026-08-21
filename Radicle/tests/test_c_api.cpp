@@ -134,14 +134,67 @@ TEST(CApi, NegativeSurfaceRejectsNullAndInvalidInput) {
   EXPECT_EQ(radicle_plugin_remap_masters(plugin, bad_kind, 1),
             RADICLE_STATUS_INVALID_ARGUMENT);
 
-  // Null write target and double destroy are both safe no-ops/failures.
+  // Null write target, null-destroy, and freeing null buffers are all safe.
   EXPECT_EQ(radicle_plugin_write_file(plugin, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   radicle_plugin_destroy(nullptr);
   radicle_free_bytes(nullptr);
   radicle_free_string_array(nullptr, 3u);
 }
 
-TEST(CApi, WriteFileLeavesOriginalIntactWhenWriteFails) {
+#if !defined(_WIN32)
+TEST(CApi, FailedReplacementLeavesExistingFileIntact) {
+  namespace fs = std::filesystem;
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(
+                testdata_path("FW_HeatherSurvivalPatch.esp").string().c_str(), &plugin),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(plugin, nullptr);
+
+  // An existing destination plus a read-only parent directory forces the
+  // replacement primitive itself to fail: the staged rename cannot land. The
+  // original bytes must survive untouched — this is the regression guard for
+  // any future fallback that deletes the destination before renaming.
+  const auto dir = root / "out";
+  std::filesystem::create_directories(dir);
+  const auto target = dir / "Patch.esp";
+  const std::vector<std::byte> sentinel{{std::byte{0xDE}, std::byte{0xAD},
+                                         std::byte{0xBE}, std::byte{0xEF}}};
+  ASSERT_NO_FATAL_FAILURE(write_bytes(target, sentinel));
+
+  {
+    std::error_code ec;
+    std::filesystem::permissions(dir, std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec,
+                                 ec);
+    ASSERT_FALSE(ec) << ec.message();
+  }
+
+  EXPECT_NE(radicle_plugin_write_file(plugin, target.string().c_str()),
+            RADICLE_STATUS_OK);
+
+  std::vector<std::byte> after(sentinel.size());
+  {
+    std::ifstream in(target, std::ios::binary);
+    ASSERT_TRUE(in.good());
+    in.read(reinterpret_cast<char*>(after.data()),
+            static_cast<std::streamsize>(after.size()));
+    EXPECT_TRUE(in.good());
+  }
+  EXPECT_EQ(after, sentinel);
+
+  // Restore permissions so Cleanup can remove the tree.
+  std::error_code restore_ec;
+  std::filesystem::permissions(dir, std::filesystem::perms::owner_all, restore_ec);
+  EXPECT_FALSE(restore_ec);
+
+  radicle_plugin_destroy(plugin);
+}
+#endif
+
+TEST(CApi, FailedWriteCleansUpTempFiles) {
   namespace fs = std::filesystem;
   const auto root = temp_root();
   Cleanup cleanup{root};

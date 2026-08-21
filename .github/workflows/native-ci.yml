@@ -1,11 +1,15 @@
 name: native-ci
 
 # Self-hosted runners execute arbitrary build code and must never see input
-# from untrusted forks. The self-hosted jobs below therefore run only for:
-#   - pushes to main/work/** branches (collaborator-authored refs), and
-#   - pull requests explicitly labeled "ci:self-hosted" by a collaborator.
-# Regular pull_request events are covered by the hosted mirror jobs, so PRs
-# still get Linux Debug + Windows cross coverage without runner exposure.
+# from untrusted forks. Each lane therefore has two jobs sharing one composite
+# build action:
+#
+#   *-hosted      plain pull_request events, on ephemeral GitHub-hosted runners
+#   *-selfhosted  pushes to main/work/**, workflow_dispatch, and PRs labeled
+#                 "ci:self-hosted" by a collaborator, on the garden fleet
+#
+# Windows cross-compilation requires the self-hosted xwin toolchain and is
+# skipped entirely for unlabeled PRs (no hosted replacement; see radicle.yml).
 
 on:
   push:
@@ -24,17 +28,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  radicle-linux:
-    name: Radicle (Linux, Debug)
-    runs-on: >-
-      ${{
-        (github.event_name == 'pull_request' &&
-         !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted'))
-        && 'ubuntu-latest'
-        || format('[self-hosted, Linux, X64, garden]')
-      }}
+  radicle-linux-hosted:
+    name: Radicle (Linux, Debug, hosted)
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Publish pending status
         uses: ./.github/actions/commit-status
         with:
@@ -43,27 +47,54 @@ jobs:
           description: Radicle Linux CI is running
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build and test
+        uses: ./.github/actions/radicle-linux-ci
+        with:
+          install-deps: 'true'
+
+      - name: Upload failure diagnostics
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: radicle-linux-hosted-failure
+          path: |
+            build/radicle/Testing/**
+            build/radicle/**/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish commit status
+        if: always()
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/radicle-linux
+          state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
+          description: Radicle Linux CI ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  radicle-linux-selfhosted:
+    name: Radicle (Linux, Debug, self-hosted)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
+    runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 30
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
           persist-credentials: false
 
-      - name: Install native dependencies
-        if: runner.environment == 'github-hosted'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev
+      - name: Publish pending status
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/radicle-linux
+          state: pending
+          description: Radicle Linux CI is running
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure
-        run: >
-          cmake -S Radicle -B build/radicle -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DRADICLE_BUILD_TESTS=ON
-
-      - name: Build
-        run: cmake --build build/radicle
-
-      - name: Test
-        run: ctest --test-dir build/radicle --output-on-failure
+      - name: Build and test
+        uses: ./.github/actions/radicle-linux-ci
 
       - name: Upload failure diagnostics
         if: failure()
@@ -87,17 +118,17 @@ jobs:
           description: Radicle Linux CI ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  plugineditool-native-linux:
-    name: PluginEditTool native (Linux, Debug)
-    runs-on: >-
-      ${{
-        (github.event_name == 'pull_request' &&
-         !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted'))
-        && 'ubuntu-latest'
-        || format('[self-hosted, Linux, X64, garden]')
-      }}
+  fo4ide-linux-hosted:
+    name: PluginEditTool native (Linux, Debug, hosted)
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Publish pending status
         uses: ./.github/actions/commit-status
         with:
@@ -106,27 +137,54 @@ jobs:
           description: PluginEditTool Linux CI is running
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build and test
+        uses: ./.github/actions/fo4ide-linux-ci
+        with:
+          install-deps: 'true'
+
+      - name: Upload failure diagnostics
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: fo4ide-native-linux-hosted-failure
+          path: |
+            build/fo4ide/Testing/**
+            build/fo4ide/**/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish commit status
+        if: always()
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/fo4ide-linux
+          state: ${{ job.status == 'success' && 'success' || job.status == 'failure' && 'failure' || 'error' }}
+          description: PluginEditTool Linux CI ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  fo4ide-linux-selfhosted:
+    name: PluginEditTool native (Linux, Debug, self-hosted)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
+    runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 40
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
           persist-credentials: false
 
-      - name: Install native dependencies
-        if: runner.environment == 'github-hosted'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev
+      - name: Publish pending status
+        uses: ./.github/actions/commit-status
+        with:
+          context: native-ci/fo4ide-linux
+          state: pending
+          description: PluginEditTool Linux CI is running
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure
-        run: >
-          cmake -S PluginEditTool/native -B build/fo4ide -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DFO4IDE_BUILD_TESTS=ON
-
-      - name: Build
-        run: cmake --build build/fo4ide
-
-      - name: Test
-        run: ctest --test-dir build/fo4ide --output-on-failure
+      - name: Build and test
+        uses: ./.github/actions/fo4ide-linux-ci
 
       - name: Upload failure diagnostics
         if: failure()
@@ -152,15 +210,19 @@ jobs:
 
   radicle-windows-cross:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
-    # The xwin toolchain only lives on the self-hosted fleet, and this job
-    # must never execute untrusted PR code there: skip plain PRs entirely,
-    # run for pushes/dispatch and labeled PRs.
-    if: >
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
+    # The xwin toolchain only lives on the self-hosted fleet; never run
+    # untrusted PR code there. No hosted replacement exists — this lane is a
+    # push/dispatch/labeled-PR gate only.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:self-hosted')
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 30
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
       - name: Publish pending status
         uses: ./.github/actions/commit-status
         with:
@@ -169,20 +231,10 @@ jobs:
           description: Radicle Windows cross CI is running
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          persist-credentials: false
-
-      - name: Install cross toolchain dependencies
-        if: runner.environment == 'github-hosted'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang
-
       - name: Build Windows static zlib dependency
         run: |
-          git clone --depth 1 https://github.com/madler/zlib.git build/zlib-src
-          git -C build/zlib-src checkout 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf  # v1.3.1, hash-pinned
+          git clone --filter=blob:none https://github.com/madler/zlib.git build/zlib-src
+          git -C build/zlib-src checkout 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf  # v1.3.1
           cmake -S build/zlib-src -B build/zlib-win -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
             -DCMAKE_BUILD_TYPE=Release \

@@ -55,6 +55,13 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
     if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
+        });
+    }
     if (requestedJson.size() != loaded->plugin.header.masters.size()) {
         return std::unexpected(Error{"InvalidMasterOrder", "Master order must contain every existing master exactly once"});
     }
@@ -150,6 +157,15 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
     if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    // setLight() mutates the cache and persists here, so this is the choke
+    // point that must refuse to clobber externally modified files.
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before saving: " +
+                loaded->path.string()
+        });
+    }
 
     try {
         fo4::write_plugin_file(loaded->plugin, loaded->path);

@@ -1,6 +1,8 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <cstddef>
 #include <exception>
 #include <map>
@@ -78,6 +80,24 @@ std::size_t changedSubrecordCount(const fo4::Record* previous, const fo4::Record
     return changed;
 }
 
+std::string lastModifiedIso(const std::filesystem::path& path) {
+    std::error_code ec;
+    const auto fileTime = std::filesystem::last_write_time(path, ec);
+    if (ec) return {};
+    const auto sysTime = std::chrono::clock_cast<std::chrono::system_clock>(fileTime);
+    const auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(sysTime);
+    const std::time_t tt = std::chrono::system_clock::to_time_t(seconds);
+    std::tm tm{};
+#if defined(_WIN32)
+    gmtime_s(&tm, &tt);
+#else
+    gmtime_r(&tt, &tm);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof buffer, "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return buffer;
+}
+
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getDependencies(const nlohmann::json& arguments) const {
@@ -87,7 +107,12 @@ Result<nlohmann::json> RadiclePluginBackend::getDependencies(const nlohmann::jso
 
     std::scoped_lock lock(mutex_);
     const auto* sourceWinner = graph_.winner(key);
-    if (sourceWinner == nullptr) return nlohmann::json("[]");
+    if (sourceWinner == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "No loaded plugin contains this FormKey: " + key.to_string()
+        });
+    }
 
     nlohmann::json rows = nlohmann::json::array();
     std::set<std::string> seen;
@@ -129,7 +154,12 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
 
     std::scoped_lock lock(mutex_);
     const auto* sourceWinner = graph_.winner(key);
-    if (sourceWinner == nullptr) return nlohmann::json("[]");
+    if (sourceWinner == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "No loaded plugin contains this FormKey: " + key.to_string()
+        });
+    }
 
     nlohmann::json rows = nlohmann::json::array();
     std::set<std::pair<std::string, std::string>> seen;
@@ -153,6 +183,12 @@ Result<nlohmann::json> RadiclePluginBackend::getHistory(const nlohmann::json& ar
 
     std::scoped_lock lock(mutex_);
     const auto& versions = graph_.versions(key);
+    if (versions.empty()) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "No loaded plugin contains this FormKey: " + key.to_string()
+        });
+    }
     nlohmann::json rows = nlohmann::json::array();
     const fo4::Record* previous = nullptr;
 
@@ -165,7 +201,7 @@ Result<nlohmann::json> RadiclePluginBackend::getHistory(const nlohmann::json& ar
             {"LoadOrder", version.load_order},
             {"Action", i == 0 ? "Origin" : (i + 1 == versions.size() ? "Winning override" : "Override")},
             {"ChangedFields", i == 0 ? 0 : changedSubrecordCount(previous, record)},
-            {"LastModified", ""}
+            {"LastModified", loaded == nullptr ? std::string{} : lastModifiedIso(loaded->path)}
         });
         previous = record;
     }

@@ -74,6 +74,13 @@ Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& ar
             "Refusing to add masters to protected or game-Data plugin: " + target->name
         });
     }
+    if (!fileUnchangedSinceLoad(*target)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                target->path.string()
+        });
+    }
 
     std::vector<fo4::MasterDescriptor> masters;
     masters.reserve(target->plugin.header.masters.size() + requestedNames.size());

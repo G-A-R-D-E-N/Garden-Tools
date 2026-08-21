@@ -128,7 +128,9 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     const nlohmann::json& arguments) {
     // All write guards live inside the mutating functions themselves, so this
     // shim is a pure name mapping and cannot be bypassed to skip protection.
-    if (method == "SetField") return setField(arguments);
+    // SetField routes through the scalar-schema-aware entry point, identical
+    // to invoke("backend.SetField").
+    if (method == "SetField") return setFieldValue(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "AddMasters") return addMasters(arguments);

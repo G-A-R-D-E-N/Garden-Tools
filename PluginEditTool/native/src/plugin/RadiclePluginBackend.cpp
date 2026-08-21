@@ -1,6 +1,8 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <array>
 #include <cctype>
 #include <cstddef>
@@ -284,9 +286,13 @@ std::optional<Error> RadiclePluginBackend::writeGuard(const LoadedPlugin& loaded
 }
 
 bool RadiclePluginBackend::isAllowedSaveRoot(const std::filesystem::path& path) const {
+    // Only directories hosting an *editable* loaded plugin are writable
+    // roots. Game-Data and protected plugins contribute no root, so an
+    // editable MO2 plugin can never be Save-As'd over anything beneath Data.
     std::error_code ec;
     auto target = std::filesystem::weakly_canonical(path, ec);
     for (const auto& loaded : plugins_) {
+        if (!isEditable(loaded)) continue;
         auto root = std::filesystem::weakly_canonical(loaded.path.parent_path(), ec);
         auto [rootEnd, nothing] =
             std::mismatch(root.begin(), root.end(), target.begin(), target.end());
@@ -307,7 +313,9 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "appInterop.ScanBrokenRefs") return scanBrokenRefs();
     if (operation == "backend.OpenPlugin") return openPlugin(arguments);
     if (operation == "backend.SavePlugin") return savePlugin(arguments);
-    if (operation == "backend.SetField") return setField(arguments);
+    // Scalar-schema aware on every entry path; setFieldValue falls back to
+    // setField for non-schema fields.
+    if (operation == "backend.SetField") return setFieldValue(arguments);
     if (operation == "backend.CopyAsOverride") return copyAsOverride(arguments);
     if (operation == "backend.CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (operation == "backend.AddMasters") return addMasters(arguments);
@@ -537,12 +545,21 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
     // savePlugin gets the same protection.
     if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
     const auto output = requestedPath.empty() ? loaded->path : utf8Path(requestedPath);
-    // "Save As" may only land next to plugins of the active environment;
+    // "Save As" may only produce a plugin file, and only inside a directory
+    // that already hosts an editable plugin of the active environment;
     // otherwise this endpoint would be an arbitrary-file overwrite primitive.
-    if (!isAllowedSaveRoot(output)) {
+    static constexpr std::array<std::string_view, 3> k_pluginExtensions{".esp", ".esm", ".esl"};
+    const auto lowerOutput = asciiLower(output.string());
+    const bool pluginExtension =
+        std::any_of(k_pluginExtensions.begin(), k_pluginExtensions.end(),
+                    [&](const std::string_view extension) {
+                        return lowerOutput.ends_with(extension);
+                    });
+    if (!pluginExtension || !isAllowedSaveRoot(output)) {
         return std::unexpected(Error{
             "SavePathNotAllowed",
-            "Refusing to save outside the directories hosting loaded plugins: " +
+            "Refusing to save: target must be a .esp/.esm/.esl inside a directory "
+            "hosting an editable loaded plugin: " +
                 output.string()
         });
     }
@@ -841,6 +858,14 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
     if (!loaded) return nlohmann::json("{}");
 
     nlohmann::json masters = nlohmann::json::array();
+    // Compute real usage: a master is "used" when at least one FormLink in
+    // this plugin resolves into it.
+    std::set<std::string> usedMasters;
+    for (const auto& link : fo4::collect_form_links_detailed(loaded->plugin).links) {
+        if (!link.key.owner().empty()) {
+            usedMasters.insert(std::string(link.key.owner().filename()));
+        }
+    }
     for (std::size_t index = 0; index < loaded->plugin.header.masters.size(); ++index) {
         const auto& master = loaded->plugin.header.masters[index];
         // Expose the resolved kind so clients (and tests) can catch a
@@ -849,7 +874,7 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
             {"index", index},
             {"name", std::string(master.key.filename())},
             {"size", master.data_size},
-            {"used", true},
+            {"used", usedMasters.contains(std::string(master.key.filename()))},
             {"kind", master.kind == fo4::PluginKind::light ? "light" : "full"}
         });
     }

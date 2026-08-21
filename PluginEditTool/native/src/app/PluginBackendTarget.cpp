@@ -9,10 +9,6 @@ PluginBackendTarget::PluginBackendTarget(plugin::IPluginBackend& backend, std::s
 
 Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                                                     const nlohmann::json& args) {
-    if (targetNamespace_ == "backend") {
-        if (method == "SetField") return backend_.setFieldValue(args);
-        return backend_.invokeBackend(method, args);
-    }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
 }
 
