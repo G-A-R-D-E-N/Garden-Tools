@@ -46,6 +46,7 @@ add_library(fo4
   src/plugin/writer.cpp
   src/schema/form_links.cpp
   src/schema/vmad.cpp
+  src/graph/conflict_graph.cpp
 )
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -100,6 +101,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writer.cpp
     tests/test_formlinks.cpp
     tests/test_vmad.cpp
+    tests/test_conflict_graph.cpp
     tests/test_c_api.cpp
     tests/plugin_bytes.cpp
   )
