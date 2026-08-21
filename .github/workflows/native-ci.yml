@@ -1,10 +1,5 @@
 name: native-ci
 
-# Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runner
-# (label `garden`). Hosted runners are intentionally avoided: both orgs are over
-# the Free Actions minutes allowance (GHRUNNER#24), and hosted jobs fail silently
-# once exhausted. Self-hosted minutes are free.
-
 on:
   push:
     branches:
@@ -12,6 +7,10 @@ on:
       - "work/**"
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
 
 concurrency:
   group: native-ci-${{ github.ref }}
@@ -22,7 +21,7 @@ jobs:
     name: Radicle (Linux, Debug)
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -39,8 +38,9 @@ jobs:
       - name: Test
         run: ctest --test-dir build/radicle --output-on-failure
 
-      - name: Upload logs and binaries on failure
+      - name: Upload failure diagnostics
         if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: radicle-linux-failure
@@ -51,11 +51,26 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Publish commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          state="$JOB_STATUS"
+          if [ "$state" != success ] && [ "$state" != failure ]; then state=error; fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"$state\",\"context\":\"native-ci/radicle-linux\",\"description\":\"Radicle Linux self-hosted CI: $JOB_STATUS\"}"
+
   plugineditool-native-linux:
     name: PluginEditTool native (Linux, Debug)
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -72,8 +87,9 @@ jobs:
       - name: Test
         run: ctest --test-dir build/fo4ide --output-on-failure
 
-      - name: Upload logs and binaries on failure
+      - name: Upload failure diagnostics
         if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: fo4ide-native-linux-failure
@@ -84,27 +100,57 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Publish commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          state="$JOB_STATUS"
+          if [ "$state" != success ] && [ "$state" != failure ]; then state=error; fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"$state\",\"context\":\"native-ci/fo4ide-linux\",\"description\":\"PluginEditTool Linux self-hosted CI: $JOB_STATUS\"}"
+
   radicle-windows-cross:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Configure (clang-cl / xwin, Release)
+      - name: Build Windows zlib dependency
+        run: |
+          git clone --depth 1 --branch v1.3.1 https://github.com/madler/zlib.git build/zlib-src
+          cmake -S build/zlib-src -B build/zlib-win -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/build/zlib-win-install \
+            -DZLIB_BUILD_EXAMPLES=OFF
+          cmake --build build/zlib-win
+          cmake --install build/zlib-win
+
+      - name: Configure
         run: >
           cmake -S Radicle -B build/radicle-win -G Ninja
           -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
           -DCMAKE_BUILD_TYPE=Release
           -DRADICLE_BUILD_TESTS=OFF
+          -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win-install/include
+          -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win-install/lib/zlibstatic.lib
+          -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win-install/lib/zlibstatic.lib
 
       - name: Build
         run: cmake --build build/radicle-win
 
       - name: Upload Windows binaries
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: radicle-windows-x64
@@ -114,3 +160,18 @@ jobs:
             build/radicle-win/**/*.lib
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Publish commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          state="$JOB_STATUS"
+          if [ "$state" != success ] && [ "$state" != failure ]; then state=error; fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"$state\",\"context\":\"native-ci/radicle-windows-cross\",\"description\":\"Radicle Windows cross CI: $JOB_STATUS\"}"
