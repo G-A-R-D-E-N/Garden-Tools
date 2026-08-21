@@ -5,6 +5,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <system_error>
 #include <type_traits>
 
 namespace fo4::schema {
@@ -81,9 +82,6 @@ std::string format_float(float value) {
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
   if (subrecord == k_xhlt) {
-    // xEdit FO4: XHLT is wbInteger(..., 'Health %', itU32).
-    // Radicle's UI convention is human percentage points 0..100, stored directly
-    // in the u32 field. Integer-backed percentages do not accept fractions.
     return ScalarDescriptor{
         k_xhlt, "Health %", ScalarStorage::u32,
         ScalarPresentation::percent_0_100, 0.0, 100.0};
@@ -112,8 +110,6 @@ std::string decode_scalar(std::span<const std::byte> data,
         std::string(descriptor.field_name) + " has unexpected binary width");
   }
 
-  // Read existing bytes losslessly. Descriptor min/max constrain new authored
-  // values only; unusual existing values must remain inspectable/preservable.
   switch (descriptor.storage) {
     case ScalarStorage::u8:
       return std::to_string(std::to_integer<std::uint8_t>(data[0]));
