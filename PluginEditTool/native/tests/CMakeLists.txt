@@ -26,6 +26,7 @@ add_executable(
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
     unit/RadiclePluginEyesTests.cpp
+    unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp
     unit/RadiclePluginLvspGridTests.cpp
     unit/RadiclePluginBatchMutationTests.cpp
