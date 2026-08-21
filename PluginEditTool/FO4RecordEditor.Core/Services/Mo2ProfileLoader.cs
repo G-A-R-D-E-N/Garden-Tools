@@ -468,8 +468,8 @@ public static class Mo2ProfileLoader
     internal static List<string> EnsureRequiredGameMasters(IEnumerable<string> loadOrder)
     {
         var result = loadOrder.ToList();
-        if (!result.Any(m => m.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase)))
-            result.Insert(0, "Fallout4.esm");
+        result.RemoveAll(m => m.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
+        result.Insert(0, "Fallout4.esm");
         return result;
     }
 }
