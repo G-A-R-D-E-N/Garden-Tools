@@ -1488,6 +1488,7 @@ public static class Smoke
         VerificationFailureLeavesTheSourceUntouched();
 
         DirtyGraphSurvivesARejectedOpen();
+        ADroppedFileReachesTheBridge();
         CleanWindowClosesWithoutPrompt();
         GraphLayoutPersistsAcrossFreshWindow();
         LastTabPersistsAcrossFreshWindow();
@@ -1533,6 +1534,51 @@ public static class Smoke
         window.DiscardDecision = () => DiscardChoice.Discard;
         window.Close();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+    }
+
+    // The drop path had a silent-failure bug: the guard accepted the legacy FileNames format
+    // while the reader could only read Files, so such a drop was swallowed with no feedback.
+    // The only existing coverage sits inside the per-file battery, which runs only when the
+    // harness is handed .hkx arguments -- and CI passes none, which is why it went unnoticed.
+    // This case needs no fixture: BridgeOpenPath fills the path field before parsing, so the
+    // plumbing can be proved with a file that is not a real graph.
+    private static void ADroppedFileReachesTheBridge()
+    {
+        Console.WriteLine("\na dropped file is accepted and its path reaches the Bridge");
+
+        string folder = System.IO.Directory.CreateTempSubdirectory("bgs-drop").FullName;
+        string path = System.IO.Path.Combine(folder, "dropped.hkx");
+        System.IO.File.WriteAllBytes(path, new byte[] { 0x57, 0xE0, 0xE0, 0x57 });
+        try
+        {
+            var window = new MainWindow();
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var tabs = Find<TabControl>(window).First();
+            tabs.SelectedIndex = tabs.Items.OfType<TabItem>().ToList()
+                                     .FindIndex(t => t.Header?.ToString() == "Bridge");
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            // FileNames only, with no Files entry: the shape a legacy drag source produces,
+            // and the exact shape that used to be accepted and then silently discarded.
+            var dropped = new Avalonia.Input.DataObject();
+            dropped.Set(Avalonia.Input.DataFormats.FileNames, new[] { path });
+
+            window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.DragEnter,
+                            dropped, Avalonia.Input.DragDropEffects.Copy);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            CheckTrue("a legacy FileNames drag is offered as a drop",
+                      window.BridgeDropHintText.Contains("Drop to open"));
+
+            window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.Drop,
+                            dropped, Avalonia.Input.DragDropEffects.Copy);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Check("and dropping it puts the path in the field", path, window.PathFieldForTest);
+
+            CloseForTest(window);
+        }
+        finally { System.IO.Directory.Delete(folder, true); }
     }
 
     private static void CleanWindowClosesWithoutPrompt()
