@@ -238,7 +238,7 @@ Phase 0 (foundation)
 
 ## Phase R — Runtime Reverse Engineering (Fallout4.exe)
 
-**Targets:** Fallout4.exe 1.10.163 (OG) and 1.11.221 (AE)  
+**Targets:** Fallout4.exe 1.10.163 (OG) and 1.11.240 (AE)  
 **Output repo:** https://github.com/PRISMA-USER-INTERFACE-FRAMEWORK/commonlib_NonVR  
 **Local docs:** `Resources/RE-Work/Runtime/`
 
@@ -266,7 +266,7 @@ F4SE/CommonLibF4 plugin development (PrismaHUD, FalloutChat, Rad Mod, C# bridge)
 - **657,980 additional names** applied from community IDC label decode
 - **150 confirmed CommonLib naming bugs** found and fixed
 - **1,959 safe naming-gap fills** applied (Class::FuncN → real names)
-- **AE 1.11.221 project** auto-propagated from 1.11.191 with vtable cross-check
+- **AE 1.11.240 project** auto-propagated from 1.11.191 with vtable cross-check
 
 ### Runtime roadmap (from Runtime/04-ROADMAP.md)
 
