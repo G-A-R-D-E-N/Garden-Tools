@@ -1,5 +1,6 @@
 #include "fo4/forms/eyes.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 
@@ -139,6 +140,42 @@ Eyes decode_eyes(const Plugin& plugin, const FormKey& key) {
   if (data->data.size() != 1) throw EyesError("EYES DATA must be exactly one byte");
   result.data_flags = std::to_integer<std::uint8_t>(data->data.front());
   return result;
+}
+
+FormKey create_eyes(Plugin& plugin,
+                    std::optional<std::string_view> editor_id,
+                    std::string_view full_text,
+                    std::string_view icon,
+                    std::uint8_t data_flags,
+                    RecordFlags record_flags) {
+  auto next = plugin;
+
+  // Encode every caller-supplied string before committing the cloned plugin.
+  // A bad embedded NUL therefore cannot leave an allocated but incomplete
+  // record behind in the caller's Plugin object.
+  std::optional<std::vector<std::byte>> encoded_edid;
+  if (editor_id.has_value()) encoded_edid = zstring(*editor_id);
+  const auto encoded_full = zstring(full_text);
+  const auto encoded_icon = zstring(icon);
+
+  const auto key = create_local_record(next, k_eyes);
+  auto* record = find_mutable_record(next, key);
+  if (record == nullptr) {
+    throw EyesError("newly allocated EYES record could not be resolved");
+  }
+
+  record->header.flags = record_flags;
+  if (encoded_edid.has_value()) {
+    record->subrecords.push_back(Subrecord{sig_edid, std::move(*encoded_edid), false});
+  }
+  record->subrecords.push_back(Subrecord{k_full, encoded_full, false});
+  record->subrecords.push_back(Subrecord{k_icon, encoded_icon, false});
+  record->subrecords.push_back(
+      Subrecord{sig_data, std::vector<std::byte>{std::byte{data_flags}}, false});
+  mark_modified(next, *record);
+
+  plugin = std::move(next);
+  return key;
 }
 
 bool set_eyes_text_fields(Plugin& plugin,
