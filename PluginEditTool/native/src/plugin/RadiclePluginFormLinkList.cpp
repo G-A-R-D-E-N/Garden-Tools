@@ -1,5 +1,6 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <cstddef>
 #include <exception>
 #include <filesystem>
 #include <string>
