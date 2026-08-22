@@ -55,6 +55,13 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
     if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
+        });
+    }
     if (requestedJson.size() != loaded->plugin.header.masters.size()) {
         return std::unexpected(Error{"InvalidMasterOrder", "Master order must contain every existing master exactly once"});
     }
@@ -90,6 +97,10 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
         auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
         fo4::write_plugin_file(remapped, loaded->path);
         loaded->plugin = std::move(remapped);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
         rebuildGraphLocked();
         return nlohmann::json("Wrote " + name + " with reordered masters.");
     } catch (const std::exception& error) {
@@ -146,9 +157,22 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
     if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    // setLight() mutates the cache and persists here, so this is the choke
+    // point that must refuse to clobber externally modified files.
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before saving: " +
+                loaded->path.string()
+        });
+    }
 
     try {
         fo4::write_plugin_file(loaded->plugin, loaded->path);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
         return nlohmann::json("Saved " + name + ".");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginWriteFailed", error.what()});

@@ -1,6 +1,8 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <cctype>
 #include <cstddef>
 #include <exception>
@@ -72,6 +74,24 @@ std::string rawFormIdText(fo4::RawFormId formId) {
     out << "0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
         << formId.value();
     return out.str();
+}
+
+std::string lastModifiedIso(const std::filesystem::path& path) {
+    std::error_code ec;
+    const auto fileTime = std::filesystem::last_write_time(path, ec);
+    if (ec) return {};
+    const auto sysTime = std::chrono::clock_cast<std::chrono::system_clock>(fileTime);
+    const auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(sysTime);
+    const std::time_t tt = std::chrono::system_clock::to_time_t(seconds);
+    std::tm tm{};
+#if defined(_WIN32)
+    gmtime_s(&tm, &tt);
+#else
+    gmtime_r(&tt, &tm);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof buffer, "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return buffer;
 }
 
 using SubrecordMap = std::map<std::pair<std::string, std::size_t>, std::vector<std::byte>>;
@@ -161,11 +181,16 @@ nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 
 Result<nlohmann::json> RadiclePluginBackend::getPluginRecordTypes(
     const nlohmann::json& arguments) const {
     const auto pluginName = stringArgument(arguments, 0);
-    if (pluginName.empty()) return nlohmann::json("[]");
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
 
     std::scoped_lock lock(mutex_);
     const auto* loaded = findPlugin(pluginName);
-    if (loaded == nullptr) return nlohmann::json("[]");
+    // A typo'd plugin name must not be reported as "plugin with no records".
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
 
     std::map<std::string, std::size_t> counts;
     for (const auto* record : fo4::collect_records(loaded->plugin)) {
@@ -189,9 +214,14 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
 
     std::scoped_lock lock(mutex_);
     const auto* loaded = findPlugin(pluginName);
-    if (loaded == nullptr || signature.empty()) {
+    // An unknown plugin must be an error, not an empty grid: the two are
+    // indistinguishable for the client otherwise.
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    if (signature.empty()) {
         return nlohmann::json(nlohmann::json{
-            {"columns", gridColumns(signature)},
+            {"columns", nlohmann::json::array()},
             {"rows", nlohmann::json::array()},
             {"total", 0},
             {"offset", offset}
@@ -395,21 +425,59 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
 
     std::scoped_lock lock(mutex_);
     const auto* winner = graph_.winner(key);
-    if (winner == nullptr) return nlohmann::json("{}");
+    if (winner == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "No loaded plugin contains this FormKey: " + key.to_string()
+        });
+    }
     const auto* loaded = findPlugin(winner->plugin.filename());
-    if (loaded == nullptr) return nlohmann::json("{}");
+    if (loaded == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "The winning plugin is not loaded for FormKey: " + key.to_string()
+        });
+    }
     const auto* record = fo4::find_record(loaded->plugin, key);
-    if (record == nullptr) return nlohmann::json("{}");
+    if (record == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record is not present in " + loaded->name + ": " + key.to_string()
+        });
+    }
 
     const auto& versions = graph_.versions(key);
+
+    // Resolve the base form for override records: the earliest definition in
+    // load order. All overrides share the FormKey, so the UI can navigate to
+    // the base record inside any plugin that contains it.
+    std::string baseForm;
+    std::string baseFormKey;
+    if (versions.size() > 1) {
+        const auto& origin = versions.front();
+        baseFormKey = key.to_string();
+        const auto* originLoaded = findPlugin(origin.plugin.filename());
+        if (originLoaded != nullptr) {
+            if (const auto* originRecord = fo4::find_record(originLoaded->plugin, key)) {
+                auto editor = editorId(*originRecord);
+                if (editor.empty()) editor = key.to_string();
+                baseForm = std::move(editor) + " (" +
+                           std::string(origin.plugin.filename()) + ")";
+            }
+        }
+        if (baseForm.empty()) {
+            baseForm = std::string(origin.plugin.filename());
+        }
+    }
+
     return nlohmann::json(nlohmann::json{
         {"FormKey", key.to_string()},
         {"FormId", rawFormIdText(record->header.form_id)},
         {"EditorId", editorId(*record)},
         {"Signature", record->header.signature.to_string()},
         {"ClassName", record->header.signature.to_string()},
-        {"BaseForm", ""},
-        {"BaseFormKey", ""},
+        {"BaseForm", std::move(baseForm)},
+        {"BaseFormKey", std::move(baseFormKey)},
         {"File", loaded->name},
         {"Winner", loaded->name},
         {"OverrideCount", versions.empty() ? 0 : versions.size() - 1}
@@ -440,7 +508,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordPluginMatrix(
             {"Conflicts", changes},
             {"IsOverride", index != 0},
             {"IsWinner", index + 1 == versions.size()},
-            {"LastModified", ""}
+            {"LastModified", loaded == nullptr ? std::string{} : lastModifiedIso(loaded->path)}
         });
         previous = record;
     }
@@ -455,11 +523,26 @@ Result<nlohmann::json> RadiclePluginBackend::getContainmentPath(
 
     std::scoped_lock lock(mutex_);
     const auto* winner = graph_.winner(key);
-    if (winner == nullptr) return nlohmann::json("[]");
+    if (winner == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "No loaded plugin contains this FormKey: " + key.to_string()
+        });
+    }
     const auto* loaded = findPlugin(winner->plugin.filename());
-    if (loaded == nullptr) return nlohmann::json("[]");
+    if (loaded == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "The winning plugin is not loaded for FormKey: " + key.to_string()
+        });
+    }
     const auto* record = fo4::find_record(loaded->plugin, key);
-    if (record == nullptr) return nlohmann::json("[]");
+    if (record == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record is not present in " + loaded->name + ": " + key.to_string()
+        });
+    }
 
     const auto editor = editorId(*record);
     return nlohmann::json(nlohmann::json::array({

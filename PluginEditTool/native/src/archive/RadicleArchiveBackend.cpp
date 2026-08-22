@@ -1,7 +1,6 @@
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
@@ -16,6 +15,7 @@
 #include <vector>
 
 #include <fo4/archive/ba2.hpp>
+#include <fo4/io/atomic_write.hpp>
 
 namespace fo4ide::archive {
 namespace {
@@ -189,53 +189,44 @@ std::filesystem::path destinationFor(const std::filesystem::path& root,
     return destination;
 }
 
+// Stages and atomically replaces the destination. All staging/replace
+// mechanics come from Radicle's fo4::io::StagedFile (exclusive O_NOFOLLOW
+// staging, fsync, single replace primitive) so extraction shares exactly
+// the same replacement semantics as plugin/BA2/string writes — there is no
+// second, weaker implementation, and the destination is never absent or
+// truncated at any observation point.
 void writeAtomically(const std::filesystem::path& destination,
                      std::span<const std::byte> bytes) {
     if (destination.empty()) throw std::invalid_argument("output path is empty");
     const auto parent = destination.parent_path();
     if (!parent.empty()) {
-        rejectSymlinkPath(std::filesystem::absolute(parent).lexically_normal());
         std::filesystem::create_directories(parent);
+        // Re-check immediately after creation: create_directories follows
+        // symlinks, so a raced component must abort before anything is
+        // staged. This narrows the check-to-use window as far as portable
+        // C++ allows; the final replace never follows the destination.
+        rejectSymlinkPath(std::filesystem::absolute(parent).lexically_normal());
     }
-    std::error_code statusError;
-    const auto existingStatus = std::filesystem::symlink_status(destination, statusError);
-    if (!statusError && std::filesystem::exists(existingStatus) &&
-        (std::filesystem::is_symlink(existingStatus) || std::filesystem::is_directory(existingStatus))) {
-        throw std::invalid_argument("refusing to replace non-regular output path: " + destination.string());
-    }
-
-    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
-    auto temporary = destination;
-    temporary += ".radicle-" + std::to_string(unique) + ".tmp";
-    auto backup = destination;
-    backup += ".radicle-" + std::to_string(unique) + ".bak";
-
     {
-        std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
-        if (!stream) throw std::runtime_error("could not create temporary output: " + temporary.string());
-        if (!bytes.empty()) {
-            stream.write(reinterpret_cast<const char*>(bytes.data()),
-                         static_cast<std::streamsize>(bytes.size()));
+        std::error_code statusError;
+        const auto existingStatus = std::filesystem::symlink_status(destination, statusError);
+        if (!statusError && std::filesystem::exists(existingStatus) &&
+            (std::filesystem::is_symlink(existingStatus) || std::filesystem::is_directory(existingStatus))) {
+            throw std::invalid_argument("refusing to replace non-regular output path: " + destination.string());
         }
-        if (!stream) throw std::runtime_error("could not write temporary output: " + temporary.string());
     }
 
-    bool movedOriginal = false;
+    auto staged = fo4::io::StagedFile::create(destination);
+    staged.write(bytes);
+    staged.finish();
     try {
-        if (std::filesystem::is_regular_file(destination)) {
-            std::filesystem::rename(destination, backup);
-            movedOriginal = true;
-        }
-        std::filesystem::rename(temporary, destination);
-        if (movedOriginal) std::filesystem::remove(backup);
+        staged.verify(bytes.size());
     } catch (...) {
-        std::error_code ignored;
-        std::filesystem::remove(temporary, ignored);
-        if (movedOriginal && !std::filesystem::exists(destination)) {
-            std::filesystem::rename(backup, destination, ignored);
-        }
+        // Abandoning the attempt must not leave .radicle-tmp litter.
+        std::move(staged).cancel();
         throw;
     }
+    std::move(staged).commit();
 }
 
 const fo4::archive::Ba2GeneralEntry& requireEntry(

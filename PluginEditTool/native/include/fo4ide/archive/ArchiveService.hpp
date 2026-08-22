@@ -22,24 +22,15 @@ public:
                                           const nlohmann::json& arguments) = 0;
 };
 
-class RadicleArchiveBackend;
-
+// Placeholder backend used when no real archive implementation is wired up.
+// It is genuinely null: every operation reports ArchiveBackendUnavailable.
 class NullArchiveBackend final : public IArchiveBackend {
 public:
-    NullArchiveBackend();
-    ~NullArchiveBackend() override;
+    NullArchiveBackend() = default;
 
-    NullArchiveBackend(const NullArchiveBackend&) = delete;
-    NullArchiveBackend& operator=(const NullArchiveBackend&) = delete;
-    NullArchiveBackend(NullArchiveBackend&&) noexcept;
-    NullArchiveBackend& operator=(NullArchiveBackend&&) noexcept;
-
-    bool available() const noexcept override;
+    bool available() const noexcept override { return false; }
     Result<nlohmann::json> invoke(std::string_view operation,
                                   const nlohmann::json& arguments) override;
-
-private:
-    std::unique_ptr<RadicleArchiveBackend> backend_;
 };
 
 class ArchiveService {

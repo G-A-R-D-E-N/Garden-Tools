@@ -112,16 +112,12 @@ TEST_CASE("Radicle archive backend lists GNRL entries using the existing UI cont
     CHECK(result->at("entries")[0].at("size") == 2048);
 }
 
-TEST_CASE("Legacy archive backend construction delegates to Radicle") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = writeArchive(root, "legacy.ba2", {entry("A.txt", "one")});
-
+TEST_CASE("Null archive backend is genuinely unavailable") {
     fo4ide::archive::NullArchiveBackend backend;
-    CHECK(backend.available());
-    const auto result = backend.invoke("list", listArguments(path));
-    REQUIRE(result.has_value());
-    CHECK(result->at("shownCount") == 1);
+    CHECK_FALSE(backend.available());
+    const auto result = backend.invoke("list", nlohmann::json::array());
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ArchiveBackendUnavailable");
 }
 
 TEST_CASE("Radicle archive backend extracts selected entries under the chosen root") {
@@ -169,6 +165,39 @@ TEST_CASE("Radicle archive backend rejects traversal before writing extraction o
     CHECK_FALSE(std::filesystem::exists(root / "escape.txt"));
     CHECK_FALSE(std::filesystem::exists(output / "safe" / "good.txt"));
 }
+
+#if !defined(_WIN32)
+TEST_CASE("Radicle archive backend refuses to write through a symlinked output path") {
+    namespace fs = std::filesystem;
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = writeArchive(root, "link.ba2", {entry("A.txt", "payload")});
+
+    // The extraction target is a symlink to an innocent file elsewhere; the
+    // backend must refuse instead of following it.
+    const auto victim = root / "victim.txt";
+    std::ofstream victimStream(victim, std::ios::binary);
+    victimStream << "innocent";
+    victimStream.close();
+    const auto output = root / "out";
+    fs::create_directories(output);
+    const auto linkPath = output / "A.txt";
+    fs::create_symlink(victim, linkPath);
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const nlohmann::json args{
+        {"archivePath", path.string()},
+        {"innerPath", "A.txt"},
+        {"outputPath", linkPath.string()}
+    };
+    const auto result = backend.invoke("extractFile", args);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ArchiveRequestInvalid");
+    // The symlink must survive untouched and the victim file unharmed.
+    REQUIRE(fs::is_symlink(linkPath));
+    CHECK(readBytes(victim) == bytes("innocent"));
+}
+#endif
 
 TEST_CASE("Radicle archive backend reports invalid regex filters") {
     const auto root = tempRoot();

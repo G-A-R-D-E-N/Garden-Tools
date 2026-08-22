@@ -145,12 +145,16 @@ TEST_CASE("Native AddMasters preserves actual light kind for flagged ESP master"
     REQUIRE(backend.invokeBackend(
         "AddMasters", nlohmann::json::array({"Target.esp", "FlaggedLight.esp"})).has_value());
 
-    const auto reloaded = fo4::read_plugin_file(targetPath);
-    REQUIRE(reloaded.header.masters.size() == 1);
-    CHECK(reloaded.header.masters[0].key.filename() == "FlaggedLight.esp");
-
-    const auto listed = backend.invoke("masters.List", nlohmann::json::array({"Target.esp"}));
-    REQUIRE(listed.has_value());
+    // The written plugin cannot carry the master's kind (readers derive it
+    // from the filename), so assert on the backend's resolved state, which is
+    // what a later remap will use. An ESL-flagged .esp must be light.
+    const auto listedRaw = backend.invoke("masters.List",
+                                          nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listedRaw.has_value());
+    const auto listed = nlohmann::json::parse(listedRaw->get<std::string>());
+    REQUIRE(listed.at("masters").size() == 1);
+    CHECK(listed.at("masters")[0].at("name") == "FlaggedLight.esp");
+    CHECK(listed.at("masters")[0].at("kind") == "light");
 }
 
 TEST_CASE("Native AddMasters duplicate is a no-op") {

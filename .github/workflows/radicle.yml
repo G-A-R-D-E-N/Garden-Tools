@@ -1,5 +1,12 @@
 name: Radicle + PluginEditTool Native
 
+# Self-hosted only -- see native-ci.yml's header for why (private repo, no
+# untrusted-fork threat, and hosted runners fail outright: GHRUNNER#24).
+# "Install native dependencies" is gone: it ran `sudo apt-get`, which the
+# self-hosted runner account cannot do (self-hosted runner accounts are
+# deliberately non-privileged -- GHRUNNER's own security policy), and the
+# toolchain (ninja, zlib1g-dev) is already staged host-wide on this runner.
+
 on:
   push:
     paths:
@@ -18,17 +25,14 @@ permissions:
 
 jobs:
   radicle:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ninja-build zlib1g-dev
+        with:
+          persist-credentials: false
 
       - name: Configure Radicle
         run: >-
@@ -44,24 +48,21 @@ jobs:
         run: ctest --test-dir build/radicle --output-on-failure
 
   plugin-edit-native:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ninja-build zlib1g-dev
+        with:
+          persist-credentials: false
 
       - name: Configure PluginEditTool native host
+        # HTTP stays ON so the HttpServerTests (HTTP/SSE/RPC envelope) run.
         run: >-
           cmake -S PluginEditTool/native -B build/plugin-edit-native -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DFO4IDE_BUILD_TESTS=ON
-          -DFO4IDE_BUILD_HTTP=OFF
 
       - name: Build PluginEditTool native host
         run: cmake --build build/plugin-edit-native --parallel

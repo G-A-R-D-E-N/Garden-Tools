@@ -306,8 +306,13 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
 }  // namespace
 
 std::vector<std::size_t> vmad_formid_offsets(std::span<const std::byte> data,
-                                             Signature record_signature) {
+                                              Signature record_signature) {
   return scan_vmad(data, record_signature).offsets;
+}
+
+bool vmad_has_unsupported_properties(std::span<const std::byte> data,
+                                      Signature record_signature) {
+  return scan_vmad(data, record_signature).unsupported;
 }
 
 std::optional<std::vector<std::size_t>> vmad_formid_offsets_for_remap(

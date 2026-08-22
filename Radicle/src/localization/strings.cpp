@@ -1,5 +1,7 @@
 #include "fo4/localization/strings.hpp"
 
+#include "fo4/io/atomic_write.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <limits>
@@ -132,7 +134,9 @@ LocalizedStringTable read_string_table(std::span<const std::byte> bytes,
 
   const auto count = read_u32(bytes, 0);
   const auto data_size = read_u32(bytes, 4);
-  if (count > (std::numeric_limits<std::size_t>::max() - 8) / 8) {
+  // Widen before comparing so the check is meaningful (and warning-clean)
+  // on 64-bit hosts where the constant exceeds the u32 operand's range.
+  if (static_cast<std::size_t>(count) > (std::numeric_limits<std::size_t>::max() - 8) / 8) {
     throw StringTableError("localized string table row count overflows address space");
   }
   const auto table_size = static_cast<std::size_t>(count) * 8;
@@ -196,7 +200,11 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
   std::vector<TableRow> rows;
   rows.reserve(table.entries.size());
   std::vector<std::byte> data;
-  std::map<std::vector<std::byte>, std::uint32_t> deduplicated;
+  // Keyed by std::string rather than std::vector<std::byte>: GCC 14's
+  // -Wstringop-overread mis-reports the memcmp bound inside libstdc++'s
+  // vector<byte> three-way comparison at -O3 (false positive that breaks
+  // -Werror builds). The bytes are opaque payload, so string is equivalent.
+  std::map<std::string, std::uint32_t> deduplicated;
   std::set<std::uint32_t> ids;
 
   for (const auto& entry : table.entries) {
@@ -205,7 +213,13 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
       throw StringTableError("localized string table contains a duplicate string ID");
     }
 
-    auto found = deduplicated.find(entry.text);
+    const auto text_key = [](const std::vector<std::byte>& bytes) {
+      if (bytes.empty()) return std::string{};
+      const auto* data = reinterpret_cast<const char*>(bytes.data());
+      return std::string(data, bytes.size());
+    };
+
+    auto found = deduplicated.find(text_key(entry.text));
     std::uint32_t offset = 0;
     if (found != deduplicated.end()) {
       offset = found->second;
@@ -222,7 +236,7 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
       }
       data.insert(data.end(), entry.text.begin(), entry.text.end());
       data.push_back(std::byte{0});
-      deduplicated.emplace(entry.text, offset);
+      deduplicated.emplace(text_key(entry.text), offset);
     }
     rows.push_back({entry.id, offset});
   }
@@ -250,13 +264,7 @@ std::vector<std::byte> write_string_table(const LocalizedStringTable& table) {
 void write_string_table_file(const LocalizedStringTable& table,
                              const std::filesystem::path& path) {
   const auto bytes = write_string_table(table);
-  std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-  if (!stream) throw StringTableError("could not open localized string file for writing");
-  if (!bytes.empty()) {
-    stream.write(reinterpret_cast<const char*>(bytes.data()),
-                 static_cast<std::streamsize>(bytes.size()));
-  }
-  if (!stream) throw StringTableError("could not write localized string file");
+  io::write_file_atomic(path, bytes);
 }
 
 const LocalizedStringEntry* find_string(const LocalizedStringTable& table,

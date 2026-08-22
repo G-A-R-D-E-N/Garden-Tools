@@ -24,6 +24,7 @@ typedef enum radicle_status {
   RADICLE_STATUS_INVALID_ARGUMENT = 1,
   RADICLE_STATUS_IO_ERROR = 2,
   RADICLE_STATUS_PARSE_ERROR = 3,
+  /* Reserved for future read APIs; no current entry point returns it. */
   RADICLE_STATUS_NOT_FOUND = 4,
   RADICLE_STATUS_OUT_OF_MEMORY = 5,
   RADICLE_STATUS_INTERNAL_ERROR = 255
@@ -52,11 +53,22 @@ RADICLE_API radicle_status radicle_plugin_read_file(const char* path,
                                                      radicle_plugin** out_plugin);
 RADICLE_API void radicle_plugin_destroy(radicle_plugin* plugin);
 
+/*
+ * Writes the plugin to `path`. On any failure (including a partially failed
+ * write) the pre-existing file at `path` is left untouched: the payload is
+ * staged in a sibling temporary file and renamed into place. Returns
+ * RADICLE_STATUS_OK, or an error status with details in radicle_last_error().
+ */
 RADICLE_API radicle_status radicle_plugin_write_file(const radicle_plugin* plugin,
-                                                      const char* path);
+                                                       const char* path);
+/*
+ * Serializes the plugin. A plugin whose bytes are empty returns OK with
+ * *out_bytes == NULL and *out_size == 0; FFI consumers must treat that pair
+ * as "zero-length output", not as an error.
+ */
 RADICLE_API radicle_status radicle_plugin_write_bytes(const radicle_plugin* plugin,
-                                                       uint8_t** out_bytes,
-                                                       size_t* out_size);
+                                                        uint8_t** out_bytes,
+                                                        size_t* out_size);
 RADICLE_API void radicle_free_bytes(uint8_t* bytes);
 
 RADICLE_API radicle_status radicle_plugin_stamp_master_kinds(

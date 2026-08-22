@@ -59,6 +59,13 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
             "Refusing to edit protected or game-Data plugin: " + loaded->name
         });
     }
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
+        });
+    }
 
     const auto* record = fo4::find_record(loaded->plugin, key);
     if (record == nullptr) {
@@ -99,6 +106,10 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
         if (status == fo4::ScalarMutationStatus::updated) {
             fo4::write_plugin_file(mutated, loaded->path);
             loaded->plugin = std::move(mutated);
+            {
+                std::error_code ec;
+                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+            }
             rebuildGraphLocked();
         }
         return nlohmann::json(

@@ -33,19 +33,24 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
     let cancelled = false;
     void (async () => {
       try {
-        const names = (JSON.parse(await backend.GetEditablePlugins()) as string[])
+        // Show every loaded plugin, not only editable ones: reads work for
+        // any loaded plugin and the backend rejects protected writes with a
+        // clear error. On a transient fetch failure keep the stale list
+        // instead of wiping the user's selection.
+        const activeRaw = JSON.parse(await backend.GetActivePlugins()) as Array<{ Name?: unknown }>;
+        const names = activeRaw
+          .map(entry => entry?.Name)
           .filter((name): name is string => typeof name === 'string' && name.length > 0);
         if (cancelled) return;
         setPlugins(names);
-        setPlugin(current => names.includes(current) ? current : '');
       } catch {
-        if (!cancelled) {
+        if (!cancelled && plugins.length === 0) {
           setPlugins([]);
-          setPlugin('');
         }
       }
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backend]);
 
   useEffect(() => {

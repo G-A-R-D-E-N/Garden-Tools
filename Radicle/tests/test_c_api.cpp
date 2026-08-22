@@ -94,6 +94,144 @@ TEST(CApi, RejectsInvalidArgumentsWithoutThrowing) {
   EXPECT_NE(std::string(radicle_last_error()).find("required"), std::string::npos);
 }
 
+TEST(CApi, NegativeSurfaceRejectsNullAndInvalidInput) {
+  radicle_plugin* plugin = nullptr;
+
+  // Null path string.
+  EXPECT_EQ(radicle_plugin_read_file("/definitely/not/a/plugin.esp", nullptr),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  // Null out pointers on every entry point that produces output.
+  uint8_t* bytes = reinterpret_cast<uint8_t*>(0x1);
+  size_t byte_count = 1;
+  EXPECT_EQ(radicle_plugin_write_bytes(nullptr, &bytes, &byte_count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(bytes, reinterpret_cast<uint8_t*>(0x1));
+  EXPECT_EQ(radicle_plugin_write_bytes(plugin, &bytes, &byte_count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  char** strings = nullptr;
+  size_t string_count = 0;
+  EXPECT_EQ(radicle_plugin_collect_form_keys(nullptr, &strings, &string_count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(strings, nullptr);
+  EXPECT_EQ(string_count, 0u);
+  EXPECT_EQ(radicle_plugin_collect_form_links(nullptr, &strings, &string_count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  // Null master arrays / descriptors.
+  EXPECT_EQ(radicle_plugin_stamp_master_kinds(nullptr, nullptr, 0),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  const char* const master_paths[] = {nullptr};
+  EXPECT_EQ(radicle_plugin_stamp_master_kinds(plugin, master_paths, 1),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  const radicle_master_descriptor bad_descriptor[] = {{nullptr, RADICLE_PLUGIN_FULL}};
+  EXPECT_EQ(radicle_plugin_remap_masters(plugin, bad_descriptor, 1),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  // Out-of-range enum value must not crash; it is rejected as invalid.
+  const radicle_master_descriptor bad_kind[] = {
+      {"Fallout4.esm", static_cast<radicle_plugin_kind>(99)}};
+  EXPECT_EQ(radicle_plugin_remap_masters(plugin, bad_kind, 1),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  // Null write target, null-destroy, and freeing null buffers are all safe.
+  EXPECT_EQ(radicle_plugin_write_file(plugin, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_plugin_destroy(nullptr);
+  radicle_free_bytes(nullptr);
+  radicle_free_string_array(nullptr, 3u);
+}
+
+#if !defined(_WIN32)
+TEST(CApi, FailedReplacementLeavesExistingFileIntact) {
+  namespace fs = std::filesystem;
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(
+                testdata_path("FW_HeatherSurvivalPatch.esp").string().c_str(), &plugin),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(plugin, nullptr);
+
+  // An existing destination plus a read-only parent directory forces the
+  // replacement primitive itself to fail: the staged rename cannot land. The
+  // original bytes must survive untouched — this is the regression guard for
+  // any future fallback that deletes the destination before renaming.
+  const auto dir = root / "out";
+  std::filesystem::create_directories(dir);
+  const auto target = dir / "Patch.esp";
+  const std::vector<std::byte> sentinel{{std::byte{0xDE}, std::byte{0xAD},
+                                         std::byte{0xBE}, std::byte{0xEF}}};
+  ASSERT_NO_FATAL_FAILURE(write_bytes(target, sentinel));
+
+  {
+    std::error_code ec;
+    std::filesystem::permissions(dir, std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec,
+                                 ec);
+    ASSERT_FALSE(ec) << ec.message();
+  }
+
+  EXPECT_NE(radicle_plugin_write_file(plugin, target.string().c_str()),
+            RADICLE_STATUS_OK);
+
+  std::vector<std::byte> after(sentinel.size());
+  {
+    std::ifstream in(target, std::ios::binary);
+    ASSERT_TRUE(in.good());
+    in.read(reinterpret_cast<char*>(after.data()),
+            static_cast<std::streamsize>(after.size()));
+    EXPECT_TRUE(in.good());
+  }
+  EXPECT_EQ(after, sentinel);
+
+  // Restore permissions so Cleanup can remove the tree.
+  std::error_code restore_ec;
+  std::filesystem::permissions(dir, std::filesystem::perms::owner_all, restore_ec);
+  EXPECT_FALSE(restore_ec);
+
+  radicle_plugin_destroy(plugin);
+}
+#endif
+
+TEST(CApi, FailedWriteCleansUpTempFiles) {
+  namespace fs = std::filesystem;
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(
+                testdata_path("FW_HeatherSurvivalPatch.esp").string().c_str(), &plugin),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(plugin, nullptr);
+
+  // A regular file sitting where a parent directory must be created forces
+  // failure long before any destination byte is touched.
+  const auto blocker = root / "blocker";
+  write_bytes(blocker, {std::byte{0x00}});
+  const auto impossible = blocker / "Nested" / "Patch.esp";
+  EXPECT_NE(radicle_plugin_write_file(plugin, impossible.string().c_str()),
+            RADICLE_STATUS_OK);
+  EXPECT_TRUE(std::filesystem::is_regular_file(blocker));
+
+  // A sibling temporary file from a failed staged write must not linger next
+  // to a real output file after a successful save.
+  const auto target = root / "out" / "Patch.esp";
+  ASSERT_EQ(radicle_plugin_write_file(plugin, target.string().c_str()), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  bool stray_temp_files = false;
+  for (const auto& entry : std::filesystem::directory_iterator(target.parent_path())) {
+    if (entry.path().filename().string().find(".radicle-tmp") != std::string::npos) {
+      stray_temp_files = true;
+    }
+  }
+  EXPECT_FALSE(stray_temp_files);
+
+  radicle_plugin_destroy(plugin);
+}
+
 TEST(CApi, ReadsSerializesAndCollectsFormKeys) {
   const auto path = testdata_path("FW_HeatherSurvivalPatch.esp").string();
 
