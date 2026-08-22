@@ -142,13 +142,16 @@ bool erase_record(Group& group, const FormKey& record_key) {
 
 }  // namespace
 
+std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin) {
+  if (plugin.header.tes4_flags.is_small_file()) {
+    return {k_first_light_local_id, k_light_local_mask};
+  }
+  return {k_first_full_local_id, k_full_local_mask};
+}
+
 FormKey create_local_record(Plugin& plugin, Signature signature) {
   if (signature.packed() == 0 || signature == sig_tes4 || signature == sig_grup) {
     throw FormIdError("invalid major-record signature for local record creation");
-  }
-  if (plugin.header.tes4_flags.is_small_file()) {
-    throw FormIdError(
-        "light-plugin record creation is disabled until CheckValidIDForSmallFile is proven");
   }
   if (plugin.key.empty()) {
     throw FormIdError("plugin has no identity for local record creation");
@@ -157,17 +160,20 @@ FormKey create_local_record(Plugin& plugin, Signature signature) {
   auto next = plugin;
   assign_record_form_keys(next);
 
-  auto candidate = next.header.next_form_id;
-  if (candidate == 0 || candidate > k_full_local_mask) {
-    throw FormIdError("HEDR nextFormID is outside the full-plugin local FormID range");
+  const auto [lowest, highest] = local_form_id_range(next);
+  // A light plugin's HEDR nextFormID may legitimately sit below the full-plugin
+  // floor, so clamp up to this plugin's own floor rather than rejecting it.
+  auto candidate = std::max(next.header.next_form_id, lowest);
+  if (candidate > highest) {
+    throw FormIdError("HEDR nextFormID is outside this plugin's local FormID range");
   }
 
-  while (candidate <= k_full_local_mask) {
+  while (candidate <= highest) {
     const FormKey probe{next.key, LocalFormId{candidate}};
     if (find_record(next, probe) == nullptr) break;
     ++candidate;
   }
-  if (candidate > k_full_local_mask) {
+  if (candidate > highest) {
     throw FormIdError("no local FormID remains at or above HEDR nextFormID");
   }
 
@@ -225,12 +231,9 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
   if (record_key.owner() != plugin.key) return RecordRenumberStatus::not_local;
-  if (plugin.header.tes4_flags.is_small_file()) {
-    throw FormIdError(
-        "light-plugin record renumbering is disabled until CheckValidIDForSmallFile is proven");
-  }
-  if (new_local.value() == 0 || new_local.value() > k_full_local_mask) {
-    throw FormIdError("new local FormID is outside the full-plugin local FormID range");
+  const auto [lowest, highest] = local_form_id_range(plugin);
+  if (new_local.value() < lowest || new_local.value() > highest) {
+    throw FormIdError("new local FormID is outside this plugin's local FormID range");
   }
 
   auto next = plugin;
