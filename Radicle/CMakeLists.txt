@@ -64,7 +64,7 @@ function(fo4_apply_sanitizers target)
   endif()
   if(FO4_ENABLE_UBSAN)
     target_compile_options(${target} PRIVATE -fsanitize=undefined -fno-omit-frame-pointer)
-    target_link_options(${target} PRIVATE -fsanitize=undefined)
+    target_link_options(${target} PRIVATE -fsanitize=undefined -fno-omit-frame-pointer)
   endif()
 endfunction()
 
@@ -75,6 +75,7 @@ add_library(fo4
   src/binary/cursor.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
+  src/forms/cell.cpp
   src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
@@ -207,6 +208,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_formlink_lists.cpp
     tests/test_nested_formlink_lists.cpp
     tests/test_sraf_formlinks.cpp
+    tests/test_exterior_cell_grid.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
