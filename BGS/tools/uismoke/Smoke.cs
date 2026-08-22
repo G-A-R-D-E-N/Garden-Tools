@@ -1542,10 +1542,17 @@ public static class Smoke
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
     }
 
-    // Avalonia 12 has a single file format, so the FileNames/Files mismatch this case guarded
-    // against on 11 cannot occur here. What it still proves is that a real platform drop
-    // payload survives the whole path and lands in the Bridge -- and that the framework's own
-    // path lookup, which is the only way to build that payload now, works headless.
+    // The only other coverage of the drop path sits inside the per-file battery, which runs
+    // only when the harness is handed .hkx arguments -- and CI passes none, which is how a
+    // silent-failure bug in it went unnoticed. This case needs no fixture: BridgeOpenPath
+    // fills the path field before parsing, so the plumbing can be proved with a file that is
+    // not a real graph.
+    //
+    // On Avalonia 11 this dropped a FileNames-only payload, because the bug was a guard that
+    // accepted a format the reader could not read. Avalonia 12 has a single file format, so
+    // that mismatch cannot occur and the case instead proves that a real platform payload
+    // survives the whole path -- and that the framework's own path lookup, now the only way
+    // to build one, works headless.
     private static void ADroppedFileReachesTheBridge()
     {
         Console.WriteLine("\na dropped file is accepted and its path reaches the Bridge");
@@ -1564,6 +1571,8 @@ public static class Smoke
                                      .FindIndex(t => t.Header?.ToString() == "Bridge");
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
+            // Avalonia 12 seals IStorageItem against user implementations, so the payload has
+            // to come from the framework's own lookup rather than a test stub.
             var storageFile = window.StorageProvider
                 .TryGetFileFromPathAsync(new Uri(path)).GetAwaiter().GetResult();
             CheckTrue("the platform resolves a dropped path to a storage item", storageFile != null);

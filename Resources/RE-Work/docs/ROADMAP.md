@@ -233,3 +233,56 @@ Phase 0 (foundation)
 3. **Start S-tier form types** — QUST LoadRecord/SaveRecord (Phase 5, highest-value next record)
 4. **Write `validate_esp.py`** — generalizes the subrecord cross-check to all form types (Phase 8 → M7)
 5. **Decompile exteriorcellloader grid-walk** — the cell-grid construction and background-load enqueue (Phase 2 remaining gap)
+
+---
+
+## Phase R — Runtime Reverse Engineering (Fallout4.exe)
+
+**Targets:** Fallout4.exe 1.10.163 (OG) and 1.11.240 (AE)  
+**Output repo:** https://github.com/PRISMA-USER-INTERFACE-FRAMEWORK/commonlib_NonVR  
+**Local docs:** `Resources/RE-Work/Runtime/`
+
+Separate from the CK work — this reverse-engineers the **game binary itself** to support
+F4SE/CommonLibF4 plugin development (PrismaHUD, FalloutChat, Rad Mod, C# bridge).
+
+### Runtime assets
+
+| doc | what | state |
+|---|---|---|
+| Runtime/01-SETUP.md | environment: Ghidra, projects, gotchas | ✅ |
+| Runtime/02-WORKFLOW.md | day-to-day: search, decompile, re-name | ✅ |
+| Runtime/03-FINDINGS.md | verified facts log — offsets, addresses, bugs caught | ✅ |
+| Runtime/04-ROADMAP.md | runtime RE capability menu + next targets | ✅ |
+| Runtime/05-LABEL-RECOVERY.md | community IDC label decode/apply technique | ✅ |
+| Runtime/06-FUNCTION-INDEX.md | subsystem function index + 1.10.155-vs-1.10.163 cross-ref (313 candidate misnames) | ✅ |
+| Runtime/07-DECOMPILE-CANDIDATES.md | decompile verification: 150 confirmed bugs, 68 false-positives, 63 correct | ✅ |
+| Runtime/Organized/ | subsystem READMEs: Landscape, Quests, Workshop, Pipboy, Controllers, Weather | ✅ |
+| Runtime/Scripts/ | Ghidra Java scripts (FW_Query, ApplyDecodedLabels, ApplySafeGaps, etc.) | ✅ |
+
+### Key runtime metrics
+
+- **209,817 functions** in the OG unpacked project
+- **14,824 named** `Class::Method` from CommonLibF4 RTTI matching
+- **657,980 additional names** applied from community IDC label decode
+- **150 confirmed CommonLib naming bugs** found and fixed
+- **1,959 safe naming-gap fills** applied (Class::FuncN → real names)
+- **AE 1.11.240 project** auto-propagated from 1.11.191 with vtable cross-check
+
+### Runtime roadmap (from Runtime/04-ROADMAP.md)
+
+1. **Quick-loot container suppression** — find clean activation interception point (PrismaHUD)
+2. **Vanilla ammo readout via GFx** — confirm HUD ammo push path (PrismaHUD)
+3. **Audit "// guessed" offsets** — sweep plugins for unverified struct accesses
+4. **Save-load freeze diagnostic** — engine `BSStringPool`/Havok-job race during load
+5. **Diff across game versions** — structural-hash scripts for relocating hooks in new builds
+
+### Runtime ↔ CK cross-pollination
+
+| CK finding | runtime value |
+|---|---|
+| TESObjectCELL member layout (doc 23 §8) | cell flag reads in runtime plugins |
+| TESObjectREFR LoadRecord subrecord set (doc 23 §7e) | reference traversal in save/load hooks |
+| TESWorldSpace cell-map insert (doc 23 §8.3) | worldspace bounds in map mods |
+| bgsterrainwatermeshbuilder.cpp (doc 23 §10b.2) | LOD water behavior understanding |
+| Elric PDB symbols (doc 18) | confirmed class names for runtime vtables |
+
