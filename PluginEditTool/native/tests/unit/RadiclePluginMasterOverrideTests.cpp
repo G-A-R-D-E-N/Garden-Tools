@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -42,12 +43,12 @@ void writeBytes(const std::filesystem::path& path,
 }
 
 std::vector<std::byte> readBytes(const std::filesystem::path& path) {
-    std::ifstream stream(path, std::ios::binary | std::ios::ate);
-    REQUIRE(stream.good());
-    const auto size = stream.tellg();
-    REQUIRE(size >= 0);
+    std::error_code sizeEc;
+    const auto size = std::filesystem::file_size(path, sizeEc);
+    REQUIRE_FALSE(sizeEc);
     std::vector<std::byte> bytes(static_cast<std::size_t>(size));
-    stream.seekg(0);
+    std::ifstream stream(path, std::ios::binary);
+    REQUIRE(stream.good());
     if (!bytes.empty()) {
         stream.read(reinterpret_cast<char*>(bytes.data()),
                     static_cast<std::streamsize>(bytes.size()));
