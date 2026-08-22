@@ -209,6 +209,13 @@
       ]
     },
     {
+      "signature": "QUST",
+      "fields": [],
+      "localized_subrecords": [
+        "CNAM"
+      ]
+    },
+    {
       "signature": "RACE",
       "authoring": {
         "placement": "top_level",
