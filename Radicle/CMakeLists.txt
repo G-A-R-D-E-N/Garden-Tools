@@ -28,6 +28,16 @@ add_custom_target(radicle_schema_check ALL
   COMMENT "Checking generated Fallout 4 scalar field schema"
   VERBATIM
 )
+add_custom_target(radicle_record_schema_check ALL
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/record_schema_codegen.py"
+    --schema "${CMAKE_CURRENT_SOURCE_DIR}/schema/fallout4/fields.json"
+    --output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/generated_record_constraints.inc"
+    --check
+  COMMENT "Checking generated Fallout 4 record authoring schema"
+  VERBATIM
+)
 
 function(fo4_apply_warnings target)
   if(MSVC)
@@ -75,6 +85,9 @@ add_library(fo4
 
 if(TARGET radicle_schema_check)
   add_dependencies(fo4 radicle_schema_check)
+endif()
+if(TARGET radicle_record_schema_check)
+  add_dependencies(fo4 radicle_record_schema_check)
 endif()
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
