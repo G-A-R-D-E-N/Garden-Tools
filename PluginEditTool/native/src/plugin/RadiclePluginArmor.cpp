@@ -139,15 +139,13 @@ Result<nlohmann::json> RadiclePluginBackend::setArmorField(
             });
         }
 
-        if (mutated.original_bytes != loaded->plugin.original_bytes) {
-            fo4::write_plugin_file(mutated, loaded->path);
-            loaded->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            }
-            rebuildGraphLocked();
+        fo4::write_plugin_file(mutated, loaded->path);
+        loaded->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
         }
+        rebuildGraphLocked();
 
         return nlohmann::json(
             "Updated " + field + " for " + formKeyText + " in " + pluginName + ".");
