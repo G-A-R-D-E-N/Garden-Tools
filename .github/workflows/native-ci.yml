@@ -49,6 +49,7 @@ jobs:
 
       - name: Upload logs and binaries on failure
         if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: radicle-linux-failure
@@ -82,6 +83,7 @@ jobs:
 
       - name: Upload logs and binaries on failure
         if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: fo4ide-native-linux-failure
@@ -100,11 +102,27 @@ jobs:
     # is retired, so Windows binaries cannot be executed here: this job proves
     # the code COMPILES and LINKS for Windows (tests OFF). Native MSVC/WebView2
     # test execution still needs a real Windows runner if ever wanted.
+    #
+    # The xwin sysroot does not provide zlib, so this lane builds the pinned
+    # static zlib dependency first and points find_package(ZLIB) at it.
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Build Windows static zlib dependency
+        run: |
+          git clone --filter=blob:none https://github.com/madler/zlib.git build/zlib-src
+          git -C build/zlib-src checkout 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+          cmake -S build/zlib-src -B build/zlib-win -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DZLIB_BUILD_EXAMPLES=OFF
+          cmake --build build/zlib-win --target zlibstatic
+          cp build/zlib-src/zlib.h build/zlib-win/zlib.h
+          test -f build/zlib-win/zconf.h
+          test -f build/zlib-win/zlibstatic.lib
 
       - name: Configure (clang-cl / xwin, Release)
         # xwin ships the release CRT only, so Release is required (see the
@@ -114,12 +132,17 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
           -DCMAKE_BUILD_TYPE=Release
           -DRADICLE_BUILD_TESTS=OFF
+          -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win
+          -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
+          -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
+          -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
 
       - name: Build
         run: cmake --build build/radicle-win
 
       - name: Upload Windows binaries
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: radicle-windows-x64
