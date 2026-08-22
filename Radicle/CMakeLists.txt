@@ -64,7 +64,7 @@ function(fo4_apply_sanitizers target)
   endif()
   if(FO4_ENABLE_UBSAN)
     target_compile_options(${target} PRIVATE -fsanitize=undefined -fno-omit-frame-pointer)
-    target_link_options(${target} PRIVATE -fsanitize=undefined -fno-omit-frame-pointer)
+    target_link_options(${target} PRIVATE -fsanitize=undefined)
   endif()
 endfunction()
 
