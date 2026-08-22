@@ -67,6 +67,7 @@ add_library(fo4
   src/plugin/onam.cpp
   src/plugin/writer.cpp
   src/schema/form_links.cpp
+  src/schema/preflight.cpp
   src/schema/scalar.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
@@ -171,6 +172,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_formlinks.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_scalar.cpp
+    tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
