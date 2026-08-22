@@ -743,7 +743,7 @@ XCLC grid coords. Functions that need interior cell position navigate
 through `cell+0x150` → worldspace → cell-level array (see the complex
 getters at `0xd197e0`/`0xd19820` which do handle the interior path).
 
-### 8.5 Cell-data block — complete 0x88 (exterior) and 0x20 (interior) layout
+### 8.5 Cell-data block — exterior (0x20) and interior (0x88) layout
 
 Recovered from the allocator (`FUN_140d18510`, `tesobjectcell.cpp:0xaee`),
 the coordinate setters, the LoadRecord/SaveRecord field accessors, and the
@@ -825,15 +825,44 @@ confirmed by SaveRecord: `puVar4 = getter(cell); local_18 = *puVar4; local_14 = 
 
 #### 8.5c Interior 0x88-byte cell-data layout
 
-136 bytes, allocated for interior cells. Contains the **XCLL** lighting
-payload (0x88 bytes), verified by SaveRecord interior path:
-`piVar3 = getter2(); write_subrecord('XCLL', piVar3, 0x88)`.
+136 bytes, allocated for interior cells. Used for the **XCLL** lighting/ambient
+subrecord (the interior counterpart to XCLC). The full field map from the
+allocator init sequence:
 
-The XCLL 0x88-byte block is opaque to the code studied here — the allocator
-initializes 5 floats at `+0x28` via `thunk_FUN_140911970`, then lays down
-scale/identity seeds at `+0x1C` through `+0x7C` (same pattern as the exterior
-path but in a larger block). The block is freed as a single 0x88-byte
-allocation in `ClearItem` (`FUN_140d13f00`): `FUN_140001c4e(cell+0x60, 0x88)`.
+| offset | size | name / init | notes |
+|---|---:|---|---|
+| +0x00 | 8 | 0 (u64) | field0 — zeroed |
+| +0x08 | 8 | 0 (u64) | field1 — zeroed |
+| +0x10 | 8 | 0 (u64) | field2 — zeroed |
+| +0x18 | 4 | 0 (u32) | field3 — zeroed |
+| +0x1C | 4 | **1.0f** (`0x3f800000`) | scale seed #1 |
+| +0x20 | 4 | (in `thunk_FUN_140911970`) | ambient R? (5-float array at +0x28 starts here) |
+| +0x24 | 4 | **1.0f** (`0x3f800000`) | scale seed #2 |
+| +0x28 | 20 | `thunk_FUN_140911970(block+0x28)` | **5-float ambient/lighting array** — directional, ambient, fog color, fog near/far (standard XCLL layout) |
+| +0x3C | 4 | (in float-array) | 4th float of lighting group |
+| +0x40 | 4 | (in float-array) | 5th float of lighting group |
+| +0x44 | 4 | (padding/alignment) | |
+| +0x48 | 4 | 0 (u32) | zeroed |
+| +0x4C | 8 | **1.0f** (`0x3f800000`) | scale seed #3 (stored as u64 pair) |
+| +0x48 | 4 | 0 (u32) | zeroed |
+| +0x4C | 8 | **1.0f** (`0x3f800000`) | scale seed #3 (stored as u64 pair) |
+| +0x54 | 4 | 0 (u32) | zeroed |
+| +0x58 | 8 | **0x79F** (u64) | validity marker (same as exterior — bit 2 set) |
+| +0x60 | 8 | **10000.0f** (`0x461c4000`) | default water height (u64 — shared with exterior) |
+| +0x68 | 4 | 0 (u32) | zeroed |
+| +0x6C | 4 | **1.0f** (`0x3f800000`) | scale seed #4 |
+| +0x70 | 4 | **1.0f** (`0x3f800000`) | scale seed #5 |
+| +0x74 | 4 | **1.0f** (`0x3f800000`) | scale seed #6 |
+| +0x78 | 4 | **1.0f** (`0x3f800000`) | scale seed #7 |
+| +0x7C | 4 | **1.0f** (`0x3f800000`) | scale seed #8 |
+| +0x80 | 8 | 0 (ptr) | pointer — zeroed |
+
+**Key findings from the full decompile:**
+- The **0x79F** and **10000.0f** water height are present in BOTH layouts — they're not exterior-specific.
+- The interior layout has **8 identity scale seeds** (all `1.0f`) vs. exterior's **2** — confirming the interior block carries XCLL ambient/lighting data.
+- The `thunk_FUN_140911970` call at `block+0x28` initializes a 5-float lighting array (directional, ambient, fog) — the XCLL core.
+- Interior free path: `FUN_140001c4e(old, 0x88)` — single allocation, no refcounted linked data.
+- Exterior free path: `thunk_FUN_140d3fec0(old, 1)` — refcount decrement on linked data at `+0x08`/`+0x10`.
 
 #### 8.5d The 0x79F constant at +0x58
 
