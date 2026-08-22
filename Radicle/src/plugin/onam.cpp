@@ -21,6 +21,11 @@ bool participates_in_fo4_onam(Signature signature) {
          signature == Signature::from_string("PMIS") ||
          signature == Signature::from_string("ACHR") ||
          signature == Signature::from_string("ACRE") ||
+         signature == Signature::from_string("PBEA") ||
+         signature == Signature::from_string("PFLA") ||
+         signature == Signature::from_string("PCON") ||
+         signature == Signature::from_string("PBAR") ||
+         signature == Signature::from_string("PHZD") ||
          signature == Signature::from_string("SCEN") ||
          signature == Signature::from_string("DLBR") ||
          signature == Signature::from_string("DIAL") ||
