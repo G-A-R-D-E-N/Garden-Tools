@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -80,6 +81,7 @@ TEST(Onam, RebuildIncludesOnlyNonPersistentMasterOwnedFo4Participants) {
   persistent.children.emplace_back(record("REFR", 0x00000101u));
   auto temporary = nested_group(fo4::GroupType::cell_temporary_children);
   temporary.children.emplace_back(record("REFR", 0x00000100u));
+  temporary.children.emplace_back(record("PHZD", 0x00000103u));
   temporary.children.emplace_back(record("WEAP", 0x00000102u));  // Not an ONAM family.
   temporary.children.emplace_back(record("REFR", 0x01000800u));  // Local record.
   children.children.emplace_back(std::move(persistent));
@@ -94,15 +96,17 @@ TEST(Onam, RebuildIncludesOnlyNonPersistentMasterOwnedFo4Participants) {
   plugin.original_bytes.clear();
   fo4::rebuild_tes4_onam(plugin);
 
-  ASSERT_EQ(plugin.header.overrides.size(), 2u);
+  ASSERT_EQ(plugin.header.overrides.size(), 3u);
   EXPECT_EQ(plugin.header.overrides[0], fo4::RawFormId{0x00000100u});
-  EXPECT_EQ(plugin.header.overrides[1], fo4::RawFormId{0x00000200u});
+  EXPECT_EQ(plugin.header.overrides[1], fo4::RawFormId{0x00000103u});
+  EXPECT_EQ(plugin.header.overrides[2], fo4::RawFormId{0x00000200u});
   EXPECT_EQ(onam_subrecord_count(plugin), 1u);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esm");
-  ASSERT_EQ(reread.header.overrides.size(), 2u);
+  ASSERT_EQ(reread.header.overrides.size(), 3u);
   EXPECT_EQ(reread.header.overrides[0], fo4::RawFormId{0x00000100u});
-  EXPECT_EQ(reread.header.overrides[1], fo4::RawFormId{0x00000200u});
+  EXPECT_EQ(reread.header.overrides[1], fo4::RawFormId{0x00000103u});
+  EXPECT_EQ(reread.header.overrides[2], fo4::RawFormId{0x00000200u});
 }
 
 TEST(Onam, DirtyMasterWriteRebuildsStaleOnamAutomatically) {
@@ -118,6 +122,24 @@ TEST(Onam, DirtyMasterWriteRebuildsStaleOnamAutomatically) {
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esm");
   ASSERT_EQ(reread.header.overrides.size(), 1u);
   EXPECT_EQ(reread.header.overrides[0], fo4::RawFormId{0x00000222u});
+}
+
+TEST(Onam, DirtyMasterWriteDropsOnamAfterOverrideRemoval) {
+  auto plugin = fo4::read_plugin(make_header({"Base.esm"}), "Patch.esm");
+  auto dialogue = top_group("DIAL");
+  dialogue.children.emplace_back(record("DIAL", 0x00000222u));
+  plugin.groups.push_back(std::move(dialogue));
+  plugin.original_bytes.clear();
+
+  auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esm");
+  ASSERT_EQ(reread.header.overrides.size(), 1u);
+
+  reread.groups.clear();
+  reread.original_bytes.clear();
+  const auto without_override =
+      fo4::read_plugin(fo4::write_plugin(reread), "Patch.esm");
+  EXPECT_TRUE(without_override.header.overrides.empty());
+  EXPECT_EQ(onam_subrecord_count(without_override), 0u);
 }
 
 TEST(Onam, EmptyRebuildRemovesStaleOnam) {
