@@ -118,6 +118,16 @@ struct QuestAlias {
   std::optional<std::uint8_t> max_initial_fill_count;
   std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
+  // Subrecord signatures in this alias whose FormID names a master index
+  // outside the plugin's master table. Real mods ship these dangling links --
+  // OWR.esp has 28 ALFR references to index 3 with a single master -- and
+  // refusing to decode would make the whole quest unreadable in an editor
+  // whose job is to surface exactly that kind of problem.
+  //
+  // The raw subrecord is preserved verbatim in `subrecords`, so nothing is
+  // lost and a rewrite is unaffected; only the semantic fill cannot name a
+  // target.
+  std::vector<Signature> unresolved_links;
   std::vector<Subrecord> subrecords;
 };
 
@@ -169,6 +179,11 @@ struct QuestStage {
   std::uint8_t unknown{0};
   // 63 shipped stages carry no log entry at all, so this may be empty.
   std::vector<QuestLogEntry> log_entries;
+  // Members between INDX and the first QSDT. Bethesda never emits these, but
+  // third-party plugins do (a NAM2 ahead of any log entry), and rejecting the
+  // record would make the whole quest unreadable. Written back immediately
+  // after INDX.
+  std::vector<Subrecord> leading_members;
 };
 
 struct QuestStages {

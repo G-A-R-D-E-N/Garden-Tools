@@ -47,9 +47,12 @@ struct Armor {
   // DESC is localized: a string ID in a localized plugin, inline text
   // otherwise. Exactly one per record across all 688 shipped ARMO.
   //
-  // FULL is deliberately not modelled here. It is not a unique field -- OBTE
-  // object-template blocks carry their own FULL overrides, up to 20 in a
-  // single record -- so it needs template-block parsing first.
+  // The record's own name. FULL is not unique in ARMO -- the OBTE template
+  // block emits [OBTF] FULL OBTS per combination, up to 20 in one record --
+  // but the record's own FULL always precedes OBTE. Verified across 5,792
+  // template-bearing ARMO/WEAP/NPC_ records: never more than one FULL before
+  // the boundary, zero exceptions.
+  std::optional<schema::LocalizedString> full_name;
   std::optional<schema::LocalizedString> description;
   std::int32_t value{0};
   float weight{0.0f};

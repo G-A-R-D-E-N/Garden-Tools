@@ -77,10 +77,10 @@ QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest) {
     }
 
     if (entry == nullptr) {
-      // A stage member appearing before any QSDT is not a shape seen in
-      // shipped data; keep it rather than dropping it silently.
-      throw QuestError("QUST stage " + subrecord.signature.to_string() +
-                       " appears before any QSDT log entry");
+      // Not a shape Bethesda emits, but third-party plugins do. Keep it on the
+      // stage rather than rejecting the whole quest.
+      stage->leading_members.push_back(subrecord);
+      continue;
     }
 
     if (subrecord.signature == k_cnam) {
@@ -142,6 +142,7 @@ std::vector<Subrecord> encode_stages(const QuestStages& stages) {
     indx[2] = std::byte{stage.flags};
     indx[3] = std::byte{stage.unknown};
     out.push_back(marker(k_indx, std::move(indx)));
+    out.insert(out.end(), stage.leading_members.begin(), stage.leading_members.end());
     for (const auto& entry : stage.log_entries) {
       out.push_back(marker(k_qsdt, std::vector<std::byte>{std::byte{entry.flags}}));
       out.insert(out.end(), entry.members.begin(), entry.members.end());

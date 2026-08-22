@@ -169,6 +169,10 @@ RawFormId raw_form_id(const Subrecord& member, std::string_view label) {
   return RawFormId{read_u32(member.data)};
 }
 
+// Collects the signatures of links that could not be resolved, so a dangling
+// reference degrades the one field instead of the whole quest.
+thread_local std::vector<Signature>* t_unresolved = nullptr;
+
 std::optional<FormKey> decode_optional_form_key(
     const Subrecord& member,
     const PluginFormIdContext& context,
@@ -178,6 +182,10 @@ std::optional<FormKey> decode_optional_form_key(
   try {
     return resolve_plugin_form_id(raw, context);
   } catch (const FormIdError& error) {
+    if (t_unresolved != nullptr) {
+      t_unresolved->push_back(member.signature);
+      return std::nullopt;
+    }
     throw QuestError("QUST " + std::string(label) + " cannot resolve: " + error.what());
   }
 }
@@ -416,6 +424,14 @@ void decode_location_fill(QuestAlias& alias,
 
 void decode_alias_semantics(QuestAlias& alias,
                             const PluginFormIdContext* context) {
+  // Scope the unresolved-link collector to this alias so a dangling FormID
+  // degrades one field rather than aborting the quest.
+  alias.unresolved_links.clear();
+  t_unresolved = &alias.unresolved_links;
+  struct Guard {
+    ~Guard() { t_unresolved = nullptr; }
+  } guard;
+
   if (alias.kind == QuestAliasKind::collection) {
     if (const auto* max_fill = unique_member(alias, k_almi, "ALMI")) {
       if (max_fill->data.size() != 1) {

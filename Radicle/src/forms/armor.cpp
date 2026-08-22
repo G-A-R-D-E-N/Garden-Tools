@@ -20,6 +20,8 @@ namespace {
 
 constexpr auto k_armo = Signature::from_string("ARMO");
 constexpr auto k_desc = Signature::from_string("DESC");
+constexpr auto k_full = Signature::from_string("FULL");
+constexpr auto k_obte = Signature::from_string("OBTE");
 constexpr auto k_arma = Signature::from_string("ARMA");
 constexpr auto k_mod2 = Signature::from_string("MOD2");
 constexpr auto k_mod3 = Signature::from_string("MOD3");
@@ -76,6 +78,38 @@ const Subrecord* unique_subrecord(const Record& record,
     throw ArmorError(std::string(field_name) + " is required");
   }
   return found;
+}
+
+// The template block starts at OBTE and emits its own FULL per combination,
+// so the record's own name is the FULL before that boundary.
+std::size_t template_boundary(const Record& record) {
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    if (record.subrecords[i].signature == k_obte) return i;
+  }
+  return record.subrecords.size();
+}
+
+std::optional<schema::LocalizedString> optional_localized_before(const Plugin& plugin,
+                                                                const Record& record,
+                                                                Signature record_signature,
+                                                                Signature signature,
+                                                                std::size_t boundary,
+                                                                std::string_view field_name) {
+  const Subrecord* found = nullptr;
+  for (std::size_t i = 0; i < boundary && i < record.subrecords.size(); ++i) {
+    if (record.subrecords[i].signature != signature) continue;
+    if (found != nullptr) {
+      throw ArmorError(std::string(field_name) + " appears more than once before the "
+                       "object-template block");
+    }
+    found = &record.subrecords[i];
+  }
+  if (found == nullptr) return std::nullopt;
+  try {
+    return schema::read_localized_string(plugin, record_signature, signature, *found);
+  } catch (const std::exception& error) {
+    throw ArmorError(error.what());
+  }
 }
 
 std::optional<schema::LocalizedString> optional_localized(const Plugin& plugin,
@@ -223,6 +257,9 @@ Armor decode_armor(const Plugin& plugin, const FormKey& key) {
   result.female_world_model = optional_string(*record, k_mod4, "ARMO female MOD4");
   result.female_icon = optional_string(*record, k_ico2, "ARMO female ICO2");
   result.female_message_icon = optional_string(*record, k_mic2, "ARMO female MIC2");
+  const auto boundary = template_boundary(*record);
+  result.full_name =
+      optional_localized_before(plugin, *record, k_armo, k_full, boundary, "ARMO FULL");
   result.description = optional_localized(plugin, *record, k_armo, k_desc, "ARMO DESC");
 
   const auto* data = unique_subrecord(*record, sig_data, "ARMO DATA", true);

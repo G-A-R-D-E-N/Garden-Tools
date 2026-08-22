@@ -403,3 +403,33 @@ carry a DLC master index, so their Fallout4.esm matches are coincidence.
 is inferential, and a wrong offset would make master remapping corrupt a float
 or integer field — worse than the current omission. Confirm against xEdit's
 `wbEXPL`/`wbPROJ`/`wbHAZD` definitions or the CK before wiring them.
+
+## ARMO FULL and the object-template boundary
+
+`OBTE` starts the template block, which emits `[OBTF] [FULL] OBTS` per
+combination — so a single ARMO can carry up to 20 `FULL` subrecords. **The
+record's own name is the `FULL` that precedes `OBTE`.**
+
+Verified across `Fallout4.esm` + 3 DLC masters, on every template-bearing
+record type: **never more than one `FULL` before the boundary**, zero
+exceptions in 5,792 records (ARMO 710 with / 298 without, WEAP 347/118,
+NPC_ 1979/2340). After the boundary: 502 template `FULL`s on ARMO alone.
+
+> RE-Work doc 26 states that "ARMO emits `OBTS` with no `FULL`". The shipped
+> files disagree — ARMO emits `OBTF FULL OBTS` per combination exactly like
+> NPC_ and WEAP. The boundary rule above is measured, not taken from the doc.
+
+## Third-party plugin corpus
+
+`ModCorpusRealData` sweeps every decoder over a directory tree of mod plugins
+(`FO4_MOD_CORPUS`). The shipped masters are one authoring tool's output; mod
+plugins come from the CK, xEdit and hand-rolled tooling and carry shapes
+Bethesda never produces.
+
+Current local result: **1,821 plugins parsed, 1,369 of them light**, 11,026
+records decoded across QUST/RACE/ARMO/ARMA, with **one** defective plugin
+(`ImprovedInstITO2Patch.esp`, 8 masters but records referencing index 10).
+
+It found one real decoder defect: a third-party quest places `NAM2` before any
+`QSDT`, which the stage decoder rejected outright. `QuestStage::leading_members`
+now keeps those losslessly. Bethesda emits no such stage in 8,680.

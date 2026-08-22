@@ -197,3 +197,62 @@ TEST(QuestAliases, RequiresReferenceNameAndReferenceLocationFlags) {
           plugin, fo4::FormKey::parse("000800:Quest.esp"))),
       fo4::forms::QuestError);
 }
+
+// Real mods ship dangling FormLinks: OWR.esp has 28 ALFR references naming
+// master index 3 while declaring a single master. Refusing to decode would
+// make the whole quest unreadable in an editor whose job is to report exactly
+// that. The link is dropped from the semantic fill, recorded, and the raw
+// subrecord is preserved.
+TEST(QuestAliases, DanglingFormLinkDegradesTheFieldNotTheQuest) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto grup = fo4::test::begin_group(out, "QUST", 0);
+  const auto rec = fo4::test::begin_record(out, "QUST", 0, 0x01000800);
+  fo4::test::ByteWriter anam;
+  anam.u32(1);
+  fo4::test::write_subrecord(out, "ANAM", anam.bytes);
+  fo4::test::ByteWriter alst;
+  alst.u32(0);
+  fo4::test::write_subrecord(out, "ALST", alst.bytes);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"A\0", 2});
+  fo4::test::ByteWriter fnam;
+  fnam.u32(0);
+  fo4::test::write_subrecord(out, "FNAM", fnam.bytes);
+  // Master index 3 with only one master declared.
+  fo4::test::ByteWriter alfr;
+  alfr.u32(0x03000123);
+  fo4::test::write_subrecord(out, "ALFR", alfr.bytes);
+  fo4::test::write_subrecord(out, "ALED", std::string_view{"", 0});
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+
+  const auto plugin = fo4::read_plugin(out.bytes, "Dangling.esp");
+  const auto key = fo4::FormKey::parse("000800:Dangling.esp");
+
+  const auto decoded = fo4::forms::decode_quest_aliases(plugin, key);
+  ASSERT_EQ(decoded.aliases.size(), 1u);
+  const auto& alias = decoded.aliases[0];
+
+  // Reported rather than thrown.
+  ASSERT_EQ(alias.unresolved_links.size(), 1u);
+  EXPECT_EQ(alias.unresolved_links[0].to_string(), "ALFR");
+
+  // The raw subrecord survives, so a rewrite is unaffected.
+  bool kept = false;
+  for (const auto& sub : alias.subrecords) {
+    if (sub.signature.to_string() == "ALFR") kept = true;
+  }
+  EXPECT_TRUE(kept);
+}
