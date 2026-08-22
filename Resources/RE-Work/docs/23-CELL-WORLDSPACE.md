@@ -1217,6 +1217,76 @@ WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
 are also saved — they go through the `NAM*`-array and map-data iterators
 dispatched from `vl+0x3b8`/`vl+0x3c0`, not inline in the SaveRecord body.)
 
+#### 10b.3 WRLD DATA — byte-level field map
+
+In FO4, DATA is **1 byte** — the worldspace flags only. Previous TES games (FO3,
+Skyrim) embedded bounds and parent worldspace in a ~12-16 byte DATA; FO4 split these
+into separate subrecords. Byte-parsed from 3 real records against the CK's
+`FUN_140e4a750` LoadRecord:
+
+**Flags (DATA, 1B — mandatory in every WRLD):**
+
+| bit | mask | meaning | DiamondCityFX | DiamondCity | Goodneighbor |
+|---|---|---|---|---|---|
+| 0 | 0x01 | SmallWorld (interior) | ✅ | | ✅ |
+| 1 | 0x02 | CanNotFastTravel | | | |
+| 2 | 0x04 | (no LOD water — TES5 compat) | | | |
+| 3 | 0x08 | (no LOD noise — TES5 compat) | | | |
+| 4 | 0x10 | NoLandscape | ✅ | | |
+| 5 | 0x20 | (no sky — TES5 compat) | | | |
+| 6 | 0x40 | FixedDimensions | ✅ | | |
+| 7 | 0x80 | NoGrass | | | |
+
+DiamondCityFX: `0x51` = SmallWorld | NoLandscape | FixedDimensions (FX-only world,
+no terrain). DiamondCity: `0xD9` = SmallWorld | NoLandscape | NoGrass | FixedDimensions
+| (bit 5 set = no sky implied, bit 7 = NoGrass). Goodneighbor: `0x01` = SmallWorld only.
+
+**Parent worldspace (WNAM, 4B):** `formID` — always `0x0000003C` (Commonwealth)
+for all 3. Sets the parent worldspace for weather/lighting inheritance.
+
+**Center cell (WCTR, 4B):** `(int16 cellX, int16 cellY)` at worldspace origin.
+DiamondCityFX: `(0,0)`. Interior-world centers are always at grid origin.
+
+**Land LOD dimensions (DNAM, 8B):** `(float minX, float minY)` — DiamondCityFX:
+`(-2048.0, -10000.0)`. These define the land-LOD grid origin in world units.
+For interior worlds they're often at extreme values to disable land LOD.
+
+**Object bounds (NAM0, 8B):** `(float minX, float minY)` — DiamondCityFX:
+`(-36864.0, -12288.0)`. Object LOD bounding box minimum in world units.
+
+**Object bounds max (NAM9, 8B):** `(float maxX, float maxY)` — DiamondCityFX:
+`(24576.0, 16384.0)`. Together with NAM0 this forms the worldspace AABB.
+
+**Climate data (NAM2, 8B):** `(float landFadeStart, float landFadeEnd)` —
+DiamondCityFX: near-zero (disabled). Interior worlds don't use land fade.
+
+**Use-flags (PNAM, 2B):** bitmask of parent-worldspace data inheritance.
+DiamondCityFX `0x0016`: UseLODData | UseMapData | UseClimateData.
+Goodneighbor `0x001F`: all bits except bit 6 (0x40).
+
+**Complete FO4 WRLD subrecord field summary:**
+
+| 4CC | size | type | field |
+|---|---|---|---|
+| DATA | 1 | u8 | worldspace flags |
+| EDID | var | zstring | editor ID |
+| FULL | 4 | formID | name record (FULL subrecord) |
+| WNAM | 4 | formID | parent worldspace |
+| WCTR | 4 | (i16,i16) | center cell coords |
+| PNAM | 2 | u16 | parent use-flags |
+| DNAM | 8 | (f32,f32) | land LOD origin |
+| NAM0 | 8 | (f32,f32) | object bounds min |
+| NAM9 | 8 | (f32,f32) | object bounds max |
+| NAM2 | 8 | (f32,f32) | climate land fade (NAM2 only) |
+| NAMA | 4 | f32 | unknown (always ~1.0) |
+| ONAM | 16 | binary | music/audio data |
+| ZNAM | 4 | formID | music type? |
+| XWEM | var | zstring | water cubemap path (always mipblur_DefaultOutside1.dds) |
+| XLCN | 4 | formID | location formID |
+| RNAM | 4 | formID | region reference (repeated) |
+| CLSZ | 4 | u32 | world map cell size (always 0) |
+| OFST | var | f32[] | world map offset array |
+
 #### 10b.2 XWEM → distant-terrain water mesh builder
 
 `XWEM` is the **worldspace-default water height** (float, RVA `0xe4a276` in WRLD
