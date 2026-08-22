@@ -56,13 +56,16 @@ GroupHeader new_top_group_header(Signature signature) {
   return header;
 }
 
-GroupHeader source_top_group_header(const Plugin& source, Signature signature) {
+const Group* source_top_group_for_record(const Plugin& source,
+                                         const Record* source_record) {
   for (const auto& group : source.groups) {
-    if (group.header.group_type == 0 && group.header.top_label() == signature) {
-      return group.header;
+    if (group.header.group_type != 0) continue;
+    for (const auto& child : group.children) {
+      const auto* record = std::get_if<Record>(&child);
+      if (record == source_record) return &group;
     }
   }
-  return new_top_group_header(signature);
+  return nullptr;
 }
 
 void clear_group_originals(Plugin& plugin) {
@@ -377,6 +380,17 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   const bool target_exists = find_record(destination, record_key) != nullptr;
   if (target_exists && !overwrite) return RecordCopyStatus::already_exists;
 
+  // Replacing an existing target record is containment-safe because the
+  // destination node stays in its existing group. Inserting a missing record
+  // is only safe when the source is itself directly contained by a top-level
+  // group. Nested CELL/DIAL/world records need their full parent hierarchy and
+  // must fail closed until that insertion primitive exists.
+  const auto* source_top_group =
+      target_exists ? nullptr : source_top_group_for_record(source, source_record);
+  if (!target_exists && source_top_group == nullptr) {
+    return RecordCopyStatus::source_containment_unsupported;
+  }
+
   auto copied_record = *source_record;
   auto next = destination;
 
@@ -436,7 +450,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
 
     if (target_group == nullptr) {
       Group group;
-      group.header = source_top_group_header(source, copied_record.header.signature);
+      group.header = source_top_group->header;
       group.original_bytes.clear();
       next.groups.push_back(std::move(group));
       target_group = &next.groups.back();
