@@ -123,6 +123,17 @@ public sealed class HavokConversionMap
 
         public TypeRule Rename(string sourceMember, string targetMember)
         {
+            if (string.IsNullOrWhiteSpace(sourceMember))
+                throw new ArgumentException("source member is required", nameof(sourceMember));
+            if (string.IsNullOrWhiteSpace(targetMember))
+                throw new ArgumentException("target member is required", nameof(targetMember));
+
+            var clash = RenamedMembers.FirstOrDefault(pair =>
+                pair.Key != sourceMember && string.Equals(pair.Value, targetMember, StringComparison.Ordinal));
+            if (clash.Key != null)
+                throw new ArgumentException(
+                    $"{clash.Key} is already renamed to {targetMember}", nameof(targetMember));
+
             RenamedMembers[sourceMember] = targetMember;
             return this;
         }
@@ -283,6 +294,20 @@ public static class HavokSemanticConverter
                         sourceValue, enumMapping, sourceObject.Id, sourceMember, report, diagnostics, out bool enumPatched);
                     patched |= enumPatched;
                 }
+                if (targetObject.Members.ContainsKey(targetMember))
+                {
+                    // Reached when a rename lands on a member the source object also carries
+                    // under that name. Whichever member is visited second would otherwise
+                    // overwrite the first, silently and in dictionary order.
+                    diagnostics.Add(new HavokConversionDiagnostic(
+                        HavokConversionDiagnosticLevel.Error,
+                        sourceObject.Id,
+                        targetMember,
+                        $"{sourceMember} maps onto {targetMember}, which this object already " +
+                        "wrote; the later value was discarded"));
+                    patched = true;
+                    continue;
+                }
                 targetObject.Members[targetMember] = convertedValue;
             }
 
@@ -398,14 +423,23 @@ public static class HavokSemanticConverter
             }
         }
 
-        // Recurse into array elements when the element type is a declared struct.
-        if (value is HavokIntermediateValue.ArrayValue array && member.TargetType != null &&
-            registry.TryGet(member.TargetType, out _))
+        // Recurse into array elements. Struct elements recurse into their members; reference
+        // elements get the same declared-class check a scalar pointer member receives, which
+        // they previously escaped entirely.
+        if (value is HavokIntermediateValue.ArrayValue array && member.TargetType != null)
             for (int i = 0; i < array.Values.Count; i++)
-                if (array.Values[i] is HavokIntermediateValue.StructValue)
-                    ValidateValue(objId, $"{path}[{i}]", array.Values[i],
-                        new HavokMemberDefinition(member.Name, "TYPE_STRUCT", member.TargetType),
-                        target, registry, diagnostics);
+            {
+                string? elementType = array.Values[i] switch
+                {
+                    HavokIntermediateValue.StructValue => "TYPE_STRUCT",
+                    HavokIntermediateValue.ReferenceValue => "TYPE_POINTER",
+                    _ => null,
+                };
+                if (elementType == null) continue;
+                ValidateValue(objId, $"{path}[{i}]", array.Values[i],
+                    new HavokMemberDefinition(member.Name, elementType, member.TargetType),
+                    target, registry, diagnostics);
+            }
     }
 
     private static bool KindMatches(string valueType, HavokIntermediateValue value) => valueType switch

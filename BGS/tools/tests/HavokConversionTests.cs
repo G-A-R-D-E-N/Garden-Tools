@@ -317,4 +317,67 @@ public sealed class HavokConversionTests
         Assert.Contains(findings, finding => finding.Message.Contains("more than one rigid body"));
         Assert.True(findings.Count(finding => finding.Level == HavokPhysicsValidationLevel.Error) >= 4);
     }
+
+    [Fact]
+    public void ARenameOntoAnExistingMemberIsReportedInsteadOfOverwriting()
+    {
+        var source = new HavokIntermediateDocument { RootId = 1 };
+        var root = source.Add(1, "Widget");
+        root.Members["oldName"] = new HavokIntermediateValue.IntegerValue(1);
+        root.Members["newName"] = new HavokIntermediateValue.IntegerValue(2);
+
+        var map = new HavokConversionMap();
+        map.Map("Widget", "Widget").Rename("oldName", "newName");
+
+        var result = HavokSemanticConverter.Convert(source, map);
+
+        var collision = result.Diagnostics.Single(d => d.Member == "newName");
+        Assert.Equal(HavokConversionDiagnosticLevel.Error, collision.Level);
+        Assert.Contains("already wrote", collision.Message);
+        // Whichever member lost the race, exactly one value survives and it is not silent.
+        Assert.Single(result.Document.Get(1)!.Members);
+    }
+
+    [Fact]
+    public void TwoRenamesOntoOneTargetAreRejectedWhenTheMapIsBuilt()
+    {
+        var map = new HavokConversionMap();
+        var rule = map.Map("Widget", "Widget").Rename("a", "merged");
+
+        var error = Assert.Throws<ArgumentException>(() => rule.Rename("b", "merged"));
+        Assert.Contains("already renamed", error.Message);
+    }
+
+    [Fact]
+    public void AWronglyTypedReferenceInsideAnArrayIsCaught()
+    {
+        var source = new HavokIntermediateDocument { RootId = 1 };
+        var owner = source.Add(1, "Machine");
+        source.Add(2, "Generator");
+        source.Add(3, "Modifier");
+        owner.Members["children"] = new HavokIntermediateValue.ArrayValue(new[]
+        {
+            new HavokIntermediateValue.ReferenceValue(2),
+            new HavokIntermediateValue.ReferenceValue(3),
+        });
+
+        var map = new HavokConversionMap();
+        map.AllowIdentity("Machine", "Generator", "Modifier");
+
+        var targetTypes = new HavokTypeRegistry();
+        targetTypes.Register(new HavokTypeDefinition("Machine", null, new[]
+        {
+            new HavokMemberDefinition("children", "TYPE_ARRAY", "Generator"),
+        }));
+        targetTypes.Register(new HavokTypeDefinition("Generator", null, System.Array.Empty<HavokMemberDefinition>()));
+        targetTypes.Register(new HavokTypeDefinition("Modifier", null, System.Array.Empty<HavokMemberDefinition>()));
+
+        var result = HavokSemanticConverter.Convert(source, map, targetTypes);
+
+        // Element 0 is fine; element 1 points at a Modifier where a Generator is declared.
+        var bad = result.Diagnostics.Single(d => d.Member == "children[1]");
+        Assert.Equal(HavokConversionDiagnosticLevel.Error, bad.Level);
+        Assert.Contains("Modifier", bad.Message);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Member == "children[0]");
+    }
 }

@@ -14,9 +14,11 @@ public static class HavokVersionProbe
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path is required", nameof(path));
 
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-                                          FileShare.Read | FileShare.Delete, HeaderBytes,
+                                          FileShare.Read | FileShare.Delete, HeaderBytes + 1,
                                           FileOptions.SequentialScan);
-        Span<byte> header = stackalloc byte[HeaderBytes];
+        // One byte past the window, so a version string running up to the boundary can be
+        // told apart from one that merely ends there. See Read(ReadOnlySpan<byte>).
+        Span<byte> header = stackalloc byte[HeaderBytes + 1];
         int read = 0;
         while (read < header.Length)
         {
@@ -44,6 +46,13 @@ public static class HavokVersionProbe
             }
 
             if (!hasDigit || end <= i + 3) continue;
+
+            // The token ran to the edge of the window. If more bytes are available and the
+            // next one would have continued it, the string is cut short -- and a truncated
+            // version reads as a different, valid-looking one, so report nothing instead.
+            // With no byte to peek at, the token is taken as complete.
+            if (end == limit && limit < bytes.Length && IsVersionByte(bytes[limit])) return null;
+
             return new HavokHeaderVersion(System.Text.Encoding.ASCII.GetString(bytes[i..end]), i);
         }
         return null;

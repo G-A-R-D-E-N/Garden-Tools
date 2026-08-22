@@ -51,6 +51,29 @@ public sealed class HavokVersionProbeTests
     }
 
     [Fact]
+    public void RejectsAVersionCutOffByTheHeaderWindow()
+    {
+        // The token is still running when the 96-byte window ends, so the readable part
+        // ("hk_2018.2") is a plausible-looking version that is not the file's real one.
+        byte[] bytes = new byte[HavokVersionProbe.HeaderBytes + 32];
+        Encoding.ASCII.GetBytes("hk_2018.2.0-r1").CopyTo(bytes, HavokVersionProbe.HeaderBytes - 9);
+
+        Assert.Null(HavokVersionProbe.Read(bytes));
+    }
+
+    [Fact]
+    public void ReadsAVersionThatEndsExactlyBeforeTheWindowCloses()
+    {
+        byte[] bytes = new byte[HavokVersionProbe.HeaderBytes];
+        Encoding.ASCII.GetBytes("hk_2018.2.0-r1").CopyTo(bytes, HavokVersionProbe.HeaderBytes - 15);
+
+        var result = HavokVersionProbe.Read(bytes);
+
+        Assert.NotNull(result);
+        Assert.Equal("hk_2018.2.0-r1", result!.Version);
+    }
+
+    [Fact]
     public void ReturnsNullWhenNoHavokVersionIsPresent()
     {
         Assert.Null(HavokVersionProbe.Read(Encoding.ASCII.GetBytes("not a havok header")));
