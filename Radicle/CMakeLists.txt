@@ -218,6 +218,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_alias_location_formlinks.cpp
     tests/test_quest_alias_mutation.cpp
     tests/test_quest_alias_boundary.cpp
+    tests/test_quest_alias_formlink_remap.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
