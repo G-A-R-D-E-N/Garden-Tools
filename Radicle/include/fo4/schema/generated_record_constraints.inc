@@ -36,6 +36,11 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("FULL"), 0, 1},
   {Signature::from_string("DESC"), 1, 1},
   {Signature::from_string("DATA"), 1, 1},
+  {Signature::from_string("VTCK"), 1, 1},
+  {Signature::from_string("PNAM"), 1, 1},
+  {Signature::from_string("UNAM"), 1, 1},
+  {Signature::from_string("NAM1"), 1, 1},
+  {Signature::from_string("NAM3"), 1, 1},
 };
 
 inline constexpr RecordAuthoringConstraint k_generated_record_authoring_constraints[] = {
@@ -43,5 +48,5 @@ inline constexpr RecordAuthoringConstraint k_generated_record_authoring_constrai
   {Signature::from_string("ARMO"), RecordPlacement::top_level, 10, 10},
   {Signature::from_string("EYES"), RecordPlacement::top_level, 20, 4},
   {Signature::from_string("LVSP"), RecordPlacement::top_level, 24, 7},
-  {Signature::from_string("RACE"), RecordPlacement::top_level, 31, 4},
+  {Signature::from_string("RACE"), RecordPlacement::top_level, 31, 9},
 };
