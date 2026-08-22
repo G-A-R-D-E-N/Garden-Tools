@@ -87,7 +87,7 @@ nlohmann::json parseResult(const fo4ide::Result<nlohmann::json>& result) {
 
 }
 
-TEST_CASE("PluginEditTool creates minimal current-format RACE") {
+TEST_CASE("PluginEditTool creates current-format RACE with required base skeleton") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -114,8 +114,8 @@ TEST_CASE("PluginEditTool creates minimal current-format RACE") {
     REQUIRE(created.at("formKey") == "000800:Patch.esp");
 
     const auto disk = fo4::read_plugin_file(path);
-    const auto model = fo4::forms::decode_race(
-        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    const auto key = fo4::FormKey::parse("000800:Patch.esp");
+    const auto model = fo4::forms::decode_race(disk, key);
     REQUIRE(model.editor_id.has_value());
     CHECK(*model.editor_id == "GardenRace");
     REQUIRE(model.full_name.has_value());
@@ -129,6 +129,23 @@ TEST_CASE("PluginEditTool creates minimal current-format RACE") {
     CHECK(model.acceleration_rate == 2.0f);
     CHECK(model.deceleration_rate == 1.5f);
     CHECK(model.injured_health_pct == 0.25f);
+    CHECK_FALSE(model.male_voice.has_value());
+    CHECK_FALSE(model.female_voice.has_value());
+    CHECK(model.facegen_main_clamp == 0.0f);
+    CHECK(model.facegen_face_clamp == 0.0f);
+    CHECK(model.body_data.male.empty());
+    CHECK(model.body_data.female.empty());
+
+    const auto* record = fo4::find_record(disk, key);
+    REQUIRE(record != nullptr);
+    std::size_t bodyMarkers = 0;
+    std::size_t behaviorMarkers = 0;
+    for (const auto& subrecord : record->subrecords) {
+        if (subrecord.signature == fo4::Signature::from_string("NAM1")) ++bodyMarkers;
+        if (subrecord.signature == fo4::Signature::from_string("NAM3")) ++behaviorMarkers;
+    }
+    CHECK(bodyMarkers == 1u);
+    CHECK(behaviorMarkers == 1u);
 }
 
 TEST_CASE("PluginEditTool rejects incomplete RACE payload before write") {
