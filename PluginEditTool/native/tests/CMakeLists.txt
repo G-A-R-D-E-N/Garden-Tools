@@ -34,6 +34,7 @@ add_executable(
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp
     unit/RadiclePluginFormLinkListTests.cpp
+    unit/RadiclePluginNestedFormLinkListTests.cpp
     unit/RadiclePluginEyesTests.cpp
     unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp
