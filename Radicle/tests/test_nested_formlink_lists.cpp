@@ -1,10 +1,12 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -43,7 +45,9 @@ std::vector<std::byte> subgraph_plugin(bool malformed_terminator = false,
   link.u32(0x00000800);
   fo4::test::write_subrecord(out, "SAKD", link.bytes);
   const std::vector<std::byte> graph0{
-      std::byte{'g'}, std::byte{'0'}, std::byte{0}};
+      std::byte{static_cast<unsigned char>('g')},
+      std::byte{static_cast<unsigned char>('0')},
+      std::byte{0}};
   fo4::test::write_subrecord(out, "SGNM", graph0);
   fo4::test::write_subrecord(out, "STKD", link.bytes);
   const std::vector<std::byte> sraf0 = malformed_terminator
@@ -59,7 +63,9 @@ std::vector<std::byte> subgraph_plugin(bool malformed_terminator = false,
     fo4::test::write_subrecord(out, "SAKD", link.bytes);
   }
   const std::vector<std::byte> graph1{
-      std::byte{'g'}, std::byte{'1'}, std::byte{0}};
+      std::byte{static_cast<unsigned char>('g')},
+      std::byte{static_cast<unsigned char>('1')},
+      std::byte{0}};
   fo4::test::write_subrecord(out, "SGNM", graph1);
   const std::vector<std::byte> sraf1(4, std::byte{0});
   fo4::test::write_subrecord(out, "SRAF", sraf1);
@@ -112,6 +118,13 @@ std::size_t count_in_group(const fo4::Record& record,
     if (current_group == group && subrecord.signature == sig) ++count;
   }
   return count;
+}
+
+bool has_issue(const std::vector<fo4::schema::PreflightIssue>& issues,
+               std::string_view code) {
+  return std::any_of(issues.begin(), issues.end(), [&](const auto& issue) {
+    return issue.code == code;
+  });
 }
 
 }
@@ -239,4 +252,24 @@ TEST(NestedFormLinkListMutation, MalformedTerminatorOrElementFailsClosed) {
       static_cast<void>(fo4::schema::set_record_nested_formlink_list_element(
           bad_element, race_key, scoped->descriptor, 1, 1, keyword)),
       fo4::schema::FormLinkListError);
+}
+
+TEST(NestedFormLinkListPreflight, ReportsMalformedTerminatorAndElementStorage) {
+  const auto race_key = fo4::FormKey::parse("000803:Subgraphs.esp");
+
+  auto bad_terminator =
+      fo4::read_plugin(subgraph_plugin(true, false), "Subgraphs.esp");
+  const auto* bad_terminator_race = fo4::find_record(bad_terminator, race_key);
+  ASSERT_NE(bad_terminator_race, nullptr);
+  const auto terminator_issues = fo4::schema::preflight_record(*bad_terminator_race);
+  EXPECT_TRUE(has_issue(
+      terminator_issues, "invalid_nested_formlink_terminator_storage"));
+
+  auto bad_element =
+      fo4::read_plugin(subgraph_plugin(false, true), "Subgraphs.esp");
+  const auto* bad_element_race = fo4::find_record(bad_element, race_key);
+  ASSERT_NE(bad_element_race, nullptr);
+  const auto element_issues = fo4::schema::preflight_record(*bad_element_race);
+  EXPECT_TRUE(has_issue(
+      element_issues, "invalid_nested_formlink_list_storage"));
 }
