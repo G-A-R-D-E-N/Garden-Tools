@@ -35,6 +35,7 @@ enum class FormLinkListMutationStatus {
   record_mismatch,
   index_out_of_range,
   target_type_mismatch,
+  insertion_boundary_unavailable,
 };
 
 class FormLinkListError : public std::runtime_error {
@@ -60,5 +61,18 @@ FormLinkListMutationStatus set_record_formlink_list_element(
     const FormLinkListDescriptor& descriptor,
     std::size_t index,
     const FormKey& target);
+
+FormLinkListMutationStatus insert_record_formlink_list_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    std::size_t index,
+    const FormKey& target);
+
+FormLinkListMutationStatus remove_record_formlink_list_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    std::size_t index);
 
 }  // namespace fo4::schema
