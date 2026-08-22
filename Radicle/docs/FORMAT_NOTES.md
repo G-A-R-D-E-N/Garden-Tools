@@ -180,3 +180,30 @@ This is the calculation #71 flags as "do not guess". `exterior_cell_grid_layout`
 and `exterior_grid_group_label_u32` in `fo4/forms/cell.hpp` implement it, and
 `tests/test_exterior_cell_grid_real.cpp` re-checks it against the shipped
 masters when `FO4_DATA_DIR` is set (it skips in CI, which has no game files).
+
+## Localized string subrecords in shipped masters
+
+Every Bethesda master sets TES4 flag `0x80`: `Fallout4.esm` header flags are
+`0x0081`. In a localized plugin a string subrecord does not hold inline text —
+it holds a **four-byte string ID** into the `.STRINGS`/`.DLSTRINGS`/`.ILSTRINGS`
+tables. All 45 `RACE` records in `Fallout4.esm` carry a `DESC` of exactly 4
+bytes.
+
+The typed decoders currently read string subrecords as NUL-terminated text, so
+`decode_race` rejects every shipped RACE with "DESC is not a single
+NUL-terminated string". This is a **localization gap, not a RACE gap** — it
+will affect any typed decoder that reads a string subrecord from vanilla
+content.
+
+`fo4/localization/strings.hpp` already reads and writes the string tables; what
+is missing is the typed decoders consulting `tes4_flags.is_localized()` and
+treating those payloads as string IDs. Related: #29 (bit 7 localized vs
+delocalized semantics).
+
+## RACE BodyData INDX
+
+`INDX` inside a RACE BodyData block is a `uint32` body-part index, not an empty
+separator, and it is **not** derivable from list position: of the 90 gender
+blocks in `Fallout4.esm`, 17 are not a plain `0..n-1` run — they begin
+`0, 0, 1, 2, …`. The value is decoded and written back verbatim rather than
+recomputed.
