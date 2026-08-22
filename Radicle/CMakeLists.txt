@@ -69,6 +69,7 @@ add_library(fo4
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/race.cpp
+  src/forms/race_body.cpp
   src/io/atomic_write.cpp
   src/localization/strings.cpp
   src/plugin/tes4.cpp
@@ -201,6 +202,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_lvsp.cpp
     tests/test_lvsp_creation.cpp
     tests/test_race_creation.cpp
+    tests/test_race_body.cpp
     tests/test_onam.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
