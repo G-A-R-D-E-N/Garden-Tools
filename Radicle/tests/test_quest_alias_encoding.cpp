@@ -15,6 +15,7 @@ TEST(QuestAliasEncoding, BuildsReferenceAliasInProvenOrder) {
       .flags = 0x12u,
       .force_into_alias = -1,
       .max_initial_fill_count = std::nullopt,
+      .fill = std::monostate{},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::reference);
@@ -39,6 +40,7 @@ TEST(QuestAliasEncoding, BuildsLocationAliasWithoutInventingName) {
       .flags = 0x40u,
       .force_into_alias = std::nullopt,
       .max_initial_fill_count = std::nullopt,
+      .fill = std::monostate{},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::location);
@@ -58,6 +60,7 @@ TEST(QuestAliasEncoding, BuildsCompactCollectionAlias) {
       .flags = std::nullopt,
       .force_into_alias = std::nullopt,
       .max_initial_fill_count = std::uint8_t{6},
+      .fill = std::monostate{},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::collection);
@@ -78,6 +81,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = 0u,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
 
@@ -89,6 +93,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = std::nullopt,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
 
@@ -100,6 +105,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = 0u,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
 
@@ -112,6 +118,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = 0u,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
 }
