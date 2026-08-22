@@ -49,8 +49,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # setup-dotnet installs into /usr/share/dotnet by default, which the
+      # runner account cannot write to on this host -- that path is only
+      # runner-owned on GitHub's hosted images. The tool cache is writable and
+      # persists between jobs, so the SDK is downloaded once, not per run.
       - name: Set up pinned .NET SDK
         uses: actions/setup-dotnet@v4
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
           dotnet-version: 8.0.424
 
