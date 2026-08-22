@@ -325,8 +325,14 @@ public static class Smoke
             CheckTrue($"{name}: the Current file card advertises the drop affordance",
                 Find<TextBlock>(window).Any(t => (t.Text ?? "").Contains("Drop a .hkx anywhere on the Bridge")));
 
-            var droppedData = new Avalonia.Input.DataObject();
-            droppedData.Set(Avalonia.Input.DataFormats.FileNames, new[] { path });
+            // Avalonia 12 seals IStorageItem against user implementations, so the drop payload
+            // has to come from the framework's own path lookup rather than a test stub.
+            var storageFile = window.StorageProvider
+                .TryGetFileFromPathAsync(new Uri(path)).GetAwaiter().GetResult();
+            CheckTrue($"{name}: the platform resolves the dropped path to a storage item",
+                      storageFile != null);
+            var droppedData = new Avalonia.Input.DataTransfer();
+            droppedData.Add(Avalonia.Input.DataTransferItem.CreateFile(storageFile!));
             window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.DragEnter, droppedData,
                             Avalonia.Input.DragDropEffects.Copy);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -1592,12 +1598,17 @@ public static class Smoke
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
     }
 
-    // The drop path had a silent-failure bug: the guard accepted the legacy FileNames format
-    // while the reader could only read Files, so such a drop was swallowed with no feedback.
-    // The only existing coverage sits inside the per-file battery, which runs only when the
-    // harness is handed .hkx arguments -- and CI passes none, which is why it went unnoticed.
-    // This case needs no fixture: BridgeOpenPath fills the path field before parsing, so the
-    // plumbing can be proved with a file that is not a real graph.
+    // The only other coverage of the drop path sits inside the per-file battery, which runs
+    // only when the harness is handed .hkx arguments -- and CI passes none, which is how a
+    // silent-failure bug in it went unnoticed. This case needs no fixture: BridgeOpenPath
+    // fills the path field before parsing, so the plumbing can be proved with a file that is
+    // not a real graph.
+    //
+    // On Avalonia 11 this dropped a FileNames-only payload, because the bug was a guard that
+    // accepted a format the reader could not read. Avalonia 12 has a single file format, so
+    // that mismatch cannot occur and the case instead proves that a real platform payload
+    // survives the whole path -- and that the framework's own path lookup, now the only way
+    // to build one, works headless.
     private static void ADroppedFileReachesTheBridge()
     {
         Console.WriteLine("\na dropped file is accepted and its path reaches the Bridge");
@@ -1616,15 +1627,19 @@ public static class Smoke
                                      .FindIndex(t => t.Header?.ToString() == "Bridge");
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
-            // FileNames only, with no Files entry: the shape a legacy drag source produces,
-            // and the exact shape that used to be accepted and then silently discarded.
-            var dropped = new Avalonia.Input.DataObject();
-            dropped.Set(Avalonia.Input.DataFormats.FileNames, new[] { path });
+            // Avalonia 12 seals IStorageItem against user implementations, so the payload has
+            // to come from the framework's own lookup rather than a test stub.
+            var storageFile = window.StorageProvider
+                .TryGetFileFromPathAsync(new Uri(path)).GetAwaiter().GetResult();
+            CheckTrue("the platform resolves a dropped path to a storage item", storageFile != null);
+
+            var dropped = new Avalonia.Input.DataTransfer();
+            dropped.Add(Avalonia.Input.DataTransferItem.CreateFile(storageFile!));
 
             window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.DragEnter,
                             dropped, Avalonia.Input.DragDropEffects.Copy);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            CheckTrue("a legacy FileNames drag is offered as a drop",
+            CheckTrue("a file drag is offered as a drop",
                       window.BridgeDropHintText.Contains("Drop to open"));
 
             window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.Drop,
