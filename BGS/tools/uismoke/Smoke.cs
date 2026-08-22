@@ -1494,6 +1494,7 @@ public static class Smoke
         VerificationFailureLeavesTheSourceUntouched();
 
         DirtyGraphSurvivesARejectedOpen();
+        ADroppedFileReachesTheBridge();
         CleanWindowClosesWithoutPrompt();
         GraphLayoutPersistsAcrossFreshWindow();
         LastTabPersistsAcrossFreshWindow();
@@ -1539,6 +1540,51 @@ public static class Smoke
         window.DiscardDecision = () => DiscardChoice.Discard;
         window.Close();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+    }
+
+    // Avalonia 12 has a single file format, so the FileNames/Files mismatch this case guarded
+    // against on 11 cannot occur here. What it still proves is that a real platform drop
+    // payload survives the whole path and lands in the Bridge -- and that the framework's own
+    // path lookup, which is the only way to build that payload now, works headless.
+    private static void ADroppedFileReachesTheBridge()
+    {
+        Console.WriteLine("\na dropped file is accepted and its path reaches the Bridge");
+
+        string folder = System.IO.Directory.CreateTempSubdirectory("bgs-drop").FullName;
+        string path = System.IO.Path.Combine(folder, "dropped.hkx");
+        System.IO.File.WriteAllBytes(path, new byte[] { 0x57, 0xE0, 0xE0, 0x57 });
+        try
+        {
+            var window = new MainWindow();
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var tabs = Find<TabControl>(window).First();
+            tabs.SelectedIndex = tabs.Items.OfType<TabItem>().ToList()
+                                     .FindIndex(t => t.Header?.ToString() == "Bridge");
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var storageFile = window.StorageProvider
+                .TryGetFileFromPathAsync(new Uri(path)).GetAwaiter().GetResult();
+            CheckTrue("the platform resolves a dropped path to a storage item", storageFile != null);
+
+            var dropped = new Avalonia.Input.DataTransfer();
+            dropped.Add(Avalonia.Input.DataTransferItem.CreateFile(storageFile!));
+
+            window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.DragEnter,
+                            dropped, Avalonia.Input.DragDropEffects.Copy);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            CheckTrue("a file drag is offered as a drop",
+                      window.BridgeDropHintText.Contains("Drop to open"));
+
+            window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.Drop,
+                            dropped, Avalonia.Input.DragDropEffects.Copy);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Check("and dropping it puts the path in the field", path, window.PathFieldForTest);
+
+            CloseForTest(window);
+        }
+        finally { System.IO.Directory.Delete(folder, true); }
     }
 
     private static void CleanWindowClosesWithoutPrompt()
