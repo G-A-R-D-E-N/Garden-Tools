@@ -45,7 +45,7 @@ std::vector<std::byte> make_renumber_plugin(bool malformed_mnam = false,
     const auto navm = fo4::test::begin_record(out, "NAVM", 0, 0x00000802);
     fo4::test::ByteWriter mnam;
     mnam.u32(0x00000800);
-    mnam.u16(0xFFFFu);  // Claims triangle indexes that are not present.
+    mnam.u16(0xFFFFu);
     fo4::test::write_subrecord(out, "MNAM", mnam.bytes);
     fo4::test::end_record(out, navm);
     fo4::test::end_group(out, navm_group);
@@ -98,6 +98,16 @@ TEST(RecordLifecycle, RenumberRekeysKnownInternalFormLinksAndRoundTrips) {
   ASSERT_NE(link, links.end());
   EXPECT_EQ(link->key, new_key);
   EXPECT_EQ(link->raw, fo4::RawFormId{0x00000900});
+}
+
+TEST(RecordLifecycle, DeleteRefusesReferencedRecordWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_renumber_plugin(), "Lifecycle.esp");
+  const auto key = fo4::FormKey::parse("000800:Lifecycle.esp");
+  const auto original = plugin.original_bytes;
+
+  EXPECT_EQ(fo4::delete_local_record(plugin, key), fo4::RecordDeleteStatus::referenced);
+  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_NE(fo4::find_record(plugin, key), nullptr);
 }
 
 TEST(RecordLifecycle, RenumberRefusesExistingTargetWithoutMutation) {
