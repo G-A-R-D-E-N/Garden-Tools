@@ -37,6 +37,7 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | [22-BATCH-SETTING-DEPENDENCIES.md](22-BATCH-SETTING-DEPENDENCIES.md) | batch-pipeline setting dependencies — direct descriptor value references for PreCombined/PreVis, dialogue/text/FaceGen exporters, VCS services, the negative `iPlacedObjectRender` result, and dependency tiers |
 | [20-WINE-PAPYRUS-ZIP-CRASH.md](20-WINE-PAPYRUS-ZIP-CRASH.md) | the Wine startup crash explained — Papyrus source-zip extraction via Shell COM (`IShellDispatch::NameSpace` returns S_OK + NULL `Folder*`), with patch/workaround analysis |
 | [21-UVD-FORMAT.md](21-UVD-FORMAT.md) | the compiled PreVis `.uvd` scene format (magic `0xD6000012`) — CRC-32C framing, full 0x150 header field map, and version string, verified against 3 shipped samples + the writer decompiles |
+| [26-RE-TARGETS.md](26-RE-TARGETS.md) | the high-value RE targets — OBTE/OBTS object-template block layout (547/547 payloads, OMOD includes), string-table resolution (reader-variant dispatch, no ID bits), XCLC trailing dword = Force-Hide-Land (9,741 cells), and the Fallout4.exe section-delta RVA rebase rule |
 
 ## Data dumps (`../dumps/`)
 
