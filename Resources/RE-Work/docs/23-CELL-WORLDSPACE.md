@@ -1171,6 +1171,27 @@ WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
 are also saved — they go through the `NAM*`-array and map-data iterators
 dispatched from `vl+0x3b8`/`vl+0x3c0`, not inline in the SaveRecord body.)
 
+#### 10b.2 XWEM → distant-terrain water mesh builder
+
+`XWEM` is the **worldspace-default water height** (float, RVA `0xe4a276` in WRLD
+LoadRecord). This value feeds the CK's `bgsterrainwatermeshbuilder.cpp`
+(0xf76000–0xf83fff, `shared\distantterrain\`) which generates the runtime LOD
+water mesh. The xLODGen engine's `WaterDelta` setting controls how the water
+plane interacts with terrain below:
+
+- **Engine default: `WaterDeltaLOD<n> = -1`** (disabled — no optimization).
+- At `>= 0`, below-water heightfield samples are clamped to `waterHeight − delta/LOD`
+  and interior underwater vertices are marked `Ignored` (greedy reducer skips them).
+- **`WaterDelta = 0`** is NOT a no-op: `0 >= 0` enters the block but the clamp
+  is `waterHeight − 0 = waterHeight`, so heights are never flattened (below-water
+  samples are < waterHeight by definition). Only the vertex handling changes —
+  underwater interior vertices are still marked `Ignored`, and at `lodLevel > 1`
+  underwater coarse-grid vertices are forced `Used` for seam matching.
+- The integer division `waterDelta / lodLevel` is **truncating** — small deltas
+  silently vanish: `3` at LOD4, `7` at LOD8, `15` at LOD16, `31` at LOD32.
+
+Full xLODGen water analysis: [`lodgen/reverse-engineering/XLODGEN_TERRAIN_INTERNALS.md` §1–§6](../lodgen/reverse-engineering/XLODGEN_TERRAIN_INTERNALS.md) — per-quad `GenerateWater`, water-height grouping (exact at LOD4, merged at LOD8+), `BSSubIndexTriShape`/`BSSegmentedTriShape` shape selection, land-clipped water under `SPECIALWATER`, and the `WATERDELTALOD4/8/16/32` → `TerrainLOD.GenerateQuad` pipeline.
+
 ### 10c. Complete override map — named TESForm virtuals for CELL and WRLD
 
 Every override was decompiled and its call pattern matched against
