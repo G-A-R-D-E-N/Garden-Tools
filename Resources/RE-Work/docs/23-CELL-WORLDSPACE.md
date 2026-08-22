@@ -836,15 +836,51 @@ CELL `SaveRecord` writes: `VISI`, `RVIS`, `PCMB`, `DATA`, `XCLC`, `CNAM`,
 | 33 | `FUN_140e4a320` | cell-map iterator/insert | `FUN_140e4d180` (worldspace cell-map insert — §8.3), `FUN_140e53eb0`, `FUN_140d196a0` | `tesworldspace.cpp:0x62a` |
 | 35 | `FUN_140e4b080` | cell-grid child iteration | 9× `FUN_1408be010` (form lookup) + `FUN_1408c68d0`/`FUN_1408bdd20` — walks the cell array | `tesworldspace.cpp:0x50d` |
 
-WRLD `LoadRecord` dispatches: `ATDM`, `BTDM`, `CNAM`, `DATA`, `DNAM`, `EDID`,
-`FULL`, `ICON`, `LTMP`, `MHDT`, `MNAM`, `NAM2`, `NAM3`, `NAM4`, `NAMA`,
-`NNAM`, `OBLT`, `OBML`, `OBND`, `OBTE`, `ONAM`, `PNAM`, `PTRN`, `RNAM`,
-`STCP`, `TNAM`, `TTCP`, `UNAM`, `VMAD`, `WCTR`, `WLEV`, `WMAD`, `WNAM`,
-`XEZN`, `XLCN`, `XWEM`, `ZNAM`.
+WRLD `LoadRecord` dispatches (cross-checked against 3 live WRLD records from
+Fallout4.esm — DiamondCityFX, DiamondCity, Goodneighbor):
+
+**Confirmed in real files (15):** `DATA`, `DNAM`, `EDID`, `FULL`,
+`NAM0`..`NAM9` (some optional), `NAMA`, `ONAM`, `PNAM`, `WCTR`, `WNAM`,
+`XLCN`, `XWEM`, `ZNAM`.
+
+**In dispatch but absent from these 3 (19 — optional/rare/DLC):**
+`ATDM`, `BTDM`, `CNAM`, `ICON`, `LTMP`, `MHDT`, `MNAM`, `TNAM`, `UNAM`,
+`WLEV`, `WMAD`, `XEZN`. Plus `NAM1`/`NAM3`–`NAM8` (climate layers —
+DiamondCityFX has only `NAM2` and `NAM9` because DiamondCity uses climate
+NAM2; interior worlds skip climate entirely).
+
+**Missing from the dispatch, found in every real WRLD (3 — §10b.1):**
+`CLSZ` (cell size for world map), `OFST` (world map offset data array),
+`RNAM` (region references — repeated per-region; 41× in DiamondCity).
+
+**Not WRLD-specific** (handled by `TESForm` base; removed from the
+per-class list): `OBND`, `PTRN`, `STCP`, `VMAD`.
+
+**Correction:** the earlier list entry `NNAM` was a misdecode — WRLD has
+no `NNAM` subrecord (that's a LeveledList subrecord). It was likely
+`MNAM` (world map path) rendered by an arg-display mismatch.
+
+#### 10b.1 Newly discovered: CLSZ, OFST, RNAM
+
+Byte-parsed from Fallout4.esm WRLD records:
+
+| 4CC | size | description |
+|---|---|---|
+| `CLSZ` | 4 | cell size for world map (u32) — present in all 3 sampled WRLDs |
+| `OFST` | N × 4 | world map offset data (u32 array) — present in all 3 |
+| `RNAM` | 4 | region reference (formID of a REGN record) — repeated, 41× in DiamondCity, many in Goodneighbor |
+
+These are in the LoadRecord switch tree (recovered subrecord set of 26 reads)
+but were missed in the initial doc summary because `CLSZ`/`OFST` appear as
+hex immediates without adjacent CONCAT44 clues, and `RNAM` blended with
+CELL's `RNAM`. The dispatch tree decoder now confirms them as part of the
+WRLD surface.
 
 WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
 `NAM0`, `NAM2`, `NAM3`, `NAM4`, `NAM9`, `NAMA`, `ONAM`, `PNAM`, `WCTR`,
-`WLEV`, `WNAM`, `XEZN`, `XLCN`, `ZNAM`.
+`WLEV`, `WNAM`, `XEZN`, `XLCN`, `ZNAM`. (Note: `CLSZ`, `OFST`, and `RNAM`
+are also saved — they go through the `NAM*`-array and map-data iterators
+dispatched from `vl+0x3b8`/`vl+0x3c0`, not inline in the SaveRecord body.)
 
 ### 10c. What the diff teaches
 
