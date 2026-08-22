@@ -172,6 +172,40 @@ struct QuestStages {
 
 QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest);
 
+/*
+ * Quest objectives, measured on Fallout4.esm (1,198 objectives, 1,500
+ * targets). The array runs from the first QOBJ up to ANAM:
+ *
+ *   QOBJ (u16 objective index)
+ *     FNAM (u32 objective flags)    -- exactly one per objective
+ *     NNAM (display text, localized) -- exactly one; 4 bytes in all 1,198
+ *     QSTA (12 bytes)               -- one target; 0..19 of them
+ *       CTDA / CIS1 / CIS2 per-target conditions
+ */
+struct QuestObjectiveTarget {
+  // QSTA: int32 alias id at 0, uint32 flags at 4, optional keyword FormID at
+  // 8. The keyword is zero in 1,498 of the 1,500 shipped targets.
+  std::int32_t alias{0};
+  std::uint32_t flags{0};
+  std::optional<FormKey> keyword;
+  // Per-target conditions and anything unmodelled, kept in order.
+  std::vector<Subrecord> subrecords;
+};
+
+struct QuestObjective {
+  std::uint16_t index{0};
+  std::uint32_t flags{0};
+  std::optional<schema::LocalizedString> display_text;
+  // 66 shipped objectives carry no target at all.
+  std::vector<QuestObjectiveTarget> targets;
+};
+
+struct QuestObjectives {
+  std::vector<QuestObjective> objectives;
+};
+
+QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& quest);
+
 struct QuestAliases {
   std::uint32_t next_alias_id{0};
   std::vector<QuestAlias> aliases;
