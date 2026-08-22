@@ -7,11 +7,19 @@ name: native-ci
 # pull_request trigger only; work-branch push runs are intentionally omitted so
 # one PR commit does not consume two self-hosted CI slots.
 
+# BGS/ is a self-contained C#/.NET tool with no bearing on the native C++ jobs
+# below, so changes confined to it skip this workflow. paths-ignore (not an
+# explicit paths allowlist) is deliberate: a commit touching BGS/ *and* anything
+# else still runs the full build.
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "BGS/**"
   pull_request:
+    paths-ignore:
+      - "BGS/**"
   workflow_dispatch:
 
 concurrency:
@@ -32,6 +40,7 @@ jobs:
         run: >
           cmake -S Radicle -B build/radicle -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
+          -DBUILD_TESTING=ON
           -DRADICLE_BUILD_TESTS=ON
 
       - name: Build
@@ -91,8 +100,13 @@ jobs:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
     runs-on: [self-hosted, Linux, X64, garden]
     # Cross-compiles the Windows x64 build from Linux with clang-cl + the xwin
-    # CRT/SDK (GHRUNNER#17). Wine is not required. The xwin sysroot does not
-    # provide zlib, so this lane builds the pinned static zlib dependency first.
+    # CRT/SDK (GHRUNNER#17) -- the same method used elsewhere on this host. Wine
+    # is retired, so Windows binaries cannot be executed here: this job proves
+    # the code COMPILES and LINKS for Windows (tests OFF). Native MSVC/WebView2
+    # test execution still needs a real Windows runner if ever wanted.
+    #
+    # The xwin sysroot does not provide zlib, so this lane builds the pinned
+    # static zlib dependency first and points find_package(ZLIB) at it.
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
@@ -117,6 +131,7 @@ jobs:
           cmake -S Radicle -B build/radicle-win -G Ninja
           -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
           -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=OFF
           -DRADICLE_BUILD_TESTS=OFF
           -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win
           -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib

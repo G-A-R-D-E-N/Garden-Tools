@@ -107,3 +107,5 @@ bsprecomputedvisibility_editor.cpp   ← precombined/previs editor side
   render-window code; near `tesmain.cpp` are CK init.
 - The `*_editor.cpp` list is the **editor-only fork surface** — the exact classes to diff against
   the runtime forms for "what the editor does differently."
+- For a file→class map of the entire tesforms/world module (all 158 runtime files + 43 editor forks,
+  cross-validated against RTTI), see **[24-TESFORMS-SOURCE-MAP.md](24-TESFORMS-SOURCE-MAP.md)**.
