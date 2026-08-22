@@ -144,44 +144,63 @@ offset  size  field
 
 ---
 
-## 4. Fallout4.exe RVA rebase — section delta check ✅ done (root cause identified)
+## 4. Fallout4.exe RVA rebase — section-aware mapping ✅ resolved for OG 1.10.163
 
-Section headers of the unpacked `Fallout4.exe` (55,343,016 B, PE32+):
+The unpacked OG 1.10.163 image used by the symbol dump is 65,319,936 B (PE32+).
+Its section table is the authoritative source for converting a symbol RVA to a raw
+file offset:
 
 | section | virtAddr | rawPtr | rawPtr − virtAddr |
-|---|---|---|---|
-| .text    | 00001000 | 00000400 | **−0x0C00** |
-| .interpr | 02435000 | 02434000 | −0x1000 |
-| .rdata   | 02440000 | 0243e800 | −0x1800 |
-| .data    | 02ed8000 | 02ed5c00 | −0x2400 |
-| .pdata   | 03e76000 | 030e3000 | −0x0D93000 |
-| _RDATA   | 040f5000 | 03362000 | −0x0D93000 |
-| .rsrc    | 040f6000 | 03363000 | −0x0D93000 |
-| .reloc   | 0419d000 | 03409800 | −0x0D93800 |
-| .bind    | 04220000 | 0348bc00 | −0x0D94400 |
+|---|---:|---:|---:|
+| `.text` | `0x00001000` | `0x00000400` | `-0x0c00` |
+| `.interpr` | `0x02c0c000` | `0x02c0b400` | `-0x0c00` |
+| `.rdata` | `0x02c17000` | `0x02c15c00` | `-0x1400` |
+| `.data` | `0x036cb000` | `0x036c9c00` | `-0x1400` |
+| `.pdata` | `0x06737000` | `0x038cb600` | `-0x2e6ba00` |
+| `.tls` | `0x06a8c000` | `0x03c20400` | `-0x2e6bc00` |
+| `.rsrc` | `0x06a90000` | `0x03c23a00` | `-0x2e6c600` |
+| `.reloc` | `0x06b37000` | `0x03cca200` | `-0x2e6ce00` |
 
-**Root cause of the 0x10 drift:** raw→RVA deltas are **not uniform** across
-sections. The first four sections each have their own delta (−0xC00, −0x1000,
-−0x1800, −0x2400), and the last five jump to a constant −0xD93000 family. Any
-tool that assumes a single file-offset→RVA conversion (like
-`CheckValidIDForSmallFile` sweeps) will be off by exactly the section-delta
-difference at a section boundary — the "off by 0x10" in at least one region.
+**Why the old sweeps drifted:** raw→RVA deltas are **not uniform** across
+sections. In this OG image, `.text`/`.interpr` use `-0xc00`, `.rdata`/`.data`
+use `-0x1400`, and the later sections have their own large deltas. Any tool
+that assumes one global file-offset delta will read the wrong bytes at a
+section boundary. The old `0x10` discrepancy was this class of mapping error.
 
 **Correct rebase rule:**
 1. Locate the section whose `virtAddr ≤ RVA < virtAddr + max(vsize,rawSize)`.
 2. fileOffset = RVA − virtAddr + rawPtr.
 3. Never use one global `RVA − imageBase + delta` constant.
 
-The `.bind`/`.reloc`/`.rsrc`/`_RDATA`/`.pdata` sections all share the
-−0xD93000 family in this build, so the drift only bites at the .text/.interpr/
-.rdata/.data transitions — consistent with "off by 0x10 in at least one
-region".
+For the OG 1.10.163 dump, `TESFile::CheckValidIDForSmallFile` is listed at
+RVA `0x130560`. Section-aware mapping places it at raw file offset `0x12f960`,
+where the bytes are:
+
+```text
+f7 c1 00 f0 ff 00 0f 94 c0 c3
+```
+
+That is the complete 10-byte body: `test ecx, 0x00fff000; sete al; ret`.
+Therefore the exact predicate is:
+
+```text
+(formID & 0x00FFF000) == 0
+```
+
+A complete low-24-bit sweep finds 4,096 valid IDs (`0x000000..0x000fff`)
+and 16,773,120 invalid IDs. The old “function not found” result was a raw
+offset/RVA lookup failure, not a missing function. The reusable implementation
+is `tools/rebase_runtime_symbols.py`; it maps every symbol through its
+containing PE section and can reproduce the sweep with `--sweep`.
 
 ---
 
 ## Open items
 
-- Bit-7 runtime string semantics: decompile `BGSLocalizedStringDL` in
-  Fallout4.exe (RVA 0x14014FAF0) — runtime RE track, issue #29.
+- Bit-7 runtime string semantics: the CK and `StringFileInfo::ResolveID` paths
+  are now pinned; the remaining runtime question is the in-memory field/tag
+  convention around `BGSLocalizedStringDL`.
+- Apply the same section-aware symbol sweep to AE 1.11.240 once its matching
+  named-function dump is available.
 - Whether the CK *editor* ever writes a non-zero Force-Hide-Land on save
   (the writer preserves byte 8 from cell+0x1E; vanilla is 0/0x0F only).

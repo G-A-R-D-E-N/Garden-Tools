@@ -90,7 +90,7 @@ CK Ghidra headless helpers: [scripts/](scripts/).
 
 ## Runtime (`Fallout4.exe`)
 
-OG 1.10.163 and AE 1.11.221. FormID / TESFile, layouts, naming.
+OG 1.10.163 and AE 1.11.240. FormID / TESFile, layouts, naming.
 
 - [Runtime/README.md](Runtime/README.md)
 - [Runtime/03-FINDINGS.md](Runtime/03-FINDINGS.md)
@@ -98,6 +98,7 @@ OG 1.10.163 and AE 1.11.221. FormID / TESFile, layouts, naming.
 - [Runtime/Organized/INDEX.md](Runtime/Organized/INDEX.md)
 - [Runtime/Organized/1.10.163/](Runtime/Organized/1.10.163/) subsystem notes (landscape, quests, HUD, workshop)
 - [Runtime/Scripts/](Runtime/Scripts/)
+- [tools/rebase_runtime_symbols.py](tools/rebase_runtime_symbols.py) (section-aware RVA rebasing and OG small-file ID sweep)
 
 ## Layout
 
