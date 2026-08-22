@@ -166,6 +166,10 @@ worldspace/cell alignment and calls `0x1181210` followed by deferred cleanup `0x
 | PreVis scenes | `Data\\Vis\\Scenes\\<Worldspace>_<Plugin>_<x>_<y>.scene` or `Interior_<Cell>.scene` |
 | PreVis plugin | `Data\\PreVis.esp` |
 
+## See also
+
+- **Doc 25** ([25-COMBINED-CELL-GEOMETRY-DB.md](25-COMBINED-CELL-GEOMETRY-DB.md)) — BTree-file index format, `ExtraCombinedRefs` layout, `CombinedObjects.esp` output, `_OC`/`_Physics` NIF pipeline, cell-key derivation.
+
 ## Remaining reverse-engineering targets
 
 - Exact `Execute` worldspace slice arithmetic for the raw stored pair, including the last-chunk
