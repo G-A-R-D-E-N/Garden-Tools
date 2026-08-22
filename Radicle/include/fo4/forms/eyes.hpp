@@ -30,6 +30,13 @@ struct Eyes {
 
 Eyes decode_eyes(const Plugin& plugin, const FormKey& key);
 
+FormKey create_eyes(Plugin& plugin,
+                    std::optional<std::string_view> editor_id,
+                    std::string_view full_text,
+                    std::string_view icon,
+                    std::uint8_t data_flags,
+                    RecordFlags record_flags = {});
+
 bool set_eyes_text_fields(Plugin& plugin,
                           const FormKey& key,
                           std::optional<std::string_view> editor_id,
