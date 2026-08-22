@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace fo4::forms {
@@ -23,6 +24,31 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+struct QuestSpecificReferenceFill {
+  std::optional<FormKey> reference;
+};
+
+struct QuestUniqueActorFill {
+  FormKey actor;
+};
+
+struct QuestLocationAliasReferenceFill {
+  std::int32_t alias{0};
+  FormKey reference_type;
+};
+
+struct QuestExternalAliasReferenceFill {
+  std::optional<FormKey> quest;
+  std::int32_t alias{0};
+};
+
+using QuestAliasFill = std::variant<
+    std::monostate,
+    QuestSpecificReferenceFill,
+    QuestUniqueActorFill,
+    QuestLocationAliasReferenceFill,
+    QuestExternalAliasReferenceFill>;
+
 // One alias is kept as an ordered subrecord sequence because reference and
 // location aliases are repeatable tagged unions with conditions/arrays inside
 // them. Semantic members are added incrementally, but the raw ordered sequence
@@ -35,6 +61,7 @@ struct QuestAlias {
   std::optional<std::uint32_t> flags;
   std::optional<std::int32_t> force_into_alias;
   std::optional<std::uint8_t> max_initial_fill_count;
+  QuestAliasFill fill;
   std::vector<Subrecord> subrecords;
 };
 
@@ -45,6 +72,7 @@ struct QuestAliasCreation {
   std::optional<std::uint32_t> flags;
   std::optional<std::int32_t> force_into_alias;
   std::optional<std::uint8_t> max_initial_fill_count;
+  QuestAliasFill fill;
 };
 
 struct QuestAliases {
@@ -52,7 +80,11 @@ struct QuestAliases {
   std::vector<QuestAlias> aliases;
 };
 
+// Base alias encoding is available without a plugin context only when no
+// FormLink-bearing fill is requested.
 QuestAlias encode_quest_alias(const QuestAliasCreation& creation);
+QuestAlias encode_quest_alias(const Plugin& plugin,
+                              const QuestAliasCreation& creation);
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
 
 }  // namespace fo4::forms
