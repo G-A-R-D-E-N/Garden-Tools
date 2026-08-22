@@ -34,20 +34,18 @@ bool participates_in_fo4_onam(Signature signature) {
 
 void collect_onam_overrides(const Plugin& plugin,
                             const Group& group,
-                            bool inside_persistent_children,
                             std::vector<RawFormId>& result) {
-  const bool persistent =
-      inside_persistent_children ||
-      group.header.group_type == static_cast<std::int32_t>(GroupType::cell_persistent_children);
-
   for (const auto& child : group.children) {
     if (const auto* record = std::get_if<Record>(&child)) {
-      if (persistent || !participates_in_fo4_onam(record->header.signature)) continue;
+      if (record->header.flags.is_persistent() ||
+          !participates_in_fo4_onam(record->header.signature)) {
+        continue;
+      }
       if (record->form_key.owner().empty() || record->form_key.owner() == plugin.key) continue;
       result.push_back(record->header.form_id);
       continue;
     }
-    collect_onam_overrides(plugin, std::get<Group>(child), persistent, result);
+    collect_onam_overrides(plugin, std::get<Group>(child), result);
   }
 }
 
@@ -69,7 +67,7 @@ void rebuild_tes4_onam(Plugin& plugin) {
 
   std::vector<RawFormId> overrides;
   for (const auto& group : plugin.groups) {
-    collect_onam_overrides(plugin, group, false, overrides);
+    collect_onam_overrides(plugin, group, overrides);
   }
 
   std::ranges::sort(overrides);
