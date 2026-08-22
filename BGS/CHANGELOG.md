@@ -4,6 +4,22 @@ Changes that affect Behaviour Graph Studio users are documented here.
 
 New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
 
+## 1.0.6
+
+August 17, 2026
+
+<details>
+<summary><strong>Crash Log Diagnosis</strong></summary>
+<br>
+
+* `symrm crash <hash | crashlog.txt> --data <Data folder>` now resolves an AnimTextData subgraph hash (the `AnimationOffsets\<id>.txt` name a crash log complains about) to the subgraph it names.
+* The resolver reads the game's own `AnimationFileData\<id>.txt` manifests from the .ba2 archives (loose files win), so no hash algorithm is reimplemented — the engine's ground truth is used.
+* It reports the subgraph's behavior graph(s), the archive the manifest came from, whether its offset-data file exists, and which of the subgraph's animations are missing from the game data.
+* Loose manifest overrides (e.g. a merged AnimTextData mod) are honored, matching how the engine resolves the tree.
+* New `symrm hash <behavior.hkx> <sapt> [...]` computes the subgraph id itself from a race record's behavior graph and animation folder prefixes. The algorithm was reverse-engineered from the game binary and validated against the game's shipped ids: it is CRC-32 (reflected 0xEDB88320 table, init 0, no final xor) of the lowercased prefix list joined by `|` in the high half, and of the lowercased behavior path in the low half. Every base-game subgraph id recomputes exactly from its race record.
+
+</details>
+
 ## 1.0.5
 
 August 15, 2026
@@ -53,8 +69,9 @@ August 15, 2026
 * `symrm chain` and `symrm check` now accept `--data <Data folder>` and resolve every animation against the game's `.ba2` archives (loose files first, archives in plugin load order), so vanilla animations are no longer reported missing just because they are packed.
 * The Chain tab has a Game Data folder field: set your game's `Data` folder once and every chain, graph check and project check resolves animations against its `.ba2` archives, with each animation marked as loose or naming the archive it came from.
 * With game data attached, an animation that is genuinely absent anywhere becomes an error instead of a warning.
-* Weapon subgraphs (behaviors that play `Animations\Weapon\...` clips) get a single per-weapon coverage note naming the weapon types that lack per-weapon copies, with the generic-copy fallback explained.
+* Weapon subgraphs (behaviors that play `Animations\Weapon\...` clips) get one finding per genuinely missing clip, each resolved to the exact engine search: the failing weapon chain prefix the engine looked under (in fallback order, from the master's AnimationSetData) and whether a generic `Animations\<clip>` fallback exists — a clip with no chain copy and no generic fallback is marked as a crash for that weapon type. Adding the generic copy clears the warning.
 * Borrowed `..\` animation paths (for example into `PowerArmor`) resolve correctly against the archives.
+* The Playback tab can now play clips that only exist inside a `.ba2` archive: with the Game Data folder set, selecting a clip whose animation is packed reads the animation (and, when the rig is packed too, the `CharacterAssets` skeleton) straight out of the archive, and the summary names the archive it came from.
 
 </details>
 

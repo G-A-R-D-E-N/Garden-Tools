@@ -22,8 +22,18 @@ public sealed class GameData : IDisposable
     public string? PluginsPath { get; }
 
 
+    /// <summary>
+    /// One weapon animation type (the folder under Animations\Weapon\) and the path
+    /// prefixes the engine searches, in fallback order, when a weapon subgraph plays a
+    /// generic clip: e.g. 44Pistol resolves against "Animations\Weapon\44Pistol\Player",
+    /// then "Animations\Weapon\44Pistol", then "Animations\Weapon\Pistol", and so on.
+    /// Derived from the race AnimationSetData in the game's master plugin.
+    /// </summary>
+    public sealed record WeaponTypeSet(string Type, IReadOnlyList<string> Prefixes);
+
     private readonly Dictionary<string, Ba2> _opened = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, HashSet<string>> _names = new(StringComparer.OrdinalIgnoreCase);
+    private List<WeaponTypeSet>? _weaponSets;
 
     private GameData(string dataFolder, List<string> archivePaths, string? pluginsPath)
     {
@@ -60,21 +70,69 @@ public sealed class GameData : IDisposable
     /// Where the declared animation resolves from: "loose" when a file sits under the project
     /// root, the archive's file name when it is packed, or null when it is absent everywhere.
     /// </summary>
-    public string? ResolveAnimation(string projectRoot, string declared)
+    public string? ResolveAnimation(string projectRoot, string declared) =>
+        ReadAnimation(projectRoot, declared)?.Source;
+
+    /// <summary>A declared animation that resolves somewhere: its bytes and where they came from.</summary>
+    public sealed record AnimationRead(byte[] Bytes, string Source, string? EntryName);
+
+    /// <summary>
+    /// Read the declared animation's bytes from the loose file or the matching archive entry,
+    /// so callers can decode a packed clip without extracting it. Returns null when the
+    /// animation is absent everywhere.
+    /// </summary>
+    public AnimationRead? ReadAnimation(string projectRoot, string declared)
     {
         string loose = ResolveLoose(projectRoot, declared);
-        if (File.Exists(loose)) return "loose";
+        if (File.Exists(loose))
+        {
+            try { return new AnimationRead(File.ReadAllBytes(loose), "loose", null); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        }
 
+        var (archive, entry) = FindEntry(projectRoot, declared);
+        if (entry == null) return null;
+        try { return new AnimationRead(archive.Read(entry), Path.GetFileName(archive.Path), entry.Name); }
+        catch (Exception e) when (e is IOException or InvalidDataException) { return null; }
+    }
+
+    /// <summary>
+    /// The first .hkx under the character's CharacterAssets folder in the archives, given an
+    /// animation entry name like "Meshes/Actors/Turret/Animations/...". Returns its bytes, or
+    /// null when no packed skeleton exists there. The rig is usually the loose chain skeleton,
+    /// so this is the fallback for fully packed actors.
+    /// </summary>
+    public byte[]? SkeletonBytes(string animationEntryName)
+    {
+        string flat = animationEntryName.Replace('\\', '/');
+        int anims = flat.LastIndexOf("/Animations/", StringComparison.Ordinal);
+        if (anims < 0) return null;
+        string assets = flat[..anims] + "/CharacterAssets/";
+
+        foreach (string archive in ArchivePaths)
+        {
+            foreach (var entry in Entries(archive))
+            {
+                if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) continue;
+                try { return Open(archive).Read(entry); }
+                catch (Exception e) when (e is IOException or InvalidDataException) { return null; }
+            }
+        }
+        return null;
+    }
+
+    private (Ba2 Archive, Ba2.Entry? Entry) FindEntry(string projectRoot, string declared)
+    {
         string key = Normalize(declared);
-        if (key.Length == 0) return null;
+        if (key.Length == 0) return (null!, null);
 
         // the declared path may traverse up out of the project root (..\PowerArmor\... borrows
         // another actor's animations), so resolve it against the root before matching archives
         string? prefixed = null;
-        string? absolute = null;
         try
         {
-            absolute = Path.GetFullPath(Path.Combine(projectRoot,
+            string absolute = Path.GetFullPath(Path.Combine(projectRoot,
                 declared.Replace('\\', Path.DirectorySeparatorChar)
                         .Replace('/', Path.DirectorySeparatorChar)));
             if (IsUnder(absolute, DataFolder))
@@ -92,16 +150,45 @@ public sealed class GameData : IDisposable
         foreach (string archive in ArchivePaths)
         {
             var names = Names(archive);
-            if (prefixed != null && names.Contains(prefixed)) return Path.GetFileName(archive);
+            if (prefixed != null && !names.Contains(prefixed)) continue;
+            if (prefixed == null && !names.Any(n => n.EndsWith("/" + key, StringComparison.Ordinal))) continue;
 
-            if (prefixed == null)
+            foreach (var entry in Entries(archive))
             {
-                foreach (string name in names)
-                    if (name.EndsWith("/" + key, StringComparison.Ordinal))
-                        return Path.GetFileName(archive);
+                string normalized = Normalize(entry.Name);
+                if (prefixed != null)
+                {
+                    if (normalized == prefixed) return (Open(archive), entry);
+                }
+                else if (normalized.EndsWith("/" + key, StringComparison.Ordinal))
+                {
+                    return (Open(archive), entry);
+                }
             }
         }
-        return null;
+        return (null!, null);
+    }
+
+    private IEnumerable<Ba2.Entry> Entries(string archivePath)
+    {
+        try { return Open(archivePath).Entries; }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            // a texture (DX10) archive or an unreadable file simply holds no animations
+            return Array.Empty<Ba2.Entry>();
+        }
+    }
+
+    /// <summary>
+    /// Every entry of every archive, in load order, with the archive it came from. The
+    /// subgraph index uses this to read the engine's AnimTextData manifests without
+    /// duplicating load-order handling.
+    /// </summary>
+    public IEnumerable<(string ArchivePath, Ba2.Entry Entry)> EnumerateEntries()
+    {
+        foreach (string archive in ArchivePaths)
+            foreach (var entry in Entries(archive))
+                yield return (archive, entry);
     }
 
     /// <summary>
@@ -243,6 +330,80 @@ public sealed class GameData : IDisposable
         int dash = name.IndexOf(" - ", StringComparison.Ordinal);
         string core = dash >= 0 ? name[..dash] : name;
         return string.Equals(core, pluginBase, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The weapon animation types the engine will actually resolve, derived from the
+    /// AnimationSetData on the race records of the game's master plugin (Fallout4.esm).
+    /// Empty when no master is present or it cannot be read, in which case callers fall
+    /// back to inferring weapon types from the subgraph itself.
+    /// </summary>
+    public IReadOnlyList<WeaponTypeSet> WeaponTypeSets
+    {
+        get
+        {
+            if (_weaponSets != null) return _weaponSets;
+            _weaponSets = BuildWeaponTypeSets();
+            return _weaponSets;
+        }
+    }
+
+    private List<WeaponTypeSet> BuildWeaponTypeSets()
+    {
+        var sets = new List<WeaponTypeSet>();
+        string master = Path.Combine(DataFolder, "Fallout4.esm");
+        if (!File.Exists(master)) return sets;
+
+        List<EsPlugin.AnimSet> animSets;
+        try { animSets = EsPlugin.RaceAnimationSets(master); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return sets;
+        }
+
+        // insertion order is the engine's fallback order: each set lists its prefixes from the
+        // most specific (Animations\Weapon\<Type>\Player) down through the generic weapon folders,
+        // and a later set only adds prefixes its type did not already inherit.
+        var byType = new Dictionary<string, (List<string> Prefixes, HashSet<string> Seen)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var set in animSets)
+        {
+            string behavior = Path.GetFileNameWithoutExtension(set.Behavior);
+            if (!behavior.Contains("Weapon", StringComparison.OrdinalIgnoreCase)) continue;
+
+            // each set is one weapon archetype: its first Animations\Weapon\ path names the
+            // type, and every path in the set is the fallback chain that type searches.
+            // The set paths are data-relative, e.g. Actors\Character\Animations\Weapon\
+            // 44Pistol\Player; the project root for a character sits at Actors\Character,
+            // so the declared path is the suffix after that prefix.
+            string? type = null;
+            var prefixes = new List<string>();
+            foreach (string path in set.Paths)
+            {
+                int at = path.IndexOf("Animations\\Weapon\\", StringComparison.OrdinalIgnoreCase);
+                if (at <= 0) continue;
+                string relative = path[at..];
+                int embedded = relative.IndexOf("Actors\\", StringComparison.OrdinalIgnoreCase);
+                if (embedded > 0) relative = relative[..embedded];
+                int typeEnd = relative.IndexOf('\\', "Animations\\Weapon\\".Length);
+                string folder = typeEnd > 0
+                    ? relative["Animations\\Weapon\\".Length..typeEnd]
+                    : relative["Animations\\Weapon\\".Length..];
+                if (folder.Length == 0) continue;
+
+                type ??= folder;
+                prefixes.Add(relative);
+            }
+            if (type == null) continue;
+
+            if (!byType.TryGetValue(type, out var known))
+                byType[type] = known = (new List<string>(), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            foreach (string prefix in prefixes)
+                if (known.Seen.Add(prefix)) known.Prefixes.Add(prefix);
+        }
+
+        foreach (var pair in byType.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+            sets.Add(new WeaponTypeSet(pair.Key, pair.Value.Prefixes.ToList()));
+        return sets;
     }
 
     private static string? FindPluginsFile()

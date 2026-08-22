@@ -2760,28 +2760,49 @@ public class MainWindow : Window
 
         string root = _projectChain?.Root ?? Path.GetDirectoryName(Path.GetFullPath(_hkxPath)) ?? "";
         string path = ProjectChain.ResolvePath(root, animation);
-        if (!File.Exists(path))
+        if (File.Exists(path))
         {
-            if (announce)
-                SetPlaybackSummary($"'{animation}' is not on disk under {root}, so it cannot be played. " +
-                                   "Check graph reports the same thing.", Ux.BadBrush);
+            LoadPose(path, animation);
             return;
         }
 
-        LoadPose(path, animation);
+        var packed = _gameData?.ReadAnimation(root, animation);
+        if (packed == null)
+        {
+            if (announce)
+                SetPlaybackSummary($"'{animation}' is neither loose under {root} nor inside any .ba2 under " +
+                                   "the game data folder, so it cannot be played. Check graph reports " +
+                                   "the same thing.", Ux.BadBrush);
+            return;
+        }
+
+        LoadPose(packed.Bytes, animation, animation, packed.Source, packed.EntryName);
     }
 
     private void LoadPose(string animationPath, string label)
     {
-        if (_poseSource == animationPath) return;
+        byte[] hkx;
+        try { hkx = InputFilePolicy.ReadHkx(animationPath); }
+        catch (Exception ex)
+        {
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
+            ClearPose();
+            return;
+        }
+        LoadPose(hkx, animationPath, label, "loose", null);
+    }
+
+    private void LoadPose(byte[] hkx, string key, string label, string source, string? archiveEntry)
+    {
+        if (_poseSource == key) return;
 
         Stop();
-        _poseSkeleton = PoseSkeleton(animationPath);
+        _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry);
 
         HkxAnimationData animation;
         try
         {
-            if (!new HkxBinaryReader().TryReadAnimation(animationPath, out animation))
+            if (!new HkxBinaryReader().TryReadAnimation(hkx, out animation))
             {
                 SetPlaybackSummary($"{label}: {animation.AnimationClass} is not decoded, so it cannot be drawn.",
                                    Ux.BadBrush);
@@ -2810,10 +2831,10 @@ public class MainWindow : Window
         }
 
         _poseAnimation = animation;
-        _poseSource = animationPath;
+        _poseSource = key;
         _playback.Load(animation.NumFrames, animation.FrameDuration);
 
-        try { _poseMotion = RootMotion.Read(animationPath); }
+        try { _poseMotion = RootMotion.Read(hkx); }
         catch { _poseMotion = new RootMotion.Motion(); }
 
         var reference = AnimationPose.ReferencePose(_poseSkeleton!);
@@ -2836,11 +2857,26 @@ public class MainWindow : Window
                   : "")
             : "   stays on the spot";
 
+        string from = source == "loose" ? "" : $"   read from {source}";
         SetPlaybackSummary(
             $"{label}   {animation.NumFrames} frames at {1f / Math.Max(animation.FrameDuration, 0.0001f):F0} fps, " +
             $"{animation.Duration:F2}s   {driven} of {_poseSkeleton!.BoneNames.Count} bones driven   " +
-            $"on {_poseSkeleton.Name}{travelled}", Ux.MetaBrush);
+            $"on {_poseSkeleton.Name}{travelled}{from}", Ux.MetaBrush);
         UpdateFrameLabel();
+    }
+
+    private HkxSkeleton? ArchiveSkeleton(string? animationEntry)
+    {
+        if (_gameData == null || animationEntry == null) return null;
+        byte[]? bytes;
+        try { bytes = _gameData.SkeletonBytes(animationEntry); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+        if (bytes == null) return null;
+        try { return new HkxBinaryReader().ReadSkeleton(bytes); }
+        catch { return null; }
     }
 
     private async Task OpenFromArchive()
@@ -3690,6 +3726,18 @@ public class MainWindow : Window
 
         e.Cancel = true;
         _ = CloseAfterDecision();
+    }
+
+    // The window owns the GameData, and GameData holds a file handle for every .ba2 it has
+    // opened. BuildChain disposes the previous one when it rebuilds, but nothing released the
+    // last one when the window went away, so the game's archives stayed locked for the life of
+    // the process. Closing is the only point where the window is certainly finished with it --
+    // OnClosing can still be cancelled.
+    protected override void OnClosed(EventArgs e)
+    {
+        _gameData?.Dispose();
+        _gameData = null;
+        base.OnClosed(e);
     }
 
     private async Task CloseAfterDecision()
