@@ -367,3 +367,42 @@ TEST_CASE("Save As writes the checked canonical destination") {
     REQUIRE_FALSE(canonicalEc);
     CHECK(plugins[0].at("FilePath") == canonical.string());
 }
+
+#if !defined(_WIN32)
+TEST_CASE("Save As rejects a plugin-named symlink to a non-plugin target") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto modDir = root / "mods" / "MyMod";
+    const auto patch = modDir / "Patch.esp";
+    const auto victim = modDir / "notes.txt";
+    const auto alias = modDir / "LooksSafe.esp";
+    writeBytes(patch, makePlugin());
+    std::filesystem::create_directories(modDir);
+    {
+        std::ofstream out(victim, std::ios::binary | std::ios::trunc);
+        REQUIRE(out.good());
+        out << "sentinel";
+    }
+    std::error_code symlinkEc;
+    std::filesystem::create_symlink(victim, alias, symlinkEc);
+    REQUIRE_FALSE(symlinkEc);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", patch, "MyMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto saved = backend.invokeBackend(
+        "SavePlugin", nlohmann::json::array({"Patch.esp", alias.string()}));
+    REQUIRE_FALSE(saved.has_value());
+    CHECK(saved.error().type == "SavePathNotAllowed");
+
+    std::ifstream in(victim, std::ios::binary);
+    std::string contents{std::istreambuf_iterator<char>(in), {}};
+    CHECK(contents == "sentinel");
+    CHECK(std::filesystem::is_symlink(alias));
+}
+#endif
