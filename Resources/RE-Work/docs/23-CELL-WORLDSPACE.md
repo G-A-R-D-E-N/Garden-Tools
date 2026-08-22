@@ -350,6 +350,75 @@ collision handling — not cell-specific.
 (`thunk_FUN_14087d2d0`), and calls `thunk_FUN_140d55ca0` (probably cell →
 worldspace association).
 
+### 8.4 Interior-cell XCLC path — why the coordinate setter skips them
+
+**Short answer:** interior cells don't use XCLC at all. The subrecord is
+**exterior-only** (12 bytes: cell-grid coords x, y + a field at +0x1e).
+Interior cells use **XCLL** (`0x4C4C4358`, 0x88 bytes — lighting/ambient
+data), which is the interior counterpart in both LoadRecord and SaveRecord.
+
+**The three functions that create the asymmetry:**
+
+- **`FUN_140d18490`** (cell-data getter, RVA `0xd18490`):
+  ```c
+  if (cell->+0x50 & 1) return NULL;   // interior → NULL
+  return cell->+0x60;                  // exterior → cell-data block
+  ```
+  This is called by both LoadRecord and SaveRecord to gate XCLC
+  access. There's a duplicate at `0xd184b0` with identical logic
+  (same bytes: `F6 41 50 01 75 03 33 C0 C3 48 8B 41 60 C3`).
+
+- **`FUN_140d197c0`** (coordinate setter, RVA `0xd197c0`):
+  ```c
+  if (cell->+0x50 & 1) return;        // interior → skip
+  if (cell->+0x60) {
+      cell_data[0] = x;                // write grid x
+      cell_data[4] = y;                // write grid y
+  }
+  ```
+  Called by `NewCell` after constructing an exterior cell. Skips
+  interior cells entirely — the programmatic setter, not the loader.
+
+- **`FUN_140d19770`** (simple world-position getter, RVA `0xd19770`):
+  ```c
+  if (cell->+0x50 & 1) { *x=0.0f; *y=0.0f; return; }  // interior → (0,0)
+  cell_data = cell->+0x60;
+  *x = (float)(cell_data[0] * 4096);   // grid x → world units
+  *y = (float)(cell_data[4] * 4096);   // grid y → world units
+  ```
+  Used by the cell-map insert (`FUN_140e4d180`) to grow world bounds.
+  Returns (0,0) for interior — they don't participate in the grid.
+
+**In LoadRecord (FUN_140d146d0):** The XCLC handler dispatches on
+subrecord 4CC `0x434C4358` and calls `FUN_140d18490`. For interior
+cells, this returns NULL, the NULL guard fires, and the read is
+**skipped** — the 12 bytes are read into locals and discarded. XCLL
+(`0x4C4C4358`) has its own handler in the same switch; it writes
+0x88 bytes into a different target.
+
+**In SaveRecord (FUN_140d44ba0):** The exterior/interior split is
+explicit at the top of the XCLC/XCLL block:
+
+```c
+if ((cell->+0x50 & 1) == 0) {          // exterior
+    data = FUN_140d18490(cell);         // cell-data ptr
+    write_subrecord('XCLC', data, 12);  // coords + field
+    if (data->+0x07) write_subrecord('CNAM', ...);
+    if (data->+0x1d) write_subrecord('ZNAM', ...);
+} else {                                // interior
+    data = FUN_140d184b0();             // NULL call — different accessor
+    write_subrecord('XCLL', data, 0x88); // lighting, not coords
+}
+```
+
+**Why:** interior cells have no grid position. Their "coordinates" are
+implicit from the worldspace parent (stored at `cell+0x150` back-pointer).
+The cell-data block at `+0x60` still exists for interior cells (allocated
+by `FUN_140d18510`), but it carries XCLL lighting/ambient data, not
+XCLC grid coords. Functions that need interior cell position navigate
+through `cell+0x150` → worldspace → cell-level array (see the complex
+getters at `0xd197e0`/`0xd19820` which do handle the interior path).
+
 ### 8b. TESWorldSpace member layout (constructor)
 
 Recovered from the factory Create (`FUN_140e49880` → alloc 0x2B8 + call ctor
