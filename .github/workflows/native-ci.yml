@@ -39,6 +39,7 @@ jobs:
         run: >
           cmake -S Radicle -B build/radicle -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
+          -DBUILD_TESTING=ON
           -DRADICLE_BUILD_TESTS=ON
 
       - name: Build
@@ -131,6 +132,7 @@ jobs:
           cmake -S Radicle -B build/radicle-win -G Ninja
           -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
           -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=OFF
           -DRADICLE_BUILD_TESTS=OFF
           -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win
           -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib

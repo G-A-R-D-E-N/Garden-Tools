@@ -67,6 +67,12 @@ Result<Output> ReprocRunner::run(const Request& request) {
     if (!workingDirectory.empty()) options.working_directory = workingDirectory.c_str();
     if (!environment.empty()) options.env.extra = environment;
 
+    // reproc's default stderr redirect is the parent process, even when an
+    // stderr sink is passed to reproc::run. Explicit pipes are required for
+    // both streams so callers receive complete child output.
+    options.redirect.out.type = reproc::redirect::pipe;
+    options.redirect.err.type = reproc::redirect::pipe;
+
     const auto timeoutCount = request.timeout.count() > 0
         ? static_cast<int>(request.timeout.count())
         : 120000;
