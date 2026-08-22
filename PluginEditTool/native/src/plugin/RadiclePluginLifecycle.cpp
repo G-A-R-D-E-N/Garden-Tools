@@ -1,10 +1,16 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include <fo4/forms/eyes.hpp>
+#include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/form_links.hpp>
@@ -18,11 +24,82 @@ std::string lifecycleStringArgument(const nlohmann::json& args, std::size_t inde
     return args[index].get<std::string>();
 }
 
+const nlohmann::json* lifecycleObjectArgument(const nlohmann::json& args,
+                                              std::size_t index) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_object()) return nullptr;
+    return &args[index];
 }
+
+template <class UInt>
+bool lifecycleUnsignedField(const nlohmann::json& object,
+                            const char* key,
+                            UInt defaultValue,
+                            UInt& value) {
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        value = defaultValue;
+        return true;
+    }
+    std::uint64_t parsed = 0;
+    if (found->is_number_unsigned()) {
+        parsed = found->get<std::uint64_t>();
+    } else if (found->is_number_integer()) {
+        const auto signedValue = found->get<std::int64_t>();
+        if (signedValue < 0) return false;
+        parsed = static_cast<std::uint64_t>(signedValue);
+    } else {
+        return false;
+    }
+    if (parsed > static_cast<std::uint64_t>(std::numeric_limits<UInt>::max())) return false;
+    value = static_cast<UInt>(parsed);
+    return true;
+}
+
+std::optional<std::string> optionalStringField(const nlohmann::json& object,
+                                               const char* key,
+                                               bool& valid) {
+    valid = true;
+    const auto found = object.find(key);
+    if (found == object.end() || found->is_null()) return std::nullopt;
+    if (!found->is_string()) {
+        valid = false;
+        return std::nullopt;
+    }
+    return found->get<std::string>();
+}
+
+Result<nlohmann::json> persistLifecycleMutation(
+    RadiclePluginBackend::LoadedPlugin& loaded,
+    fo4::Plugin mutated,
+    std::string pluginName,
+    std::string signature,
+    const fo4::FormKey& key,
+    RadiclePluginBackend& backend) {
+    try {
+        fo4::write_plugin_file(mutated, loaded.path);
+        loaded.plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            loaded.loadedTime = std::filesystem::last_write_time(loaded.path, ec);
+        }
+        backend.rebuildGraphLocked();
+        return nlohmann::json(nlohmann::json{
+            {"ok", true},
+            {"plugin", std::move(pluginName)},
+            {"signature", std::move(signature)},
+            {"formKey", key.to_string()}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"RecordCreateFailed", error.what()});
+    }
+}
+
+}  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& arguments) {
     const auto pluginName = lifecycleStringArgument(arguments, 0);
     const auto signatureText = lifecycleStringArgument(arguments, 1);
+    const auto* payload = lifecycleObjectArgument(arguments, 2);
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
@@ -30,6 +107,19 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         return std::unexpected(Error{
             "InvalidRecordSignature",
             "Record signature must contain exactly four characters"
+        });
+    }
+    if (signatureText != "EYES" && signatureText != "LVSP") {
+        return std::unexpected(Error{
+            "RecordCreationRequiresSchema",
+            "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
+                signatureText
+        });
+    }
+    if (payload == nullptr) {
+        return std::unexpected(Error{
+            "RecordCreationPayloadMissing",
+            "Typed " + signatureText + " creation requires an object payload"
         });
     }
 
@@ -48,8 +138,134 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
 
     try {
         auto mutated = loaded->plugin;
-        const auto key = fo4::create_local_record(
-            mutated, fo4::Signature::from_string(signatureText));
+        fo4::FormKey key;
+
+        if (signatureText == "EYES") {
+            const auto full = payload->find("fullText");
+            const auto icon = payload->find("icon");
+            if (full == payload->end() || !full->is_string() ||
+                icon == payload->end() || !icon->is_string()) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "EYES creation requires string fields fullText and icon"
+                });
+            }
+
+            bool editorValid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            if (!editorValid) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "EYES editorId must be a string or null"
+                });
+            }
+
+            std::uint8_t dataFlags = 0;
+            std::uint32_t recordFlags = 0;
+            if (!lifecycleUnsignedField(*payload, "dataFlags", std::uint8_t{0}, dataFlags) ||
+                !lifecycleUnsignedField(*payload, "recordFlags", std::uint32_t{0}, recordFlags)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "EYES dataFlags must be 0..255 and recordFlags must be an unsigned 32-bit value"
+                });
+            }
+
+            key = fo4::forms::create_eyes(
+                mutated,
+                editorId.has_value()
+                    ? std::optional<std::string_view>{*editorId}
+                    : std::nullopt,
+                full->get_ref<const std::string&>(),
+                icon->get_ref<const std::string&>(),
+                dataFlags,
+                fo4::RecordFlags{recordFlags});
+        } else {
+            std::uint8_t chanceNone = 0;
+            std::uint8_t maxCount = 0;
+            std::uint8_t flags = 0;
+            if (!lifecycleUnsignedField(*payload, "chanceNone", std::uint8_t{0}, chanceNone) ||
+                !lifecycleUnsignedField(*payload, "maxCount", std::uint8_t{0}, maxCount) ||
+                !lifecycleUnsignedField(*payload, "flags", std::uint8_t{0}, flags)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "LVSP chanceNone, maxCount, and flags must be 0..255"
+                });
+            }
+
+            const auto entriesField = payload->find("entries");
+            if (entriesField == payload->end() || !entriesField->is_array()) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "LVSP creation requires an entries array"
+                });
+            }
+
+            std::vector<fo4::forms::LeveledSpellEntry> entries;
+            entries.reserve(entriesField->size());
+            for (const auto& item : *entriesField) {
+                if (!item.is_object()) {
+                    return std::unexpected(Error{
+                        "InvalidRecordCreationPayload",
+                        "Every LVSP entry must be an object"
+                    });
+                }
+                const auto spell = item.find("spell");
+                if (spell == item.end() || !spell->is_string()) {
+                    return std::unexpected(Error{
+                        "InvalidRecordCreationPayload",
+                        "Every LVSP entry requires a spell FormKey string"
+                    });
+                }
+
+                fo4::forms::LeveledSpellEntry entry;
+                if (!lifecycleUnsignedField(item, "level", std::uint16_t{1}, entry.level) ||
+                    !lifecycleUnsignedField(item, "count", std::uint16_t{1}, entry.count) ||
+                    !lifecycleUnsignedField(item, "chanceNone", std::uint8_t{0}, entry.chance_none)) {
+                    return std::unexpected(Error{
+                        "InvalidRecordCreationPayload",
+                        "LVSP entry level/count must be 0..65535 and chanceNone must be 0..255"
+                    });
+                }
+                try {
+                    entry.spell = fo4::FormKey::parse(spell->get_ref<const std::string&>());
+                } catch (const std::exception& error) {
+                    return std::unexpected(Error{"InvalidLeveledSpellReference", error.what()});
+                }
+
+                const auto* winner = graph_.winner(entry.spell);
+                if (winner == nullptr ||
+                    (winner->signature != fo4::Signature::from_string("SPEL") &&
+                     winner->signature != fo4::Signature::from_string("LVSP"))) {
+                    return std::unexpected(Error{
+                        "InvalidLeveledSpellReference",
+                        "LVSP entry spell must resolve to a loaded SPEL or LVSP record: " +
+                            entry.spell.to_string()
+                    });
+                }
+                entries.push_back(std::move(entry));
+            }
+
+            bool editorValid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            if (!editorValid ||
+                (editorId.has_value() && editorId->find('\0') != std::string::npos)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "LVSP editorId must be a string without embedded NUL bytes or null"
+                });
+            }
+
+            key = fo4::forms::create_leveled_spell(
+                mutated, chanceNone, maxCount, flags, entries);
+            if (editorId.has_value() &&
+                !fo4::set_record_editor_id(mutated, key, *editorId)) {
+                return std::unexpected(Error{
+                    "RecordCreateFailed",
+                    "Newly created LVSP record could not accept its editor ID"
+                });
+            }
+        }
+
         fo4::write_plugin_file(mutated, loaded->path);
         loaded->plugin = std::move(mutated);
         {
@@ -63,6 +279,10 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             {"signature", signatureText},
             {"formKey", key.to_string()}
         }.dump());
+    } catch (const fo4::forms::EyesError& error) {
+        return std::unexpected(Error{"EyesCreateFailed", error.what()});
+    } catch (const fo4::forms::LeveledSpellError& error) {
+        return std::unexpected(Error{"LeveledSpellCreateFailed", error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"RecordCreateFailed", error.what()});
     }
