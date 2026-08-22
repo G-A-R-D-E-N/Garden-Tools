@@ -80,6 +80,17 @@ Record* find_mutable_record(Plugin& plugin, const FormKey& record_key) {
   return target;
 }
 
+Record* find_top_level_record(Plugin& plugin, const FormKey& record_key) {
+  for (auto& group : plugin.groups) {
+    if (group.header.group_type != 0) continue;
+    for (auto& child : group.children) {
+      auto* record = std::get_if<Record>(&child);
+      if (record != nullptr && record->form_key == record_key) return record;
+    }
+  }
+  return nullptr;
+}
+
 void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
   Subrecord* hedr = nullptr;
   for (auto& subrecord : plugin.tes4.subrecords) {
@@ -196,6 +207,55 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   return RecordDeleteStatus::deleted;
 }
 
+RecordRenumberStatus renumber_local_record(Plugin& plugin,
+                                           const FormKey& record_key,
+                                           LocalFormId new_local) {
+  if (record_key.owner() != plugin.key) return RecordRenumberStatus::not_local;
+  if (plugin.header.tes4_flags.is_small_file()) {
+    throw FormIdError(
+        "light-plugin record renumbering is disabled until CheckValidIDForSmallFile is proven");
+  }
+  if (new_local.value() == 0 || new_local.value() > k_full_local_mask) {
+    throw FormIdError("new local FormID is outside the full-plugin local FormID range");
+  }
+
+  auto next = plugin;
+  assign_record_form_keys(next);
+  auto* target = find_top_level_record(next, record_key);
+  if (target == nullptr) {
+    if (find_record(next, record_key) != nullptr) {
+      throw FormIdError(
+          "nested record renumbering is disabled until parent GRUP label rewriting is proven");
+    }
+    return RecordRenumberStatus::record_missing;
+  }
+
+  const FormKey new_key{next.key, new_local};
+  if (new_key == record_key) return RecordRenumberStatus::unchanged;
+  if (find_record(next, new_key) != nullptr) return RecordRenumberStatus::target_exists;
+
+  rekey_form_links(next, record_key, new_key);
+  target = find_top_level_record(next, record_key);
+  if (target == nullptr) {
+    throw FormIdError("record disappeared during transactional FormLink rekey");
+  }
+
+  target->form_key = new_key;
+  target->header.form_id = encode_plugin_form_id(new_key, plugin_form_id_context(next));
+  target->original_bytes.clear();
+  target->decompressed_payload.clear();
+  target->header.data_size = 0;
+  target->uncompressed_size = 0;
+
+  if (new_local.value() >= next.header.next_form_id) {
+    set_hedr_next_form_id(next, new_local.value() + 1u);
+  }
+  next.original_bytes.clear();
+  clear_group_originals(next);
+  plugin = std::move(next);
+  return RecordRenumberStatus::renumbered;
+}
+
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,
                           std::string_view editor_id) {
@@ -262,9 +322,6 @@ ScalarMutationStatus set_record_scalar(
   }
   if (found == nullptr) return ScalarMutationStatus::subrecord_missing;
 
-  // Existing bytes are read faithfully, but new values are validated by the
-  // exact record-qualified field descriptor. Missing fields are not inserted
-  // until schema/codegen also carries proven subrecord ordering.
   static_cast<void>(schema::decode_scalar(found->data, field.scalar));
   const auto encoded = schema::encode_scalar(value, field.scalar);
   if (found->data == encoded) return ScalarMutationStatus::unchanged;
