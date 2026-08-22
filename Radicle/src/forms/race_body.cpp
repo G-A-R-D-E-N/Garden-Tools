@@ -18,6 +18,9 @@ namespace {
 constexpr auto k_race = Signature::from_string("RACE");
 constexpr auto k_full = Signature::from_string("FULL");
 constexpr auto k_desc = Signature::from_string("DESC");
+constexpr auto k_vtck = Signature::from_string("VTCK");
+constexpr auto k_pnam = Signature::from_string("PNAM");
+constexpr auto k_unam = Signature::from_string("UNAM");
 constexpr auto k_nam1 = Signature::from_string("NAM1");
 constexpr auto k_mnam = Signature::from_string("MNAM");
 constexpr auto k_fnam = Signature::from_string("FNAM");
@@ -35,7 +38,8 @@ bool is_model_signature(Signature signature) {
 
 bool is_sparse_creation_signature(Signature signature) {
   return signature == sig_edid || signature == k_full || signature == k_desc ||
-         signature == sig_data;
+         signature == sig_data || signature == k_vtck || signature == k_pnam ||
+         signature == k_unam;
 }
 
 void require_empty_marker(const Subrecord& subrecord, std::string_view label) {
@@ -222,7 +226,7 @@ bool set_race_body_data(Plugin& plugin,
   } else {
     // The complete RACE ordering contains many optional structures before
     // BodyData. Without a prior BodyData marker, only the sparse #65 creation
-    // shape has a proven insertion point: immediately after its DATA.
+    // shape has a proven insertion point: after its required VTCK/PNAM/UNAM.
     for (const auto& subrecord : record->subrecords) {
       if (!is_sparse_creation_signature(subrecord.signature)) {
         throw RaceError(
