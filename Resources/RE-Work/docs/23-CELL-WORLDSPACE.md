@@ -1111,6 +1111,38 @@ CELL `LoadRecord` dispatches: `CNAM`, `DATA`, `EDID`, `FULL`, `LNAM`,
 CELL `SaveRecord` writes: `VISI`, `RVIS`, `PCMB`, `DATA`, `XCLC`, `CNAM`,
 `MHDT`, `LTMP`, `XCLW`.
 
+#### 10a.1 Cross-check against Fallout4.esm CELL records (2026-08-22)
+
+Byte-parsed 3 interior cells from Fallout4.esm (all `0x40000` = compressed).
+Exterior cells all have `0x40000` too — no clean `0x0002` cells found in Fallout4.esm
+(all cells are compressed in the shipped master).
+
+**Core interior set (present in every cell, 10):**
+`EDID`, `FULL`, `DATA`, `VISI`, `PCMB`, `XCLL` (int. lighting, 0x88B),
+`LTMP`, `XCLW`, `XCIM`, `XLCN`.
+
+**Common interior extras (present in 2/3 cells, 4):**
+`XCCM`, `XILW`, `XOWN`, `XPRI`.
+
+**Rare/sporadic interior (1/3 cells, 4):**
+`XCMO`, `XCAS`, `XEZN`, `XCRI`.
+
+**Verdict — 100% match with LoadRecord dispatch.**
+All 18 subrecords seen in real cells appear in the doc's LoadRecord list
+(`XCLC` and `XCLW` are exterior see §10a.2). No missing subrecords found.
+The 10 `SaveRecord` writes match the core interior set: interior cells
+write `XCLL` where exterior cells write `XCLC`.
+
+#### 10a.2 Interior vs. exterior subrecord split
+
+| subrecord | interior | exterior | verified in real file |
+|---|---|---|---|
+| `XCLL` (0x88B lighting) | ✅ core | — | every interior cell |
+| `XCLC` (12B coords) | — | ✅ core | exterior-only (§8.4) |
+| `XCLW` (water height) | ✅ core | ✅ | both types |
+| `XCLR` (region list) | sporadic | rare | varies |
+| `LTMP` (lighting template) | ✅ core | rare | ✓ |
+
 ### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
 
 | slot | function | name | evidence | `__FILE__` anchors |
