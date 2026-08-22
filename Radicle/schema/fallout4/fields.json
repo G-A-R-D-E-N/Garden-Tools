@@ -2,6 +2,35 @@
   "version": 1,
   "records": [
     {
+      "signature": "EYES",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {"signature": "EDID", "minimum": 0, "maximum": 1},
+          {"signature": "FULL", "minimum": 1, "maximum": 1},
+          {"signature": "ICON", "minimum": 1, "maximum": 1},
+          {"signature": "DATA", "minimum": 1, "maximum": 1}
+        ]
+      },
+      "fields": []
+    },
+    {
+      "signature": "LVSP",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {"signature": "EDID", "minimum": 0, "maximum": 1},
+          {"signature": "OBND", "minimum": 0, "maximum": 1},
+          {"signature": "LVLD", "minimum": 1, "maximum": 1},
+          {"signature": "LVLM", "minimum": 1, "maximum": 1},
+          {"signature": "LVLF", "minimum": 1, "maximum": 1},
+          {"signature": "LLCT", "minimum": 1, "maximum": 1},
+          {"signature": "LVLO", "minimum": 0, "maximum": 255}
+        ]
+      },
+      "fields": []
+    },
+    {
       "signature": "REFR",
       "fields": [
         {
