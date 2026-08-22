@@ -6,6 +6,7 @@ Primary source:
 
 - `TES5Edit/TES5Edit/Core/wbImplementation.pas`, `TwbFile.PrepareSave`
 - ONAM rebuild block around lines 4986-5088 on the referenced branch
+- `TwbMainRecord.GetIsPersistent`, which returns the record-header `Persistent` flag
 - xEdit `whatsnew.md`, `ONAMUpdate Mode`
 
 ## What ONAM is for
@@ -39,9 +40,9 @@ A record is emitted only when:
 
 1. it is an override owned by one of the file's masters, not a new local record;
 2. it is in the supported signature set above; and
-3. it is not persistent.
+3. its record-header `Persistent` flag (`0x00000400`) is clear.
 
-For Radicle's structural tree, records below a `cell_persistent_children` GRUP are therefore excluded. Temporary-cell descendants are eligible. Record flags are not treated as a universal persistence bit because the same flag positions have record-type-specific meanings elsewhere in the format.
+`TwbMainRecord.GetIsPersistent` reads that header flag directly. xEdit normally keeps CELL child-group placement consistent with it, moving persistent placed records to the persistent-children group and temporary records to the temporary-children group, but ONAM rebuild itself tests the flag. Radicle therefore also uses the flag directly rather than inferring persistence from GRUP type.
 
 ## Ordering and replacement
 
