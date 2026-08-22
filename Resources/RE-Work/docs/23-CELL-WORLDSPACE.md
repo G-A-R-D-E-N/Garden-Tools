@@ -1142,6 +1142,20 @@ write `XCLL` where exterior cells write `XCLC`.
 | `XCLW` (water height) | ✅ core | ✅ | both types |
 | `XCLR` (region list) | sporadic | rare | varies |
 | `LTMP` (lighting template) | ✅ core | rare | ✓ |
+| `XCWT` (water type) | rare | ? | FO4-only (1/46 cells), 4B formID |
+
+#### 10a.3 SaveRecord validator (`validate_cell_save.py`)
+
+A dedicated byte-parser cross-checks every CELL subrecord in any `.esm` against the
+SaveRecord dispatch. Running against Fallout4.esm (46 interior CELLs):
+
+- **18 unique subrecords found** — 100% in SaveRecord, none in TESForm base or LoadRecord-only
+- **0 unknowns** — every 4CC has a known write path
+- **9 SaveRecord keys not seen in the sampled cells** (exterior-only `XCLC`/`CNAM`/`XCLR`/`XCLP`/`XCLS`,
+  rare `MHDT`/`RVIS`/`XILW`/`XWEM`) — all explained by the sample being interior-only
+- **`XCWT`** (cell water type, 4B formID) is new to the SaveRecord list — found in 1/46 cells
+
+Validator: `ghidra-dump/validate_cell_save.py` — `--json` flag for machine output.
 
 ### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
 
