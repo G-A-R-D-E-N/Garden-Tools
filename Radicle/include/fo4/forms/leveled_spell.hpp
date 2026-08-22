@@ -38,6 +38,12 @@ struct LeveledSpell {
 
 LeveledSpell decode_leveled_spell(const Plugin& plugin, const FormKey& key);
 
+FormKey create_leveled_spell(Plugin& plugin,
+                             std::uint8_t chance_none,
+                             std::uint8_t max_count,
+                             std::uint8_t flags,
+                             std::span<const LeveledSpellEntry> entries);
+
 bool replace_leveled_spell_entries(Plugin& plugin,
                                    const FormKey& key,
                                    std::span<const LeveledSpellEntry> entries);
