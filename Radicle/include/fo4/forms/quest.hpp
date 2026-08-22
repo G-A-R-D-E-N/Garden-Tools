@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/localized_fields.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -130,6 +131,46 @@ struct QuestAliasCreation {
   std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
 };
+
+/*
+ * Quest stages, measured on Fallout4.esm's 1,336 QUST records (8,680 stages,
+ * 9,058 log entries).
+ *
+ * The array runs from the first INDX up to the first QOBJ or ANAM:
+ *
+ *   INDX (4 bytes: u16 index, u8 flags, u8 unknown)
+ *     QSDT (1 byte flags)          -- one log entry; 0..9 of them per stage
+ *       CNAM  log text, localized  -- 4 bytes in all 921 shipped instances
+ *       NAM2  note text, inline    -- never localized
+ *       CTDA/CIS2 per-entry conditions
+ *
+ * NAM0 does not occur in FO4 quest stages at all (0 of 8,680) despite being a
+ * documented Skyrim stage field, so it is not modelled.
+ */
+struct QuestLogEntry {
+  // QSDT: bit 0 completes the quest, bit 1 fails it. Observed values 0, 1, 2.
+  std::uint8_t flags{0};
+  std::optional<schema::LocalizedString> log_text;
+  std::optional<std::string> note;
+  // Ordered remainder (conditions and anything unmodelled) kept verbatim so a
+  // rewrite never collapses members by signature.
+  std::vector<Subrecord> subrecords;
+};
+
+struct QuestStage {
+  std::uint16_t index{0};
+  std::uint8_t flags{0};
+  // Not always zero in shipped data, so it is preserved rather than rebuilt.
+  std::uint8_t unknown{0};
+  // 63 shipped stages carry no log entry at all, so this may be empty.
+  std::vector<QuestLogEntry> log_entries;
+};
+
+struct QuestStages {
+  std::vector<QuestStage> stages;
+};
+
+QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest);
 
 struct QuestAliases {
   std::uint32_t next_alias_id{0};

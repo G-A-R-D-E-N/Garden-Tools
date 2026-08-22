@@ -243,3 +243,33 @@ override instead of the armour's name. `FULL` stays unmodelled on ARMO until
 the `OBTE` template block is parsed; `DESC` is modelled now.
 
 Measured top-level order is `EDID OBND PTRN FULL … KSIZ KWDA DESC INDX …`.
+
+## QUST stage / log-entry grammar
+
+Measured on `Fallout4.esm`: 1,336 QUST records, 8,680 stages, 9,058 log
+entries. The stage array runs from the first `INDX` up to the first `QOBJ`
+(objectives) or `ANAM` (alias array):
+
+```
+INDX  4 bytes: u16 stage index, u8 flags, u8 unknown
+  QSDT  1 byte flags          -- one log entry
+    CNAM  log text, LOCALIZED -- 4 bytes in all 921 shipped instances
+    NAM2  note text, inline   -- NUL-terminated, 99 distinct lengths
+    CTDA / CIS2               -- per-entry conditions
+```
+
+Payload sizes are fixed: `INDX` is 4 bytes in all 8,680 stages, `QSDT` is 1
+byte in all 9,058 entries. Observed `QSDT` flag values are `0` (8,649), `1`
+(267, completes the quest) and `2` (142, fails it).
+
+Three things worth pinning:
+
+- **`NAM0` does not occur.** Zero of 8,680 stages carry it, despite it being a
+  documented Skyrim stage field. It is not modelled.
+- **Log entries per stage are not always one:** 0 (63 stages), 1 (8,378), and
+  2–9 (239). Both the empty and the multi-entry shapes must be representable.
+- **The fourth `INDX` byte is not always zero** (observed 0–10+), so it is
+  preserved rather than rebuilt.
+
+`INDX` is also used by the alias array, which is why the walk has to stop at
+`QOBJ`/`ANAM` rather than scanning the whole record.

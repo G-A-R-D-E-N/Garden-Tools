@@ -90,6 +90,7 @@ add_library(fo4
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/quest_aliases.cpp
+  src/forms/quest_stages.cpp
   src/forms/quest_alias_edit.cpp
   src/forms/race.cpp
   src/forms/race_body.cpp
@@ -226,6 +227,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_creation.cpp
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_real.cpp
+    tests/test_quest_stages_real.cpp
+    tests/test_quest_stages.cpp
     tests/test_typed_families_real.cpp
     tests/test_localized_fields.cpp
     tests/test_quest_alias_encoding.cpp
