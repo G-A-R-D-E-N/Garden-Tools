@@ -325,8 +325,14 @@ public static class Smoke
             CheckTrue($"{name}: the Current file card advertises the drop affordance",
                 Find<TextBlock>(window).Any(t => (t.Text ?? "").Contains("Drop a .hkx anywhere on the Bridge")));
 
-            var droppedData = new Avalonia.Input.DataObject();
-            droppedData.Set(Avalonia.Input.DataFormats.FileNames, new[] { path });
+            // Avalonia 12 seals IStorageItem against user implementations, so the drop payload
+            // has to come from the framework's own path lookup rather than a test stub.
+            var storageFile = window.StorageProvider
+                .TryGetFileFromPathAsync(new Uri(path)).GetAwaiter().GetResult();
+            CheckTrue($"{name}: the platform resolves the dropped path to a storage item",
+                      storageFile != null);
+            var droppedData = new Avalonia.Input.DataTransfer();
+            droppedData.Add(Avalonia.Input.DataTransferItem.CreateFile(storageFile!));
             window.DragDrop(new Point(420, 260), Avalonia.Input.Raw.RawDragEventType.DragEnter, droppedData,
                             Avalonia.Input.DragDropEffects.Copy);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
