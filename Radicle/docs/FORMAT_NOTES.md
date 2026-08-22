@@ -189,16 +189,15 @@ it holds a **four-byte string ID** into the `.STRINGS`/`.DLSTRINGS`/`.ILSTRINGS`
 tables. All 45 `RACE` records in `Fallout4.esm` carry a `DESC` of exactly 4
 bytes.
 
-The typed decoders currently read string subrecords as NUL-terminated text, so
-`decode_race` rejects every shipped RACE with "DESC is not a single
-NUL-terminated string". This is a **localization gap, not a RACE gap** — it
-will affect any typed decoder that reads a string subrecord from vanilla
-content.
+This is handled by `fo4/schema/localized_fields.hpp`. A string field decodes to
+a `LocalizedString` carrying **either** a four-byte string ID (localized plugin,
+lstring field) **or** inline text, whichever the file used. Decoding performs no
+I/O and picks no language, so a write-back reproduces the original bytes;
+resolve an ID through `fo4::localization` when display text is wanted.
 
-`fo4/localization/strings.hpp` already reads and writes the string tables; what
-is missing is the typed decoders consulting `tes4_flags.is_localized()` and
-treating those payloads as string IDs. Related: #29 (bit 7 localized vs
-delocalized semantics).
+`RACE` is wired. The remaining typed families still read strings as inline text
+and need the same treatment. Related: #29 (bit 7 localized vs delocalized
+semantics).
 
 ## RACE BodyData INDX
 

@@ -38,6 +38,16 @@ add_custom_target(radicle_record_schema_check ALL
   COMMENT "Checking generated Fallout 4 record authoring schema"
   VERBATIM
 )
+add_custom_target(radicle_lstring_schema_check ALL
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/lstring_schema_codegen.py"
+    --schema "${CMAKE_CURRENT_SOURCE_DIR}/schema/fallout4/fields.json"
+    --output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/generated_lstring_fields.inc"
+    --check
+  COMMENT "Checking generated Fallout 4 localized field schema"
+  VERBATIM
+)
 add_custom_target(radicle_formlink_schema_check ALL
   COMMAND
     "${Python3_EXECUTABLE}"
@@ -94,6 +104,7 @@ add_library(fo4
   src/plugin/onam.cpp
   src/plugin/writer.cpp
   src/schema/form_links.cpp
+  src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
   src/schema/nested_formlink_lists.cpp
   src/schema/preflight.cpp
@@ -216,6 +227,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_real.cpp
     tests/test_typed_families_real.cpp
+    tests/test_localized_fields.cpp
     tests/test_quest_alias_encoding.cpp
     tests/test_quest_alias_formlinks.cpp
     tests/test_quest_alias_location_formlinks.cpp
