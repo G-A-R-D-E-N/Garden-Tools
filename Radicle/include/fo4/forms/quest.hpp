@@ -4,7 +4,9 @@
 #include "fo4/plugin/container.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace fo4::forms {
@@ -28,6 +30,10 @@ public:
 struct QuestAlias {
   QuestAliasKind kind{QuestAliasKind::reference};
   std::uint32_t id{0};
+  std::optional<std::string> name;
+  std::optional<std::uint32_t> flags;
+  std::optional<std::int32_t> force_into_alias;
+  std::optional<std::uint8_t> max_initial_fill_count;
   std::vector<Subrecord> subrecords;
 };
 
