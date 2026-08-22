@@ -59,6 +59,8 @@ constexpr auto k_nvmi = Signature::from_string("NVMI");
 constexpr auto k_nvpp = Signature::from_string("NVPP");
 constexpr auto k_nvsi = Signature::from_string("NVSI");
 constexpr auto k_mnam = Signature::from_string("MNAM");
+constexpr auto k_race = Signature::from_string("RACE");
+constexpr auto k_sraf = Signature::from_string("SRAF");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -359,6 +361,12 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
 void visit_link_offsets(const Record& record, const Subrecord& sub,
                         bool strict_remap, auto&& fn) {
   if (sub.signature == sig_xxxx || sub.data.empty()) {
+    return;
+  }
+  // xEdit FO4 uses SRAF in two incompatible ways: INFO response Camera Path
+  // is a FormID, while RACE subgraph SRAF is {u16 role, u16 perspective} and
+  // terminates one subgraph. Never interpret the RACE flags as a FormID.
+  if (record.header.signature == k_race && sub.signature == k_sraf) {
     return;
   }
   if (is_navmesh_mixed_payload(record, sub)) {
