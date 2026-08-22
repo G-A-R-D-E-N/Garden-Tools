@@ -79,6 +79,7 @@ add_library(fo4
   src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
+  src/forms/quest_aliases.cpp
   src/forms/race.cpp
   src/forms/race_body.cpp
   src/io/atomic_write.cpp
@@ -210,6 +211,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_sraf_formlinks.cpp
     tests/test_exterior_cell_grid.cpp
     tests/test_exterior_cell_creation.cpp
+    tests/test_quest_aliases.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
