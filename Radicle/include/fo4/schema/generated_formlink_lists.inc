@@ -7,6 +7,8 @@ inline constexpr Signature k_generated_formlink_list_targets[] = {
   Signature::from_string("TXST"),
   Signature::from_string("CLFM"),
   Signature::from_string("NPC_"),
+  Signature::from_string("KYWD"),
+  Signature::from_string("KYWD"),
 };
 
 inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {
@@ -16,4 +18,9 @@ inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {
   {Signature::from_string("RACE"), "RACE\\MaleFaceDetails", "Male Face Details", Signature::from_string("FTSM"), true, true, 3, 1},
   {Signature::from_string("RACE"), "RACE\\MaleHairColors", "Male Hair Colors", Signature::from_string("AHCM"), true, true, 4, 1},
   {Signature::from_string("RACE"), "RACE\\MalePresets", "Male Race Presets", Signature::from_string("RPRM"), true, true, 5, 1},
+};
+
+inline constexpr NestedFormLinkListDescriptor k_generated_nested_formlink_lists[] = {
+  {Signature::from_string("RACE"), "RACE\\Subgraphs", "ActorKeywords", "Subgraph Actor Keywords", Signature::from_string("SAKD"), Signature::from_string("SRAF"), 4, false, true, 6, 1},
+  {Signature::from_string("RACE"), "RACE\\Subgraphs", "TargetKeywords", "Subgraph Target Keywords", Signature::from_string("STKD"), Signature::from_string("SRAF"), 4, false, true, 7, 1},
 };
