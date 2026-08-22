@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-MUTATIONS = {"existing_only"}
+MUTATIONS = {"existing_only", "existing_neighbors"}
 
 
 def valid_signature(value: str) -> bool:
@@ -74,8 +74,7 @@ def load_lists(schema_path: Path):
             if not isinstance(nullable, bool):
                 raise ValueError(f"FormLink list nullable must be boolean: {path!r}")
             if mutation not in MUTATIONS:
-                raise ValueError(
-                    f"unsupported FormLink list mutation policy until insertion ordering exists: {mutation!r}")
+                raise ValueError(f"unsupported FormLink list mutation policy: {mutation!r}")
 
             lists.append({
                 "record": record_signature,
@@ -84,7 +83,7 @@ def load_lists(schema_path: Path):
                 "subrecord": subrecord,
                 "targets": parsed_targets,
                 "nullable": nullable,
-                "can_insert": False,
+                "can_insert": mutation == "existing_neighbors",
             })
 
     lists.sort(key=lambda item: (item["record"], item["path"]))
