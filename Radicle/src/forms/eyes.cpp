@@ -3,6 +3,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/preflight.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -179,6 +180,12 @@ FormKey create_eyes(Plugin& plugin,
   record->subrecords.push_back(
       Subrecord{sig_data, std::vector<std::byte>{std::byte{data_flags}}, false});
   mark_modified(next, *record);
+
+  for (const auto& issue : schema::preflight_authoring_record(next, key)) {
+    if (issue.severity == schema::PreflightSeverity::error) {
+      throw EyesError("EYES authoring preflight failed: " + issue.message);
+    }
+  }
 
   plugin = std::move(next);
   return key;
