@@ -3,6 +3,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/preflight.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -91,6 +92,12 @@ FormKey create_leveled_spell(Plugin& plugin,
   if (!entries.empty()) {
     if (!replace_leveled_spell_entries(next, key, entries)) {
       throw LeveledSpellError("newly allocated LVSP record could not accept entries");
+    }
+  }
+
+  for (const auto& issue : schema::preflight_authoring_record(next, key)) {
+    if (issue.severity == schema::PreflightSeverity::error) {
+      throw LeveledSpellError("LVSP authoring preflight failed: " + issue.message);
     }
   }
 
