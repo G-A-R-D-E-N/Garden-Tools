@@ -49,6 +49,9 @@ private:
     Result<nlohmann::json> createRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> deleteRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> renumberRecord(const nlohmann::json& arguments);
+    Result<nlohmann::json> addQuestAlias(const nlohmann::json& arguments);
+    Result<nlohmann::json> replaceQuestAlias(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeQuestAlias(const nlohmann::json& arguments);
     Result<nlohmann::json> setField(const nlohmann::json& arguments);
     Result<nlohmann::json> setArmorField(const nlohmann::json& arguments);
     Result<nlohmann::json> setFormLinkListField(const nlohmann::json& arguments);
