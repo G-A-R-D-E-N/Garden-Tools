@@ -23,6 +23,11 @@ For Fallout 4, xEdit considers these signatures while rebuilding ONAM:
 - `PMIS`
 - `ACHR`
 - `ACRE`
+- `PBEA`
+- `PFLA`
+- `PCON`
+- `PBAR`
+- `PHZD`
 - `SCEN`
 - `DLBR`
 - `DIAL`
@@ -40,12 +45,21 @@ For Radicle's structural tree, records below a `cell_persistent_children` GRUP a
 
 ## Ordering and replacement
 
-xEdit deletes existing ONAM before rebuilding. It walks masters in master-table order and records in fixed-FormID order. Radicle therefore emits one deterministic ONAM array sorted by the current plugin-relative raw FormID and removes stale ONAM when no eligible overrides remain.
+xEdit deletes existing ONAM before rebuilding. It walks masters in master-table order and records in fixed-FormID order. Radicle emits one deterministic ONAM array sorted by the current plugin-relative raw FormID, which has the same master-ordinal-then-local-ID ordering for on-disk FormIDs. Stale ONAM is removed when no eligible overrides remain.
 
 Master reorder must preserve the logical FormKeys represented by ONAM even though the serialized high-byte master ordinals change.
 
-## Scope boundary
+Dirty master-flagged Radicle writes rebuild ONAM automatically. Clean plugins still return their preserved original bytes without being rebuilt.
 
-ONAM maintenance alone does **not** make arbitrary `CopyAsOverride` into an ESM target safe. Placed references, LAND/NAVM, INFO, and similar records have structural containment requirements. Radicle must preserve or explicitly construct the correct parent GRUP hierarchy before PluginEditTool removes its current master-target override refusal.
+## CopyAsOverride containment boundary
 
-That containment work is separate from ONAM metadata maintenance and remains fail-closed until proven.
+ONAM maintenance alone does not make every missing-record override insertion safe. Placed references, LAND/NAVM, INFO, and similar records may require nested parent GRUP hierarchy.
+
+Radicle therefore distinguishes two cases:
+
+- replacing an override already present in the destination is allowed because its existing containment is preserved;
+- inserting a missing record is allowed only when the source record is a direct child of a top-level GRUP whose header can be reproduced safely.
+
+A missing nested source record fails with `source_containment_unsupported` in Radicle and `RecordContainmentUnsupported` through PluginEditTool. This prevents REFR/INFO/world records from being silently moved into invalid top-level groups.
+
+With that boundary enforced, PluginEditTool may write containment-safe top-level overrides into editable master-flagged targets. The writer rebuilds ONAM automatically on the resulting dirty master file.
