@@ -82,6 +82,26 @@ std::vector<std::byte> make_target_plugin() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_lifecycle_plugin(std::uint32_t next_form_id = 0x900,
+                                             bool light = false) {
+  fo4::test::ByteWriter out;
+  const auto flags = light ? fo4::RecordFlags::small_file : 0u;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);  // one top-level GRUP + one MISC record
+  hedr.u32(next_form_id);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Existing\0", 9});
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 std::string editor_id(const fo4::Record& record) {
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != fo4::sig_edid) continue;
@@ -192,4 +212,71 @@ TEST(Mutation, CopyOverrideRequiresExplicitOverwriteForExistingTarget) {
   const auto* replaced = fo4::find_record(reloaded, key);
   ASSERT_NE(replaced, nullptr);
   EXPECT_EQ(editor_id(*replaced), "SecondVersion");
+}
+
+TEST(Mutation, CreateLocalRecordAllocatesMonotonicallyAndReusesTopGroup) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(), "Lifecycle.esp");
+  const auto eyes = fo4::Signature::from_string("EYES");
+
+  const auto first = fo4::create_local_record(plugin, eyes);
+  const auto second = fo4::create_local_record(plugin, eyes);
+  EXPECT_EQ(first, fo4::FormKey::parse("000900:Lifecycle.esp"));
+  EXPECT_EQ(second, fo4::FormKey::parse("000901:Lifecycle.esp"));
+  EXPECT_EQ(plugin.header.next_form_id, 0x902u);
+
+  std::size_t eyes_groups = 0;
+  std::size_t eyes_records = 0;
+  for (const auto& group : plugin.groups) {
+    if (group.header.group_type != 0 || group.header.top_label() != eyes) continue;
+    ++eyes_groups;
+    eyes_records += group.children.size();
+  }
+  EXPECT_EQ(eyes_groups, 1u);
+  EXPECT_EQ(eyes_records, 2u);
+
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), "Lifecycle.esp");
+  EXPECT_EQ(reloaded.header.next_form_id, 0x902u);
+  EXPECT_EQ(reloaded.header.record_count, 5u);
+  EXPECT_NE(fo4::find_record(reloaded, first), nullptr);
+  EXPECT_NE(fo4::find_record(reloaded, second), nullptr);
+}
+
+TEST(Mutation, CreateLocalRecordSkipsAStaleCollidingNextFormId) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x800), "Lifecycle.esp");
+  const auto created =
+      fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"));
+  EXPECT_EQ(created, fo4::FormKey::parse("000801:Lifecycle.esp"));
+  EXPECT_EQ(plugin.header.next_form_id, 0x802u);
+}
+
+TEST(Mutation, DeleteLocalRecordDoesNotRecycleNextFormId) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(), "Lifecycle.esp");
+  const auto eyes = fo4::Signature::from_string("EYES");
+  const auto first = fo4::create_local_record(plugin, eyes);
+  const auto second = fo4::create_local_record(plugin, eyes);
+
+  ASSERT_EQ(fo4::delete_local_record(plugin, first), fo4::RecordDeleteStatus::deleted);
+  EXPECT_EQ(plugin.header.next_form_id, 0x902u);
+  EXPECT_EQ(fo4::delete_local_record(plugin, fo4::FormKey::parse("000123:Other.esm")),
+            fo4::RecordDeleteStatus::not_local);
+
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), "Lifecycle.esp");
+  EXPECT_EQ(reloaded.header.next_form_id, 0x902u);
+  EXPECT_EQ(reloaded.header.record_count, 4u);
+  EXPECT_EQ(fo4::find_record(reloaded, first), nullptr);
+  EXPECT_NE(fo4::find_record(reloaded, second), nullptr);
+
+  const auto third = fo4::create_local_record(plugin, eyes);
+  EXPECT_EQ(third, fo4::FormKey::parse("000902:Lifecycle.esp"));
+}
+
+TEST(Mutation, CreateLocalRecordRefusesLightPluginWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x900, true), "Lifecycle.esl");
+  const auto original = plugin.original_bytes;
+  EXPECT_THROW(
+      static_cast<void>(
+          fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"))),
+      fo4::FormIdError);
+  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
 }
