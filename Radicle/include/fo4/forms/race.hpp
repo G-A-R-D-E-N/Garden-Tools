@@ -6,15 +6,30 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace fo4::forms {
 
 class RaceError : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
+};
+
+// RACE BodyData is a repeated structural sequence, not a signature-keyed map:
+// NAM1 -> MNAM -> (INDX + generic-model bundle)* -> FNAM ->
+// (INDX + generic-model bundle)*. The generic model is sparse/unordered in
+// xEdit, so preserve its proven MODL/MODT/MODC/MODS/MODF subrecords verbatim.
+struct RaceBodyPart {
+  std::vector<Subrecord> model_subrecords;
+};
+
+struct RaceBodyData {
+  std::vector<RaceBodyPart> male;
+  std::vector<RaceBodyPart> female;
 };
 
 struct RaceCreation {
@@ -40,6 +55,7 @@ struct RaceCreation {
   std::uint32_t flags2{0};
   std::int32_t pipboy_biped_object{0};
   std::int16_t xp_value{0};
+  RaceBodyData body_data;
 };
 
 struct Race {
@@ -66,9 +82,16 @@ struct Race {
   std::uint32_t flags2{0};
   std::int32_t pipboy_biped_object{0};
   std::int16_t xp_value{0};
+  RaceBodyData body_data;
 };
 
 Race decode_race(const Plugin& plugin, const FormKey& key);
 FormKey create_race(Plugin& plugin, const RaceCreation& creation);
+
+RaceBodyData decode_race_body_data(const Plugin& plugin, const FormKey& key);
+bool set_race_body_data(Plugin& plugin,
+                        const FormKey& key,
+                        std::span<const RaceBodyPart> male,
+                        std::span<const RaceBodyPart> female);
 
 }  // namespace fo4::forms
