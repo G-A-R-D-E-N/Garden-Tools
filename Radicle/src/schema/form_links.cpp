@@ -58,6 +58,7 @@ constexpr auto k_nvnm = Signature::from_string("NVNM");
 constexpr auto k_nvmi = Signature::from_string("NVMI");
 constexpr auto k_nvpp = Signature::from_string("NVPP");
 constexpr auto k_nvsi = Signature::from_string("NVSI");
+constexpr auto k_mnam = Signature::from_string("MNAM");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -247,10 +248,32 @@ std::optional<std::vector<std::size_t>> nvpp_formid_offsets(
   return offsets;
 }
 
+std::optional<std::vector<std::size_t>> mnam_formid_offsets(
+    std::span<const std::byte> data) {
+  // xEdit FO4 NAVM.MNAM PreCut Map Entries: the outer array consumes entries
+  // until the subrecord ends. Each entry is a FormID Reference followed by a
+  // -2 array, i.e. a u16 count and that many u16 triangle indexes.
+  std::vector<std::size_t> offsets;
+  std::size_t cursor = 0;
+  while (cursor < data.size()) {
+    if (data.size() - cursor < 6) return std::nullopt;
+    offsets.push_back(cursor);  // Reference
+    cursor += 4;
+    const auto triangle_count = static_cast<std::size_t>(read_u16(data, cursor));
+    cursor += 2;
+    if (triangle_count > (data.size() - cursor) / 2) return std::nullopt;
+    cursor += triangle_count * 2;
+  }
+  return offsets;
+}
+
 std::optional<std::vector<std::size_t>> navmesh_mixed_formid_offsets(
     const Record& record, const Subrecord& sub) {
   if (record.header.signature == k_navm && sub.signature == k_nvnm) {
     return nvnm_formid_offsets(sub.data);
+  }
+  if (record.header.signature == k_navm && sub.signature == k_mnam) {
+    return mnam_formid_offsets(sub.data);
   }
   if (record.header.signature == k_navi && sub.signature == k_nvmi) {
     return nvmi_formid_offsets(sub.data);
@@ -271,7 +294,8 @@ std::optional<std::vector<std::size_t>> navmesh_mixed_formid_offsets(
 }
 
 bool is_navmesh_mixed_payload(const Record& record, const Subrecord& sub) {
-  return (record.header.signature == k_navm && sub.signature == k_nvnm) ||
+  return (record.header.signature == k_navm &&
+          (sub.signature == k_nvnm || sub.signature == k_mnam)) ||
          (record.header.signature == k_navi &&
           (sub.signature == k_nvmi || sub.signature == k_nvpp || sub.signature == k_nvsi));
 }
@@ -437,7 +461,6 @@ void remap_raw(std::span<std::byte> data, std::size_t offset,
     write_u32(data, offset, encoded.value());
   }
 }
-
 }  // namespace
 
 void remap_record_form_links(Record& record,
