@@ -114,14 +114,6 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
             "Refusing to write overrides into protected or game-Data plugin: " + target->name
         });
     }
-    // Same restriction as single-record copyAsOverride: batch writes must not
-    // slip past the ONAM safety guard that single copy enforces.
-    if (target->plugin.header.tes4_flags.is_master()) {
-        return std::unexpected(Error{
-            "MasterOverrideWriteUnsupported",
-            "Native override insertion into master-flagged targets is disabled until TES4 ONAM override metadata is maintained"
-        });
-    }
     if (!fileUnchangedSinceLoad(*target)) {
         return std::unexpected(Error{
             "PluginChangedOnDisk",
@@ -186,6 +178,13 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
                         {"formKey", item.formKeyText},
                         {"source", item.source},
                         {"reason", "record is not present in source plugin"}
+                    });
+                    break;
+                case fo4::RecordCopyStatus::source_containment_unsupported:
+                    failures.push_back({
+                        {"formKey", item.formKeyText},
+                        {"source", item.source},
+                        {"reason", "record requires nested source GRUP containment that native insertion does not support yet"}
                     });
                     break;
             }
