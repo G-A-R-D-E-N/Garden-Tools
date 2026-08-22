@@ -21,6 +21,14 @@ public sealed class GameData : IDisposable
     public IReadOnlyList<string> ArchivePaths { get; }
     public string? PluginsPath { get; }
 
+    /// <summary>
+    /// The enabled Mod Organizer 2 roots layered over the game data, lowest priority first;
+    /// the last entry (the profile's overwrite folder when present) wins. Each root mirrors
+    /// the Data folder layout, so "Meshes\Actors\..." inside a root overlays the same
+    /// virtual path in the base tree.
+    /// </summary>
+    public IReadOnlyList<string> ModRoots { get; }
+
 
     /// <summary>
     /// One weapon animation type (the folder under Animations\Weapon\) and the path
@@ -33,29 +41,107 @@ public sealed class GameData : IDisposable
 
     private readonly Dictionary<string, Ba2> _opened = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, HashSet<string>> _names = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, string>? _modLooseIndex;
     private List<WeaponTypeSet>? _weaponSets;
 
-    private GameData(string dataFolder, List<string> archivePaths, string? pluginsPath)
+    private GameData(string dataFolder, List<string> archivePaths, string? pluginsPath, List<string> modRoots)
     {
         DataFolder = dataFolder;
         ArchivePaths = archivePaths;
         PluginsPath = pluginsPath;
+        ModRoots = modRoots;
     }
 
-    /// <summary>Index every .ba2 directly under the data folder, in load order.</summary>
-    public static GameData Discover(string dataFolder, string? pluginsPath = null)
+    /// <summary>
+    /// Index every .ba2 directly under the data folder, in load order. When mod roots are
+    /// given, their top-level .ba2 files are layered ahead of the game's own archives, highest
+    /// priority first, so a modded copy wins over the base game's.
+    /// </summary>
+    public static GameData Discover(string dataFolder, string? pluginsPath = null,
+                                    IReadOnlyList<string>? modRoots = null)
     {
         string folder = Path.GetFullPath(dataFolder);
-        var archives = Directory.EnumerateFiles(folder, "*.ba2")
-                                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-                                .Select(Path.GetFullPath)
-                                .ToList();
 
+        var roots = new List<string>();
+        var modArchives = new List<string>();
+        if (modRoots != null)
+        {
+            var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string root in modRoots)
+            {
+                string full = Path.GetFullPath(root);
+                if (!placed.Add(full)) continue;
+                roots.Add(full);
+                foreach (string ba2 in Directory.EnumerateFiles(full, "*.ba2", SearchOption.TopDirectoryOnly)
+                                                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+                    if (placed.Add(ba2)) modArchives.Add(ba2);
+            }
+            modArchives.Reverse();
+        }
+
+        var baseArchives = Directory.EnumerateFiles(folder, "*.ba2")
+                                    .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                                    .Select(Path.GetFullPath)
+                                    .ToList();
         pluginsPath ??= FindPluginsFile();
         if (pluginsPath != null && File.Exists(pluginsPath))
-            archives = OrderByPlugins(archives, pluginsPath);
+            baseArchives = OrderByPlugins(baseArchives, pluginsPath);
 
-        return new GameData(folder, archives, pluginsPath);
+        modArchives.AddRange(baseArchives);
+        return new GameData(folder, modArchives, pluginsPath, roots);
+    }
+
+    /// <summary>
+    /// The game data with a Mod Organizer 2 modlist layered over it: every enabled mod in
+    /// mods/&lt;modsFolder&gt;/mods is a root in modlist.txt order (bottom of the file wins),
+    /// and the profile's overwrite folder, when it exists, is the final root. The modlist
+    /// lives at &lt;modsFolder&gt;/modlist.txt, or at
+    /// &lt;modsFolder&gt;/profiles/&lt;profile&gt;/modlist.txt when a profile is named.
+    /// </summary>
+    public static GameData DiscoverModded(string dataFolder, string modsFolder,
+                                          string? profile = null, string? pluginsPath = null)
+    {
+        string mods = Path.GetFullPath(modsFolder);
+        var roots = new List<string>();
+
+        string? modlist = profile != null
+            ? Path.Combine(mods, "profiles", profile, "modlist.txt")
+            : Path.Combine(mods, "modlist.txt");
+        if (File.Exists(modlist))
+        {
+            foreach (string raw in File.ReadAllLines(modlist))
+            {
+                string line = raw.Trim();
+                if (line.Length == 0 || line[0] == '#') continue;
+                if (line[0] != '+') continue;
+                string name = line[1..].Trim();
+                if (name.Length == 0) continue;
+                string root = Path.Combine(mods, "mods", name);
+                if (Directory.Exists(root)) roots.Add(root);
+            }
+        }
+
+        string overwrite = Path.Combine(mods, "overwrite");
+        if (Directory.Exists(overwrite)) roots.Add(overwrite);
+
+        return Discover(dataFolder, pluginsPath, roots);
+    }
+
+    /// <summary>
+    /// The profile whose modlist.txt to use for an MO2 instance root: null when the root
+    /// itself has a modlist.txt, otherwise the first profile (alphabetically) that ships one.
+    /// </summary>
+    public static string? ModlistProfile(string modsFolder)
+    {
+        string mods = Path.GetFullPath(modsFolder);
+        if (File.Exists(Path.Combine(mods, "modlist.txt"))) return null;
+        string profiles = Path.Combine(mods, "profiles");
+        if (!Directory.Exists(profiles)) return null;
+        return Directory.EnumerateDirectories(profiles)
+            .Select(d => Path.GetFileName(d))
+            .Where(n => File.Exists(Path.Combine(profiles, n, "modlist.txt")))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
     }
 
     /// <summary>
@@ -84,9 +170,16 @@ public sealed class GameData : IDisposable
     public AnimationRead? ReadAnimation(string projectRoot, string declared)
     {
         string loose = ResolveLoose(projectRoot, declared);
-        if (File.Exists(loose))
+        string? rel = DataRelativePath(loose);
+        if (rel != null && ModLooseIndex().TryGetValue(Normalize(rel), out string? modLoose))
         {
-            try { return new AnimationRead(File.ReadAllBytes(loose), "loose", null); }
+            try { return new AnimationRead(File.ReadAllBytes(modLoose), "loose", null); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        }
+        string? baseLoose = CaseInsensitivePath(loose) ?? CaseInsensitivePath(Path.ChangeExtension(loose, ".hkx"));
+        if (baseLoose != null)
+        {
+            try { return new AnimationRead(File.ReadAllBytes(baseLoose), "loose", null); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
         }
 
@@ -94,6 +187,85 @@ public sealed class GameData : IDisposable
         if (entry == null) return null;
         try { return new AnimationRead(archive.Read(entry), Path.GetFileName(archive.Path), entry.Name); }
         catch (Exception e) when (e is IOException or InvalidDataException) { return null; }
+    }
+
+    private string? DataRelativePath(string fullPath)
+    {
+        if (!IsUnder(fullPath, DataFolder)) return null;
+        return Path.GetRelativePath(DataFolder, fullPath);
+    }
+
+    private Dictionary<string, string> ModLooseIndex()
+    {
+        if (_modLooseIndex != null) return _modLooseIndex;
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string root in ModRoots)
+        {
+            if (!Directory.Exists(Path.Combine(root, "Meshes"))) continue;
+            try
+            {
+                foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    string rel = Path.GetRelativePath(root, file);
+                    map[Normalize(rel)] = file;
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+        _modLooseIndex = map;
+        return _modLooseIndex;
+    }
+
+    /// <summary>
+    /// The engine is case-insensitive (Windows), but this tool runs on case-sensitive
+    /// filesystems, and mod manifests routinely declare paths in a different case than
+    /// the loose folder that ships them. Resolves a path by matching each missing
+    /// component case-insensitively against the deepest existing ancestor.
+    /// </summary>
+    private static string? CaseInsensitivePath(string path)
+    {
+        if (File.Exists(path) || Directory.Exists(path)) return path;
+
+        var missing = new Stack<string>();
+        string current = path;
+        while (!File.Exists(current) && !Directory.Exists(current))
+        {
+            string? parent = Path.GetDirectoryName(current);
+            if (parent == null || string.Equals(parent, current, StringComparison.Ordinal)) return null;
+            missing.Push(Path.GetFileName(current));
+            current = parent;
+        }
+        if (missing.Count == 0) return null;
+
+        while (missing.Count > 0)
+        {
+            string want = missing.Pop();
+            bool last = missing.Count == 0;
+            string? found = null;
+            try
+            {
+                if (last)
+                {
+                    foreach (string candidate in Directory.EnumerateFiles(current))
+                        if (string.Equals(Path.GetFileName(candidate), want, StringComparison.OrdinalIgnoreCase))
+                        { found = candidate; break; }
+                    if (found == null)
+                        foreach (string candidate in Directory.EnumerateDirectories(current))
+                            if (string.Equals(Path.GetFileName(candidate), want, StringComparison.OrdinalIgnoreCase))
+                            { found = candidate; break; }
+                }
+                else
+                {
+                    foreach (string candidate in Directory.EnumerateDirectories(current))
+                        if (string.Equals(Path.GetFileName(candidate), want, StringComparison.OrdinalIgnoreCase))
+                        { found = candidate; break; }
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+            if (found == null) return null;
+            current = found;
+        }
+        return current;
     }
 
     /// <summary>
@@ -180,13 +352,13 @@ public sealed class GameData : IDisposable
     }
 
     /// <summary>
-    /// Every entry of every archive, in load order, with the archive it came from. The
-    /// subgraph index uses this to read the engine's AnimTextData manifests without
-    /// duplicating load-order handling.
+    /// Every entry of every archive, lowest priority first, with the archive it came from.
+    /// The subgraph index uses this to read the engine's AnimTextData manifests and keeps
+    /// the last entry for an id, so the highest-priority copy wins.
     /// </summary>
     public IEnumerable<(string ArchivePath, Ba2.Entry Entry)> EnumerateEntries()
     {
-        foreach (string archive in ArchivePaths)
+        foreach (string archive in ArchivePaths.Reverse())
             foreach (var entry in Entries(archive))
                 yield return (archive, entry);
     }
@@ -201,13 +373,30 @@ public sealed class GameData : IDisposable
 
         string looseDir = Path.Combine(projectRoot,
             virtualFolder.Replace('/', Path.DirectorySeparatorChar));
-        try
+        AddSubfolders(CaseInsensitivePath(looseDir));
+
+        string? rootRel = DataRelativePath(Path.GetFullPath(projectRoot));
+        if (rootRel != null)
         {
-            if (Directory.Exists(looseDir))
-                foreach (string dir in Directory.EnumerateDirectories(looseDir))
-                    result.Add(Path.GetFileName(dir));
+            foreach (string mod in ModRoots)
+            {
+                string modLooseDir = Path.Combine(
+                    Path.Combine(mod, rootRel),
+                    virtualFolder.Replace('/', Path.DirectorySeparatorChar));
+                AddSubfolders(CaseInsensitivePath(modLooseDir));
+            }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+
+        void AddSubfolders(string? dir)
+        {
+            if (dir == null) return;
+            try
+            {
+                foreach (string sub in Directory.EnumerateDirectories(dir))
+                    result.Add(Path.GetFileName(sub));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
 
         string norm = "/" + virtualFolder.Replace('\\', '/').Trim('/').ToLowerInvariant() + "/";
         foreach (string archive in ArchivePaths)
@@ -351,8 +540,8 @@ public sealed class GameData : IDisposable
     private List<WeaponTypeSet> BuildWeaponTypeSets()
     {
         var sets = new List<WeaponTypeSet>();
-        string master = Path.Combine(DataFolder, "Fallout4.esm");
-        if (!File.Exists(master)) return sets;
+        string? master = FindMaster();
+        if (master == null) return sets;
 
         List<EsPlugin.AnimSet> animSets;
         try { animSets = EsPlugin.RaceAnimationSets(master); }
@@ -361,20 +550,12 @@ public sealed class GameData : IDisposable
             return sets;
         }
 
-        // insertion order is the engine's fallback order: each set lists its prefixes from the
-        // most specific (Animations\Weapon\<Type>\Player) down through the generic weapon folders,
-        // and a later set only adds prefixes its type did not already inherit.
         var byType = new Dictionary<string, (List<string> Prefixes, HashSet<string> Seen)>(StringComparer.OrdinalIgnoreCase);
         foreach (var set in animSets)
         {
             string behavior = Path.GetFileNameWithoutExtension(set.Behavior);
             if (!behavior.Contains("Weapon", StringComparison.OrdinalIgnoreCase)) continue;
 
-            // each set is one weapon archetype: its first Animations\Weapon\ path names the
-            // type, and every path in the set is the fallback chain that type searches.
-            // The set paths are data-relative, e.g. Actors\Character\Animations\Weapon\
-            // 44Pistol\Player; the project root for a character sits at Actors\Character,
-            // so the declared path is the suffix after that prefix.
             string? type = null;
             var prefixes = new List<string>();
             foreach (string path in set.Paths)
@@ -404,6 +585,17 @@ public sealed class GameData : IDisposable
         foreach (var pair in byType.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
             sets.Add(new WeaponTypeSet(pair.Key, pair.Value.Prefixes.ToList()));
         return sets;
+    }
+
+    private string? FindMaster()
+    {
+        for (int i = ModRoots.Count - 1; i >= 0; i--)
+        {
+            string candidate = Path.Combine(ModRoots[i], "Fallout4.esm");
+            if (File.Exists(candidate)) return candidate;
+        }
+        string master = Path.Combine(DataFolder, "Fallout4.esm");
+        return File.Exists(master) ? master : null;
     }
 
     private static string? FindPluginsFile()

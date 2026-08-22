@@ -1524,6 +1524,11 @@ public static class Smoke
         StandaloneAnimationSkeletonSearchesFromAnimationsRoot();
 
         ChainTabAttachesGameData();
+        ChainTabShowsPerWeaponGaps();
+        ChainTabResolvesCrashHashToTheMissingClip();
+        CrashPanelJumpsToTheMissingClipOnTheGraph();
+        ChainTabSweepFlagsGapsAcrossTheLoadOrder();
+        ChainTabLayersTheModlistOverTheGameData();
         PlaybackReadsPackedClipsFromArchives();
         ArchiveBrowserBuilds();
 
@@ -1580,6 +1585,308 @@ public static class Smoke
                 }
                 finally { Directory.Delete(data, true); }
             });
+        }
+        finally { System.IO.File.Delete(path); }
+    }
+
+    private static void ChainTabShowsPerWeaponGaps()
+    {
+        Console.WriteLine("\nthe Chain tab shows a per-weapon clip gap with game data attached");
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bgs-chain-weapon-{Guid.NewGuid():N}.hkx");
+        System.IO.File.WriteAllBytes(path, WeaponSubgraphBytes());
+        try
+        {
+            string data = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                                                 $"bgs-chain-weapon-data-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(data);
+            try
+            {
+                // a per-weapon copy of the generic reload clip exists under 44Pistol only;
+                // the subgraph plays it through the Pistol weapon type, which lacks it
+                WriteArchive(System.IO.Path.Combine(data, "Fallout4 - Animations.ba2"),
+                             new[] { "Meshes/Actors/Test/Animations/Weapon/44Pistol/WPNReload.hkx" });
+                Settings.TrySet("gameDataFolder", data, out _);
+
+                var window = new MainWindow();
+                window.Show();
+                window.Open(path);
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                SelectTab(window, "Chain");
+
+                var rows = Find<TextBlock>(window.ChainGrid).Select(t => t.Text).ToList();
+                CheckTrue("the chain tab names the per-weapon gap",
+                          rows.Any(t => t.Contains("per-weapon coverage", StringComparison.Ordinal)));
+                CheckTrue("it names the weapon type with the gap", rows.Any(t => t.Contains("'Pistol'")));
+                CheckTrue("it names the failing search path",
+                          rows.Any(t => t.Contains(@"Animations\Weapon\Pistol", StringComparison.Ordinal)));
+                CheckTrue("it names the missing clip", rows.Any(t => t.Contains("WPNReload", StringComparison.Ordinal)));
+                CheckTrue("it states the generic fallback status", rows.Any(t => t.Contains("generic", StringComparison.Ordinal)));
+                CloseForTest(window);
+            }
+            finally { Directory.Delete(data, true); }
+        }
+        finally { System.IO.File.Delete(path); }
+    }
+
+    private static void ChainTabResolvesCrashHashToTheMissingClip()
+    {
+        Console.WriteLine("\nthe Chain tab resolves a pasted crash hash to the missing per-weapon clip");
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bgs-chain-crash-{Guid.NewGuid():N}.hkx");
+        System.IO.File.WriteAllBytes(path, OneClipBytes());
+        try
+        {
+            string data = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                                                 $"bgs-chain-crash-data-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(data);
+            try
+            {
+                const string manifest =
+                    "3\n1\n10448007347639226270\n1\n" +
+                    "Actors\\Character\\Behaviors\\WeaponBehavior.hkx\n";
+                WriteArchive(System.IO.Path.Combine(data, "Fallout4 - Animations.ba2"), new[]
+                {
+                    ("Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                        System.Text.Encoding.UTF8.GetBytes(manifest)),
+                    ("Meshes/Actors/Character/Behaviors/WeaponBehavior.hkx", WeaponSubgraphBytes()),
+                    ("Meshes/Actors/Character/Animations/Weapon/44Pistol/WPNReload.hkx", new byte[] { 1 }),
+                });
+                Settings.TrySet("gameDataFolder", data, out _);
+
+                var window = new MainWindow();
+                window.Show();
+                window.Open(path);
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                SelectTab(window, "Chain");
+
+                window.CrashHashField.Text = "10448007347639226270";
+                window.ResolveCrashHashForTest();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                var rows = Find<TextBlock>(window.ChainGrid).Select(t => t.Text).ToList();
+                CheckTrue("the summary names the resolved behavior",
+                          window.CrashHashSummary.Contains("WeaponBehavior", StringComparison.Ordinal));
+                CheckTrue("the chain tab names the per-weapon gap",
+                          rows.Any(t => t.Contains("per-weapon coverage", StringComparison.Ordinal)));
+                CheckTrue("it names the weapon type", rows.Any(t => t.Contains("'Pistol'")));
+                CheckTrue("it names the missing clip",
+                          rows.Any(t => t.Contains("WPNReload", StringComparison.Ordinal)));
+                CheckTrue("it names the failing search path",
+                          rows.Any(t => t.Contains(@"Animations\Weapon\Pistol", StringComparison.Ordinal)));
+                CloseForTest(window);
+            }
+            finally { Directory.Delete(data, true); }
+        }
+        finally { System.IO.File.Delete(path); }
+    }
+
+    private static void CrashPanelJumpsToTheMissingClipOnTheGraph()
+    {
+        Console.WriteLine("\nthe floating crash panel jumps to the missing clip on the graph canvas");
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bgs-panel-jump-{Guid.NewGuid():N}.hkx");
+        System.IO.File.WriteAllBytes(path, WeaponSubgraphBytes());
+        try
+        {
+            string data = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                                                 $"bgs-panel-jump-data-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(data);
+            try
+            {
+                const string manifest =
+                    "3\n1\n10448007347639226270\n1\n" +
+                    "Actors\\Character\\Behaviors\\WeaponBehavior.hkx\n";
+                WriteArchive(System.IO.Path.Combine(data, "Fallout4 - Animations.ba2"), new[]
+                {
+                    ("Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                        System.Text.Encoding.UTF8.GetBytes(manifest)),
+                    ("Meshes/Actors/Character/Behaviors/WeaponBehavior.hkx", WeaponSubgraphBytes()),
+                    ("Meshes/Actors/Character/Animations/Weapon/44Pistol/WPNReload.hkx", new byte[] { 1 }),
+                });
+                Settings.TrySet("gameDataFolder", data, out _);
+
+                var window = new MainWindow();
+                window.Show();
+                window.Open(path);
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                SelectTab(window, "Chain");
+
+                window.CrashHashField.Text = "10448007347639226270";
+                window.ResolveCrashHashForTest();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();                CheckTrue("the crash panel floats over the graph canvas", window.CrashPanelVisible);
+                CheckTrue("its title names the subgraph behavior",
+                          window.CrashPanelTitle.Contains("WeaponBehavior", StringComparison.Ordinal));
+                CheckTrue("the panel names the missing clip",
+                          window.CrashPanelBodyText.Contains("WPNReload", StringComparison.Ordinal));
+
+                SelectTab(window, "Graph");
+                var jumps = Find<Button>(window)
+                    .Where(b => b.Content?.ToString() == "Jump" && b.IsEnabled)
+                    .ToList();
+                Check("the panel offers one enabled jump for the missing clip", 1, jumps.Count);
+                if (jumps.Count == 1)
+                {
+                    string clipId = (string)jumps[0].Tag;
+                    CheckTrue("the jump targets the clip object", clipId.Length > 0);
+                    Click(jumps[0]);
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                    Check("the graph selects the clip node", clipId, window.Canvas.SelectedId);
+                }
+                CloseForTest(window);
+            }
+            finally { Directory.Delete(data, true); }
+        }
+        finally { System.IO.File.Delete(path); }
+    }
+
+    private static void ChainTabSweepFlagsGapsAcrossTheLoadOrder()
+    {
+        Console.WriteLine("\nthe Chain tab sweep flags per-weapon gaps across every shipped subgraph");
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bgs-sweep-tab-{Guid.NewGuid():N}.hkx");
+        System.IO.File.WriteAllBytes(path,
+            WeaponSubgraphBytes(@"Animations\Weapon\44Pistol\WPNAssemblyPose.hkt",
+                                @"Animations\WPNReload.hkt"));
+        try
+        {
+            string data = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                                                 $"bgs-sweep-tab-data-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(data);
+            try
+            {
+                const string failingManifest =
+                    "3\n1\n10448007347639226270\n1\n" +
+                    "Actors\\Character\\Behaviors\\WeaponBehavior.hkx\n";
+                const string cleanManifest =
+                    "3\n1\n2000000000000000000\n1\n" +
+                    "Actors\\Character\\Behaviors\\CleanBehavior.hkx\n";
+                WriteArchive(System.IO.Path.Combine(data, "Fallout4 - Animations.ba2"), new[]
+                {
+                    ("Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                        System.Text.Encoding.UTF8.GetBytes(failingManifest)),
+                    ("Meshes/AnimTextData/AnimationFileData/2000000000000000000.txt",
+                        System.Text.Encoding.UTF8.GetBytes(cleanManifest)),
+                    ("Meshes/Actors/Character/Behaviors/WeaponBehavior.hkx",
+                        WeaponSubgraphBytes(@"Animations\Weapon\Pistol\WPNAssemblyPose.hkt",
+                                            @"Animations\WPNReload.hkt")),
+                    ("Meshes/Actors/Character/Behaviors/CleanBehavior.hkx",
+                        WeaponSubgraphBytes(@"Animations\Weapon\44Pistol\WPNAssemblyPose.hkt",
+                                            @"Animations\WPNReload.hkt")),
+                    ("Meshes/Actors/Character/Animations/Weapon/44Pistol/WPNReload.hkx", new byte[] { 2 }),
+                });
+                Settings.TrySet("gameDataFolder", data, out _);
+
+                var window = new MainWindow();
+                window.Show();
+                window.Open(path);
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                SelectTab(window, "Chain");
+
+                window.RunSweepForTest();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                CheckTrue("the sweep summary counts the failing subgraph",
+                          window.SweepSummary.Contains("1 subgraph", StringComparison.Ordinal) &&
+                          window.SweepSummary.Contains("2 manifests", StringComparison.Ordinal));
+                var rows = Find<TextBlock>(window.ChainGrid).Select(t => t.Text).ToList();
+                CheckTrue("the sweep group counts the checked subgraphs",
+                          rows.Any(t => t.Contains("2 weapon subgraphs checked, 1 with gaps",
+                                                    StringComparison.Ordinal)));
+                CheckTrue("it names the failing subgraph id",
+                          rows.Any(t => t.Contains("10448007347639226270", StringComparison.Ordinal)));
+                CheckTrue("it names the failing behavior",
+                          rows.Any(t => t.Contains("WeaponBehavior.hkx", StringComparison.Ordinal)));
+                CheckTrue("it names the missing clip",
+                          rows.Any(t => t.Contains("WPNReload", StringComparison.Ordinal)));
+                CheckTrue("the clean subgraph is not flagged",
+                          !rows.Any(t => t.Contains("FAIL 2000000000000000000", StringComparison.Ordinal)));
+                CloseForTest(window);
+            }
+            finally { Directory.Delete(data, true); }
+        }
+        finally { System.IO.File.Delete(path); }
+    }
+
+    private static void ChainTabLayersTheModlistOverTheGameData()
+    {
+        Console.WriteLine("\nthe Chain tab mods folder layers the modlist over the game data");
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bgs-mods-tab-{Guid.NewGuid():N}.hkx");
+        System.IO.File.WriteAllBytes(path,
+            WeaponSubgraphBytes(@"Animations\Weapon\44Pistol\WPNAssemblyPose.hkt",
+                                @"Animations\WPNReload.hkt"));
+        try
+        {
+            string data = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                                                 $"bgs-mods-tab-data-{Guid.NewGuid():N}");
+            string mods = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                                                $"bgs-mods-tab-mods-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(data);
+            Directory.CreateDirectory(mods);
+            try
+            {
+                const string baseManifest =
+                    "3\n1\n10448007347639226270\n1\n" +
+                    "Actors\\Character\\Behaviors\\BaseBehavior.hkx\n";
+                WriteArchive(System.IO.Path.Combine(data, "Fallout4 - Animations.ba2"), new[]
+                {
+                    ("Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                        System.Text.Encoding.UTF8.GetBytes(baseManifest)),
+                    ("Meshes/Actors/Character/Behaviors/BaseBehavior.hkx",
+                        WeaponSubgraphBytes(@"Animations\Weapon\44Pistol\WPNAssemblyPose.hkt",
+                                            @"Animations\WPNReload.hkt")),
+                    ("Meshes/Actors/Character/Animations/Weapon/44Pistol/WPNReload.hkx", new byte[] { 2 }),
+                });
+
+                File.WriteAllText(System.IO.Path.Combine(mods, "modlist.txt"), "+AnimTextData Merge\n");
+                string merge = System.IO.Path.Combine(mods, "mods", "AnimTextData Merge");
+                string fileData = System.IO.Path.Combine(merge, "Meshes", "AnimTextData", "AnimationFileData");
+                Directory.CreateDirectory(fileData);
+                File.WriteAllText(System.IO.Path.Combine(fileData, "8806872131610908823.txt"),
+                    "3\n1\n8806872131610908823\n1\n" +
+                    "Actors\\Character\\Behaviors\\WeaponOverhaulBehavior.hkx\n");
+                string behaviors = System.IO.Path.Combine(merge, "Meshes", "Actors", "Character", "Behaviors");
+                Directory.CreateDirectory(behaviors);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(behaviors, "WeaponOverhaulBehavior.hkx"),
+                    WeaponSubgraphBytes());
+
+                Settings.TrySet("gameDataFolder", data, out _);
+
+                var window = new MainWindow();
+                window.Show();
+                window.Open(path);
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                SelectTab(window, "Chain");
+
+                window.ModsField.Text = "";
+                window.ApplyModsForTest();
+                Check("without a mods folder nothing is layered", "no mods layered", window.ModsSummary);
+                window.RunSweepForTest();
+                CheckTrue("the vanilla sweep is clean before the mods are attached",
+                          window.SweepSummary.Contains("all clean", StringComparison.Ordinal));
+
+                window.ModsField.Text = mods;
+                window.ApplyModsForTest();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                CheckTrue("the mods summary names the enabled root",
+                          window.ModsSummary.Contains("1 mod root", StringComparison.Ordinal));
+
+                window.CrashHashField.Text = "8806872131610908823";
+                window.ResolveCrashHashForTest();
+                CheckTrue("the crash lookup resolves the merged manifest",
+                          window.CrashHashSummary.Contains("WeaponOverhaulBehavior", StringComparison.Ordinal));
+
+                window.RunSweepForTest();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                CheckTrue("the modded sweep flags the merged subgraph",
+                          window.SweepSummary.Contains("1 subgraph", StringComparison.Ordinal));
+                var rows = Find<TextBlock>(window.ChainGrid).Select(t => t.Text).ToList();
+                CheckTrue("the sweep names the merged id",
+                          rows.Any(t => t.Contains("8806872131610908823", StringComparison.Ordinal)));
+                CheckTrue("it names the merged behavior",
+                          rows.Any(t => t.Contains("WeaponOverhaulBehavior.hkx", StringComparison.Ordinal)));
+                CheckTrue("it names the missing clip",
+                          rows.Any(t => t.Contains("WPNReload", StringComparison.Ordinal)));
+                CloseForTest(window);
+            }
+            finally { Directory.Delete(data, true); Directory.Delete(mods, true); }
         }
         finally { System.IO.File.Delete(path); }
     }
@@ -2985,6 +3292,58 @@ public static class Smoke
             Data = data,
             LocalFixups = BitConverter.GetBytes(nameField).Concat(BitConverter.GetBytes(size)).ToArray(),
             VirtualFixups = Triple(0, 0, 5),
+        });
+        image.ContentsSectionIndex = 1;
+        return image.Rebuild();
+    }
+
+    private static byte[] WeaponSubgraphBytes(params string[] clips)
+    {
+        if (clips.Length == 0)
+            clips = new[]
+            {
+                @"Animations\Weapon\Pistol\WPNAssemblyPose.hkt",
+                @"Animations\WPNReload.hkt",
+            };
+
+        var classes = OpenCommonwealth.Services.Hkx.HavokClasses.Shipped;
+        int size = classes["hkbClipGenerator"]!.Size;
+        int nameField = classes.Field("hkbClipGenerator", "animationName")!.Offset;
+
+        var names = new byte[5 + "hkbClipGenerator".Length + 1];
+        BitConverter.GetBytes(OpenCommonwealth.Services.Hkx.HavokClassTypes.Shipped["hkbClipGenerator"]!.Signature)
+                    .CopyTo(names, 0);
+        names[4] = 0x09;
+        System.Text.Encoding.ASCII.GetBytes("hkbClipGenerator").CopyTo(names, 5);
+
+        var data = new List<byte>();
+        var locals = new List<byte>();
+        var virtuals = new List<byte>();
+        foreach (string clip in clips)
+        {
+            byte[] text = System.Text.Encoding.UTF8.GetBytes(clip);
+            int at = data.Count;
+            data.AddRange(new byte[size]);
+            int strAt = data.Count;
+            data.AddRange(text);
+            data.Add(0);
+            locals.AddRange(BitConverter.GetBytes(at + nameField));
+            locals.AddRange(BitConverter.GetBytes(strAt));
+            virtuals.AddRange(Triple(at, 0, 5));
+        }
+
+        var image = new OpenCommonwealth.Services.Hkx.PackfileImage();
+        image.Sections.Add(new OpenCommonwealth.Services.Hkx.PackfileSection
+        {
+            TagBytes = MakeTag("__classnames__"),
+            Data = names,
+        });
+        image.Sections.Add(new OpenCommonwealth.Services.Hkx.PackfileSection
+        {
+            TagBytes = MakeTag("__data__"),
+            Data = data.ToArray(),
+            LocalFixups = locals.ToArray(),
+            VirtualFixups = virtuals.ToArray(),
         });
         image.ContentsSectionIndex = 1;
         return image.Rebuild();

@@ -50,6 +50,8 @@ public static class Program
             case "chain": return Chain(argv);
             case "crash": return Crash(argv);
             case "hash": return Hash(argv);
+            case "sweep": return Sweep(argv);
+            case "diff": return Diff(argv);
             case "notes": return Notes(argv);
             case "saveevent": return SaveEvent(argv);
             case "savewide": return SaveWide(argv);
@@ -87,10 +89,13 @@ public static class Program
           lifecycle <hkxDir | file.hkx>
               Native open, edit, save, reload, validate, and render gate for supported files.
 
-          crash <hash | crashlog.txt> --data <Data folder>
+          crash <hash | crashlog.txt> --data <Data folder> [--mods <MO2 mods folder> [--profile <name>]]
               Resolve an AnimTextData subgraph hash (e.g. 10448007347639226270) to the
               subgraph it names, using the AnimationFileData manifests the game ships in its
-              archives, and report which of the subgraph's animations are missing.
+              archives, and report which of the subgraph's animations are missing. With
+              --mods, the merged manifests and animations from a Mod Organizer 2 modlist
+              (the mods folder, or its profiles/<name>/modlist.txt when --profile is given)
+              are layered over the game data the way the engine loads them.
 
           hash <behavior.hkx> [<sapt> ...]
               Compute the AnimTextData subgraph id for a behavior graph and its animation
@@ -98,6 +103,16 @@ public static class Program
               list joined by '|' in the high half, and of the lowercased behavior path in
               the low half. The result names the AnimationOffsets cache file the engine
               writes for that subgraph.
+
+          sweep --data <Data folder> [--mods <MO2 mods folder> [--profile <name>]]
+              Regression sweep: run the crash resolution across every shipped subgraph
+              hash and report any that resolve to a per-weapon clip gap, so a broken
+              weapon animation is caught across the whole load order at once.
+
+          diff --data <Data folder> --mods <MO2 mods folder> [--profile <name>]
+              Compare the vanilla and modded subgraph coverage side by side: which
+              AnimationFileData manifests and behavior paths the modlist adds (or drops),
+              and which of the new behaviors are weapon subgraphs.
 
           test
               Regression checks that use native code only.
@@ -4119,9 +4134,13 @@ public static class Program
 
         string input = argv[1];
         string? dataFolder = null;
+        string? modsFolder = null;
+        string? profile = null;
         for (int i = 2; i < argv.Length; i++)
         {
             if (argv[i] == "--data" && i + 1 < argv.Length) dataFolder = argv[i + 1];
+            if (argv[i] == "--mods" && i + 1 < argv.Length) modsFolder = argv[i + 1];
+            if (argv[i] == "--profile" && i + 1 < argv.Length) profile = argv[i + 1];
         }
         if (dataFolder == null)
         {
@@ -4129,8 +4148,7 @@ public static class Program
             return 1;
         }
 
-        // Accept either a bare hash or a crash log naming the file.
-        ulong? id = ExtractSubgraphHash(input);
+        ulong? id = OpenCommonwealth.Services.Archive.SubgraphIndex.ExtractSubgraphHash(input);
         if (id == null)
         {
             Console.Error.WriteLine($"no AnimTextData hash found in {input}");
@@ -4143,15 +4161,40 @@ public static class Program
             Console.Error.WriteLine($"--data folder not found: {dataFolder}");
             return 1;
         }
+        if (modsFolder != null)
+        {
+            modsFolder = Path.GetFullPath(modsFolder);
+            if (!Directory.Exists(modsFolder))
+            {
+                Console.Error.WriteLine($"--mods folder not found: {modsFolder}");
+                return 1;
+            }
+        }
 
-        using var data = OpenCommonwealth.Services.Archive.GameData.Discover(dataFolder);
+        using var data = modsFolder != null
+            ? OpenCommonwealth.Services.Archive.GameData.DiscoverModded(dataFolder, modsFolder, profile)
+            : OpenCommonwealth.Services.Archive.GameData.Discover(dataFolder);
         var index = OpenCommonwealth.Services.Archive.SubgraphIndex.Discover(data);
         int manifestCount = index.Subgraphs.Count;
 
         var sub = index.Find(id.Value);
+        string modInfo = modsFolder != null
+            ? $" plus {data.ModRoots.Count} mod root(s) from {modsFolder}"
+            : "";
         Console.WriteLine($"subgraph {id.Value}");
-        Console.WriteLine($"  manifests   {manifestCount} AnimationFileData file(s) under {dataFolder}" +
+        Console.WriteLine($"  manifests   {manifestCount} AnimationFileData file(s) under {dataFolder}{modInfo}" +
                           $" ({data.ArchivePaths.Count} archive(s))");
+        if (data.ModRoots.Count > 0)
+        {
+            var withAnimTextData = data.ModRoots
+                .Where(r => Directory.Exists(Path.Combine(r, "Meshes", "AnimTextData")))
+                .Select(r => Path.GetFileName(r.TrimEnd(Path.DirectorySeparatorChar)))
+                .ToList();
+            if (withAnimTextData.Count > 0)
+                Console.WriteLine($"  mods        {withAnimTextData.Count} root(s) hold AnimTextData: " +
+                                  string.Join(", ", withAnimTextData.Take(4)) +
+                                  (withAnimTextData.Count > 4 ? $" (+{withAnimTextData.Count - 4} more)" : ""));
+        }
 
         if (sub != null)
         {
@@ -4193,33 +4236,146 @@ public static class Program
             Console.WriteLine("  offset data (no AnimationOffsets file for this id in the game data)");
         }
 
+        var behaviorPaths = new List<string>();
+        if (sub != null) behaviorPaths.AddRange(sub.BehaviorPaths);
+        if (off?.FirstPathHint != null &&
+            !behaviorPaths.Contains(off.FirstPathHint, StringComparer.OrdinalIgnoreCase))
+            behaviorPaths.Add(off.FirstPathHint);
+
+        if (behaviorPaths.Count > 0)
+        {
+            var (weaponSubgraph, gaps) = OpenCommonwealth.Services.Archive.SubgraphIndex.WeaponGapFindings(data, behaviorPaths);
+            if (!weaponSubgraph)
+                Console.WriteLine("  per-weapon  not a weapon subgraph (no Animations\\Weapon\\ clips)");
+            else if (gaps.Count == 0)
+                Console.WriteLine("  per-weapon  every clip resolves for every weapon type " +
+                                  "(the fallback chains or the generic copy)");
+            else
+            {
+                Console.WriteLine($"  per-weapon  {gaps.Count} missing clip(s) resolved by the engine search:");
+                foreach (var f in gaps.Take(6))
+                    Console.WriteLine($"    {f.What}");
+                if (gaps.Count > 6)
+                    Console.WriteLine($"    ... and {gaps.Count - 6} more");
+            }
+        }
+
         return sub == null ? 1 : 0;
     }
 
-    /// <summary>
-    /// Read a bare hash or a crash log and return the AnimTextData subgraph hash it names.
-    /// Prefers the AnimationOffsets\&lt;id&gt;.txt pattern, then the longest digit run.
-    /// </summary>
-    internal static ulong? ExtractSubgraphHash(string input)
+    internal static int Diff(string[] argv)
     {
-        string text = input;
-        if (File.Exists(input))
+        string? dataFolder = null;
+        string? modsFolder = null;
+        string? profile = null;
+        for (int i = 1; i < argv.Length; i++)
         {
-            try { text = File.ReadAllText(input); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+            if (argv[i] == "--data" && i + 1 < argv.Length) dataFolder = argv[i + 1];
+            if (argv[i] == "--mods" && i + 1 < argv.Length) modsFolder = argv[i + 1];
+            if (argv[i] == "--profile" && i + 1 < argv.Length) profile = argv[i + 1];
+        }
+        if (dataFolder == null || modsFolder == null)
+        {
+            Console.Error.WriteLine("diff needs --data <game Data folder> and --mods <MO2 mods folder>");
+            return 1;
+        }
+        dataFolder = Path.GetFullPath(dataFolder);
+        modsFolder = Path.GetFullPath(modsFolder);
+        if (!Directory.Exists(dataFolder))
+        {
+            Console.Error.WriteLine($"--data folder not found: {dataFolder}");
+            return 1;
+        }
+        if (!Directory.Exists(modsFolder))
+        {
+            Console.Error.WriteLine($"--mods folder not found: {modsFolder}");
+            return 1;
         }
 
-        var patterns = new[]
+        using var vanilla = OpenCommonwealth.Services.Archive.GameData.Discover(dataFolder);
+        using var modded = OpenCommonwealth.Services.Archive.GameData.DiscoverModded(dataFolder, modsFolder, profile);
+        var diff = OpenCommonwealth.Services.Archive.SubgraphIndex.CompareCoverage(vanilla, modded);
+
+        Console.WriteLine($"diff: {diff.VanillaManifests} vanilla manifest(s) -> " +
+                          $"{diff.ModdedManifests} modded manifest(s)");
+        Console.WriteLine($"  new manifest ids   {diff.NewIds.Count}");
+        Console.WriteLine($"  gone from modded   {diff.GoneIds.Count}");
+
+        Console.WriteLine($"  new behavior paths {diff.NewBehaviorPaths.Count}");
+        foreach (string behavior in diff.NewBehaviorPaths)
+            Console.WriteLine($"    {behavior}");
+
+        if (diff.NewManifestsPerBehavior.Count > 0)
         {
-            new System.Text.RegularExpressions.Regex(@"AnimationOffsets[\\/](\d+)\.txt"),
-            new System.Text.RegularExpressions.Regex(@"(\d{9,20})"),
-        };
-        foreach (var re in patterns)
-        {
-            var m = re.Match(text);
-            if (m.Success && ulong.TryParse(m.Groups[1].Value, out ulong id)) return id;
+            Console.WriteLine($"  new manifests reference {diff.NewManifestsPerBehavior.Count} distinct behavior(s):");
+            foreach (var kv in diff.NewManifestsPerBehavior.OrderByDescending(kv => kv.Value))
+                Console.WriteLine($"    {kv.Value,5} new manifest(s) -> {kv.Key}");
         }
-        return null;
+
+        Console.WriteLine($"  new weapon behaviors {diff.NewWeaponBehaviors.Count}");
+        foreach (string behavior in diff.NewWeaponBehaviors)
+            Console.WriteLine($"    {behavior}");
+        return 0;
+    }
+
+    internal static int Sweep(string[] argv)
+    {
+        string? dataFolder = null;
+        string? modsFolder = null;
+        string? profile = null;
+        for (int i = 1; i < argv.Length; i++)
+        {
+            if (argv[i] == "--data" && i + 1 < argv.Length) dataFolder = argv[i + 1];
+            if (argv[i] == "--mods" && i + 1 < argv.Length) modsFolder = argv[i + 1];
+            if (argv[i] == "--profile" && i + 1 < argv.Length) profile = argv[i + 1];
+        }
+        if (dataFolder == null)
+        {
+            Console.Error.WriteLine("sweep needs --data <game Data folder> to read the AnimTextData manifests");
+            return 1;
+        }
+        dataFolder = Path.GetFullPath(dataFolder);
+        if (!Directory.Exists(dataFolder))
+        {
+            Console.Error.WriteLine($"--data folder not found: {dataFolder}");
+            return 1;
+        }
+        if (modsFolder != null)
+        {
+            modsFolder = Path.GetFullPath(modsFolder);
+            if (!Directory.Exists(modsFolder))
+            {
+                Console.Error.WriteLine($"--mods folder not found: {modsFolder}");
+                return 1;
+            }
+        }
+
+        using var data = modsFolder != null
+            ? OpenCommonwealth.Services.Archive.GameData.DiscoverModded(dataFolder, modsFolder, profile)
+            : OpenCommonwealth.Services.Archive.GameData.Discover(dataFolder);
+        var sweep = OpenCommonwealth.Services.Archive.SubgraphIndex.Sweep(data);
+
+        Console.WriteLine($"sweep: {sweep.ManifestCount} AnimationFileData manifest(s), " +
+                          $"{sweep.ArchiveCount} archive(s)" +
+                          (sweep.ModRootCount > 0 ? $", {sweep.ModRootCount} mod root(s)" : ""));
+        Console.WriteLine($"  weapon subgraphs checked   {sweep.WeaponSubgraphsChecked}");
+        Console.WriteLine($"  with per-weapon gaps       {sweep.Failures.Count}");
+
+        if (sweep.Failures.Count > 0)
+        {
+            foreach (var fail in sweep.Failures)
+            {
+                Console.WriteLine($"FAIL {fail.Id} ({Path.GetFileName(fail.Behavior)}): {fail.Gaps.Count} gap(s)");
+                foreach (var f in fail.Gaps.Take(6))
+                    Console.WriteLine($"    {f.What}");
+                if (fail.Gaps.Count > 6)
+                    Console.WriteLine($"    ... and {fail.Gaps.Count - 6} more");
+            }
+            return 1;
+        }
+
+        Console.WriteLine("  all clean: every clip resolves through a fallback chain or the generic copy");
+        return 0;
     }
 
     private static int Lifecycle(string[] argv)
