@@ -41,6 +41,30 @@ std::vector<std::byte> emptyPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> legacyArmorWithBodyData() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "ARMO", 0);
+    const auto record = fo4::test::begin_record(out, "ARMO", 0, 0x00000800);
+    const std::array<std::byte, 8> body{};
+    fo4::test::write_subrecord(out, "BOD2", body);
+    fo4::test::ByteWriter data;
+    data.u32(10);
+    data.f32(2.0f);
+    data.u32(100);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 void writeBytes(const std::filesystem::path& path,
                 const std::vector<std::byte>& bytes) {
     std::filesystem::create_directories(path.parent_path());
@@ -172,6 +196,104 @@ TEST_CASE("PluginEditTool creates ARMA biped and first-person gendered models") 
     CHECK(model.male_priority == 3u);
     CHECK(model.female_priority == 4u);
     CHECK(model.weapon_adjust == 1.25f);
+}
+
+TEST_CASE("PluginEditTool fills missing ARMO gendered fields after creation") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "ARMO", nlohmann::json::object()})));
+    const auto key = created.at("formKey").get<std::string>();
+
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMO\\MaleWorldModel", "Meshes\\Armor\\Male.nif"
+    })).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMO\\MaleIcon", "Textures\\Male.dds"
+    })).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMO\\FemaleWorldModel", "Meshes\\Armor\\Female.nif"
+    })).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMO\\FemaleIcon", "Textures\\Female.dds"
+    })).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto model = fo4::forms::decode_armor(
+        disk, fo4::FormKey::parse(key));
+    REQUIRE(model.male_world_model.has_value());
+    CHECK(*model.male_world_model == "Meshes\\Armor\\Male.nif");
+    REQUIRE(model.male_icon.has_value());
+    CHECK(*model.male_icon == "Textures\\Male.dds");
+    REQUIRE(model.female_world_model.has_value());
+    CHECK(*model.female_world_model == "Meshes\\Armor\\Female.nif");
+    REQUIRE(model.female_icon.has_value());
+    CHECK(*model.female_icon == "Textures\\Female.dds");
+}
+
+TEST_CASE("PluginEditTool fills missing ARMA biped and first-person models") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "ARMA", nlohmann::json::object()})));
+    const auto key = created.at("formKey").get<std::string>();
+
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMA\\MaleBipedModel", "Meshes\\Armor\\MaleBiped.nif"
+    })).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMA\\FemaleBipedModel", "Meshes\\Armor\\FemaleBiped.nif"
+    })).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMA\\MaleFirstPersonModel", "Meshes\\Armor\\MaleFirst.nif"
+    })).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", key, "ARMA\\FemaleFirstPersonModel", "Meshes\\Armor\\FemaleFirst.nif"
+    })).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto model = fo4::forms::decode_armor_addon(
+        disk, fo4::FormKey::parse(key));
+    REQUIRE(model.male_biped_model.has_value());
+    CHECK(*model.male_biped_model == "Meshes\\Armor\\MaleBiped.nif");
+    REQUIRE(model.female_biped_model.has_value());
+    CHECK(*model.female_biped_model == "Meshes\\Armor\\FemaleBiped.nif");
+    REQUIRE(model.male_first_person_model.has_value());
+    CHECK(*model.male_first_person_model == "Meshes\\Armor\\MaleFirst.nif");
+    REQUIRE(model.female_first_person_model.has_value());
+    CHECK(*model.female_first_person_model == "Meshes\\Armor\\FemaleFirst.nif");
+}
+
+TEST_CASE("PluginEditTool refuses missing armor insertion around unmodeled legacy data") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, legacyArmorWithBodyData());
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp",
+        "000800:Patch.esp",
+        "ARMO\\FemaleWorldModel",
+        "Meshes\\Armor\\Female.nif"
+    }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ArmorWriteFailed");
+    CHECK(readBytes(path) == before);
 }
 
 TEST_CASE("Invalid ARMA creation is transactional through PluginEditTool") {
