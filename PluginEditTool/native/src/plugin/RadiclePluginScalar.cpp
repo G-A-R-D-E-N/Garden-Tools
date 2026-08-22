@@ -8,6 +8,7 @@
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/scalar.hpp>
 
 namespace fo4ide::plugin {
@@ -23,6 +24,9 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     const nlohmann::json& arguments) {
     const auto fieldPath = stringArgument(arguments, 2);
+    if (fo4::schema::indexed_formlink_list_path(fieldPath).has_value()) {
+        return setFormLinkListField(arguments);
+    }
     if (fieldPath.starts_with("ARMO\\") || fieldPath.starts_with("ARMA\\")) {
         return setArmorField(arguments);
     }
