@@ -1,0 +1,89 @@
+name: bgs-ci
+
+# Build/test lane for BGS/ (BehaviourGraphStudio), the C#/.NET tool imported
+# from github.com/G-A-R-D-E-N/BGS. It replaces BGS/.github/workflows/ci.yml,
+# which is inert here: GitHub only reads workflows from the repository root.
+#
+# Two deliberate differences from the original:
+#
+#  * Self-hosted, not hosted. BGS was a public repo with free hosted minutes.
+#    This repository is private and both orgs are over the Free Actions
+#    allowance (GHRUNNER#24), where hosted jobs fail silently -- the same
+#    reason native-ci.yml pins the `garden` runner.
+#  * Linux only. The original matrix also published and executed a win-x64
+#    binary. The only runner here is Linux and Wine is retired on that host,
+#    so the Windows leg cannot execute and is omitted rather than left to rot.
+#
+# Restore/build steps use bash; the original used pwsh, which the hosted images
+# ship and the self-hosted runner does not.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "BGS/**"
+      - ".github/workflows/bgs-ci.yml"
+  pull_request:
+    paths:
+      - "BGS/**"
+      - ".github/workflows/bgs-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bgs-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: BGS build and test (Linux)
+    runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: BGS
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.424
+
+      - name: Restore locked dependencies
+        run: |
+          set -euo pipefail
+          for project in \
+            src/BehaviourGraph.Core.csproj \
+            app/BehaviourStudio.csproj \
+            tools/symrm/symrm.csproj \
+            tools/tests/BehaviourGraph.Tests.csproj \
+            tools/uismoke/uismoke.csproj
+          do
+            dotnet restore "$project" --locked-mode
+          done
+
+      - name: Build app
+        run: dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore
+
+      - name: Run native regression harness
+        run: dotnet run --project tools/symrm/symrm.csproj --configuration Release --no-restore -- test
+
+      - name: Run xUnit suite
+        run: dotnet test tools/tests/BehaviourGraph.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"
+
+      - name: Run UI smoke harness
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore
+
+      - name: Publish platform package
+        run: >
+          dotnet publish app/BehaviourStudio.csproj --configuration Release
+          --runtime linux-x64 --self-contained true --no-restore
+          --output publish-check
+
+      - name: Verify Linux executable
+        run: ./publish-check/BehaviourGraphStudio --version
