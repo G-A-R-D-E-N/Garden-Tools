@@ -3,6 +3,7 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <iterator>
 #include <string>
 #include <utility>
 
