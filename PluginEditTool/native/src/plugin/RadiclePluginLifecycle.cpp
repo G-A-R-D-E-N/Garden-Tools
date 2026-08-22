@@ -1,5 +1,6 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -9,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include <fo4/forms/armor.hpp>
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/mutation.hpp>
@@ -55,6 +57,46 @@ bool lifecycleUnsignedField(const nlohmann::json& object,
     return true;
 }
 
+template <class SInt>
+bool lifecycleSignedField(const nlohmann::json& object,
+                          const char* key,
+                          SInt defaultValue,
+                          SInt& value) {
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        value = defaultValue;
+        return true;
+    }
+    if (!found->is_number_integer()) return false;
+    const auto parsed = found->get<std::int64_t>();
+    if (parsed < static_cast<std::int64_t>(std::numeric_limits<SInt>::min()) ||
+        parsed > static_cast<std::int64_t>(std::numeric_limits<SInt>::max())) {
+        return false;
+    }
+    value = static_cast<SInt>(parsed);
+    return true;
+}
+
+bool lifecycleFloatField(const nlohmann::json& object,
+                         const char* key,
+                         float defaultValue,
+                         float& value) {
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        value = defaultValue;
+        return true;
+    }
+    if (!found->is_number()) return false;
+    const auto parsed = found->get<double>();
+    if (!std::isfinite(parsed) ||
+        parsed < -static_cast<double>(std::numeric_limits<float>::max()) ||
+        parsed > static_cast<double>(std::numeric_limits<float>::max())) {
+        return false;
+    }
+    value = static_cast<float>(parsed);
+    return std::isfinite(value);
+}
+
 std::optional<std::string> optionalStringField(const nlohmann::json& object,
                                                const char* key,
                                                bool& valid) {
@@ -66,6 +108,12 @@ std::optional<std::string> optionalStringField(const nlohmann::json& object,
         return std::nullopt;
     }
     return found->get<std::string>();
+}
+
+std::optional<std::string_view> optionalStringView(
+    const std::optional<std::string>& value) {
+    if (!value.has_value()) return std::nullopt;
+    return std::string_view{*value};
 }
 
 }  // namespace
@@ -83,7 +131,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             "Record signature must contain exactly four characters"
         });
     }
-    if (signatureText != "EYES" && signatureText != "LVSP") {
+    if (signatureText != "ARMA" && signatureText != "ARMO" &&
+        signatureText != "EYES" && signatureText != "LVSP") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -146,14 +195,12 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
 
             key = fo4::forms::create_eyes(
                 mutated,
-                editorId.has_value()
-                    ? std::optional<std::string_view>{*editorId}
-                    : std::nullopt,
+                optionalStringView(editorId),
                 full->get_ref<const std::string&>(),
                 icon->get_ref<const std::string&>(),
                 dataFlags,
                 fo4::RecordFlags{recordFlags});
-        } else {
+        } else if (signatureText == "LVSP") {
             std::uint8_t chanceNone = 0;
             std::uint8_t maxCount = 0;
             std::uint8_t flags = 0;
@@ -238,6 +285,73 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "Newly created LVSP record could not accept its editor ID"
                 });
             }
+        } else if (signatureText == "ARMO") {
+            bool valid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            if (!valid) {
+                return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO editorId must be a string or null"});
+            }
+            const auto maleWorld = optionalStringField(*payload, "maleWorldModel", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO maleWorldModel must be a string or null"});
+            const auto maleIcon = optionalStringField(*payload, "maleIcon", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO maleIcon must be a string or null"});
+            const auto maleMessage = optionalStringField(*payload, "maleMessageIcon", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO maleMessageIcon must be a string or null"});
+            const auto femaleWorld = optionalStringField(*payload, "femaleWorldModel", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO femaleWorldModel must be a string or null"});
+            const auto femaleIcon = optionalStringField(*payload, "femaleIcon", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO femaleIcon must be a string or null"});
+            const auto femaleMessage = optionalStringField(*payload, "femaleMessageIcon", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO femaleMessageIcon must be a string or null"});
+
+            fo4::forms::ArmorCreation creation;
+            creation.editor_id = optionalStringView(editorId);
+            creation.male_world_model = optionalStringView(maleWorld);
+            creation.male_icon = optionalStringView(maleIcon);
+            creation.male_message_icon = optionalStringView(maleMessage);
+            creation.female_world_model = optionalStringView(femaleWorld);
+            creation.female_icon = optionalStringView(femaleIcon);
+            creation.female_message_icon = optionalStringView(femaleMessage);
+            if (!lifecycleSignedField(*payload, "value", std::int32_t{0}, creation.value) ||
+                !lifecycleFloatField(*payload, "weight", 0.0f, creation.weight) ||
+                !lifecycleUnsignedField(*payload, "health", std::uint32_t{0}, creation.health)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "ARMO value must be int32, weight must be finite f32, and health must be uint32"
+                });
+            }
+            key = fo4::forms::create_armor(mutated, creation);
+        } else {
+            bool valid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA editorId must be a string or null"});
+            const auto maleBiped = optionalStringField(*payload, "maleBipedModel", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA maleBipedModel must be a string or null"});
+            const auto femaleBiped = optionalStringField(*payload, "femaleBipedModel", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA femaleBipedModel must be a string or null"});
+            const auto maleFirst = optionalStringField(*payload, "maleFirstPersonModel", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA maleFirstPersonModel must be a string or null"});
+            const auto femaleFirst = optionalStringField(*payload, "femaleFirstPersonModel", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA femaleFirstPersonModel must be a string or null"});
+
+            fo4::forms::ArmorAddonCreation creation;
+            creation.editor_id = optionalStringView(editorId);
+            creation.male_biped_model = optionalStringView(maleBiped);
+            creation.female_biped_model = optionalStringView(femaleBiped);
+            creation.male_first_person_model = optionalStringView(maleFirst);
+            creation.female_first_person_model = optionalStringView(femaleFirst);
+            if (!lifecycleUnsignedField(*payload, "malePriority", std::uint8_t{0}, creation.male_priority) ||
+                !lifecycleUnsignedField(*payload, "femalePriority", std::uint8_t{0}, creation.female_priority) ||
+                !lifecycleUnsignedField(*payload, "maleWeightSlider", std::uint8_t{0}, creation.male_weight_slider) ||
+                !lifecycleUnsignedField(*payload, "femaleWeightSlider", std::uint8_t{0}, creation.female_weight_slider) ||
+                !lifecycleUnsignedField(*payload, "detectionSoundValue", std::uint8_t{0}, creation.detection_sound_value) ||
+                !lifecycleFloatField(*payload, "weaponAdjust", 0.0f, creation.weapon_adjust)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "ARMA priority/slider/detection values must be uint8 and weaponAdjust must be finite f32"
+                });
+            }
+            key = fo4::forms::create_armor_addon(mutated, creation);
         }
 
         fo4::write_plugin_file(mutated, loaded->path);
@@ -253,6 +367,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             {"signature", signatureText},
             {"formKey", key.to_string()}
         }.dump());
+    } catch (const fo4::forms::ArmorError& error) {
+        return std::unexpected(Error{"ArmorCreateFailed", error.what()});
     } catch (const fo4::forms::EyesError& error) {
         return std::unexpected(Error{"EyesCreateFailed", error.what()});
     } catch (const fo4::forms::LeveledSpellError& error) {
