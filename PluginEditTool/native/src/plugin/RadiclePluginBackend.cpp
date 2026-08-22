@@ -285,28 +285,38 @@ std::optional<Error> RadiclePluginBackend::writeGuard(const LoadedPlugin& loaded
     return std::nullopt;
 }
 
-bool RadiclePluginBackend::isAllowedSaveRoot(const std::filesystem::path& path) const {
+std::optional<std::filesystem::path> RadiclePluginBackend::allowedSavePath(
+    const std::filesystem::path& path) const {
     // Writable roots are the immutable snapshot captured from the trusted
     // environment.LoadMo2 plugin list. They are never derived from mutable
     // LoadedPlugin.path entries: an ad hoc OpenPlugin cannot relocate a root
     // by retargeting a same-named trusted plugin to another directory.
     std::error_code targetEc;
     const auto target = std::filesystem::weakly_canonical(path, targetEc);
-    if (targetEc || target.empty()) return false;  // fail closed
+    if (targetEc || target.empty()) return std::nullopt;  // fail closed
 
-    for (const auto& untrustedRoot : trustedSaveRoots_) {
-        std::error_code rootEc;
-        const auto root = std::filesystem::weakly_canonical(untrustedRoot, rootEc);
-        // Fail closed: a root that cannot be canonicalized contributes
-        // nothing rather than matching everything.
-        if (rootEc || root.empty()) continue;
-        const auto [rootEnd, nothing] =
-            std::mismatch(root.begin(), root.end(), target.begin(), target.end());
+    // Save As must never target the game's Data directory, even if a bad
+    // environment snapshot once included a protected plugin from there.
+    if (!dataDirectory_.empty()) {
+        std::error_code dataEc;
+        const auto dataDir = std::filesystem::weakly_canonical(dataDirectory_, dataEc);
+        if (dataEc || dataDir.empty()) return std::nullopt;
+        const auto dataEnd = std::mismatch(
+            dataDir.begin(), dataDir.end(), target.begin(), target.end()).first;
+        if (dataEnd == dataDir.end()) return std::nullopt;
+    }
+
+    for (const auto& root : trustedSaveRoots_) {
+        // Each root was canonicalized exactly once during LoadMo2. Repeating
+        // that work here would follow a symlink swapped in after the trusted
+        // snapshot and silently relocate its Save-As authority.
+        const auto rootEnd =
+            std::mismatch(root.begin(), root.end(), target.begin(), target.end()).first;
         if (rootEnd == root.end()) {
-            return true;
+            return target;
         }
     }
-    return false;
+    return std::nullopt;
 }
 
 Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
@@ -407,6 +417,9 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         std::set<std::filesystem::path> uniqueRoots;
         std::vector<std::filesystem::path> roots;
         for (const auto& item : loaded) {
+            // Protected Data/official plugins are readable environment
+            // entries, never authorities for Save As destinations.
+            if (!item.trusted || !isEditable(item)) continue;
             std::error_code rootEc;
             const auto root =
                 std::filesystem::weakly_canonical(item.path.parent_path(), rootEc);
@@ -587,7 +600,7 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
     // Guards live here, not only in the RPC shim: every dispatch path into
     // savePlugin gets the same protection.
     if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
-    const auto output = requestedPath.empty() ? loaded->path : utf8Path(requestedPath);
+    auto output = requestedPath.empty() ? loaded->path : utf8Path(requestedPath);
     // "Save As" may only produce a plugin file, and only inside a directory
     // hosting a trusted editable plugin of the active environment; otherwise
     // this endpoint would be an arbitrary-file overwrite primitive. In-place
@@ -601,14 +614,17 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
                         [&](const std::string_view extension) {
                             return lowerOutput.ends_with(extension);
                         });
-        if (!pluginExtension || !isAllowedSaveRoot(output)) {
+        const auto allowedOutput = pluginExtension ? allowedSavePath(output)
+                                                   : std::nullopt;
+        if (!allowedOutput) {
             return std::unexpected(Error{
                 "SavePathNotAllowed",
                 "Refusing to save: target must be a .esp/.esm/.esl inside a directory "
                 "hosting a trusted, editable loaded plugin: " +
-                    output.string()
+                output.string()
             });
         }
+        output = *allowedOutput;
     }
     try {
         fo4::write_plugin_file(loaded->plugin, output);

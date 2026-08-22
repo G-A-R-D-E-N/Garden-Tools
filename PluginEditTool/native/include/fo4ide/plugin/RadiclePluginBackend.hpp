@@ -86,10 +86,11 @@ private:
     // Returns an error when `plugin` must not be written: read-only source,
     // or modified on disk since it was cached. Caller holds mutex_.
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
-    // True when `path` resolves inside a directory that already hosts a
-    // loaded plugin (the MO2 mod dirs / Data dir of the active environment).
-    // Saves outside these roots are rejected.
-    bool isAllowedSaveRoot(const std::filesystem::path& path) const;
+    // Returns the canonical target when `path` resolves inside an authorized
+    // Save-As root, otherwise nullopt. The writer must use this exact path so
+    // its destination is the one that was containment-checked.
+    std::optional<std::filesystem::path> allowedSavePath(
+        const std::filesystem::path& path) const;
     void rebuildGraphLocked();
 
     mutable std::mutex mutex_;

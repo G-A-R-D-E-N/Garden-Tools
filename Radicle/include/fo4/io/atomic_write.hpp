@@ -22,10 +22,10 @@ public:
 
     StagedFile(const StagedFile&) = delete;
     StagedFile& operator=(const StagedFile&) = delete;
-    // Move transfers exclusive ownership of the OS handle: the source is
-    // left empty (-1 / nullptr) so its destructor can never double-close.
+    // Move transfers exclusive ownership of the stage and OS handle; the
+    // source is left empty so its destructor cannot clean up the new owner.
     StagedFile(StagedFile&& other) noexcept;
-    StagedFile& operator=(StagedFile&& other) noexcept;
+    StagedFile& operator=(StagedFile&& other);
     ~StagedFile();
 
     void write(std::span<const std::byte> bytes);
@@ -46,6 +46,7 @@ private:
     StagedFile() = default;
 
     void close() noexcept;
+    bool discard() noexcept;
 
     std::filesystem::path path_;
     std::filesystem::path destination_;

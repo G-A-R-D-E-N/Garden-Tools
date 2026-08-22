@@ -269,3 +269,101 @@ TEST_CASE("OpenPlugin cannot retarget a trusted plugin via a same-name collision
     REQUIRE_FALSE(denied.has_value());
     CHECK(denied.error().type == "SavePathNotAllowed");
 }
+
+TEST_CASE("Save As refuses a Data-directory destination even with a writable source") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto dataDir = root / "Fallout 4" / "Data";
+    const auto modDir = root / "mods" / "MyMod";
+    const auto dataPlugin = dataDir / "DataOnly.esp";
+    const auto patch = modDir / "Patch.esp";
+    writeBytes(dataPlugin, makePlugin());
+    writeBytes(patch, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(dataDir);
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("DataOnly.esp", dataPlugin, "Data"),
+            pluginEntry("Patch.esp", patch, "MyMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto saved = backend.invokeBackend(
+        "SavePlugin",
+        nlohmann::json::array({"Patch.esp", (dataDir / "Injected.esp").string()}));
+    REQUIRE_FALSE(saved.has_value());
+    CHECK(saved.error().type == "SavePathNotAllowed");
+}
+
+TEST_CASE("Save As does not follow a trusted root after it becomes a symlink") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourceDir = root / "mods" / "Source";
+    const auto trustedRoot = root / "mods" / "Trusted";
+    const auto relocatedRoot = root / "relocated";
+    const auto originalRoot = root / "original";
+    const auto source = sourceDir / "Patch.esp";
+    const auto anchor = trustedRoot / "Anchor.esp";
+    writeBytes(source, makePlugin());
+    writeBytes(anchor, makePlugin());
+    std::filesystem::create_directories(relocatedRoot);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", source, "Source"),
+            pluginEntry("Anchor.esp", anchor, "Trusted")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    // Replacing the original trusted directory with a symlink must not grant
+    // Save-As authority over its new target.
+    std::filesystem::rename(trustedRoot, originalRoot);
+    std::error_code symlinkEc;
+    std::filesystem::create_directory_symlink(relocatedRoot, trustedRoot, symlinkEc);
+    REQUIRE_FALSE(symlinkEc);
+
+    const auto saved = backend.invokeBackend(
+        "SavePlugin",
+        nlohmann::json::array({"Patch.esp", (trustedRoot / "Injected.esp").string()}));
+    REQUIRE_FALSE(saved.has_value());
+    CHECK(saved.error().type == "SavePathNotAllowed");
+    CHECK_FALSE(std::filesystem::exists(relocatedRoot / "Injected.esp"));
+}
+
+TEST_CASE("Save As writes the checked canonical destination") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto modDir = root / "mods" / "MyMod";
+    const auto actualOutputDir = modDir / "actual-output";
+    const auto outputAlias = modDir / "output-alias";
+    const auto patch = modDir / "Patch.esp";
+    writeBytes(patch, makePlugin());
+    std::filesystem::create_directories(actualOutputDir);
+    std::error_code symlinkEc;
+    std::filesystem::create_directory_symlink(actualOutputDir, outputAlias, symlinkEc);
+    REQUIRE_FALSE(symlinkEc);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", patch, "MyMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto requested = outputAlias / "Saved.esp";
+    REQUIRE(backend.invokeBackend(
+        "SavePlugin", nlohmann::json::array({"Patch.esp", requested.string()})).has_value());
+
+    const auto plugins = parseStringResult(
+        backend.invoke("appInterop.GetPlugins", nlohmann::json::array()));
+    REQUIRE(plugins.size() == 1);
+    std::error_code canonicalEc;
+    const auto canonical = std::filesystem::weakly_canonical(requested, canonicalEc);
+    REQUIRE_FALSE(canonicalEc);
+    CHECK(plugins[0].at("FilePath") == canonical.string());
+}

@@ -57,17 +57,25 @@ std::filesystem::path temp_sibling(const std::filesystem::path& path) {
 StagedFile::StagedFile(StagedFile&& other) noexcept
     : path_(std::move(other.path_)),
       destination_(std::move(other.destination_)),
-      handle_(std::exchange(other.handle_, nullptr)) {}
+      handle_(std::exchange(other.handle_, nullptr)) {
+  other.path_.clear();
+  other.destination_.clear();
+}
 #else
 StagedFile::StagedFile(StagedFile&& other) noexcept
     : path_(std::move(other.path_)),
       destination_(std::move(other.destination_)),
-      fd_(std::exchange(other.fd_, -1)) {}
+      fd_(std::exchange(other.fd_, -1)) {
+  other.path_.clear();
+  other.destination_.clear();
+}
 #endif
 
-StagedFile& StagedFile::operator=(StagedFile&& other) noexcept {
+StagedFile& StagedFile::operator=(StagedFile&& other) {
   if (this != &other) {
-    close();
+    if (!discard()) {
+      throw std::runtime_error("unable to discard staged file " + path_.string());
+    }
     path_ = std::move(other.path_);
     destination_ = std::move(other.destination_);
 #if defined(_WIN32)
@@ -75,11 +83,13 @@ StagedFile& StagedFile::operator=(StagedFile&& other) noexcept {
 #else
     fd_ = std::exchange(other.fd_, -1);
 #endif
+    other.path_.clear();
+    other.destination_.clear();
   }
   return *this;
 }
 
-StagedFile::~StagedFile() { close(); }
+StagedFile::~StagedFile() { discard(); }
 
 StagedFile StagedFile::create(const std::filesystem::path& destination) {
   if (destination.empty()) {
@@ -207,24 +217,44 @@ void StagedFile::commit() && {
 #if defined(_WIN32)
     const auto error = ::GetLastError();
 #endif
+    const auto destination = destination_.string();
     std::error_code remove_ec;
     std::filesystem::remove(path_, remove_ec);
+    if (!remove_ec) {
+      path_.clear();
+      destination_.clear();
+    }
 #if defined(_WIN32)
-    throw std::runtime_error("unable to replace " + destination_.string() +
+    throw std::runtime_error("unable to replace " + destination +
                              " atomically (error " + std::to_string(error) +
                              "); original file left untouched");
 #else
-    throw std::runtime_error("unable to replace " + destination_.string() +
+    throw std::runtime_error("unable to replace " + destination +
                              " atomically: " + ec.message() +
                              "; original file left untouched");
 #endif
   }
+
+  // The stage was renamed into its destination. Clear the source path so the
+  // destructor's RAII cleanup never removes the committed output.
+  path_.clear();
+  destination_.clear();
 }
 
 void StagedFile::cancel() && {
+  static_cast<void>(discard());
+}
+
+bool StagedFile::discard() noexcept {
   close();
-  std::error_code remove_ec;
-  std::filesystem::remove(path_, remove_ec);
+  if (!path_.empty()) {
+    std::error_code remove_ec;
+    std::filesystem::remove(path_, remove_ec);
+    if (remove_ec) return false;
+    path_.clear();
+  }
+  destination_.clear();
+  return true;
 }
 
 void StagedFile::close() noexcept {

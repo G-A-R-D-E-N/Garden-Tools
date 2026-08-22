@@ -139,3 +139,36 @@ TEST(AtomicWrite, MoveTransfersHandleOwnershipExactlyOnce) {
   }
   EXPECT_FALSE(stray_temp_files);
 }
+
+TEST(AtomicWrite, MoveAssignmentDiscardsTheReplacedUncommittedStage) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  const auto target = root / "out" / "target.bin";
+  const auto replacedDestination = root / "out" / "replaced.bin";
+  std::filesystem::create_directories(target.parent_path());
+
+  auto incoming = fo4::io::StagedFile::create(target);
+  incoming.write(bytes("payload"));
+  incoming.finish();
+
+  auto replaced = fo4::io::StagedFile::create(replacedDestination);
+  replaced.write(bytes("discarded"));
+  replaced.finish();
+
+  // The uncommitted stage for replacedDestination must be removed before
+  // assignment takes over incoming's stage.
+  replaced = std::move(incoming);
+  std::move(replaced).commit();
+
+  std::ifstream in(target, std::ios::binary);
+  std::string contents{std::istreambuf_iterator<char>(in), {}};
+  EXPECT_EQ(contents, "payload");
+
+  bool stray_temp_files = false;
+  for (const auto& entry : std::filesystem::directory_iterator(target.parent_path())) {
+    if (entry.path().filename().string().find(".radicle-tmp") != std::string::npos) {
+      stray_temp_files = true;
+    }
+  }
+  EXPECT_FALSE(stray_temp_files);
+}
