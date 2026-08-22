@@ -45,7 +45,9 @@ void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>&
 std::vector<std::byte> makePlugin(bool withXhlt = true,
                                   bool miscRecord = false,
                                   std::uint32_t healthValue = 50,
-                                  bool duplicateXhlt = false) {
+                                  bool duplicateXhlt = false,
+                                  bool withXscl = false,
+                                  float scaleValue = 1.0f) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
     fo4::test::ByteWriter hedr;
@@ -67,6 +69,11 @@ std::vector<std::byte> makePlugin(bool withXhlt = true,
             duplicate.u32(healthValue);
             fo4::test::write_subrecord(out, "XHLT", duplicate.bytes);
         }
+    }
+    if (withXscl) {
+        fo4::test::ByteWriter scale;
+        scale.f32(scaleValue);
+        fo4::test::write_subrecord(out, "XSCL", scale.bytes);
     }
     const std::array<std::byte, 2> unknown{std::byte{0xAA}, std::byte{0xBB}};
     fo4::test::write_subrecord(out, "ZZZZ", unknown);
@@ -91,13 +98,14 @@ void loadBackend(fo4ide::plugin::RadiclePluginBackend& backend,
     REQUIRE(loaded->at("loadedPlugins") == 1);
 }
 
-std::string readHealth(const std::filesystem::path& path) {
+std::string readScalar(const std::filesystem::path& path,
+                       fo4::Signature signature) {
     const auto plugin = fo4::read_plugin_file(path);
     const auto* record = fo4::find_record(
         plugin, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(record != nullptr);
     for (const auto& subrecord : record->subrecords) {
-        if (subrecord.signature != fo4::Signature::from_string("XHLT")) continue;
+        if (subrecord.signature != signature) continue;
         const auto descriptor = fo4::schema::scalar_descriptor(subrecord.signature);
         REQUIRE(descriptor.has_value());
         return fo4::schema::decode_scalar(subrecord.data, *descriptor);
@@ -111,6 +119,15 @@ nlohmann::json grid(fo4ide::plugin::RadiclePluginBackend& backend) {
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
     return nlohmann::json::parse(result->get<std::string>());
+}
+
+std::size_t columnIndex(const nlohmann::json& value, std::string_view column) {
+    const auto& columns = value.at("columns");
+    for (std::size_t index = 0; index < columns.size(); ++index) {
+        if (columns[index] == column) return index;
+    }
+    FAIL("Spreadsheet column is missing: " << column);
+    return 0;
 }
 
 }
@@ -128,7 +145,41 @@ TEST_CASE("Native schema SetField writes REFR XHLT as human percentage points") 
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
     }));
     REQUIRE(result.has_value());
-    CHECK(readHealth(path) == "75");
+    CHECK(readScalar(path, fo4::Signature::from_string("XHLT")) == "75");
+}
+
+TEST_CASE("Native schema SetField writes generated REFR Scale without typed dispatch") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin(true, false, 50, false, true, 1.0f));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto result = backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\Scale", "1.25"
+    }));
+    REQUIRE(result.has_value());
+    CHECK(readScalar(path, fo4::Signature::from_string("XSCL")) == "1.25");
+}
+
+TEST_CASE("Native schema SetField rejects invalid generated Scale without touching disk") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin(true, false, 50, false, true, 1.0f));
+    const auto before = fo4::read_plugin_file(path).original_bytes;
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto result = backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\Scale", "10.01"
+    }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ScalarFieldWriteFailed");
+    CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
 TEST_CASE("Native schema SetField rejects invalid REFR percentage without touching disk") {
@@ -149,7 +200,7 @@ TEST_CASE("Native schema SetField rejects invalid REFR percentage without touchi
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
-TEST_CASE("Native schema SetField refuses missing XHLT rather than guessing insertion order") {
+TEST_CASE("Native schema SetField refuses missing scalar rather than guessing insertion order") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -159,11 +210,17 @@ TEST_CASE("Native schema SetField refuses missing XHLT rather than guessing inse
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
 
-    const auto result = backend.setFieldValue(nlohmann::json::array({
+    const auto health = backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "50"
     }));
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "ScalarFieldMissing");
+    REQUIRE_FALSE(health.has_value());
+    CHECK(health.error().type == "ScalarFieldMissing");
+
+    const auto scale = backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\Scale", "1"
+    }));
+    REQUIRE_FALSE(scale.has_value());
+    CHECK(scale.error().type == "ScalarFieldMissing");
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
@@ -201,25 +258,26 @@ TEST_CASE("Native schema SetField refuses protected Data plugin") {
     CHECK(fo4::read_plugin_file(path).original_bytes == before);
 }
 
-TEST_CASE("REFR spreadsheet exposes HealthPercent from existing XHLT") {
+TEST_CASE("REFR spreadsheet exposes generated scalar fields") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
-    writeBytes(path, makePlugin(true, false, 50));
+    writeBytes(path, makePlugin(true, false, 50, false, true, 1.25f));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
 
     const auto value = grid(backend);
-    REQUIRE(value.at("columns").size() == 2);
-    CHECK(value.at("columns")[0] == "EDID");
-    CHECK(value.at("columns")[1] == "REFR\\HealthPercent");
+    const auto health = columnIndex(value, "REFR\\HealthPercent");
+    const auto scale = columnIndex(value, "REFR\\Scale");
     REQUIRE(value.at("rows").size() == 1);
-    CHECK(value.at("rows")[0].at("cells")[1] == "50");
-    CHECK(value.at("rows")[0].at("editable")[1] == true);
+    CHECK(value.at("rows")[0].at("cells")[health] == "50");
+    CHECK(value.at("rows")[0].at("editable")[health] == true);
+    CHECK(value.at("rows")[0].at("cells")[scale] == "1.25");
+    CHECK(value.at("rows")[0].at("editable")[scale] == true);
 }
 
-TEST_CASE("REFR spreadsheet keeps missing XHLT blank and read-only") {
+TEST_CASE("REFR spreadsheet keeps missing generated scalars blank and read-only") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -230,26 +288,34 @@ TEST_CASE("REFR spreadsheet keeps missing XHLT blank and read-only") {
 
     const auto value = grid(backend);
     REQUIRE(value.at("rows").size() == 1);
-    CHECK(value.at("rows")[0].at("cells")[1] == "");
-    CHECK(value.at("rows")[0].at("editable")[1] == false);
+    for (const auto& field :
+         fo4::schema::scalar_fields(fo4::Signature::from_string("REFR"))) {
+        const auto index = columnIndex(value, field.path);
+        CHECK(value.at("rows")[0].at("cells")[index] == "");
+        CHECK(value.at("rows")[0].at("editable")[index] == false);
+    }
 }
 
-TEST_CASE("REFR spreadsheet preserves unusual existing XHLT values") {
+TEST_CASE("REFR spreadsheet preserves unusual existing scalar values") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
-    writeBytes(path, makePlugin(true, false, 150));
+    writeBytes(path, makePlugin(true, false, 150, false, true, 12.0f));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
 
     const auto value = grid(backend);
     REQUIRE(value.at("rows").size() == 1);
-    CHECK(value.at("rows")[0].at("cells")[1] == "150");
-    CHECK(value.at("rows")[0].at("editable")[1] == true);
+    const auto health = columnIndex(value, "REFR\\HealthPercent");
+    const auto scale = columnIndex(value, "REFR\\Scale");
+    CHECK(value.at("rows")[0].at("cells")[health] == "150");
+    CHECK(value.at("rows")[0].at("editable")[health] == true);
+    CHECK(value.at("rows")[0].at("cells")[scale] == "12");
+    CHECK(value.at("rows")[0].at("editable")[scale] == true);
 }
 
-TEST_CASE("REFR spreadsheet rejects duplicate XHLT rather than choosing one") {
+TEST_CASE("REFR spreadsheet rejects duplicate generated scalar subrecords") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
