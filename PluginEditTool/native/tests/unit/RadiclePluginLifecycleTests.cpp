@@ -9,6 +9,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/flags.hpp>
+#include <fo4/forms/eyes.hpp>
+#include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
@@ -59,6 +61,24 @@ std::vector<std::byte> makePlugin(std::uint32_t tes4Flags = 0,
     return out.bytes;
 }
 
+std::vector<std::byte> makeSpellPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(2);
+    hedr.u32(0x900);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "SPEL", 0);
+    const auto record = fo4::test::begin_record(out, "SPEL", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"ExistingSpell\0", 14});
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 std::vector<std::byte> makeReferencingPlugin() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -96,6 +116,16 @@ nlohmann::json pluginEntry(std::string name,
     };
 }
 
+nlohmann::json eyesPayload() {
+    return {
+        {"editorId", "CreatedEyes"},
+        {"fullText", "Created Eyes"},
+        {"icon", "Textures\\Eyes\\Created.dds"},
+        {"dataFlags", 5},
+        {"recordFlags", 0x00000404u}
+    };
+}
+
 nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& result) {
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
@@ -104,7 +134,7 @@ nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& result) {
 
 }
 
-TEST_CASE("Native lifecycle creates renumbers and deletes a persisted local record") {
+TEST_CASE("Native lifecycle creates renumbers and deletes a persisted typed record") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto pluginPath = root / "mods" / "MyMod" / "Patch.esp";
@@ -119,12 +149,17 @@ TEST_CASE("Native lifecycle creates renumbers and deletes a persisted local reco
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
 
     const auto created = parseStringResult(backend.invokeBackend(
-        "CreateRecord", nlohmann::json::array({"Patch.esp", "EYES"})));
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "EYES", eyesPayload()})));
     REQUIRE(created.at("formKey") == "000900:Patch.esp");
 
     auto disk = fo4::read_plugin_file(pluginPath);
-    REQUIRE(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) != nullptr);
+    const auto createdKey = fo4::FormKey::parse("000900:Patch.esp");
+    REQUIRE(fo4::find_record(disk, createdKey) != nullptr);
     CHECK(disk.header.next_form_id == 0x901u);
+    const auto eyes = fo4::forms::decode_eyes(disk, createdKey);
+    REQUIRE(eyes.editor_id.has_value());
+    CHECK(*eyes.editor_id == "CreatedEyes");
+    CHECK(eyes.full_text == std::optional<std::string>{"Created Eyes"});
 
     const auto renumbered = parseStringResult(backend.invokeBackend(
         "RenumberRecord",
@@ -145,6 +180,84 @@ TEST_CASE("Native lifecycle creates renumbers and deletes a persisted local reco
     CHECK(disk.header.next_form_id == 0x951u);
 }
 
+TEST_CASE("Native lifecycle creates LVSP with validated initial entries") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MagicMod" / "Patch.esp";
+    writeBytes(pluginPath, makeSpellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MagicMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json payload{
+        {"editorId", "CreatedList"},
+        {"chanceNone", 20},
+        {"maxCount", 2},
+        {"flags", 5},
+        {"entries", nlohmann::json::array({
+            {
+                {"level", 10},
+                {"spell", "000800:Patch.esp"},
+                {"count", 1},
+                {"chanceNone", 3}
+            }
+        })}
+    };
+    const auto created = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVSP", payload})));
+    REQUIRE(created.at("formKey") == "000900:Patch.esp");
+
+    const auto disk = fo4::read_plugin_file(pluginPath);
+    const auto key = fo4::FormKey::parse("000900:Patch.esp");
+    const auto list = fo4::forms::decode_leveled_spell(disk, key);
+    CHECK(list.chance_none == 20u);
+    CHECK(list.max_count == 2u);
+    CHECK(list.flags == 5u);
+    REQUIRE(list.entries.size() == 1u);
+    CHECK(list.entries[0].spell == fo4::FormKey::parse("000800:Patch.esp"));
+    CHECK(list.entries[0].level == 10u);
+    CHECK(disk.header.next_form_id == 0x901u);
+
+    const auto* record = fo4::find_record(disk, key);
+    REQUIRE(record != nullptr);
+    REQUIRE(record->subrecords.size() == 6u);
+    CHECK(record->subrecords[0].signature == fo4::sig_edid);
+    CHECK(record->subrecords[1].signature.to_string() == "LVLD");
+    CHECK(record->subrecords[2].signature.to_string() == "LVLM");
+    CHECK(record->subrecords[3].signature.to_string() == "LVLF");
+    CHECK(record->subrecords[4].signature.to_string() == "LLCT");
+    CHECK(record->subrecords[5].signature.to_string() == "LVLO");
+}
+
+TEST_CASE("Native lifecycle refuses raw creation without schema preflight") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MyMod" / "Patch.esp";
+    writeBytes(pluginPath, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MyMod")
+        })}}).has_value());
+
+    const auto created = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "RACE", nlohmann::json::object()}));
+    REQUIRE_FALSE(created.has_value());
+    CHECK(created.error().type == "RecordCreationRequiresSchema");
+
+    const auto disk = fo4::read_plugin_file(pluginPath);
+    CHECK(disk.header.next_form_id == 0x900u);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);
+}
+
 TEST_CASE("Native lifecycle refuses protected Data plugins") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -162,7 +275,8 @@ TEST_CASE("Native lifecycle refuses protected Data plugins") {
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
 
     const auto created = backend.invokeBackend(
-        "CreateRecord", nlohmann::json::array({"Protected.esp", "EYES"}));
+        "CreateRecord",
+        nlohmann::json::array({"Protected.esp", "EYES", eyesPayload()}));
     REQUIRE_FALSE(created.has_value());
     CHECK(created.error().type == "PluginReadOnly");
 
@@ -187,7 +301,8 @@ TEST_CASE("Native lifecycle refuses light create and renumber") {
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
 
     const auto created = backend.invokeBackend(
-        "CreateRecord", nlohmann::json::array({"Light.esl", "EYES"}));
+        "CreateRecord",
+        nlohmann::json::array({"Light.esl", "EYES", eyesPayload()}));
     REQUIRE_FALSE(created.has_value());
     CHECK(created.error().type == "LightPluginLifecycleUnsupported");
 
