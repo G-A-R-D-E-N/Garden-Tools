@@ -215,6 +215,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_encoding.cpp
     tests/test_quest_alias_formlinks.cpp
+    tests/test_quest_alias_location_formlinks.cpp
     tests/test_quest_alias_mutation.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
