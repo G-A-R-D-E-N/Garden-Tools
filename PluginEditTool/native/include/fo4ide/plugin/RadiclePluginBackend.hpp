@@ -50,6 +50,7 @@ private:
     Result<nlohmann::json> deleteRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> renumberRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setField(const nlohmann::json& arguments);
+    Result<nlohmann::json> setArmorField(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
     Result<nlohmann::json> addMasters(const nlohmann::json& arguments);
