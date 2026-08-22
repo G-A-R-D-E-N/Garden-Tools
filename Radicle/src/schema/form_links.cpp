@@ -62,6 +62,7 @@ constexpr auto k_mnam = Signature::from_string("MNAM");
 constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_race = Signature::from_string("RACE");
 constexpr auto k_sraf = Signature::from_string("SRAF");
+constexpr auto k_alco = Signature::from_string("ALCO");
 constexpr auto k_alfr = Signature::from_string("ALFR");
 constexpr auto k_anam = Signature::from_string("ANAM");
 constexpr auto k_cnam = Signature::from_string("CNAM");
@@ -396,11 +397,12 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   }
   // QUST has the same signature-reuse problem on a larger scale. Classify the
   // proven QUST-only meanings before consulting the global signature table.
-  // ALFR is a Specific Reference FormLink but is not present in the generated
-  // wbFormIDCk signature list. The listed signatures below are scalar/string
-  // data in QUST even though they are FormIDs elsewhere.
+  // ALFR Specific Reference and ALCO Create Reference Object are FormLinks but
+  // are not present in the generated wbFormIDCk signature list. The listed
+  // signatures below are scalar/string data in QUST even though they are
+  // FormIDs elsewhere.
   if (record.header.signature == k_qust) {
-    if (sub.signature == k_alfr) {
+    if (sub.signature == k_alfr || sub.signature == k_alco) {
       if (sub.data.size() == 4) fn(0);
       return;
     }
