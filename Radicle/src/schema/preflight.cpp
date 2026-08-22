@@ -5,6 +5,7 @@
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <cstddef>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -94,6 +95,20 @@ RecordLocation locate_record(const Plugin& plugin, const FormKey& key) {
   return result;
 }
 
+bool first_nested_terminator_descriptor(std::size_t descriptor_index) {
+  const auto& descriptor = k_generated_nested_formlink_lists[descriptor_index];
+  for (std::size_t index = 0; index < descriptor_index; ++index) {
+    const auto& previous = k_generated_nested_formlink_lists[index];
+    if (previous.record == descriptor.record &&
+        previous.container_path == descriptor.container_path &&
+        previous.terminator == descriptor.terminator &&
+        previous.terminator_size == descriptor.terminator_size) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 std::vector<PreflightIssue> preflight_record(const Record& record) {
@@ -172,6 +187,67 @@ std::vector<PreflightIssue> preflight_record(const Record& record) {
             PreflightSeverity::error));
       }
       ++ordinal;
+    }
+  }
+
+  for (std::size_t descriptor_index = 0;
+       descriptor_index < std::size(k_generated_nested_formlink_lists);
+       ++descriptor_index) {
+    const auto& descriptor = k_generated_nested_formlink_lists[descriptor_index];
+    if (descriptor.record != record.header.signature) continue;
+
+    const bool validate_terminator =
+        first_nested_terminator_descriptor(descriptor_index);
+    std::size_t container_index = 0;
+    std::size_t element_index = 0;
+    bool member_since_terminator = false;
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == descriptor.subrecord) {
+        member_since_terminator = true;
+        if (subrecord.data.size() != 4) {
+          issues.push_back(field_issue(
+              record,
+              std::string(descriptor.container_path) + "[" +
+                  std::to_string(container_index) + "]\\" +
+                  std::string(descriptor.member) + "[" +
+                  std::to_string(element_index) + "]",
+              "invalid_nested_formlink_list_storage",
+              descriptor.record.to_string() + " " +
+                  descriptor.subrecord.to_string() +
+                  " nested FormLink list element must be exactly four bytes",
+              PreflightSeverity::error));
+        }
+        ++element_index;
+      }
+
+      if (subrecord.signature != descriptor.terminator) continue;
+      if (validate_terminator &&
+          subrecord.data.size() != descriptor.terminator_size) {
+        issues.push_back(field_issue(
+            record,
+            std::string(descriptor.container_path) + "[" +
+                std::to_string(container_index) + "]",
+            "invalid_nested_formlink_terminator_storage",
+            descriptor.record.to_string() + " " +
+                descriptor.terminator.to_string() +
+                " nested-list terminator has unexpected storage size",
+            PreflightSeverity::error));
+      }
+      ++container_index;
+      element_index = 0;
+      member_since_terminator = false;
+    }
+
+    if (member_since_terminator) {
+      issues.push_back(field_issue(
+          record,
+          std::string(descriptor.container_path) + "[" +
+              std::to_string(container_index) + "]\\" +
+              std::string(descriptor.member),
+          "unterminated_nested_formlink_list",
+          descriptor.record.to_string() + " nested FormLink list reaches the end of the record without " +
+              descriptor.terminator.to_string() + " terminator",
+          PreflightSeverity::error));
     }
   }
 
