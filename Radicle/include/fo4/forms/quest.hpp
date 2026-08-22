@@ -7,6 +7,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::forms {
@@ -37,11 +38,21 @@ struct QuestAlias {
   std::vector<Subrecord> subrecords;
 };
 
+struct QuestAliasCreation {
+  QuestAliasKind kind{QuestAliasKind::reference};
+  std::uint32_t id{0};
+  std::optional<std::string_view> name;
+  std::optional<std::uint32_t> flags;
+  std::optional<std::int32_t> force_into_alias;
+  std::optional<std::uint8_t> max_initial_fill_count;
+};
+
 struct QuestAliases {
   std::uint32_t next_alias_id{0};
   std::vector<QuestAlias> aliases;
 };
 
+QuestAlias encode_quest_alias(const QuestAliasCreation& creation);
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
 
 }  // namespace fo4::forms
