@@ -84,6 +84,14 @@
           {"signature": "NAM3", "minimum": 1, "maximum": 1}
         ]
       },
+      "formlink_lists": [
+        {"path": "RACE\\MalePresets", "label": "Male Race Presets", "subrecord": "RPRM", "targets": ["NPC_"], "nullable": true, "mutation": "existing_only"},
+        {"path": "RACE\\MaleHairColors", "label": "Male Hair Colors", "subrecord": "AHCM", "targets": ["CLFM"], "nullable": true, "mutation": "existing_only"},
+        {"path": "RACE\\MaleFaceDetails", "label": "Male Face Details", "subrecord": "FTSM", "targets": ["TXST"], "nullable": true, "mutation": "existing_only"},
+        {"path": "RACE\\FemalePresets", "label": "Female Race Presets", "subrecord": "RPRF", "targets": ["NPC_"], "nullable": true, "mutation": "existing_only"},
+        {"path": "RACE\\FemaleHairColors", "label": "Female Hair Colors", "subrecord": "AHCF", "targets": ["CLFM"], "nullable": true, "mutation": "existing_only"},
+        {"path": "RACE\\FemaleFaceDetails", "label": "Female Face Details", "subrecord": "FTSF", "targets": ["TXST"], "nullable": true, "mutation": "existing_only"}
+      ],
       "fields": []
     },
     {
