@@ -84,4 +84,22 @@ ArmorAddon decode_armor_addon(const Plugin& plugin, const FormKey& key);
 FormKey create_armor(Plugin& plugin, const ArmorCreation& creation);
 FormKey create_armor_addon(Plugin& plugin, const ArmorAddonCreation& creation);
 
+bool set_armor_model_fields(
+    Plugin& plugin,
+    const FormKey& key,
+    std::optional<std::string_view> male_world_model,
+    std::optional<std::string_view> male_icon,
+    std::optional<std::string_view> male_message_icon,
+    std::optional<std::string_view> female_world_model,
+    std::optional<std::string_view> female_icon,
+    std::optional<std::string_view> female_message_icon);
+
+bool set_armor_addon_model_fields(
+    Plugin& plugin,
+    const FormKey& key,
+    std::optional<std::string_view> male_biped_model,
+    std::optional<std::string_view> female_biped_model,
+    std::optional<std::string_view> male_first_person_model,
+    std::optional<std::string_view> female_first_person_model);
+
 }  // namespace fo4::forms
