@@ -603,6 +603,126 @@ XCLC grid coords. Functions that need interior cell position navigate
 through `cell+0x150` → worldspace → cell-level array (see the complex
 getters at `0xd197e0`/`0xd19820` which do handle the interior path).
 
+### 8.5 Cell-data block — complete 0x88 (exterior) and 0x20 (interior) layout
+
+Recovered from the allocator (`FUN_140d18510`, `tesobjectcell.cpp:0xaee`),
+the coordinate setters, the LoadRecord/SaveRecord field accessors, and the
+world-position getter. The cell-data pointer lives at `cell+0x60`; the block
+is allocated by `FUN_140d18510` with type gated by `cell+0x50 & 1`.
+
+#### 8.5a Allocator: `FUN_140d18510(cell)`
+
+```c
+// Free old block
+old = cell->+0x60;
+if (old) {
+    if (exterior) {
+        if (formFlags & 0x4000) { old->+0x08 = 0; old->+0x10 = 0; }
+        thunk_FUN_140d3fec0(old, 1);  // decrement refcount on linked data
+    } else {
+        FUN_140001c4e(old, 0x88);     // free 0x88-byte interior block
+    }
+    cell->+0x60 = NULL;
+}
+
+// Allocate new block
+if (exterior) {
+    block = thunk_FUN_141ff6d30(heap, 0x20, 0);  // 32 bytes
+    if (block) {
+        block[0:8] = 0;                         // +0x00: field0
+        block[8:16] = 0;                        // +0x08: linked-data ptr
+        block[16:24] = 0;                       // +0x10: linked-data ptr2
+        *(u32*)(block+24) = 0;                  // +0x18: field3
+        *(u16*)(block+28) = 0;                  // +0x1C: short
+        *(u8*)(block+30) = 0;                   // +0x1E: byte flag
+    }
+} else {
+    block = thunk_FUN_141ff6d30(heap, 0x88, 0, 0);  // 136 bytes
+    if (block) {
+        thunk_FUN_140911970(block + 0x28);      // +0x28: float-array init (5 floats)
+        block[0:8] = 0;                         // +0x00: int32 x coord
+        block[8:16] = 0;                        // +0x08: int32 y coord
+        block[16:24] = 0;                       // +0x10: field2
+        *(u32*)(block+24) = 0;                  // +0x18: field3
+        *(u64*)(block+28) = 0x3f800000;         // +0x1C: 1.0f float
+        *(u32*)(block+36) = 0x3f800000;         // +0x24: 1.0f float
+        *(u32*)(block+72) = 0;                  // +0x48: zero
+        *(u64*)(block+76) = 0x3f800000;         // +0x4C: 1.0f float
+        *(u32*)(block+84) = 0;                  // +0x54: zero
+        block[11] = 0x79f;                      // +0x58: u64 0x79F constant
+        block[12] = 0x461c4000;                 // +0x60: 10000.0f float
+        block[16] = 0;                          // +0x80: pointer
+        *(u32*)(block+104) = 0;                 // +0x68: zero
+        *(u32*)(block+108) = 0x3f800000;        // +0x6C: 1.0f float
+        *(u32*)(block+112) = 0x3f800000;        // +0x70: 1.0f float
+        *(u32*)(block+116) = 0x3f800000;        // +0x74: 1.0f float
+        *(u32*)(block+120) = 0x3f800000;        // +0x78: 1.0f float
+        *(u32*)(block+124) = 0x3f800000;        // +0x7C: 1.0f float
+    }
+}
+cell->+0x60 = block;
+```
+
+#### 8.5b Exterior 0x20-byte cell-data layout
+
+32 bytes, allocated for exterior cells. Verified by the coordinate setter
+(`FUN_140d197c0`), LoadRecord XCLC handler, and SaveRecord exterior path.
+
+| offset | size | name | init | evidence |
+|---|---:|---:|---|
+| +0x00 | 4 | **gridX** (int32) | 0 | `FUN_140d197c0`: `*block = x`; LoadRecord: `read(block, 4)`; `FUN_140d19770`: `*worldX = (float)(block[0] * 4096)` |
+| +0x04 | 4 | **gridY** (int32) | 0 | `FUN_140d197c0`: `block[1] = y`; `FUN_140d19770`: `*worldY = (float)(block[4] * 4096)` |
+| +0x07 | 1 | **CNAM flag** (byte) | 0 | SaveRecord: `if (block[7] != 0) write_subrecord('CNAM', block+7, 1)` |
+| +0x08 | 8 | **linked-data ptr** (void*) | 0 | `FUN_140d18510`: `old->+0x08 = 0`; SaveRecord: `if (block[8] != 0) write_TVDT(block[8])` |
+| +0x10 | 8 | **linked-data ptr2** (void*) | 0 | `FUN_140d18510`: `old->+0x10 = 0`; only accessed in allocator free path |
+| +0x18 | 4 | (u32) | 0 | zeroed in allocator; role TBD |
+| +0x1C | 2 | (u16) | 0 | zeroed in allocator; role TBD |
+| +0x1D | 1 | **ZNAM flag** (byte) | 0 | LoadRecord ZNAM: `read(block+0x1d, 1)`; SaveRecord: `if (block[0x1d] != 0) write('ZNAM', block+0x1d, 1)` |
+| +0x1E | 1 | byte | 0 | XCLC position 2 (byte at +0x1e in the 12-byte XCLC payload) |
+
+**XCLC wire format (12 bytes):** `[gridX:4][gridY:4][+0x1e:1][padding:3]` —
+confirmed by SaveRecord: `puVar4 = getter(cell); local_18 = *puVar4; local_14 = puVar4[1]; local_10 = *(puVar4+0x1e); write_subrecord('XCLC', &local_18, 0xc)`.
+
+#### 8.5c Interior 0x88-byte cell-data layout
+
+136 bytes, allocated for interior cells. Contains the **XCLL** lighting
+payload (0x88 bytes), verified by SaveRecord interior path:
+`piVar3 = getter2(); write_subrecord('XCLL', piVar3, 0x88)`.
+
+The XCLL 0x88-byte block is opaque to the code studied here — the allocator
+initializes 5 floats at `+0x28` via `thunk_FUN_140911970`, then lays down
+scale/identity seeds at `+0x1C` through `+0x7C` (same pattern as the exterior
+path but in a larger block). The block is freed as a single 0x88-byte
+allocation in `ClearItem` (`FUN_140d13f00`): `FUN_140001c4e(cell+0x60, 0x88)`.
+
+#### 8.5d The 0x79F constant at +0x58
+
+The value `0x79F` (1949 decimal) is stored as a **u64** at exterior
+cell-data offset `+0x58` (confirmed: `puVar1[0xb] = 0x79f`). It is
+written once in the allocator and **never read by any function in the
+cell-data range** (0xd17000–0xd1a000) — no MOV from `[RAX+0x58]` exists.
+
+This is likely a **version marker** or **magic constant** that identifies
+the cell-data block as valid — the CK's cell-loader checks byte `+0x58`
+for `4` (bit 3) before doing the worldspace→cell lookup in
+`FUN_140d184d0` (the exterior-path continuation of the getter function):
+`TEST [RAX+0x58], 4; JZ skip`. The value `0x79F` has bit 2 set (`4`),
+so the test passes for freshly allocated blocks.
+
+The `0x461c4000` at `+0x60` is `10000.0f` — the **default water height**
+for the cell (CK's standard water level).
+
+#### 8.5e Accessor summary
+
+| function | RVA | role | interior/exterior behavior |
+|---|---|---|---|
+| `FUN_140d18510` | `0xd18510` | **allocator** — frees old block, allocates new (0x20 or 0x88) | `cell+0x50 & 1` → 0x20 exterior / 0x88 interior |
+| `FUN_140d18490` | `0xd17ab0` | **getter** — returns `cell+0x60` pointer | interior → NULL; exterior → `cell+0x60` |
+| `FUN_140d184b0` | `0xd17a90` | **getter (alt)** — returns `cell+0x60` pointer | interior → `cell+0x60`; exterior → NULL (inverted from 0xd18490) |
+| `FUN_140d197c0` | `0xd197c0` | **coord setter** — writes gridX/gridY to `+0x00/+0x04` | interior → no-op; exterior → `block[0:2] = (x,y)` |
+| `FUN_140d19770` | `0xd19770` | **world-pos getter** — returns `(gridX*4096, gridY*4096)` | interior → (0.0, 0.0); exterior → `block[0:2] * 4096.0f` |
+| `FUN_140d184d0` | `0xd184d0` | **validity check** — `TEST [block+0x58], 4` | continuation of getter; calls `cell+0x150` → worldspace when valid |
+
 ### 8b. TESWorldSpace member layout (constructor)
 
 Recovered from the factory Create (`FUN_140e49880` → alloc 0x2B8 + call ctor
@@ -970,7 +1090,7 @@ hex). The result is asymmetric in a way that confirms the slot naming:
   | `FUN_1408c7a70` | `tesform.cpp:0x9a4` | form-header writer — allocates the 0x18 header block, writes formID/version/flags, emits `EDID`, then calls the vtable save slots (`+0x1b0` subrecords, `+0x3b8` → `PTRN`-family `FUN_14036d7c0`, `+0x3c0` → `STCP`-family `FUN_1403706a0`) |
   | `FUN_1408c7710` | (write primitive) | subrecord writer — appends 4CC + u16 size + data to `DAT_143d4a470` |
   | `FUN_1408c7bf0` | `tesform.cpp:0x9e0` | subrecord close / size-patch — rewinds the buffer size (`DAT_143d4a470+4 = DAT_143d4a46c - 0x18`) unless form flag `+0x10` bit 0xe is set |
-  | `FUN_140d18490` | — | CELL exterior cell-data getter (`+0x60`), `0` if interior (`+0x50 & 1`) — called 5× inside CELL `SaveRecord` |
+  | `FUN_140d18490` | — | CELL exterior cell-data getter (`cell+0x60`), `NULL` if interior (`cell+0x50 & 1`) — 13-byte function at `0xd17ab0`; the interior counterpart is `FUN_140d184b0` at `0xd17a90` which returns the pointer when `cell+0x50 & 1` is **set** (inverted logic). Called 5× inside CELL `SaveRecord`. |
 
   So CELL `SaveRecord` = `FUN_140d18490` (get cell data) + 13×
   `FUN_1408c7710` + 3× `FUN_1408c7bf0` (close each subrecord), with the
@@ -1082,8 +1202,6 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 
 ## 12. Open questions
 
-- The 0x20/0x88-byte cell-data block internals (what lives in the 0x88
-  exterior block beyond the coords + 1.0f seeds; the `0x79F` at +0x58).
 - Whether any CK feature writes WRLD/CELL records with non-standard subrecords
   (editor-only `EditorWarnings.txt` paths noted in §10 of doc 03).
 - The full ~160-subrecord REFR LoadRecord dispatch table (currently partially
@@ -1092,6 +1210,9 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - The LAND texture-layer reader at `0x457100` — full subrecord set and caller chain.
 - The LAND vertex-data *save* path (which function writes VHGT/VNML/VCLR/MPCD
   to the output buffer, since these are not in SaveRecord).
+- The interior XCLL 0x88-byte block format — the `thunk_FUN_140911970` init
+  at `+0x28` writes 5 floats; the remaining fields between +0x08 and +0x87
+  should be mapped against the XCLL subrecord byte layout.
 
 ## Artifacts
 
@@ -1103,8 +1224,10 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - `ghidra-dump/decompile-save-helpers.txt` (`FUN_1408c7a70` form-header writer, `FUN_1408c7bf0` subrecord close, `FUN_140d18490` cell-data getter)
 - `ghidra-dump/decompile-TESDataHandler-CreateForm-FUN_140865b10.txt`
 - `ghidra-dump/decompile-TESObjectCELL-LoadRecord-candidate.txt`
-- `ghidra-dump/cell-ctor-0xd13940.txt`, `cell-setters.txt`,
-  `worldspace-cellmap-insert-0xe4d180.txt` (raw decompiles; local only)
+- `ghidra-dump/cell-setters.txt` (10 functions: EDID setter FUN_1408bfb80,
+  interior-flag setter FUN_140d1d2e0, cell-data allocator FUN_140d18510,
+  coordinate setter FUN_140d197c0 + the getter at `0xd17ab0` and
+  alt-getter at `0xd17a90`)
 - `ghidra-dump/decompile-REFRFactory-slots.txt`,
   `decompile-REFRSerializer-slots.txt`, `decompile-REFR-serializer-thunks.txt`,
   `decompile-serializer-virtuals.txt`, `decompile-factory-compare.txt`,
