@@ -17,3 +17,7 @@
 {0x44545344u, 12, 16}, // DSTD debris
 // XNDP: navmesh FormID at 0, int16 triangle, pad.
 {0x50444E58u, 0, 4},   // XNDP
+// RACE VTCK: required male/female voice pair. Single-form VTCK uses are
+// already covered by formid_subrecords.inc when their payload is four bytes.
+{0x4B435456u, 0, 8},   // VTCK male voice
+{0x4B435456u, 4, 8},   // VTCK female voice
