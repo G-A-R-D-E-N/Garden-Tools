@@ -47,10 +47,13 @@ fo4::Group top_group(std::string_view signature) {
   return group;
 }
 
-fo4::Record record(std::string_view signature, std::uint32_t form_id) {
+fo4::Record record(std::string_view signature,
+                   std::uint32_t form_id,
+                   std::uint32_t flags = 0) {
   fo4::Record value;
   value.header.signature = fo4::Signature::from_string(signature);
   value.header.form_id = fo4::RawFormId{form_id};
+  value.header.flags = fo4::RecordFlags{flags};
   value.header.form_version = 131;
   return value;
 }
@@ -78,10 +81,16 @@ TEST(Onam, RebuildIncludesOnlyNonPersistentMasterOwnedFo4Participants) {
   cell.children.emplace_back(record("CELL", 0x00000010u));  // CELL itself is never emitted.
   auto children = nested_group(fo4::GroupType::cell_children);
   auto persistent = nested_group(fo4::GroupType::cell_persistent_children);
-  persistent.children.emplace_back(record("REFR", 0x00000101u));
+  persistent.children.emplace_back(
+      record("REFR", 0x00000101u, fo4::RecordFlags::persistent));
   auto temporary = nested_group(fo4::GroupType::cell_temporary_children);
   temporary.children.emplace_back(record("REFR", 0x00000100u));
   temporary.children.emplace_back(record("PHZD", 0x00000103u));
+  // xEdit's ONAM predicate is the record flag, not the containing GRUP type.
+  // Even if a malformed file leaves this in Temporary, the persistent bit
+  // keeps it out of ONAM.
+  temporary.children.emplace_back(
+      record("REFR", 0x00000104u, fo4::RecordFlags::persistent));
   temporary.children.emplace_back(record("WEAP", 0x00000102u));  // Not an ONAM family.
   temporary.children.emplace_back(record("REFR", 0x01000800u));  // Local record.
   children.children.emplace_back(std::move(persistent));
