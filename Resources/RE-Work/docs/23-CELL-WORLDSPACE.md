@@ -262,6 +262,114 @@ for the JSON record format — the reason REFR gets the hand-written pair is
 that its editor needs both, and the template's fixed name/type accessors
 aren't enough for the JSON schema.
 
+### 7d. The full JSONSerializerBase roster — 11 record types
+
+The RTTI strings in the binary reveal **11** serializer classes (not 10 as
+previously reported), all in anonymous namespaces with the
+`JSONSerializerBase<TSub, TRecord, FormType>` template:
+
+| serializer anon-class | record class | encoded ft | schema builder RVA | props |
+|---|---|---|---|---|
+| `TESObjectREFRSerializer` | `TESObjectREFR` | `$0EA` (0x4A) | `0xd87d90` | 73 |
+| `TESObjectWEAPSerializer` | `TESObjectWEAP` | `$0CL` (0x2B) | ~`0xc954b0` | 46 |
+| `BGSAimModelSerializer` | `BGSAimModel` | `$0IN` (0x8E) | ~`0x445e46` | 16 |
+| `BGSKeywordSerializer` | `BGSKeyword` | `$03` (0x03) | (TBD) | (≥1) |
+| `BGSMod_ObjectSerializer` | `BGSMod::Attachment::Mod` | `$0JA` (0xA0) | (TBD) | (≥1) |
+| `CameraShotSerializer` | `BGSCameraShot` | `$0GD` (0x63) | (TBD) | (≥1) |
+| `ExplosionSerializer` | `BGSExplosion` | `$0FK` (0x4A) | (TBD) | (≥1) |
+| `ProjectileSerializer` | `BGSProjectile` | `$0DD` (0x3D) | (TBD) | (≥1) |
+| `SoundCatSerializer` | `BGSSoundCategory` | `$0IG` (0x86) | (TBD) | (≥1) |
+| `SoundDescSerializer` | `BGSSoundDescriptorForm` | `$0IE` (0x84) | (TBD) | (≥1) |
+| `WeatherSerializer` | `TESWeather` | `$0DJ` (0x43) | (TBD) | (≥1) |
+
+All 11 share the same `IJSONSerializer` base interface (vftable layout:
+slot 1 = ctor/register, slot 2 = JSON read, slot 3 = JSON write,
+slot 4 = schema builder). Each ctor calls `FUN_140396a50(form_type)` to
+register in the JSON serializer hash map at `DAT_143d1b0d0`.
+
+**Schema-building protocol:** the schema builder virtual (slot 4) calls
+a property-registration API at RVA `0x16248` (`lea rdx, [RIP+string]`;
+`call 0x16248`), one invocation per named property. Extracting the
+`lea rdx` targets from each builder's bytecode recovers the full
+property surface:
+
+#### 7d.1 TESObjectREFR (73 properties, split across two schema functions)
+
+Part 1 at RVA `0xd87d90` (39 props — identity, flags, transform, misc):
+`Base Object`, `Layer`, `Encounter Zone`, `Comments`, `Num. Materials`,
+`Turn Off Fire`, `Initially Disabled`, `Hidden From Local Map`,
+`Inaccessible`, `Open by Default`, `Motion Blur`, `Starts Dead`,
+`Starts Unconscious`, `Respawn`, `Reflected by Autowater`,
+`Ignored by Sandbox`, `Is Full LOD`, `Don't Havok Settle`,
+`Is Ground Piece`, `LOD Respects Enable State`,
+`Pos X/Y/Z`, `Rot X/Y/Z`, `Scale`, `Test radius`, `Color`,
+`Player Activate`, `Collision Layer`, `Bound X/Y/Z`,
+`Count`, `Health`, `Ammo Count`, `Time Left`, `Alpha Cutoff`.
+
+Part 2 at RVA `0xd89e0e` (34 props — physics, linkage, door/teleport):
+`Required Rank`, `Has Patrol Data`, `Idle Time`, `Width`, `Height`,
+`Radio Station`, `Ignores Distance Check`, `Min Weak Distance`,
+`Max Weak Distance`, `Imagespace`, `Lighting Template`, `Thickness`,
+`Slack`, `Has Teleport Data`, `Linked Door`, `No Alarm`,
+`Teleport Loc Name`, `Random Teleport Marker`,
+`Linear Velocity X/Y/Z`, `Angular Velocity X/Y/Z`,
+`Attach Reference`, `Enable State Parent`, `Enable State Opposite`,
+`Linked Reference`, `Keyword Linked References`,
+`Activate Parents`, `Activate Parent Only`, `Multibound Ref`,
+`Spawn Container`, `Acoustic Parent`.
+
+#### 7d.2 TESObjectWEAP (46 properties)
+
+Schema builder at ~RVA `0xc954b0`: `Weapon speed`, `Attack delay`,
+`Weapon reach`, `Automatic weapon`, `Has scope`, `Can't be dropped`,
+`Hides backpack`, `Accuracy Bonus`, `Attack Seconds`, `Reload Seconds`,
+`Bolt Charge Seconds`, `Number of projectiles fired per shot`,
+`Iron sight FOV mult`, `Critical damage multiplier`, `Critical charge bonus`,
+`Critical effect on death`, `Minimum range`, `Maximum range`,
+`Out of range damage multiplier`, `Hit behavior`, `Weapon type`,
+`Ignore resistance`, `Is playable`, `Is player-only`, `Is minor crime`,
+`Fixed range`, `Use prevented in normal combat`, `NPCs use ammo`,
+`No jam after reload`, `Override damage to weapon`,
+`Use alternating rumble`, `Non hostile weapon`, `Is bound weapon`,
+`Damage to weapon multiplier.`, `Sound level multiplier`,
+`Critical effect`, `Attack sound`, `2D attack sound`,
+`Attack loop sound`, `Attack fail sound`, `Idle sound`,
+`Equip sound`, `Unequip sound`, `Fast Equip sound`,
+`Aim model`, `Zoom data`.
+
+#### 7d.3 BGSAimModel (16 properties)
+
+Schema builder at ~RVA `0x445e46`: `Min cone angle`, `Max cone angle`,
+`Cone increase per shot`, `Cone decrease per sec`,
+`Time after shot before cone starts decreasing (ms)`,
+`Sneaking multiplier on cone angle`,
+`Force of spring controlling how fast recoil diminishes`,
+`Multiplier on speed recoil diminishes (IronSights)`,
+`Maximum recoil added per shot`, `Minimum recoil added per shot`,
+`Multiplier on recoil when not in iron sights`,
+`Recoil will runaway to maximum after this many shots`,
+`Width of the "fan" that the recoil can fall within`,
+`Rotates the recoil arc`,
+`Multiplier on cone of fire extents when in iron sights`,
+`Base stability value factored into stability formula`.
+
+#### 7d.4 Remaining 8 serializers
+
+The remaining eight serializers (BGSKeyword, BGSMod_Object, CameraShot,
+Explosion, Projectile, SoundCat, SoundDesc, Weather) have confirmed RTTI
+and vftable entries, but their schema builders either have very small
+property sets (< 5 calls to `0x16248`) or use a different registration
+API — their exact property names are still TBD pending vftable COL
+recovery.
+
+**Two non-serializer schema builders** were also detected via the
+`call 0x16248` pattern: one at `0x2bbdf70` (35 props — texture blend,
+alpha, base texture, envmap, normal, palette) and another at `0x2bbff00`
+(34 props — material effects, shadow casting, displacement, hair/eye/skin).
+These belong to `BGSMaterialObject`/`BGSEffectShader`-family classes,
+not JSON serializers — the `call 0x16248` API is a general-purpose
+property editor registration, not JSON-specific.
+
 ## 8. TESObjectCELL member layout (constructor + setters)
 
 Recovered from the constructor `FUN_140d13940` (`tesobjectcell.cpp`) plus the
