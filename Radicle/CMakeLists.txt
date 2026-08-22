@@ -173,6 +173,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_perk_entrypoints.cpp
     tests/test_navmesh_formlinks.cpp
     tests/test_eyes.cpp
+    tests/test_eyes_creation.cpp
     tests/test_lvsp.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
