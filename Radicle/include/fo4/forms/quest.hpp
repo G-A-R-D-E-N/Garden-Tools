@@ -150,11 +150,16 @@ struct QuestAliasCreation {
 struct QuestLogEntry {
   // QSDT: bit 0 completes the quest, bit 1 fails it. Observed values 0, 1, 2.
   std::uint8_t flags{0};
+  // Decoded views of CNAM and NAM2. Read-only: `members` is what gets written.
   std::optional<schema::LocalizedString> log_text;
   std::optional<std::string> note;
-  // Ordered remainder (conditions and anything unmodelled) kept verbatim so a
-  // rewrite never collapses members by signature.
-  std::vector<Subrecord> subrecords;
+  // Every member after QSDT, in file order, CNAM and NAM2 included.
+  //
+  // This is authoritative on encode. The shipped order is
+  // QSDT [CTDA...] [NAM2] [CNAM] -- conditions come first -- so rebuilding
+  // from the decoded fields instead would silently reorder the 8,000+ entries
+  // that carry both.
+  std::vector<Subrecord> members;
 };
 
 struct QuestStage {
@@ -206,6 +211,40 @@ struct QuestObjectives {
 
 QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& quest);
 
+/*
+ * Authoring.
+ *
+ * Each writer rebuilds only its own contiguous array and splices it back into
+ * the record, so stages, objectives and aliases never disturb one another:
+ * the stage array is bounded by the first INDX and the first QOBJ/ANAM, the
+ * objective array by the first QOBJ and ANAM.
+ *
+ * Round-tripping an unmodified quest reproduces its exact subrecord sequence.
+ */
+void write_quest_stages(Plugin& plugin, const FormKey& quest, const QuestStages& stages);
+void write_quest_objectives(Plugin& plugin,
+                            const FormKey& quest,
+                            const QuestObjectives& objectives);
+
+// Convenience mutations over the decode/write pair. Each preserves everything
+// outside the array it touches.
+void add_quest_stage(Plugin& plugin, const FormKey& quest, const QuestStage& stage);
+bool remove_quest_stage(Plugin& plugin, const FormKey& quest, std::uint16_t index);
+// Moves the stage with `index` to position `to` in the array order.
+bool reorder_quest_stage(Plugin& plugin,
+                         const FormKey& quest,
+                         std::uint16_t index,
+                         std::size_t to);
+
+void add_quest_objective(Plugin& plugin,
+                         const FormKey& quest,
+                         const QuestObjective& objective);
+bool remove_quest_objective(Plugin& plugin, const FormKey& quest, std::uint16_t index);
+bool reorder_quest_objective(Plugin& plugin,
+                             const FormKey& quest,
+                             std::uint16_t index,
+                             std::size_t to);
+
 struct QuestAliases {
   std::uint32_t next_alias_id{0};
   std::vector<QuestAlias> aliases;
@@ -231,5 +270,13 @@ void replace_quest_alias(Plugin& plugin,
 bool remove_quest_alias(Plugin& plugin,
                         const FormKey& quest,
                         std::uint32_t alias_id);
+
+// Moves the alias with `alias_id` to position `to` in the array order. The
+// alias's whole contiguous subrecord run moves with it, so ALCS/ALMI prefixes
+// and per-alias conditions stay attached.
+bool reorder_quest_alias(Plugin& plugin,
+                         const FormKey& quest,
+                         std::uint32_t alias_id,
+                         std::size_t to);
 
 }  // namespace fo4::forms

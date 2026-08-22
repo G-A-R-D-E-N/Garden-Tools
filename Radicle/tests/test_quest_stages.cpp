@@ -91,9 +91,9 @@ TEST(QuestStages, DecodesStagesEntriesAndEdgeShapes) {
   // QSDT bit 0 completes the quest.
   EXPECT_EQ(first.log_entries[1].flags, 1u);
   EXPECT_FALSE(first.log_entries[1].log_text.has_value());
-  // Conditions are preserved verbatim rather than modelled away.
-  ASSERT_EQ(first.log_entries[1].subrecords.size(), 1u);
-  EXPECT_EQ(first.log_entries[1].subrecords[0].signature.to_string(), "CTDA");
+  // Members are preserved verbatim, in file order, rather than modelled away.
+  ASSERT_EQ(first.log_entries[1].members.size(), 1u);
+  EXPECT_EQ(first.log_entries[1].members[0].signature.to_string(), "CTDA");
 
   const auto& second = decoded.stages[1];
   EXPECT_EQ(second.index, 20u);

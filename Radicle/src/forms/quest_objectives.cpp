@@ -3,7 +3,11 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/localized_fields.hpp"
 
+#include "fo4/plugin/visit.hpp"
+
+#include <algorithm>
 #include <cstring>
+#include <utility>
 
 namespace fo4::forms {
 namespace {
@@ -100,6 +104,143 @@ QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& que
   }
 
   return result;
+}
+
+namespace {
+
+// The objective array runs from the first QOBJ to ANAM (or end of record).
+std::pair<std::size_t, std::size_t> objective_array_bounds(const Record& record) {
+  std::size_t begin = record.subrecords.size();
+  std::size_t end = record.subrecords.size();
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    const auto signature = record.subrecords[i].signature;
+    if (signature == k_anam) {
+      end = i;
+      if (begin > i) begin = i;
+      return {begin, end};
+    }
+    if (signature == k_qobj && begin == record.subrecords.size()) begin = i;
+  }
+  return {begin, end};
+}
+
+Subrecord marker(Signature signature, std::vector<std::byte> data) {
+  Subrecord subrecord;
+  subrecord.signature = signature;
+  subrecord.data = std::move(data);
+  return subrecord;
+}
+
+std::vector<std::byte> bytes_of(const void* source, std::size_t size) {
+  std::vector<std::byte> out(size);
+  std::memcpy(out.data(), source, size);
+  return out;
+}
+
+std::vector<Subrecord> encode_objectives(const Plugin& plugin,
+                                         const QuestObjectives& objectives) {
+  const auto context = plugin_form_id_context(plugin);
+  std::vector<Subrecord> out;
+  for (const auto& objective : objectives.objectives) {
+    out.push_back(marker(k_qobj, bytes_of(&objective.index, 2)));
+    out.push_back(marker(k_fnam, bytes_of(&objective.flags, 4)));
+    if (objective.display_text.has_value()) {
+      out.push_back(marker(k_nnam, schema::write_localized_string(*objective.display_text)));
+    }
+    for (const auto& target : objective.targets) {
+      std::vector<std::byte> qsta(12);
+      std::memcpy(qsta.data(), &target.alias, 4);
+      std::memcpy(qsta.data() + 4, &target.flags, 4);
+      const std::uint32_t keyword =
+          target.keyword.has_value() ? encode_plugin_form_id(*target.keyword, context).value() : 0u;
+      std::memcpy(qsta.data() + 8, &keyword, 4);
+      out.push_back(marker(k_qsta, std::move(qsta)));
+      out.insert(out.end(), target.subrecords.begin(), target.subrecords.end());
+    }
+  }
+  return out;
+}
+
+Record* mutable_quest(Plugin& plugin, const FormKey& quest) {
+  Record* found = nullptr;
+  visit_records(plugin, [&](Record& record) {
+    if (record.form_key == quest && record.header.signature == k_qust) found = &record;
+  });
+  if (found == nullptr) {
+    throw QuestError("QUST record " + quest.to_string() + " was not found");
+  }
+  return found;
+}
+
+}  // namespace
+
+void write_quest_objectives(Plugin& plugin,
+                            const FormKey& quest,
+                            const QuestObjectives& objectives) {
+  auto next = plugin;
+  auto* record = mutable_quest(next, quest);
+  const auto [begin, end] = objective_array_bounds(*record);
+  const auto encoded = encode_objectives(next, objectives);
+
+  std::vector<Subrecord> rebuilt;
+  rebuilt.insert(rebuilt.end(), record->subrecords.begin(),
+                 record->subrecords.begin() + static_cast<std::ptrdiff_t>(begin));
+  rebuilt.insert(rebuilt.end(), encoded.begin(), encoded.end());
+  rebuilt.insert(rebuilt.end(),
+                 record->subrecords.begin() + static_cast<std::ptrdiff_t>(end),
+                 record->subrecords.end());
+
+  record->subrecords = std::move(rebuilt);
+  record->original_bytes.clear();
+  record->decompressed_payload.clear();
+  record->header.data_size = 0;
+  record->uncompressed_size = 0;
+  next.original_bytes.clear();
+  visit_groups(next, [](Group& group) { group.original_bytes.clear(); });
+  plugin = std::move(next);
+}
+
+void add_quest_objective(Plugin& plugin,
+                         const FormKey& quest,
+                         const QuestObjective& objective) {
+  auto objectives = decode_quest_objectives(plugin, quest);
+  for (const auto& existing : objectives.objectives) {
+    if (existing.index == objective.index) {
+      throw QuestError("QUST already has an objective with index " +
+                       std::to_string(objective.index));
+    }
+  }
+  objectives.objectives.push_back(objective);
+  write_quest_objectives(plugin, quest, objectives);
+}
+
+bool remove_quest_objective(Plugin& plugin, const FormKey& quest, std::uint16_t index) {
+  auto objectives = decode_quest_objectives(plugin, quest);
+  const auto before = objectives.objectives.size();
+  std::erase_if(objectives.objectives,
+                [&](const QuestObjective& o) { return o.index == index; });
+  if (objectives.objectives.size() == before) return false;
+  write_quest_objectives(plugin, quest, objectives);
+  return true;
+}
+
+bool reorder_quest_objective(Plugin& plugin,
+                             const FormKey& quest,
+                             std::uint16_t index,
+                             std::size_t to) {
+  auto objectives = decode_quest_objectives(plugin, quest);
+  auto& list = objectives.objectives;
+  const auto found = std::find_if(list.begin(), list.end(),
+                                  [&](const QuestObjective& o) { return o.index == index; });
+  if (found == list.end()) return false;
+  if (to >= list.size()) {
+    throw QuestError("QUST objective reorder target is out of range");
+  }
+  auto moved = *found;
+  list.erase(found);
+  list.insert(list.begin() + static_cast<std::ptrdiff_t>(to), std::move(moved));
+  write_quest_objectives(plugin, quest, objectives);
+  return true;
 }
 
 }  // namespace fo4::forms

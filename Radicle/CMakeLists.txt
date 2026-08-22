@@ -231,6 +231,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_stages_real.cpp
     tests/test_quest_objectives_real.cpp
     tests/test_proj_expl_hazd_real.cpp
+    tests/test_quest_authoring_real.cpp
+    tests/test_quest_authoring.cpp
     tests/test_quest_objectives.cpp
     tests/test_quest_stages.cpp
     tests/test_typed_families_real.cpp
