@@ -68,32 +68,6 @@ std::optional<std::string> optionalStringField(const nlohmann::json& object,
     return found->get<std::string>();
 }
 
-Result<nlohmann::json> persistLifecycleMutation(
-    RadiclePluginBackend::LoadedPlugin& loaded,
-    fo4::Plugin mutated,
-    std::string pluginName,
-    std::string signature,
-    const fo4::FormKey& key,
-    RadiclePluginBackend& backend) {
-    try {
-        fo4::write_plugin_file(mutated, loaded.path);
-        loaded.plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded.loadedTime = std::filesystem::last_write_time(loaded.path, ec);
-        }
-        backend.rebuildGraphLocked();
-        return nlohmann::json(nlohmann::json{
-            {"ok", true},
-            {"plugin", std::move(pluginName)},
-            {"signature", std::move(signature)},
-            {"formKey", key.to_string()}
-        }.dump());
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"RecordCreateFailed", error.what()});
-    }
-}
-
 }  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& arguments) {
