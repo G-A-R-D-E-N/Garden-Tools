@@ -15,6 +15,7 @@ TEST(QuestAliasEncoding, BuildsReferenceAliasInProvenOrder) {
       .flags = 0x12u,
       .force_into_alias = -1,
       .max_initial_fill_count = std::nullopt,
+      .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
   });
 
@@ -40,6 +41,7 @@ TEST(QuestAliasEncoding, BuildsLocationAliasWithoutInventingName) {
       .flags = 0x40u,
       .force_into_alias = std::nullopt,
       .max_initial_fill_count = std::nullopt,
+      .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
   });
 
@@ -60,6 +62,7 @@ TEST(QuestAliasEncoding, BuildsCompactCollectionAlias) {
       .flags = std::nullopt,
       .force_into_alias = std::nullopt,
       .max_initial_fill_count = std::uint8_t{6},
+      .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
   });
 
@@ -81,6 +84,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = 0u,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
@@ -93,6 +97,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = std::nullopt,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
@@ -105,6 +110,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = 0u,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
@@ -118,6 +124,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .flags = 0u,
           .force_into_alias = std::nullopt,
           .max_initial_fill_count = std::nullopt,
+          .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
       })),
       fo4::forms::QuestError);
