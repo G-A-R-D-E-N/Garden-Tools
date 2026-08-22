@@ -273,3 +273,44 @@ Three things worth pinning:
 
 `INDX` is also used by the alias array, which is why the walk has to stop at
 `QOBJ`/`ANAM` rather than scanning the whole record.
+
+## Exterior CELL DATA and XCLC
+
+Measured across `Fallout4.esm`, `DLCCoast.esm` and `DLCNukaWorld.esm`.
+
+**`DATA` is 2 bytes on every CELL.** For the 61,543 exterior cells (those
+carrying `XCLC`), bit 1 is set on **61,542** — the sole exception is one cell
+with `0x0000`. Observed values are `0x0002` (61,252), `0x0042` (237, plus Hand
+Changed) and `0x000A` (53, plus No LOD Water). All 1,376 interior cells set
+bit 0.
+
+An all-clear `DATA` therefore describes a record shape that occurs once in the
+entire shipped corpus, so `create_exterior_cell` defaults to `0x0002` and
+refuses the interior bit outright.
+
+**`XCLC` is exterior-only and 12 bytes** in all 38,970 `Fallout4.esm` instances
+that carry it; the 1,195 CELLs without one are interiors, which use `XCLL`
+instead (CKRE doc 23: `FUN_140d18490` gates access on the interior flag in both
+LoadRecord and SaveRecord).
+
+The 4 bytes after x/y are **one meaningful byte plus three bytes of
+uninitialised padding**, not a `u32`. Measured over 61,543 exterior cells in
+`Fallout4.esm` + DLCCoast + DLCNukaWorld:
+
+| Offset 8 (Force-Hide-Land quads, bits 0–3) | count |
+|---|---|
+| `0x00` | 61,485 (99.91%) |
+| `0x0F` — all four quads hidden | 50 |
+| `0xFF`, `0x44`, `0x22`, `0x88` | 1 each |
+
+Bytes 9–11 are junk the CK does not clear: only 96 distinct values across all
+61,543 cells, clustering in large batches (29,389 share `71a376`), which is the
+signature of reused allocation rather than data. Reading the field as a `u32`
+yields 103 distinct "flag" values and would surface padding as spurious
+high flag bits — xEdit's `u32 wbFlags Quad 1..4` is over-wide for this reason.
+
+This is consistent with the CK's own LoadRecord (`FUN_140d146d0`, XCLC branch),
+which takes **byte 8 into `cell+0x1E` and skips three padding bytes**.
+
+`create_exterior_cell` writes all four bytes zero: the quad flags clear, and no
+fabricated padding.
