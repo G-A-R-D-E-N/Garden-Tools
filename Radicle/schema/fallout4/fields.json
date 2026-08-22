@@ -14,6 +14,17 @@
           "minimum": 0,
           "maximum": 100,
           "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
         }
       ]
     }
