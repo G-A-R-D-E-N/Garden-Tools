@@ -105,6 +105,21 @@ TEST(Onam, RebuildIncludesOnlyNonPersistentMasterOwnedFo4Participants) {
   EXPECT_EQ(reread.header.overrides[1], fo4::RawFormId{0x00000200u});
 }
 
+TEST(Onam, DirtyMasterWriteRebuildsStaleOnamAutomatically) {
+  auto plugin = fo4::read_plugin(make_header({"Base.esm"}), "Patch.esm");
+  ASSERT_EQ(plugin.header.overrides.size(), 1u);
+  EXPECT_EQ(plugin.header.overrides[0], fo4::RawFormId{0x0000DEADu});
+
+  auto dialogue = top_group("DIAL");
+  dialogue.children.emplace_back(record("DIAL", 0x00000222u));
+  plugin.groups.push_back(std::move(dialogue));
+  plugin.original_bytes.clear();
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esm");
+  ASSERT_EQ(reread.header.overrides.size(), 1u);
+  EXPECT_EQ(reread.header.overrides[0], fo4::RawFormId{0x00000222u});
+}
+
 TEST(Onam, EmptyRebuildRemovesStaleOnam) {
   auto plugin = fo4::read_plugin(make_header({"Base.esm"}), "Patch.esm");
   ASSERT_EQ(onam_subrecord_count(plugin), 1u);
