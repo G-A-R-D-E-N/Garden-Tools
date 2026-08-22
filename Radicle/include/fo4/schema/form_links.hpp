@@ -25,6 +25,14 @@ void remap_record_form_links(Record& record,
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context);
 
+// Replaces every schema-proven in-plugin reference to old_key with new_key.
+// The operation is transactional and uses strict link parsing: unsupported
+// VMAD or malformed mixed NAVM/NAVI payloads throw rather than risking a
+// partial rekey with hidden stale references.
+void rekey_form_links(Plugin& plugin,
+                      const FormKey& old_key,
+                      const FormKey& new_key);
+
 // Collected links plus coverage caveats. records_with_unsupported_vmad counts
 // records whose VMAD script data uses property types Radicle cannot scan; no
 // links from those records are included, so consumers must surface the gap
