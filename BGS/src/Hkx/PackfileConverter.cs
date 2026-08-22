@@ -338,11 +338,15 @@ public static class PackfileConverter
 
             if (member.VType is "TYPE_STRINGPTR" or "TYPE_CSTRING")
             {
-                if (aims.TryGetValue(at, out int text) && seen.Add(text))
-                {
-                    if (StringBlock(objects, text) is not Block textBlock) return false;
-                    blocks.Add(textBlock);
-                }
+                // A fixed array of string pointers has ArrSize slots and TranscodeObject
+                // registers every one of them. Following only the first leaves the rest
+                // without blocks, and Remap then rejects a file that is representable.
+                for (int e = 0; e < Math.Max(1, member.ArrSize); e++)
+                    if (aims.TryGetValue(at + e * source.PointerSize, out int text) && seen.Add(text))
+                    {
+                        if (StringBlock(objects, text) is not Block textBlock) return false;
+                        blocks.Add(textBlock);
+                    }
                 continue;
             }
 
@@ -427,6 +431,11 @@ public static class PackfileConverter
                 int tgtStride = LayoutWalker.Of(types, member.CType, target).Size;
                 if (srcStride <= 0 || tgtStride <= 0) continue;
 
+                // The untyped ArrayAt above only proved count <= remaining bytes. Multi-byte
+                // elements can still run past the section end, and the block below would size
+                // the copy from that count.
+                if (objects.ArrayAt(at, srcStride) == null) return false;
+
                 if (seen.Add(array.At))
                     blocks.Add(new Block
                     {
@@ -455,6 +464,7 @@ public static class PackfileConverter
             int srcWidth = RelElementWidth(types, source, member);
             int tgtWidth = RelElementWidth(types, target, member);
             if (srcWidth <= 0 || tgtWidth <= 0) continue;
+            if (objects.ArrayAt(at, srcWidth) == null) return false;
 
             string kind = member.VSub switch
             {
