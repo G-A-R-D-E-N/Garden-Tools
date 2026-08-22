@@ -93,10 +93,14 @@ public sealed class GameData : IDisposable
 
     /// <summary>
     /// The game data with a Mod Organizer 2 modlist layered over it: every enabled mod in
-    /// mods/&lt;modsFolder&gt;/mods is a root in modlist.txt order (bottom of the file wins),
-    /// and the profile's overwrite folder, when it exists, is the final root. The modlist
-    /// lives at &lt;modsFolder&gt;/modlist.txt, or at
+    /// mods/&lt;modsFolder&gt;/mods is a root, and the profile's overwrite folder, when it
+    /// exists, is the final root. The modlist lives at &lt;modsFolder&gt;/modlist.txt, or at
     /// &lt;modsFolder&gt;/profiles/&lt;profile&gt;/modlist.txt when a profile is named.
+    ///
+    /// MO2 stores that file highest priority first -- the reverse of the order its own UI
+    /// shows, and the reverse of what the base game sits in: the tail of a real modlist is
+    /// the DLC and unmanaged content everything else overrides. Roots are therefore added
+    /// bottom-up, so the mod nearest the top of the file is the last root and wins.
     /// </summary>
     public static GameData DiscoverModded(string dataFolder, string modsFolder,
                                           string? profile = null, string? pluginsPath = null)
@@ -109,7 +113,8 @@ public sealed class GameData : IDisposable
             : Path.Combine(mods, "modlist.txt");
         if (File.Exists(modlist))
         {
-            foreach (string raw in File.ReadAllLines(modlist))
+            // Bottom-up: the last root wins, and MO2 puts the winning mod on the first line.
+            foreach (string raw in File.ReadAllLines(modlist).Reverse())
             {
                 string line = raw.Trim();
                 if (line.Length == 0 || line[0] == '#') continue;
