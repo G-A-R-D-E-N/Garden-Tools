@@ -10,9 +10,10 @@ name: bgs-ci
 #    This repository is private and both orgs are over the Free Actions
 #    allowance (GHRUNNER#24), where hosted jobs fail silently -- the same
 #    reason native-ci.yml pins the `garden` runner.
-#  * Both legs run bash. The original used pwsh, which the hosted images ship
-#    and these runners do not; Git for Windows provides bash on the Windows
-#    runner, so one script serves both legs.
+#  * Every step is a single command, so each leg can use its runner's default
+#    shell. Do not add `shell: bash` here: on the Windows runner that resolves
+#    to C:\Windows\system32\bash.EXE, the WSL stub, which has no distro
+#    installed and fails immediately.
 
 on:
   push:
@@ -51,7 +52,6 @@ jobs:
             executable: BehaviourGraphStudio.exe
     defaults:
       run:
-        shell: bash
         working-directory: BGS
     steps:
       - name: Check out repository
@@ -68,18 +68,23 @@ jobs:
         with:
           dotnet-version: 8.0.424
 
-      - name: Restore locked dependencies
-        run: |
-          set -euo pipefail
-          for project in \
-            src/BehaviourGraph.Core.csproj \
-            app/BehaviourStudio.csproj \
-            tools/symrm/symrm.csproj \
-            tools/tests/BehaviourGraph.Tests.csproj \
-            tools/uismoke/uismoke.csproj
-          do
-            dotnet restore "$project" --locked-mode
-          done
+      # Unrolled rather than looped: a loop needs a specific shell, and the
+      # two legs do not share one. Each restore is its own step so a lock-file
+      # mismatch names the offending project directly.
+      - name: Restore BehaviourGraph.Core
+        run: dotnet restore src/BehaviourGraph.Core.csproj --locked-mode
+
+      - name: Restore BehaviourStudio
+        run: dotnet restore app/BehaviourStudio.csproj --locked-mode
+
+      - name: Restore symrm
+        run: dotnet restore tools/symrm/symrm.csproj --locked-mode
+
+      - name: Restore tests
+        run: dotnet restore tools/tests/BehaviourGraph.Tests.csproj --locked-mode
+
+      - name: Restore uismoke
+        run: dotnet restore tools/uismoke/uismoke.csproj --locked-mode
 
       - name: Build app
         run: dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore
