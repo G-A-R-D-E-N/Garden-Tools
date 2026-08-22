@@ -19,6 +19,7 @@ namespace fo4::forms {
 namespace {
 
 constexpr auto k_armo = Signature::from_string("ARMO");
+constexpr auto k_desc = Signature::from_string("DESC");
 constexpr auto k_arma = Signature::from_string("ARMA");
 constexpr auto k_mod2 = Signature::from_string("MOD2");
 constexpr auto k_mod3 = Signature::from_string("MOD3");
@@ -75,6 +76,27 @@ const Subrecord* unique_subrecord(const Record& record,
     throw ArmorError(std::string(field_name) + " is required");
   }
   return found;
+}
+
+std::optional<schema::LocalizedString> optional_localized(const Plugin& plugin,
+                                                         const Record& record,
+                                                         Signature record_signature,
+                                                         Signature signature,
+                                                         std::string_view field_name) {
+  const Subrecord* found = nullptr;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != signature) continue;
+    if (found != nullptr) {
+      throw ArmorError(std::string(field_name) + " appears more than once");
+    }
+    found = &subrecord;
+  }
+  if (found == nullptr) return std::nullopt;
+  try {
+    return schema::read_localized_string(plugin, record_signature, signature, *found);
+  } catch (const std::exception& error) {
+    throw ArmorError(error.what());
+  }
 }
 
 std::optional<std::string> optional_string(const Record& record,
@@ -201,6 +223,7 @@ Armor decode_armor(const Plugin& plugin, const FormKey& key) {
   result.female_world_model = optional_string(*record, k_mod4, "ARMO female MOD4");
   result.female_icon = optional_string(*record, k_ico2, "ARMO female ICO2");
   result.female_message_icon = optional_string(*record, k_mic2, "ARMO female MIC2");
+  result.description = optional_localized(plugin, *record, k_armo, k_desc, "ARMO DESC");
 
   const auto* data = unique_subrecord(*record, sig_data, "ARMO DATA", true);
   if (data->data.size() != 12) {
@@ -245,6 +268,14 @@ ArmorAddon decode_armor_addon(const Plugin& plugin, const FormKey& key) {
 FormKey create_armor(Plugin& plugin, const ArmorCreation& creation) {
   auto next = plugin;
 
+  // Authoring inline text into a localized plugin would produce a DESC the
+  // engine reads as a four-byte string ID. Minting a real ID means owning the
+  // .STRINGS tables, which this path does not, so fail closed.
+  if (creation.description.has_value() && next.header.tes4_flags.is_localized()) {
+    throw ArmorError(
+        "ARMO DESC cannot be authored as inline text into a localized plugin");
+  }
+
   const auto editor = encode_optional(creation.editor_id);
   const auto male_model = encode_optional(creation.male_world_model);
   const auto male_icon = encode_optional(creation.male_icon);
@@ -252,6 +283,7 @@ FormKey create_armor(Plugin& plugin, const ArmorCreation& creation) {
   const auto female_model = encode_optional(creation.female_world_model);
   const auto female_icon = encode_optional(creation.female_icon);
   const auto female_message_icon = encode_optional(creation.female_message_icon);
+  const auto encoded_description = encode_optional(creation.description);
   const auto data = armor_data(creation);
 
   const auto key = create_local_record(next, k_armo);
@@ -267,6 +299,9 @@ FormKey create_armor(Plugin& plugin, const ArmorCreation& creation) {
   append_optional_string(*record, k_mod4, female_model);
   append_optional_string(*record, k_ico2, female_icon);
   append_optional_string(*record, k_mic2, female_message_icon);
+  if (encoded_description.has_value()) {
+    record->subrecords.push_back(Subrecord{k_desc, *encoded_description, false});
+  }
   record->subrecords.push_back(data);
 
   require_authoring_preflight(next, key, "ARMO");

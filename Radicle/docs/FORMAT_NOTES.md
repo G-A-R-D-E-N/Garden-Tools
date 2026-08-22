@@ -229,3 +229,17 @@ a log-entry lstring. The same signature means different things in different
 records, so lstring-ness has to be declared per (record, subrecord) pair in
 `schema/fallout4/fields.json` rather than inferred from the bytes. Anything
 that guesses from size will silently turn FormIDs into string IDs.
+
+### ARMO FULL is not a unique field
+
+`DESC` is exactly one per record across all 688 shipped ARMO. `FULL` is not:
+counts per record run 0, 1, 2, 3, 4, 6, 7, 8, 9, 14, 16 and 20, because `OBTE`
+object-template blocks carry their own `FULL` name overrides. In 11 records a
+`FULL` appears only after `OBTE`.
+
+A unique-subrecord lookup for ARMO `FULL` would therefore throw on 71 of 688
+shipped records, and a first-match lookup would silently return a template
+override instead of the armour's name. `FULL` stays unmodelled on ARMO until
+the `OBTE` template block is parsed; `DESC` is modelled now.
+
+Measured top-level order is `EDID OBND PTRN FULL … KSIZ KWDA DESC INDX …`.
