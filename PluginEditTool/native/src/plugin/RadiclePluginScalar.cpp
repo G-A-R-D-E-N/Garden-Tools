@@ -24,7 +24,8 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     const nlohmann::json& arguments) {
     const auto fieldPath = stringArgument(arguments, 2);
-    if (fo4::schema::indexed_formlink_list_path(fieldPath).has_value()) {
+    if (fo4::schema::indexed_formlink_list_path(fieldPath).has_value() ||
+        fo4::schema::indexed_nested_formlink_list_path(fieldPath).has_value()) {
         return setFormLinkListField(arguments);
     }
     if (fieldPath.starts_with("ARMO\\") || fieldPath.starts_with("ARMA\\")) {
