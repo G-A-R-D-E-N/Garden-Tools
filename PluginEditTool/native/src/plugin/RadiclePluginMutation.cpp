@@ -120,9 +120,6 @@ bool isEyesField(std::string_view field) {
 
 bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
     if (asciiLower(loaded.source) == "data") return false;
-    // Path-based protection, failing closed: if the Data directory is
-    // configured but either path cannot be canonicalized, the plugin is
-    // treated as protected rather than skipping the check.
     if (!dataDirectory_.empty()) {
         std::error_code dataEc;
         std::error_code pluginEc;
@@ -145,10 +142,6 @@ void RadiclePluginBackend::setDataDirectory(std::filesystem::path dataDirectory)
 Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     std::string_view method,
     const nlohmann::json& arguments) {
-    // All write guards live inside the mutating functions themselves, so this
-    // shim is a pure name mapping and cannot be bypassed to skip protection.
-    // SetField routes through the scalar-schema-aware entry point, identical
-    // to invoke("backend.SetField").
     if (method == "CreateRecord") return createRecord(arguments);
     if (method == "DeleteRecord") return deleteRecord(arguments);
     if (method == "RenumberRecord") return renumberRecord(arguments);
@@ -408,12 +401,6 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
                 target->path.string()
         });
     }
-    if (target->plugin.header.tes4_flags.is_master()) {
-        return std::unexpected(Error{
-            "MasterOverrideWriteUnsupported",
-            "Native override insertion into master-flagged targets is disabled until TES4 ONAM override metadata is maintained"
-        });
-    }
 
     try {
         auto mutated = target->plugin;
@@ -423,6 +410,12 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
                 return std::unexpected(Error{
                     "RecordNotFound",
                     "Record is not present in " + sourceName + ": " + formKeyText
+                });
+            case fo4::RecordCopyStatus::source_containment_unsupported:
+                return std::unexpected(Error{
+                    "RecordContainmentUnsupported",
+                    "Cannot insert this record without reproducing its nested source GRUP hierarchy: " +
+                        formKeyText
                 });
             case fo4::RecordCopyStatus::already_exists:
                 return nlohmann::json(
