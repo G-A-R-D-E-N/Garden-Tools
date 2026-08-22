@@ -148,6 +148,12 @@ FormKey create_eyes(Plugin& plugin,
                     std::string_view icon,
                     std::uint8_t data_flags,
                     RecordFlags record_flags) {
+  if (record_flags.is_master() || record_flags.is_deleted() ||
+      record_flags.is_compressed() || record_flags.is_small_file()) {
+    throw EyesError(
+        "new EYES records cannot be created with master, deleted, compressed, or small-file flags");
+  }
+
   auto next = plugin;
 
   // Encode every caller-supplied string before committing the cloned plugin.
