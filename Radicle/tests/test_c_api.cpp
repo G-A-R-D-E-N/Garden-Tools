@@ -86,6 +86,20 @@ std::set<std::string> collect_form_keys(radicle_plugin* plugin) {
   return out;
 }
 
+std::set<std::string> collect_form_links_text(radicle_plugin* plugin) {
+  char** values = nullptr;
+  size_t count = 0;
+  EXPECT_EQ(radicle_plugin_collect_form_links(plugin, &values, &count), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  std::set<std::string> out;
+  for (size_t i = 0; i < count; ++i) {
+    if (values[i] != nullptr) out.emplace(values[i]);
+  }
+  radicle_free_string_array(values, count);
+  return out;
+}
+
 }  // namespace
 
 TEST(CApi, RejectsInvalidArgumentsWithoutThrowing) {
@@ -300,5 +314,57 @@ TEST(CApi, RemapsMastersWritesAndReloadsStableFormKeys) {
   const auto after = collect_form_keys(plugin);
   EXPECT_TRUE(after.contains("000800:Patch.esp"));
   EXPECT_TRUE(after.contains("00009A:Keep.esp"));
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApi, HeatherRealFixtureDropsInsertedMasterWritesAndReloadsStableIdentity) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  const auto input = testdata_path("FW_HeatherSurvivalPatch.esp");
+  const auto output = root / "out" / "FW_HeatherSurvivalPatch.esp";
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(input.string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(plugin, nullptr);
+
+  const auto before_keys = collect_form_keys(plugin);
+  const auto before_links = collect_form_links_text(plugin);
+  ASSERT_FALSE(before_keys.empty());
+  ASSERT_FALSE(before_links.empty());
+
+  // Insert an unused master between Fallout4 and Heather. This forces every
+  // Heather/Survival reference and every local record's current-plugin ordinal
+  // to move, then the second remap drops that master again. The test therefore
+  // exercises a real master-drop on the real Heather fixture without pretending
+  // one of Heather's three genuinely referenced shipped masters is removable.
+  const radicle_master_descriptor expanded[] = {
+      {"Fallout4.esm", RADICLE_PLUGIN_FULL},
+      {"RadicleUnusedProbe.esp", RADICLE_PLUGIN_FULL},
+      {"llamaCompanionHeatherv2.esp", RADICLE_PLUGIN_FULL},
+      {"Survival Mode Overhaul.esp", RADICLE_PLUGIN_FULL},
+  };
+  ASSERT_EQ(radicle_plugin_remap_masters(plugin, expanded, 4), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(collect_form_keys(plugin), before_keys);
+  EXPECT_EQ(collect_form_links_text(plugin), before_links);
+
+  const radicle_master_descriptor original[] = {
+      {"Fallout4.esm", RADICLE_PLUGIN_FULL},
+      {"llamaCompanionHeatherv2.esp", RADICLE_PLUGIN_FULL},
+      {"Survival Mode Overhaul.esp", RADICLE_PLUGIN_FULL},
+  };
+  ASSERT_EQ(radicle_plugin_remap_masters(plugin, original, 3), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_write_file(plugin, output.string().c_str()), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+  plugin = nullptr;
+
+  ASSERT_EQ(radicle_plugin_read_file(output.string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(plugin, nullptr);
+  EXPECT_EQ(collect_form_keys(plugin), before_keys);
+  EXPECT_EQ(collect_form_links_text(plugin), before_links);
   radicle_plugin_destroy(plugin);
 }
