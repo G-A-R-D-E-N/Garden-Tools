@@ -52,6 +52,8 @@ private:
     Result<nlohmann::json> setField(const nlohmann::json& arguments);
     Result<nlohmann::json> setArmorField(const nlohmann::json& arguments);
     Result<nlohmann::json> setFormLinkListField(const nlohmann::json& arguments);
+    Result<nlohmann::json> insertFormLinkListElement(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeFormLinkListElement(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
     Result<nlohmann::json> addMasters(const nlohmann::json& arguments);
