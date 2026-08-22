@@ -35,6 +35,15 @@ std::vector<std::byte> make_plugin_with_owned_record(std::uint32_t form_id) {
 
 }  // namespace
 
+TEST(RecordFlags, ModelsPersistentBitAt0400) {
+  const fo4::RecordFlags persistent{0x00000400u};
+  EXPECT_TRUE(persistent.is_persistent());
+  EXPECT_TRUE(persistent.test(fo4::RecordFlags::persistent));
+
+  const fo4::RecordFlags clear{0x00000800u};
+  EXPECT_FALSE(clear.is_persistent());
+}
+
 TEST(PluginFlags, SetsAndClearsSmallFileFlagThroughSerialization) {
   auto plugin = fo4::read_plugin(make_plugin(0), "Flagged.esp");
   ASSERT_FALSE(plugin.header.tes4_flags.is_small_file());
