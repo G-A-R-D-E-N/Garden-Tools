@@ -240,27 +240,167 @@ base (`FUN_1403969e0`).
 `Spawn Container`, `Acoustic Parent`, `Radiation`, `Health`, `Ammo Count`,
 light/emittance fields, physics (Linear/Angular Velocity), etc.
 
-### 7c. Two paths, not one
+### 7c. Two paths, not one — end-to-end trace of REFR creation and serialization
 
-- **Binary record load** (`.esm`/`.esp` via `TESFile`): `CreateForm(type)`
-  → `factory_getter(0x40)` → **factory** vftable slot 2 (`FUN_140d64ae0`)
-  → alloc + full ctor. This is the same dispatch CELL/WRLD/LAND use — the
-  REFR factory just replaces the template.
-- **JSON record serialization**: looked up through the *serializer* registry
-  (a separate hash map keyed by form type, populated by
-  `FUN_140396a50`), dispatched through `IJSONSerializer` virtuals. REFR is
-  one of **10** JSON-serializer classes in the binary (`TESObjectWEAP`,
-  `Explosion`, `Projectile`, `BGSKeyword`, `BGSAimModel`, `BGSMod_Object`,
-  `CameraShot`, `SoundCat`, `SoundDesc`, `TESObjectREFR`), all in anonymous
-  namespaces — the JSON system is a parallel, opt-in record surface, not the
-  file-format loader.
+REFR is unique among the world-building form classes in having two
+independent record paths — a **binary record factory** (like CELL/WRLD/LAND)
+and a **JSON serializer** (shared with WEAP/AIMS and 8 other form types).
+Here is the full trace of both paths, from entry to stored record.
 
-So the practical answer: REFR records are **created** through the same
-factory-registry path as every other form (CreateForm → vftable slot 2), and
-the `TESObjectREFRSerializer` is a *separate* JSON serialization surface used
-for the JSON record format — the reason REFR gets the hand-written pair is
-that its editor needs both, and the template's fixed name/type accessors
-aren't enough for the JSON schema.
+#### 7c.1 Binary factory path (same as CELL/WRLD/LAND)
+
+```
+TESFile::LoadRecord (in exteriorcellloader or file reader)
+  → reads 4CC 'REFR'
+  → TESDataHandler::CreateForm(0x40)         // FUN_140865b10, tesdatahandler.cpp:0x1bc4
+    → factory_getter(0x40)                    // FUN_1408bc2f0
+      → reg[0x40] = TESObjectREFRFactory instance (set by ctor on init)
+    → factory->vftable[8]                    // slot 2 = Create
+      → FUN_140d64ae0
+        → alloc(0x130, 0x10, 1)              // 304 bytes, 16-byte aligned
+        → FUN_140d64f50(obj)                 // full in-place ctor
+          → lays down 9 vtables:
+            TESChildCell → NiRefObject → BSHandleRefObject →
+            BSTEventSink<...> ×3 → IKeywordFormBase →
+            ActorValueOwner → TESObjectREFR::vftable (0x30a1990)
+          → sets form-type byte *(obj+0x26) = 0x40
+  → obj->LoadRecord(file)                    // slot 24: FUN_140d65f60
+    → reads ~160 subrecords into the object
+  → TESDataHandler::InsertForm(obj)
+```
+
+This path creates a **blank REFR object** (alloc + ctor), then **hydrates** it
+from the binary `.esm`/`.esp` subrecord stream via `LoadRecord`. Every form
+type uses this pattern — the REFR factory is hand-written (`TESObjectREFRFactory`
+in `tesobjectrefr_editor.cpp`, anonymous namespace `?A0xd5936d08@@`) but the
+dispatch shape is identical to the template `ConcreteFormFactory`.
+
+#### 7c.2 JSON serializer path (unique to 11 form types)
+
+**Registration** (at CK startup, before any record is loaded):
+
+```
+TESObjectREFRSerializer::ctor                      // FUN_140d64a80
+  → JSONSerializerBase<anon, TESObjectREFR, 64>::vftable  // multi-inheritance
+  → FUN_140396a50(0x40)                            // register in JSON hash map
+    → FUN_140399700()                               // singleton getter
+      → returns &DAT_143d1b0d0 (hash map, entry size 0x18)
+    → thunk_FUN_140398960(map+8, &0x40, &this, ...) // insert serializer ptr
+  → FUN_1403969e0(this)                             // set IJSONSerializer::vftable base
+```
+
+The hash map at `DAT_143d1b0d0` maps `formType (u32)` → `IJSONSerializer*`.
+After all 11 ctor calls, the map contains entries for types
+`{0x4A,0x2B,0x8E,0x03,0xA0,0x63,0x4A,0x3D,0x86,0x84,0x43}`.
+
+**Read (JSON → record object)** — called from the HTTP API handler `addformoftype`:
+
+```
+FUN_1408cb460 (HTTP: "addformoftype")              // RVA 0x8cb460
+  → parse JSON body from HTTP request
+  → FUN_1408caec0(req)                              // resolve base form from request
+    → *(baseForm+0x26)                              // get form-type byte
+  → FUN_140396af0(formType)                         // check: serializer exists?
+    → FUN_140399700() → hash lookup → found? yes/no
+  → [if no: return {"error": "no serializer for type"}]
+  → factory::vftable[8]                             // clone base form
+  → FUN_1403979b0(formType, newObj, jsonData)       // JSON read dispatch
+    → FUN_140399700() → hash lookup by formType
+    → IJSONSerializer::vftable[0x10]                // slot 2 = JSON read virtual
+      → FUN_140d649d0(serializer, obj, jsonData)    // REFR serializer thunk
+        → FUN_140d82720(obj, jsonData)              // the 1500-line JSON reader
+          // For each JSON key in the schema:
+          //   "Base Object"  → FUN_140d82720 reads formID → resolves via vftable[0x1d0]
+          //   "Pos X/Y/Z"    → *(obj+0x1C)/+0x1A/+0x1B (float fields)
+          //   "Rot X/Y/Z"    → *(obj+0x1D)/+0xE4/+0xD4 (rotation)
+          //   "Scale"        → *(float*)(obj+0x1b) (scale uniform)
+          //   "Health"       → *(u32*)(obj+0x228)
+          //   etc. — all 73 schema properties mapped to object offsets
+  → validate + insert into TESDataHandler singleton
+  → callback("{"success":"true", "id":"%d"}")
+```
+
+**Write (record object → JSON):**
+
+```
+FUN_1408cb750 (HTTP: "getformdatabyid")
+  → TESDataHandler::LookupFormByID(formID)
+  → *(form+0x26)                                    // get form-type byte
+  → FUN_140396af0(formType)                         // serializer exists?
+  → FUN_140397b30(formType, form, &jsonBuffer)      // JSON write dispatch
+    → FUN_140399700() → hash lookup
+    → IJSONSerializer::vftable[0x18]                // slot 3 = JSON write virtual
+      → FUN_140d649f0(serializer, form, &jsonBuffer)
+        → FUN_140d85830(form, &jsonBuffer)          // the 1300-line JSON writer
+          // Reads each schema property from the object and serializes
+```
+
+**Schema introspection (form → property list):**
+
+```
+FUN_1408cb320 (HTTP: "getmetadatafortype")
+  → IJSONSerializer::vftable[0x20]                  // slot 4 = schema builder
+    → FUN_140d64a70(serializer, &metadataOut)
+      → FUN_140d87d90(&metadataOut)                 // 73-property schema
+        → for each of 73 named properties:
+          call 0x16248(metadataOut, label, desc, jsonKey, type, default, ...)
+```
+
+#### 7c.3 Dispatch key: `FUN_140396af0` — the serializer existence check
+
+```c
+bool FUN_140396af0(int formType) {
+    map = FUN_140399700();               // get hash-map singleton
+    return hash_lookup(map+8, &formType); // true = serializer exists for this type
+}
+```
+
+This function is called by **five HTTP handlers** (`addformoftype`,
+`getformdatabyid`, `updateform`, `getformsoftype`, `getmetadatafortype`)
+to gate access — a form type without a registered serializer returns
+`{"error": "..."}` immediately. Every other form type in the game (hundreds
+more) cannot be created or edited through the JSON API.
+
+#### 7c.4 The HTTP REST API surface
+
+11 URL routes are registered by `FUN_1408cb840` (at RVA `0x8cb840`, the
+route array at `0x1840b0`):
+
+| route (string at RVA) | handler RVA | JSON virtual | role |
+|---|---|---|---|
+| `checkoutform` (0x300d930) | `FUN_1408cafa0` | — | lock a form for editing |
+| `undocheckout` | `FUN_1408cb010` | — | release edit lock |
+| **`addformoftype`** (0x300d950) | **`FUN_1408cb460`** | **slot 2 (read)** | **create new form from JSON** |
+| `getformsoftype` (0x2fad390) | `FUN_1408cb130` | slot 2 (read) | query forms by type |
+| `getemptyformoftype` | `FUN_1408cb280` | — | get empty form template |
+| **`getmetadatafortype`** (0x300d990) | `FUN_1408cb320` | **slot 4 (schema)** | get property metadata |
+| `getformtypeswithmetadata` | `FUN_1408cb3b0` | slot 4 (schema) | list types with metadata |
+| **`updateform`** (0x300d9c8) | `FUN_1408cb600` | **slot 3 (write)** | edit existing form |
+| `gettypeofformbyid` | `FUN_1408cb690` | — | resolve form ID → type |
+| **`getformdatabyid`** (0x300d9f0) | `FUN_1408cb750` | **slot 3 (write)** | export form as JSON |
+| `getformtypeswithpropertybridges` | `FUN_1408cb7a0` | — | list types with property bridges |
+
+Routes 8–12 characters long, registered via a `BSTHashMap`-style
+string→function-pointer table. The handler bodies are in the
+`0x8ca000–0x8cc000` range (construction-set HTTP server).
+
+#### 7c.5 Key differences: factory vs. serializer
+
+| aspect | ConcreteFormFactory (binary) | TESObjectREFRSerializer (JSON) |
+|---|---|---|
+| **trigger** | `CreateForm(type)` in file loader | HTTP POST/GET from embedded REST API |
+| **registry** | `DAT_143d49cd0` flat pointer array (0x9F entries) | `DAT_143d1b0d0` hash map (11 entries) |
+| **creation** | `alloc(0x130)` + `FUN_140d64f50` full ctor → blank object | `factory::Create` clones a base form, then **JSON reader** hydrates fields |
+| **hydration** | `LoadRecord(file)` → ~160 sequential subrecord reads (`FUN_14087e870`) | `IJSONSerializer::read(obj, json)` → key-value dispatch on 73 named properties |
+| **persistence** | `SaveRecord` → `FUN_1408c7710` subrecord writer (4 + subclass chain) | `IJSONSerializer::write(obj, &buf)` → key-value JSON serialization |
+| **scope** | every form type (CELL, WRLD, LAND, REFR, WEAP, … all ~159 types) | only 11 form types (REFR, WEAP, AIMS, KYWD, Mod, CameraShot, Explosion, Projectile, SoundCat, SoundDesc, Weather) |
+| **schema** | implicit — subrecord 4CC dispatch in LoadRecord body | explicit — schema builder virtual returns human-readable property list |
+| **source file** | `tesobjectrefr_editor.cpp` (ctor + factory), `tesobjectrefr.cpp` (LoadRecord/SaveRecord) | `tesobjectrefr_editor.cpp` (anonymous namespace `?A0xd5936d08@@`) |
+
+The JSON serializer is an **opt-in parallel record surface** for editing
+records through a remote HTTP API — it never touches the `.esm`/`.esp`
+binary format. The binary factory creates blank objects hydrated from
+plugin files; the JSON serializer creates objects from HTTP JSON payloads.
 
 ### 7d. The full JSONSerializerBase roster — 11 record types
 
