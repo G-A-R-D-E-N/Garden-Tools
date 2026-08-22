@@ -26,6 +26,7 @@ enum class RecordDeleteStatus {
   deleted,
   record_missing,
   not_local,
+  referenced,
 };
 
 enum class RecordRenumberStatus {
@@ -36,19 +37,13 @@ enum class RecordRenumberStatus {
   target_exists,
 };
 
-// Creates an empty local major record using the plugin's HEDR nextFormID,
-// advances nextFormID monotonically, and creates/reuses the matching top-level
-// GRUP. Light-plugin creation is intentionally refused until the engine's
-// exact small-file FormID validity predicate is proven.
 FormKey create_local_record(Plugin& plugin, Signature signature);
 
-// Deletes a record owned by this plugin. nextFormID is never decremented or
-// recycled; a later creation continues monotonically from the HEDR value.
+// Refuses deletion when any schema-proven in-plugin FormLink still targets the
+// record. Unsupported remap surfaces fail closed before mutation. nextFormID
+// is never decremented or recycled.
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key);
 
-// Rekeys a top-level local record and rewrites every schema-proven in-plugin
-// FormLink to the new identity. Nested-record renumbering and light-plugin
-// renumbering fail closed until their structural/ID rules are proven.
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);
