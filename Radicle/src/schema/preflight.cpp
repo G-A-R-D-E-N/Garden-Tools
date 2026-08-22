@@ -1,6 +1,7 @@
 #include "fo4/schema/preflight.hpp"
 
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 
@@ -21,6 +22,20 @@ PreflightIssue issue_for(const Record& record,
   return PreflightIssue{
       .record = record.form_key,
       .path = std::string(field.path),
+      .code = std::move(code),
+      .message = std::move(message),
+      .severity = severity,
+  };
+}
+
+PreflightIssue field_issue(const Record& record,
+                           std::string path,
+                           std::string code,
+                           std::string message,
+                           PreflightSeverity severity) {
+  return PreflightIssue{
+      .record = record.form_key,
+      .path = std::move(path),
       .code = std::move(code),
       .message = std::move(message),
       .severity = severity,
@@ -138,6 +153,25 @@ std::vector<PreflightIssue> preflight_record(const Record& record) {
           "scalar_value_out_of_range",
           error.what(),
           PreflightSeverity::warning));
+    }
+  }
+
+  for (const auto& descriptor : k_generated_formlink_lists) {
+    if (descriptor.record != record.header.signature) continue;
+    std::size_t ordinal = 0;
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature != descriptor.subrecord) continue;
+      if (subrecord.data.size() != 4) {
+        issues.push_back(field_issue(
+            record,
+            std::string(descriptor.path) + "[" + std::to_string(ordinal) + "]",
+            "invalid_formlink_list_storage",
+            descriptor.record.to_string() + " " +
+                descriptor.subrecord.to_string() +
+                " FormLink list element must be exactly four bytes",
+            PreflightSeverity::error));
+      }
+      ++ordinal;
     }
   }
 
