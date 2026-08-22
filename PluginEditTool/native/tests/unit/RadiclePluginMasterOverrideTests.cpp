@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -38,6 +39,21 @@ void writeBytes(const std::filesystem::path& path,
     stream.write(reinterpret_cast<const char*>(bytes.data()),
                  static_cast<std::streamsize>(bytes.size()));
     REQUIRE(stream.good());
+}
+
+std::vector<std::byte> readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    REQUIRE(stream.good());
+    const auto size = stream.tellg();
+    REQUIRE(size >= 0);
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+    stream.seekg(0);
+    if (!bytes.empty()) {
+        stream.read(reinterpret_cast<char*>(bytes.data()),
+                    static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(stream.good());
+    }
+    return bytes;
 }
 
 void header(fo4::test::ByteWriter& out,
@@ -176,9 +192,5 @@ TEST_CASE("Missing nested override fails with containment error and leaves targe
         }));
     REQUIRE_FALSE(copied.has_value());
     CHECK(copied.error().type == "RecordContainmentUnsupported");
-
-    std::ifstream in(targetPath, std::ios::binary);
-    const std::vector<std::byte> after(
-        std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-    CHECK(after == targetBytes);
+    CHECK(readBytes(targetPath) == targetBytes);
 }
