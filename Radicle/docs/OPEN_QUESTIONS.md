@@ -1,0 +1,58 @@
+# Open questions
+
+Speculative answers must not be hardcoded as facts.
+
+## FormID / ESL
+
+1. What FormID appears in an ESL's **own** major-record headers on disk: `00xxxxxx`, `FExxxxxx`, or `(master_count << 24) | local`? **Partial answer:** `ccBGSFO4096-AS_Enclave.esl` uses `(master_count << 24) | local` (`0x01xxxxxx` with one master). Repeat on more ESLs before treating as universal.
+2. Exact predicate of `TESFile::CheckValidIDForSmallFile` (OG RVA `0x130560`, 10 bytes).
+3. Exact bytes of `TESFile::AdjustFormIDFileIndex` (OG RVA `0x131fa0`).
+4. Do ESP files with `SmallFile` (bit 9) use 12-bit local IDs on disk, or only at runtime? Encode already masks a light owner to 12 bits (same rule as `.esl`). Official ESL locals observed in `0x800`–`0xFFF` still encode identically under either mask.
+5. How next-gen 1.11.x assigns `smallFileCompileIndex` vs OG 1.10.163.
+6. Can a plugin list more than 254 masters, and what happens?
+
+## HEDR
+
+0. HEDR `formCount` appears to be (major records excluding TES4) + (all GRUPs, nested included). Heather and DLCworkshop01 match. Still want an ESL and a WRLD-heavy plugin before the writer emits this field.
+
+## TES4 flags
+
+7. Is bit 7 (`0x80`) "localized" (Mutagen/xEdit) or "delocalized" (CommonLib `kDelocalized`)? Official ESL `0x281` has it set.
+8. Are TES4 record flags and `TESFile::flags` the same bit layout? CommonLib treats them as the same enum.
+
+## Compression / XXXX
+
+9. Do vanilla FO4 compressed records use zlib wrappers or raw deflate? CK strings say zlib. Reader still tries both until `DecompressCurrentForm` is decompiled.
+10. Does `TESFile::GetChunkData` hide `XXXX` from `Load()` callers (they only see `actualChunkSize`), or do some Load() implementations see the `XXXX` chunk?
+10b. Engine `GetChunkData` truncates oversize chunks (`data truncated`). Should the native reader match that or fail hard? Currently fail hard.
+
+## Groups
+
+11. Confirm group type integers 0-10 against CK/runtime, not only xEdit.
+12. Interior cell block grouping math (which cells share a block).
+
+## CK vs file-load table
+
+13. Why CKRE's file-load table appears to omit `RACE` while RACE records exist in `Fallout4.esm`. Special-case loader vs dump error.
+14. CKRE factory join was wrong for indexes 1–10. **Answered:** MSVC `$0N` for 1–10 is `(N-1)`, so `$03` is KYWD=4 not GMST=3.
+
+## Localization
+
+15. `.STRINGS` / `.DLSTRINGS` / `.ILSTRINGS` layout for FO4, including next-gen changes.
+16. How `TESFile::SetDelocalized` interacts with `FULL`/`DESC` storage.
+
+## Complex chunks (deferred)
+
+17. VMAD fragment layouts for PACK/INFO/SCEN phase extras are walked from xEdit counters; Variable property payloads (type 6/16) are skipped as empty/count-only. Encoding of VMAD strings is UTF-8 per xEdit `wbEncodingVMAD`.
+18. CTDA CIS1/CIS2 string params. Use Global comparison FormID remap is implemented (type bit 2). ESP flagged light can be stamped via `apply_master_kinds` / `remap_plugin_masters(MasterDescriptor)`; the library still cannot read SmallFile off a master that is only a MAST name.
+19. PERK Add Activate Choice
+20. NAVM / NAVI
+21. Persistent vs temporary REFR grouping rules on save
+
+## BA2
+
+22. Next-gen v7/v8 GNRL and DX10 differences. FO4IDE already has tests; this library has not imported that evidence yet.
+
+## Writer policy
+
+23. When CK omits default/zero subrecords, should an unmodified native rewrite match CK or match the original bytes? Default: keep `original_bytes` when the record was not edited.

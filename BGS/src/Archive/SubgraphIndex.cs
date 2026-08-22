@@ -157,7 +157,14 @@ public sealed class SubgraphIndex
 
     private static byte[] ReadEntry(string archivePath, Ba2.Entry entry)
     {
-        try { return Ba2.Open(archivePath).Read(entry); }
+        // Ba2 owns a file handle. Leaving it to the finaliser costs nothing on Linux, where an
+        // open file can still be deleted, but on Windows it keeps the archive locked for as
+        // long as the reader survives -- long enough to fail an unrelated directory delete.
+        try
+        {
+            using var archive = Ba2.Open(archivePath);
+            return archive.Read(entry);
+        }
         catch (Exception e) when (e is IOException or InvalidDataException) { return Array.Empty<byte>(); }
     }
 
