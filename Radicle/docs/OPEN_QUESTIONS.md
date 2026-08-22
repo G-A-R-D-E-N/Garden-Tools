@@ -5,9 +5,9 @@ Speculative answers must not be hardcoded as facts.
 ## FormID / ESL
 
 1. What FormID appears in an ESL's **own** major-record headers on disk: `00xxxxxx`, `FExxxxxx`, or `(master_count << 24) | local`? **Partial answer:** `ccBGSFO4096-AS_Enclave.esl` uses `(master_count << 24) | local` (`0x01xxxxxx` with one master). Repeat on more ESLs before treating as universal.
-2. Exact predicate of `TESFile::CheckValidIDForSmallFile` (OG RVA `0x130560`, 10 bytes).
+2. Exact predicate of `TESFile::CheckValidIDForSmallFile`. **Still open, no longer blocking.** The listed OG RVA `0x130560` holds a large TLS-prologue function in the unpacked binary, not a 10-byte leaf, and a `.text` sweep for a 12-bit range check found no match. The symbol RVAs in that region are demonstrably offset — `AdjustFormIDFileIndex` is listed at `0x131fa0` but starts at `0x131f90` — so re-basing them is the lead. It would only corroborate 4 below, not change it.
 3. Exact bytes of `TESFile::AdjustFormIDFileIndex` (OG RVA `0x131fa0`).
-4. Do ESP files with `SmallFile` (bit 9) use 12-bit local IDs on disk, or only at runtime? Encode already masks a light owner to 12 bits (same rule as `.esl`). Official ESL locals observed in `0x800`–`0xFFF` still encode identically under either mask.
+4. **Answered.** `TESFile::AdjustFormIDFileIndex` (RVA `0x131f90`, 55 bytes) masks a light plugin's local to 12 bits *destructively* before OR-ing in the slot, so anything above `0xFFF` silently aliases onto another record. Usable range is `0x001`–`0xFFF` — the `0x800` floor belongs to the full-plugin encoding only. Six of the nine shipped ESLs allocate below `0x800`, and `ccFSVFO4007-Halloween.esl` has 2078 own records, disproving the `0x800`–`0xFFF`/2048 folklore. See `ESL_FORMIDS.md`.
 5. How next-gen 1.11.x assigns `smallFileCompileIndex` vs OG 1.10.163.
 6. Can a plugin list more than 254 masters, and what happens?
 

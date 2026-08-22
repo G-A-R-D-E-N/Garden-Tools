@@ -286,7 +286,9 @@ TEST_CASE("Native lifecycle refuses protected Data plugins") {
     CHECK(deleted.error().type == "PluginReadOnly");
 }
 
-TEST_CASE("Native lifecycle refuses light create and renumber") {
+// Light plugins are supported now that the small-file FormID range is proven
+// from the engine rather than guessed. See Radicle/docs/ESL_FORMIDS.md and #26.
+TEST_CASE("Native lifecycle creates and renumbers in light plugins") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto pluginPath = root / "mods" / "LightMod" / "Light.esl";
@@ -303,14 +305,29 @@ TEST_CASE("Native lifecycle refuses light create and renumber") {
     const auto created = backend.invokeBackend(
         "CreateRecord",
         nlohmann::json::array({"Light.esl", "EYES", eyesPayload()}));
-    REQUIRE_FALSE(created.has_value());
-    CHECK(created.error().type == "LightPluginLifecycleUnsupported");
+    REQUIRE(created.has_value());
 
+    // CreateRecord took 0x900 (the fixture's nextFormID), so renumber the
+    // pre-existing MISC into a slot that is still free.
     const auto renumbered = backend.invokeBackend(
         "RenumberRecord",
-        nlohmann::json::array({"Light.esl", "000800:Light.esl", "000900:Light.esl"}));
-    REQUIRE_FALSE(renumbered.has_value());
-    CHECK(renumbered.error().type == "LightPluginLifecycleUnsupported");
+        nlohmann::json::array({"Light.esl", "000800:Light.esl", "000901:Light.esl"}));
+    REQUIRE(renumbered.has_value());
+
+    // A light plugin may use locals below the full-plugin 0x800 floor: its
+    // runtime FormID is 0xFE | slot << 12 | local and cannot collide with the
+    // engine's reserved low forms.
+    const auto low = backend.invokeBackend(
+        "RenumberRecord",
+        nlohmann::json::array({"Light.esl", "000901:Light.esl", "000001:Light.esl"}));
+    CHECK(low.has_value());
+
+    // Above 0xFFF the engine masks the local down and the record aliases onto a
+    // different one, so the backend must still fail closed there.
+    const auto tooHigh = backend.invokeBackend(
+        "RenumberRecord",
+        nlohmann::json::array({"Light.esl", "000001:Light.esl", "001000:Light.esl"}));
+    CHECK_FALSE(tooHigh.has_value());
 }
 
 TEST_CASE("Native lifecycle refuses delete and renumber across external references") {
