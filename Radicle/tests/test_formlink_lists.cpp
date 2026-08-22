@@ -71,6 +71,16 @@ std::uint32_t nth_raw(const fo4::Record& record,
   return 0;
 }
 
+std::size_t count_subrecords(const fo4::Record& record,
+                             std::string_view signature) {
+  const auto sig = fo4::Signature::from_string(signature);
+  std::size_t count = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature == sig) ++count;
+  }
+  return count;
+}
+
 }
 
 TEST(FormLinkListSchema, ParsesGeneratedIndexedRaceHeadPath) {
@@ -83,7 +93,7 @@ TEST(FormLinkListSchema, ParsesGeneratedIndexedRaceHeadPath) {
   ASSERT_EQ(fo4::schema::formlink_list_targets(parsed->descriptor).size(), 1u);
   EXPECT_EQ(fo4::schema::formlink_list_targets(parsed->descriptor)[0],
             fo4::Signature::from_string("CLFM"));
-  EXPECT_FALSE(parsed->descriptor.can_insert);
+  EXPECT_TRUE(parsed->descriptor.can_insert);
 }
 
 TEST(FormLinkListSchema, RejectsMalformedOrUnknownIndexedPaths) {
@@ -115,6 +125,94 @@ TEST(FormLinkListMutation, ReplacesOnlyRequestedExistingElement) {
   ASSERT_NE(race, nullptr);
   EXPECT_EQ(nth_raw(*race, "AHCM", 0), 0x00000800u);
   EXPECT_EQ(nth_raw(*race, "AHCM", 1), 0x00000801u);
+}
+
+TEST(FormLinkListMutation, InsertsUsingExistingNeighborsWithoutTouchingThem) {
+  auto plugin = fo4::read_plugin(
+      plugin_with_race_hair_colors(), "HeadLists.esp");
+  const auto race_key = fo4::FormKey::parse("000803:HeadLists.esp");
+  const auto new_color = fo4::FormKey::parse("000801:HeadLists.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("RACE"), "RACE\\MaleHairColors");
+  ASSERT_TRUE(descriptor.has_value());
+
+  EXPECT_EQ(
+      fo4::schema::insert_record_formlink_list_element(
+          plugin, race_key, *descriptor, 1, new_color),
+      fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread =
+      fo4::read_plugin(fo4::write_plugin(plugin), "HeadLists.esp");
+  const auto* race = fo4::find_record(reread, race_key);
+  ASSERT_NE(race, nullptr);
+  ASSERT_EQ(count_subrecords(*race, "AHCM"), 3u);
+  EXPECT_EQ(nth_raw(*race, "AHCM", 0), 0x00000800u);
+  EXPECT_EQ(nth_raw(*race, "AHCM", 1), 0x00000801u);
+  EXPECT_EQ(nth_raw(*race, "AHCM", 2), 0x00000800u);
+}
+
+TEST(FormLinkListMutation, AppendsUsingLastExistingNeighbor) {
+  auto plugin = fo4::read_plugin(
+      plugin_with_race_hair_colors(), "HeadLists.esp");
+  const auto race_key = fo4::FormKey::parse("000803:HeadLists.esp");
+  const auto new_color = fo4::FormKey::parse("000801:HeadLists.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("RACE"), "RACE\\MaleHairColors");
+  ASSERT_TRUE(descriptor.has_value());
+
+  EXPECT_EQ(
+      fo4::schema::insert_record_formlink_list_element(
+          plugin, race_key, *descriptor, 2, new_color),
+      fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto* race = fo4::find_record(plugin, race_key);
+  ASSERT_NE(race, nullptr);
+  ASSERT_EQ(count_subrecords(*race, "AHCM"), 3u);
+  EXPECT_EQ(nth_raw(*race, "AHCM", 2), 0x00000801u);
+}
+
+TEST(FormLinkListMutation, RemovesOnlyRequestedElement) {
+  auto plugin = fo4::read_plugin(
+      plugin_with_race_hair_colors(), "HeadLists.esp");
+  const auto race_key = fo4::FormKey::parse("000803:HeadLists.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("RACE"), "RACE\\MaleHairColors");
+  ASSERT_TRUE(descriptor.has_value());
+
+  EXPECT_EQ(
+      fo4::schema::remove_record_formlink_list_element(
+          plugin, race_key, *descriptor, 0),
+      fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread =
+      fo4::read_plugin(fo4::write_plugin(plugin), "HeadLists.esp");
+  const auto* race = fo4::find_record(reread, race_key);
+  ASSERT_NE(race, nullptr);
+  ASSERT_EQ(count_subrecords(*race, "AHCM"), 1u);
+  EXPECT_EQ(nth_raw(*race, "AHCM", 0), 0x00000800u);
+}
+
+TEST(FormLinkListMutation, EmptyListInsertionFailsClosedWithoutSchemaAnchor) {
+  auto plugin = fo4::read_plugin(
+      plugin_with_race_hair_colors(), "HeadLists.esp");
+  const auto race_key = fo4::FormKey::parse("000803:HeadLists.esp");
+  const auto color = fo4::FormKey::parse("000801:HeadLists.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("RACE"), "RACE\\MaleHairColors");
+  ASSERT_TRUE(descriptor.has_value());
+
+  ASSERT_EQ(
+      fo4::schema::remove_record_formlink_list_element(
+          plugin, race_key, *descriptor, 1),
+      fo4::schema::FormLinkListMutationStatus::updated);
+  ASSERT_EQ(
+      fo4::schema::remove_record_formlink_list_element(
+          plugin, race_key, *descriptor, 0),
+      fo4::schema::FormLinkListMutationStatus::updated);
+  EXPECT_EQ(
+      fo4::schema::insert_record_formlink_list_element(
+          plugin, race_key, *descriptor, 0, color),
+      fo4::schema::FormLinkListMutationStatus::insertion_boundary_unavailable);
 }
 
 TEST(FormLinkListMutation, RejectsWrongLocalTargetType) {
@@ -159,5 +257,13 @@ TEST(FormLinkListMutation, MalformedExistingElementFailsClosed) {
   EXPECT_THROW(
       static_cast<void>(fo4::schema::set_record_formlink_list_element(
           plugin, race_key, parsed->descriptor, parsed->index, color)),
+      fo4::schema::FormLinkListError);
+  EXPECT_THROW(
+      static_cast<void>(fo4::schema::insert_record_formlink_list_element(
+          plugin, race_key, parsed->descriptor, 1, color)),
+      fo4::schema::FormLinkListError);
+  EXPECT_THROW(
+      static_cast<void>(fo4::schema::remove_record_formlink_list_element(
+          plugin, race_key, parsed->descriptor, 0)),
       fo4::schema::FormLinkListError);
 }
