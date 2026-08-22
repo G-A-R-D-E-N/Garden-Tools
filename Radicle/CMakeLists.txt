@@ -185,6 +185,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_hedr_count.cpp
     tests/test_formlinks.cpp
     tests/test_formlink_ordinals.cpp
+    tests/test_rekey_formlinks.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
