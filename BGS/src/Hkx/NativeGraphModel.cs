@@ -13,7 +13,12 @@ public static class NativeGraphModel
     {
         types ??= HavokClassTypes.Shipped;
         if (types.Count == 0) return null;
-        if (objects.Instances.Any(i => !types.Knows(i.ClassName))) return null;
+        // Knowing the name is not enough. A class the width-aware walker cannot place leaves
+        // Fill with no layout, so its fields stay empty while the model still looks complete --
+        // and comparison and analysis downstream read that as "no differences" rather than
+        // "not decoded". Refuse the file instead.
+        if (objects.Instances.Any(i =>
+                LayoutWalker.Active(types, i.ClassName, objects.PointerWidth) == null)) return null;
 
         var index = new Dictionary<PackfileObjects.Instance, int>();
         for (int i = 0; i < objects.Instances.Count; i++) index[objects.Instances[i]] = i;

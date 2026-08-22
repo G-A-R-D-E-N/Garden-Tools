@@ -65,11 +65,16 @@ public static class LayoutWalker
     public static bool CanPlace(HavokClassTypes types, string className)
     {
         var cache = CacheFor(types);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        // Walk the chain for cycles first. ExtraAlignment recurses through parents itself, via
+        // NaturalAlign -> Of, and Of does not cache until it returns, so calling it partway
+        // along a cyclic chain recurses without bound instead of reaching the check below.
+        var chain = new HashSet<string>(StringComparer.Ordinal);
+        for (string? at = className; at != null; at = types[at]?.Parent)
+            if (!chain.Add(at) || !types.Knows(at)) return false;
+
         for (string? at = className; at != null; at = types[at]?.Parent)
         {
-            if (!seen.Add(at)) return false;
-            if (!types.Knows(at)) return false;
             ExtraAlignment(types, at);
             if (cache.Reproduces.TryGetValue(at, out bool ok) && !ok) return false;
         }
