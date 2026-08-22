@@ -9,7 +9,9 @@
 #include <cstdint>
 #include <cstring>
 #include <string_view>
+#include <system_error>
 #include <utility>
+#include <vector>
 
 namespace fo4::schema {
 namespace {
