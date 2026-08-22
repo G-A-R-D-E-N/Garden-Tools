@@ -370,6 +370,82 @@ These belong to `BGSMaterialObject`/`BGSEffectShader`-family classes,
 not JSON serializers — the `call 0x16248` API is a general-purpose
 property editor registration, not JSON-specific.
 
+### 7e. REFR binary LoadRecord / SaveRecord — vftable slots and subread order
+
+REFR's primary vftable is at RVA `0x30a1990`, decoded from the in-place
+ctor (`FUN_140d64f50`) via the RIP-relative LEA chain. The vftable is
+**shifted by +1 slot** compared to CELL/WRLD (slot 0 = an extra entry before
+the first virtual, likely the RTTI COL pointer stored inside the array rather
+than at `vftable[-1]`). Mapping against the CELL reference: REFR[s] =
+CELL[s+1] for all shared TESForm slots.
+
+| REFR slot | CELL equiv | thunk RVA | resolves to | role |
+|---|---|---|---|---|
+| **23** | CELL 24 (LoadRecord) | `0x937d9` | `jmp 0xd65f60` | **LoadRecord** — switch-dispatch on ~160 subrecord 4CCs |
+| **26** | CELL 27 (SaveRecord) | `0x43ea5` | `jmp 0xda7820` | **SaveRecord** — virtual-subclass save chain |
+
+#### 7e.1 LoadRecord (`FUN_140d65f60`, refr-loadsave-decomp.txt)
+
+Signature: `bool FUN_140d65f60(longlong *this, longlong tesfile)`
+
+Flow:
+1. `FUN_14000ff83(this, 0)` — zero-init
+2. `thunk_FUN_1408bf480(this, tesfile)` — **TESForm base LoadRecord**
+   (reads EDID, FULL, and other base form data)
+3. Sets form-type byte `*(this + 0x26) = 0x40`
+4. Enters the subrecord dispatch loop: `thunk_FUN_14087e760(tesfile)` reads
+   the next 4CC + u16 size, then a **cascading if/else tree** (not a jump
+   table) dispatches on the 4CC value.
+
+The dispatch tree is organized by numeric 4CC ranges. Representative
+subrecords from the first ~70 decoded:
+
+| 4CC | handler | description |
+|---|---|---|
+| `VMAD` (0x44414D56) | `thunk_FUN_1408bf1a0` | VMAD data block |
+| `DATA` (0x41544144) | inline read (0x18 bytes) | position + rotation (6 floats at +0x1C/+0x1A/+0x1B/+0x1D/+0xE4/+0xD4) |
+| `NAME` (0x454D414E) | base-object setter (vt+0x198) | set base object + read EDID override |
+| `XIS2` (0x32534958) | flag handler | (handled inline) |
+| `XPPA` (0x41505058) | flag handler | (handled inline) |
+| `XCZA` (0x415A4358) | flag handler | (handled inline) |
+| `XRGB` (0x42475258) | flag handler | (handled inline) |
+| `XLIB` (0x42494C58) | flag handler | (handled inline) |
+| `XGLB` (0x424C4758) | flag handler | (handled inline) |
+| `XLMB` (0x424D4C58) | flag handler | (handled inline) |
+| `XSPC` (0x43505358) | flag handler | (handled inline) |
+| `XAMC` (0x434D4158) | flag handler | (handled inline) |
+| `XENC` (0x434E4558) | encounter zone link | (handled inline) |
+| `XLOC` (0x434F4C58) | lock data | (handled inline) |
+| `XMRC` (0x43524D58) | merchant container | (handled inline) |
+| `XFVC` (0x43564658) | follower/command ref | (handled inline) |
+| `XCZC` (0x435A4358) | flag handler | (handled inline) |
+| `XCIM` (0x4D494358) | image-space modifier | (handled inline) |
+| `XUSE` (0x45535558) | use-report ref | (handled inline) |
+
+The full dispatch table spans ~160 distinct 4CC values (the complete set
+includes all hex constants listed in the decompile artifact). The pattern
+is always `if (4CC < threshold) { ... } else if (4CC == NNNNN) { handler; }
+else ...` — Ghidra flattened the switch into a binary-search tree.
+
+Key observation: many subrecords (especially the X* flag group) are checked
+against a flag mask `*(this + 7) & 0x3ff` to determine if the data should
+be read. The internal flag at `this + 0x50` gates the loop exit condition.
+
+#### 7e.2 SaveRecord (`FUN_140da7820`)
+
+Signature calls `thunk_FUN_1408c7710` (subrecord writer) only 4× for the
+base form fields: `NAME`, `XLRL` (location ref), `XSCL` (scale), `DATA`
+(position+rotation). The REFR-specific subrecords are written through the
+**virtual subclass save chain** — SaveRecord calls through vftable slots on
+`this` (e.g. `vt+0x1b0` → PTRN, `vt+0x3b8` → save extensions, `vt+0x3c0`
+→ STCP), the same pattern as CELL/WRLD §10d. The workhorses are the shared
+`tesform.cpp` save helpers (`FUN_1408c7a70` at `tesform.cpp:0x9a4` =
+form-header writer, `FUN_1408c7bf0` at `tesform.cpp:0x9e0` = subrecord
+close/size-patch), not REFR-specific writers.
+
+**Artifacts:** `ghidra-dump/decompile-REFR-LoadSaveRecord.txt` (two-function
+decompile, 490 lines).
+
 ## 8. TESObjectCELL member layout (constructor + setters)
 
 Recovered from the constructor `FUN_140d13940` (`tesobjectcell.cpp`) plus the
@@ -845,6 +921,9 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
   exterior block beyond the coords + 1.0f seeds; the `0x79F` at +0x58).
 - Whether any CK feature writes WRLD/CELL records with non-standard subrecords
   (editor-only `EditorWarnings.txt` paths noted in §10 of doc 03).
+- The full ~160-subrecord REFR LoadRecord dispatch table (currently partially
+  decoded from the decompile tree; a complete table extraction from the
+  binary if/else dispatch is pending).
 
 ## Artifacts
 
@@ -861,7 +940,9 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - `ghidra-dump/decompile-REFRFactory-slots.txt`,
   `decompile-REFRSerializer-slots.txt`, `decompile-REFR-serializer-thunks.txt`,
   `decompile-serializer-virtuals.txt`, `decompile-factory-compare.txt`,
-  `decompile-json-registry.txt`, `callers-{REFRFactory-ctor,REFRFactory-Create,serializer-read,serializer-reg,json-registry}.txt` (raw decompiles; local only)
+  `decompile-json-registry.txt`, `callers-{REFRFactory-ctor,REFRFactory-Create,serializer-read,serializer-reg,json-registry}.txt`
+- `ghidra-dump/decompile-REFR-LoadSaveRecord.txt` (REFR LoadRecord FUN_140d65f60 + SaveRecord FUN_140da7820; 490 lines, 160-subrecord dispatch tree)
+  (raw decompiles; local only)
 - `ghidra-dump/decompile-exteriorcellloader.txt` (grid ctor FUN_140ffc050 +
   node-tree FUN_140d1a5e0), `decompile-CellLoaderTask.txt` (task name),
   `decompile-CellLoaderTask-run.txt` (LoadCellData + PostProcess),
