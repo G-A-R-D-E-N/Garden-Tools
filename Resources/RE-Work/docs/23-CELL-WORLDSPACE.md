@@ -1176,6 +1176,159 @@ not inline in SaveRecord.
 | `TESObjectLAND` | `0x309a5c8` | `FUN_140cefdb0` (slot 24) | `FUN_140d01900` (slot 27) | 5 load + texture / 10 save |
 | `TESObjectREFR` | `0x30a1990` | `FUN_140d65f60` (slot 24) | `FUN_140da7820` (slot 27) | ~160 load / 4 save + subclass chain |
 
+### 10g. TESForm save header — the 0x18-byte wire block
+
+The shared save pipeline is driven by three functions in `tesform.cpp`
+(all verified by Ghidra decompile against
+`code\shared\formcomponents\tesform.cpp` assert anchors):
+
+| function | RVA | anchor | role |
+|---|---|---|---|
+| `FUN_1408c7a70` | `0x8c7a70` | `tesform.cpp:0x9a4` | **form-header writer** — emits the 0x18-byte record header + EDID + subclass chains |
+| `FUN_1408c7bf0` | `0x8c7bf0` | `tesform.cpp:0x9e0` | **size-patch / close** — backfills the data-size field |
+| `FUN_1408c7710` | `0x8c7710` | (write primitive) | **subrecord writer** — appends `[4CC:4][size:2][data:size]` to the output buffer |
+
+#### 10g.1 Form-header writer (`FUN_1408c7a70`)
+
+```c
+void FUN_1408c7a70(TESForm *form) {
+    // Guard: skip if form flags bit 14 (0x4000) is set
+    if ((form->flags >> 14) & 1) return;
+
+    // Initialize write cursor and allocate output buffer
+    DAT_143d4a46c = 0x18;                          // cursor = header size
+    buf = thunk_FUN_141ff6d30(heap, 0x18, 0);      // alloc 24 bytes
+    DAT_143d4a470 = buf;                           // global output-buffer ptr
+
+    // Write form flags (masked for non-TES4 records)
+    buf[2] = form->flags;                          // +0x08
+    if (form->formType != 0x01)                    // if not TES4
+        buf[2] = form->flags & 0xfe9baff4;         // mask off bits 0/1/3/10/11/16-19/24/31
+
+    // Write record type 4CC
+    *buf = DAT_143b9a550[form->formType * 6];      // +0x00: formEnumString lookup
+
+    // Write formID and revision
+    buf[3] = form->formID;                         // +0x0C: low 32 bits
+    buf[1] = 0;                                    // +0x04: data-size (zero; patched later)
+    buf[5] = thunk_FUN_1408808c0();                // +0x14: form version (u16)
+    buf[6] = (u16)form->field_0x24;                // +0x16: byte from +0x24 as u16
+    buf[4] = (u32)form->field_0x20;                // +0x10: revision counter
+
+    // Write EDID subrecord if non-empty
+    edid = FUN_140071152(&form->edid);             // BSString at +0x18
+    if (edid && *edid)
+        FUN_1408c7710('EDID', edid, strlen(edid)+1);
+
+    // Pre-save hook
+    thunk_FUN_1408bef50(form);
+
+    // Subclass save chain: slot 54 (vt+0x1b0)
+    (*(form->vftable + 0x1b0))(form);              // e.g. VMAD, OBND, OBLT writes
+
+    // PTRN-family save chain: slot 119 (vt+0x3b8)
+    ptrn_obj = (*(form->vftable + 0x3b8))(form);   // WRLD returns nav-mesh/region data
+    if (ptrn_obj)
+        thunk_FUN_14036d7c0(ptrn_obj, 'PTRN');     // write PTRN subrecord array
+
+    // STCP-family save chain: slot 120 (vt+0x3c0)
+    stcp_obj = (*(form->vftable + 0x3c0))(form);   // WRLD returns sound/trap data
+    if (stcp_obj)
+        thunk_FUN_1403706a0(stcp_obj, 'STCP');     // write STCP subrecord array
+}
+```
+
+**The 0x18-byte header wire format** (little-endian, same as `.esm`/`.esp`
+record header):
+
+| offset | size | field | source |
+|---|---:|---|---|
+| +0x00 | 4 | **record type 4CC** | `DAT_143b9a550[formTypeByte * 6]` (the formEnumString table — maps 0x01→"TES4", 0x3F→"CELL", 0x4A→"WRLD", etc.) |
+| +0x04 | 4 | **data size** | 0 initially; backfilled by `FUN_1408c7bf0` to `DAT_143d4a46c - 0x18` (total bytes written minus header) |
+| +0x08 | 4 | **form flags** | `form+0x10` masked `& 0xfe9baff4` if type ≠ 0x01 (TES4 keeps flags unmasked). Mask clears: bit 0 (ESM), bit 1 (deleted?), bit 3, bits 10-11, bits 16-19, bits 24, 31 |
+| +0x0C | 4 | **formID** (low 32) | `form+0x14` (the u32 formID; master file prefix is implicit from the file slot) |
+| +0x10 | 4 | **revision counter** | `form+0x20` (u32 — incremented on each save? read from `form[4]` = byte offset +0x20) |
+| +0x14 | 2 | **form version** | `thunk_FUN_1408808c0()` — likely a global version from the base game/editor |
+| +0x16 | 2 | **form-type byte** | `*(u8*)(form+0x24)` zero-extended to u16 (the same byte checked by `GetFormType()` — 0x3F=CELL, 0x4A=WRLD, etc.) |
+
+**Flags mask breakdown:** `0xfe9baff4` clears these bits from the TES4 flags
+word: 0x0001 (ESM), 0x0002 (deleted/reserved), 0x0008, 0x0C00 (compressed +
+ignored), 0x1E0000 (five bits — localized/risky flags), 0x01000000, and
+0x80000000. The full `esm`/`esp` flag word has 32 bits but only ~16 are
+meaningful; the mask strips editor-internal and runtime-only flags.
+
+#### 10g.2 Size-patch (`FUN_1408c7bf0`)
+
+```c
+void FUN_1408c7bf0(TESForm *form) {
+    // tesform.cpp:0x9e0
+    if (((form->flags >> 14) & 1) == 0) {           // skip if bit 14 set
+        *(u32*)(DAT_143d4a470 + 4) = DAT_143d4a46c - 0x18;
+        // data-size = total_bytes_written - header_size
+    }
+}
+```
+
+`DAT_143d4a46c` is the global write cursor — incremented by every
+`FUN_1408c7710` call (subrecord 4CC + u16 size + payload). At `SaveRecord`
+end, `DAT_143d4a46c - 0x18` is the total subrecord payload size, written
+back to the header at `DAT_143d4a470 + 4`. If form flags bit 14 (0x4000)
+is set, the patch is skipped — the record has a custom size path.
+
+#### 10g.3 Subrecord writer (`FUN_1408c7710`)
+
+Appends to the growable output buffer at `DAT_143d4a470`:
+
+```
+[DAT_143d4a470 + DAT_143d4a46c] = 4CC (4 bytes, LE)
+[DAT_143d4a470 + DAT_143d4a46c + 4] = data_size (2 bytes, LE u16)
+[DAT_143d4a470 + DAT_143d4a46c + 6] = data (data_size bytes)
+DAT_143d4a46c += 6 + data_size
+```
+
+Same wire format as the subrecords inside a `.esm`/`.esp` record body
+(4CC type + u16 size + payload). The buffer is reallocated as needed
+(the function starts by calling a `realloc`-style helper).
+
+#### 10g.4 Subclass save dispatch (vt+0x1b0, +0x3b8, +0x3c0)
+
+Three vftable slots form the subclass save chain, called from the
+form-header writer *before* the class-specific SaveRecord:
+
+| byte offset | slot | base TESForm | CELL override? | WRLD override? | role |
+|---|---|---|---|---|---|
+| **+0x1b0** | 54 | `thunk_FUN_1408bee00` | no (inherits base) | **yes** → `thunk 0x1f375` | **Subrecord save virtual** — writes class-generic subrecords. Base writes VMAD/OBND/OBLT; WRLD overrides to also write CNAM/NAM*/WCTR/etc. |
+| **+0x3b8** | 119 | string data (returns 0) | string data (returns 0) | **yes** → `thunk 0x7389e` | **PTRN-family writer** — returns a `BSTArray`-like navigation-mesh or region object. If non-null, `thunk_FUN_14036d7c0(obj, 'PTRN')` writes a PTRN subrecord array. CELL/REFR return 0 (no PTRN for them). |
+| **+0x3c0** | 120 | string data (returns 0) | string data (returns 0) | **yes** → `thunk 0x9bef7` | **STCP-family writer** — returns a sound/trap/collision data object. If non-null, `thunk_FUN_1403706a0(obj, 'STCP')` writes an STCP subrecord array. CELL/REFR return 0. |
+
+This explains the annotation in §10b: "`CLSZ`, `OFST`, and `RNAM` are
+also saved — they go through the `NAM*`-array and map-data iterators
+dispatched from `vl+0x3b8`/`vl+0x3c0`, not inline in the SaveRecord body."
+The WRLD vftable extends to at least 125 slots — much larger than CELL's
+79 — because worldspaces have PTRN/STCP subobject chains that other record
+types don't.
+
+#### 10g.5 Full save call-order
+
+For all record types, the SaveRecord call order is:
+
+1. **`FUN_1408c7a70(form)`** — write 0x18-byte header + EDID
+2. → **`vt+0x1b0`** — base subrecord virtual (VMAD, OBND, OBLT; WRLD adds CNAM/NAM*/WCTR/…)
+3. → **`vt+0x3b8`** → PTRN (WRLD only; returns 0 for CELL/REFR/LAND)
+4. → **`vt+0x3c0`** → STCP (WRLD only; returns 0 for CELL/REFR/LAND)
+5. **`class::SaveRecord(form)`** — class-specific subrecords (the slot 27 override; e.g. CELL's XCLC/DATA/VISI/RVIS/PCMB, WRLD's DATA/DNAM/MHDT/LTMP/NAM*)
+6. **`FUN_1408c7bf0(form)`** — backfill data-size
+
+Steps 1–4 are shared by every form type (the `tesform.cpp:0x9a4` code).
+Step 5 is the class-specific dispatch (the virtual we call LoadRecord/
+SaveRecord). Step 6 patches the header.
+
+**Consequence:** the `data-size` field in the header counts *all*
+subrecord payload bytes from steps 2–5. The form-header writer's
+subrecords and the class SaveRecord's subrecords are concatenated into
+the same output buffer at `DAT_143d4a470`, and the final size-patch
+subtracts 0x18 (the header) from the total cursor position.
+
 ## 11. Known record strings (load/save surface)
 
 CELL: `XCLC` (coords), `XCLW`, `XCLL` (lighting), `XCLR`, `XCLP`, `XCLS`,
