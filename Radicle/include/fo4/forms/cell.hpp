@@ -1,9 +1,14 @@
 #pragma once
 
+#include "fo4/formid.hpp"
+#include "fo4/plugin/container.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
+#include <string_view>
 
 namespace fo4::forms {
 
@@ -29,6 +34,13 @@ struct ExteriorCellGridLayout {
   std::int32_t subblock_y{0};
 };
 
+struct ExteriorCellCreation {
+  FormKey worldspace;
+  std::int32_t x{0};
+  std::int32_t y{0};
+  std::optional<std::string_view> editor_id;
+};
+
 bool exterior_cell_coordinate_valid(std::int32_t coordinate) noexcept;
 
 // xEdit's worldspace grouping contract uses mathematical floor division:
@@ -44,5 +56,18 @@ std::uint32_t exterior_grid_group_label_u32(std::int32_t grid_x,
                                             std::int32_t grid_y);
 std::array<std::byte, 4> exterior_grid_group_label(std::int32_t grid_x,
                                                    std::int32_t grid_y);
+
+// Creates a new local exterior CELL beneath an existing WRLD record in this
+// plugin. The mutation is transactional: invalid/malformed hierarchy or an
+// occupied coordinate leaves the caller's plugin unchanged.
+FormKey create_exterior_cell(Plugin& plugin, const ExteriorCellCreation& creation);
+
+// Finds a non-persistent exterior CELL at the requested coordinate beneath the
+// given WRLD hierarchy. Returns null when the hierarchy/coordinate is absent;
+// malformed matching hierarchy throws CellError instead of guessing.
+const Record* find_exterior_cell(const Plugin& plugin,
+                                 const FormKey& worldspace,
+                                 std::int32_t x,
+                                 std::int32_t y);
 
 }  // namespace fo4::forms
