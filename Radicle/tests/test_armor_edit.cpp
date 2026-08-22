@@ -38,7 +38,7 @@ std::vector<std::byte> legacy_armor(bool with_male_model) {
   const auto record = fo4::test::begin_record(out, "ARMO", 0, 0x00000800);
   if (with_male_model) {
     fo4::test::write_subrecord(
-        out, "MOD2", std::string_view{"Meshes\\Armor\\OldMale.nif\0", 26});
+        out, "MOD2", std::string_view{"Meshes\\Armor\\OldMale.nif\0", 25});
   }
   const std::array<std::byte, 8> bod2{};
   fo4::test::write_subrecord(out, "BOD2", bod2);
