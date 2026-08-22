@@ -207,3 +207,26 @@ separator, and it is **not** derivable from list position: of the 90 gender
 blocks in `Fallout4.esm`, 17 are not a plain `0..n-1` run — they begin
 `0, 0, 1, 2, …`. The value is decoded and written back verbatim rather than
 recomputed.
+
+### Which fields are localized
+
+Measured on `Fallout4.esm` (localized, TES4 `0x0081`), payload size per
+(record, subrecord) pair:
+
+| Field | Always 4 bytes | Never 4 bytes |
+|---|---|---|
+| `FULL` | ARMO 974, WEAP 864, MISC 2043, NPC_ 1944, QUST 708, CELL 319, RACE 40 | — |
+| `DESC` | ARMO 688, WEAP 252, RACE 45 | — |
+| `EDID` | — | ARMO 688, WEAP 252, RACE 45, ARMA 739, CELL 1736 |
+| `DNAM` | — | ARMA 739, WEAP 252, NPC_ 3015, QUST 1336 |
+
+`FULL` and `DESC` are 4 bytes in every record that carries them, with zero
+inline instances — those are the safe lstring set to start from. `EDID` is
+never localized.
+
+**Payload size alone cannot decide this.** `NPC_ CNAM` is 4 bytes in all 3,015
+instances but it is a Class FormID, not a string ID; `QUST CNAM` in a stage is
+a log-entry lstring. The same signature means different things in different
+records, so lstring-ness has to be declared per (record, subrecord) pair in
+`schema/fallout4/fields.json` rather than inferred from the bytes. Anything
+that guesses from size will silently turn FormIDs into string IDs.
