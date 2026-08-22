@@ -64,6 +64,7 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/onam.cpp
   src/plugin/writer.cpp
   src/schema/form_links.cpp
   src/schema/scalar.cpp
@@ -177,6 +178,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_eyes_creation.cpp
     tests/test_lvsp.cpp
     tests/test_lvsp_creation.cpp
+    tests/test_onam.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_conflict_graph.cpp
