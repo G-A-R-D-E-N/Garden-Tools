@@ -152,3 +152,36 @@ TEST(TypedFamiliesRealData, DecodesEveryShippedLeveledSpell) {
                 static_cast<void>(fo4::forms::decode_leveled_spell(p, k));
               }});
 }
+
+// ARMO DESC is exactly one per record across all 688 shipped ARMO, and every
+// master is localized, so it must decode as a string ID.
+TEST(TypedFamiliesRealData, ShippedArmorDescriptionsAreLocalizedIds) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  }
+  const auto path = std::filesystem::path{dir} / "Fallout4.esm";
+  if (!std::filesystem::exists(path)) {
+    GTEST_SKIP() << "Fallout4.esm not found under " << dir;
+  }
+
+  const auto plugin = fo4::read_plugin_file(path);
+  ASSERT_TRUE(plugin.header.tes4_flags.is_localized());
+
+  const auto armo = fo4::Signature::from_string("ARMO");
+  std::size_t seen = 0;
+  std::size_t described = 0;
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->header.signature != armo) continue;
+    const auto decoded = fo4::forms::decode_armor(plugin, record->form_key);
+    ++seen;
+    if (!decoded.description.has_value()) continue;
+    ++described;
+    EXPECT_TRUE(decoded.description->localized())
+        << decoded.key.to_string() << " DESC should be a string ID";
+    EXPECT_FALSE(decoded.description->text.has_value());
+  }
+  EXPECT_GT(seen, 600u);
+  // Every shipped ARMO carries exactly one DESC.
+  EXPECT_EQ(described, seen);
+}

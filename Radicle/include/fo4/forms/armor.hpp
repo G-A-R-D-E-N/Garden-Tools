@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/localized_fields.hpp"
 
 #include <array>
 #include <cstddef>
@@ -26,6 +27,9 @@ struct ArmorCreation {
   std::optional<std::string_view> female_world_model;
   std::optional<std::string_view> female_icon;
   std::optional<std::string_view> female_message_icon;
+  // Inline text only. Authoring into a localized plugin is refused: minting a
+  // string ID would mean owning the .STRINGS tables, which this path does not.
+  std::optional<std::string_view> description;
   std::int32_t value{0};
   float weight{0.0f};
   std::uint32_t health{0};
@@ -40,6 +44,13 @@ struct Armor {
   std::optional<std::string> female_world_model;
   std::optional<std::string> female_icon;
   std::optional<std::string> female_message_icon;
+  // DESC is localized: a string ID in a localized plugin, inline text
+  // otherwise. Exactly one per record across all 688 shipped ARMO.
+  //
+  // FULL is deliberately not modelled here. It is not a unique field -- OBTE
+  // object-template blocks carry their own FULL overrides, up to 20 in a
+  // single record -- so it needs template-block parsing first.
+  std::optional<schema::LocalizedString> description;
   std::int32_t value{0};
   float weight{0.0f};
   std::uint32_t health{0};

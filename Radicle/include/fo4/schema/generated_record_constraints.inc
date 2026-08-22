@@ -20,6 +20,7 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("MO4T"), 0, 1},
   {Signature::from_string("ICO2"), 0, 1},
   {Signature::from_string("MIC2"), 0, 1},
+  {Signature::from_string("DESC"), 0, 1},
   {Signature::from_string("DATA"), 1, 1},
   {Signature::from_string("EDID"), 0, 1},
   {Signature::from_string("FULL"), 1, 1},
@@ -45,8 +46,8 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
 
 inline constexpr RecordAuthoringConstraint k_generated_record_authoring_constraints[] = {
   {Signature::from_string("ARMA"), RecordPlacement::top_level, 0, 10},
-  {Signature::from_string("ARMO"), RecordPlacement::top_level, 10, 10},
-  {Signature::from_string("EYES"), RecordPlacement::top_level, 20, 4},
-  {Signature::from_string("LVSP"), RecordPlacement::top_level, 24, 7},
-  {Signature::from_string("RACE"), RecordPlacement::top_level, 31, 9},
+  {Signature::from_string("ARMO"), RecordPlacement::top_level, 10, 11},
+  {Signature::from_string("EYES"), RecordPlacement::top_level, 21, 4},
+  {Signature::from_string("LVSP"), RecordPlacement::top_level, 25, 7},
+  {Signature::from_string("RACE"), RecordPlacement::top_level, 32, 9},
 };
