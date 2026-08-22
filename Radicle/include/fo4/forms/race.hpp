@@ -55,6 +55,10 @@ struct RaceCreation {
   std::uint32_t flags2{0};
   std::int32_t pipboy_biped_object{0};
   std::int16_t xp_value{0};
+  std::optional<FormKey> male_voice;
+  std::optional<FormKey> female_voice;
+  float facegen_main_clamp{0.0f};
+  float facegen_face_clamp{0.0f};
   RaceBodyData body_data;
 };
 
@@ -82,6 +86,10 @@ struct Race {
   std::uint32_t flags2{0};
   std::int32_t pipboy_biped_object{0};
   std::int16_t xp_value{0};
+  std::optional<FormKey> male_voice;
+  std::optional<FormKey> female_voice;
+  float facegen_main_clamp{0.0f};
+  float facegen_face_clamp{0.0f};
   RaceBodyData body_data;
 };
 
