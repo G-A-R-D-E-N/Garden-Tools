@@ -10,7 +10,7 @@
 // CSV name applied.
 //
 // Uses Ghidra's own demangler (DemanglerUtil/DemangledObject.applyTo) for MSVC-mangled names so
-// functions get proper namespace + signature, exactly like symbol import does - not just a bare label.
+// functions get proper namespace + signature, exactly like PDB import does - not just a bare label.
 // Falls back to a plain sanitized label/rename when the string isn't demanglable (a handful of the
 // CSV's names are already plain, e.g. "_tls_end").
 //

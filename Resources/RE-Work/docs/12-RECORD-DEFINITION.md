@@ -88,14 +88,14 @@ Each also registers an `atexit` teardown. Template arguments decode as `<class, 
 
 ## 5. RTTI class map — index → class (cross-validated)
 
-The mangled RTTI names embed the enum index: `ConcreteObjectFormFactory@V<Class>@@$0<hex>@...` where the hex uses MSVC digits `0-9` + `A-J` → nibble values (A=10? no — **A=0..J=9 over a base-16 digit set**; empirically `$0JH@` = 0x97 = 151, `$0HI@` = 0x78 = 120, `$03@` = 3).
+The mangled RTTI names embed the enum index: `ConcreteObjectFormFactory@V<Class>@@$0<hex>@...` where the hex uses per-nibble letters by position — **A=0 … P=15** (so `$0JH` = 0x97 = 151 = AORU, `$0HI` = 0x78 = 120, `$0DP` = 0x3F = 63 = CELL, `$03` = 3). An earlier draft read this as "A=0..J=9" and produced a systematic off-by-one for indices ≥ 0xA0's nibbles — the factory *registration call* (`thunk_FUN_1408bc350(idx, ...)`) is the ground truth, and doc 23 re-validated the CELL/WRLD/LAND rows against it.
 
 Decoding all 119 `ConcreteObjectFormFactory` / `ConcreteFormFactory` RTTI names and joining on enum index yields **83 class bindings with zero mismatches** against `formEnumString`. Highlights:
 
 | idx | 4CC | class | idx | 4CC | class |
 |----:|-----|-------|----:|-----|-------|
-| 3 | GMST | BGSKeyword | 74 | WRLD | BGSStoryManagerBranchNode |
-| 4 | KYWD | BGSLocationRefType | 75 | LAND | BGSStoryManagerQuestNode |
+| 3 | GMST | BGSKeyword | 74 | WRLD | TESWorldSpace (see doc 23) |
+| 4 | KYWD | BGSLocationRefType | 75 | LAND | TESObjectLAND (see doc 23) |
 | 16 | EYES | TESEyes | 80 | QUST | TESQuest |
 | 17 | RACE | TESRace | 88 | EFSH | TESEffectShader |
 | 18 | SOUN | TESSound | 96 | BPTD | BGSBodyPartData |
@@ -106,7 +106,7 @@ Decoding all 119 `ConcreteObjectFormFactory` / `ConcreteFormFactory` RTTI names 
 | 50 | NOTE | BGSNote | 134 | SNCT | BGSSoundCategory |
 | 55 | TERM | BGSTerminal | 137 | CLFM | BGSColorForm |
 | 57 | WTHR | TESWeather | 149 | AECH | BGSAudioEffectChain |
-| 63 | CELL | BGSCameraShot | 151 | AORU | BGSAttractionRule |
+| 63 | CELL | TESObjectCELL (see doc 23) | 151 | AORU | BGSAttractionRule |
 
 Full join in `record-definition-table.txt`.
 

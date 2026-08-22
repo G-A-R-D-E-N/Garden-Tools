@@ -183,6 +183,7 @@ through the same function — either way the read semantics are identical.
 - Write-back side (notify setter, registry API, ini-write census): `16-SETTINGS-WRITEBACK.md`
 - Full ini path→reader map: `17-INI-PATHS.md`
 - Compatibility oracle for a real CreationKit.ini: `tools/validate_ckini.py` (replays this reader + the type-letter switch against the 1,629-key table)
+- Duplicate descriptor pairs, their two initializer/data runs, and pointer-keyed collision behavior: `ghidra-dump/duplicate-ini-settings.md`
 - Decompiles: `ghidra-dump/READER-FUN_1425c7f90.txt`, `READALL-FUN_14092b990-BudgetCaps.txt`,
   `INIT-FUN_142ea4030-record-register.txt`, `SINGLETON-FUN_1425c7920.txt`,
   `LOADERSINI-FUN_1425feb30.txt`

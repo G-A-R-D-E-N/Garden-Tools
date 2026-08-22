@@ -27,7 +27,7 @@ Whenever plugin work hits one of these questions, the named DB is the fastest au
    in the new build. Complementary to this naming pipeline, not a replacement.
    - **Update 2026-07-10:** a lighter version of this was done for a different purpose — not
      locating new hooks, but cross-checking the 1.10.163 project's own naming *disagreements*
-     against the independent 1.10.155 named project to catch more CommonLib RTTI-matching errors. See
+     against the independent 1.10.155 PDB to catch more CommonLib RTTI-matching errors. See
      [06-FUNCTION-INDEX.md](./06-FUNCTION-INDEX.md). Full structural/byte-level VT across the
      version gap is still not done.
 
@@ -57,7 +57,7 @@ quickly (e.g. `LoadGameJob::Run`, `BGSSaveLoadManager::UpdateQueuedTasks`).
 
 ### 5. Decompile-verify the 313 candidate CommonLib misname bugs  *(DONE 2026-07-10)*
 [06-FUNCTION-INDEX.md](./06-FUNCTION-INDEX.md)'s cross-reference pass flagged 313 addresses where
-CommonLib's existing name is specific/confident but contradicted by an independent 1.10.155 named project
+CommonLib's existing name is specific/confident but contradicted by an independent 1.10.155 PDB
 match on the community-decoded name — the same signature as the two already-confirmed real bugs.
 All 313 were decompile-verified (batch Ghidra decompile + parallel-agent review against the actual
 C body): **150 confirmed real bugs**, 68 likely linker code-folding artifacts (not bugs — a newly
@@ -81,13 +81,13 @@ See 03-FINDINGS.md (2026-07-10 reassignment entry) + `Organized\safe_gaps_deferr
 (The other 423 originally-deferred rows are `std::_Func_*` template-formatting diffs, ignorable.)
 
 ### 7. Resolve the ~20 Havok hknpShape INCONCLUSIVE vtable slots  *(DONE 2026-07-11)*
-Resolved via the 1.10.155 named project vtable slot order (a better source than the public Havok SDK header — the
-symbols has the exact per-build slot→method mapping). CommonLib's names were shifted by 4 slots; applied the
+Resolved via the 1.10.155 PDB vtable slot order (a better source than the public Havok SDK header — the
+PDB has the exact per-build slot→method mapping). CommonLib's names were shifted by 4 slots; applied the
 authoritative names to all 26 hknpShape slots. Same technique then closed **every** remaining
 INCONCLUSIVE / KEEP / deferred naming item from the whole cross-reference effort — see 03-FINDINGS.md
 (2026-07-11 entry). **No open RE naming follow-ups remain.** New reusable tooling: `FindDumpVtable.java`
 (locate+dump any class's vtable in either project), `CleanRename.java` (force-rename clearing colliding
-labels). The symbol-vtable-order technique is now the go-to resolver for any "which method is this vtable
+labels). The PDB-vtable-order technique is now the go-to resolver for any "which method is this vtable
 slot" question.
 
 ## How to add a target

@@ -8,10 +8,11 @@ Never push game binaries, debug files, or decompiled function bodies.
 
 | Path | What |
 |------|------|
-| `docs/` | numbered CK notes (00–21) plus original inventory |
-| `dumps/` | CK fact tables: RTTI names, TES* classes, settings keys, `__FILE__` paths, LOD strings |
+| `docs/` | numbered CK notes (00–22) plus original inventory |
+| `dumps/` | CK fact tables (RTTI names, TES* classes, settings keys, `__FILE__` paths, LOD strings) plus the NIF/TextExport/string-file analysis docs |
 | `scripts/` | CK Ghidra Java query scripts |
-| `tools/` | `pe_recon.py`, `validate_ckini.py`, synthetic INI samples |
+| `tools/` | `pe_recon.py`, `validate_ckini.py`, `extract_ck_nif_savebinary.py`, `validate_nif.py`, synthetic INI + CompileTextExport fixtures |
+| `STATUS.md` | completion state of every doc and tool, next open questions |
 | `Runtime/` | runtime pipeline docs, findings, Ghidra scripts, Organized analysis CSVs, subsystem notes |
 
 ## Not tracked

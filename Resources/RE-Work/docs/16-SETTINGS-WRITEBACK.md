@@ -248,6 +248,7 @@ persistence: generic writer + app savers:
 - Full ini path→reader/writer census: `17-INI-PATHS.md`
 - Key inventory: `06-SETTINGS-KEYS.md`, `ghidra-dump/ck-settings-keys.txt`
 - CLI dispatcher (a notify caller): `13-CLI-PARSER.md`; batch runner: `15-BATCH-PROCESSES.md`
+- Duplicate descriptor write collisions and the two collection getter targets: `ghidra-dump/duplicate-ini-settings.md`
 - Decompiles: `ghidra-dump/SETWRITE-NOTIFY-FUN_1425c6b90.txt`,
   `SETWRITE-REGISTER-FUN_1425c6800.txt`, `SETWRITE-UNREGISTER-FUN_1425c69c0.txt`,
   `SETWRITE-INSERT-FUN_1425c75a0.txt`, `SETWRITE-HASH-FUN_141ffe210.txt`,

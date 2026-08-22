@@ -1,6 +1,6 @@
 // Full function export for the named FO4 1.10.163 Ghidra DB (fwgh_proj_1.10.163_unpacked).
 // Dumps every function's RVA, byte size, and prototype string to a flat text file in a format
-// close enough to ReverseEngineering\Symbols\Fallout4_functions.txt (the 1.10.155 named project dump) that the same
+// close enough to ReverseEngineering\Symbols\Fallout4_functions.txt (the 1.10.155 PDB dump) that the same
 // subsystem-bucketing script can parse both. Pure symbol-table/listing walk -- no decompile calls,
 // no re-analysis -- so this should run in a couple of minutes even at ~210k functions.
 //
@@ -45,7 +45,7 @@ public class FW_ExportAll extends GhidraScript {
                 }
                 // getSignature().getPrototypeString() does NOT qualify member-function names with
                 // their class (e.g. "void GetHeight(BGSAIWorldLocation * this)", not
-                // "BGSAIWorldLocation::GetHeight"), unlike the 1.10.155 named project dump's demangled
+                // "BGSAIWorldLocation::GetHeight"), unlike the 1.10.155 PDB dump's demangled
                 // signatures which always are. Emit f.getName(true) explicitly so downstream
                 // subsystem-bucketing has one reliable "Class::Method" field to key off, matching
                 // the 1.10.155 format.

@@ -9,7 +9,7 @@ The goal is a single deterministic pipeline for analyzing the active game data, 
 - [Full phase roadmap](docs/ROADMAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [LOD ecosystem research](docs/RESEARCH.md)
-- [xLODGen reverse-engineering oracle](docs/XLODGEN_REVERSE_ENGINEERING.md) — recovered GUI and engine contracts: [engine internals](docs/LODGEN_ENGINE.md), [Quality/WaterDelta semantics](docs/XLODGEN_QUALITY.md), [full analysis + tools](docs/reverse-engineering/REPORT-xLODGen.md)
+- [xLODGen reverse-engineering oracle](docs/XLODGEN_REVERSE_ENGINEERING.md) — recovered GUI and engine contracts: [engine internals](docs/LODGEN_ENGINE.md), [Quality/WaterDelta semantics](docs/XLODGEN_QUALITY.md), [full analysis + tools](docs/reverse-engineering/REPORT-xLODGen.md), [analysis progress + open questions](docs/reverse-engineering/PROGRESS.md)
 - v0.1 release tracker: #1
 - terrain-source parity gate: #19
 

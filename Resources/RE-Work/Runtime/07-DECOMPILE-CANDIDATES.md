@@ -17,7 +17,7 @@ Full decompile-based verification pass over every one of the 313 candidates flag
 
 **137 of the 150 CONFIRMED_MISNAME renames were applied** to `Projects\fwgh_proj_1.10.163_unpacked`
 (`Scripts\ApplyConfirmedMisnames.java`) -- addresses re-demangled from the original community-label
-mangled string where possible (full namespace+signature, matching symbols-import fidelity) with a
+mangled string where possible (full namespace+signature, matching PDB-import fidelity) with a
 forced `setName(..., USER_DEFINED)` fallback. **13 were reverted** after a post-apply cross-check
 against CommonLibF4's own hand-authored headers (`CommonLibF4\include\`, the canonical copy) found
 that the OLD name was, in every one of the 13 cases, a real, exactly-matching member already
@@ -38,7 +38,7 @@ existing plugins.
 
 **Methodology lesson for next time:** cross-check candidates against CommonLibF4's own headers
 *before* applying, not after -- it would have caught these 13 before they were ever written to the
-Ghidra project, instead of requiring a revert pass. Two independent sources (1.10.155 named project +
+Ghidra project, instead of requiring a revert pass. Two independent sources (1.10.155 PDB +
 decompile) agreeing was NOT sufficient in these 13 cases; a third source (CommonLibF4's own
 hand-verified headers, when one exists for the class) should be checked first when available.
 
@@ -290,7 +290,7 @@ new evidence.**
 
 Important methodology finding: **the current CommonLib name was correct in these 63 cases** -- the 1.10.155 cross-reference match was misleading, usually because of one of these patterns (seen repeatedly across this list):
 - Case-only or abbreviation-only differences (lock vs Lock, SetHealthPercent vs SetHealthPerc) treated as a full name conflict
-- The 1.10.155 named project's mangled symbol embeds the SAME class CommonLib already used, just formatted differently
+- The 1.10.155 PDB's mangled symbol embeds the SAME class CommonLib already used, just formatted differently
 - Template/generic instantiations where the base pattern is shared across a whole family (Helper<T> for several T) and matches equally well under either label
 - A function with two real, correct names for two real overloads (GetOwner_1, a CommonLib disambiguation suffix, not a wrong guess)
 
@@ -349,7 +349,7 @@ Important methodology finding: **the current CommonLib name was correct in these
 | `0x1419FBEA0` | `_lua_pushnumber_hkbInternal___AXPEAUlua_State_1...` | `private static void __cdecl hkbLuaBase::hkReal_push(struct hkbInter...` | body is the identical TValue-push pattern for a float value, the literal real Lua lua_pushnumber implementation matching the EXISTING man... |
 | `0x1419FBEF0` | `_lua_pushinteger_hkbInternal___AXPEAUlua_State_...` | `private static void __cdecl hkbLuaBase::int_push(struct hkbInternal...` | body writes a TValue tag=3 (LUA_TNUMBER) and value then bumps the stack top pointer by 4 slots, the literal real Lua lua_pushinteger impl... |
 | `0x141A772F0` | `_getTickCounter_hkSystemClock___A_KXZ` | `public static unsigned __int64 __cdecl hkStopwatch::getTickCounter(...` | same literal mangled-symbol evidence as its sibling; body is a raw rdtsc read matching hkSystemClock::getTickCounter, a real Havok API |
-| `0x141A77300` | `_getTicksPerSecond_hkSystemClock___A_KXZ` | `public static unsigned __int64 __cdecl hkStopwatch::getTicksPerSeco...` | the EXISTING name is a literal symbols-mangled symbol embedding class scope hkSystemClock, and hkSystemClock::getTicksPerSecond is Havok's re... |
+| `0x141A77300` | `_getTicksPerSecond_hkSystemClock___A_KXZ` | `public static unsigned __int64 __cdecl hkStopwatch::getTicksPerSeco...` | the EXISTING name is a literal PDB-mangled symbol embedding class scope hkSystemClock, and hkSystemClock::getTicksPerSecond is Havok's re... |
 | `0x141A7EA90` | `hkMemorySystem::GarbageCollect` | `public virtual void __thiscall hkMemorySystem::garbageCollect(void)...` | body dispatches GarbageCollectThread/GarbageCollectShared vfuncs, identical behavior to what both GarbageCollect and garbageCollect descr... |
 | `0x141B0EC90` | `MemoryManager::AutoScrapBuffer::Ctor` | `public __thiscall MemoryManager::AutoScrapBuffer::AutoScrapBuffer(v...` | body sets ptr to a sentinel value, exactly a constructor as both Ctor and AutoScrapBuffer() describe |
 | `0x141B0ED40` | `MemoryManager::AutoScrapBuffer::Dtor` | `public __thiscall MemoryManager::AutoScrapBuffer::~AutoScrapBuffer(...` | body frees this->ptr via the thread scrap heap unless it's the sentinel, exactly a destructor as both Dtor and ~AutoScrapBuffer describe |
@@ -427,4 +427,4 @@ No confident call from the decompile alone. Two recurring shapes:
    zero plugin dependencies on any of the wrong names.
 2. Cross-reference the ~20 Havok hknpShape INCONCLUSIVE entries against Havok's public SDK interface headers (method order, not decompiled behavior) to resolve the vtable-slot-to-name mapping the decompile alone couldn't settle.
 3. The FOLDED_ALIAS discovery (COMDAT folding) is itself worth a short methodology note in 05-LABEL-RECOVERY.md or 03-FINDINGS.md for future disagreement-list passes -- it changes how a "disagreement" should be triaged before assuming either name is wrong.
-4. **New methodology note (from the apply pass):** before applying ANY future batch of decompile-verified renames, cross-check each candidate's OLD class against CommonLibF4's own headers (`CommonLibF4\include\RE\<A-Z>\<ClassName>.h` / `Scaleform\<A-Z>\...`) first -- if that class has a real, hand-authored header, treat it as a third, higher-priority source than either the 1.10.155 named project or a decompile-only read.
+4. **New methodology note (from the apply pass):** before applying ANY future batch of decompile-verified renames, cross-check each candidate's OLD class against CommonLibF4's own headers (`CommonLibF4\include\RE\<A-Z>\<ClassName>.h` / `Scaleform\<A-Z>\...`) first -- if that class has a real, hand-authored header, treat it as a third, higher-priority source than either the 1.10.155 PDB or a decompile-only read.

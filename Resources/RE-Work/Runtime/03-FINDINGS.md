@@ -96,8 +96,8 @@ prior entry for `ButtonInfo` / `MultiActivateManager`, so this is the first reco
 | 0x18 | 0x04 | `BUTTON_INDEX` (u32) | `ButtonInfo(BUTTON_INDEX)` ctor `0xb7b5b0` = `*(u32*)(this+0x18)=param_1`; default ctor writes sentinel 4; `operator==` `0xb7b600` compares it |
 | 0x1c | 0x01 | `bool valid` | ctors set `this[0x1c]=1`; `operator==`/`operator=` copy it as a byte; `OnButtonRelease` gates on `CMP byte ptr [RAX+RDI+0x1c],0` |
 
-`BUTTON_INDEX` is a 4-byte enum from the 1.10.155 private symbols type record
-(`/local symbols/MultiActivateManager/BUTTON_INDEX`), six entries -- 4 valid buttons plus a count
+`BUTTON_INDEX` is a 4-byte enum from the 1.10.155 private PDB type record
+(`/Fallout4.pdb/MultiActivateManager/BUTTON_INDEX`), six entries -- 4 valid buttons plus a count
 sentinel and one alias:
 
 | name | value |
@@ -1524,11 +1524,11 @@ hierarchy CommonLibF4's numbering runs ~3 low (it omits ~3 undocumented base vir
 (`ReferenceEffect::Init`) actually lives at raw slot 58. The audit's same-index comparison therefore
 misaligns per-class and produces spurious "mismatches."
 
-Verified two of the strongest candidates against the 155 named project (address-keyed = ground truth) — both
+Verified two of the strongest candidates against the 155 PDB (address-keyed = ground truth) — both
 DB names are **correct**, my audit was misaligned:
-- `ReferenceEffect` slot-58 DB name `Init`; 155 named project `ReferenceEffect::Init` @ `0xc7cdd0` (+0x10 skew
+- `ReferenceEffect` slot-58 DB name `Init`; 155 PDB `ReferenceEffect::Init` @ `0xc7cdd0` (+0x10 skew
   = 163 `0xc7cde0`). ✓ DB right.
-- `PipboyPlayerInfoData` slot-1 DB name `Populate`; 155 named project `PipboyPlayerInfoData::Populate` @
+- `PipboyPlayerInfoData` slot-1 DB name `Populate`; 155 PDB `PipboyPlayerInfoData::Populate` @
   `0xc3af20` (+0x10 = `0xc3af30`). ✓ DB right.
 
 Also flagged 26 abstract-interface classes (`IMovementState`, `BSISoundCategory`, …) as pure garbage
@@ -1539,7 +1539,7 @@ pointed at one `MSVCR110.DLL::GetPackageType` location).
 (e.g. renaming `ReferenceEffect::Init` → `Update3D`). hknpShape remains the only confirmed real shift,
 already fixed via the community crossref (which compares **address-keyed function identities** — the
 reliable method — not `// NN` slot numbers). **Lesson: to find real mis-slotting, compare against
-address-keyed sources (155 named project / community IDC labels), NOT CommonLibF4's `// NN` comments.** The
+address-keyed sources (155 PDB / community IDC labels), NOT CommonLibF4's `// NN` comments.** The
 audit tooling (`VtableAudit.java`) is kept but carries this documented limitation.
 
 ---
@@ -1547,21 +1547,21 @@ audit tooling (`VtableAudit.java`) is kept but carries this documented limitatio
 ## 2026-07-11 — ALL remaining inconclusive/deferred RE naming resolved (nothing left open)
 
 Closed out every remaining open naming thread from the cross-reference work, using a new
-**symbol-vtable-order resolution technique**: for any ambiguous vtable-slot name, dump the class's
-vtable from the 1.10.155 named project-named project (`??_7<Class>@@6B@` — full Microsoft private symbols =
+**PDB-vtable-order resolution technique**: for any ambiguous vtable-slot name, dump the class's
+vtable from the 1.10.155 PDB-named project (`??_7<Class>@@6B@` — full Microsoft private symbols =
 ground-truth slot→method order), align by slot index to the 163 vtable, and apply. Both builds put
 most vtables at the *same* VA and the per-function addresses differ by a consistent ~0x10 skew, so
 alignment is unambiguous. New scripts: `FindDumpVtable.java` (locate + dump any class's vtable),
 `CleanRename.java` (force-rename clearing colliding stray labels first).
 
-**hknpShape vtable (was ~20 INCONCLUSIVE "not implemented" stubs):** the 155 named project revealed the names
+**hknpShape vtable (was ~20 INCONCLUSIVE "not implemented" stubs):** the 155 PDB revealed the names
 sitting in the Ghidra project were *shifted by 4 slots* — the whole `[4]..[29]` block was mis-slotted.
 Applied the authoritative names to all 26 slots (`0x1414d85f0` = `hknpShape::getType`, `0x1414d8750` =
 `getNumberOfSupportVertices`, `0x1414d94d0` = `castRayImpl`, …).
 
 **⚠ IMPORTANT — the error was NOT in CommonLibF4, and this corrects a mischaracterization used loosely
 throughout these findings.** Cross-checked three sources at every slot [4]..[19]: **CommonLibF4's own
-header (`RE/H/hknpShape.h`, `// NN` slot comments), the 1.10.155 named project vtable, and what got applied — all
+header (`RE/H/hknpShape.h`, `// NN` slot comments), the 1.10.155 PDB vtable, and what got applied — all
 three agree perfectly.** CommonLibF4's header is *correct*. The 4-slot shift was introduced by the
 **doodlum `BethesdaGhidraScripts` RTTI-matcher** (`name_db_1.10.163_unpacked.py`) when it *applied*
 CommonLibF4's method list into the 163 Ghidra DB — it mis-counted the base-class slots and offset the
@@ -1581,7 +1581,7 @@ disagreements resolved by vtable order: `0x140FACD20` = `Explosion::InitLoadGame
 not the "SetCurrentScene" CommonLib claimed), `0x140BA3E20` = `PowerArmorModMenu::ShowCurrent3D`
 (155 slot [29], not "RenameCurrent").
 
-**The 2 held reassignments** (from the 202-pass) resolved by direct 155 named project address match (+0x10
+**The 2 held reassignments** (from the 202-pass) resolved by direct 155 PDB address match (+0x10
 skew): `0x140DE5F50` = `EquipActorOutfitItemsFunctor::operator()` (155 @ 0xde5f40),
 `0x140705990` = `BGSProcedureTreeConditionalItem::CreateExecState` (155 @ 0x705980). Both decoded
 names were right; the earlier INCONCLUSIVE was only because the decompiled bodies were broken
@@ -1595,7 +1595,7 @@ Bucket definitively closed, nothing to apply.
 Net: **41 more addresses authoritatively resolved + applied** (26 hknpShape + 13 non-Havok + 2 held),
 verified in the live DB. **Every INCONCLUSIVE / KEEP / deferred item from the entire cross-reference
 effort is now either applied or definitively closed — no open RE naming follow-ups remain.**
-Key reusable lesson: the 155-symbol-vtable-order technique is the definitive resolver for any
+Key reusable lesson: the 155-PDB-vtable-order technique is the definitive resolver for any
 "which method is this vtable slot" question the decompile alone can't answer.
 
 ---
@@ -1633,7 +1633,7 @@ safe-gap (`Begin`) fixes intact. Roadmap item 6 is now fully closed.
 
 Applied the "safe" tier from the 155-vs-163 cross-reference: addresses whose CURRENT name is a
 generic CommonLib/Ghidra placeholder (`Class::FuncN`, `_NNN`, `thunk_FUN_...`, empty `Class::`) getting
-filled with the 1.10.155-cross-referenced real name. `Scripts\ApplySafeGaps.java`, report in
+filled with the 1.10.155-PDB-cross-referenced real name. `Scripts\ApplySafeGaps.java`, report in
 `Organized\applied_safe_gaps.csv`.
 
 Of the 2,803 safe-gap candidates, first split by whether the decoded name's class MATCHES the
@@ -1648,7 +1648,7 @@ the same base-vs-derived / sibling-class ambiguity that caused all 13 misname re
   worth a decompile-verified follow-up (documented in `Organized\safe_gaps_deferred_reassignments.md`,
   and roadmap item 6).
 
-Lower confidence than the 137 misname fixes: these are cross-referenced, NOT decompile-verified —
+Lower confidence than the 137 misname fixes: these are PDB-cross-referenced, NOT decompile-verified —
 but they overwrite meaningless placeholders (`FuncN`), so even a slightly-off real name is strictly
 more informative, and the same-class filter removes the one error mode (wrong class) that actually
 matters. Disjoint from the misname set (placeholder-named vs specifically-named), verified intact
@@ -1689,14 +1689,14 @@ they are NOT safe with >1 worker regardless of the D3D11 finding.
 
 ## 2026-07-07 — CAVEAT: the original `fwgh_proj\BethesdaGhidraScripts` was built from a PACKED exe
 
-**Discovered while doing unrelated Version Tracking work against a separately-imported 1.10.155 named project
+**Discovered while doing unrelated Version Tracking work against a separately-imported 1.10.155 PDB
 project.** The `Fallout4.exe` copy that `fwgh_proj\BethesdaGhidraScripts` was imported from
 (`docs\Knowledge Materials\Reference\BethesdaGhidraScripts\exes\f4\og\Fallout4.exe`, SHA256
 `55F57947...`) has a Steam-DRM-wrapped/packed `.text` section, **not real code**. Confirmed via:
 
 - **Entropy:** `.text` reads ~8.0 bits/byte (indistinguishable from random data) across the *entire*
   44MB section, both in the raw exe file and inside the already-imported Ghidra program's own stored
-  bytes (real x86-64 code normally reads ~5.5–6.5 bits/byte — see the 1.10.155 named project project for
+  bytes (real x86-64 code normally reads ~5.5–6.5 bits/byte — see the 1.10.155 PDB project for
   comparison, which reads ~6.3). `.rdata` (vtables/RTTI/strings) reads normally (~4.23) in both files.
 - **Decompile sanity check:** three functions with "trusted" CommonLib-RTTI names —
   `PlayerCharacter::ServePrisonTime`, `TESObjectREFR::Predestroy`, `PlayerCharacter::GoToPrison` — all
@@ -1771,7 +1771,7 @@ side-quest's objective happened to be nearest, re-transitioning (CSS `0.13s` eas
 different one won. That reads as both "wrong quest" and "laggy."
 
 **How found:** per the user's request, searched `ReverseEngineering\Symbols\Fallout4_functions.txt`/`Fallout4_data.txt`
-(1.10.155 named project — names/signatures only, addresses don't transfer) for compass/quest-target symbols, then
+(1.10.155 PDB — names/signatures only, addresses don't transfer) for compass/quest-target symbols, then
 re-resolved every hit against the real 1.10.163 project (`fwgh_proj_1.10.163_unpacked`) via
 `FW_Query.java`/`DecompileAt.java` (a new helper, `ListFuncsInRange.java`, was added to enumerate
 functions in an address window when a template's `operator()` doesn't show up under a short-name
@@ -1795,7 +1795,7 @@ substring search). Decompiled the actual vanilla compass pipeline:
   that matters here).
 - `TESQuest::SetActive` (RVA `0x5d6ac0`) confirms the same bit is set/cleared symmetrically and fires a
   `TESQuestEvent::Event` notify — this is the exact bit the Pip-Boy's quest-log "Active" toggle
-  (`PipboyQuestMenu::ToggleQuestActiveStatus`, found via the symbol table) flips.
+  (`PipboyQuestMenu::ToggleQuestActiveStatus`, found via the PDB) flips.
 
 **Fix applied:** added `if ((obj->ownerQuest->data.flags & 0x0800) == 0) continue;` to
 `BuildCompassJSON()`'s objective loop, skipping any objective whose owning quest isn't Pip-Boy-tracked.
@@ -1943,7 +1943,7 @@ Full recovered table (all under `_root.`, prefix omitted):
 naming pass is just the scalar-deleting-destructor thunk (`~Class()` + optional `MemoryManager::Deallocate`),
 **not** `CanBeVisible()`/`UpdateDisplayObject()`/etc. — confirmed by decompiling `HUDComponentBase::Func1` and
 `HUDAmmoCounter::Func1` and finding identical dtor-thunk bodies at both. `CanBeVisible()` (a real per-widget
-virtual — see `HUDCompass::CanBeVisible`, `HUDActionPointMeter::CanBeVisible`, etc. in the 1.10.155 fully named
+virtual — see `HUDCompass::CanBeVisible`, `HUDActionPointMeter::CanBeVisible`, etc. in the 1.10.155 full-PDB
 symbol dump, `ReverseEngineering\Symbols\Fallout4_functions.txt`) is a much cleaner native suppression hook than SetVariable
 (survives any HUDMenu.swf reskin since it's a C++-side gate, not a Scaleform path) but its vtable slot isn't
 named in the 1.10.163 project — would need a fresh Ghidra vtable-layout query (walk `VTABLE_HUDCompass` slots)
@@ -2060,9 +2060,9 @@ COMDAT-folding + CommonLibF4-header-cross-check methodology notes in
 ## 2026-07-10 — Subsystem function index + 155-vs-163 disagreement cross-reference
 
 Built a full function export for the 1.10.163 project (365,059 functions — didn't exist as a flat
-dump before, only queryable) and bucketed both it and the 1.10.155 named project dump into 19 subsystem
+dump before, only queryable) and bucketed both it and the 1.10.155 PDB dump into 19 subsystem
 categories for browsability. Then cross-referenced all 40,073 `label_apply_disagreements.csv` rows
-(05-LABEL-RECOVERY.md §3) against the independent 1.10.155 named project name set — the same class of check
+(05-LABEL-RECOVERY.md §3) against the independent 1.10.155 PDB name set — the same class of check
 that already caught `PlayerCharacter::ServePrisonTime`/`GoToPrison` being wrong.
 
 **Result:** 313 candidate misnamed functions (specific CommonLib name, contradicted by an
@@ -2490,7 +2490,7 @@ Derivation method (no Ghidra project needed for the answers — pure PE analysis
 | `nsPipboy_LocalMap::LocalMapTexture` (g_localMapTex) | 0x5a67ec0 (1155495) | **0x327c208** | AE `RenderLocalMap`(`FUN_140adbba0`): lock→Render→"LocalMap" atexit→alloc 0x18 BSScaleformExternalTexture→store in `DAT_14327c208`→SetTexture. Structure-identical to OG `RenderLocalMap`@0xb88f50. |
 | `LocalMapRenderer::'scalar deleting destructor'` (DeleteRenderer) | 0xb8b980 (229144) | **UNRESOLVED** | No callers (only its `.pdata` entry), no vtable (LocalMapRenderer has none — 0 `.rdata` refs to Render/dtor/ctor), recompiled. Guarded off on AE (renderer kept+reused, freed at exit). |
 
-Wired in `PrismaUI_F4_NG_1.11.221_ISOLATED` as `REL::Offset{ ogRva, aeRva }` (per-runtime; slot order [OG,NG,AE] with trailing-repeat, and the paths are gated to OG||AE so the NG slot is never hit). Build-verified (PrismaUI_F4.dll links). Per-runtime RVAs must be re-verified on future game updates. (Reference RVAs only — the unpacked exe/symbols are never shipped; see the deploy/push guardrails.)
+Wired in `PrismaUI_F4_NG_1.11.221_ISOLATED` as `REL::Offset{ ogRva, aeRva }` (per-runtime; slot order [OG,NG,AE] with trailing-repeat, and the paths are gated to OG||AE so the NG slot is never hit). Build-verified (PrismaUI_F4.dll links). Per-runtime RVAs must be re-verified on future game updates. (Reference RVAs only — the unpacked exe/PDB are never shipped; see the deploy/push guardrails.)
 
 ---
 
@@ -2507,7 +2507,7 @@ with `crc32` = reflected 0xEDB88320 table, running value init **0**, **no final 
 the set's animation-folder prefixes (SAPT) joined by `|`.
 
 **How verified.**
-- Extracted the hash function from the 1.10.163 unpacked exe (symbols-mapped): `0x14afeb0` computes two
+- Extracted the hash function from the 1.10.163 unpacked exe (PDB-mapped): `0x14afeb0` computes two
   table-driven CRCs (table at RVA `0x2e0a930`, zlib polynomial) with init 0 and a bare `mov [out],esi`
   store — no final XOR. `0x14afc10` builds the high-half input by joining the set's prefix array with
   the separator string `"|"` (RVA `0x2c4c160`). The record constructor stores `lo | hi<<32`.

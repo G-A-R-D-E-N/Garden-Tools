@@ -231,4 +231,7 @@ explains that the sentinel raises are skipped.
 - `ghidra-dump/decompile-batch-support-1575a0-2e89460-6a3e60-487010.log`
   (setting wrapper, add wrapper, unhandled filter, CLI parser)
 - `ghidra-dump/decompile-ProcessRunner-0x4906a0.log`
+- `ghidra-dump/decompile-CompileTextExport-FUN_140916980.md`
+  (argument mapping, output-context status, root order, input/file-ID parsing,
+  recoverable diagnostics, and hard failure paths)
 - `ghidra-dump/CLI-DISPATCHER-FUN_1404870f0.txt`

@@ -7,17 +7,17 @@ copy ever gets lost, the "Rebuild from scratch" section at the bottom recreates 
 
 Two shell wrappers automate the headless-query dance (symlink + stale-lock cleanup +
 `analyzeHeadless -noanalysis`) and print just the script's own output. Both mirror the Windows
-wrappers' interface (`run_query.ps1` for 163, `run_query_155.ps1` for 155):
+wrappers' interface (`run_query.ps1` for 163, `run_pdb_query.ps1` for 155):
 
 | Project | Wrapper | Default script | Owner rewrite? |
 |---|---|---|---|
 | 1.10.163 `fwgh_proj_1.10.163_unpacked` | `Scripts/run_query_163.sh` | `FW_Query.java` | no (already `ciusr`) |
-| 1.10.155 named project `fwgh_proj_1.10.155` | `Scripts/run_query_155.sh` | `Query.java` | yes (`Game`→you, restored on exit) |
+| 1.10.155 PDB `fwgh_proj_1.10.155` | `Scripts/run_query_155.sh` | `PDB_Query.java` | yes (`Game`→you, restored on exit) |
 
 ```bash
 Scripts/run_query_163.sh "HUDCompass"                    # substring search
 Scripts/run_query_163.sh "decompile:NavMesh::Activate"   # decompile a function
-Scripts/run_query_155.sh -script Stats.java          # naming/health diagnostic
+Scripts/run_query_155.sh -script PDB_Stats.java          # naming/health diagnostic
 ```
 
 Per-project manual steps and failure reference: "Opening this project on Linux" below (163) and
@@ -37,7 +37,7 @@ some of *those* turned out wrong (see below).
 |-----------|------|-------|
 | **Project** | `E:\F4SE OG\ReverseEngineering\Projects\fwgh_proj_1.10.163_unpacked\` | Program name `Fallout4_163_unpacked`, program path `/Fallout4.exe.unpacked.exe`. Fresh import (not a clone/reimport of the old one — Ghidra ties analysis to the originally-imported bytes, a clean import was more reliable). |
 | **Source exe** | `E:\F4SE OG\ReverseEngineering\Symbols\1.10.163\Fallout4.exe.unpacked.exe` | Steamless-unpacked, 65,319,936 bytes, FileVersion/ProductVersion 1.10.163.0 (InternalName "Institute"), SHA256 `9A147A35686691AC6C52C2B3BC24027FC26119C2EB77716E10900AF29A61609E`. Verified distinct from both the packed original (`55F57947...`) and the 1.10.155 retail exe (`886D67FC...`). |
-| **`.text` entropy** | ~6.334 bits/byte | Matches the 1.10.155 named project project's 6.33 — confirmed real code, not packed. |
+| **`.text` entropy** | ~6.334 bits/byte | Matches the 1.10.155 PDB project's 6.33 — confirmed real code, not packed. |
 | **Naming: CommonLib RTTI pass** | 209,817 total functions, 14,824 scoped `Class::Method` | Re-ran `CommonLibImport_F4_OG.py` (via `scripts\name_db_1.10.163_unpacked.py`) fresh against the correct bytes. |
 | **Naming: community IDC labels** | 657,980 additional names applied, 40,073 disagreements logged | See "Community label recovery" below — a second, independent, version-exact naming source layered on top of CommonLib's names. |
 
@@ -57,7 +57,7 @@ Remove-Item "$projLoc\Fallout4_163_unpacked.lock" -Force -ErrorAction SilentlyCo
 ### Opening this project on Linux (path + unpacked-binary gotchas)
 
 Opened read-only on Linux 2026-08-13 (the `ButtonInfo` / `BUTTON_INDEX` work in `03-FINDINGS.md`).
-Unlike the 1.10.155 named project project, this one **does not need the owner rewrite** — its `project.prp`
+Unlike the 1.10.155 PDB project, this one **does not need the owner rewrite** — its `project.prp`
 already records `OWNER="ciusr"`, so it opens directly as the current user. (If a Windows checkout ever
 re-owns it to `Game`, the `NotOwnerException` workaround in
 [`Symbols/GHIDRA_PROJECT.md`](./Symbols/GHIDRA_PROJECT.md) applies the same way.)
@@ -82,10 +82,10 @@ re-owns it to `Game`, the `NotOwnerException` workaround in
    (encrypted `.text`) and must never be re-imported — this project exists precisely because of that.
    See the "USE THIS PROJECT" table above and `05-LABEL-RECOVERY.md`.
 
-3. **There is no debug file on this project.** 1.10.163 has no usable private symbols, so names came from the
-   CommonLib RTTI pass + community IDC labels, and `debugFileLoaded()` is false. Consequence: Ghidra's
+3. **There is no PDB on this project.** 1.10.163 has no usable private PDB, so names came from the
+   CommonLib RTTI pass + community IDC labels, and `isPdbLoaded()` is false. Consequence: Ghidra's
    enum/type records are demangler skeletons (name + size only, no enumerator values) — that is why
-   `BUTTON_INDEX`'s enumerator names had to be read from the 1.10.155 named project project instead.
+   `BUTTON_INDEX`'s enumerator names had to be read from the 1.10.155 PDB project instead.
 
 4. **Invocation** — always `-process -recursive -noanalysis` (never let a query re-run the multi-hour
    auto-analysis), and remove any stale `Fallout4_163_unpacked.lock` first:
@@ -97,8 +97,8 @@ re-owns it to `Game`, the `NotOwnerException` workaround in
      -scriptPath /tmp/fwgh_scripts -postScript DecompileAt.java b7b680
    ```
 
-   Query scripts for **this** project are `FW_Query.java` / `FW_Stats.java` (the `Query.java` /
-   `Stats.java` pair is 1.10.155-only); `DecompileAt.java`, `DisasmAt.java`, `DumpBytesAt.java` and
+   Query scripts for **this** project are `FW_Query.java` / `FW_Stats.java` (the `PDB_Query.java` /
+   `PDB_Stats.java` pair is 1.10.155-only); `DecompileAt.java`, `DisasmAt.java`, `DumpBytesAt.java` and
    `VTableDump.java` take raw 1.10.163 RVAs (hex, `0x` optional).
 
 ### Community label recovery (durable technique — reusable for future version gaps)
@@ -113,7 +113,7 @@ surrounding IDC syntax are plain. Decoded to `ReverseEngineering\Symbols\F4_1_10
 
 Applied via `scripts\ApplyDecodedLabels.java`, which:
 - Uses Ghidra's own demangler (`DemanglerUtil`/`DemangledObject.applyTo`) so applied names get proper
-  namespaces/signatures, the same mechanism symbol import uses — not bare labels.
+  namespaces/signatures, the same mechanism PDB import uses — not bare labels.
 - **Never silently overwrites an existing real (non-`FUN_`/`DAT_`) name.** If the CSV disagrees with an
   existing name at the same address, it logs the disagreement to a CSV report instead. This caught real
   errors in the original CommonLib RTTI matching — see `03-FINDINGS.md`'s 2026-07-07 entry for two
@@ -248,7 +248,7 @@ $exe  = "E:\F4SE OG\ReverseEngineering\Symbols\1.10.163\Fallout4.exe.unpacked.ex
 #    but errors "Directory not found" if the directory itself doesn't pre-exist).
 New-Item -ItemType Directory -Force $proj | Out-Null
 
-# 2. Import + full auto-analysis (piped blank stdin dodges the pause-hang gotcha above; no debug file for this
+# 2. Import + full auto-analysis (piped blank stdin dodges the pause-hang gotcha above; no PDB for this
 #    version, so no -preScript needed, unlike the 1.10.155 project in ReverseEngineering\Symbols\).
 "" | & $gh $proj "Fallout4_163_unpacked" -import $exe *> "$proj\import_analyze.log"
 # -> expect ~14 min, "REPORT: Analysis succeeded" / "Import succeeded" at the end.

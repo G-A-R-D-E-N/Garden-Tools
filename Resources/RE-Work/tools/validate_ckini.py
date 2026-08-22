@@ -17,10 +17,52 @@ Usage:
     python3 validate_ckini.py --stats        # type/section distribution
     python3 validate_ckini.py --command '-CompileTextExport:Fallout4.esm en Export Fallout4'
     python3 validate_ckini.py --command=-Install:  # no-argument switches
+    python3 validate_ckini.py --compile-text \
+        --command '-CompileTextExport:Fallout4.esm ENGLISH backup primary'
+    python3 validate_ckini.py --compile-text samples/compile-text/backup samples/compile-text/primary
+    # each run also prints ROUTE lines + a ROUTING SUMMARY predicting the
+    # .STRINGS / .DLSTRINGS / .ILSTRINGS output table per record
+    # combine with --strings to cross-check predictions against real outputs
+    # (the combined run also reports the per-table dialog-category
+    # composition, per language stem):
+    python3 validate_ckini.py --compile-text samples/compile-text/backup \
+        samples/compile-text/primary --strings '.../STRINGS'
+    # machine-consumable: routing predictions + cross-check verdicts as JSON
+    # (human-readable text suppressed; exit codes unchanged):
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS --json
+    # full 18-category breakdown in composition reports (not just the dialog
+    # set {1,6,7,10}); composition reports also flag routing anomalies as
+    # warnings (dialog ID in .STRINGS, ordinary ID in .DLSTRINGS,
+    # TextExport-derived ID in .ILSTRINGS):
+    python3 validate_ckini.py --strings '.../STRINGS' \
+        --text-export '.../TextExport.txt' --verbose
+    # write the per-language-stem composition to a deterministic JSON file
+    # (sorted keys, no timestamps) for CI diffing across runs:
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS \
+        --composition-out cross-check-composition.json
+    # diff the current composition against a saved one; prints only the
+    # changed stems and tables, exit 1 on drift:
+    python3 validate_ckini.py --compile-text \
+        samples/compile-text/cross-check/input \
+        --strings samples/compile-text/cross-check/STRINGS \
+        --composition-in cross-check/composition.golden.json
     python3 validate_ckini.py CreationKit.ini --exit-codes
+    python3 validate_ckini.py --strings \
+        '.../STRINGS/Fallout4_en.STRINGS' '.../STRINGS/Fallout4_en.DLSTRINGS'
+    python3 validate_ckini.py --strings '.../STRINGS'   # whole language dir
+    # attribute compiled IDs back to their TextExport categories, so the
+    # partition report also counts how many IDs per table came from each
+    # dialog category (indices {1,6,7,10} -> .DLSTRINGS):
+    python3 validate_ckini.py --strings '.../STRINGS' \
+        --text-export '.../TextExport.txt' ['.../more/TextExport.txt' ...]
 
-The descriptor table maps `bKey:Section` literals (1,629 in the shipped dump;
-doc 10 counts 1,641 records with static pointers). The type letter is the
+The descriptor table maps 1,629 colon-bearing `bKey:Section` literals plus
+25 byte-verified bare records (whose reader section is `[MAIN]`; doc 10 counts
+1,641 colon-bearing records with static pointers). The type letter is the
 FIRST character of the key name:
 
     b bool | c int8 | h int16 | i int32 | u uint32 | f float |
@@ -67,8 +109,10 @@ platform/MapInfo/PreVis enum checks.
 """
 
 import argparse
+import json
 import os
 import re
+import struct
 import sys
 
 DEFAULT_DESCRIPTORS = os.path.join(
@@ -91,18 +135,60 @@ TYPE_LETTERS = {
 }
 DEFAULT_SLANGUAGE = "ENGLISH"   # PTR_DAT_143b992d0 (not recovered; usual value)
 
+# The binary contains 25 INI SettingT records whose key literals have no
+# ``:Section`` suffix. FUN_1425c6690 supplies the reader's literal fallback
+# section ``MAIN`` for these records. They are not present in
+# ck-settings-keys.txt because that dump is the 1,629 colon-bearing literal
+# inventory; keep this correction here so the oracle's default schema matches
+# the actual descriptor records without changing the raw string dump.
+NO_SECTION_DESCRIPTORS = (
+    "iBatchWindowMaxRefSelectedRefresh",
+    "uFollowingCompanionFailsBeforeWarpAttempt",
+    "fFollowingCompanionFailsAtDistanceRatio",
+    "fFollowingCompanionPreferredWarpDistance",
+    "bEnableLipLookup",
+    "bSkipFurnitureMarkerVisualization",
+    "bPrimitivesOn",
+    "bUseWaterHDR",
+    "fPrecutMinStepHeight",
+    "sControlsRemapFile",
+    "fMaxBoneSpeedBeforeDefaultStiffness",
+    "bDefaultLandscape_WetnessControl_UseScreenSpaceReflections",
+    "fDefaultLandscape_WetnessControl_SpecScale",
+    "fDefaultLandscape_WetnessControl_SpecPowerScale",
+    "fDefaultLandscape_WetnessControl_SpecMin",
+    "fDefaultLandscape_WetnessControl_EnvMapScale",
+    "fDefaultLandscape_WetnessControl_FresnelPower",
+    "fDefaultLandscape_WetnessControl_Metalness",
+    "uMaxRainSplashPerFrame",
+    "uRainSplashBufferSize",
+    "bRainSplash",
+    "fMinSplashSize",
+    "fMaxSplashSize",
+    "fDensityDistModifier",
+    "fSkyCellRefFadeDistance",
+)
+
 
 # ---------------------------------------------------------------------------
 # Descriptor table
 # ---------------------------------------------------------------------------
 
-def parse_descriptors(path):
-    """Parse the `bKey:Section` literal list into a lookup table.
+def parse_descriptors(path, include_no_section=None):
+    """Parse the descriptor literal list into a lookup table.
 
-    Returns (by_key, by_lower) where:
+    A line containing ``:`` is split as ``key:section``. A bare line is
+    assigned the engine reader's fallback section ``MAIN``. For the shipped
+    CK descriptor dump, the 25 byte-verified bare records are appended from
+    ``NO_SECTION_DESCRIPTORS``; custom fixture tables are left untouched.
+
+    Returns (by_key, by_lower, descs) where:
       by_key   = {(section, key): descriptor-dict}   (canonical case)
       by_lower = {(section_lower, key_lower): descriptor-dict}
     """
+    if include_no_section is None:
+        include_no_section = (os.path.abspath(path) ==
+                              os.path.abspath(DEFAULT_DESCRIPTORS))
     descs = []
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -116,6 +202,15 @@ def parse_descriptors(path):
             descs.append({"key": key, "section": section,
                           "letter": key[:1] if key else "",
                           "descriptor": line})
+
+    if include_no_section:
+        present = {(d["section"].lower(), d["key"].lower()) for d in descs}
+        for key in NO_SECTION_DESCRIPTORS:
+            if ("main", key.lower()) not in present:
+                descs.append({"key": key, "section": "MAIN",
+                              "letter": key[:1] if key else "",
+                              "descriptor": key})
+
     by_key = {(d["section"], d["key"]): d for d in descs}
     by_lower = {(d["section"].lower(), d["key"].lower()): d for d in descs}
     return by_key, by_lower, descs
@@ -296,6 +391,35 @@ _WORLDSPACE_KIND = {"worldspace", "interior"}
 _MAPINFO_KIND = {"doors", "markers", "interiors"}
 _ANIMINFO_OPTIONS = {"--speed", "--stance", "--forceall"}
 
+# The 18-category table FUN_14091f3d0 walks at .rdata 0x143b9bef0 (doc 05 /
+# decompile-CompileTextExport-line-parser-FUN_14091f3d0.md). Index 17 (Misc)
+# is the parser's default when no _stricmp match is found.
+_TEXT_CATEGORIES = [
+    "Response Text", "Quest Stage Log Entry", "Quest Objective Display Text",
+    "Name", "Topic Text", "Game Setting", "Book", "Description",
+    "Faction Rank", "Note", "Message", "Message Box Button",
+    "Ammo Short Name", "Body Part Name", "Alternate Activation Text",
+    "Activate Choice Label", "Loading Screen Text", "Misc",
+]
+_TEXT_CATEGORIES_LOWER = [c.lower() for c in _TEXT_CATEGORIES]
+
+# The caller's ``0x4c2`` bit test (FUN_140916980) sends exactly these four
+# category indices to the dialog context; every other category goes to the
+# ordinary context. The third .ILSTRINGS context is fed by the supplemental
+# ID-named input files, not by a category name (doc 05 /
+# decompile-CompileTextExport-FUN_140916980.md).
+_TEXT_DIALOG_INDICES = {1, 6, 7, 10}
+
+# The parser's "reserved ID" prefix check: the engine skips the low 16 IDs
+# (0x00000000..0x0000000F, high 28 bits zero) with
+# ``Attempting to use reserved ID 0x%08X. Skipping.``
+_TEXT_RESERVED_LIMIT = 0x10
+
+# Doc 05 / FUN_14091f3d0: the reader replaces the first three tab bytes with
+# NUL delimiters. A record without three tabs has no text field and is parsed
+# as a malformed line; the producer emits exactly three tabs.
+_TEXT_TAB_COUNT = 3
+
 # Doc 19's raise-site matrix. The process result is unknown to a static INI
 # oracle, so raising branches report both reachable sentinel codes; the two
 # no-raise branches report the normal process-exit path instead.
@@ -368,6 +492,273 @@ def _quoted_helper(text):
 
 def _nonempty_tokens(tokens, label):
     return ["%s must not be empty" % label] if any(t == "" for t in tokens) else []
+
+
+_COMPILE_FIXTURE_README = ("CompileTextExport input fixtures live in "
+                            "tools/samples/compile-text/ (see its README.txt): "
+                            "primary and backup roots, mandatory TextExport.txt "
+                            "files, 8-hex-stem supplemental files, a malformed "
+                            "supplemental filename, duplicate IDs across roots, "
+                            "a reserved-ID record, an unknown category, and a "
+                            "malformed line.")
+
+
+def _text_root_record(raw_line):
+    """Return (string_id_or_None, category_or_None, notes).
+
+    Mirrors the four-field TextExport.txt record parser FUN_14091f3d0:
+    the first three tabs are structural delimiters, the StringID is parsed
+    as hexadecimal, an invalid/zero StringID yields no usable ID, and an
+    unknown category falls back to index 17 (Misc). Tabs after the third
+    delimiter are ordinary text. The caller decides how unknown categories
+    are routed; here they are surfaced as notes, never as errors.
+    """
+    parts = raw_line.split("\t")
+    if len(parts) < _TEXT_TAB_COUNT + 1:
+        return None, None, ["malformed line (fewer than %d tab fields)" % _TEXT_TAB_COUNT]
+    notes = []
+    m = re.match(r"^0x([0-9A-Fa-f]+)$", parts[0].strip())
+    if not m:
+        return None, None, notes + ["StringID field '%s' is not 0x<hex>" % parts[0].strip()]
+    string_id = int(m.group(1), 16) & 0xFFFFFFFF
+    category = parts[2].strip()
+    if category.lower() not in _TEXT_CATEGORIES_LOWER:
+        notes.append("unknown category '%s' -> falls back to Misc" % category)
+    return string_id, category, notes
+
+
+def _supplemental_id_from_filename(name):
+    """Derive the supplemental-file ID exactly like FUN_140916980.
+
+    The worker strips the final extension and requires the remaining stem to
+    be exactly 8 hexadecimal characters. Returns (id, None) or (None, reason).
+    """
+    stem = name.rsplit(".", 1)[0]
+    if len(stem) != 8:
+        return None, "stem '%s' is not 8 characters" % stem
+    if not re.fullmatch(r"[0-9A-Fa-f]{8}", stem):
+        return None, "stem '%s' is not 8 hexadecimal characters" % stem
+    return int(stem, 16), None
+
+
+def _esm_stem(esm):
+    """The output-name stem: input ESM name cut at its final dot (strrchr)."""
+    return esm.rsplit(".", 1)[0]
+
+
+def _compile_output_name(esm, language, ext):
+    """Output path Data/STRINGS/<stem>_<Language><ext> (doc 05 / FUN_14091aa30).
+
+    ``ext`` carries its leading dot (``.STRINGS`` etc.); the engine builds
+    the path as ``Data/%%s/%%s_%%s%%s`` (FUN_14091aa30).
+    """
+    return "Data\\STRINGS\\%s_%s%s" % (_esm_stem(esm), language, ext)
+
+
+def _compile_route(category, from_supplemental, esm, language):
+    """Predict the localized-string output table for one text record.
+
+    TextExport.txt records are routed by category: the dialog bitmask
+    indices {1,6,7,10} land in .DLSTRINGS, everything else in .STRINGS
+    (unknown categories fall back to Misc -> ordinary). Supplemental
+    ID-named files feed the .ILSTRINGS context regardless of category.
+    Returns (extension, output filename) for the record.
+    """
+    if from_supplemental:
+        ext = ".ILSTRINGS"
+    else:
+        cat = (category or "").strip().lower()
+        try:
+            idx = _TEXT_CATEGORIES_LOWER.index(cat)
+        except ValueError:
+            idx = len(_TEXT_CATEGORIES) - 1   # Misc default (index 17)
+        ext = ".DLSTRINGS" if idx in _TEXT_DIALOG_INDICES else ".STRINGS"
+    return ext, _compile_output_name(esm, language, ext)
+
+
+def check_compile_text_roots(esm, roots, language=None):
+    """Validate the CompileTextExport input-root set like FUN_140916980.
+
+    Returns (ok, lines, route_records, summary). For each root (traversed in
+    the engine's ``[backup,] primary`` order) the mandatory
+    ``<root>/<ESM>/TextExport.txt`` must exist; supplemental ``*.txt`` files
+    must carry an 8-hex-character ID stem. Records are parsed with the
+    four-field grammar: reserved IDs, duplicate IDs, unknown categories, and
+    malformed lines are the engine's skip/recovery diagnostics (warnings),
+    not hard failures.
+
+    ``route_records`` is the structured per-record list {id, ext, source,
+    category, output} consumed by the cross-check and --json; ``summary``
+    carries the structured diagnostics (reserved/duplicates/
+    unknown-categories/malformed-lines/supplemental-files/errors/
+    route_counts) for machine consumption.
+
+    ``language`` selects the output filename; when omitted (positional-root
+    mode) the DEFAULT_SLANGUAGE value is used so the routing predictions
+    still carry a concrete path.
+    """
+    if language is None:
+        language = DEFAULT_SLANGUAGE
+    lines = ["COMPILE-TEXT: FUN_140916980 input-root contract"]
+    if not esm:
+        lines.append("ERROR: no <ESMFilename> for the input path <root>/<ESM>/TextExport.txt")
+        return False, lines, [], {}
+    if not roots:
+        lines.append("ERROR: no input roots")
+        return False, lines, [], {}
+    lines.append("ESM: %s" % esm)
+    lines.append("LANGUAGE: %s" % language)
+    lines.append("ROOTS (traversal order [backup,] primary): %s" % ", ".join(roots))
+
+    seen_ids = {}          # string_id -> (label, line) first seen
+    reserved = []          # structured: {id, source}
+    duplicates = []        # structured: {id, source, first_seen}
+    malformed_lines = []   # structured: {source, note}
+    unknown_categories = []  # structured: {id, category, source}
+    supplemental_files = []  # structured: {file, id}
+    errors = []
+    warnings = []
+    routes = []            # per-record output-table predictions
+    route_records = []     # structured {id, ext, source, category, output}
+    route_counts = {}      # extension -> record count
+
+    for root in roots:
+        root_dir = os.path.abspath(root)
+        esm_dir = os.path.join(root_dir, esm)
+        mandatory = os.path.join(esm_dir, "TextExport.txt")
+        if not os.path.isfile(mandatory):
+            errors.append("mandatory input missing: %s" % mandatory)
+            continue
+        lines.append("ROOT %s: mandatory %s" % (root, mandatory))
+
+        # The worker derives each supplemental file's ID from its 8-hex stem
+        # and skips malformed names entirely (``Could not parse ID from
+        # filename: %s. Skipping.``); such files are never read. The third
+        # tuple slot marks the .ILSTRINGS feeder: supplemental ID-named files
+        # (TextExport.txt is the category-routed mandatory input).
+        reads = [("TextExport.txt", mandatory, False)]
+        try:
+            names = sorted(f for f in os.listdir(esm_dir)
+                           if f.lower().endswith(".txt") and f != "TextExport.txt")
+        except OSError as exc:
+            errors.append("could not list %s: %s" % (esm_dir, exc))
+            continue
+        for name in names:
+            file_id, reason = _supplemental_id_from_filename(name)
+            if reason:
+                warnings.append("Could not parse ID from filename: %s. Skipping (%s)" % (name, reason))
+                continue
+            lines.append("  supplemental %s -> file ID 0x%08X" % (name, file_id))
+            supplemental_files.append({"file": name, "id": file_id})
+            reads.append((name, os.path.join(esm_dir, name), True))
+
+        for fname, path, is_supplemental in reads:
+            label = "%s/%s" % (os.path.basename(root), fname)
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    for lineno, raw in enumerate(fh, 1):
+                        line = raw.rstrip("\r\n")
+                        if not line.strip() or line.lstrip().startswith(";"):
+                            continue
+                        string_id, category, notes = _text_root_record(line)
+                        # The unknown-category fallback is its own warning;
+                        # structural problems (bad StringID, missing tabs)
+                        # are the malformed-line diagnostics.
+                        structural = [n for n in notes
+                                      if not n.startswith("unknown category")]
+                        if structural:
+                            malformed_lines.append({
+                                "source": "%s:%d" % (label, lineno),
+                                "note": "; ".join(structural)})
+                        if string_id is None:
+                            continue
+                        # Reserved IDs are skipped before category routing,
+                        # exactly like the engine's reserved-ID branch.
+                        if string_id < _TEXT_RESERVED_LIMIT:
+                            reserved.append({"id": string_id,
+                                             "source": "%s:%d" % (label, lineno)})
+                            continue
+                        if category and category.lower() not in _TEXT_CATEGORIES_LOWER:
+                            unknown_categories.append({
+                                "id": string_id,
+                                "category": category,
+                                "source": "%s:%d" % (label, lineno)})
+                        first = seen_ids.get(string_id)
+                        if first is not None:
+                            duplicates.append({"id": string_id,
+                                               "source": "%s:%d" % (label, lineno),
+                                               "first_seen": first})
+                        else:
+                            seen_ids[string_id] = "%s:%d" % (label, lineno)
+                        # Output-table prediction (doc 05 / FUN_140916980
+                        # ``0x4c2`` dialog bitmask + supplemental .ILSTRINGS):
+                        # the compiler would write this record to exactly one
+                        # of the three Data\STRINGS files.
+                        ext, outname = _compile_route(category, is_supplemental,
+                                                      esm, language)
+                        routes.append("%s:%d: 0x%08X [%s] -> %s"
+                                      % (label, lineno, string_id,
+                                         (category or "").strip() or "(none)", outname))
+                        route_records.append({
+                            "id": string_id,
+                            "ext": ext,
+                            "source": "%s:%d" % (label, lineno),
+                            "category": (category or "").strip() or "(none)",
+                            "output": outname,
+                            "supplemental": is_supplemental,
+                        })
+                        route_counts[ext] = route_counts.get(ext, 0) + 1
+            except OSError as exc:
+                errors.append("could not read %s: %s" % (path, exc))
+
+    for item in reserved:
+        warnings.append("%s: Attempting to use reserved ID 0x%08X. Skipping."
+                        % (item["source"], item["id"]))
+    for item in duplicates:
+        warnings.append("Duplicate ID found: 0x%08X (%s; first seen %s)"
+                        % (item["id"], item["source"], item["first_seen"]))
+    for item in unknown_categories:
+        warnings.append("%s: unknown category '%s' -> falls back to Misc"
+                        % (item["source"], item["category"]))
+    for item in malformed_lines:
+        warnings.append("%s: %s" % (item["source"], item["note"]))
+    if not errors:
+        warnings.append("all diagnostics above are skip/recovery paths; the aggregate "
+                        "string table is built from %d unique IDs" % len(seen_ids))
+
+    lines.extend("ERROR: " + item for item in errors)
+    lines.extend("WARNING: " + item for item in warnings)
+
+    # Output-table prediction summary: every routed record lands in exactly
+    # one of the three Data\STRINGS files (doc 05 / localized-string-file
+    # format doc; FUN_140916980 ``0x4c2`` dialog bitmask for TextExport.txt
+    # records, .ILSTRINGS for supplemental ID-named inputs).
+    if routes:
+        lines.append("ROUTING (predicted output tables):")
+        lines.extend("  ROUTE: " + r for r in routes)
+        total = sum(route_counts.values())
+        lines.append("ROUTING SUMMARY: %d routed records -> %s" % (
+            total, ", ".join("%s=%d" % (k, v)
+                              for k, v in sorted(route_counts.items()))))
+
+    if not errors:
+        lines.append("VERDICT: PASS")
+    else:
+        lines.append("VERDICT: FAIL")
+    summary = {
+        "esm": esm,
+        "language": language,
+        "roots": roots,
+        "unique_ids": len(seen_ids),
+        "reserved": reserved,
+        "duplicates": duplicates,
+        "unknown_categories": unknown_categories,
+        "malformed_lines": malformed_lines,
+        "supplemental_files": supplemental_files,
+        "errors": list(errors),
+        "route_counts": dict(route_counts),
+    }
+    return not errors, lines, route_records, summary
 
 
 def _parse_compile_args(arg_text):
@@ -544,6 +935,724 @@ def lint_batch_command(command):
     else:
         lines.append("VERDICT: FAIL")
     return not errors, lines
+
+
+# ---------------------------------------------------------------------------
+# Localized-string files (.STRINGS / .DLSTRINGS / .ILSTRINGS)
+# ---------------------------------------------------------------------------
+# Byte-level format documented in
+# ghidra-dump/localized-string-file-format.md (writer FUN_14091d790, loader
+# FUN_140915000):
+#
+#     offset  size  field
+#     0x00    4     u32 numStrings
+#     0x04    4     u32 dataSize
+#     0x08    8*N   rows { u32 stringID; u32 offset; }   (N == numStrings)
+#     0x08+8N  D    data block (D == dataSize)
+#
+# invariant: len(file) == 8 + 8*numStrings + dataSize
+# table rows sorted ascending by stringID; offsets point into the data block
+# (insertion order, not ID order; identical text dedups to one offset).
+# .STRINGS      records:  NUL-terminated text, offset -> first byte
+# .DL/.ILSTRINGS records:  u32 len + text (len INCLUDES the trailing NUL),
+#                          offset -> the u32 len; block walks to EOF as
+#                          sum(4 + len).
+
+_STRINGS_KINDS = (".STRINGS", ".DLSTRINGS", ".ILSTRINGS")
+_STRINGS_MAX_ROWS = 10_000_000
+
+# Shipped Fallout 4 files (all 11 languages) contain exactly two stringIDs
+# that live in BOTH the .STRINGS and .DLSTRINGS tables: the Enclave
+# Creation-Club weapon/armor paint descriptions (English text in .STRINGS,
+# localized text in .DLSTRINGS). The engine tolerates the collision; the
+# "globally unique" rule is a writer invariant with these two known shipped
+# exceptions.
+_STRINGS_KNOWN_PARTITION_EXCEPTIONS = {0x36CB7, 0x36CB9}
+
+
+def _strings_kind(path):
+    """Return one of _STRINGS_KINDS (upper-cased) or None for a foreign file."""
+    base = os.path.basename(path)
+    upper = base.upper()
+    for kind in _STRINGS_KINDS:
+        if upper.endswith(kind):
+            return kind
+    return None
+
+
+def _strings_lang_stem(path):
+    """Group key: the '<ESM>_<Language>' stem shared by the three kinds."""
+    base = os.path.basename(path)
+    return base.rsplit(".", 1)[0].lower()
+
+
+def load_text_export_categories(paths):
+    """Build {stringID: canonical-category} from TextExport.txt file(s).
+
+    Reuses the four-field FUN_14091f3d0 record parser. Reserved IDs (below
+    0x10) are skipped exactly like the compiler, so they never show up as
+    attributed. Category names are canonicalized (case-insensitive match,
+    unknown -> Misc, the parser's index-17 default), so the dialog lookups
+    in the composition report are exact. A directory argument is walked
+    recursively for files named TextExport.txt. Unreadable paths surface as
+    warnings, not failures -- the map only enriches the --strings partition
+    report.
+
+    Returns (id_to_category, warnings).
+    """
+    id_to_cat = {}
+    warnings = []
+    for p in paths:
+        if os.path.isdir(p):
+            names = []
+            for root, _dirs, files in os.walk(p):
+                for name in files:
+                    if name.lower() == "textexport.txt":
+                        names.append(os.path.join(root, name))
+            if not names:
+                warnings.append("no TextExport.txt found under %s" % p)
+            files = sorted(names)
+        else:
+            files = [p]
+        for path in files:
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    for lineno, raw in enumerate(fh, 1):
+                        line = raw.rstrip("\r\n")
+                        if not line.strip() or line.lstrip().startswith(";"):
+                            continue
+                        string_id, category, notes = _text_root_record(line)
+                        if string_id is None:
+                            for n in notes:
+                                if not n.startswith("unknown category"):
+                                    warnings.append("%s:%d: %s"
+                                                    % (os.path.basename(path), lineno, n))
+                            continue
+                        if string_id < _TEXT_RESERVED_LIMIT:
+                            continue
+                        cat = (category or "").strip()
+                        try:
+                            cat = _TEXT_CATEGORIES[_TEXT_CATEGORIES_LOWER.index(cat.lower())]
+                        except ValueError:
+                            cat = _TEXT_CATEGORIES[-1]   # Misc fallback
+                        id_to_cat[string_id] = cat
+            except OSError as exc:
+                warnings.append("could not read %s: %s" % (path, exc))
+    return id_to_cat, warnings
+
+
+def _routing_anomaly(kind, category_idx, supplemental_ids, sid):
+    """Return a routing-anomaly reason for one (kind, category) attribution.
+
+    The engine's FUN_140916980 ``0x4c2`` bitmask routes the dialog
+    categories {1,6,7,10} to .DLSTRINGS and every other category to
+    .STRINGS; .ILSTRINGS is fed only by the supplemental ID-named inputs,
+    whose categories are unconstrained. ``supplemental_ids`` marks IDs with
+    supplemental provenance (combined mode); None means every attributed ID
+    is TextExport-derived, so any .ILSTRINGS attribution is anomalous.
+    Returns None when the attribution is clean.
+    """
+    if kind == ".STRINGS" and category_idx in _TEXT_DIALOG_INDICES:
+        return "dialog-category ID in .STRINGS (expected .DLSTRINGS)"
+    if kind == ".DLSTRINGS" and category_idx not in _TEXT_DIALOG_INDICES:
+        return "ordinary-category ID in .DLSTRINGS (expected .STRINGS)"
+    if kind == ".ILSTRINGS" and (supplemental_ids is None
+                                 or sid not in supplemental_ids):
+        return "TextExport-routed ID in .ILSTRINGS (supplemental-only table)"
+    return None
+
+
+def _composition_data(kind_ids, category_map, supplemental_ids=None):
+    """Structured per-table composition for one language stem.
+
+    Returns {kind: {ids, attributed, by_category, dialog, ordinary,
+    unattributed, anomalies}} for every non-empty table, where ``dialog``
+    counts the IDs attributed to categories {1,6,7,10} and ``anomalies``
+    lists routing violations {id, id_hex, category, reason}: a dialog ID in
+    .STRINGS, an ordinary ID in .DLSTRINGS, or a TextExport-derived ID in
+    .ILSTRINGS (the two known shipped partition exceptions are exempt).
+    ``kind_ids`` maps each of _STRINGS_KINDS to the list of compiled
+    stringIDs; ``category_map`` maps stringID -> canonical TextExport
+    category name; ``supplemental_ids`` marks supplemental-provenance IDs
+    (combined mode; None = all attributed IDs are TextExport-derived).
+    """
+    out = {}
+    for kind in _STRINGS_KINDS:
+        ids = kind_ids[kind]
+        if not ids:
+            continue
+        by_cat = {}
+        anomalies = []
+        for sid in ids:
+            cat = category_map.get(sid)
+            if cat is None:
+                continue
+            by_cat[cat] = by_cat.get(cat, 0) + 1
+            if sid in _STRINGS_KNOWN_PARTITION_EXCEPTIONS:
+                continue
+            try:
+                idx = _TEXT_CATEGORIES_LOWER.index(cat.lower())
+            except ValueError:
+                idx = len(_TEXT_CATEGORIES) - 1   # Misc fallback
+            reason = _routing_anomaly(kind, idx, supplemental_ids, sid)
+            if reason:
+                anomalies.append({"id": sid, "id_hex": "0x%08X" % sid,
+                                  "category": cat, "reason": reason})
+        attr = sum(by_cat.values())
+        dialog = sum(by_cat.get(_TEXT_CATEGORIES[i], 0)
+                     for i in _TEXT_DIALOG_INDICES)
+        out[kind] = {
+            "ids": len(ids),
+            "attributed": attr,
+            "by_category": dict(sorted(by_cat.items())),
+            "dialog": dialog,
+            "ordinary": attr - dialog,
+            "unattributed": len(ids) - attr,
+            "anomalies": anomalies,
+        }
+    return out
+
+
+def _composition_lines(header, kind_ids, category_map, verbose=False,
+                       supplemental_ids=None):
+    """Per-table dialog-category composition lines for one language stem.
+
+    Formats ``_composition_data`` for the human-readable report; the
+    structured dict is what --json emits. With ``verbose`` the per-table
+    report additionally lists all 18 category names with counts (canonical
+    order, zeros included). Routing anomalies (see ``_composition_data``)
+    are surfaced as per-table WARNING lines, capped at five per table.
+    Returns the lines to append, starting with ``header``.
+    """
+    lines = [header]
+    for kind, d in _composition_data(kind_ids, category_map,
+                                     supplemental_ids).items():
+        detail = []
+        if d["dialog"]:
+            parts = ["%s=%d" % (name, d["by_category"].get(name, 0))
+                     for name in (_TEXT_CATEGORIES[i]
+                                  for i in sorted(_TEXT_DIALOG_INDICES))
+                     if d["by_category"].get(name)]
+            detail.append("dialog-routed=%d (%s)" % (d["dialog"], ", ".join(parts)))
+        if d["ordinary"]:
+            detail.append("ordinary-routed=%d" % d["ordinary"])
+        if not detail:
+            detail.append("none attributed")
+        lines.append("  %s: %d IDs, %d attributed (%s), %d unattributed"
+                     % (kind, d["ids"], d["attributed"], "; ".join(detail),
+                        d["unattributed"]))
+        if verbose:
+            breakdown = ", ".join(
+                "%s=%d" % (name, d["by_category"].get(name, 0))
+                for name in _TEXT_CATEGORIES)
+            lines.append("    category breakdown: %s" % breakdown)
+        shown = d["anomalies"][:5]
+        for a in shown:
+            lines.append("    WARNING: routing anomaly: %s: %s (%s) %s"
+                         % (kind, a["id_hex"], a["category"], a["reason"]))
+        extra = len(d["anomalies"]) - len(shown)
+        if extra:
+            lines.append("    WARNING: ... and %d more routing anomaly(s) in %s"
+                         % (extra, kind))
+    return lines
+
+
+def write_composition_json(path, stems, meta, ok):
+    """Write the per-language-stem composition to a JSON file for CI diffing.
+
+    ``stems`` maps stem -> {kind: ``_composition_data`` dict}; ``meta`` is a
+    small context dict (source/esm/language/roots) folded into the payload.
+    The output is deterministic (sorted keys, no timestamps), so the file
+    can be committed and diffed across runs. Returns an error message, or
+    None on success.
+    """
+    payload = {
+        "tool": "validate_ckini",
+        "mode": "composition",
+        "verdict": "PASS" if ok else "FAIL",
+        "anomaly_count": sum(len(kind.get("anomalies", []))
+                              for stem in stems.values()
+                              for kind in stem.values()),
+    }
+    payload.update(meta)
+    payload["stems"] = stems
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    except OSError as exc:
+        return "could not write %s: %s" % (path, exc)
+    return None
+
+
+def load_composition_file(path):
+    """Load a --composition-out payload; return (stems_map, error-or-None).
+
+    Accepts either a full write_composition_json payload (has a ``stems``
+    object) or a bare {stem: {kind: dict}} map.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except OSError as exc:
+        return None, "could not read %s: %s" % (path, exc)
+    except ValueError as exc:
+        return None, "%s is not valid JSON: %s" % (path, exc)
+    if not isinstance(payload, dict):
+        return None, "%s does not look like a composition payload (not an object)" % path
+    if "stems" in payload and isinstance(payload["stems"], dict):
+        return payload["stems"], None
+    return payload, None
+
+
+def _fmt_diff_value(value):
+    """Render a changed field value compactly (anomalies -> id list)."""
+    if isinstance(value, list):
+        if value and all(isinstance(x, dict) and "id_hex" in x for x in value):
+            return "[%s]" % ", ".join(x["id_hex"] for x in value)
+        return repr(value)
+    return repr(value)
+
+
+def _diff_dicts(before, after, path, out):
+    """Recursively collect changed/added/removed leaf paths between two dicts."""
+    for key in sorted(set(before) | set(after)):
+        p = "%s.%s" % (path, key)
+        bv, av = before.get(key), after.get(key)
+        if key not in before:
+            out.append("ADD %s = %s" % (p, _fmt_diff_value(av)))
+        elif key not in after:
+            out.append("DEL %s = %s" % (p, _fmt_diff_value(bv)))
+        elif isinstance(bv, dict) and isinstance(av, dict):
+            _diff_dicts(bv, av, p, out)
+        elif bv != av:
+            out.append("CHG %s: %s -> %s" % (p, _fmt_diff_value(bv),
+                                              _fmt_diff_value(av)))
+
+
+def diff_composition(baseline, current):
+    """Diff two stem maps; return (drifted, report-lines).
+
+    Reports only the changed stems and tables (added/removed stems and
+    tables, plus per-table changed fields); unchanged stems are summarized
+    as a count, never listed.
+    """
+    added = sorted(set(current) - set(baseline))
+    removed = sorted(set(baseline) - set(current))
+    common = sorted(set(baseline) & set(current))
+    lines = []
+    changed = 0
+    for stem in removed:
+        lines.append("  REMOVED stem: %s" % stem)
+    for stem in added:
+        lines.append("  ADDED stem: %s" % stem)
+    for stem in common:
+        before, after = baseline[stem], current[stem]
+        diffs = []
+        for table in sorted(set(before) - set(after)):
+            diffs.append("    REMOVED table: %s" % table)
+        for table in sorted(set(after) - set(before)):
+            diffs.append("    ADDED table: %s" % table)
+        for table in sorted(set(before) & set(after)):
+            out = []
+            _diff_dicts(before[table], after[table], table, out)
+            diffs.extend("    " + line for line in out)
+        if diffs:
+            changed += 1
+            lines.append("  CHANGED stem %s:" % stem)
+            lines.extend(diffs)
+    drifted = bool(added or removed or changed)
+    if not drifted:
+        lines.append("  (no changes: %d stem(s) identical)" % len(common))
+        lines.append("VERDICT: IDENTICAL")
+    else:
+        lines.append("VERDICT: DRIFT (%d stem(s) changed, %d added, %d removed)"
+                     % (changed, len(added), len(removed)))
+    return drifted, lines
+
+
+def _emit_composition_diff(composition_in, stems):
+    """Print the drift report vs --composition-in; return the exit code."""
+    baseline, err = load_composition_file(composition_in)
+    if err:
+        print("ERROR: " + err)
+        return 2
+    drifted, lines = diff_composition(baseline, stems)
+    print("COMPOSITION-DIFF vs %s:" % composition_in)
+    print("\n".join(lines))
+    return 1 if drifted else 0
+
+
+def check_strings_file(path):
+    """Validate one localized-string file; return (ok, lines)."""
+    kind = _strings_kind(path)
+    lines = ["STRINGS %s [%s]" % (os.path.basename(path), kind)]
+    if kind is None:
+        return False, lines + ["ERROR: extension is not .STRINGS/.DLSTRINGS/.ILSTRINGS"]
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError as exc:
+        return False, lines + ["ERROR: %s" % exc]
+    errors, warnings, notes = [], [], []
+
+    if len(data) < 8:
+        errors.append("file is %d bytes, shorter than the 8-byte header" % len(data))
+        return False, lines + ["ERROR: " + e for e in errors]
+
+    num_strings, data_size = struct.unpack_from("<II", data, 0)
+    table_size = 8 * num_strings
+    file_expected = 8 + table_size + data_size
+    if num_strings > _STRINGS_MAX_ROWS:
+        errors.append("numStrings %d exceeds the %d-row sanity bound"
+                      % (num_strings, _STRINGS_MAX_ROWS))
+    if file_expected != len(data):
+        errors.append("size invariant violated: file is %d bytes, "
+                      "8 + 8*numStrings(%d) + dataSize(%d) = %d"
+                      % (len(data), num_strings, data_size, file_expected))
+    if len(data) < 8 + table_size:
+        errors.append("file ends inside the offset table "
+                      "(need %d bytes for %d rows)" % (8 + table_size, num_strings))
+    if errors:
+        return False, lines + ["ERROR: " + e for e in errors]
+
+    notes.append("numStrings=%d dataSize=%d (invariant holds)" % (num_strings, data_size))
+    rows = [struct.unpack_from("<II", data, 8 + 8 * i) for i in range(num_strings)]
+    ids = [r[0] for r in rows]
+
+    # Table rows must be sorted ascending by stringID (writer FUN_1409186d0).
+    if any(a >= b for a, b in zip(ids, ids[1:])):
+        first_bad = next(i for i in range(1, len(ids))
+                         if ids[i] <= ids[i - 1])
+        warnings.append("offset table not strictly ascending by stringID "
+                        "(first violation at row %d: 0x%08X -> 0x%08X)"
+                        % (first_bad, ids[first_bad - 1], ids[first_bad]))
+    elif num_strings > 1 and ids[0] == ids[-1]:
+        warnings.append("all %d rows share one stringID 0x%08X"
+                        % (num_strings, ids[0]))
+
+    # Offsets must point inside the data block.
+    data_block = data[8 + table_size:]
+    bad_off = ["0x%08X@0x%x" % (r[0], r[1]) for r in rows if r[1] >= data_size]
+    if bad_off:
+        errors.append("%d offset(s) outside data block: %s"
+                      % (len(bad_off), ", ".join(bad_off[:8])))
+    unique_offs = sorted({r[1] for r in rows})
+
+    if kind == ".STRINGS":
+        # NUL-terminated: every offset must point at a string with a NUL
+        # before the block end.
+        if not errors:
+            for off in unique_offs:
+                nul = data_block.find(b"\x00", off)
+                if nul < 0:
+                    errors.append("no NUL terminator for offset 0x%x" % off)
+                    break
+        if not errors:
+            lens = [data_block.find(b"\x00", off) - off for off in unique_offs]
+            empty = sum(1 for l in lens if l == 0)
+            notes.append("%d unique offsets, %d empty string(s), "
+                         "max text length %d" % (len(unique_offs), empty, max(lens)))
+    else:
+        # Length-prefixed: offset must land on a record boundary and the data
+        # block must walk to EOF as sum(4 + len). len INCLUDES the NUL.
+        boundaries = {}
+        pos = 0
+        while pos < len(data_block) and not errors:
+            if pos + 4 > len(data_block):
+                errors.append("record header overruns data block at 0x%x" % pos)
+                break
+            rec_len = struct.unpack_from("<I", data_block, pos)[0]
+            if pos + 4 + rec_len > len(data_block):
+                errors.append("record at 0x%x (len %d) overruns data block"
+                              % (pos, rec_len))
+                break
+            if data_block[pos + 4 + rec_len - 1] != 0:
+                warnings.append("record at 0x%x (len %d) is not NUL-terminated"
+                                % (pos, rec_len))
+            boundaries[pos] = rec_len
+            pos += 4 + rec_len
+        if not errors and pos != len(data_block):
+            errors.append("data block does not walk to EOF: ended at 0x%x of 0x%x"
+                          % (pos, len(data_block)))
+        if not errors:
+            off_records = [r for r in rows if r[1] not in boundaries]
+            if off_records:
+                errors.append("%d table offset(s) not on a record boundary: %s"
+                              % (len(off_records),
+                                 ", ".join("0x%08X@0x%x" % r for r in off_records[:8])))
+        if not errors:
+            notes.append("%d unique offsets, %d data records, "
+                         "block walks to EOF as sum(4+len)"
+                         % (len(unique_offs), len(boundaries)))
+
+    lines.extend("NOTE: " + n for n in notes)
+    lines.extend("WARNING: " + w for w in warnings)
+    lines.extend("ERROR: " + e for e in errors)
+    if not errors:
+        lines.append("VERDICT: PASS")
+    else:
+        lines.append("VERDICT: FAIL")
+    return not errors, lines
+
+
+def check_strings_files(paths, category_map=None, verbose=False):
+    """Validate .STRINGS/.DLSTRINGS/.ILSTRINGS files (or directories of them).
+
+    Returns (ok, lines, composition). Directories are scanned for the three
+    kinds. When several files share the same ``<ESM>_<Language>`` stem,
+    their stringID sets are cross-checked for the global-uniqueness
+    partition (a string ID lives in exactly one of the three tables).
+
+    ``category_map`` (optional) maps stringID -> canonical TextExport
+    category name (see ``load_text_export_categories``). When supplied, the
+    per-stem report also counts, for every table, how many of its IDs were
+    routed from each dialog category (indices {1,6,7,10} -> .DLSTRINGS per
+    FUN_140916980's 0x4c2 bitmask) versus the ordinary categories, flags
+    routing anomalies as warnings (dialog ID in .STRINGS, ordinary ID in
+    .DLSTRINGS, TextExport-derived ID in .ILSTRINGS), and -- with
+    ``verbose`` -- lists the full 18-category breakdown for every table.
+    """
+    files = []
+    for p in paths:
+        if os.path.isdir(p):
+            for name in sorted(os.listdir(p)):
+                full = os.path.join(p, name)
+                if os.path.isfile(full) and _strings_kind(full):
+                    files.append(full)
+        else:
+            files.append(p)
+    if not files:
+        return False, ["STRINGS: no .STRINGS/.DLSTRINGS/.ILSTRINGS files found"]
+
+    lines = ["STRINGS: localized-string file validation (format doc: "
+             "ghidra-dump/localized-string-file-format.md)"]
+    by_stem = {}
+    overall_ok = True
+    composition = {}         # stem -> _composition_data dict (for --composition-out)
+    for path in sorted(files):
+        ok, sub = check_strings_file(path)
+        lines.extend(sub)
+        lines.append("")
+        overall_ok = overall_ok and ok
+        if _strings_kind(path):
+            by_stem.setdefault(_strings_lang_stem(path), []).append(path)
+
+    # Cross-file ID partition per language stem: a stringID must appear in
+    # exactly one table. The routed-record composition (when TextExport
+    # categories are available) is reported for every stem, including stems
+    # that hold a single file.
+    for stem, group in sorted(by_stem.items()):
+        kind_ids = {k: [] for k in _STRINGS_KINDS}
+        for path in group:
+            kind = _strings_kind(path)
+            with open(path, "rb") as fh:
+                head = fh.read(8)
+            if len(head) < 8:
+                continue
+            num, _ = struct.unpack_from("<II", head, 0)
+            with open(path, "rb") as fh:
+                data = fh.read()
+            for i in range(num):
+                sid, _ = struct.unpack_from("<II", data, 8 + 8 * i)
+                kind_ids[kind].append(sid)
+
+        if len(group) >= 2:
+            seen = {}
+            collisions = []
+            for kind, ids in kind_ids.items():
+                for sid in ids:
+                    if sid in seen and seen[sid] != kind:
+                        collisions.append("0x%08X in both %s and %s"
+                                          % (sid, seen[sid], kind))
+                    seen.setdefault(sid, kind)
+            if collisions:
+                known = [c for c in collisions
+                         if int(c.split(" ")[0], 16) in _STRINGS_KNOWN_PARTITION_EXCEPTIONS]
+                if len(known) == len(collisions):
+                    lines.append("WARNING: STRINGS %s: %d known shipped exception(s) "
+                                 "(Enclave Creation-Club paints, present in every language): %s"
+                                 % (stem, len(collisions), "; ".join(collisions)))
+                else:
+                    overall_ok = False
+                    lines.append("STRINGS %s: stringID partition violated (%d collision(s)): %s"
+                                 % (stem, len(collisions), "; ".join(collisions[:6])))
+            else:
+                lines.append("STRINGS %s: %d files, stringID partition holds "
+                             "(%d unique IDs)" % (stem, len(group), len(seen)))
+
+        # Routed-record composition per table: how many of this stem's
+        # compiled IDs came from each dialog category (indices {1,6,7,10})
+        # versus the ordinary categories, attributed via TextExport records.
+        if category_map:
+            total = sum(len(ids) for ids in kind_ids.values())
+            composition[stem] = _composition_data(kind_ids, category_map)
+            lines.extend(_composition_lines(
+                "STRINGS %s: TextExport routed-record composition "
+                "(%d IDs across %d file(s))" % (stem, total, len(group)),
+                kind_ids, category_map, verbose))
+
+    lines.append("VERDICT: %s" % ("PASS" if overall_ok else "FAIL"))
+    return overall_ok, lines, composition
+
+
+def _load_strings_ids(path):
+    """Return {stringID: kind} for one compiled localized-string file.
+
+    Reuses the same header/table parse as check_strings_file; returns {}
+    for unreadable or foreign files so callers can treat them as absent.
+    """
+    kind = _strings_kind(path)
+    if kind is None:
+        return {}
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError:
+        return {}
+    if len(data) < 8:
+        return {}
+    num, _ = struct.unpack_from("<II", data, 0)
+    if num > _STRINGS_MAX_ROWS or len(data) < 8 + 8 * num:
+        return {}
+    ids = {}
+    for i in range(num):
+        sid, _ = struct.unpack_from("<II", data, 8 + 8 * i)
+        ids[sid] = kind
+    return ids
+
+
+def cross_check_compile_routes(route_records, strings_paths, esm, language,
+                               verbose=False):
+    """Verify each predicted output table against real compiled string files.
+
+    Returns (ok, lines, summary). ``strings_paths`` may mix files and
+    directories; only files whose ``<ESM>_<Language>`` stem matches the
+    compile's esm/language (or the default language when none was given) are
+    considered. For every routed record the ID must be present in the
+    predicted table; a record found in a *different* table is a routing
+    discrepancy (hard failure), and a record missing from all matching
+    compiled files is a warning (the compiled set may predate the export).
+
+    ``summary`` is the structured machine-consumable result: matched file
+    names, per-record verdicts {id, category, source, predicted_ext,
+    present_in, verdict}, verdict counts, and the per-language-stem
+    composition (``_composition_data`` dicts, whose per-kind ``anomalies``
+    list routing violations). ``verbose`` adds the full 18-category
+    breakdown to the human-readable composition lines.
+    """
+    files = []
+    for p in strings_paths:
+        if os.path.isdir(p):
+            for name in sorted(os.listdir(p)):
+                full = os.path.join(p, name)
+                if os.path.isfile(full) and _strings_kind(full):
+                    files.append(full)
+        else:
+            files.append(p)
+
+    # Match compiled files by ESM stem prefix: shipped files use language
+    # codes (Fallout4_en.STRINGS) while the CLI language argument may be a
+    # full name (ENGLISH), so match <stem>_* rather than the exact spelling.
+    prefix = _esm_stem(esm).lower() + "_"
+    matching = [f for f in files if _strings_lang_stem(f).startswith(prefix)]
+    if not matching:
+        lines = ["CROSS-CHECK: no compiled %s* string files match the compile "
+                 "(esm=%s language=%s); skipped" % (_esm_stem(esm), esm, language)]
+        empty = {"files": [], "records": [], "match_count": 0,
+                 "mismatch_count": 0, "warning_count": 0, "composition": {}}
+        return True, lines, empty
+
+    by_kind = {k: {} for k in _STRINGS_KINDS}
+    for path in sorted(matching):
+        ids = _load_strings_ids(path)
+        by_kind[_strings_kind(path)].update(ids)
+
+    if len(matching) <= 4:
+        file_list = ", ".join(os.path.basename(f) for f in sorted(matching))
+    else:
+        file_list = "%d files (first: %s ...)" % (
+            len(matching), ", ".join(os.path.basename(f)
+                                     for f in sorted(matching)[:3]))
+    lines = ["CROSS-CHECK: predicted output tables vs compiled files (%s):"
+             % file_list]
+    ok = True
+    matched = 0
+    results = []
+    for rec in route_records:
+        sid = rec["id"]
+        predicted = rec["ext"]
+        present = [k for k in _STRINGS_KINDS if sid in by_kind[k]]
+        if predicted in present:
+            verdict = "MATCH"
+            matched += 1
+        elif present:
+            verdict = "MISMATCH"
+            ok = False
+        else:
+            verdict = "WARNING"
+        results.append({
+            "id": sid,
+            "id_hex": "0x%08X" % sid,
+            "category": rec["category"],
+            "source": rec["source"],
+            "predicted_ext": predicted,
+            "present_in": present,
+            "verdict": verdict,
+        })
+
+    if matched:
+        lines.append("  MATCH: %d record(s) present in their predicted table" % matched)
+    for r in results:
+        if r["verdict"] == "MISMATCH":
+            lines.append("  MISMATCH: %s: 0x%08X [%s] predicted %s but found in %s"
+                         % (r["source"], r["id"], r["category"],
+                            r["predicted_ext"], ",".join(r["present_in"])))
+    for r in results:
+        if r["verdict"] == "WARNING":
+            lines.append("  WARNING: %s: 0x%08X [%s] not in any compiled table"
+                         % (r["source"], r["id"], r["category"]))
+
+    # Per-table dialog-category composition: attribute every compiled ID
+    # back to its routed record's category (canonicalized like the
+    # TextExport parser; unknown/empty -> Misc). Reported per language stem
+    # so a multi-language compiled set does not double-count the same IDs.
+    cat_map = {}
+    supplemental_ids = set()
+    for rec in route_records:
+        cat = (rec["category"] or "").strip()
+        try:
+            cat = _TEXT_CATEGORIES[_TEXT_CATEGORIES_LOWER.index(cat.lower())]
+        except ValueError:
+            cat = _TEXT_CATEGORIES[-1]   # Misc fallback
+        cat_map[rec["id"]] = cat
+        if rec.get("supplemental"):
+            supplemental_ids.add(rec["id"])
+    stems = {}
+    for path in sorted(matching):
+        stems.setdefault(_strings_lang_stem(path), []).append(path)
+    composition = {}
+    for stem in sorted(stems):
+        kind_ids = {k: [] for k in _STRINGS_KINDS}
+        for path in stems[stem]:
+            ids = _load_strings_ids(path)
+            kind_ids[_strings_kind(path)].extend(ids.keys())
+        composition[stem] = _composition_data(kind_ids, cat_map, supplemental_ids)
+        lines.extend(_composition_lines(
+            "COMPOSITION %s: %d routed IDs, per compiled table by "
+            "routed-record category (dialog set {1,6,7,10} -> .DLSTRINGS)"
+            % (stem, len(route_records)), kind_ids, cat_map, verbose,
+            supplemental_ids))
+
+    summary = {
+        "files": [os.path.basename(f) for f in sorted(matching)],
+        "records": results,
+        "match_count": matched,
+        "mismatch_count": sum(1 for r in results if r["verdict"] == "MISMATCH"),
+        "warning_count": sum(1 for r in results if r["verdict"] == "WARNING"),
+        "composition": composition,
+    }
+    lines.append("VERDICT: %s" % ("PASS" if ok else "FAIL"))
+    return ok, lines, summary
 
 
 # ---------------------------------------------------------------------------
@@ -774,7 +1883,191 @@ def main(argv):
                     help="lint one CK batch command against the doc-05/13 grammar (use --command= for a no-arg switch)")
     ap.add_argument("--exit-codes", action="store_true",
                     help="replay doc 19's 31-switch exit-code matrix; requires the INI gate to be enabled")
+    ap.add_argument("--compile-text", nargs="*", default=None, metavar="ROOT",
+                    help="validate CompileTextExport input roots (mandatory TextExport.txt, "
+                         "8-hex supplemental stems, duplicate/reserved IDs, categories). "
+                         "When --command is also given, the roots are taken from the command; "
+                         "otherwise the positional ROOT directories are used. Fixtures: "
+                         "tools/samples/compile-text/")
+    ap.add_argument("--strings", nargs="*", default=None, metavar="PATH",
+                    help="validate compiled localized-string files (.STRINGS/.DLSTRINGS/"
+                         ".ILSTRINGS) or directories of them against the byte format from "
+                         "ghidra-dump/localized-string-file-format.md: header/size invariant, "
+                         "sorted ID table, offset bounds, per-kind record encoding, and the "
+                         "per-language stringID partition. Combined with --compile-text, "
+                         "cross-checks the predicted output tables against the compiled "
+                         "files and reports the per-table dialog-category composition per "
+                         "language stem (no --text-export needed there). With --text-export, "
+                         "the partition report also counts how many IDs per table came from "
+                         "each dialog category. Real samples: "
+                         ".../TEMP_BSA_FILES/*/STRINGS/")
+    ap.add_argument("--text-export", nargs="*", default=None, metavar="FILE",
+                    help="TextExport.txt file(s) (or directories walked for them) whose "
+                         "records attribute compiled string IDs back to their source "
+                         "category in the --strings partition report (dialog categories "
+                         "{1,6,7,10} -> .DLSTRINGS per FUN_140916980)")
+    ap.add_argument("--json", action="store_true",
+                    help="emit the compile-text routing predictions and, when combined "
+                         "with --strings, the cross-check verdicts and per-language "
+                         "composition as structured JSON on stdout (human-readable text "
+                         "is suppressed; exit codes unchanged)")
+    ap.add_argument("--verbose", action="store_true",
+                    help="in composition reports (--strings with --text-export, or "
+                         "combined --compile-text --strings) list all 18 TextExport "
+                         "categories with counts per table, not just the dialog set "
+                         "{1,6,7,10}")
+    ap.add_argument("--composition-out", metavar="FILE", default=None,
+                    help="write the per-language-stem composition (per-table counts, "
+                         "dialog/ordinary splits, routing anomalies) to FILE as "
+                         "deterministic JSON for CI diffing; requires --strings with "
+                         "--text-export, or --compile-text combined with --strings "
+                         "(the normal text report still prints to stdout)")
+    ap.add_argument("--composition-in", metavar="FILE", default=None,
+                    help="diff the current run's per-language-stem composition against "
+                         "a --composition-out JSON file (e.g. a committed golden file) "
+                         "and print only the changed stems and tables; exit 1 on drift, "
+                         "0 when identical (replaces the normal text report on stdout)")
     args = ap.parse_args(argv)
+
+    if args.json and args.compile_text is None:
+        ap.error("--json requires --compile-text (optionally with --strings)")
+    if args.composition_in is not None or args.composition_out is not None:
+        has_comp = ((args.strings is not None and args.text_export) or
+                    (args.compile_text is not None and args.strings is not None))
+        if not has_comp:
+            ap.error("--composition-in/--composition-out requires composition data: "
+                     "--strings with --text-export, or --compile-text combined with "
+                     "--strings")
+    if args.json and args.composition_in is not None:
+        ap.error("--json cannot be combined with --composition-in (the drift report "
+                 "replaces the JSON payload on stdout)")
+
+    if args.strings is not None and args.compile_text is None:
+        # Standalone --strings validation. When --compile-text is also given
+        # the strings block is skipped: the compile-text branch runs first and
+        # then cross-checks its route predictions against these files. With
+        # --text-export the partition report additionally attributes every
+        # compiled ID back to its TextExport category.
+        if args.text_export:
+            category_map, te_warnings = load_text_export_categories(args.text_export)
+            for w in te_warnings:
+                print("WARNING: " + w)
+        else:
+            category_map = None
+        ok, lines, composition = check_strings_files(args.strings, category_map,
+                                                     args.verbose)
+        if args.composition_in is not None:
+            return _emit_composition_diff(args.composition_in, composition)
+        print("\n".join(lines))
+        if args.composition_out is not None:
+            err = write_composition_json(
+                args.composition_out, composition,
+                {"source": "strings --text-export",
+                 "esm": None, "language": None, "roots": None}, ok)
+            if err:
+                print("ERROR: " + err)
+                return 1
+        return 0 if ok else 1
+
+    if args.compile_text is not None:
+        # With --command also present, first lint the command line itself
+        # (grammar, quoted FUN_140490960 roots), then validate the input
+        # roots the command names. Without --command, the positional ROOT
+        # directories are checked directly with the default ESM name.
+        # --json switches the whole compile-text output to one structured
+        # JSON payload on stdout (exit codes unchanged).
+        command_lint = None
+        if args.batch_command is not None:
+            ok, command_lint = lint_batch_command(args.batch_command)
+            if not ok:
+                if args.json:
+                    print(json.dumps({
+                        "tool": "validate_ckini", "mode": "compile-text",
+                        "command": args.batch_command,
+                        "command_lint": command_lint, "verdict": "FAIL"},
+                        indent=2, sort_keys=True))
+                else:
+                    print("\n".join(command_lint))
+                return 1
+            args2, parse_errors = _parse_compile_args(args.batch_command[args.batch_command.index(":") + 1:]
+                                                      if ":" in args.batch_command else "")
+            if parse_errors:
+                if args.json:
+                    print(json.dumps({
+                        "tool": "validate_ckini", "mode": "compile-text",
+                        "command": args.batch_command,
+                        "command_parse_errors": parse_errors, "verdict": "FAIL"},
+                        indent=2, sort_keys=True))
+                else:
+                    print("\n".join("ERROR: " + e for e in parse_errors))
+                return 1
+            esm = args2[0]
+            language = args2[1] if len(args2) > 1 else None
+            roots = args2[2:] if len(args2) > 2 else []
+        else:
+            esm = "Fallout4.esm"
+            language = None
+            roots = args.compile_text
+
+        ok, lines, route_records, summary = check_compile_text_roots(esm, roots, language)
+        if args.strings is not None:
+            ok2, xlines, xsummary = cross_check_compile_routes(
+                route_records, args.strings, esm, language, args.verbose)
+            ok = ok and ok2
+        else:
+            xlines, xsummary = None, None
+
+        if args.composition_out is not None and xsummary is not None:
+            err = write_composition_json(
+                args.composition_out, xsummary["composition"],
+                {"source": "compile-text cross-check",
+                 "esm": esm, "language": language, "roots": roots}, ok)
+            if err:
+                print("ERROR: " + err)
+                return 1
+        if args.composition_in is not None and xsummary is not None:
+            return _emit_composition_diff(args.composition_in,
+                                          xsummary["composition"])
+
+        if args.json:
+            payload = {
+                "tool": "validate_ckini",
+                "mode": "cross-check" if xsummary is not None else "compile-text",
+                "esm": esm,
+                "language": language,
+                "roots": roots,
+                "command": args.batch_command,
+                "command_lint": command_lint,
+                "records": [
+                    {"id": r["id"], "id_hex": "0x%08X" % r["id"],
+                     "category": r["category"], "source": r["source"],
+                     "predicted_ext": r["ext"], "output": r["output"],
+                     "supplemental": bool(r.get("supplemental"))}
+                    for r in route_records
+                ],
+                "routing_summary": summary["route_counts"],
+                "routed_total": sum(summary["route_counts"].values()),
+                "diagnostics": {
+                    "unique_ids": summary["unique_ids"],
+                    "reserved_ids": summary["reserved"],
+                    "duplicates": summary["duplicates"],
+                    "unknown_categories": summary["unknown_categories"],
+                    "malformed_lines": summary["malformed_lines"],
+                    "supplemental_files": summary["supplemental_files"],
+                    "errors": summary["errors"],
+                },
+                "verdict": "PASS" if ok else "FAIL",
+            }
+            if xsummary is not None:
+                payload["cross_check"] = xsummary
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0 if ok else 1
+
+        print("\n".join(lines))
+        if xlines is not None:
+            print()
+            print("\n".join(xlines))
+        return 0 if ok else 1
 
     if args.batch_command is not None:
         ok, lines = lint_batch_command(args.batch_command)

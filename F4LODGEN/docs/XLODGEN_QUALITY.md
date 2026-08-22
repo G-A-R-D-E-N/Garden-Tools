@@ -177,7 +177,12 @@ heights at/above water:  height += nudge    (z-fight avoidance)
 heights below water:     height = min(height, waterHeight - delta)
 ```
 
-So terrain under water is pulled down to `waterHeight - delta` and merged into large flat underwater chunks. `-1` = disabled.
+`/` is **truncating integer division** (both operands `int`; IL `div` + `conv.r4`),
+so deltas smaller than the LOD level truncate to 0 (`WaterDelta=3` at LOD4,
+`7` at LOD8, `15` at LOD16, `31` at LOD32) and behave exactly like
+`WaterDelta=0` for heights. So terrain under water is pulled down to
+`waterHeight - delta` and merged into large flat underwater chunks (only when
+the delta survives truncation). `-1` = disabled.
 
 Current implemented behavior:
 
@@ -185,7 +190,7 @@ Current implemented behavior:
 - positive WaterDelta: shallow submerged height samples are lowered relative to their resolved water plane before greedy reduction.
 - underwater-triangle statistics are retained for diagnostics.
 
-`WaterDelta=0` is now characterized (no longer open): it is *not* "off" — it flattens underwater samples to the water plane and marks interior underwater samples `Ignored` (the greedy reducer never spends a point on them), while border underwater samples become `Used` (forced vertices); above-water samples are raised by `delta/100` and below-water clamped to `water - delta/lodLevel`. The interactions with hide-quads, `REMOVEUNSEENFACES`, ZSHIFT, and special water are documented in [reverse-engineering/XLODGEN_TERRAIN_INTERNALS.md](reverse-engineering/XLODGEN_TERRAIN_INTERNALS.md) §1/§2/§3/§6.
+`WaterDelta=0` is now characterized (no longer open): it is *not* "off" — but with `delta=0` the below-water clamp target is `waterHeight` itself, and since a below-water sample is already below it the clamp **never fires: heights are left untouched, not flattened**. What 0 *does* do is the underwater vertex handling: interior underwater samples are marked `Ignored` (the greedy reducer never spends a point on them), while underwater coarse-grid samples become `Used` (forced vertices, seam matching at LOD resolution); above-water samples are raised by `delta/100` (no-op at 0). The interactions with hide-quads, `REMOVEUNSEENFACES`, ZSHIFT, and special water are documented in [reverse-engineering/XLODGEN_TERRAIN_INTERNALS.md](reverse-engineering/XLODGEN_TERRAIN_INTERNALS.md) §1/§2/§3/§6.
 
 ## Defaults — engine side (Program.cs)
 

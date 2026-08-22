@@ -197,20 +197,29 @@ extensions:
 | dialog strings | `Data\\STRINGS\\<ESM stem>_<Language>.DLSTRINGS` | final path + `_temp` |
 | miscellaneous strings | `Data\\STRINGS\\<ESM stem>_<Language>.ILSTRINGS` | final path + `_temp` |
 
-`<ESM stem>` is the input ESM name with the suffix beginning at the first
-`.` removed (`Fallout4.esm` → `Fallout4`). The directory and extensions are
-not synthesized: the constructor receives the embedded literals `STRINGS`,
+`<ESM stem>` is the input ESM name with the suffix beginning at the last
+`.` removed (`Fallout4.esm` → `Fallout4`); the helper uses `strrchr`, so a
+multi-dot name is cut at its final dot. The directory and extensions are not
+synthesized: the constructor receives the embedded literals `STRINGS`,
 `.STRINGS`, `.DLSTRINGS`, and `.ILSTRINGS`; the path format is
 `Data/%s/%s_%s%s`. Each context also creates a `<path>_temp` stream and is
-finalized by `FUN_14091d790`, so a failed open/finalization leaves the branch
-failed rather than reporting a successful compile.
+finalized by `FUN_14091d790`. The caller checks the context open/write status
+before input processing; it does not branch on a return value after the three
+finalizer calls, so a late `+0x14d` finalizer status is not an independently
+proven additional return-failure condition. See the durable decompile for the
+exact status distinction.
 
 The resulting files are Bethesda localized-string binary files, not copies of
 the text export. The compiler fills the three tables while processing the
 text records: ordinary string IDs go to `.STRINGS`, dialog/voice-localized
 records to `.DLSTRINGS`, and the remaining localized records to `.ILSTRINGS`.
-The exact low-level block/header format is the engine's standard string-file
-writer; this function is the producer/orchestrator, not a plain-text exporter.
+The exact low-level format is documented in
+[`ghidra-dump/localized-string-file-format.md`](ghidra-dump/localized-string-file-format.md):
+`u32 numStrings`, `u32 dataSize`, `(stringID, offset)` pairs (8 bytes each,
+sorted by ID), then a data block of NUL-terminated records (`.STRINGS`) or
+`u32 len + text + NUL` records (`.DLSTRINGS`/`.ILSTRINGS`), verified on 33
+shipped FO4 files; this function is the producer/orchestrator, not a
+plain-text exporter.
 
 ### Input roots and text layout
 
@@ -224,26 +233,49 @@ the primary input is conventionally:
 ```
 
 The optional fourth argument is a second text-export root (`PathToBackupTextExport`),
-not an output filename. `FUN_140916980` adds it to the input-root list before
-processing the primary root, allowing the compiler's existing text-export
-layout to supply fallback/backup records. The parser reports malformed lines,
-invalid IDs, reserved IDs, duplicate IDs, unreadable files, and oversized
-string files through the embedded `Text Compile:` diagnostics; reserved and
-duplicate records are skipped or rejected rather than silently merged.
+not an output filename. The function appends a non-empty backup root **first**
+and then appends the primary root; the observed traversal order is therefore
+`[backup,] primary`. This is an input precedence/order detail, not proof that
+all duplicate records are merged as a semantic fallback. For each root the
+main file is `<root>/<ESMFilename>/TextExport.txt`; additional ID-named files
+are scanned when present. A supplemental filename must contain an 8-character
+hexadecimal ID before its extension; malformed names are logged and skipped.
+
+The parser reports malformed lines, invalid IDs, reserved IDs, duplicate IDs,
+unreadable files, and oversized string files through the embedded `Text Compile:`
+diagnostics. Reserved IDs, duplicates, invalid characters, and unknown categories
+have recovery/skip paths; they should not be treated as identical to the hard
+output-open or mandatory-input failures. The exact four-field grammar, first-three-tab
+delimiters, hexadecimal StringID rules, and all 18 category tokens are recorded in
+[`ghidra-dump/decompile-CompileTextExport-line-parser-FUN_14091f3d0.md`](ghidra-dump/decompile-CompileTextExport-line-parser-FUN_14091f3d0.md).
+The complete caller reconstruction and failure map is in
+[`ghidra-dump/decompile-CompileTextExport-FUN_140916980.md`](ghidra-dump/decompile-CompileTextExport-FUN_140916980.md).
 
 ### Control flow and failure points
 
-1. Build the three output contexts for the ESM stem and language.
-2. Build the input-root list from the optional backup root and primary root.
-3. Walk the export records/files, parse IDs and string payloads, and route each
-   record to the appropriate output context.
-4. Write the localized-string tables through the temporary streams, finalize
-   all three contexts, and release them.
-5. Return true only if no context/open/parse failure set the shared error flag.
+1. Optionally run the `bValidateStringsOnCompile:General` character/resource
+   preflight (the clear-setting path); the set path jumps directly to output
+   construction.
+2. Build the three output contexts for the ESM stem and language. Each context
+   tracks status bytes at `+0x14c/+0x14d`; an output-open/resource failure sets
+   the function's failure path and emits `Could not open all output files`.
+3. Build the input-root list in `[backup,] primary` order and open the mandatory
+   `TextExport.txt` for each root. A mandatory input open/read failure emits
+   `Could not open input file, aborting process` and fails the call; a supplemental
+   file can instead emit `Could not open file for read, skipping`.
+4. Walk the export records/files, parse IDs and string payloads, and route each
+   record to the appropriate output context. Character replacement and duplicate
+   or reserved-ID messages are recovery/skip diagnostics.
+5. Write the localized-string tables through temporary streams, call
+   `FUN_14091d790` for all three contexts, release resources, and return the
+   inverse of the function failure byte.
 
 Useful byte-level anchors are `FUN_14091aa30` (one output context),
-`FUN_14091d790` (context finalization), and the three constructor calls in
-`FUN_140916980` at `0x140916c09`, `0x140916c26`, and `0x140916c43`.
+`FUN_14091d240` (record insertion/character normalization),
+`FUN_14091f3d0` (line/buffer parser), `FUN_14091d790` (context finalization),
+and the three constructor calls in `FUN_140916980` at `0x140916c09`,
+`0x140916c26`, and `0x140916c43`. The dispatcher still maps true/false to
+`0x6b650000`/`0x6b650001` only when the exception gate is enabled.
 
 ## Related runtime bits
 

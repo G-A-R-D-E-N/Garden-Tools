@@ -43,6 +43,10 @@ set(_xwin_libs
   "/libpath:${XWIN_ROOT}/sdk/lib/um/x86_64")
 string(JOIN " " _xwin_lib_flags ${_xwin_libs})
 
+# CMake normally links C/C++ targets through the compiler driver. Force the
+# LLVM linker there; CMAKE_LINKER covers cases where CMake invokes lld-link
+# directly. Keeping -fuse-ld=lld in compiler flags prevents it from being
+# passed as an lld-link argument.
 set(_xwin_driver_flags "--target=x86_64-pc-windows-msvc -fuse-ld=lld")
 set(CMAKE_C_FLAGS_INIT   "${_xwin_driver_flags} ${_xwin_inc_flags}")
 set(CMAKE_CXX_FLAGS_INIT "${_xwin_driver_flags} ${_xwin_inc_flags}")
@@ -56,5 +60,8 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
+# xwin ships the release CRT only (msvcrt.lib, no msvcrtd.lib), so every
+# configuration - including CMake's own compiler probes, which default to
+# Debug - must link the release runtime.
 set(CMAKE_TRY_COMPILE_CONFIGURATION Release)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)

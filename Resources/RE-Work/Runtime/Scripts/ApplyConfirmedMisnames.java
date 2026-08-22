@@ -7,7 +7,7 @@
 //
 // For each row: look up the address's ORIGINAL mangled name from F4_1_10_163_labels_decoded.csv
 // (same source ApplyDecodedLabels.java uses) and demangle it via Ghidra's own demangler, exactly
-// like symbol import does -- this applies the full namespace+signature, not just a bare rename.
+// like PDB import does -- this applies the full namespace+signature, not just a bare rename.
 // Falls back to a plain rename using the qualified name extracted from the CSV's already-demangled
 // "claimed_real_name" column if the mangled lookup/demangle fails for any reason.
 //
@@ -176,7 +176,7 @@ public class ApplyConfirmedMisnames extends GhidraScript {
 
                 // Step 1 (best-effort, for signature/type fidelity): re-demangle the ORIGINAL
                 // mangled community-label string and applyTo() -- this attaches full parameter
-                // types etc. like symbol import does. NOTE: applyTo() respects Ghidra's symbol
+                // types etc. like PDB import does. NOTE: applyTo() respects Ghidra's symbol
                 // source-type precedence and will SILENTLY SKIP the rename if the existing name
                 // already has equal/higher priority (e.g. USER_DEFINED from the CommonLib RTTI
                 // pass) -- confirmed empirically (a first run of this script "applied" 150/150 by

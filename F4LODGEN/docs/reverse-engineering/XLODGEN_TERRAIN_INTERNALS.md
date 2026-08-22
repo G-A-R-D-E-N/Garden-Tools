@@ -2,10 +2,12 @@
 
 Research date: 2026-08-18. Companion to `XLODGEN_OUTPUT_FORMAT.md` (byte layout),
 [`XLODGEN_QUALITY.md`](../XLODGEN_QUALITY.md) (defaults), `XLODGEN_SETTINGS_WRITER.md` (GUI writer), and
-[`LODGEN_ENGINE.md`](../LODGEN_ENGINE.md). Everything below is read from the decompiled engine source in
-`/tmp/lodgen-src` (xLODGen 4.1.5o's `LODGenerator*` projects); file:line refs are
-to that tree. These are the exact behaviors a native (C++) port must reproduce
-for byte/geometry parity.
+[`LODGEN_ENGINE.md`](../LODGEN_ENGINE.md). Everything below is read from the decompiled engine source
+(xLODGen's `LODGenerator*` projects). The shipped `xLODGenx64.exe` was decompiled
+with ILSpy (`/tmp/lodgen-il/out/LODGenerator/TerrainLOD.cs`) and the IL checked
+where a C# cast could hide truncation — see §1 for the integer-division catch.
+These are the exact behaviors a native (C++) port must reproduce for
+byte/geometry parity.
 
 Pipeline recap (TerrainLOD.cs):
 `ReadWorldData()` (load `LODGen_Terrain_<ws>.bin`) →
@@ -24,7 +26,8 @@ The whole block is skipped when `waterDelta[lodIndex] < 0`.
 ```csharp
 if (waterDelta[quad.lodIndex] >= 0)
 {
-    float num15 = waterDelta[quad.lodIndex] / quad.lodLevel;  // per-level delta
+    float num15 = waterDelta[quad.lodIndex] / quad.lodLevel;  // per-level delta —
+                                                              // TRUNCATING int div
     float num16 = num15 / 100f;                               // 1% of it
     // per heightfield sample (x,y):
     if (heightValues[x,y] >= waterheightValues[x,y])          // ABOVE water
@@ -33,30 +36,48 @@ if (waterDelta[quad.lodIndex] >= 0)
     {
         allBelow = true; work();                              // 3x3 diagonal check
         num18 = waterheightValues[x,y] - num15;
-        if (heightValues[x,y] > num18) heightValues[x,y] = num18;  // clamp to water-delta
+        if (heightValues[x,y] > num18) heightValues[x,y] = num18;  // clamp DOWN
         if (allBelow && !(protectCellBorders && lodLevel==1 && border sample))
             list.Add(new Index2(x,y));                        // "unseen" set
     }
 }
-terrain.ScriptedPreInsertion(list, 0);                        // state 0 → Ignored
+terrain.ScriptedPreInsertion(list, 0);                        // state 0 → Ignored;
+                                                              // runs BEFORE the
+                                                              // border-pin passes
 ```
 
 - **Above-water samples are raised by `delta/100`** (1% of the per-level delta —
-  the `if (h < h + num16)` guard is trivially true; it is not a clamp).
+  the `if (h < h + num16)` guard is trivially true; it is not a clamp). The raise
+  is a no-op when `num15 == 0` (`height + 0 < height` is false).
 - **Below-water samples are clamped DOWN to `waterHeight − delta/lodLevel`**
-  (never raised). Note the delta is divided by lodLevel, so the *same* setting
-  produces a smaller world-space step at higher LODs.
+  (never raised). The clamp fires only when the sample is *above* that target,
+  i.e. when it sits within `delta/lodLevel` of the water plane; deeper samples
+  keep their true height.
+- **`waterDelta / lodLevel` is truncating integer division** — `waterDelta` and
+  `quad.lodLevel` are both `int`, and the IL is `div` + `conv.r4` with no float
+  cast first. So `num15` is an exact integer, and **small deltas silently
+  vanish**: `WaterDelta=3` at LOD4 (÷4), `7` at LOD8, `15` at LOD16 and `31` at
+  LOD32 all truncate to 0, making the height-modification block a no-op while
+  the setting is still "on" (the underwater-vertex passes below still run).
 - **`allBelow`** is computed by `work()`: scans only the **4 diagonal** neighbors
   (`num30 != x && num29 != y` — orthogonals are skipped); false if any diagonal
   neighbor is at/above water.
 - The collected underwater samples are fed to `ScriptedPreInsertion(list, 0)` =
   `PointState.Ignored` — **the greedy reducer never spends a point on them**
   (and the diagonal check decides whether a below-water sample is "interior
-  underwater" and gets ignored, or near the surface and stays eligible).
-- With `WaterDelta=0`: above-water untouched (`num16=0`), below-water clamped to
-  exactly `waterHeight`; the ignored-underwater behavior is identical. So **0 is
-  not "off"** — it is "flatten underwater samples to the water plane and don't
-  spend vertices under water". `-1` is the true off switch.
+  underwater" and gets ignored, or near the surface and stays eligible). This
+  pass runs *before* the border-pin passes below, and a later state-1 pass
+  upgrades an `Ignored` point back to `Used` (see border pins).
+- **`WaterDelta=0` is NOT a no-op.** The whole block runs (`0 >= 0`), but with
+  `num15 = 0`: above-water samples are untouched and the below-water clamp
+  target is exactly `waterHeight` — a below-water sample is `< waterHeight` by
+  definition, so **the clamp never fires and heights are never flattened**;
+  underwater samples keep their true height. What *does* change is the vertex
+  handling: interior underwater samples are marked `Ignored` (no vertices spent
+  below water) and, at `lodLevel > 1`, underwater coarse-grid samples are forced
+  `Used` for seam matching (see border pins). So **0 is "optimize unseen with
+  zero height modification"** — `-1` is the true off switch. Truncated-to-zero
+  deltas behave identically to 0 (see above).
 - Errors: OOM → log "Set Optimize Unseen for LOD level N to off or use x64
   version" + exit **640**; other exceptions → "Error optimizing unseen triangles
   for LOD level N" + exit **646**.
@@ -68,10 +89,16 @@ After the delta block the greedy mesh is pre-seeded (all via `ScriptedPreInserti
 - `lodLevel == 1` (protectCellBorders / UNDER per-cell path): vertices of the
   previous-level geometry inside this cell → **Used** (forced); border samples at
   x==0 or y==0 (per cell, cols/rows 1..31) not covered by old geometry → **Ignored**.
-- `lodLevel > 1`: samples on the quad outline (every `lodLevel*2` step) **plus,
-  when `waterDelta >= 0`, every underwater sample** → **Used** (forced vertices).
-  So with WaterDelta on, underwater points on the quad border are *kept as fixed
-  vertices* (seam matching) while interior underwater points are *ignored*.
+- `lodLevel > 1`: the loop walks the coarse grid (every `lodLevel*2` step) and
+  forces **`Used`** every sample on the quad outline (x==0||x==32||y==0||y==32)
+  **plus, when `waterDelta >= 0` — including at `WaterDelta=0` and at deltas
+  truncated to 0 — every coarse-grid sample whose height is below water**, even
+  in the interior. This state-1 pass runs *after* the waterDelta Ignored pass
+  and upgrades its `Ignored` marks back to `Used` (guard admits `Ignored`;
+  state 1 → `Select()` + `Used`). Net effect: underwater coarse-grid samples are
+  kept as forced vertices (seam matching at LOD resolution), while underwater
+  fine-grid samples (not on the `lodLevel*2` lattice) stay `Ignored` and the
+  greedy reducer spends nothing on them.
 
 ## 2. Hide quads (`HIDEQUADS`, `landFlags`, `IgnoreHide`)
 

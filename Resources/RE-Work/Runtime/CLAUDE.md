@@ -1,9 +1,9 @@
 # ReverseEngineering — Master Reference
 
 This folder is the **single consolidated home** for all Fallout 4 reverse-engineering assets:
-the Ghidra install, all 3 RE projects, the raw symbols/symbol dumps, the organized subsystem index,
+the Ghidra install, all 3 RE projects, the raw PDB/symbol dumps, the organized subsystem index,
 and every doc/script that operates on them. Consolidated 2026-07-10 from three previously
-separate locations (`Tools\symbols\`, `Tools\Ghidra\`, `docs\ReverseEngineering\`) — if you find an
+separate locations (`Tools\PDB\`, `Tools\Ghidra\`, `docs\ReverseEngineering\`) — if you find an
 older doc/memory/comment referencing those paths, they now live here; see "Path history" below.
 
 **Read this file first** when doing any RE work in this workspace. It exists so a fresh session
@@ -54,7 +54,7 @@ ReverseEngineering\
 │   │                                     cross-check, the same role 1.10.155 plays for OG.
 │   ├── fwgh_proj_1.10.155\            ← Project name "Fallout4_155". A DIFFERENT game version
 │   │                                     (1.10.155, not 1.10.163) with a full private Microsoft
-│   │                                     symbols applied — real signatures, but WRONG ADDRESSES for
+│   │                                     PDB applied — real signatures, but WRONG ADDRESSES for
 │   │                                     our OG target. Useful only as an independent cross-check
 │   │                                     source (see 06-FUNCTION-INDEX.md), never for hook RVAs.
 │   └── fwgh_proj_OLD_packed_reference_only\   ← Project name "BethesdaGhidraScripts".
@@ -70,12 +70,12 @@ ReverseEngineering\
 │                             `kNG` bucket is `>1.10.163` and `<=1.10.984`, narrower than either AE
 │                             project above) — if NG-specific (not AE) addresses are ever needed,
 │                             that's a gap, not something either 1.11.x project already covers.
-├── Symbols\                   ← raw exe/symbols files + flat symbol dumps (not a Ghidra project —
+├── Symbols\                   ← raw exe/PDB files + flat symbol dumps (not a Ghidra project —
 │   │                             these are the inputs a Ghidra project was built FROM, or a
 │   │                             parallel non-Ghidra extraction)
-│   ├── Fallout4.exe                            ← 1.10.155 retail
-│   ├── Fallout4Beta.exe                        ← 1.10.155 beta variant
-│   ├── Fallout4_functions.txt / _data.txt     ← 1.10.155 named project dump (fast,
+│   ├── Fallout4.exe / Fallout4.pdb            ← 1.10.155 retail, full private PDB
+│   ├── Fallout4Beta.exe / Fallout4Beta.pdb    ← 1.10.155 beta variant
+│   ├── Fallout4_functions.txt / _data.txt     ← 1.10.155 PDB dump via llvm-pdbutil (fast,
 │   │                                             no-Ghidra-needed name+signature lookup)
 │   ├── F4_1_10_163_IDCLabels.idc              ← raw community label source (obfuscated names)
 │   ├── F4_1_10_163_labels_decoded.csv         ← same, decoded (698,074 rows, 0xADDR,name)
@@ -95,7 +95,7 @@ ReverseEngineering\
 ├── Scripts\                    ← every script that operates on the above, merged from the two
 │   │                              old script folders (no filename collisions)
 │   ├── run_query.ps1            ← query/decompile fwgh_proj_1.10.163_unpacked (THE target)
-│   ├── run_query_155.ps1        ← query/decompile fwgh_proj_1.10.155 (cross-check source)
+│   ├── run_pdb_query.ps1        ← query/decompile fwgh_proj_1.10.155 (cross-check source)
 │   ├── FW_Query.java / FW_Stats.java / FW_ExportAll.java / DecompileAt.java / VTableDump.java /
 │   │   VT_ByteDump.java / XrefDump.java / ListFuncsInRange.java / FindCallers.java /
 │   │   FW_Imports.java / FW_SymSearch.java     ← 1.10.163-project GhidraScripts (run via run_query.ps1)
@@ -105,7 +105,7 @@ ReverseEngineering\
 │   ├── DecompileCandidates.java  ← batch-decompile a CSV of addresses to Decompiles\<addr>.txt
 │   ├── ApplyConfirmedMisnames.java / ApplySafeGaps.java   ← batch force-rename from a CSV (fn+data)
 │   ├── RevertMisapplied.java / CleanRename.java   ← force-rename (CleanRename clears colliding labels first)
-│   ├── Query.java / Stats.java / SetSymbolFile.java   ← 1.10.155-project GhidraScripts (run via run_query_155.ps1)
+│   ├── PDB_Query.java / PDB_Stats.java / SetPdbFile.java   ← 1.10.155-project GhidraScripts (run via run_pdb_query.ps1)
 │   ├── ApplyDecodedLabels.java  ← applies F4_1_10_163_labels_decoded.csv to a Ghidra project
 │   ├── name_db.py / name_db_1.10.163_unpacked.py   ← CommonLib RTTI-vtable naming pass (pyghidra, not analyzeHeadless)
 │   └── organize_functions.py    ← regenerates everything in Organized\ (Python, ~15s runtime)
@@ -113,7 +113,7 @@ ReverseEngineering\
 │   └── <address>.txt per candidate (claimed names + Ghidra's own current name + full decompiled
 │                                     C body) — see 07-DECOMPILE-CANDIDATES.md for the verdicts
 ├── Havok\                      ← Havok Content Tools Compendium, ~29 GB, added 2026-08-09. Installers
-│   │                             for HCT 5 through 2014, the Anarchy 2014.1.1 SDK/samples/debug files, and
+│   │                             for HCT 5 through 2014, the Anarchy 2014.1.1 SDK/samples/PDBs, and
 │   │                             the Havok Animation Tool. See "Havok SDK source" below before use.
 │   └── SDK-2014.1.1\           ← extracted from Havok_Anarchy_SDK_2014_1_1_Windows.exe: 1,598 files.
 │                                 Source\Behavior (306 headers), Source\Animation, Source\Common
@@ -124,7 +124,7 @@ ReverseEngineering\
 
 **Gitignored** (see workspace root `.gitignore`): `Symbols\`, `Ghidra\`, `Projects\`, `Organized\`,
 `Decompiles\`, `Logs\`, `Havok\`. Everything in those is either huge (100s of MB–GB), regeneratable from
-the game files + scripts, or licensing-murky to redistribute (the game exe/symbols). Only the numbered
+the game files + scripts, or licensing-murky to redistribute (the game exe/PDB). Only the numbered
 markdown docs + this `CLAUDE.md` + `README.md` are tracked — they're small and are the actual
 distilled knowledge; the folders are working data.
 
@@ -171,8 +171,8 @@ offset is the single most likely mistake to make in this folder.
 & "E:\F4SE OG\ReverseEngineering\Scripts\run_query.ps1" "decompile:PlayerCharacter::Update"
 & "E:\F4SE OG\ReverseEngineering\Scripts\run_query.ps1" "addr:0x749ea0,decompile"
 
-# Cross-check against the independent 1.10.155 named project (different addresses — names/signatures only)
-& "E:\F4SE OG\ReverseEngineering\Scripts\run_query_155.ps1" "decompile:PlayerCharacter::Update"
+# Cross-check against the independent 1.10.155 PDB (different addresses — names/signatures only)
+& "E:\F4SE OG\ReverseEngineering\Scripts\run_pdb_query.ps1" "decompile:PlayerCharacter::Update"
 
 # Regenerate the subsystem index + crossref after either symbol source changes
 python "E:\F4SE OG\ReverseEngineering\Scripts\organize_functions.py"
@@ -224,12 +224,12 @@ source-code comment elsewhere in the workspace mentions one of these, the conten
 | `Tools\Ghidra\fwgh_proj_1.10.163_unpacked\` | `ReverseEngineering\Projects\fwgh_proj_1.10.163_unpacked\` |
 | `Tools\Ghidra\fwgh_proj_1.10.155\` | `ReverseEngineering\Projects\fwgh_proj_1.10.155\` |
 | `Tools\Ghidra\fwgh_proj\` | `ReverseEngineering\Projects\fwgh_proj_OLD_packed_reference_only\` (renamed for clarity) |
-| `Tools\symbols\` (files directly in it) | `ReverseEngineering\Symbols\` |
-| `Tools\symbols\1.10.163\` | `ReverseEngineering\Symbols\1.10.163\` |
-| `Tools\symbols\organized\` | `ReverseEngineering\Organized\` |
-| `Tools\symbols\scripts\` + `docs\ReverseEngineering\scripts\` | `ReverseEngineering\Scripts\` (merged, no filename collisions) |
+| `Tools\PDB\` (files directly in it) | `ReverseEngineering\Symbols\` |
+| `Tools\PDB\1.10.163\` | `ReverseEngineering\Symbols\1.10.163\` |
+| `Tools\PDB\organized\` | `ReverseEngineering\Organized\` |
+| `Tools\PDB\scripts\` + `docs\ReverseEngineering\scripts\` | `ReverseEngineering\Scripts\` (merged, no filename collisions) |
 | `docs\ReverseEngineering\*.md` | `ReverseEngineering\*.md` (same filenames, moved to root) |
 
 Historical narrative in changelogs/session-handoff docs describing *past* work (e.g. "queried
-Tools/symbols's local symbols") was deliberately left unrewritten — those are accurate descriptions of
+Tools/PDB's Fallout4.pdb") was deliberately left unrewritten — those are accurate descriptions of
 what was true at the time, not live references that need to resolve today.

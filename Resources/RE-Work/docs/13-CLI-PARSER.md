@@ -202,8 +202,12 @@ Notes:
   separately in [09-PRECOMBINED-PREVIS.md](09-PRECOMBINED-PREVIS.md).
 - `FUN_140916980` constructs the three language-specific localized-string
   outputs `Data\\STRINGS\\<ESM stem>_<Language>.{STRINGS,DLSTRINGS,ILSTRINGS}`
-  through `FUN_14091aa30`; see [05-BATCH-CLI.md](05-BATCH-CLI.md) for its
-  input-root and temporary-file contract.
+  through `FUN_14091aa30`; see [05-BATCH-CLI.md](05-BATCH-CLI.md) and the
+  byte-level reconstruction
+  [`ghidra-dump/decompile-CompileTextExport-FUN_140916980.md`](ghidra-dump/decompile-CompileTextExport-FUN_140916980.md)
+  for its `bValidateStringsOnCompile` preflight, backup-before-primary root
+  order, supplemental filename-ID scan, temporary-file status bytes, and hard
+  versus recoverable failure paths.
 - `-Install` (`0x400`) does **not** run a process — it calls `FUN_14047cc40(1)`,
   the AdminTasks elevation runner.
 - The batch-failure contract (`RaiseException(0x6b650000/1)`) is used by
@@ -233,7 +237,11 @@ or quote character (also NUL'd). Leading whitespace is skipped.
 - Returns `NULL` at end of string (then `*next = 0`).
 
 Used by `-GenerateSingleLip` (tokens 1–2) and `-CompileTextExport` (tokens 3–4,
-after two `strtok_s` tokens).
+after two `strtok_s` tokens). For `-CompileTextExport`, the ESM and language
+remain ordinary space-delimited tokens; only the required primary root and
+optional backup root can preserve spaces with quotes. The worker's exact input
+and failure behavior is retained in
+[`ghidra-dump/decompile-CompileTextExport-FUN_140916980.md`](ghidra-dump/decompile-CompileTextExport-FUN_140916980.md).
 
 ### `FUN_1404905a0` — generation-target validator (`undefined4 FUN_1404905a0(char *tok)`)
 
