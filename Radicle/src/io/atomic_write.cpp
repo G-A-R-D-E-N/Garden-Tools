@@ -95,26 +95,50 @@ StagedFile StagedFile::create(const std::filesystem::path& destination) {
   if (destination.empty()) {
     throw std::runtime_error("destination path is empty");
   }
+
+  const auto candidate = temp_sibling(destination);
   StagedFile staged;
-  staged.destination_ = destination;
-  staged.path_ = temp_sibling(destination);
 
 #if defined(_WIN32)
-  staged.handle_ = ::CreateFileW(staged.path_.c_str(), GENERIC_WRITE,
-                                 FILE_SHARE_READ, nullptr, CREATE_NEW,
-                                 FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (staged.handle_ == INVALID_HANDLE_VALUE) {
-    // Deliberately do not retry: a collision or hostile pre-created file at
-    // the staging path must fail closed.
+  const auto handle = ::CreateFileW(candidate.c_str(), GENERIC_WRITE,
+                                    FILE_SHARE_READ, nullptr, CREATE_NEW,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (handle == INVALID_HANDLE_VALUE) {
+    // The candidate is not ours unless CREATE_NEW succeeds. In particular,
+    // losing a collision race must never make RAII cleanup delete the file
+    // that another process created at this path.
     throw std::runtime_error("unable to create exclusive staging file " +
-                             staged.path_.string());
+                             candidate.string());
+  }
+  try {
+    staged.path_ = candidate;
+    staged.destination_ = destination;
+    staged.handle_ = handle;
+  } catch (...) {
+    ::CloseHandle(handle);
+    std::error_code remove_ec;
+    std::filesystem::remove(candidate, remove_ec);
+    throw;
   }
 #else
-  staged.fd_ = ::open(staged.path_.c_str(),
-                      O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0644);
-  if (staged.fd_ < 0) {
+  const auto fd = ::open(candidate.c_str(),
+                         O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0644);
+  if (fd < 0) {
+    // The candidate is not ours unless O_EXCL succeeds. In particular,
+    // losing a collision race must never make RAII cleanup delete the file
+    // that another process created at this path.
     throw std::runtime_error("unable to create exclusive staging file " +
-                             staged.path_.string());
+                             candidate.string());
+  }
+  try {
+    staged.path_ = candidate;
+    staged.destination_ = destination;
+    staged.fd_ = fd;
+  } catch (...) {
+    ::close(fd);
+    std::error_code remove_ec;
+    std::filesystem::remove(candidate, remove_ec);
+    throw;
   }
 #endif
   return staged;
