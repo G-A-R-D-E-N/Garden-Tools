@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <cstring>
 #include <set>
 #include <span>
 #include <string>
@@ -69,10 +70,14 @@ RaceBodyPart parse_part(const Record& record, std::size_t& cursor) {
       record.subrecords[cursor].signature != k_indx) {
     throw RaceError("RACE BodyData part is missing its INDX marker");
   }
-  require_empty_marker(record.subrecords[cursor], "BodyData INDX");
+  const auto& marker = record.subrecords[cursor];
+  if (marker.data.size() != 4) {
+    throw RaceError("RACE BodyData INDX must be exactly four bytes");
+  }
+  RaceBodyPart part;
+  std::memcpy(&part.index, marker.data.data(), 4);
   ++cursor;
 
-  RaceBodyPart part;
   while (cursor < record.subrecords.size() &&
          is_model_signature(record.subrecords[cursor].signature)) {
     part.model_subrecords.push_back(record.subrecords[cursor]);
@@ -142,6 +147,14 @@ std::optional<BodyRange> find_body_range(const Record& record) {
   return result;
 }
 
+Subrecord index_marker(Signature signature, std::uint32_t index) {
+  Subrecord subrecord;
+  subrecord.signature = signature;
+  subrecord.data.resize(4);
+  std::memcpy(subrecord.data.data(), &index, 4);
+  return subrecord;
+}
+
 Subrecord empty_marker(Signature signature) {
   Subrecord subrecord;
   subrecord.signature = signature;
@@ -155,13 +168,13 @@ std::vector<Subrecord> encode_body_data(std::span<const RaceBodyPart> male,
   encoded.push_back(empty_marker(k_mnam));
   for (const auto& part : male) {
     validate_part(part);
-    encoded.push_back(empty_marker(k_indx));
+    encoded.push_back(index_marker(k_indx, part.index));
     encoded.insert(encoded.end(), part.model_subrecords.begin(), part.model_subrecords.end());
   }
   encoded.push_back(empty_marker(k_fnam));
   for (const auto& part : female) {
     validate_part(part);
-    encoded.push_back(empty_marker(k_indx));
+    encoded.push_back(index_marker(k_indx, part.index));
     encoded.insert(encoded.end(), part.model_subrecords.begin(), part.model_subrecords.end());
   }
   return encoded;
