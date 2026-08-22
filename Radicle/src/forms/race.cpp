@@ -267,6 +267,7 @@ Race decode_race(const Plugin& plugin, const FormKey& key) {
   result.flags2 = read_u32(data->data, 88);
   result.pipboy_biped_object = read_i32(data->data, 128);
   result.xp_value = read_i16(data->data, 132);
+  result.body_data = decode_race_body_data(plugin, key);
   return result;
 }
 
@@ -304,6 +305,9 @@ FormKey create_race(Plugin& plugin, const RaceCreation& creation) {
   record->subrecords.push_back(Subrecord{k_desc, desc, false});
   record->subrecords.push_back(data);
 
+  if (!set_race_body_data(next, key, creation.body_data.male, creation.body_data.female)) {
+    throw RaceError("newly allocated RACE record could not accept BodyData");
+  }
   require_authoring_preflight(next, key);
   plugin = std::move(next);
   return key;
