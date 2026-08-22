@@ -21,8 +21,15 @@ namespace fo4::forms {
 namespace {
 
 constexpr auto k_race = Signature::from_string("RACE");
+constexpr auto k_vtyp = Signature::from_string("VTYP");
 constexpr auto k_full = Signature::from_string("FULL");
 constexpr auto k_desc = Signature::from_string("DESC");
+constexpr auto k_vtck = Signature::from_string("VTCK");
+constexpr auto k_pnam = Signature::from_string("PNAM");
+constexpr auto k_unam = Signature::from_string("UNAM");
+constexpr auto k_nam3 = Signature::from_string("NAM3");
+constexpr auto k_mnam = Signature::from_string("MNAM");
+constexpr auto k_fnam = Signature::from_string("FNAM");
 constexpr std::size_t k_current_race_data_size = 200;
 constexpr std::uint16_t k_current_form_version = 131;
 
@@ -156,7 +163,7 @@ void require_finite(float value, std::string_view field) {
   }
 }
 
-void validate_creation(const RaceCreation& creation) {
+void validate_creation(const Plugin& plugin, const RaceCreation& creation) {
   require_finite(creation.male_height, "male height");
   require_finite(creation.female_height, "female height");
   for (const auto value : creation.male_default_weight) {
@@ -172,13 +179,25 @@ void validate_creation(const RaceCreation& creation) {
   require_finite(creation.flight_radius, "flight radius");
   require_finite(creation.angular_acceleration_rate, "angular acceleration rate");
   require_finite(creation.angular_tolerance, "angular tolerance");
+  require_finite(creation.facegen_main_clamp, "FaceGen main clamp");
+  require_finite(creation.facegen_face_clamp, "FaceGen face clamp");
   if (creation.size > 3) {
     throw RaceError("RACE size must be 0..3");
   }
+
+  for (const auto* voice : {&creation.male_voice, &creation.female_voice}) {
+    if (!voice->has_value() || (*voice)->owner() != plugin.key) continue;
+    const auto* target = find_record(plugin, **voice);
+    if (target == nullptr || target->header.signature != k_vtyp) {
+      throw RaceError(
+          "local RACE voice FormKey must resolve to an existing VTYP record: " +
+          (*voice)->to_string());
+    }
+  }
 }
 
-Subrecord encode_current_data(const RaceCreation& creation) {
-  validate_creation(creation);
+Subrecord encode_current_data(const Plugin& plugin, const RaceCreation& creation) {
+  validate_creation(plugin, creation);
 
   Subrecord data;
   data.signature = sig_data;
@@ -214,6 +233,44 @@ Subrecord encode_current_data(const RaceCreation& creation) {
   // minimal #65 creator and will be modeled separately before editable use.
 
   return data;
+}
+
+Subrecord encode_voices(const Plugin& plugin, const RaceCreation& creation) {
+  Subrecord voices;
+  voices.signature = k_vtck;
+  voices.data.resize(8);
+  const auto context = plugin_form_id_context(plugin);
+  if (creation.male_voice.has_value()) {
+    write_u32(voices.data, 0,
+              encode_plugin_form_id(*creation.male_voice, context).value());
+  }
+  if (creation.female_voice.has_value()) {
+    write_u32(voices.data, 4,
+              encode_plugin_form_id(*creation.female_voice, context).value());
+  }
+  return voices;
+}
+
+Subrecord float_subrecord(Signature signature, float value) {
+  Subrecord subrecord;
+  subrecord.signature = signature;
+  subrecord.data.resize(4);
+  write_f32(subrecord.data, 0, value);
+  return subrecord;
+}
+
+Subrecord empty_marker(Signature signature) {
+  Subrecord subrecord;
+  subrecord.signature = signature;
+  return subrecord;
+}
+
+std::optional<FormKey> decode_voice(const PluginFormIdContext& context,
+                                    const std::vector<std::byte>& data,
+                                    std::size_t offset) {
+  const auto raw = RawFormId{read_u32(data, offset)};
+  if (raw.is_null()) return std::nullopt;
+  return resolve_plugin_form_id(raw, context);
 }
 
 void require_authoring_preflight(const Plugin& plugin, const FormKey& key) {
@@ -267,7 +324,28 @@ Race decode_race(const Plugin& plugin, const FormKey& key) {
   result.flags2 = read_u32(data->data, 88);
   result.pipboy_biped_object = read_i32(data->data, 128);
   result.xp_value = read_i16(data->data, 132);
+
+  const auto* voices = unique_subrecord(*record, k_vtck, "VTCK");
+  if (voices->data.size() != 8) {
+    throw RaceError("RACE VTCK must contain exactly male and female FormIDs");
+  }
+  const auto context = plugin_form_id_context(plugin);
+  result.male_voice = decode_voice(context, voices->data, 0);
+  result.female_voice = decode_voice(context, voices->data, 4);
+
+  const auto* main_clamp = unique_subrecord(*record, k_pnam, "PNAM");
+  const auto* face_clamp = unique_subrecord(*record, k_unam, "UNAM");
+  if (main_clamp->data.size() != 4 || face_clamp->data.size() != 4) {
+    throw RaceError("RACE PNAM and UNAM FaceGen clamps must each be four bytes");
+  }
+  result.facegen_main_clamp = read_f32(main_clamp->data, 0);
+  result.facegen_face_clamp = read_f32(face_clamp->data, 0);
   result.body_data = decode_race_body_data(plugin, key);
+
+  const auto* behavior_marker = unique_subrecord(*record, k_nam3, "NAM3");
+  if (!behavior_marker->data.empty()) {
+    throw RaceError("RACE required NAM3 behavior marker must be empty");
+  }
   return result;
 }
 
@@ -287,7 +365,10 @@ FormKey create_race(Plugin& plugin, const RaceCreation& creation) {
       ? std::optional<std::vector<std::byte>>{zstring(*creation.full_name)}
       : std::nullopt;
   const auto desc = zstring(creation.description);
-  const auto data = encode_current_data(creation);
+  const auto data = encode_current_data(plugin, creation);
+  const auto voices = encode_voices(plugin, creation);
+  const auto main_clamp = float_subrecord(k_pnam, creation.facegen_main_clamp);
+  const auto face_clamp = float_subrecord(k_unam, creation.facegen_face_clamp);
 
   auto next = plugin;
   const auto key = create_local_record(next, k_race);
@@ -304,10 +385,25 @@ FormKey create_race(Plugin& plugin, const RaceCreation& creation) {
   }
   record->subrecords.push_back(Subrecord{k_desc, desc, false});
   record->subrecords.push_back(data);
+  record->subrecords.push_back(voices);
+  record->subrecords.push_back(main_clamp);
+  record->subrecords.push_back(face_clamp);
 
   if (!set_race_body_data(next, key, creation.body_data.male, creation.body_data.female)) {
     throw RaceError("newly allocated RACE record could not accept BodyData");
   }
+
+  record = find_mutable_record(next, key);
+  if (record == nullptr) {
+    throw RaceError("newly allocated RACE record disappeared after BodyData creation");
+  }
+  // xEdit marks NAM3 and both behavior-graph containers required. The male
+  // marker itself is optional, but emitting both empty gender markers gives
+  // the new record an explicit, deterministic empty behavior-graph shape.
+  record->subrecords.push_back(empty_marker(k_nam3));
+  record->subrecords.push_back(empty_marker(k_mnam));
+  record->subrecords.push_back(empty_marker(k_fnam));
+
   require_authoring_preflight(next, key);
   plugin = std::move(next);
   return key;
