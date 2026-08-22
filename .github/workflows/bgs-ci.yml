@@ -10,10 +10,12 @@ name: bgs-ci
 #    This repository is private and both orgs are over the Free Actions
 #    allowance (GHRUNNER#24), where hosted jobs fail silently -- the same
 #    reason native-ci.yml pins the `garden` runner.
-#  * Every step is a single command, so each leg can use its runner's default
-#    shell. Do not add `shell: bash` here: on the Windows runner that resolves
-#    to C:\Windows\system32\bash.EXE, the WSL stub, which has no distro
-#    installed and fails immediately.
+#  * Shell is chosen per leg, and both choices are deliberate. On the Windows
+#    runner `bash` resolves to C:\Windows\system32\bash.EXE -- the WSL stub,
+#    which has no distro installed -- and the default `powershell` cannot run
+#    the .ps1 Actions writes per step, because script execution is disabled on
+#    that host. `cmd` avoids both. Every step is a single command, so nothing
+#    needs shell-specific syntax.
 
 on:
   push:
@@ -46,12 +48,15 @@ jobs:
         include:
           - runner: [self-hosted, Linux, X64, garden]
             rid: linux-x64
-            executable: BehaviourGraphStudio
+            shell: bash
+            executable: ./publish-check/BehaviourGraphStudio
           - runner: [self-hosted, Windows, X64, garden]
             rid: win-x64
-            executable: BehaviourGraphStudio.exe
+            shell: cmd
+            executable: .\publish-check\BehaviourGraphStudio.exe
     defaults:
       run:
+        shell: ${{ matrix.shell }}
         working-directory: BGS
     steps:
       - name: Check out repository
@@ -105,4 +110,4 @@ jobs:
           --output publish-check
 
       - name: Verify published executable
-        run: ./publish-check/${{ matrix.executable }} --version
+        run: ${{ matrix.executable }} --version
