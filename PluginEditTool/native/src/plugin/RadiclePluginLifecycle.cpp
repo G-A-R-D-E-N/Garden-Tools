@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <fo4/forms/armor.hpp>
+#include <fo4/forms/cell.hpp>
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/forms/race.hpp>
@@ -133,8 +134,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         });
     }
     if (signatureText != "ARMA" && signatureText != "ARMO" &&
-        signatureText != "EYES" && signatureText != "LVSP" &&
-        signatureText != "RACE") {
+        signatureText != "CELL" && signatureText != "EYES" &&
+        signatureText != "LVSP" && signatureText != "RACE") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -165,7 +166,41 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         auto mutated = loaded->plugin;
         fo4::FormKey key;
 
-        if (signatureText == "EYES") {
+        if (signatureText == "CELL") {
+            const auto worldspace = payload->find("worldspace");
+            if (worldspace == payload->end() || !worldspace->is_string() ||
+                !payload->contains("x") || !payload->contains("y")) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "CELL creation requires worldspace FormKey, x, and y"
+                });
+            }
+
+            fo4::forms::ExteriorCellCreation creation;
+            try {
+                creation.worldspace =
+                    fo4::FormKey::parse(worldspace->get_ref<const std::string&>());
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{"InvalidWorldspaceFormKey", error.what()});
+            }
+            if (!lifecycleSignedField(*payload, "x", std::int32_t{0}, creation.x) ||
+                !lifecycleSignedField(*payload, "y", std::int32_t{0}, creation.y)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "CELL x and y must fit signed 32-bit storage"
+                });
+            }
+            bool editorValid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            if (!editorValid) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "CELL editorId must be a string or null"
+                });
+            }
+            creation.editor_id = optionalStringView(editorId);
+            key = fo4::forms::create_exterior_cell(mutated, creation);
+        } else if (signatureText == "EYES") {
             const auto full = payload->find("fullText");
             const auto icon = payload->find("icon");
             if (full == payload->end() || !full->is_string() ||
@@ -405,6 +440,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         }.dump());
     } catch (const fo4::forms::ArmorError& error) {
         return std::unexpected(Error{"ArmorCreateFailed", error.what()});
+    } catch (const fo4::forms::CellError& error) {
+        return std::unexpected(Error{"CellCreateFailed", error.what()});
     } catch (const fo4::forms::EyesError& error) {
         return std::unexpected(Error{"EyesCreateFailed", error.what()});
     } catch (const fo4::forms::LeveledSpellError& error) {
