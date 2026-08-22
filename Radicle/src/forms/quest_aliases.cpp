@@ -724,6 +724,21 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
     result.next_alias_id = read_u32(subrecord.data);
   }
   if (!anam_index.has_value()) {
+    // A partial override that does not touch aliases carries neither ANAM nor
+    // any alias markers -- seven shipped DLC overrides of Fallout4.esm quests
+    // are exactly EDID(+VMAD). Those have no alias array to decode, so report
+    // an empty one rather than rejecting the record.
+    //
+    // Alias markers without ANAM stay fail-closed: next_alias_id would be
+    // unknown and the array's start position ambiguous.
+    const auto has_alias_markers =
+        std::any_of(record->subrecords.begin(), record->subrecords.end(),
+                    [](const Subrecord& subrecord) {
+                      return is_alias_start(subrecord.signature);
+                    });
+    if (!has_alias_markers) {
+      return result;
+    }
     throw QuestError("QUST is missing required ANAM Next Alias ID");
   }
 
@@ -736,7 +751,13 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
     QuestAlias alias;
     alias.kind = alias_kind(start.signature);
     alias.id = alias_id(start, alias_label(alias.kind));
-    if (!alias_ids.insert(alias.id).second) {
+    // Uniqueness applies to reference/location aliases only. A collection
+    // marker deliberately carries the ID of the reference alias it prefixes:
+    // across the six shipped masters all 889 ALCS markers are immediately
+    // followed by an ALST with the same ID, and no quest has a duplicate ID
+    // among ALST/ALLS alone. Counting ALCS here rejected 332 shipped quests.
+    if (alias.kind != QuestAliasKind::collection &&
+        !alias_ids.insert(alias.id).second) {
       throw QuestError("QUST contains duplicate Alias ID " + std::to_string(alias.id));
     }
 
