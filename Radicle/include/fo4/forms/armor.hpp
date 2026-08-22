@@ -4,6 +4,7 @@
 #include "fo4/plugin/container.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
