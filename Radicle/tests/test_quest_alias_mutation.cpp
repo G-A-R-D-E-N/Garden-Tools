@@ -102,6 +102,7 @@ fo4::forms::QuestAliasCreation collection(std::uint32_t id, std::uint8_t max_fil
       .flags = std::nullopt,
       .force_into_alias = std::nullopt,
       .max_initial_fill_count = max_fill,
+      .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
   };
 }
@@ -119,6 +120,7 @@ TEST(QuestAliasMutation, AddsBeforeTailAndAdvancesNextAliasId) {
       .flags = 0x20u,
       .force_into_alias = std::nullopt,
       .max_initial_fill_count = std::nullopt,
+      .closest_to_alias = std::nullopt,
       .fill = fo4::forms::QuestSpecificReferenceFill{
           fo4::FormKey::parse("000123:Master.esm")},
   };
