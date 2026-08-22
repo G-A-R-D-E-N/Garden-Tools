@@ -295,6 +295,15 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedSavePath(
     const auto target = std::filesystem::weakly_canonical(path, targetEc);
     if (targetEc || target.empty()) return std::nullopt;  // fail closed
 
+    // The canonical destination is the path that will actually be written.
+    // Validate its extension too: a requested Foo.esp symlink must not be
+    // allowed to resolve to notes.txt and bypass the plugin-only write rule.
+    const auto canonicalExtension = asciiLower(target.extension().string());
+    if (canonicalExtension != ".esp" && canonicalExtension != ".esm" &&
+        canonicalExtension != ".esl") {
+        return std::nullopt;
+    }
+
     // Save As must never target the game's Data directory, even if a bad
     // environment snapshot once included a protected plugin from there.
     if (!dataDirectory_.empty()) {
