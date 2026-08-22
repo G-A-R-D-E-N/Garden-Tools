@@ -38,6 +38,16 @@ add_custom_target(radicle_record_schema_check ALL
   COMMENT "Checking generated Fallout 4 record authoring schema"
   VERBATIM
 )
+add_custom_target(radicle_formlink_schema_check ALL
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/formlink_schema_codegen.py"
+    --schema "${CMAKE_CURRENT_SOURCE_DIR}/schema/fallout4/fields.json"
+    --output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/generated_formlink_lists.inc"
+    --check
+  COMMENT "Checking generated Fallout 4 FormLink list schema"
+  VERBATIM
+)
 
 function(fo4_apply_warnings target)
   if(MSVC)
@@ -81,6 +91,7 @@ add_library(fo4
   src/plugin/onam.cpp
   src/plugin/writer.cpp
   src/schema/form_links.cpp
+  src/schema/formlink_lists.cpp
   src/schema/preflight.cpp
   src/schema/scalar.cpp
   src/schema/vmad.cpp
@@ -92,6 +103,9 @@ if(TARGET radicle_schema_check)
 endif()
 if(TARGET radicle_record_schema_check)
   add_dependencies(fo4 radicle_record_schema_check)
+endif()
+if(TARGET radicle_formlink_schema_check)
+  add_dependencies(fo4 radicle_formlink_schema_check)
 endif()
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -189,6 +203,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_formlinks.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
+    tests/test_formlink_lists.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
