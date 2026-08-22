@@ -8,6 +8,8 @@ CK numbered notes live in `docs/` so their cross-links stay valid. Start from [d
 
 Status of every doc and tool — completion state and next open questions: [STATUS.md](STATUS.md).
 
+**Forward plan:** [ROADMAP.md](ROADMAP.md) — 9-phase roadmap, dependency graph, S/A/B/C/D-tier form type priorities, 9 CK replacement milestones (M1–M9).
+
 ## Categories
 
 ### Records and plugins
