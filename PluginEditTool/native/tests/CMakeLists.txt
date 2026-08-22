@@ -30,6 +30,7 @@ add_executable(
     unit/RadiclePluginMasterOverrideTests.cpp
     unit/RadiclePluginScalarTests.cpp
     unit/RadiclePluginSchemaGridTests.cpp
+    unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginEyesTests.cpp
     unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp
