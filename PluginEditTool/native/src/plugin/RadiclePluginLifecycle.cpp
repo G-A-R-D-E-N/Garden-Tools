@@ -13,6 +13,7 @@
 #include <fo4/forms/armor.hpp>
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
+#include <fo4/forms/race.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/form_links.hpp>
@@ -132,7 +133,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         });
     }
     if (signatureText != "ARMA" && signatureText != "ARMO" &&
-        signatureText != "EYES" && signatureText != "LVSP") {
+        signatureText != "EYES" && signatureText != "LVSP" &&
+        signatureText != "RACE") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -285,6 +287,40 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "Newly created LVSP record could not accept its editor ID"
                 });
             }
+        } else if (signatureText == "RACE") {
+            const auto description = payload->find("description");
+            if (description == payload->end() || !description->is_string() ||
+                !payload->contains("maleHeight") || !payload->contains("femaleHeight")) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "RACE creation requires description, maleHeight, and femaleHeight"
+                });
+            }
+
+            bool valid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "RACE editorId must be a string or null"});
+            const auto fullName = optionalStringField(*payload, "fullName", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "RACE fullName must be a string or null"});
+
+            fo4::forms::RaceCreation creation;
+            creation.editor_id = optionalStringView(editorId);
+            creation.full_name = optionalStringView(fullName);
+            creation.description = description->get_ref<const std::string&>();
+            if (!lifecycleFloatField(*payload, "maleHeight", 0.0f, creation.male_height) ||
+                !lifecycleFloatField(*payload, "femaleHeight", 0.0f, creation.female_height) ||
+                !lifecycleUnsignedField(*payload, "flags", std::uint32_t{0}, creation.flags) ||
+                !lifecycleUnsignedField(*payload, "flags2", std::uint32_t{0}, creation.flags2) ||
+                !lifecycleUnsignedField(*payload, "size", std::uint32_t{0}, creation.size) ||
+                !lifecycleFloatField(*payload, "accelerationRate", 0.0f, creation.acceleration_rate) ||
+                !lifecycleFloatField(*payload, "decelerationRate", 0.0f, creation.deceleration_rate) ||
+                !lifecycleFloatField(*payload, "injuredHealthPct", 0.0f, creation.injured_health_pct)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "RACE numeric fields must fit their current form-131 storage"
+                });
+            }
+            key = fo4::forms::create_race(mutated, creation);
         } else if (signatureText == "ARMO") {
             bool valid = false;
             const auto editorId = optionalStringField(*payload, "editorId", valid);
@@ -373,6 +409,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         return std::unexpected(Error{"EyesCreateFailed", error.what()});
     } catch (const fo4::forms::LeveledSpellError& error) {
         return std::unexpected(Error{"LeveledSpellCreateFailed", error.what()});
+    } catch (const fo4::forms::RaceError& error) {
+        return std::unexpected(Error{"RaceCreateFailed", error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"RecordCreateFailed", error.what()});
     }
