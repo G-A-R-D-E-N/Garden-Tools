@@ -882,17 +882,66 @@ WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
 are also saved — they go through the `NAM*`-array and map-data iterators
 dispatched from `vl+0x3b8`/`vl+0x3c0`, not inline in the SaveRecord body.)
 
-### 10c. What the diff teaches
+### 10c. Complete override map — named TESForm virtuals for CELL and WRLD
 
-- The shared `TESForm` surface (slots 25/26/29/34/36–49…) is *identical*
-  across CELL/WRLD — the class-specific bits are concentrated in slots
-  22–35.
-- The editor extras (labels, dangling-cell validation, cell-map insert)
-  occupy the low override slots; the I/O pair sits at the fixed 24/27
-  positions inherited from `TESForm`.
-- Subrecord codes are inline immediates in the Load/Save bodies — the
-  `strings` inventory in §11 is a superset (includes codes the CK never
-  emits via these two functions).
+Every override was decompiled and its call pattern matched against
+the TESForm base vftable surface to assign a concrete virtual name.
+Base-stub slots (25, 26, 29, 34, 36, 37, 39–79) are omitted;
+they carry the same TESForm thunk in every class.
+
+#### 10c.1 TESObjectCELL (primary vftable `0x309c780`)
+
+| slot | base | CELL override | virtual name | call-pattern evidence |
+|---|---|---|---|---|
+| 23 | `FUN_140004c28` | `FUN_140d13f00` | **`ClearItem`** | `tesobjectcell.cpp:0x49f`; frees cell-data at `+0x58` via `FUN_1407d2060`; frees `+0x60` block (0x20 interior / 0x88 exterior); nulls `+0x150` multibound |
+| **24** | `thunk_FUN_140720ac0` | `FUN_140d146d0` | **`LoadRecord`** | 14× `FUN_14087e870` reads; `tesobjectcell.cpp:0x4d7/0x4ee/0x555` |
+| **27** | `thunk_FUN_140720ad0` | `FUN_140d44ba0` | **`SaveRecord`** | 13× `FUN_1408c7710` writes |
+| **28** | `thunk_FUN_1408bccb0` | `FUN_140d44f00` | **`ReleaseForm`** | walks ref-array at `+0x10`/`+0x12`; per-ref IncRefCount→DecRefCount via `bshandlerefobject.inl:0x3b/0x47/0x55`; calls `thunk_FUN_14087ec50`(unregister) + `thunk_FUN_14087d2d0`(notify DataHandler in GRUP type 6) + `thunk_FUN_140d55ca0`(cell→worldspace); returns bool |
+| 30 | `thunk_FUN_1408bcee0` | `FUN_140d45150` | **`InitItem`** | same cleanup chain as slot 28 (unregister→notify→associate) but **without** the ref-array walk — direct single-form init path; always returns 1 |
+| 31 | `thunk_FUN_1408bcfc0` | `FUN_140d45400` | **`ResolveFormIDFromFile`** | 10-case switch on `param_2[3]` (TESFile handle type): case 0→base `FUN_1408bcfc0`; case 1→TESWorldSpace RTDynamicCast; case 2/3→ref-count iteration; case 4/5→`thunk_FUN_140d17890` flag check; case 6/8/9→TESObjectCELL RTDynamicCast→`vt+0xf8`(slot 31) |
+| 32 | `thunk_FUN_1408bcfa0` | `FUN_140d451d0` | **`IsParentForm`** | switch on `param_2+0x26` (form-type byte): case 0x3f(CELL)→compares interior/exterior flag parity, worldspace ptr equality via `vt+0xf8`, ref-count ordering; case 0x40–0x4c(REFR…LCTN)→RTDynamicCast to `TESChildCell`→`vt+8`(GetParentCell)→check `== this` or `vt+0xf8` |
+| 33 | `thunk_FUN_1408bd340` | `FUN_140d14040` | **`Copy`** | array allocs, cell-data realloc at `tesobjectcell.cpp:0x133a` |
+| 35 | `thunk_FUN_14040ef70` | `FUN_140d153d0` | **`ValidateCell`** | `tesobjectcell.cpp:0x5f9/0x1350`; dangling-cell checks, bad-coord errors, cell-name-length validation |
+| 38 | `thunk_FUN_1408be250` | `FUN_140d17dc0` | **`GetEditorLabel`** | `void(this, wchar_t*, size)`; interior→`"'%s' (%08X)"`; exterior→`"Persistent cell '%s' (%08X) (%i, %i) in WorldSpace '%s' (%08X)"` via `vt+0x238`(GetName)×2 + coord extraction from `+0xc`; invalid worldspace→`"'%s' (%08X) Invalid WorldSpace"` |
+
+#### 10c.2 TESWorldSpace (primary vftable `0x30aa510`)
+
+| slot | base | WRLD override | virtual name | call-pattern evidence |
+|---|---|---|---|---|
+| 22 | `thunk_FUN_1408bca80` | `FUN_140e4a070` | **`Initialize`** | zeroes +0xf0/+0x160/+0x168/+0xb8/+0xba/+0xbc; sets texture scale `0x3f800000`(1.0f), `0xc5000000`; calls `thunk_FUN_142424550`(texture init at +0x48); frees refcounted block at +0xc8; destructs +0x178/+0x1a0/+0x1c8/+0x1f0 |
+| 23 | `FUN_140004c28` | `FUN_140e4a1f0` | **`ClearItem`** | frees cell-map block at +0xc8(DecRef→dtor); frees +0xd0(0x38 via `thunk_FUN_140d3c040`) + +0xd8(0x38 via `thunk_FUN_140d3bc30`); frees heap blocks +0x2a8/+0x2b0 |
+| 24 | `thunk_FUN_140720ac0` | `FUN_140e4a750` | **`LoadRecord`** | 26× `FUN_14087e870`; `tesworldspace.cpp:0x360/0x378/0x4b2/0x4ba/0x4ca` |
+| **25** | `thunk_FUN_14039c240` | `FUN_140e4b040` | **`IsWorldSpace`** | `tesworldspace.cpp:0x316`; returns `1` unconditionally |
+| 27 | `thunk_FUN_140720ad0` | `FUN_140e54420` | **`SaveRecord`** | 23× `FUN_1408c7710` |
+| 31 | `thunk_FUN_1408bcfc0` | `FUN_140e54b20` | **`ResolveFormIDFromFile`** | 7-case switch on `param_2[3]`: case 0→base `FUN_1408bcfc0`; case 1→TESWorldSpace RTDynamicCast→`vt+0xf8`; case 2/3→return 0; case 6→TESObjectCELL RTDynamicCast→`vt+0xf8`; case 7→return 1 |
+| 32 | `thunk_FUN_1408bcfa0` | `FUN_140e549d0` | **`IsParentForm`** | switch on `param_2+0x26`: case 0x3f(CELL)→break(fallthrough); case 0x40–0x4c(REFR…LCTN)→RTDynamicCast to `TESChildCell`→`vt+8`(GetParentCell)→`vt+0xf8`(recursive IsParentForm on parent); **case 0x4a(WRLD)**→compare formIDs: `this+0x14 < param_2+0x14`; default→base |
+| 33 | `thunk_FUN_1408bd340` | `FUN_140e4a320` | **`AddCell`** | `tesworldspace.cpp:0x62a`; calls `FUN_140e4d180`(cell-map insert §8.3), `FUN_140e53eb0`, `FUN_140d196a0` |
+| 35 | `thunk_FUN_14040ef70` | `FUN_140e4b080` | **`IterateCells`** | `tesworldspace.cpp:0x50d`; 9× `FUN_1408be010`(form lookups) + `FUN_1408c68d0`/`FUN_1408bdd20` walking the cell array |
+
+#### 10c.3 What the naming reveals
+
+- **Four virtuals are unique to one class but not the other:**
+
+  | slot | CELL | WRLD | why only one? |
+  |---|---|---|---|
+  | 22 | (base stub) | `Initialize` | Only worldspaces need a full reinit; cells are lightweight |
+  | 25 | (base stub) | `IsWorldSpace` | Only WRLD needs to answer "yes"; CELL's form type says "no" via base |
+  | 28 | `ReleaseForm` | (base stub) | REFR removal walks the cell's ref array (unique to CELL) |
+  | 30 | `InitItem` | (base stub) | Direct form registration is cell-specific |
+
+- **Two virtuals are overridden by both with identical semantics but different casts:**
+  - Slot 31 (`ResolveFormIDFromFile`): CELL checks CELL+WRLD; WRLD checks WRLD+CELL
+  - Slot 32 (`IsParentForm`): CELL compares worldspace pointers; WRLD compares formIDs for nested worlds and delegates through `TESChildCell` for children
+
+- **Three virtuals are overridden by both with *different* semantics:**
+  - Slot 33: CELL = `Copy` (clone), WRLD = `AddCell` (insert)
+  - Slot 35: CELL = `ValidateCell` (sanity checks), WRLD = `IterateCells` (enumeration)
+  - Slot 38: CELL = `GetEditorLabel`, WRLD = (base stub)
+
+- **The base TESForm stub for slot 24 returns `1`** (always-success LoadRecord);
+  **slot 27 returns void** (no-op SaveRecord) — explaining why non-world records
+  with no override still load/save through TESForm base machinery via
+  `FUN_1408c7a70`/`FUN_1408c7710` in `tesform.cpp`.
 
 ### 10d. Anchor asymmetry: Load anchors in the class, Save anchors in `tesform`
 
