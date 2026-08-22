@@ -206,6 +206,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_rekey_formlinks.cpp
     tests/test_formlink_lists.cpp
     tests/test_nested_formlink_lists.cpp
+    tests/test_sraf_formlinks.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
