@@ -149,6 +149,9 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     // shim is a pure name mapping and cannot be bypassed to skip protection.
     // SetField routes through the scalar-schema-aware entry point, identical
     // to invoke("backend.SetField").
+    if (method == "CreateRecord") return createRecord(arguments);
+    if (method == "DeleteRecord") return deleteRecord(arguments);
+    if (method == "RenumberRecord") return renumberRecord(arguments);
     if (method == "SetField") return setFieldValue(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
