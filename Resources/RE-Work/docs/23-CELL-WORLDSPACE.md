@@ -350,6 +350,67 @@ collision handling — not cell-specific.
 (`thunk_FUN_14087d2d0`), and calls `thunk_FUN_140d55ca0` (probably cell →
 worldspace association).
 
+### 8b. TESWorldSpace member layout (constructor)
+
+Recovered from the factory Create (`FUN_140e49880` → alloc 0x2B8 + call ctor
+`FUN_140e49960`, `tesworldspace.cpp`). The factory vftable is at RVA
+`0x30aa450` (COL `0x35d03c0`, `.?AV?$ConcreteFormFactory@VTESWorldSpace@@$0EK@@@`),
+identified via the shared IFormFactory slots (5–7) common to all
+`ConcreteFormFactory` instances. `param_1` is the 8-byte slot pointer
+(`this`) passed to the ctor.
+
+**Primary vftable** at `0x30aa510` (slot 0 = COL `0x35d0450`),
+**secondary1** at `0x30aa9d8` (COL `0x35d0528`),
+**secondary2** at `0x30aaac0` (COL `0x35d0558`).
+The ctor initializes all three:
+  - `+0x00` ← primary (`0x30aa510`), `+0x28` ← secondary1 (`0x30aa518` = slot 1),
+    `+0x40` ← secondary2 (`0x30aaac8` = slot 2).
+
+The `0x30aa518` and `0x30aaac8` entries are the **vftable+8** offsets
+(effective slot 1 for each subvtable), per x64 MSVC's
+Complete Object Locator offset/cdOffset layout.
+
+| offset | size | init | meaning |
+|---|---:|---:|---|
+| +0x00 | 8 | `0x30aa510` | primary vftable (TESWorldSpace) |
+| +0x28 | 8 | `0x30aa518` | secondary1 (TESFullName base) |
+| +0x30 | 16 | ctor `0x914c20` | sub-object init (same as CELL §8.1 +0x30) |
+| +0x40 | 8 | `0x30aaac8` | secondary2 vftable |
+| +0x70 | 8 | zero → alloc 0x3f319 | **cell map** (BST map, keyed by coords — `FUN_140e539e0` lookup, `FUN_140e4d180` insert) |
+| +0x74 | 4 | 0 | |
+| +0x78 | 4 | 0 | |
+| +0x7C | 4 | 0 | |
+| +0x80 | 8 | `0x3c088` ctor | sub-object (likely land-data map) |
+| +0x88 | 8 | 0 | |
+| +0x90 | 8 | `0x3c088` ctor | sub-object |
+| +0x98 | 8 | `0x3c088` ctor → alloc `0x497bf` | **cell-level array** (BSTArray, element size 8 × `param_1` → 0x20 stride) |
+| +0xA0 | 8 | 0 | **lone interior cell** — set in `FUN_140e4d180` when an interior cell is stored |
+| +0xB8 | 8 | `0x143bd7174` | static marker |
+| +0xC0 | 8 | `0x143bd7170` | static marker |
+| +0x140 | 4 | — | **minX** (world bounds, float) — grown by `FUN_140e4d180` |
+| +0x144 | 4 | — | **minY** (float) |
+| +0x148 | 4 | — | **maxX** (float) |
+| +0x14C | 4 | — | **maxY** (float) |
+| +0x10 | 4 | (TESForm base) | form flags |
+| +0x26 | 1 | **0x4A = 74** | **form-type byte = WRLD** |
+
+**Key offsets cross-checked against `FUN_140e4d180` (cell-map insert):**
+
+- **+0x70** = cell map (`thunk_FUN_140e539e0(worldspace+0x70, key, ...)` —
+  BST map keyed by cell coord pair, the `FUN_140e539e0` lookup returns *found*).
+- **+0xA0** = interior-cell slot (single ptr, set when interior and
+  `worldspace+0xA0 == 0`). Non-interior cells skip this path.
+- **+0x140…+0x14C** = world bounds (minX, minY, maxX, maxY floats). The
+  insert function reads the cell's world position via `FUN_140d19770`, then
+  `fmin(fmin)` for each axis. Grows outward — never shrinks.
+
+**Comparison with CELL layout (§8):** Both start with three vftables
+(primary at +0x00, +0x28, +0x40) and a 16-byte sub-object at +0x30. CELL's
++0x58/+0x60 (cell-data handle/pointer) vs WRLD's +0x70 (cell map) is the
+natural difference — CELL has its own data block allocator, WRLD has a
+cell-coord keyed map. Both have the form-type byte at +0x26 (0x3F vs 0x4A)
+and flags in the TESForm base at +0x10.
+
 ## 9. Exterior cell loading — the `exteriorcellloader.cpp` streaming contract
 
 Source: `shared\tesforms\world\exteriorcellloader.cpp` (confirmed `__FILE__`
@@ -633,4 +694,9 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - `ghidra-dump/FindCodeRefsTo.java` (code xref finder)
 - `ghidra-dump/decompile-CELL-overrides.txt` (all 10 CELL slots 23+),
   `decompile-WorldSpace-overrides.txt` (all 9 WRLD override slots) —
+  raw decompiles; local only
+- `ghidra-dump/decompile-WRLD-factory-slots.txt` (WRLD factory vftable at
+  `0x30aa450` — Create, dtor, GetFormTypeName, GetFormType),
+  `decompile-WRLD-ctor-0xe49960.txt` (full TESWorldSpace constructor),
+  `decompile-WRLD-Create-0xe49880.txt` (factory Create — alloc 0x2B8 + ctor) —
   raw decompiles; local only
