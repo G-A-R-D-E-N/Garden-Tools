@@ -930,6 +930,83 @@ hex). The result is asymmetric in a way that confirms the slot naming:
   constant, not a source line** — the first pass briefly misread those
   as line anchors; the real line is the hex after the file string.
 
+### 10e. TESObjectLAND overrides (primary vftable `0x309a5c8`)
+
+LAND's vftable at RVA `0x309a5c8` (COL `0x35cbfb8`,
+`.?AVTESObjectLAND@@`). Diff against `TESForm` base vftable
+(`0x300da88`) — slots where the function target differs are LAND overrides:
+
+| slot | TESForm base | LAND override | name | evidence |
+|---|---|---|---|---|
+| 23 | `FUN_140004c28` | `thunk_FUN_140cf09d0` | `ClearItem`-family | cell-data teardown |
+| **24** | `thunk_FUN_140720ac0` | `thunk_FUN_140cefdb0` | **`LoadRecord`** | 5× subrecord read via `cmp eax, 4CC` chain |
+| 27 | `thunk_FUN_140720ad0` | `thunk_FUN_140d01900` | **`SaveRecord`** | OBTE→OBLT subrecord sequence + TESForm base chain |
+
+#### 10e.1 LoadRecord (`FUN_140cefdb0`)
+
+The decompiler flattens the subrecord dispatch into a tight `if/else` chain.
+Five subrecord 4CCs are resolved inline via `cmp eax, imm32` (RVA offsets
+from the function start):
+
+| func offset | 4CC | hex value | description |
+|---|---:|---|---|
+| +0x41fb | `DATA` | 0x41544144 | land flags/header (u32 at cell+0x53 per `tesobjectcell.cpp:0x555` assert) |
+| +0x41ea | `VHGT` | 0x54484756 | vertex height field (33×33 or similar per-cell grid) |
+| +0x41f6 | `MPCD` | 0x4443504D | material/paint color data (Fallout 4 specific) |
+| +0x4201 | `VNML` | 0x4C4D4E56 | vertex normals |
+| +0x420c | `VCLR` | 0x524C4356 | vertex colors |
+
+The read pattern follows the same `FUN_14087e870(file, dst, size)` dispatch
+used by every LoadRecord (§10a/§10b). The tight cluster of 5 `cmp` insns
+(+0x41ea–+0x420c, within 34 bytes) is the core vertex-data I/O path.
+
+**Texture layer subrecords** (`BTXT`/`ATXT`/`VTXT`) are **not** in this
+function. They are dispatched from a separate texture-layer reader at RVA
+`0x457100` (the only `cmp eax, 'BTXT'` in the entire binary), called from the
+LAND subrecord dispatch chain outside the main LoadRecord body. This is a
+separate handling path — unlike CELL/WRLD whose LoadRecord handles everything
+inline, LAND splits the core vertex data (LoadRecord) from the texture layer
+stack (delegated helper).
+
+#### 10e.2 SaveRecord (`FUN_140d01900`)
+
+Subrecord writes via `FUN_1408c7710` (the shared `tesform.cpp` subrecord
+writer, §10d) scattered across the function body:
+
+| func offset | 4CC | hex value | description |
+|---|---:|---|---|
+| +0xde29 | `OBTE` | 0x4554424F | object terrain edge links |
+| +0xde4c | `OBND` | 0x444E424F | object bounds (shared with TESForm base) |
+| +0xdef6 | `OBML` | 0x4C4D424F | object material layers |
+| +0xdf01 | `GNAM` | 0x4D414E47 | grass/ground name references |
+| +0xde18 | `HNAM` | 0x444E4148 | height-related data |
+| +0xde3a | `VMAD` | 0x44414D56 | VMAD data block (to TESForm base SaveRecord) |
+| +0xde45 | `EDID` | 0x44494445 | editor ID (to TESForm base) |
+| +0xdfd3 | `PTRN` | (TESForm base) | navigation mesh link |
+| +0xe075 | `STCP` | (TESForm base) | sound/trap/collision |
+| +0xe07c | `OBLT` | 0x544C424F | object light template |
+
+SaveRecord delegates most writes to the TESForm base chain. The
+LAND-specific writes (OBTE, OBML, GNAM, HNAM, OBLT) are the land-texture,
+grass, and terrain-edge metadata. Vertex data (VHGT/VNML/VCLR/MPCD) is
+written via the texture-layer save chain (same helper that handles BTXT/ATXT),
+not inline in SaveRecord.
+
+**The complete LAND I/O contract:**
+- **LoadRecord** handles the 5 core vertex subrecords (DATA, VHGT, MPCD, VNML, VCLR)
+- **Separate texture handler** (`0x457100`) handles layer subrecords (BTXT/ATXT/VTXT)
+- **SaveRecord** handles terrain metadata (OBTE/OBML/GNAM/HNAM/OBLT) + base form subrecords
+- **Vertex data save** is dispatched through the texture-layer save chain
+
+### 10f. Complete world-class I/O table
+
+| class | vftable RVA | LoadRecord RVA | SaveRecord RVA | subrecord count |
+|---|---|---|---|---|
+| `TESObjectCELL` | `0x309c780` | `FUN_140d146d0` (slot 24) | `FUN_140d44ba0` (slot 27) | ~40 load / 9 save |
+| `TESWorldSpace` | `0x30aa510` | `FUN_140e4a750` (slot 24) | `FUN_140e54420` (slot 27) | ~26 load / 23 save |
+| `TESObjectLAND` | `0x309a5c8` | `FUN_140cefdb0` (slot 24) | `FUN_140d01900` (slot 27) | 5 load + texture / 10 save |
+| `TESObjectREFR` | `0x30a1990` | `FUN_140d65f60` (slot 24) | `FUN_140da7820` (slot 27) | ~160 load / 4 save + subclass chain |
+
 ## 11. Known record strings (load/save surface)
 
 CELL: `XCLC` (coords), `XCLW`, `XCLL` (lighting), `XCLR`, `XCLP`, `XCLS`,
@@ -944,9 +1021,12 @@ WRLD: `WNAM`, `CNAM` (climate), `SNAM` (sound), `LNAM`, `MNAM`, `DNAM`,
 `RNAM` (parent), `OFST`, `ONAM` (LOD data), `NAM0`–`NAM9` (map offsets),
 `MHDT` (max height data), `XLOD`.
 
-LAND: `DATA` (heightfield 33×33), `VNML` (vertex normals), `VCLR` (vertex
-colors), `VHGT` (height data), `VTEX` (texture index array), `VTXT` (texture
-variations), `ATXT`/`BTXT`/`XTXT` (layer textures), `LNAM`, `MNAM`, `NAM0`.
+LAND: `DATA` (land flags/u32), `VHGT` (vertex height field, LoadRecord inline),
+`MPCD` (material/paint color data — FO4 only), `VNML` (vertex normals, LoadRecord inline),
+`VCLR` (vertex colors, LoadRecord inline), `BTXT`/`ATXT`/`VTXT` (texture layers — dispatched
+via separate handler at `0x457100`, not main LoadRecord), `OBTE`/`OBML`/`GNAM`/`HNAM`/`OBLT`
+(terrain metadata, SaveRecord inline), `OBND`/`VMAD`/`EDID`/`PTRN`/`STCP` (TESForm base,
+via SaveRecord delegate chain).
 
 (All verified present as ASCII strings in the binary; the subrecord compare
 constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
@@ -960,6 +1040,9 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - The full ~160-subrecord REFR LoadRecord dispatch table (currently partially
   decoded from the decompile tree; a complete table extraction from the
   binary if/else dispatch is pending).
+- The LAND texture-layer reader at `0x457100` — full subrecord set and caller chain.
+- The LAND vertex-data *save* path (which function writes VHGT/VNML/VCLR/MPCD
+  to the output buffer, since these are not in SaveRecord).
 
 ## Artifacts
 
@@ -989,6 +1072,8 @@ constants themselves are inline immediates in `LoadRecord`, not string xrefs.)
 - `ghidra-dump/decompile-CELL-overrides.txt` (all 10 CELL slots 23+),
   `decompile-WorldSpace-overrides.txt` (all 9 WRLD override slots) —
   raw decompiles; local only
+- `ghidra-dump/cell-worldspace-vtables/TESObjectLAND.vftable.txt` (LAND vftable
+  `0x309a5c8` — 79 slots, LoadRecord at slot 24, SaveRecord at slot 27)
 - `ghidra-dump/decompile-WRLD-factory-slots.txt` (WRLD factory vftable at
   `0x30aa450` — Create, dtor, GetFormTypeName, GetFormType),
   `decompile-WRLD-ctor-0xe49960.txt` (full TESWorldSpace constructor),
