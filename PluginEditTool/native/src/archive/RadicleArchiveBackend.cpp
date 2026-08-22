@@ -219,7 +219,13 @@ void writeAtomically(const std::filesystem::path& destination,
     auto staged = fo4::io::StagedFile::create(destination);
     staged.write(bytes);
     staged.finish();
-    staged.verify(bytes.size());
+    try {
+        staged.verify(bytes.size());
+    } catch (...) {
+        // Abandoning the attempt must not leave .radicle-tmp litter.
+        std::move(staged).cancel();
+        throw;
+    }
     std::move(staged).commit();
 }
 

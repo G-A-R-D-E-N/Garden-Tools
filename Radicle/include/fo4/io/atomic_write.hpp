@@ -22,8 +22,10 @@ public:
 
     StagedFile(const StagedFile&) = delete;
     StagedFile& operator=(const StagedFile&) = delete;
-    StagedFile(StagedFile&&) noexcept;
-    StagedFile& operator=(StagedFile&&) noexcept;
+    // Move transfers exclusive ownership of the OS handle: the source is
+    // left empty (-1 / nullptr) so its destructor can never double-close.
+    StagedFile(StagedFile&& other) noexcept;
+    StagedFile& operator=(StagedFile&& other) noexcept;
     ~StagedFile();
 
     void write(std::span<const std::byte> bytes);
@@ -35,6 +37,10 @@ public:
     // Atomically replaces the destination with the staged file. Throws on
     // failure (original left intact); cleans up the staged file first.
     void commit() &&;
+
+    // Closes and deletes the staged file. Used to abandon a staging attempt
+    // without leaving .radicle-tmp litter behind.
+    void cancel() &&;
 
 private:
     StagedFile() = default;

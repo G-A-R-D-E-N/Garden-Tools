@@ -286,21 +286,17 @@ std::optional<Error> RadiclePluginBackend::writeGuard(const LoadedPlugin& loaded
 }
 
 bool RadiclePluginBackend::isAllowedSaveRoot(const std::filesystem::path& path) const {
-    // Only directories hosting a *trusted, editable* loaded plugin are
-    // writable roots. Trusted means: arrived through the environment.LoadMo2
-    // snapshot. Plugins opened ad hoc via backend.OpenPlugin never grant
-    // Save-As authority over their directory — otherwise opening any file
-    // on disk would bootstrap an arbitrary write root. Game-Data and other
-    // protected plugins contribute no root either.
+    // Writable roots are the immutable snapshot captured from the trusted
+    // environment.LoadMo2 plugin list. They are never derived from mutable
+    // LoadedPlugin.path entries: an ad hoc OpenPlugin cannot relocate a root
+    // by retargeting a same-named trusted plugin to another directory.
     std::error_code targetEc;
     const auto target = std::filesystem::weakly_canonical(path, targetEc);
     if (targetEc || target.empty()) return false;  // fail closed
 
-    for (const auto& loaded : plugins_) {
-        if (!loaded.trusted || !isEditable(loaded)) continue;
+    for (const auto& untrustedRoot : trustedSaveRoots_) {
         std::error_code rootEc;
-        const auto root =
-            std::filesystem::weakly_canonical(loaded.path.parent_path(), rootEc);
+        const auto root = std::filesystem::weakly_canonical(untrustedRoot, rootEc);
         // Fail closed: a root that cannot be canonicalized contributes
         // nothing rather than matching everything.
         if (rootEc || root.empty()) continue;
@@ -405,8 +401,21 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 
     const auto loadedCount = loaded.size();
     {
+        // Capture the Save-As roots from this trusted snapshot once. They
+        // stay fixed until the next LoadMo2; OpenPlugin can never add to or
+        // move them.
+        std::set<std::filesystem::path> uniqueRoots;
+        std::vector<std::filesystem::path> roots;
+        for (const auto& item : loaded) {
+            std::error_code rootEc;
+            const auto root =
+                std::filesystem::weakly_canonical(item.path.parent_path(), rootEc);
+            if (rootEc || root.empty()) continue;  // fail closed: no root
+            if (uniqueRoots.insert(root).second) roots.push_back(root);
+        }
         std::scoped_lock lock(mutex_);
         plugins_ = std::move(loaded);
+        trustedSaveRoots_ = std::move(roots);
         rebuildGraphLocked();
     }
 
@@ -515,15 +524,35 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
         std::string name = plugin.key.filename().empty()
             ? filePath.filename().string()
             : std::string(plugin.key.filename());
-        std::error_code ec;
-        const auto loadedTime = std::filesystem::last_write_time(filePath, ec);
+
+        // Reject a collision with an already-loaded plugin key at a
+        // different location. Allowing it would retarget the existing entry
+        // (including a trusted one) to this file's directory, which must not
+        // influence save-root decisions or silently swap record data.
+        std::error_code newEc;
+        const auto newCanonical = std::filesystem::weakly_canonical(filePath, newEc);
         std::scoped_lock lock(mutex_);
         auto* existing = findPlugin(name);
-        if (existing) {
-            // Ad hoc loads never grant or revoke trust: an entry first loaded
-            // through LoadMo2 keeps its trusted status; a fresh OpenPlugin
-            // entry starts untrusted.
-            existing->path = filePath;
+        if (existing != nullptr) {
+            std::error_code existingEc;
+            const auto existingCanonical =
+                std::filesystem::weakly_canonical(existing->path, existingEc);
+            if (newEc || existingEc || newCanonical.empty() ||
+                existingCanonical.empty() || newCanonical != existingCanonical) {
+                return std::unexpected(Error{
+                    "PluginAlreadyLoaded",
+                    "A plugin with this name/key is already loaded from another "
+                    "location; close it first: " +
+                        (existing == nullptr ? name : existing->path.string())
+                });
+            }
+        }
+
+        std::error_code ec;
+        const auto loadedTime = std::filesystem::last_write_time(filePath, ec);
+        if (existing != nullptr) {
+            // Same canonical path: refresh the cached contents in place.
+            // Trust and save roots are untouched by ad hoc loads.
             existing->loadedTime = loadedTime;
             existing->plugin = std::move(plugin);
         } else {

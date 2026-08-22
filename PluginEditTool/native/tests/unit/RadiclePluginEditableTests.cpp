@@ -227,3 +227,45 @@ TEST_CASE("OpenPlugin never grants Save-As authority over its directory") {
         "SavePlugin", nlohmann::json::array({"Opened.esp", ""}));
     CHECK(inPlace.has_value());
 }
+
+TEST_CASE("OpenPlugin cannot retarget a trusted plugin via a same-name collision") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    std::filesystem::create_directories(root / "trusted-mod");
+    std::filesystem::create_directories(root / "arbitrary");
+
+    const auto trustedPath = root / "trusted-mod" / "Patch.esp";
+    writeBytes(trustedPath, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(root / "Fallout 4" / "Data");
+
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", trustedPath, "Trusted Mod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    // A different file with the same plugin name, at an arbitrary location.
+    // findPlugin() matches by PluginKey as well as name, so this collides.
+    const auto impostorPath = root / "arbitrary" / "Patch.esp";
+    writeBytes(impostorPath, makePlugin());
+    const auto opened = backend.invoke(
+        "backend.OpenPlugin", nlohmann::json::array({impostorPath.string()}));
+    REQUIRE_FALSE(opened.has_value());
+    CHECK(opened.error().type == "PluginAlreadyLoaded");
+
+    // The trusted entry must still point at the original file.
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    REQUIRE(active.size() == 1);
+    CHECK(active[0].at("Name") == "Patch.esp");
+
+    // And the arbitrary directory must not have become a Save-As root.
+    const auto denied = backend.invokeBackend(
+        "SavePlugin",
+        nlohmann::json::array({"Patch.esp", (root / "arbitrary" / "Out.esp").string()}));
+    REQUIRE_FALSE(denied.has_value());
+    CHECK(denied.error().type == "SavePathNotAllowed");
+}

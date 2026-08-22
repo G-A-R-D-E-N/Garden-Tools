@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #if defined(_WIN32)
   #ifndef WIN32_LEAN_AND_MEAN
@@ -52,8 +53,31 @@ std::filesystem::path temp_sibling(const std::filesystem::path& path) {
 
 }  // namespace
 
-StagedFile::StagedFile(StagedFile&&) noexcept = default;
-StagedFile& StagedFile::operator=(StagedFile&&) noexcept = default;
+#if defined(_WIN32)
+StagedFile::StagedFile(StagedFile&& other) noexcept
+    : path_(std::move(other.path_)),
+      destination_(std::move(other.destination_)),
+      handle_(std::exchange(other.handle_, nullptr)) {}
+#else
+StagedFile::StagedFile(StagedFile&& other) noexcept
+    : path_(std::move(other.path_)),
+      destination_(std::move(other.destination_)),
+      fd_(std::exchange(other.fd_, -1)) {}
+#endif
+
+StagedFile& StagedFile::operator=(StagedFile&& other) noexcept {
+  if (this != &other) {
+    close();
+    path_ = std::move(other.path_);
+    destination_ = std::move(other.destination_);
+#if defined(_WIN32)
+    handle_ = std::exchange(other.handle_, nullptr);
+#else
+    fd_ = std::exchange(other.fd_, -1);
+#endif
+  }
+  return *this;
+}
 
 StagedFile::~StagedFile() { close(); }
 
@@ -90,10 +114,13 @@ void StagedFile::write(const std::span<const std::byte> bytes) {
 #if defined(_WIN32)
   const auto* data = reinterpret_cast<const char*>(bytes.data());
   std::size_t remaining = bytes.size();
+  // WriteFile accepts at most DWORD bytes per call; a size_t cast would
+  // truncate at exactly 4 GiB and loop forever above it. Chunk explicitly.
+  constexpr std::size_t k_max_chunk = static_cast<std::size_t>(0xFFFFFFFFu);
   while (remaining > 0) {
+    const auto chunk = static_cast<DWORD>(remaining < k_max_chunk ? remaining : k_max_chunk);
     DWORD written = 0;
-    if (!::WriteFile(static_cast<HANDLE>(handle_), data,
-                     static_cast<DWORD>(remaining), &written, nullptr) ||
+    if (!::WriteFile(static_cast<HANDLE>(handle_), data, chunk, &written, nullptr) ||
         written == 0) {
       const auto error = ::GetLastError();
       close();
@@ -152,6 +179,16 @@ void StagedFile::verify(const std::size_t expectedSize) const {
 }
 
 void StagedFile::commit() && {
+  // Carry the destination's permissions onto the staged file before the
+  // swap so replacing an existing file does not silently change its mode
+  // (POSIX staging creates with 0644). Best effort on every platform.
+  std::error_code status_ec;
+  const auto existing = std::filesystem::symlink_status(destination_, status_ec);
+  if (!status_ec && std::filesystem::is_regular_file(existing)) {
+    std::error_code perm_ec;
+    std::filesystem::permissions(path_, existing.permissions(), perm_ec);
+  }
+
   // The single replace primitive. rename(2) atomically substitutes the
   // destination on POSIX; MoveFileExW with MOVEFILE_REPLACE_EXISTING is the
   // equivalent on Windows. The destination entry is swapped, never truncated
@@ -184,6 +221,12 @@ void StagedFile::commit() && {
   }
 }
 
+void StagedFile::cancel() && {
+  close();
+  std::error_code remove_ec;
+  std::filesystem::remove(path_, remove_ec);
+}
+
 void StagedFile::close() noexcept {
 #if !defined(_WIN32)
   if (fd_ >= 0) {
@@ -212,8 +255,14 @@ void write_file_atomic(const std::filesystem::path& path,
   auto staged = StagedFile::create(path);
   staged.write(bytes);
   staged.finish();
-  if (!bytes.empty()) {
-    staged.verify(bytes.size());
+  try {
+    if (!bytes.empty()) {
+      staged.verify(bytes.size());
+    }
+  } catch (...) {
+    // Abandoning the attempt must not leave .radicle-tmp litter.
+    std::move(staged).cancel();
+    throw;
   }
   std::move(staged).commit();
 }

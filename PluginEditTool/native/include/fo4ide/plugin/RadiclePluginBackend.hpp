@@ -26,7 +26,6 @@ public:
     // beneath it is treated as read-only regardless of its reported MO2
     // source. Call once during setup, before the backend serves requests.
     void setDataDirectory(std::filesystem::path dataDirectory);
-
 private:
     struct LoadedPlugin {
         std::string name;
@@ -98,6 +97,11 @@ private:
     fo4::ConflictGraph graph_;
     // Written once during setup via setDataDirectory, read-only afterwards.
     std::filesystem::path dataDirectory_;
+    // Immutable snapshot of the writable Save-As roots, captured from the
+    // environment.LoadMo2 plugin list only. Never derived from mutable
+    // LoadedPlugin.path: an ad hoc OpenPlugin must not be able to retarget
+    // a trusted entry's path and thereby relocate a save root.
+    std::vector<std::filesystem::path> trustedSaveRoots_;
 };
 
 }
