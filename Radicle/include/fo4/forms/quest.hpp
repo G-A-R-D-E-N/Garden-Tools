@@ -42,6 +42,35 @@ struct QuestExternalAliasReferenceFill {
   std::int32_t alias{0};
 };
 
+struct QuestCreateReferenceFill {
+  std::optional<FormKey> object;
+  std::int16_t alias{0};
+  std::uint16_t create_mode{0};
+};
+
+struct QuestMatchingReferenceNearAlias {
+  std::int32_t alias{0};
+  std::uint32_t type{0};
+};
+
+struct QuestMatchingReferenceEvent {
+  std::uint32_t event{0};
+  std::uint32_t data{0};
+};
+
+struct QuestMatchingReferenceClosest {
+  std::int32_t alias{0};
+};
+
+using QuestMatchingReferenceSelector = std::variant<
+    QuestMatchingReferenceNearAlias,
+    QuestMatchingReferenceEvent,
+    QuestMatchingReferenceClosest>;
+
+struct QuestFindMatchingReferenceFill {
+  QuestMatchingReferenceSelector selector;
+};
+
 struct QuestSpecificLocationFill {
   FormKey location;
 };
@@ -56,15 +85,23 @@ struct QuestExternalAliasLocationFill {
   std::optional<std::int32_t> alias;
 };
 
+struct QuestFindMatchingLocationFill {
+  std::uint32_t event{0};
+  std::uint32_t data{0};
+};
+
 using QuestAliasFill = std::variant<
     std::monostate,
     QuestSpecificReferenceFill,
     QuestUniqueActorFill,
     QuestLocationAliasReferenceFill,
     QuestExternalAliasReferenceFill,
+    QuestCreateReferenceFill,
+    QuestFindMatchingReferenceFill,
     QuestSpecificLocationFill,
     QuestReferenceAliasLocationFill,
-    QuestExternalAliasLocationFill>;
+    QuestExternalAliasLocationFill,
+    QuestFindMatchingLocationFill>;
 
 // One alias is kept as an ordered subrecord sequence because reference and
 // location aliases are repeatable tagged unions with conditions/arrays inside
@@ -78,6 +115,7 @@ struct QuestAlias {
   std::optional<std::uint32_t> flags;
   std::optional<std::int32_t> force_into_alias;
   std::optional<std::uint8_t> max_initial_fill_count;
+  std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
   std::vector<Subrecord> subrecords;
 };
@@ -89,6 +127,7 @@ struct QuestAliasCreation {
   std::optional<std::uint32_t> flags;
   std::optional<std::int32_t> force_into_alias;
   std::optional<std::uint8_t> max_initial_fill_count;
+  std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
 };
 
