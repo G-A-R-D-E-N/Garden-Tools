@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace fo4::forms {
 namespace {
@@ -36,6 +37,35 @@ std::int32_t read_i32(const std::vector<std::byte>& data) {
   std::int32_t value = 0;
   std::memcpy(&value, data.data(), sizeof(value));
   return value;
+}
+
+std::vector<std::byte> write_u32(std::uint32_t value) {
+  std::vector<std::byte> data(sizeof(value));
+  std::memcpy(data.data(), &value, sizeof(value));
+  return data;
+}
+
+std::vector<std::byte> write_i32(std::int32_t value) {
+  std::vector<std::byte> data(sizeof(value));
+  std::memcpy(data.data(), &value, sizeof(value));
+  return data;
+}
+
+std::vector<std::byte> zstring(std::string_view value) {
+  if (value.find('\0') != std::string_view::npos) {
+    throw QuestError("QUST alias name cannot contain an embedded NUL");
+  }
+  std::vector<std::byte> data;
+  data.reserve(value.size() + 1);
+  for (const char ch : value) {
+    data.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  }
+  data.push_back(std::byte{0});
+  return data;
+}
+
+Subrecord make_subrecord(Signature signature, std::vector<std::byte> data = {}) {
+  return Subrecord{signature, std::move(data), false};
 }
 
 std::uint32_t alias_id(const Subrecord& subrecord, std::string_view label) {
@@ -133,6 +163,53 @@ void decode_alias_semantics(QuestAlias& alias) {
 }
 
 }  // namespace
+
+QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
+  QuestAlias alias;
+  alias.kind = creation.kind;
+  alias.id = creation.id;
+
+  if (creation.kind == QuestAliasKind::collection) {
+    if (creation.name.has_value() || creation.flags.has_value() ||
+        creation.force_into_alias.has_value()) {
+      throw QuestError(
+          "QUST collection aliases do not use ALID, FNAM, or ALFI fields");
+    }
+    alias.subrecords.push_back(make_subrecord(k_alcs, write_u32(creation.id)));
+    if (creation.max_initial_fill_count.has_value()) {
+      alias.subrecords.push_back(make_subrecord(
+          k_almi,
+          std::vector<std::byte>{std::byte{*creation.max_initial_fill_count}}));
+    }
+    decode_alias_semantics(alias);
+    return alias;
+  }
+
+  if (!creation.flags.has_value()) {
+    throw QuestError("QUST reference/location alias creation requires FNAM Flags");
+  }
+  if (creation.kind == QuestAliasKind::reference && !creation.name.has_value()) {
+    throw QuestError("QUST reference alias creation requires ALID Alias Name");
+  }
+  if (creation.max_initial_fill_count.has_value()) {
+    throw QuestError("QUST reference/location aliases do not use collection ALMI");
+  }
+
+  alias.subrecords.push_back(make_subrecord(
+      creation.kind == QuestAliasKind::reference ? k_alst : k_alls,
+      write_u32(creation.id)));
+  if (creation.name.has_value()) {
+    alias.subrecords.push_back(make_subrecord(k_alid, zstring(*creation.name)));
+  }
+  alias.subrecords.push_back(make_subrecord(k_fnam, write_u32(*creation.flags)));
+  if (creation.force_into_alias.has_value()) {
+    alias.subrecords.push_back(
+        make_subrecord(k_alfi, write_i32(*creation.force_into_alias)));
+  }
+  alias.subrecords.push_back(make_subrecord(k_aled));
+  decode_alias_semantics(alias);
+  return alias;
+}
 
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
   const auto* record = find_record(plugin, key);
