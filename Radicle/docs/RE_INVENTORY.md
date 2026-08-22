@@ -27,7 +27,7 @@ Confidence: `confirmed` / `strong` / `probable` / `speculative`.
 
 **Proves:** 159-entry index→4CC table, 24-byte entries, index 0 `NONE`, packed 4CC little-endian `'TES4' = 0x34534554`. Validator lives in `tesform.cpp`. Factory setter `FUN_1408bc350` bounds-checks `< 0x9f`.
 
-**Confidence:** `confirmed` for the 4CC list and table sizes.
+**Confidence:** `confirmed` that these symbols exist in the unpacked OG index. `CheckValidIDForSmallFile` is `confirmed` as `(id & 0x00FFF000) == 0` from its disassembled body at RVA `0x130550`, and `AdjustFormIDFileIndex` is `confirmed` at RVA `0x131f90`. Both sit `0x10` below their listed RVAs; take addresses from the disassembly, not the symbol table, in this region.
 
 **Library impact:** The generic reader does not need the factory. The schema system should use this 4CC list as the closed set of known signatures, while still preserving unknown signatures.
 
@@ -113,7 +113,7 @@ TESFile record/chunk parser was named (`tesfilecontainer.cpp`) but the actual `N
 
 **Proves:** The engine distinguishes normal vs small files, has a master list, builds an index table, and adjusts FormIDs. Chunk IO is the subrecord loop. `GetFormVersion` exists (`0x52970`).
 
-**Confidence:** `confirmed` that these symbols/RVAs exist in the unpacked OG index. Behavior of `AdjustFormIDFileIndex` / `CheckValidIDForSmallFile` is `strong` by name and size, `speculative` in exact bitwise detail until decompiled.
+**Confidence:** `confirmed` that these symbols/RVAs exist in the unpacked OG index and that the section-aware raw mapping reaches their bodies. `CheckValidIDForSmallFile` is confirmed as `(formID & 0x00FFF000) == 0`; the 10-byte body is `f7 c1 00 f0 ff 00 0f 94 c0 c3`. The reusable map/sweep is `Resources/RE-Work/tools/rebase_runtime_symbols.py`.
 
 **Library impact:** This is the runtime specification for FormKey encode/decode and for the generic chunk reader.
 
