@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -31,6 +32,8 @@ constexpr auto k_alfr = Signature::from_string("ALFR");
 constexpr auto k_alua = Signature::from_string("ALUA");
 constexpr auto k_alfa = Signature::from_string("ALFA");
 constexpr auto k_alrt = Signature::from_string("ALRT");
+constexpr auto k_alfl = Signature::from_string("ALFL");
+constexpr auto k_knam = Signature::from_string("KNAM");
 constexpr auto k_aleq = Signature::from_string("ALEQ");
 constexpr auto k_alea = Signature::from_string("ALEA");
 constexpr auto k_aled = Signature::from_string("ALED");
@@ -244,6 +247,65 @@ void decode_reference_fill(QuestAlias& alias,
   }
 }
 
+void decode_location_fill(QuestAlias& alias,
+                          const PluginFormIdContext& context) {
+  const auto* specific = unique_member(alias, k_alfl, "ALFL");
+  const auto* reference_alias = unique_member(alias, k_alfa, "ALFA");
+  const auto* keyword = unique_member(alias, k_knam, "KNAM");
+  const auto* external_quest = unique_member(alias, k_aleq, "ALEQ");
+  const auto* external_alias = unique_member(alias, k_alea, "ALEA");
+
+  const bool has_specific = specific != nullptr;
+  const bool has_reference = reference_alias != nullptr || keyword != nullptr;
+  const bool has_external = external_quest != nullptr || external_alias != nullptr;
+  const auto variants = static_cast<unsigned>(has_specific) +
+                        static_cast<unsigned>(has_reference) +
+                        static_cast<unsigned>(has_external);
+  if (variants > 1) {
+    throw QuestError("QUST location alias contains multiple Fill Type variants");
+  }
+
+  if (has_specific) {
+    alias.fill = QuestSpecificLocationFill{
+        decode_required_form_key(*specific, context, "ALFL Specific Location")};
+    return;
+  }
+  if (has_reference) {
+    if (reference_alias == nullptr) {
+      throw QuestError("QUST Reference Alias Location fill requires ALFA");
+    }
+    if (reference_alias->data.size() != 4) {
+      throw QuestError("QUST ALFA alias ID must be exactly four bytes");
+    }
+    std::optional<FormKey> resolved_keyword;
+    if (keyword != nullptr) {
+      resolved_keyword = decode_required_form_key(*keyword, context, "KNAM Keyword");
+    }
+    alias.fill = QuestReferenceAliasLocationFill{
+        .alias = read_i32(reference_alias->data),
+        .keyword = std::move(resolved_keyword),
+    };
+    return;
+  }
+  if (has_external) {
+    std::optional<FormKey> quest;
+    if (external_quest != nullptr) {
+      quest = decode_optional_form_key(*external_quest, context, "ALEQ Quest");
+    }
+    std::optional<std::int32_t> external_id;
+    if (external_alias != nullptr) {
+      if (external_alias->data.size() != 4) {
+        throw QuestError("QUST ALEA external alias ID must be exactly four bytes");
+      }
+      external_id = read_i32(external_alias->data);
+    }
+    alias.fill = QuestExternalAliasLocationFill{
+        .quest = std::move(quest),
+        .alias = external_id,
+    };
+  }
+}
+
 void decode_alias_semantics(QuestAlias& alias,
                             const PluginFormIdContext* context) {
   if (alias.kind == QuestAliasKind::collection) {
@@ -283,19 +345,29 @@ void decode_alias_semantics(QuestAlias& alias,
     alias.force_into_alias = read_i32(force->data);
   }
 
-  if (alias.kind == QuestAliasKind::reference) {
-    const bool has_formlink_fill =
-        unique_member(alias, k_alfr, "ALFR") != nullptr ||
-        unique_member(alias, k_alua, "ALUA") != nullptr ||
-        unique_member(alias, k_alfa, "ALFA") != nullptr ||
-        unique_member(alias, k_alrt, "ALRT") != nullptr ||
-        unique_member(alias, k_aleq, "ALEQ") != nullptr ||
-        unique_member(alias, k_alea, "ALEA") != nullptr;
-    if (has_formlink_fill) {
-      if (context == nullptr) {
-        throw QuestError("QUST FormLink-bearing alias fill requires plugin FormID context");
-      }
+  const bool reference_fill_present =
+      unique_member(alias, k_alfr, "ALFR") != nullptr ||
+      unique_member(alias, k_alua, "ALUA") != nullptr ||
+      unique_member(alias, k_alfa, "ALFA") != nullptr ||
+      unique_member(alias, k_alrt, "ALRT") != nullptr ||
+      unique_member(alias, k_aleq, "ALEQ") != nullptr ||
+      unique_member(alias, k_alea, "ALEA") != nullptr;
+  const bool location_fill_present =
+      unique_member(alias, k_alfl, "ALFL") != nullptr ||
+      unique_member(alias, k_alfa, "ALFA") != nullptr ||
+      unique_member(alias, k_knam, "KNAM") != nullptr ||
+      unique_member(alias, k_aleq, "ALEQ") != nullptr ||
+      unique_member(alias, k_alea, "ALEA") != nullptr;
+
+  if ((alias.kind == QuestAliasKind::reference && reference_fill_present) ||
+      (alias.kind == QuestAliasKind::location && location_fill_present)) {
+    if (context == nullptr) {
+      throw QuestError("QUST FormLink-bearing alias fill requires plugin FormID context");
+    }
+    if (alias.kind == QuestAliasKind::reference) {
       decode_reference_fill(alias, *context);
+    } else {
+      decode_location_fill(alias, *context);
     }
   }
 }
@@ -349,15 +421,15 @@ QuestAlias encode_base_alias(const QuestAliasCreation& creation) {
   return alias;
 }
 
-void insert_reference_fill(QuestAlias& alias,
-                           const QuestAliasFill& fill,
-                           const PluginFormIdContext& context) {
+void insert_alias_fill(QuestAlias& alias,
+                       const QuestAliasFill& fill,
+                       const PluginFormIdContext& context) {
   if (std::holds_alternative<std::monostate>(fill)) return;
-  if (alias.kind != QuestAliasKind::reference) {
-    throw QuestError("current semantic Fill Type encoder supports reference aliases only");
+  if (alias.kind == QuestAliasKind::collection) {
+    throw QuestError("QUST collection aliases do not use reference/location Fill Type unions");
   }
   if (alias.subrecords.empty() || alias.subrecords.back().signature != k_aled) {
-    throw QuestError("QUST reference alias encoder lost required ALED boundary");
+    throw QuestError("QUST alias encoder lost required ALED boundary");
   }
 
   std::vector<Subrecord> members;
@@ -367,17 +439,55 @@ void insert_reference_fill(QuestAlias& alias,
         if constexpr (std::is_same_v<T, std::monostate>) {
           return;
         } else if constexpr (std::is_same_v<T, QuestSpecificReferenceFill>) {
+          if (alias.kind != QuestAliasKind::reference) {
+            throw QuestError("Specific Reference fill is valid only on reference aliases");
+          }
           members.push_back(encoded_optional_form_key(k_alfr, value.reference, context));
         } else if constexpr (std::is_same_v<T, QuestUniqueActorFill>) {
+          if (alias.kind != QuestAliasKind::reference) {
+            throw QuestError("Unique Actor fill is valid only on reference aliases");
+          }
           members.push_back(encoded_form_key(k_alua, value.actor, context));
         } else if constexpr (std::is_same_v<T, QuestLocationAliasReferenceFill>) {
+          if (alias.kind != QuestAliasKind::reference) {
+            throw QuestError("Location Alias Reference fill is valid only on reference aliases");
+          }
           members.push_back(make_subrecord(k_alfa, write_i32(value.alias)));
           members.push_back(encoded_form_key(k_alrt, value.reference_type, context));
         } else if constexpr (std::is_same_v<T, QuestExternalAliasReferenceFill>) {
+          if (alias.kind != QuestAliasKind::reference) {
+            throw QuestError("External Alias Reference fill is valid only on reference aliases");
+          }
           if (value.quest.has_value()) {
             members.push_back(encoded_form_key(k_aleq, *value.quest, context));
           }
           members.push_back(make_subrecord(k_alea, write_i32(value.alias)));
+        } else if constexpr (std::is_same_v<T, QuestSpecificLocationFill>) {
+          if (alias.kind != QuestAliasKind::location) {
+            throw QuestError("Specific Location fill is valid only on location aliases");
+          }
+          members.push_back(encoded_form_key(k_alfl, value.location, context));
+        } else if constexpr (std::is_same_v<T, QuestReferenceAliasLocationFill>) {
+          if (alias.kind != QuestAliasKind::location) {
+            throw QuestError("Reference Alias Location fill is valid only on location aliases");
+          }
+          members.push_back(make_subrecord(k_alfa, write_i32(value.alias)));
+          if (value.keyword.has_value()) {
+            members.push_back(encoded_form_key(k_knam, *value.keyword, context));
+          }
+        } else if constexpr (std::is_same_v<T, QuestExternalAliasLocationFill>) {
+          if (alias.kind != QuestAliasKind::location) {
+            throw QuestError("External Alias Location fill is valid only on location aliases");
+          }
+          if (!value.quest.has_value() && !value.alias.has_value()) {
+            throw QuestError("External Alias Location fill must contain ALEQ or ALEA");
+          }
+          if (value.quest.has_value()) {
+            members.push_back(encoded_form_key(k_aleq, *value.quest, context));
+          }
+          if (value.alias.has_value()) {
+            members.push_back(make_subrecord(k_alea, write_i32(*value.alias)));
+          }
         }
       },
       fill);
@@ -403,7 +513,7 @@ QuestAlias encode_quest_alias(const Plugin& plugin,
                               const QuestAliasCreation& creation) {
   auto alias = encode_base_alias(creation);
   const auto context = plugin_form_id_context(plugin);
-  insert_reference_fill(alias, creation.fill, context);
+  insert_alias_fill(alias, creation.fill, context);
   decode_alias_semantics(alias, &context);
   return alias;
 }
