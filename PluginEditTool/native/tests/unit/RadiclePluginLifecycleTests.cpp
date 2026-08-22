@@ -249,7 +249,7 @@ TEST_CASE("Native lifecycle refuses raw creation without schema preflight") {
 
     const auto created = backend.invokeBackend(
         "CreateRecord",
-        nlohmann::json::array({"Patch.esp", "RACE", nlohmann::json::object()}));
+        nlohmann::json::array({"Patch.esp", "MISC", nlohmann::json::object()}));
     REQUIRE_FALSE(created.has_value());
     CHECK(created.error().type == "RecordCreationRequiresSchema");
 
