@@ -35,7 +35,7 @@ fo4ide_enable_warnings(fo4ide_settings)
 fo4ide_enable_sanitizers(fo4ide_settings)
 
 add_library(fo4ide_process process/ProcessRunner.cpp)
-target_link_libraries(fo4ide_process PUBLIC fo4ide_core reproc++)
+target_link_libraries(fo4ide_process PUBLIC fo4ide_core PRIVATE reproc++)
 fo4ide_enable_warnings(fo4ide_process)
 fo4ide_enable_sanitizers(fo4ide_process)
 
