@@ -20,6 +20,14 @@ void write_u32_subrecord(fo4::test::ByteWriter& out,
   fo4::test::write_subrecord(out, signature, data.bytes);
 }
 
+void write_i32_subrecord(fo4::test::ByteWriter& out,
+                         std::string_view signature,
+                         std::int32_t value) {
+  std::vector<std::byte> data(sizeof(value));
+  std::memcpy(data.data(), &value, sizeof(value));
+  fo4::test::write_subrecord(out, signature, data);
+}
+
 std::vector<std::byte> quest_plugin(bool missing_reference_end = false,
                                     bool orphan_end = false,
                                     bool malformed_collection_count = false) {
@@ -39,6 +47,8 @@ std::vector<std::byte> quest_plugin(bool missing_reference_end = false,
 
   write_u32_subrecord(out, "ALST", 1);
   fo4::test::write_subrecord(out, "ALID", std::string_view{"ReferenceOne\0", 13});
+  write_u32_subrecord(out, "FNAM", 0x12);
+  write_i32_subrecord(out, "ALFI", -1);
   const std::vector<std::byte> unknown{
       std::byte{0x11}, std::byte{0x22}, std::byte{0x33}};
   fo4::test::write_subrecord(out, "ZZZZ", unknown);
@@ -48,6 +58,7 @@ std::vector<std::byte> quest_plugin(bool missing_reference_end = false,
 
   write_u32_subrecord(out, "ALLS", 2);
   fo4::test::write_subrecord(out, "ALID", std::string_view{"LocationTwo\0", 12});
+  write_u32_subrecord(out, "FNAM", 0x34);
   fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
 
   write_u32_subrecord(out, "ALCS", 3);
@@ -89,24 +100,36 @@ TEST(QuestAliases, PreservesMixedAliasVariantsAndRepeatedBoundaries) {
   const auto& reference = aliases.aliases[0];
   EXPECT_EQ(reference.kind, fo4::forms::QuestAliasKind::reference);
   EXPECT_EQ(reference.id, 1u);
-  ASSERT_EQ(reference.subrecords.size(), 4u);
+  EXPECT_EQ(reference.name, std::optional<std::string>{"ReferenceOne"});
+  EXPECT_EQ(reference.flags, std::optional<std::uint32_t>{0x12});
+  EXPECT_EQ(reference.force_into_alias, std::optional<std::int32_t>{-1});
+  EXPECT_FALSE(reference.max_initial_fill_count.has_value());
+  ASSERT_EQ(reference.subrecords.size(), 6u);
   EXPECT_EQ(reference.subrecords[0].signature.to_string(), "ALST");
   EXPECT_EQ(reference.subrecords[1].signature.to_string(), "ALID");
-  EXPECT_EQ(reference.subrecords[2].signature.to_string(), "ZZZZ");
-  EXPECT_EQ(reference.subrecords[2].data,
+  EXPECT_EQ(reference.subrecords[2].signature.to_string(), "FNAM");
+  EXPECT_EQ(reference.subrecords[3].signature.to_string(), "ALFI");
+  EXPECT_EQ(reference.subrecords[4].signature.to_string(), "ZZZZ");
+  EXPECT_EQ(reference.subrecords[4].data,
             (std::vector<std::byte>{std::byte{0x11}, std::byte{0x22}, std::byte{0x33}}));
-  EXPECT_EQ(reference.subrecords[3].signature.to_string(), "ALED");
+  EXPECT_EQ(reference.subrecords[5].signature.to_string(), "ALED");
 
   const auto& location = aliases.aliases[1];
   EXPECT_EQ(location.kind, fo4::forms::QuestAliasKind::location);
   EXPECT_EQ(location.id, 2u);
-  ASSERT_EQ(location.subrecords.size(), 3u);
+  EXPECT_EQ(location.name, std::optional<std::string>{"LocationTwo"});
+  EXPECT_EQ(location.flags, std::optional<std::uint32_t>{0x34});
+  EXPECT_FALSE(location.force_into_alias.has_value());
+  ASSERT_EQ(location.subrecords.size(), 4u);
   EXPECT_EQ(location.subrecords.front().signature.to_string(), "ALLS");
   EXPECT_EQ(location.subrecords.back().signature.to_string(), "ALED");
 
   const auto& collection = aliases.aliases[2];
   EXPECT_EQ(collection.kind, fo4::forms::QuestAliasKind::collection);
   EXPECT_EQ(collection.id, 3u);
+  EXPECT_FALSE(collection.name.has_value());
+  EXPECT_FALSE(collection.flags.has_value());
+  EXPECT_EQ(collection.max_initial_fill_count, std::optional<std::uint8_t>{5});
   ASSERT_EQ(collection.subrecords.size(), 2u);
   EXPECT_EQ(collection.subrecords[0].signature.to_string(), "ALCS");
   EXPECT_EQ(raw_u32(collection.subrecords[0]), 3u);
@@ -151,6 +174,24 @@ TEST(QuestAliases, RequiresUniqueFourByteNextAliasId) {
   quest->subrecords.push_back(
       fo4::Subrecord{fo4::Signature::from_string("ANAM"),
                      std::vector<std::byte>(4, std::byte{0}), false});
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::decode_quest_aliases(
+          plugin, fo4::FormKey::parse("000800:Quest.esp"))),
+      fo4::forms::QuestError);
+}
+
+TEST(QuestAliases, RequiresReferenceNameAndReferenceLocationFlags) {
+  auto plugin = fo4::read_plugin(quest_plugin(), "Quest.esp");
+  auto* quest = const_cast<fo4::Record*>(
+      fo4::find_record(plugin, fo4::FormKey::parse("000800:Quest.esp")));
+  ASSERT_NE(quest, nullptr);
+
+  for (auto it = quest->subrecords.begin(); it != quest->subrecords.end(); ++it) {
+    if (it->signature == fo4::Signature::from_string("FNAM")) {
+      quest->subrecords.erase(it);
+      break;
+    }
+  }
   EXPECT_THROW(
       static_cast<void>(fo4::forms::decode_quest_aliases(
           plugin, fo4::FormKey::parse("000800:Quest.esp"))),
