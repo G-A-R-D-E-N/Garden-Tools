@@ -211,6 +211,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_nested_formlink_lists.cpp
     tests/test_sraf_formlinks.cpp
     tests/test_exterior_cell_grid.cpp
+    tests/test_exterior_cell_grid_real.cpp
     tests/test_exterior_cell_creation.cpp
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_encoding.cpp
