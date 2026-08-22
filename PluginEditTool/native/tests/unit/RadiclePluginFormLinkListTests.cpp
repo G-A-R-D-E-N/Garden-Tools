@@ -119,6 +119,16 @@ std::uint32_t nthRaw(const fo4::Record& record,
     return 0;
 }
 
+std::size_t countSubrecords(const fo4::Record& record,
+                            std::string_view signature) {
+    const auto sig = fo4::Signature::from_string(signature);
+    std::size_t count = 0;
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature == sig) ++count;
+    }
+    return count;
+}
+
 }
 
 TEST_CASE("PluginEditTool edits generated indexed RACE FormLink list field") {
@@ -145,6 +155,61 @@ TEST_CASE("PluginEditTool edits generated indexed RACE FormLink list field") {
     CHECK(nthRaw(*race, "AHCM", 1) == 0x00000801u);
 }
 
+TEST_CASE("PluginEditTool inserts generated FormLink list element between neighbors") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "InsertFormLinkListElement",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000803:Patch.esp",
+            "RACE\\MaleHairColors",
+            1,
+            "000801:Patch.esp"
+        }));
+    REQUIRE(result.has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* race = fo4::find_record(
+        disk, fo4::FormKey::parse("000803:Patch.esp"));
+    REQUIRE(race != nullptr);
+    REQUIRE(countSubrecords(*race, "AHCM") == 3u);
+    CHECK(nthRaw(*race, "AHCM", 0) == 0x00000800u);
+    CHECK(nthRaw(*race, "AHCM", 1) == 0x00000801u);
+    CHECK(nthRaw(*race, "AHCM", 2) == 0x00000800u);
+}
+
+TEST_CASE("PluginEditTool removes generated FormLink list element") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "RemoveFormLinkListElement",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000803:Patch.esp",
+            "RACE\\MaleHairColors",
+            0
+        }));
+    REQUIRE(result.has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* race = fo4::find_record(
+        disk, fo4::FormKey::parse("000803:Patch.esp"));
+    REQUIRE(race != nullptr);
+    REQUIRE(countSubrecords(*race, "AHCM") == 1u);
+    CHECK(nthRaw(*race, "AHCM", 0) == 0x00000800u);
+}
+
 TEST_CASE("PluginEditTool rejects wrong FormLink target type without writing") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -165,7 +230,7 @@ TEST_CASE("PluginEditTool rejects wrong FormLink target type without writing") {
     CHECK(readBytes(path) == before);
 }
 
-TEST_CASE("PluginEditTool refuses FormLink list insertion until ordering is modeled") {
+TEST_CASE("PluginEditTool SetField does not silently turn replacement into insertion") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -182,5 +247,35 @@ TEST_CASE("PluginEditTool refuses FormLink list insertion until ordering is mode
     }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "FormLinkListIndexOutOfRange");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("PluginEditTool refuses empty-list insertion without a schema anchor") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    REQUIRE(backend.invokeBackend(
+        "RemoveFormLinkListElement",
+        nlohmann::json::array({"Patch.esp", "000803:Patch.esp", "RACE\\MaleHairColors", 1})).has_value());
+    REQUIRE(backend.invokeBackend(
+        "RemoveFormLinkListElement",
+        nlohmann::json::array({"Patch.esp", "000803:Patch.esp", "RACE\\MaleHairColors", 0})).has_value());
+    const auto before = readBytes(path);
+
+    const auto result = backend.invokeBackend(
+        "InsertFormLinkListElement",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000803:Patch.esp",
+            "RACE\\MaleHairColors",
+            0,
+            "000801:Patch.esp"
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "FormLinkListInsertionBoundaryUnavailable");
     CHECK(readBytes(path) == before);
 }
