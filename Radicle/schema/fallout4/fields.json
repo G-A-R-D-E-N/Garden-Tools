@@ -92,6 +92,10 @@
         {"path": "RACE\\FemaleHairColors", "label": "Female Hair Colors", "subrecord": "AHCF", "targets": ["CLFM"], "nullable": true, "mutation": "existing_neighbors"},
         {"path": "RACE\\FemaleFaceDetails", "label": "Female Face Details", "subrecord": "FTSF", "targets": ["TXST"], "nullable": true, "mutation": "existing_neighbors"}
       ],
+      "nested_formlink_lists": [
+        {"container_path": "RACE\\Subgraphs", "member": "ActorKeywords", "label": "Subgraph Actor Keywords", "subrecord": "SAKD", "terminator": "SRAF", "terminator_size": 4, "targets": ["KYWD"], "nullable": false, "mutation": "terminated_group"},
+        {"container_path": "RACE\\Subgraphs", "member": "TargetKeywords", "label": "Subgraph Target Keywords", "subrecord": "STKD", "terminator": "SRAF", "terminator_size": 4, "targets": ["KYWD"], "nullable": false, "mutation": "terminated_group"}
+      ],
       "fields": []
     },
     {
