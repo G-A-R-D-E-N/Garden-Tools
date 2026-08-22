@@ -1,6 +1,7 @@
 #include "fo4/plugin/writer.hpp"
 
 #include "fo4/io/atomic_write.hpp"
+#include "fo4/plugin/onam.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/form_links.hpp"
@@ -274,12 +275,20 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
     return plugin.original_bytes;
   }
 
-  auto tes4 = plugin.tes4;
-  patch_hedr_record_count(tes4, rebuilt_hedr_record_count(plugin));
+  // Clean plugins return original_bytes above. Once a master-flagged plugin is
+  // dirty, rebuild ONAM from the current hierarchy before serialization so
+  // stale temporary-override metadata cannot survive a mutation.
+  auto prepared = plugin;
+  if (prepared.header.tes4_flags.is_master()) {
+    rebuild_tes4_onam(prepared);
+  }
+
+  auto tes4 = prepared.tes4;
+  patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
 
   ByteWriter out;
   write_record(out, tes4);
-  for (const auto& group : plugin.groups) {
+  for (const auto& group : prepared.groups) {
     write_group(out, group);
   }
   return out.bytes;
