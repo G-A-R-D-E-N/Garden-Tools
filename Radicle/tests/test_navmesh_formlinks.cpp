@@ -200,7 +200,24 @@ fo4::test::ByteWriter make_nvpp() {
   return nvpp;
 }
 
-std::vector<std::byte> make_mixed_navmesh_plugin(bool malformed_nvnm = false) {
+fo4::test::ByteWriter make_mnam(bool malformed = false) {
+  fo4::test::ByteWriter mnam;
+  mnam.u32(0x02000850);  // Reference: KeepMe.esm
+  mnam.u16(malformed ? 0xFFFFu : 3u);
+  mnam.u16(0x0200u);     // triangle indexes, deliberately FormID-looking
+  mnam.u16(0x0850u);
+  mnam.u16(0x1234u);
+  if (!malformed) {
+    mnam.u32(0x02000851);  // second Reference: KeepMe.esm
+    mnam.u16(2);
+    mnam.u16(0x0200u);
+    mnam.u16(0x0851u);
+  }
+  return mnam;
+}
+
+std::vector<std::byte> make_mixed_navmesh_plugin(bool malformed_nvnm = false,
+                                                  bool malformed_mnam = false) {
   fo4::test::ByteWriter out;
   write_common_header(out);
 
@@ -208,6 +225,8 @@ std::vector<std::byte> make_mixed_navmesh_plugin(bool malformed_nvnm = false) {
   const auto navm = fo4::test::begin_record(out, "NAVM", 0, 0x03000800);
   const auto nvnm = make_nvnm(malformed_nvnm);
   fo4::test::write_subrecord(out, "NVNM", nvnm.bytes);
+  const auto mnam = make_mnam(malformed_mnam);
+  fo4::test::write_subrecord(out, "MNAM", mnam.bytes);
   fo4::test::end_record(out, navm);
   fo4::test::end_group(out, navm_group);
 
@@ -322,6 +341,43 @@ TEST(FormLink, NavmNvnmMixedPayloadRemapsOnlyProvenFormIdSlots) {
   }
 }
 
+TEST(FormLink, NavmMnamPrecutMapEntriesRemapReferencesOnly) {
+  auto plugin = fo4::read_plugin(make_mixed_navmesh_plugin(), "NavmeshPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:NavmeshPatch.esp");
+  const auto before = hits_for(plugin, key, "MNAM");
+  ASSERT_EQ(before.size(), 2u);
+  EXPECT_EQ(before[0].offset, 0u);
+  EXPECT_EQ(before[1].offset, 12u);
+  EXPECT_EQ(before[0].key, fo4::FormKey::parse("000850:KeepMe.esm"));
+  EXPECT_EQ(before[1].key, fo4::FormKey::parse("000851:KeepMe.esm"));
+
+  plugin = fo4::remap_plugin_masters(
+      std::move(plugin),
+      {fo4::PluginKey::from_filename("Fallout4.esm"),
+       fo4::PluginKey::from_filename("KeepMe.esm")});
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "NavmeshPatch.esp");
+  const auto after = hits_for(reread, key, "MNAM");
+  ASSERT_EQ(after.size(), before.size());
+  for (std::size_t index = 0; index < before.size(); ++index) {
+    EXPECT_EQ(after[index].key, before[index].key);
+    EXPECT_NE(after[index].raw, before[index].raw);
+    EXPECT_EQ(after[index].raw.index_byte(), 1u);
+  }
+
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* mnam = find_sub(*record, "MNAM");
+  ASSERT_NE(mnam, nullptr);
+  ASSERT_EQ(mnam->data.size(), 22u);
+  EXPECT_EQ(read_u16(mnam->data, 4), 3u);
+  EXPECT_EQ(read_u16(mnam->data, 6), 0x0200u);
+  EXPECT_EQ(read_u16(mnam->data, 8), 0x0850u);
+  EXPECT_EQ(read_u16(mnam->data, 10), 0x1234u);
+  EXPECT_EQ(read_u16(mnam->data, 16), 2u);
+  EXPECT_EQ(read_u16(mnam->data, 18), 0x0200u);
+  EXPECT_EQ(read_u16(mnam->data, 20), 0x0851u);
+}
+
 TEST(FormLink, NaviNvmiNvppAndNvsiMixedPayloadsRemapStructurally) {
   auto plugin = fo4::read_plugin(make_mixed_navmesh_plugin(), "NavmeshPatch.esp");
   const auto key = fo4::FormKey::parse("000801:NavmeshPatch.esp");
@@ -372,6 +428,20 @@ TEST(FormLink, MalformedNvnmFailsClosedInsteadOfScanningUint32s) {
       make_mixed_navmesh_plugin(true), "NavmeshPatch.esp");
   const auto key = fo4::FormKey::parse("000800:NavmeshPatch.esp");
   EXPECT_TRUE(hits_for(plugin, key, "NVNM").empty());
+
+  EXPECT_THROW(
+      fo4::remap_plugin_masters(
+          plugin,
+          {fo4::PluginKey::from_filename("Fallout4.esm"),
+           fo4::PluginKey::from_filename("KeepMe.esm")}),
+      fo4::FormIdError);
+}
+
+TEST(FormLink, MalformedMnamFailsClosedInsteadOfScanningTriangleIndexes) {
+  const auto plugin = fo4::read_plugin(
+      make_mixed_navmesh_plugin(false, true), "NavmeshPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:NavmeshPatch.esp");
+  EXPECT_TRUE(hits_for(plugin, key, "MNAM").empty());
 
   EXPECT_THROW(
       fo4::remap_plugin_masters(
