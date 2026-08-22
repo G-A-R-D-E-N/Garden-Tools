@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # BehaviourGraphStudio (BGS/). Carried over from BGS/.github/dependabot.yml,
+  # which was inert here: Dependabot only reads config from the repository
+  # root. The NuGet ecosystem searches the given directory recursively, so
+  # /BGS covers src/, app/ and tools/* the same way / did in the old repo.
+  - package-ecosystem: nuget
+    directory: /BGS
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - "tool:bgs"
+    groups:
+      dotnet-dependencies:
+        patterns:
+          - "*"
+
+  # Deliberately rooted at /, not /BGS: Dependabot only ever looks at
+  # .github/workflows in the repository root, so a /BGS directory here would
+  # match nothing. This entry therefore covers every lane in the repo
+  # (native-ci, bgs-ci, validate-ckini-golden), not just BGS's.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
