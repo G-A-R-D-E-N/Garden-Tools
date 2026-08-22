@@ -34,11 +34,21 @@ struct ExteriorCellGridLayout {
   std::int32_t subblock_y{0};
 };
 
+// Serialized CELL DATA flags. Bit 0 marks an interior cell; bit 1 is set on
+// effectively every shipped exterior cell (61,542 of 61,543 across
+// Fallout4.esm, DLCCoast and DLCNukaWorld -- the single exception is one cell
+// with DATA 0x0000). Emitting 0x0000 therefore produces a shape that occurs
+// once in the entire shipped corpus, so new exterior cells default to 0x0002.
+inline constexpr std::uint16_t k_exterior_cell_default_flags = 0x0002;
+
 struct ExteriorCellCreation {
   FormKey worldspace;
   std::int32_t x{0};
   std::int32_t y{0};
   std::optional<std::string_view> editor_id;
+  // Overridable, but bit 0 (interior) is refused: this path only builds
+  // exterior cells and a mismatched flag would contradict the XCLC it emits.
+  std::uint16_t flags{k_exterior_cell_default_flags};
 };
 
 bool exterior_cell_coordinate_valid(std::int32_t coordinate) noexcept;

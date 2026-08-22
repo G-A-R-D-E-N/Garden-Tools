@@ -273,3 +273,28 @@ Three things worth pinning:
 
 `INDX` is also used by the alias array, which is why the walk has to stop at
 `QOBJ`/`ANAM` rather than scanning the whole record.
+
+## Exterior CELL DATA and XCLC
+
+Measured across `Fallout4.esm`, `DLCCoast.esm` and `DLCNukaWorld.esm`.
+
+**`DATA` is 2 bytes on every CELL.** For the 61,543 exterior cells (those
+carrying `XCLC`), bit 1 is set on **61,542** — the sole exception is one cell
+with `0x0000`. Observed values are `0x0002` (61,252), `0x0042` (237, plus Hand
+Changed) and `0x000A` (53, plus No LOD Water). All 1,376 interior cells set
+bit 0.
+
+An all-clear `DATA` therefore describes a record shape that occurs once in the
+entire shipped corpus, so `create_exterior_cell` defaults to `0x0002` and
+refuses the interior bit outright.
+
+**`XCLC` is exterior-only and 12 bytes** in all 38,970 `Fallout4.esm` instances
+that carry it; the 1,195 CELLs without one are interiors, which use `XCLL`
+instead (CKRE doc 23: `FUN_140d18490` gates access on the interior flag in both
+LoadRecord and SaveRecord).
+
+The trailing dword after x/y is left zero on creation. The CK's own coordinate
+setter `FUN_140d197c0` writes only x and y and leaves the rest of the cell-data
+block as initialised, and 84 shipped cells carry zero there. Its non-zero
+values are not decoded — they are dense and worldspace-correlated, so a created
+cell should not fabricate one.

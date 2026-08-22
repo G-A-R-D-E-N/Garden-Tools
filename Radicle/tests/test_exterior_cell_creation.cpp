@@ -141,7 +141,10 @@ TEST(ExteriorCellCreation, CreatesRequiredWrldBlockSubblockHierarchyAndRoundTrip
   EXPECT_EQ(created->subrecords[1].signature, fo4::sig_data);
   EXPECT_EQ(created->subrecords[2].signature.to_string(), "XCLC");
   EXPECT_EQ(created->subrecords[1].data.size(), 2u);
-  EXPECT_EQ(created->subrecords[1].data[0], std::byte{0});
+  // Bit 1 is set on every shipped exterior cell but one; all-clear flags are
+  // not a shape the game ships.
+  EXPECT_EQ(created->subrecords[1].data[0],
+            std::byte{fo4::forms::k_exterior_cell_default_flags & 0xFF});
   EXPECT_EQ(created->subrecords[1].data[1], std::byte{0});
   EXPECT_EQ(created->subrecords[2].data.size(), 12u);
   EXPECT_EQ(read_i32(created->subrecords[2].data, 0), -33);
@@ -248,5 +251,53 @@ TEST(ExteriorCellCreation, MalformedExistingGridFailsClosedWithoutAllocation) {
       static_cast<void>(fo4::forms::create_exterior_cell(
           plugin, cell_creation(world, 2, 3))),
       fo4::forms::CellError);
+  EXPECT_EQ(plugin.header.next_form_id, next_before);
+}
+
+// Bit 1 is set on 61,542 of the 61,543 exterior cells across Fallout4.esm,
+// DLCCoast and DLCNukaWorld, so an all-clear DATA is not the shape the game
+// ships. New cells default to it and the caller can override.
+TEST(ExteriorCellCreation, EmitsTheShippedExteriorDataFlags) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  fo4::forms::ExteriorCellCreation creation;
+  creation.worldspace = fo4::FormKey::parse("000800:Cells.esp");
+  creation.x = 3;
+  creation.y = 4;
+  const auto key = fo4::forms::create_exterior_cell(plugin, creation);
+
+  const auto* created = fo4::find_record(plugin, key);
+  ASSERT_NE(created, nullptr);
+  const fo4::Subrecord* data = nullptr;
+  for (const auto& subrecord : created->subrecords) {
+    if (subrecord.signature == fo4::sig_data) data = &subrecord;
+  }
+  ASSERT_NE(data, nullptr);
+  ASSERT_EQ(data->data.size(), 2u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(data->data[0]),
+            fo4::forms::k_exterior_cell_default_flags & 0xFF);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(data->data[1]),
+            (fo4::forms::k_exterior_cell_default_flags >> 8) & 0xFF);
+}
+
+TEST(ExteriorCellCreation, HonoursOverriddenFlagsButRefusesTheInteriorBit) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  fo4::forms::ExteriorCellCreation creation;
+  creation.worldspace = fo4::FormKey::parse("000800:Cells.esp");
+  creation.x = 5;
+  creation.y = 6;
+  creation.flags = 0x000A;  // has water + no LOD water, a shipped combination
+  const auto key = fo4::forms::create_exterior_cell(plugin, creation);
+  const auto* created = fo4::find_record(plugin, key);
+  ASSERT_NE(created, nullptr);
+  for (const auto& subrecord : created->subrecords) {
+    if (subrecord.signature != fo4::sig_data) continue;
+    EXPECT_EQ(std::to_integer<std::uint8_t>(subrecord.data[0]), 0x0Au);
+  }
+
+  const auto next_before = plugin.header.next_form_id;
+  creation.x = 7;
+  creation.flags = 0x0001;  // interior bit contradicts the XCLC being emitted
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_exterior_cell(plugin, creation)),
+               fo4::forms::CellError);
   EXPECT_EQ(plugin.header.next_form_id, next_before);
 }
