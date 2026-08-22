@@ -32,7 +32,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -52,7 +52,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: radicle-linux-failure
           path: |
@@ -67,7 +67,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -86,7 +86,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fo4ide-native-linux-failure
           path: |
@@ -109,7 +109,7 @@ jobs:
     # static zlib dependency first and points find_package(ZLIB) at it.
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -144,7 +144,7 @@ jobs:
       - name: Upload Windows binaries
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: radicle-windows-x64
           path: |
