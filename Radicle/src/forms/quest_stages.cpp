@@ -3,7 +3,12 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/localized_fields.hpp"
 
+#include "fo4/plugin/visit.hpp"
+#include "fo4/plugin/writer.hpp"
+
+#include <algorithm>
 #include <cstring>
+#include <utility>
 
 namespace fo4::forms {
 namespace {
@@ -87,21 +92,140 @@ QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest) {
       } catch (const std::exception& error) {
         throw QuestError(error.what());
       }
-      continue;
-    }
-
-    if (subrecord.signature == k_nam2) {
+    } else if (subrecord.signature == k_nam2) {
       if (entry->note.has_value()) {
         throw QuestError("QUST log entry contains duplicate NAM2 subrecords");
       }
       entry->note = decode_note(subrecord);
-      continue;
     }
 
-    entry->subrecords.push_back(subrecord);
+    // Every member is kept in file order, decoded ones included, so encoding
+    // reproduces the original sequence exactly.
+    entry->members.push_back(subrecord);
   }
 
   return result;
+}
+
+namespace {
+
+// The stage array runs from the first INDX to the first QOBJ/ANAM. Returns
+// [begin, end) into the record's subrecords, both equal to the insertion point
+// when the quest has no stages yet.
+std::pair<std::size_t, std::size_t> stage_array_bounds(const Record& record) {
+  std::size_t begin = record.subrecords.size();
+  std::size_t end = record.subrecords.size();
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    const auto signature = record.subrecords[i].signature;
+    if (signature == k_qobj || signature == k_anam) {
+      end = i;
+      if (begin > i) begin = i;
+      return {begin, end};
+    }
+    if (signature == k_indx && begin == record.subrecords.size()) begin = i;
+  }
+  return {begin, end};
+}
+
+Subrecord marker(Signature signature, std::vector<std::byte> data) {
+  Subrecord subrecord;
+  subrecord.signature = signature;
+  subrecord.data = std::move(data);
+  return subrecord;
+}
+
+std::vector<Subrecord> encode_stages(const QuestStages& stages) {
+  std::vector<Subrecord> out;
+  for (const auto& stage : stages.stages) {
+    std::vector<std::byte> indx(4);
+    std::memcpy(indx.data(), &stage.index, 2);
+    indx[2] = std::byte{stage.flags};
+    indx[3] = std::byte{stage.unknown};
+    out.push_back(marker(k_indx, std::move(indx)));
+    for (const auto& entry : stage.log_entries) {
+      out.push_back(marker(k_qsdt, std::vector<std::byte>{std::byte{entry.flags}}));
+      out.insert(out.end(), entry.members.begin(), entry.members.end());
+    }
+  }
+  return out;
+}
+
+Record* mutable_quest(Plugin& plugin, const FormKey& quest) {
+  Record* found = nullptr;
+  visit_records(plugin, [&](Record& record) {
+    if (record.form_key == quest && record.header.signature == k_qust) found = &record;
+  });
+  if (found == nullptr) {
+    throw QuestError("QUST record " + quest.to_string() + " was not found");
+  }
+  return found;
+}
+
+}  // namespace
+
+void write_quest_stages(Plugin& plugin, const FormKey& quest, const QuestStages& stages) {
+  auto next = plugin;
+  auto* record = mutable_quest(next, quest);
+  const auto [begin, end] = stage_array_bounds(*record);
+  const auto encoded = encode_stages(stages);
+
+  std::vector<Subrecord> rebuilt;
+  rebuilt.reserve(record->subrecords.size() - (end - begin) + encoded.size());
+  rebuilt.insert(rebuilt.end(), record->subrecords.begin(),
+                 record->subrecords.begin() + static_cast<std::ptrdiff_t>(begin));
+  rebuilt.insert(rebuilt.end(), encoded.begin(), encoded.end());
+  rebuilt.insert(rebuilt.end(),
+                 record->subrecords.begin() + static_cast<std::ptrdiff_t>(end),
+                 record->subrecords.end());
+
+  record->subrecords = std::move(rebuilt);
+  record->original_bytes.clear();
+  record->decompressed_payload.clear();
+  record->header.data_size = 0;
+  record->uncompressed_size = 0;
+  next.original_bytes.clear();
+  visit_groups(next, [](Group& group) { group.original_bytes.clear(); });
+  plugin = std::move(next);
+}
+
+void add_quest_stage(Plugin& plugin, const FormKey& quest, const QuestStage& stage) {
+  auto stages = decode_quest_stages(plugin, quest);
+  for (const auto& existing : stages.stages) {
+    if (existing.index == stage.index) {
+      throw QuestError("QUST already has a stage with index " + std::to_string(stage.index));
+    }
+  }
+  stages.stages.push_back(stage);
+  write_quest_stages(plugin, quest, stages);
+}
+
+bool remove_quest_stage(Plugin& plugin, const FormKey& quest, std::uint16_t index) {
+  auto stages = decode_quest_stages(plugin, quest);
+  const auto before = stages.stages.size();
+  std::erase_if(stages.stages,
+                [&](const QuestStage& stage) { return stage.index == index; });
+  if (stages.stages.size() == before) return false;
+  write_quest_stages(plugin, quest, stages);
+  return true;
+}
+
+bool reorder_quest_stage(Plugin& plugin,
+                         const FormKey& quest,
+                         std::uint16_t index,
+                         std::size_t to) {
+  auto stages = decode_quest_stages(plugin, quest);
+  const auto found = std::find_if(stages.stages.begin(), stages.stages.end(),
+                                  [&](const QuestStage& s) { return s.index == index; });
+  if (found == stages.stages.end()) return false;
+  if (to >= stages.stages.size()) {
+    throw QuestError("QUST stage reorder target is out of range");
+  }
+  auto moved = *found;
+  stages.stages.erase(found);
+  stages.stages.insert(stages.stages.begin() + static_cast<std::ptrdiff_t>(to),
+                       std::move(moved));
+  write_quest_stages(plugin, quest, stages);
+  return true;
 }
 
 }  // namespace fo4::forms
