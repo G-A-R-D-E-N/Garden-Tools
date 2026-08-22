@@ -189,16 +189,15 @@ it holds a **four-byte string ID** into the `.STRINGS`/`.DLSTRINGS`/`.ILSTRINGS`
 tables. All 45 `RACE` records in `Fallout4.esm` carry a `DESC` of exactly 4
 bytes.
 
-The typed decoders currently read string subrecords as NUL-terminated text, so
-`decode_race` rejects every shipped RACE with "DESC is not a single
-NUL-terminated string". This is a **localization gap, not a RACE gap** — it
-will affect any typed decoder that reads a string subrecord from vanilla
-content.
+This is handled by `fo4/schema/localized_fields.hpp`. A string field decodes to
+a `LocalizedString` carrying **either** a four-byte string ID (localized plugin,
+lstring field) **or** inline text, whichever the file used. Decoding performs no
+I/O and picks no language, so a write-back reproduces the original bytes;
+resolve an ID through `fo4::localization` when display text is wanted.
 
-`fo4/localization/strings.hpp` already reads and writes the string tables; what
-is missing is the typed decoders consulting `tes4_flags.is_localized()` and
-treating those payloads as string IDs. Related: #29 (bit 7 localized vs
-delocalized semantics).
+`RACE` is wired. The remaining typed families still read strings as inline text
+and need the same treatment. Related: #29 (bit 7 localized vs delocalized
+semantics).
 
 ## RACE BodyData INDX
 
@@ -207,3 +206,26 @@ separator, and it is **not** derivable from list position: of the 90 gender
 blocks in `Fallout4.esm`, 17 are not a plain `0..n-1` run — they begin
 `0, 0, 1, 2, …`. The value is decoded and written back verbatim rather than
 recomputed.
+
+### Which fields are localized
+
+Measured on `Fallout4.esm` (localized, TES4 `0x0081`), payload size per
+(record, subrecord) pair:
+
+| Field | Always 4 bytes | Never 4 bytes |
+|---|---|---|
+| `FULL` | ARMO 974, WEAP 864, MISC 2043, NPC_ 1944, QUST 708, CELL 319, RACE 40 | — |
+| `DESC` | ARMO 688, WEAP 252, RACE 45 | — |
+| `EDID` | — | ARMO 688, WEAP 252, RACE 45, ARMA 739, CELL 1736 |
+| `DNAM` | — | ARMA 739, WEAP 252, NPC_ 3015, QUST 1336 |
+
+`FULL` and `DESC` are 4 bytes in every record that carries them, with zero
+inline instances — those are the safe lstring set to start from. `EDID` is
+never localized.
+
+**Payload size alone cannot decide this.** `NPC_ CNAM` is 4 bytes in all 3,015
+instances but it is a Class FormID, not a string ID; `QUST CNAM` in a stage is
+a log-entry lstring. The same signature means different things in different
+records, so lstring-ness has to be declared per (record, subrecord) pair in
+`schema/fallout4/fields.json` rather than inferred from the bytes. Anything
+that guesses from size will silently turn FormIDs into string IDs.

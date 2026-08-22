@@ -67,15 +67,35 @@ std::optional<std::string> optional_zstring(const Record& record,
   return std::string(begin, begin + found->data.size() - 1);
 }
 
-std::string required_zstring(const Record& record,
-                             Signature signature,
-                             std::string_view label) {
-  const auto decoded = optional_zstring(record, signature, label);
-  if (!decoded.has_value()) {
-    throw RaceError("RACE is missing required " + std::string(label) + " subrecord");
+std::optional<schema::LocalizedString> optional_localized(const Plugin& plugin,
+                                                         const Record& record,
+                                                         Signature signature) {
+  const Subrecord* found = nullptr;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != signature) continue;
+    if (found != nullptr) {
+      throw RaceError("RACE contains duplicate " + signature.to_string() + " subrecords");
+    }
+    found = &subrecord;
   }
-  return *decoded;
+  if (found == nullptr) return std::nullopt;
+  try {
+    return schema::read_localized_string(plugin, k_race, signature, *found);
+  } catch (const std::exception& error) {
+    throw RaceError(error.what());
+  }
 }
+
+schema::LocalizedString required_localized(const Plugin& plugin,
+                                           const Record& record,
+                                           Signature signature) {
+  auto value = optional_localized(plugin, record, signature);
+  if (!value.has_value()) {
+    throw RaceError("RACE is missing required " + signature.to_string());
+  }
+  return *value;
+}
+
 
 Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
   Record* found = nullptr;
@@ -296,8 +316,8 @@ Race decode_race(const Plugin& plugin, const FormKey& key) {
   Race result;
   result.key = key;
   result.editor_id = optional_zstring(*record, sig_edid, "EDID");
-  result.full_name = optional_zstring(*record, k_full, "FULL");
-  result.description = required_zstring(*record, k_desc, "DESC");
+  result.full_name = optional_localized(plugin, *record, k_full);
+  result.description = required_localized(plugin, *record, k_desc);
 
   const auto* data = unique_subrecord(*record, sig_data, "DATA");
   if (data->data.size() != k_current_race_data_size) {

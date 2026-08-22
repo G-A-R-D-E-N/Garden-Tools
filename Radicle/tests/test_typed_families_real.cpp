@@ -84,10 +84,44 @@ void run_family(const Family& family) {
 
 }  // namespace
 
-// decode_race is deliberately not swept here yet: every shipped master sets
-// TES4 localized (0x80), which makes RACE DESC a four-byte string ID rather
-// than inline text, and the decoder still reads it as a NUL-terminated string.
-// That is a localization gap, not a RACE gap -- see docs/FORMAT_NOTES.md.
+TEST(TypedFamiliesRealData, DecodesEveryShippedRace) {
+  run_family({"RACE", "RACE", [](const fo4::Plugin& p, const fo4::FormKey& k) {
+                static_cast<void>(fo4::forms::decode_race(p, k));
+              }});
+}
+
+// Every shipped master sets TES4 localized (0x80), so RACE FULL/DESC arrive as
+// four-byte string IDs. Decoding must surface them as IDs, not reject them.
+TEST(TypedFamiliesRealData, ShippedRaceStringsAreLocalizedIds) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  }
+  const auto path = std::filesystem::path{dir} / "Fallout4.esm";
+  if (!std::filesystem::exists(path)) {
+    GTEST_SKIP() << "Fallout4.esm not found under " << dir;
+  }
+
+  const auto plugin = fo4::read_plugin_file(path);
+  ASSERT_TRUE(plugin.header.tes4_flags.is_localized());
+
+  const auto race = fo4::Signature::from_string("RACE");
+  std::size_t seen = 0;
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->header.signature != race) continue;
+    const auto decoded = fo4::forms::decode_race(plugin, record->form_key);
+    EXPECT_TRUE(decoded.description.localized())
+        << decoded.key.to_string() << " DESC should be a string ID";
+    EXPECT_FALSE(decoded.description.text.has_value());
+    if (decoded.full_name.has_value()) {
+      EXPECT_TRUE(decoded.full_name->localized());
+    }
+    // EDID is never localized and must still be inline text.
+    EXPECT_TRUE(decoded.editor_id.has_value());
+    ++seen;
+  }
+  EXPECT_GT(seen, 40u);
+}
 
 TEST(TypedFamiliesRealData, DecodesEveryShippedRaceBodyData) {
   run_family({"RACE", "RACE BodyData", [](const fo4::Plugin& p, const fo4::FormKey& k) {
