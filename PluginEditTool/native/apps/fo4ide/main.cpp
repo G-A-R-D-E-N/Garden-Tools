@@ -20,6 +20,7 @@
 #include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/archive/ArchiveService.hpp>
+#include <fo4ide/archive/RadicleArchiveBackend.hpp>
 #include <fo4ide/assets/NifService.hpp>
 #include <fo4ide/audio/AudioService.hpp>
 #include <fo4ide/events/EventBus.hpp>
@@ -31,7 +32,7 @@
 #include <fo4ide/mcp/McpServer.hpp>
 #include <fo4ide/platform/NativeWindow.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
-#include <fo4ide/plugin/IPluginBackend.hpp>
+#include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include <fo4ide/process/ProcessRunner.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
@@ -318,10 +319,15 @@ int main(int argc, char** argv) {
     fo4ide::assets::NifService nifService(processRunner, nifTool);
     fo4ide::audio::AudioService audioService(processRunner, toolLocator);
     fo4ide::material::MaterialService materialService;
-    fo4ide::archive::NullArchiveBackend archiveBackend;
+    fo4ide::archive::RadicleArchiveBackend archiveBackend;
     fo4ide::archive::ArchiveService archiveService(processRunner, toolLocator, archiveBackend);
     fo4ide::events::EventBus events;
-    fo4ide::plugin::NullPluginBackend plugins;
+    fo4ide::plugin::RadiclePluginBackend plugins;
+    // Path-based game-Data protection: plugins physically inside the game's
+    // Data directory are read-only even if their reported source is missing.
+    if (const auto falloutRoot = toolLocator.fallout4Root(); !falloutRoot.empty()) {
+        plugins.setDataDirectory(falloutRoot / "Data");
+    }
     fo4ide::rpc::Dispatcher rpc;
     auto appInteropTarget = std::make_shared<fo4ide::app::AppInteropTarget>(
         settingsStore, currentSettings, platformServices, plugins);

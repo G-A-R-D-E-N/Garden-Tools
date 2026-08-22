@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 
 #include <nlohmann/json.hpp>
@@ -22,6 +23,18 @@ public:
     virtual Capabilities capabilities() const noexcept = 0;
     virtual Result<nlohmann::json> invoke(std::string_view operation,
                                           const nlohmann::json& arguments) = 0;
+
+    virtual Result<nlohmann::json> invokeBackend(std::string_view method,
+                                                 const nlohmann::json& arguments) {
+        return invoke("backend." + std::string(method), arguments);
+    }
+
+    // Dedicated seam for schema-driven field writes. Existing backends retain
+    // their current SetField behavior; Radicle overrides this to intercept
+    // registered scalar fields before delegating to its typed record writers.
+    virtual Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) {
+        return invokeBackend("SetField", arguments);
+    }
 };
 
 class NullPluginBackend final : public IPluginBackend {

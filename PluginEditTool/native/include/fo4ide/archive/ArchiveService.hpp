@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -21,16 +22,15 @@ public:
                                           const nlohmann::json& arguments) = 0;
 };
 
+// Placeholder backend used when no real archive implementation is wired up.
+// It is genuinely null: every operation reports ArchiveBackendUnavailable.
 class NullArchiveBackend final : public IArchiveBackend {
 public:
+    NullArchiveBackend() = default;
+
     bool available() const noexcept override { return false; }
-    Result<nlohmann::json> invoke(std::string_view,
-                                  const nlohmann::json&) override {
-        return std::unexpected(Error{
-            "ArchiveBackendUnavailable",
-            "Native BA2/BSA reading is waiting for the replacement archive backend"
-        });
-    }
+    Result<nlohmann::json> invoke(std::string_view operation,
+                                  const nlohmann::json& arguments) override;
 };
 
 class ArchiveService {

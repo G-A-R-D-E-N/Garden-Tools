@@ -5,6 +5,25 @@ target_link_libraries(fo4ide_core INTERFACE nlohmann_json::nlohmann_json)
 add_library(fo4ide_plugin_api INTERFACE)
 target_link_libraries(fo4ide_plugin_api INTERFACE fo4ide_core)
 
+add_library(
+    fo4ide_plugin
+    plugin/RadiclePluginBackend.cpp
+    plugin/RadiclePluginAnalysis.cpp
+    plugin/RadiclePluginMasters.cpp
+    plugin/RadiclePluginMutation.cpp
+    plugin/RadiclePluginLifecycle.cpp
+    plugin/RadiclePluginScalar.cpp
+    plugin/RadiclePluginArmor.cpp
+    plugin/RadiclePluginFormLinkList.cpp
+    plugin/RadiclePluginBatchMutation.cpp
+    plugin/RadiclePluginMasterMutation.cpp
+    plugin/RadiclePluginReadApi.cpp
+    plugin/RadiclePluginEsl.cpp
+)
+target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4)
+fo4ide_enable_warnings(fo4ide_plugin)
+fo4ide_enable_sanitizers(fo4ide_plugin)
+
 add_library(fo4ide_logging logging/Logger.cpp)
 target_link_libraries(fo4ide_logging PUBLIC fo4ide_core spdlog::spdlog)
 fo4ide_enable_warnings(fo4ide_logging)
@@ -92,8 +111,17 @@ target_link_libraries(fo4ide_material PUBLIC fo4ide_core nlohmann_json::nlohmann
 fo4ide_enable_warnings(fo4ide_material)
 fo4ide_enable_sanitizers(fo4ide_material)
 
-add_library(fo4ide_archive archive/ArchiveService.cpp)
-target_link_libraries(fo4ide_archive PUBLIC fo4ide_core fo4ide_process fo4ide_tools nlohmann_json::nlohmann_json)
+add_library(
+    fo4ide_archive
+    archive/ArchiveService.cpp
+    archive/ArchiveBackendCompatibility.cpp
+    archive/RadicleArchiveBackend.cpp
+)
+target_link_libraries(
+    fo4ide_archive
+    PUBLIC fo4ide_core fo4ide_process fo4ide_tools nlohmann_json::nlohmann_json
+    PRIVATE fo4
+)
 fo4ide_enable_warnings(fo4ide_archive)
 fo4ide_enable_sanitizers(fo4ide_archive)
 

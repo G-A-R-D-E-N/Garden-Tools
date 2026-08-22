@@ -11,8 +11,9 @@ public:
   static constexpr value_type master = 1u << 0;
   static constexpr value_type deleted = 1u << 5;
   static constexpr value_type localized = 1u << 7;
-  static constexpr value_type compressed = 1u << 18;
   static constexpr value_type small_file = 1u << 9;
+  static constexpr value_type persistent = 1u << 10;
+  static constexpr value_type compressed = 1u << 18;
 
   constexpr RecordFlags() noexcept = default;
   constexpr explicit RecordFlags(value_type bits) noexcept : bits_(bits) {}
@@ -23,8 +24,9 @@ public:
   constexpr bool is_master() const noexcept { return test(master); }
   constexpr bool is_deleted() const noexcept { return test(deleted); }
   constexpr bool is_localized() const noexcept { return test(localized); }
-  constexpr bool is_compressed() const noexcept { return test(compressed); }
   constexpr bool is_small_file() const noexcept { return test(small_file); }
+  constexpr bool is_persistent() const noexcept { return test(persistent); }
+  constexpr bool is_compressed() const noexcept { return test(compressed); }
 
   friend constexpr bool operator==(const RecordFlags&, const RecordFlags&) = default;
 

@@ -51,14 +51,15 @@ No length prefix is present.
 ### 1b. `.DLSTRINGS` / `.ILSTRINGS` — length-prefixed text records
 
 ```text
-record:  [ u32 len ][ text bytes len long ][ 0x00 ]
+record:  [ u32 len ][ text bytes (len-1) long ][ 0x00 ]
 ```
 
 The data block is a concatenation of records; `offset` points at each record's
-`u32 len`. `len` counts the text **without** the trailing NUL (`len+1` payload
-bytes follow the length field; record footprint is `4 + len`). The data block
-walks cleanly to EOF as `sum(4 + len)`, and every table offset lands on a
-record boundary.
+`u32 len`. **The stored `len` includes the trailing NUL** (`len == strlen+1`;
+the hex dump below shows `len=24` for a 23-char string). The payload following
+the length field is exactly `len` bytes and the record footprint is
+`4 + len`. The data block walks cleanly to EOF as `sum(4 + len)`, and every
+table offset lands on a record boundary.
 
 The writer selects the format with the output context's `+0x14e` flag byte:
 clear → NUL-terminated `.STRINGS` style, set → length-prefixed
@@ -103,7 +104,8 @@ Confirmed from machine code:
    `0x14091da46`).
 4. Per record: writes `u32 stringID` and the data offset to the temp table
    (`+0x38` stream), then, gated on context flag `+0x14e` (`0x14091dcf0`):
-   - flag set  → write `u32 len+1` then the text (`0x14091dd02`/`0x14091dd46`),
+   - flag set  → write `u32 len+1` (text length plus the NUL) then the text
+     and its NUL (`0x14091dd02`/`0x14091dd46`),
      i.e. the length-prefixed record — used for `.DLSTRINGS`/`.ILSTRINGS`;
    - flag clear → write the text only, NUL-terminated `.STRINGS` style.
    Accumulates `dataSize` (`+0x1138`) and the record count (`+0x1134`).
@@ -144,17 +146,14 @@ ordinary table.
 
 ## 5. Loader / consumer notes
 
-- `.DLSTRINGS` block loader `FUN_140915000` (RVA 0x915000) resolves the
+- `.DLSTRINGS` block loader `FUN_140915000` (RVA `0x915000`) resolves the
   language-specific file, reads `numStrings` into `+0x790`/`+0x798`, then reads
   `8*numStrings` bytes for the table and per-row `(stringID, offset)` lookup;
-  the `bKeepDLStringBlocksLoaded:General` value (`0x143b9c040`) is tested at
-  `0x1409155b5`/`0x140915b0a`/`0x14091652a`, and the IL counterpart
-  `bKeepILStringBlocksLoaded:General` (`0x143b9c058`) at
-  `0x140915d8b`/`0x1409161c0`/`0x1409165cd`.
+  the `bKeepDLStringBlocksLoaded:General`/`bKeepILStringBlocksLoaded:General`
+  values are tested at `0x1409155b5`/`0x140915d8b` (+3 sites each).
 - Compiler guard: `Text Compile: string file too large skipping: %s`
-  (`0x1430164b8` region) bounds oversized tables.
-- The engine source of the machinery is `shared\misc\bgslocalizedstring.cpp`
-  (embedded `__FILE__` path in the binary).
+  bounds oversized tables.
+- The engine source of the machinery is `shared\misc\bgslocalizedstring.cpp`.
 
 ## 6. Verification
 
@@ -170,20 +169,5 @@ languages × 3 kinds):
   Enclave-paint exceptions (§4) present in every language set.
 
 The `--strings` mode of `tools/validate_ckini.py` re-checks all of the above
-per file (header, size invariant, sorted table, offset bounds, per-kind record
-encoding, EOF walk) plus the per-language cross-file partition, surfacing the
-Enclave exceptions as a documented warning rather than a failure.
-
-Parsing pseudocode:
-
-```python
-import struct
-count, size = struct.unpack_from('<II', f, 0)
-table = [(struct.unpack_from('<II', f, 8+i*8)) for i in range(count)]   # (id, off)
-data  = f[8 + 8*count:]
-def strings_text(id_off):            # .STRINGS
-    off = dict((i, o) for i, o in id_off)
-    return [data[o:data.index(b'\0', o)] for o in sorted(off.values())]
-def dlistrings_text(id_off):         # .DLSTRINGS / .ILSTRINGS
-    return [data[o+4:o+4+struct.unpack_from('<I', data, o)[0]] for _, o in id_off]
-```
+per file plus the per-language cross-file partition, surfacing the Enclave
+exceptions as a documented warning rather than a failure.

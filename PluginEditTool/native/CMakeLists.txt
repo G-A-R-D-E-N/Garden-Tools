@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 
 project(FO4IDENative VERSION 0.1.0 LANGUAGES CXX)
 
@@ -17,6 +17,21 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(Dependencies)
 include(CompilerWarnings)
 include(Sanitizers)
+
+# Radicle and the native backend tests both consume zlib. Resolve it in the
+# top-level directory so the imported ZLIB::ZLIB target is visible to sibling
+# native test directories as well as Radicle's subdirectory.
+find_package(ZLIB REQUIRED)
+
+set(RADICLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Radicle")
+if(NOT EXISTS "${RADICLE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR
+        "Radicle sources not found at ${RADICLE_DIR}. "
+        "PluginEditTool/native expects the sibling Radicle checkout from the same repository.")
+endif()
+set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory("${RADICLE_DIR}" "${CMAKE_BINARY_DIR}/radicle")
 
 add_subdirectory(src)
 add_subdirectory(apps/fo4ide)

@@ -3,7 +3,9 @@ name: native-ci
 # Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runner
 # (label `garden`). Hosted runners are intentionally avoided: both orgs are over
 # the Free Actions minutes allowance (GHRUNNER#24), and hosted jobs fail silently
-# once exhausted. Self-hosted minutes are free.
+# once exhausted. Self-hosted minutes are free. Pull requests run through the
+# pull_request trigger only; work-branch push runs are intentionally omitted so
+# one PR commit does not consume two self-hosted CI slots.
 
 # BGS/ is a self-contained C#/.NET tool with no bearing on the native C++ jobs
 # below, so changes confined to it skip this workflow. paths-ignore (not an
@@ -13,7 +15,6 @@ on:
   push:
     branches:
       - main
-      - "work/**"
     paths-ignore:
       - "BGS/**"
   pull_request:
@@ -126,8 +127,6 @@ jobs:
           test -f build/zlib-win/zlibstatic.lib
 
       - name: Configure (clang-cl / xwin, Release)
-        # xwin ships the release CRT only, so Release is required (see the
-        # toolchain file). /opt/xwin is provided host-wide by GHRUNNER.
         run: >
           cmake -S Radicle -B build/radicle-win -G Ninja
           -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake

@@ -7,9 +7,8 @@ import './SpreadsheetPanel.css';
 const LS = (k: string, d: string) => localStorage.getItem('spreadsheet.' + k) ?? d;
 const setLS = (k: string, v: string) => localStorage.setItem('spreadsheet.' + k, v);
 
-interface GridRow { formKey: string; editorId: string; cells: string[]; }
+interface GridRow { formKey: string; editorId: string; cells: string[]; editable?: boolean[]; }
 interface GridData { columns: string[]; rows: GridRow[]; total: number; offset: number; error?: string; }
-
 
 export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
   const backend = getBackend();
@@ -31,26 +30,28 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!backend) return;
-
-
-
-
-    const app = window.chrome?.webview?.hostObjects?.appInterop;
+    let cancelled = false;
     void (async () => {
-      const names = new Set<string>();
       try {
-        const tree = JSON.parse(await app?.GetPlugins() ?? '[]') as { Key: string }[];
-        for (const n of tree) if (n?.Key) names.add(n.Key);
-      } catch {  }
-      try {
-        for (const n of JSON.parse(await backend.GetEditablePlugins()) as string[]) if (n) names.add(n);
-      } catch {  }
-      setPlugins([...names]);
+        // Show every loaded plugin, not only editable ones: reads work for
+        // any loaded plugin and the backend rejects protected writes with a
+        // clear error. On a transient fetch failure keep the stale list
+        // instead of wiping the user's selection.
+        const activeRaw = JSON.parse(await backend.GetActivePlugins()) as Array<{ Name?: unknown }>;
+        const names = activeRaw
+          .map(entry => entry?.Name)
+          .filter((name): name is string => typeof name === 'string' && name.length > 0);
+        if (cancelled) return;
+        setPlugins(names);
+      } catch {
+        if (!cancelled && plugins.length === 0) {
+          setPlugins([]);
+        }
+      }
     })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backend]);
-
-
-
 
   useEffect(() => {
     if (!backend) return;
@@ -58,7 +59,6 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
     let cancelled = false;
     void (async () => {
       try {
-
         const raw = JSON.parse(await backend.GetPluginRecordTypes(plugin.trim())) as string[];
         const parsed = raw.map(s => {
           const m = /^(.*?)\s*\((\d+)\)\s*$/.exec(s);
@@ -117,8 +117,6 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           failures.push(`${formKey}.${col}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
-
-
 
       let saveMsg = '';
       if (ok > 0) {
@@ -186,11 +184,14 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
                     {grid.columns.map((col, i) => {
                       const key = cellKey(row.formKey, col);
                       const dirty = edits.has(key);
+                      const canEdit = row.editable?.[i] ?? true;
                       return (
                         <td key={col} className={dirty ? 'spreadsheet-dirty' : ''}>
                           <input
                             className="spreadsheet-cell-input"
                             value={dirty ? edits.get(key)! : row.cells[i]}
+                            disabled={!canEdit}
+                            title={canEdit ? undefined : 'Read-only'}
                             onChange={e => onEdit(row.formKey, col, e.target.value)}
                           />
                         </td>

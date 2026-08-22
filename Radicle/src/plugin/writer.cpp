@@ -1,13 +1,16 @@
 #include "fo4/plugin/writer.hpp"
 
+#include "fo4/io/atomic_write.hpp"
+#include "fo4/plugin/onam.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/form_links.hpp"
 
 #include <zlib.h>
 
+#include <algorithm>
 #include <cstring>
-#include <fstream>
+#include <limits>
 #include <span>
 #include <stdexcept>
 
@@ -150,6 +153,66 @@ void write_group(ByteWriter& out, const Group& group) {
   out.patch_u32(header_offset + 4, size);
 }
 
+std::uint64_t counted_group_records(const Group& group) {
+  // xEdit TwbGroupRecord.GetCountedRecordCount is 1 + its recursive children.
+  std::uint64_t count = 1;
+  for (const auto& child : group.children) {
+    if (std::holds_alternative<Record>(child)) {
+      ++count;
+    } else {
+      const auto nested = counted_group_records(std::get<Group>(child));
+      if (nested > std::numeric_limits<std::uint64_t>::max() - count) {
+        throw std::runtime_error("plugin record count overflow");
+      }
+      count += nested;
+    }
+  }
+  return count;
+}
+
+std::uint32_t rebuilt_hedr_record_count(const Plugin& plugin) {
+  // xEdit writes Pred(root.GetCountedRecordCount): each major record counts 1,
+  // every GRUP counts 1 plus its children, and Pred removes TES4 itself.
+  std::uint64_t count = 0;
+  for (const auto& group : plugin.groups) {
+    const auto group_count = counted_group_records(group);
+    if (group_count > std::numeric_limits<std::uint64_t>::max() - count) {
+      throw std::runtime_error("plugin record count overflow");
+    }
+    count += group_count;
+  }
+  if (count > std::numeric_limits<std::uint32_t>::max()) {
+    throw std::runtime_error("plugin record count exceeds HEDR u32 storage");
+  }
+  return static_cast<std::uint32_t>(count);
+}
+
+void patch_hedr_record_count(Record& tes4, std::uint32_t count) {
+  Subrecord* hedr = nullptr;
+  for (auto& sub : tes4.subrecords) {
+    if (sub.signature != sig_hedr) continue;
+    if (hedr != nullptr) {
+      throw std::runtime_error("TES4 contains duplicate HEDR subrecords");
+    }
+    hedr = &sub;
+  }
+  if (hedr == nullptr || hedr->data.size() != 12) {
+    throw std::runtime_error("TES4 HEDR must be exactly 12 bytes on rebuild");
+  }
+
+  const auto current = static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(hedr->data[4])) |
+                       (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(hedr->data[5])) << 8) |
+                       (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(hedr->data[6])) << 16) |
+                       (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(hedr->data[7])) << 24);
+  if (current == count) return;
+
+  hedr->data[4] = std::byte{static_cast<std::uint8_t>(count)};
+  hedr->data[5] = std::byte{static_cast<std::uint8_t>(count >> 8)};
+  hedr->data[6] = std::byte{static_cast<std::uint8_t>(count >> 16)};
+  hedr->data[7] = std::byte{static_cast<std::uint8_t>(count >> 24)};
+  tes4.original_bytes.clear();
+}
+
 Subrecord zstring_subrecord(Signature signature, std::string_view text) {
   Subrecord sub;
   sub.signature = signature;
@@ -212,9 +275,20 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
     return plugin.original_bytes;
   }
 
+  // Clean plugins return original_bytes above. Once a master-flagged plugin is
+  // dirty, rebuild ONAM from the current hierarchy before serialization so
+  // stale temporary-override metadata cannot survive a mutation.
+  auto prepared = plugin;
+  if (prepared.header.tes4_flags.is_master()) {
+    rebuild_tes4_onam(prepared);
+  }
+
+  auto tes4 = prepared.tes4;
+  patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
+
   ByteWriter out;
-  write_record(out, plugin.tes4);
-  for (const auto& group : plugin.groups) {
+  write_record(out, tes4);
+  for (const auto& group : prepared.groups) {
     write_group(out, group);
   }
   return out.bytes;
@@ -222,20 +296,13 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
 
 void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) {
   const auto bytes = write_plugin(plugin);
-  std::ofstream out{path, std::ios::binary};
-  if (!out) {
-    throw std::runtime_error("unable to write " + path.string());
-  }
-  out.write(reinterpret_cast<const char*>(bytes.data()),
-            static_cast<std::streamsize>(bytes.size()));
-  if (!out) {
-    throw std::runtime_error("unable to write " + path.string());
-  }
+  io::write_file_atomic(path, bytes);
 }
 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
   assign_record_form_keys(plugin);
   const auto old_context = plugin_form_id_context(plugin);
+  const auto old_masters = plugin.header.masters;
 
   plugin.header.masters.clear();
   plugin.header.masters.reserve(new_masters.size());
@@ -243,6 +310,13 @@ Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_mas
     MasterReference master;
     master.key = std::move(desc.key);
     master.kind = desc.kind;
+    const auto old = std::find_if(old_masters.begin(), old_masters.end(), [&](const auto& item) {
+      return item.key == master.key;
+    });
+    if (old != old_masters.end()) {
+      master.data_size = old->data_size;
+      master.data_bytes = old->data_bytes;
+    }
     plugin.header.masters.push_back(std::move(master));
   }
 

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <vector>
 
 namespace fo4 {
@@ -59,6 +60,13 @@ private:
   std::size_t pos_{0};
 };
 
+struct UnsupportedVmadProperty {};
+
+struct VmadScan {
+  std::vector<std::size_t> offsets;
+  bool unsupported{false};
+};
+
 constexpr std::uint8_t k_type_object = 1;
 constexpr std::uint8_t k_type_string = 2;
 constexpr std::uint8_t k_type_int = 3;
@@ -108,8 +116,13 @@ void walk_property(Slice& slice, std::int16_t object_format,
   slice.u8();  // flags
   switch (type) {
     case 0:
-    case k_type_variable:
       break;
+    case k_type_variable:
+    case k_type_variable_array:
+      // xEdit identifies type 16 as FO76 Variable Array and does not implement
+      // it. Type 6 is likewise dynamically typed. Without a discriminator for
+      // the nested value, consuming bytes here would risk losing VMAD sync.
+      throw UnsupportedVmadProperty{};
     case k_type_object:
       walk_object(slice, object_format, offsets);
       break;
@@ -153,9 +166,6 @@ void walk_property(Slice& slice, std::int16_t object_format,
       slice.skip(n);
       break;
     }
-    case k_type_variable_array:
-      slice.u32();
-      break;
     case k_type_struct_array: {
       const auto n = slice.u32();
       for (std::uint32_t i = 0; i < n; ++i) {
@@ -259,34 +269,60 @@ void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
   }
 }
 
-}  // namespace
-
-std::vector<std::size_t> vmad_formid_offsets(std::span<const std::byte> data,
-                                             Signature record_signature) {
-  std::vector<std::size_t> offsets;
+VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) {
+  VmadScan result;
   if (data.size() < 6) {
-    return offsets;
+    return result;
   }
+
   try {
     Slice slice{data};
     slice.i16();  // version
     const auto object_format = slice.i16();
-    walk_scripts(slice, object_format, slice.u16(), offsets);
+    walk_scripts(slice, object_format, slice.u16(), result.offsets);
     if (slice.at_end()) {
-      return offsets;
+      return result;
     }
     if (record_signature == sig_qust) {
-      walk_quest_extra(slice, object_format, offsets);
+      walk_quest_extra(slice, object_format, result.offsets);
     } else if (record_signature == sig_perk) {
-      walk_perk_extra(slice, object_format, offsets);
+      walk_perk_extra(slice, object_format, result.offsets);
     } else if (record_signature == sig_pack || record_signature == sig_info) {
-      walk_flagged_fragments(slice, object_format, offsets, false);
+      walk_flagged_fragments(slice, object_format, result.offsets, false);
     } else if (record_signature == sig_scen) {
-      walk_flagged_fragments(slice, object_format, offsets, true);
+      walk_flagged_fragments(slice, object_format, result.offsets, true);
     }
+  } catch (const UnsupportedVmadProperty&) {
+    result.offsets.clear();
+    result.unsupported = true;
   } catch (const parse_error&) {
+    // Preserve the historical tolerant inspection behavior for malformed or
+    // truncated VMAD, but never return offsets collected before the failure.
+    result.offsets.clear();
   }
-  return offsets;
+  return result;
+}
+
+}  // namespace
+
+std::vector<std::size_t> vmad_formid_offsets(std::span<const std::byte> data,
+                                              Signature record_signature) {
+  return scan_vmad(data, record_signature).offsets;
+}
+
+bool vmad_has_unsupported_properties(std::span<const std::byte> data,
+                                      Signature record_signature) {
+  return scan_vmad(data, record_signature).unsupported;
+}
+
+std::optional<std::vector<std::size_t>> vmad_formid_offsets_for_remap(
+    std::span<const std::byte> data,
+    Signature record_signature) {
+  auto scan = scan_vmad(data, record_signature);
+  if (scan.unsupported) {
+    return std::nullopt;
+  }
+  return std::move(scan.offsets);
 }
 
 }  // namespace fo4

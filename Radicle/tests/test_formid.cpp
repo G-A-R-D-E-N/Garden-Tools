@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+#include <vector>
+
 using fo4::FormKey;
 using fo4::LocalFormId;
 using fo4::MasterDescriptor;
@@ -114,6 +117,47 @@ TEST(FormId, LightMasterUsesMastOrdinalOnDiskNotFeSlot) {
   EXPECT_EQ(fo4::resolve_plugin_form_id(RawFormId{0x02000812}, ctx), key);
 }
 
+TEST(FormId, RuntimeFeEncodingIsRejectedInOrdinaryOnDiskPluginContext) {
+  PluginFormIdContext ctx;
+  ctx.current_plugin = PluginKey::from_filename("FlaggedLight.esp");
+  ctx.current_kind = PluginKind::light;
+  ctx.masters = {
+      MasterDescriptor{PluginKey::from_filename("Fallout4.esm"), PluginKind::full},
+  };
+
+  EXPECT_THROW(
+      fo4::resolve_plugin_form_id(RawFormId{0xFE000812}, ctx),
+      fo4::FormIdError);
+}
+
+TEST(FormId, OnDiskFeByteRemainsAValidMastOrdinalAtTheTableBoundary) {
+  PluginFormIdContext ctx;
+  ctx.current_plugin = PluginKey::from_filename("HugePatch.esp");
+  ctx.masters.reserve(0xFEu);
+  for (std::size_t index = 0; index < 0xFEu; ++index) {
+    ctx.masters.push_back(MasterDescriptor{
+        PluginKey::from_filename("Master" + std::to_string(index) + ".esm"),
+        PluginKind::full});
+  }
+
+  const auto key = fo4::resolve_plugin_form_id(RawFormId{0xFE001234}, ctx);
+  EXPECT_EQ(key, FormKey::parse("001234:HugePatch.esp"));
+  EXPECT_EQ(fo4::encode_plugin_form_id(key, ctx), RawFormId{0xFE001234});
+}
+
+TEST(FormId, ResolvingLightOwnerPreservesFullLocalUntilEncodeBoundary) {
+  PluginFormIdContext ctx;
+  ctx.current_plugin = PluginKey::from_filename("FlaggedLight.esp");
+  ctx.current_kind = PluginKind::light;
+  ctx.masters = {
+      MasterDescriptor{PluginKey::from_filename("Fallout4.esm"), PluginKind::full},
+  };
+
+  const auto key = fo4::resolve_plugin_form_id(RawFormId{0x01010812}, ctx);
+  EXPECT_EQ(key.local(), LocalFormId{0x010812});
+  EXPECT_EQ(fo4::encode_plugin_form_id(key, ctx), RawFormId{0x01000812});
+}
+
 TEST(FormId, RuntimeFullCompileIndexIsNotCanonical) {
   RuntimeFormIdContext runtime;
   runtime.full_plugins.resize(0x57);
@@ -124,6 +168,20 @@ TEST(FormId, RuntimeFullCompileIndexIsNotCanonical) {
   EXPECT_EQ(key, FormKey::parse("00009A:RadiationOverhaul.esp"));
 }
 
+TEST(FormId, RuntimeHighestFullIndexIsFdBecauseFeIsReservedForLightPlugins) {
+  RuntimeFormIdContext runtime;
+  runtime.full_plugins.resize(0xFEu);
+  runtime.full_plugins[0xFD] =
+      MasterDescriptor{PluginKey::from_filename("LastFull.esp"), PluginKind::full};
+
+  EXPECT_EQ(
+      fo4::resolve_runtime_form_id(RawFormId{0xFD001234}, runtime),
+      FormKey::parse("001234:LastFull.esp"));
+  EXPECT_THROW(
+      fo4::resolve_runtime_form_id(RawFormId{0xFE001234}, runtime),
+      fo4::FormIdError);
+}
+
 TEST(FormId, RuntimeLightUsesFeSlotAndTwelveBitLocal) {
   RuntimeFormIdContext runtime;
   runtime.light_plugins.resize(0x57);
@@ -132,6 +190,17 @@ TEST(FormId, RuntimeLightUsesFeSlotAndTwelveBitLocal) {
 
   const auto key = fo4::resolve_runtime_form_id(RawFormId{0xFE05609A}, runtime);
   EXPECT_EQ(key, FormKey::parse("00009A:RadiationOverhaul.esl"));
+}
+
+TEST(FormId, RuntimeLightSupportsTheHighestTwelveBitSlot) {
+  RuntimeFormIdContext runtime;
+  runtime.light_plugins.resize(0x1000u);
+  runtime.light_plugins[0xFFF] =
+      MasterDescriptor{PluginKey::from_filename("LastLight.esl"), PluginKind::light};
+
+  EXPECT_EQ(
+      fo4::resolve_runtime_form_id(RawFormId{0xFEFFFABC}, runtime),
+      FormKey::parse("000ABC:LastLight.esl"));
 }
 
 TEST(FormId, RejectsUnknownMasterIndex) {

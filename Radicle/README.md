@@ -12,9 +12,15 @@ C++ namespace is still `fo4`. The library is meant to replace Mutagen inside FO4
 
 ## Status
 
-Generic lossless plugin container, FormKey identity, preservation writer, master remap, and FormLink rewrite (`NAME`/`KWDA`/`CTDA`/`VMAD` plus structured slots such as `CNTO`/`LVLO`/`XTEL`). Light plugins are TES4 SmallFile when known, otherwise `.esl` filename. Inspect CLI and GoogleTests.
+Generic lossless plugin container, FormKey identity, preservation writer, master remap, schema-aware FormLink rewrite, load-order/conflict graph, stable C ABI, and the native PluginEditTool backend are implemented. FormLink coverage includes `NAME`/`KWDA`/`CTDA`/`VMAD`, discriminator-controlled package/PERK payloads, and structured slots such as `CNTO`/`LVLO`/`XTEL`.
 
-Not yet: typed WEAP/ARMO classes, FO4IDE C adapter, BA2, conflict graph.
+The first machine-readable authoring schema is active under `schema/fallout4/fields.json`. A deterministic generator emits record-qualified C++ scalar descriptors and CMake checks that committed generated output is current. `REFR\\HealthPercent` / `XHLT` is the first field using this path; typed EYES and LVSP editing remain structured record models rather than scalar byte patches.
+
+BA2 support currently covers the proven Fallout 4 version-1 `BTDX/GNRL` layout: list/read, stored and zlib-compressed chunks, extraction, path lookup, and write/read round trips. PluginEditTool's native Archive panel now uses this Radicle reader through its archive backend seam. DX10 texture archives and next-generation v7/v8 layouts remain deliberately unsupported until their fields are verified.
+
+Localized string-table support now covers `.STRINGS`, `.DLSTRINGS`, and `.ILSTRINGS`: strict header/offset validation, raw text-byte preservation, lookup, deduplication, and deterministic writing. Automatic resolution of 4-byte localized plugin fields remains deliberately separate until TES4 bit 7 semantics are settled or the caller supplies an explicit localization context.
+
+Still incomplete: broad typed/schema-driven record authoring, safe ESL compaction, remaining mixed-layout FormID surfaces such as NAVM/NAVI, plugin-field integration with localized string tables, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
 
 ## Build
 
@@ -63,5 +69,8 @@ See `docs/FORMID_MODEL.md`.
 - `docs/RE_INVENTORY.md`
 - `docs/FORMAT_NOTES.md`
 - `docs/FORMID_MODEL.md`
+- `docs/FORM_LINK_EVIDENCE.md`
+- `docs/BA2.md`
+- `docs/LOCALIZED_STRINGS.md`
 - `docs/TEST_STRATEGY.md`
 - `docs/OPEN_QUESTIONS.md`

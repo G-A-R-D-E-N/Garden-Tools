@@ -24,12 +24,14 @@ std::string trim(std::string value) {
     return value;
 }
 
+#if defined(_WIN32)
 std::string lowerAscii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
     });
     return value;
 }
+#endif
 
 std::string pathKey(const std::filesystem::path& path) {
     auto value = path.lexically_normal().string();
