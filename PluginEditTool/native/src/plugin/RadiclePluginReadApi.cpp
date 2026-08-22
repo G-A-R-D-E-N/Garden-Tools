@@ -143,12 +143,6 @@ Result<fo4::FormKey> formKeyArgument(const nlohmann::json& arguments) {
 }
 
 nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 0) {
-    if (signature == "REFR") {
-        return nlohmann::json::array({
-            "EDID",
-            "REFR\\HealthPercent"
-        });
-    }
     if (signature == "EYES") {
         return nlohmann::json::array({
             "EDID",
@@ -157,21 +151,30 @@ nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 
             "EYES\\DataFlags"
         });
     }
-    if (signature != "LVSP") return nlohmann::json::array({"EDID"});
+    if (signature == "LVSP") {
+        nlohmann::json columns = nlohmann::json::array({
+            "EDID",
+            "LVSP\\ChanceNone",
+            "LVSP\\MaxCount",
+            "LVSP\\Flags",
+            "LVSP\\EntryCount"
+        });
+        for (std::size_t index = 0; index < maxEntries; ++index) {
+            const auto prefix = "LVSP\\Entries[" + std::to_string(index) + "]\\";
+            columns.push_back(prefix + "Level");
+            columns.push_back(prefix + "Spell");
+            columns.push_back(prefix + "Count");
+            columns.push_back(prefix + "ChanceNone");
+        }
+        return columns;
+    }
 
-    nlohmann::json columns = nlohmann::json::array({
-        "EDID",
-        "LVSP\\ChanceNone",
-        "LVSP\\MaxCount",
-        "LVSP\\Flags",
-        "LVSP\\EntryCount"
-    });
-    for (std::size_t index = 0; index < maxEntries; ++index) {
-        const auto prefix = "LVSP\\Entries[" + std::to_string(index) + "]\\";
-        columns.push_back(prefix + "Level");
-        columns.push_back(prefix + "Spell");
-        columns.push_back(prefix + "Count");
-        columns.push_back(prefix + "ChanceNone");
+    nlohmann::json columns = nlohmann::json::array({"EDID"});
+    if (signature.size() == 4) {
+        for (const auto& field :
+             fo4::schema::scalar_fields(fo4::Signature::from_string(signature))) {
+            columns.push_back(std::string(field.path));
+        }
     }
     return columns;
 }
@@ -263,42 +266,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
         nlohmann::json cells = nlohmann::json::array({editor});
         nlohmann::json editable = nlohmann::json::array({true});
 
-        if (signature == "REFR") {
-            const auto xhltSignature = fo4::Signature::from_string("XHLT");
-            const fo4::Subrecord* xhlt = nullptr;
-            for (const auto& subrecord : record->subrecords) {
-                if (subrecord.signature != xhltSignature) continue;
-                if (xhlt != nullptr) {
-                    return std::unexpected(Error{
-                        "ScalarReadFailed",
-                        record->form_key.to_string() + ": duplicate REFR XHLT subrecords"
-                    });
-                }
-                xhlt = &subrecord;
-            }
-
-            if (xhlt == nullptr) {
-                cells.push_back("");
-                editable.push_back(false);
-            } else {
-                try {
-                    const auto descriptor = fo4::schema::scalar_descriptor(xhltSignature);
-                    if (!descriptor.has_value()) {
-                        return std::unexpected(Error{
-                            "ScalarReadFailed",
-                            "REFR XHLT is missing its Radicle scalar descriptor"
-                        });
-                    }
-                    cells.push_back(fo4::schema::decode_scalar(xhlt->data, *descriptor));
-                    editable.push_back(true);
-                } catch (const fo4::schema::ScalarError& error) {
-                    return std::unexpected(Error{
-                        "ScalarReadFailed",
-                        record->form_key.to_string() + ": " + error.what()
-                    });
-                }
-            }
-        } else if (signature == "EYES") {
+        if (signature == "EYES") {
             try {
                 const auto model = fo4::forms::decode_eyes(
                     loaded->plugin, record->form_key);
@@ -350,6 +318,38 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
                     editable.push_back(false);
                     editable.push_back(false);
                     editable.push_back(false);
+                }
+            }
+        } else if (signature.size() == 4) {
+            const auto recordSignature = fo4::Signature::from_string(signature);
+            for (const auto& field : fo4::schema::scalar_fields(recordSignature)) {
+                const fo4::Subrecord* found = nullptr;
+                for (const auto& subrecord : record->subrecords) {
+                    if (subrecord.signature != field.scalar.subrecord) continue;
+                    if (found != nullptr) {
+                        return std::unexpected(Error{
+                            "ScalarReadFailed",
+                            record->form_key.to_string() + ": duplicate " + signature + " " +
+                                field.scalar.subrecord.to_string() + " subrecords"
+                        });
+                    }
+                    found = &subrecord;
+                }
+
+                if (found == nullptr) {
+                    cells.push_back("");
+                    editable.push_back(false);
+                    continue;
+                }
+
+                try {
+                    cells.push_back(fo4::schema::decode_scalar(found->data, field.scalar));
+                    editable.push_back(true);
+                } catch (const fo4::schema::ScalarError& error) {
+                    return std::unexpected(Error{
+                        "ScalarReadFailed",
+                        record->form_key.to_string() + ": " + error.what()
+                    });
                 }
             }
         }
