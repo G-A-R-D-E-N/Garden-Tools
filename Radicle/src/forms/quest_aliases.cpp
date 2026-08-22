@@ -10,7 +10,9 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace fo4::forms {
@@ -25,6 +27,12 @@ constexpr auto k_alid = Signature::from_string("ALID");
 constexpr auto k_fnam = Signature::from_string("FNAM");
 constexpr auto k_alfi = Signature::from_string("ALFI");
 constexpr auto k_almi = Signature::from_string("ALMI");
+constexpr auto k_alfr = Signature::from_string("ALFR");
+constexpr auto k_alua = Signature::from_string("ALUA");
+constexpr auto k_alfa = Signature::from_string("ALFA");
+constexpr auto k_alrt = Signature::from_string("ALRT");
+constexpr auto k_aleq = Signature::from_string("ALEQ");
+constexpr auto k_alea = Signature::from_string("ALEA");
 constexpr auto k_aled = Signature::from_string("ALED");
 
 std::uint32_t read_u32(const std::vector<std::byte>& data) {
@@ -123,7 +131,121 @@ const Subrecord* unique_member(const QuestAlias& alias,
   return found;
 }
 
-void decode_alias_semantics(QuestAlias& alias) {
+RawFormId raw_form_id(const Subrecord& member, std::string_view label) {
+  if (member.data.size() != 4) {
+    throw QuestError("QUST " + std::string(label) + " FormID must be exactly four bytes");
+  }
+  return RawFormId{read_u32(member.data)};
+}
+
+std::optional<FormKey> decode_optional_form_key(
+    const Subrecord& member,
+    const PluginFormIdContext& context,
+    std::string_view label) {
+  const auto raw = raw_form_id(member, label);
+  if (raw.is_null()) return std::nullopt;
+  try {
+    return resolve_plugin_form_id(raw, context);
+  } catch (const FormIdError& error) {
+    throw QuestError("QUST " + std::string(label) + " cannot resolve: " + error.what());
+  }
+}
+
+FormKey decode_required_form_key(const Subrecord& member,
+                                 const PluginFormIdContext& context,
+                                 std::string_view label) {
+  const auto resolved = decode_optional_form_key(member, context, label);
+  if (!resolved.has_value()) {
+    throw QuestError("QUST " + std::string(label) + " cannot be null");
+  }
+  return *resolved;
+}
+
+Subrecord encoded_form_key(Signature signature,
+                           const FormKey& key,
+                           const PluginFormIdContext& context) {
+  try {
+    return make_subrecord(signature, write_u32(encode_plugin_form_id(key, context).value()));
+  } catch (const FormIdError& error) {
+    throw QuestError("QUST alias FormLink cannot be encoded: " + std::string(error.what()));
+  }
+}
+
+Subrecord encoded_optional_form_key(Signature signature,
+                                    const std::optional<FormKey>& key,
+                                    const PluginFormIdContext& context) {
+  if (!key.has_value()) {
+    return make_subrecord(signature, write_u32(0));
+  }
+  return encoded_form_key(signature, *key, context);
+}
+
+void decode_reference_fill(QuestAlias& alias,
+                           const PluginFormIdContext& context) {
+  const auto* specific = unique_member(alias, k_alfr, "ALFR");
+  const auto* unique_actor = unique_member(alias, k_alua, "ALUA");
+  const auto* location_alias = unique_member(alias, k_alfa, "ALFA");
+  const auto* location_type = unique_member(alias, k_alrt, "ALRT");
+  const auto* external_quest = unique_member(alias, k_aleq, "ALEQ");
+  const auto* external_alias = unique_member(alias, k_alea, "ALEA");
+
+  const bool has_specific = specific != nullptr;
+  const bool has_unique = unique_actor != nullptr;
+  const bool has_location = location_alias != nullptr || location_type != nullptr;
+  const bool has_external = external_quest != nullptr || external_alias != nullptr;
+  const auto variants = static_cast<unsigned>(has_specific) +
+                        static_cast<unsigned>(has_unique) +
+                        static_cast<unsigned>(has_location) +
+                        static_cast<unsigned>(has_external);
+  if (variants > 1) {
+    throw QuestError("QUST reference alias contains multiple Fill Type variants");
+  }
+
+  if (has_specific) {
+    alias.fill = QuestSpecificReferenceFill{
+        decode_optional_form_key(*specific, context, "ALFR Specific Reference")};
+    return;
+  }
+  if (has_unique) {
+    alias.fill = QuestUniqueActorFill{
+        decode_required_form_key(*unique_actor, context, "ALUA Unique Actor")};
+    return;
+  }
+  if (has_location) {
+    if (location_alias == nullptr || location_type == nullptr) {
+      throw QuestError(
+          "QUST Location Alias Reference fill requires both ALFA and ALRT");
+    }
+    if (location_alias->data.size() != 4) {
+      throw QuestError("QUST ALFA alias ID must be exactly four bytes");
+    }
+    alias.fill = QuestLocationAliasReferenceFill{
+        .alias = read_i32(location_alias->data),
+        .reference_type =
+            decode_required_form_key(*location_type, context, "ALRT Ref Type"),
+    };
+    return;
+  }
+  if (has_external) {
+    if (external_alias == nullptr) {
+      throw QuestError("QUST External Alias Reference fill requires ALEA");
+    }
+    if (external_alias->data.size() != 4) {
+      throw QuestError("QUST ALEA external alias ID must be exactly four bytes");
+    }
+    std::optional<FormKey> quest;
+    if (external_quest != nullptr) {
+      quest = decode_optional_form_key(*external_quest, context, "ALEQ Quest");
+    }
+    alias.fill = QuestExternalAliasReferenceFill{
+        .quest = std::move(quest),
+        .alias = read_i32(external_alias->data),
+    };
+  }
+}
+
+void decode_alias_semantics(QuestAlias& alias,
+                            const PluginFormIdContext* context) {
   if (alias.kind == QuestAliasKind::collection) {
     if (const auto* max_fill = unique_member(alias, k_almi, "ALMI")) {
       if (max_fill->data.size() != 1) {
@@ -160,11 +282,25 @@ void decode_alias_semantics(QuestAlias& alias) {
     }
     alias.force_into_alias = read_i32(force->data);
   }
+
+  if (alias.kind == QuestAliasKind::reference) {
+    const bool has_formlink_fill =
+        unique_member(alias, k_alfr, "ALFR") != nullptr ||
+        unique_member(alias, k_alua, "ALUA") != nullptr ||
+        unique_member(alias, k_alfa, "ALFA") != nullptr ||
+        unique_member(alias, k_alrt, "ALRT") != nullptr ||
+        unique_member(alias, k_aleq, "ALEQ") != nullptr ||
+        unique_member(alias, k_alea, "ALEA") != nullptr;
+    if (has_formlink_fill) {
+      if (context == nullptr) {
+        throw QuestError("QUST FormLink-bearing alias fill requires plugin FormID context");
+      }
+      decode_reference_fill(alias, *context);
+    }
+  }
 }
 
-}  // namespace
-
-QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
+QuestAlias encode_base_alias(const QuestAliasCreation& creation) {
   QuestAlias alias;
   alias.kind = creation.kind;
   alias.id = creation.id;
@@ -175,13 +311,16 @@ QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
       throw QuestError(
           "QUST collection aliases do not use ALID, FNAM, or ALFI fields");
     }
+    if (!std::holds_alternative<std::monostate>(creation.fill)) {
+      throw QuestError("QUST collection alias Fill Type is not modeled by ALCS/ALMI");
+    }
     alias.subrecords.push_back(make_subrecord(k_alcs, write_u32(creation.id)));
     if (creation.max_initial_fill_count.has_value()) {
       alias.subrecords.push_back(make_subrecord(
           k_almi,
           std::vector<std::byte>{std::byte{*creation.max_initial_fill_count}}));
     }
-    decode_alias_semantics(alias);
+    decode_alias_semantics(alias, nullptr);
     return alias;
   }
 
@@ -207,7 +346,65 @@ QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
         make_subrecord(k_alfi, write_i32(*creation.force_into_alias)));
   }
   alias.subrecords.push_back(make_subrecord(k_aled));
-  decode_alias_semantics(alias);
+  return alias;
+}
+
+void insert_reference_fill(QuestAlias& alias,
+                           const QuestAliasFill& fill,
+                           const PluginFormIdContext& context) {
+  if (std::holds_alternative<std::monostate>(fill)) return;
+  if (alias.kind != QuestAliasKind::reference) {
+    throw QuestError("current semantic Fill Type encoder supports reference aliases only");
+  }
+  if (alias.subrecords.empty() || alias.subrecords.back().signature != k_aled) {
+    throw QuestError("QUST reference alias encoder lost required ALED boundary");
+  }
+
+  std::vector<Subrecord> members;
+  std::visit(
+      [&](const auto& value) {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, std::monostate>) {
+          return;
+        } else if constexpr (std::is_same_v<T, QuestSpecificReferenceFill>) {
+          members.push_back(encoded_optional_form_key(k_alfr, value.reference, context));
+        } else if constexpr (std::is_same_v<T, QuestUniqueActorFill>) {
+          members.push_back(encoded_form_key(k_alua, value.actor, context));
+        } else if constexpr (std::is_same_v<T, QuestLocationAliasReferenceFill>) {
+          members.push_back(make_subrecord(k_alfa, write_i32(value.alias)));
+          members.push_back(encoded_form_key(k_alrt, value.reference_type, context));
+        } else if constexpr (std::is_same_v<T, QuestExternalAliasReferenceFill>) {
+          if (value.quest.has_value()) {
+            members.push_back(encoded_form_key(k_aleq, *value.quest, context));
+          }
+          members.push_back(make_subrecord(k_alea, write_i32(value.alias)));
+        }
+      },
+      fill);
+
+  alias.subrecords.insert(
+      alias.subrecords.end() - 1,
+      std::make_move_iterator(members.begin()),
+      std::make_move_iterator(members.end()));
+}
+
+}  // namespace
+
+QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
+  if (!std::holds_alternative<std::monostate>(creation.fill)) {
+    throw QuestError("QUST FormLink-bearing Fill Type encoding requires a plugin context");
+  }
+  auto alias = encode_base_alias(creation);
+  decode_alias_semantics(alias, nullptr);
+  return alias;
+}
+
+QuestAlias encode_quest_alias(const Plugin& plugin,
+                              const QuestAliasCreation& creation) {
+  auto alias = encode_base_alias(creation);
+  const auto context = plugin_form_id_context(plugin);
+  insert_reference_fill(alias, creation.fill, context);
+  decode_alias_semantics(alias, &context);
   return alias;
 }
 
@@ -238,6 +435,7 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
     throw QuestError("QUST is missing required ANAM Next Alias ID");
   }
 
+  const auto context = plugin_form_id_context(plugin);
   for (std::size_t index = *anam_index + 1; index < record->subrecords.size();) {
     const auto& start = record->subrecords[index];
     if (!is_alias_start(start.signature)) {
@@ -262,7 +460,7 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
         alias.subrecords.push_back(record->subrecords[index]);
         ++index;
       }
-      decode_alias_semantics(alias);
+      decode_alias_semantics(alias, &context);
       result.aliases.push_back(std::move(alias));
       continue;
     }
@@ -289,7 +487,7 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
           "QUST " + std::string(alias_label(alias.kind)) +
           " alias is missing required ALED end marker");
     }
-    decode_alias_semantics(alias);
+    decode_alias_semantics(alias, &context);
     result.aliases.push_back(std::move(alias));
   }
 
