@@ -192,6 +192,17 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   assign_record_form_keys(next);
   if (find_record(next, record_key) == nullptr) return RecordDeleteStatus::record_missing;
 
+  // A same-key rekey is a strict no-op scan. It proves every supported mixed
+  // FormLink surface is parseable before the tolerant collector is trusted.
+  auto coverage_probe = next;
+  rekey_form_links(coverage_probe, record_key, record_key);
+  const auto links = collect_form_links(coverage_probe);
+  if (std::any_of(links.begin(), links.end(), [&](const auto& link) {
+        return link.key == record_key;
+      })) {
+    return RecordDeleteStatus::referenced;
+  }
+
   bool erased = false;
   for (auto& group : next.groups) {
     if (erase_record(group, record_key)) {
