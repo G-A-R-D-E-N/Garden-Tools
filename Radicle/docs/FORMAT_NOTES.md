@@ -326,3 +326,64 @@ so the corruption is easy to miss —
 slot removed, a `Beta.esm` keyword silently becomes an `Alpha.esm` one.
 
 `QOBJ` and `NNAM` are also used by the alias array, so the walk stops at `ANAM`.
+
+## PROJ / EXPL / HAZD
+
+Measured across `Fallout4.esm` + DLCCoast/DLCNukaWorld/DLCRobot: 218 PROJ, 317
+EXPL, 78 HAZD. Every subrecord in all three families has max cardinality 1.
+
+```
+PROJ  EDID OBND [FULL] [MODL MODT] [DEST DSTD [DMDL DMDT] DSTF] DATA DNAM NAM1 [NAM2] VNAM
+EXPL  EDID OBND [FULL] [MODL MODT] [EITM] [MNAM] DATA
+HAZD  EDID OBND [FULL] MODL MODT [MNAM] DNAM
+```
+
+Required in every shipped record: PROJ `EDID OBND DATA DNAM NAM1 VNAM`;
+EXPL `EDID OBND DATA`; HAZD `EDID OBND MODL MODT DNAM` — note HAZD requires the
+model where the other two do not. `FULL` is 4 bytes in every instance of all
+three, so it is declared localized.
+
+**PROJ `DATA` is a zero-length marker** in all 218 records, not a payload.
+**EXPL `DATA` is not fixed-width**: 84 bytes (299), 56 (11) and 64 (3), so a
+decoder must accept the shorter legacy shapes.
+
+### Typed creation is blocked on the payload structs
+
+`PROJ DNAM` (93 bytes), `EXPL DATA` (84) and `HAZD DNAM` (52) are unmodelled
+and have no usable default: 199 distinct DNAM payloads across 218 PROJ records,
+and only 13 of the 93 byte positions are constant. A creator cannot invent a
+valid one, so these need their field layouts pinned before typed creation is
+possible.
+
+### Candidate FormID slots — NOT wired, needs confirmation
+
+These payloads appear to carry FormIDs, and none of the three families has any
+entry in the FormLink schema, which would mean a master remap leaves them
+pointing at whatever record now occupies the old index — the same class of bug
+as the QSTA keyword.
+
+Two independent signals agree:
+
+| Subrecord | Offset | Resolves to (Fallout4.esm) | Carries a DLC master index |
+|---|---|---|---|
+| `EXPL DATA` | +0 | LIGH 85/220 | yes |
+| `EXPL DATA` | +4 | SNDR 165/220 | yes |
+| `EXPL DATA` | +8 | SNDR 38/220 | yes |
+| `EXPL DATA` | +12 | IPDS 70/220 | yes |
+| `EXPL DATA` | +16 | EXPL/MSTT/HAZD 47/220 | yes |
+| `PROJ DNAM` | +16 | LIGH 26/139 | yes |
+| `PROJ DNAM` | +20 | LIGH 120/139 | yes |
+| `PROJ DNAM` | +32 | EXPL 98/139 | yes |
+| `PROJ DNAM` | +36 | SNDR 70/139 | yes |
+| `HAZD DNAM` | +24 | SPEL 53 / ENCH 2 of 59 | yes |
+
+The target types are semantically coherent (a light at a light slot, sounds at
+sound slots), and in the DLCs those offsets carry index byte `0x01` pointing
+into Fallout4.esm, which a float or small integer would not do systematically.
+`PROJ DNAM +0` and `+84` and `EXPL DATA +52`/`+60` were rejected: they never
+carry a DLC master index, so their Fallout4.esm matches are coincidence.
+
+**These are deliberately not added to `structured_formids.inc`.** The evidence
+is inferential, and a wrong offset would make master remapping corrupt a float
+or integer field — worse than the current omission. Confirm against xEdit's
+`wbEXPL`/`wbPROJ`/`wbHAZD` definitions or the CK before wiring them.

@@ -130,6 +130,58 @@
       ]
     },
     {
+      "signature": "EXPL",
+      "fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "EITM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
       "signature": "EYES",
       "authoring": {
         "placement": "top_level",
@@ -157,6 +209,53 @@
         ]
       },
       "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "HAZD",
+      "fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
       "localized_subrecords": [
         "FULL"
       ]
@@ -204,6 +303,93 @@
         ]
       },
       "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "PROJ",
+      "fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM1",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM2",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
       "localized_subrecords": [
         "FULL"
       ]
