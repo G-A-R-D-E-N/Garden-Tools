@@ -102,6 +102,8 @@ bool is_formid_array_signature(Signature signature) {
 }
 
 bool record_specific_formid_array(const Record& record, const Subrecord& sub) {
+  // xEdit FO4 NAVM: ONAM is Base Objects, an array of FormIDs. PNAM and NNAM
+  // beside it are arrays of u16 vertex indexes and must not be scanned as IDs.
   return record.header.signature == k_navm && sub.signature == sig_onam;
 }
 
@@ -124,23 +126,30 @@ bool consume_counted_fixed(std::span<const std::byte> data,
 
 std::optional<std::vector<std::size_t>> nvnm_formid_offsets(
     std::span<const std::byte> data) {
+  // xEdit FO4 wbNVNM (pinned 93cc0bc5):
+  //   u32 version
+  //   Pathing Cell { u32 CRC, FormID Parent World, union[coords|Parent Cell] }
+  //   u32-counted vertices[12], triangles[21], edge-links[11], door-links[10],
+  //   cover[8], cover-triangle-map[4], waypoints[18]
+  //   Navmesh Grid { u32 divisor, vec2 grid-size, 2*vec3 bounds,
+  //                  divisor^2 cells, each a u32-counted u16 triangle array }
   if (data.size() < 16) return std::nullopt;
 
   std::vector<std::size_t> offsets;
-  offsets.push_back(8);
-  if (read_u32(data, 8) == 0) offsets.push_back(12);
+  offsets.push_back(8);  // Parent World
+  if (read_u32(data, 8) == 0) offsets.push_back(12);  // Parent Cell union arm
 
   std::size_t cursor = 16;
   const auto skip = [](std::size_t) {};
   if (!consume_counted_fixed(data, cursor, 12, skip)) return std::nullopt;
   if (!consume_counted_fixed(data, cursor, 21, skip)) return std::nullopt;
   if (!consume_counted_fixed(data, cursor, 11, [&](std::size_t base) {
-        offsets.push_back(base + 4);
+        offsets.push_back(base + 4);  // Edge Link.Navmesh
       })) {
     return std::nullopt;
   }
   if (!consume_counted_fixed(data, cursor, 10, [&](std::size_t base) {
-        offsets.push_back(base + 6);
+        offsets.push_back(base + 6);  // Door Link.Door Ref
       })) {
     return std::nullopt;
   }
@@ -148,9 +157,10 @@ std::optional<std::vector<std::size_t>> nvnm_formid_offsets(
   if (!consume_counted_fixed(data, cursor, 4, skip)) return std::nullopt;
   if (!consume_counted_fixed(data, cursor, 18, skip)) return std::nullopt;
 
+  // Grid header: divisor + vec2 + min/max vec3 = 36 bytes.
   if (cursor > data.size() || data.size() - cursor < 36) return std::nullopt;
   const auto divisor = static_cast<std::size_t>(read_u32(data, cursor));
-  if (divisor > 12) return std::nullopt;
+  if (divisor > 12) return std::nullopt;  // mirrors wbNavmeshGridCounter
   cursor += 36;
 
   const auto cell_count = divisor * divisor;
@@ -163,9 +173,15 @@ std::optional<std::vector<std::size_t>> nvnm_formid_offsets(
 
 std::optional<std::vector<std::size_t>> nvmi_formid_offsets(
     std::span<const std::byte> data) {
+  // xEdit FO4 NVMI:
+  //   FormID navmesh, u32 flags, vec3 approx-location, f32 preferred
+  //   u32-counted edge navmeshes, preferred edge navmeshes,
+  //   u32-counted door {u32 CRC, FormID ref},
+  //   u8 has-island + optional bounds/triangle/vertex arrays,
+  //   Pathing Cell {u32 CRC, FormID Parent World, union[coords|Parent Cell]}.
   if (data.size() < 24) return std::nullopt;
 
-  std::vector<std::size_t> offsets{0};
+  std::vector<std::size_t> offsets{0};  // Navmesh
   std::size_t cursor = 24;
   if (!consume_counted_fixed(data, cursor, 4, [&](std::size_t base) {
         offsets.push_back(base);
@@ -178,7 +194,7 @@ std::optional<std::vector<std::size_t>> nvmi_formid_offsets(
     return std::nullopt;
   }
   if (!consume_counted_fixed(data, cursor, 8, [&](std::size_t base) {
-        offsets.push_back(base + 4);
+        offsets.push_back(base + 4);  // Door Ref after CRC
       })) {
     return std::nullopt;
   }
@@ -188,15 +204,15 @@ std::optional<std::vector<std::size_t>> nvmi_formid_offsets(
   if (has_island > 1) return std::nullopt;
   if (has_island != 0) {
     if (cursor > data.size() || data.size() - cursor < 24) return std::nullopt;
-    cursor += 24;
+    cursor += 24;  // bounds
     const auto skip = [](std::size_t) {};
     if (!consume_counted_fixed(data, cursor, 6, skip)) return std::nullopt;
     if (!consume_counted_fixed(data, cursor, 12, skip)) return std::nullopt;
   }
 
   if (cursor > data.size() || data.size() - cursor != 12) return std::nullopt;
-  offsets.push_back(cursor + 4);
-  if (read_u32(data, cursor + 4) == 0) offsets.push_back(cursor + 8);
+  offsets.push_back(cursor + 4);  // Parent World
+  if (read_u32(data, cursor + 4) == 0) offsets.push_back(cursor + 8);  // Parent Cell
   cursor += 12;
   if (cursor != data.size()) return std::nullopt;
   return offsets;
@@ -204,12 +220,16 @@ std::optional<std::vector<std::size_t>> nvmi_formid_offsets(
 
 std::optional<std::vector<std::size_t>> nvpp_formid_offsets(
     std::span<const std::byte> data) {
+  // xEdit FO4 NVPP is two u32-counted structures:
+  //   Paths: u32 path-count, then each path is u32 count + FormID[NAVM][]
+  //   Road Marker Index: u32 count + {FormID NAVM, u32 index}[]
   std::vector<std::size_t> offsets;
   if (data.size() < 4) return std::nullopt;
 
   std::size_t cursor = 0;
   const auto path_count = static_cast<std::size_t>(read_u32(data, cursor));
   cursor += 4;
+  // Every path consumes at least its four-byte nested count.
   if (path_count > (data.size() - cursor) / 4) return std::nullopt;
   for (std::size_t path = 0; path < path_count; ++path) {
     if (!consume_counted_fixed(data, cursor, 4, [&](std::size_t base) {
@@ -220,7 +240,7 @@ std::optional<std::vector<std::size_t>> nvpp_formid_offsets(
   }
 
   if (!consume_counted_fixed(data, cursor, 8, [&](std::size_t base) {
-        offsets.push_back(base);
+        offsets.push_back(base);  // Road Marker.Navmesh
       })) {
     return std::nullopt;
   }
@@ -230,11 +250,14 @@ std::optional<std::vector<std::size_t>> nvpp_formid_offsets(
 
 std::optional<std::vector<std::size_t>> mnam_formid_offsets(
     std::span<const std::byte> data) {
+  // xEdit FO4 NAVM.MNAM PreCut Map Entries: the outer array consumes entries
+  // until the subrecord ends. Each entry is a FormID Reference followed by a
+  // -2 array, i.e. a u16 count and that many u16 triangle indexes.
   std::vector<std::size_t> offsets;
   std::size_t cursor = 0;
   while (cursor < data.size()) {
     if (data.size() - cursor < 6) return std::nullopt;
-    offsets.push_back(cursor);
+    offsets.push_back(cursor);  // Reference
     cursor += 4;
     const auto triangle_count = static_cast<std::size_t>(read_u16(data, cursor));
     cursor += 2;
@@ -293,6 +316,8 @@ bool perk_epfd_is_formid(const Record& record, const Subrecord& sub) {
     }
   }
 
+  // xEdit FO4 wbPERK: EPFT 3 = LVLI, 4 = Add Activate Choice/SPEL,
+  // 5 = Select Spell/SPEL. Other EPFD variants are float/text/non-FormID.
   return function_type == 3 || function_type == 4 || function_type == 5;
 }
 
