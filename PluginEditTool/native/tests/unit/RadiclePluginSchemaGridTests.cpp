@@ -39,7 +39,7 @@ void writeBytes(const std::filesystem::path& path,
     REQUIRE(stream.good());
 }
 
-std::vector<std::byte> makeRefrPlugin(bool includeXhlt,
+std::vector<std::byte> makeRefrPlugin(bool includeScalars,
                                       bool duplicateXhlt = false) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -53,13 +53,17 @@ std::vector<std::byte> makeRefrPlugin(bool includeXhlt,
     const auto group = fo4::test::begin_group(out, "REFR", 0);
     const auto record = fo4::test::begin_record(out, "REFR", 0, 0x00000800);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"SchemaRef\0", 10});
-    if (includeXhlt) {
+    if (includeScalars) {
         fo4::test::ByteWriter health;
         health.u32(50);
         fo4::test::write_subrecord(out, "XHLT", health.bytes);
         if (duplicateXhlt) {
             fo4::test::write_subrecord(out, "XHLT", health.bytes);
         }
+
+        fo4::test::ByteWriter scale;
+        scale.f32(1.25f);
+        fo4::test::write_subrecord(out, "XSCL", scale.bytes);
     }
     fo4::test::end_record(out, record);
     fo4::test::end_group(out, group);
@@ -116,8 +120,12 @@ TEST_CASE("Spreadsheet scalar columns come from generated record descriptors") {
     const auto& row = grid.at("rows")[0];
     CHECK(row.at("cells")[0] == "SchemaRef");
     for (std::size_t index = 0; index < fields.size(); ++index) {
-        if (fields[index].scalar.subrecord == fo4::Signature::from_string("XHLT")) {
+        const auto subrecord = fields[index].scalar.subrecord;
+        if (subrecord == fo4::Signature::from_string("XHLT")) {
             CHECK(row.at("cells")[index + 1] == "50");
+            CHECK(row.at("editable")[index + 1] == true);
+        } else if (subrecord == fo4::Signature::from_string("XSCL")) {
+            CHECK(row.at("cells")[index + 1] == "1.25");
             CHECK(row.at("editable")[index + 1] == true);
         } else {
             CHECK(row.at("cells")[index + 1] == "");
