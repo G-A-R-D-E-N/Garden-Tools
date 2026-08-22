@@ -4,7 +4,7 @@
 
 #include <cstdint>
 #include <cstring>
-#include <vector>
+#include <string_view>
 
 namespace {
 
@@ -28,34 +28,47 @@ fo4::PluginKey owner(std::string_view form_key) {
   return fo4::FormKey::parse(form_key).owner();
 }
 
+fo4::PluginFormIdContext context(bool swapped) {
+  const auto master_a = owner("000001:MasterA.esm");
+  const auto master_b = owner("000001:MasterB.esm");
+  return {
+      .current_plugin = owner("000001:Patch.esp"),
+      .current_kind = fo4::PluginKind::full,
+      .masters = swapped
+          ? std::vector<fo4::MasterDescriptor>{{master_b, fo4::PluginKind::full},
+                                                {master_a, fo4::PluginKind::full}}
+          : std::vector<fo4::MasterDescriptor>{{master_a, fo4::PluginKind::full},
+                                                {master_b, fo4::PluginKind::full}},
+  };
 }
 
-TEST(QuestAliasFormLinkRemap, RemapsALFRButLeavesAliasIdsUntouched) {
+}
+
+TEST(QuestAliasFormLinkRemap, RemapsRealLinksButLeavesQuestScalarsAndStringsUntouched) {
   fo4::Record record;
   record.header.signature = fo4::Signature::from_string("QUST");
+
+  // Both are real QUST FormLinks and point at MasterB before the reorder.
   record.subrecords.push_back(raw_u32_subrecord("ALFR", 0x01000123u));
-  record.subrecords.push_back(raw_u32_subrecord("ALFA", 0x01000123u));
-  record.subrecords.push_back(raw_u32_subrecord("ALEA", 0x01000123u));
+  record.subrecords.push_back(raw_u32_subrecord("ALEQ", 0x01000456u));
 
-  const fo4::PluginFormIdContext old_context{
-      .plugin = owner("000001:Patch.esp"),
-      .masters = {
-          owner("000001:MasterA.esm"),
-          owner("000001:MasterB.esm"),
-      },
-  };
-  const fo4::PluginFormIdContext new_context{
-      .plugin = owner("000001:Patch.esp"),
-      .masters = {
-          owner("000001:MasterB.esm"),
-          owner("000001:MasterA.esm"),
-      },
-  };
+  // These signatures are FormIDs in other record types, but xEdit defines
+  // them as QUST scalar/string data. Values deliberately look like a valid
+  // MasterB FormID so a bad global-signature remapper would corrupt them.
+  record.subrecords.push_back(raw_u32_subrecord("ANAM", 0x01000123u));
+  record.subrecords.push_back(raw_u32_subrecord("FNAM", 0x01000123u));
+  record.subrecords.push_back(raw_u32_subrecord("NAM2", 0x01000123u));
+  record.subrecords.push_back(raw_u32_subrecord("CNAM", 0x01000123u));
+  record.subrecords.push_back(raw_u32_subrecord("NNAM", 0x01000123u));
+  record.subrecords.push_back(raw_u32_subrecord("SNAM", 0x01000123u));
 
-  fo4::remap_record_form_links(record, old_context, new_context);
+  fo4::remap_record_form_links(record, context(false), context(true));
 
-  ASSERT_EQ(record.subrecords.size(), 3u);
-  EXPECT_EQ(raw_u32(record.subrecords[0]), 0x00000123u);
-  EXPECT_EQ(raw_u32(record.subrecords[1]), 0x01000123u);
-  EXPECT_EQ(raw_u32(record.subrecords[2]), 0x01000123u);
+  ASSERT_EQ(record.subrecords.size(), 8u);
+  EXPECT_EQ(raw_u32(record.subrecords[0]), 0x00000123u);  // ALFR
+  EXPECT_EQ(raw_u32(record.subrecords[1]), 0x00000456u);  // ALEQ
+  for (std::size_t index = 2; index < record.subrecords.size(); ++index) {
+    EXPECT_EQ(raw_u32(record.subrecords[index]), 0x01000123u)
+        << record.subrecords[index].signature.to_string();
+  }
 }
