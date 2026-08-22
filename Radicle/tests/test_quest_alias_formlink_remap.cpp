@@ -50,8 +50,9 @@ TEST(QuestAliasFormLinkRemap, RemapsRealLinksButLeavesQuestScalarsAndStringsUnto
   fo4::Record record;
   record.header.signature = fo4::Signature::from_string("QUST");
 
-  // Both are real QUST FormLinks and point at MasterB before the reorder.
+  // These are real QUST FormLinks and point at MasterB before the reorder.
   record.subrecords.push_back(raw_u32_subrecord("ALFR", 0x01000123u));
+  record.subrecords.push_back(raw_u32_subrecord("ALCO", 0x01000234u));
   record.subrecords.push_back(raw_u32_subrecord("ALEQ", 0x01000456u));
 
   // These signatures are FormIDs in other record types, but xEdit defines
@@ -66,10 +67,11 @@ TEST(QuestAliasFormLinkRemap, RemapsRealLinksButLeavesQuestScalarsAndStringsUnto
 
   fo4::remap_record_form_links(record, context(false), context(true));
 
-  ASSERT_EQ(record.subrecords.size(), 8u);
+  ASSERT_EQ(record.subrecords.size(), 9u);
   EXPECT_EQ(raw_u32(record.subrecords[0]), 0x00000123u);  // ALFR
-  EXPECT_EQ(raw_u32(record.subrecords[1]), 0x00000456u);  // ALEQ
-  for (std::size_t index = 2; index < record.subrecords.size(); ++index) {
+  EXPECT_EQ(raw_u32(record.subrecords[1]), 0x00000234u);  // ALCO
+  EXPECT_EQ(raw_u32(record.subrecords[2]), 0x00000456u);  // ALEQ
+  for (std::size_t index = 3; index < record.subrecords.size(); ++index) {
     EXPECT_EQ(raw_u32(record.subrecords[index]), 0x01000123u)
         << record.subrecords[index].signature.to_string();
   }
