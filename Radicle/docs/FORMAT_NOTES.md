@@ -293,8 +293,24 @@ that carry it; the 1,195 CELLs without one are interiors, which use `XCLL`
 instead (CKRE doc 23: `FUN_140d18490` gates access on the interior flag in both
 LoadRecord and SaveRecord).
 
-The trailing dword after x/y is left zero on creation. The CK's own coordinate
-setter `FUN_140d197c0` writes only x and y and leaves the rest of the cell-data
-block as initialised, and 84 shipped cells carry zero there. Its non-zero
-values are not decoded — they are dense and worldspace-correlated, so a created
-cell should not fabricate one.
+The 4 bytes after x/y are **one meaningful byte plus three bytes of
+uninitialised padding**, not a `u32`. Measured over 61,543 exterior cells in
+`Fallout4.esm` + DLCCoast + DLCNukaWorld:
+
+| Offset 8 (Force-Hide-Land quads, bits 0–3) | count |
+|---|---|
+| `0x00` | 61,485 (99.91%) |
+| `0x0F` — all four quads hidden | 50 |
+| `0xFF`, `0x44`, `0x22`, `0x88` | 1 each |
+
+Bytes 9–11 are junk the CK does not clear: only 96 distinct values across all
+61,543 cells, clustering in large batches (29,389 share `71a376`), which is the
+signature of reused allocation rather than data. Reading the field as a `u32`
+yields 103 distinct "flag" values and would surface padding as spurious
+high flag bits — xEdit's `u32 wbFlags Quad 1..4` is over-wide for this reason.
+
+This is consistent with the CK's own LoadRecord (`FUN_140d146d0`, XCLC branch),
+which takes **byte 8 into `cell+0x1E` and skips three padding bytes**.
+
+`create_exterior_cell` writes all four bytes zero: the quad flags clear, and no
+fabricated padding.
