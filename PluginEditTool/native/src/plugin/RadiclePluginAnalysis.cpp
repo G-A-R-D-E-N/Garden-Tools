@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <fo4/plugin/reader.hpp>
+#include <fo4/schema/preflight.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -173,6 +174,20 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
             {"Description", "Missing " + signature + " FormLink target " + target}
         });
     }
+
+    const auto* loaded = findPlugin(sourceWinner->plugin.filename());
+    const auto* record = loaded == nullptr ? nullptr : fo4::find_record(loaded->plugin, key);
+    if (record != nullptr) {
+        for (const auto& issue : fo4::schema::preflight_record(*record)) {
+            rows.push_back({
+                {"Severity", issue.severity == fo4::schema::PreflightSeverity::error
+                                     ? "critical"
+                                     : "warning"},
+                {"Description", issue.path + ": " + issue.message}
+            });
+        }
+    }
+
     return nlohmann::json(rows.dump());
 }
 
