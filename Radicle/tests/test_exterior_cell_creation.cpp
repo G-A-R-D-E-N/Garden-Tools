@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -88,6 +89,17 @@ const fo4::Subrecord* unique_subrecord(const fo4::Record& record,
   return found;
 }
 
+fo4::forms::ExteriorCellCreation cell_creation(const fo4::FormKey& worldspace,
+                                               std::int32_t x,
+                                               std::int32_t y) {
+  return {
+      .worldspace = worldspace,
+      .x = x,
+      .y = y,
+      .editor_id = std::nullopt,
+  };
+}
+
 }
 
 TEST(ExteriorCellCreation, CreatesRequiredWrldBlockSubblockHierarchyAndRoundTrips) {
@@ -148,9 +160,9 @@ TEST(ExteriorCellCreation, ReusesBlockAndSubblockAndCreatesOnlyNeededGroups) {
   const auto world = fo4::FormKey::parse("000800:Cells.esp");
 
   static_cast<void>(fo4::forms::create_exterior_cell(
-      plugin, {.worldspace = world, .x = -33, .y = 32}));
+      plugin, cell_creation(world, -33, 32)));
   static_cast<void>(fo4::forms::create_exterior_cell(
-      plugin, {.worldspace = world, .x = -34, .y = 33}));
+      plugin, cell_creation(world, -34, 33)));
 
   const auto* top = top_wrld(plugin);
   ASSERT_NE(top, nullptr);
@@ -166,7 +178,7 @@ TEST(ExteriorCellCreation, ReusesBlockAndSubblockAndCreatesOnlyNeededGroups) {
   EXPECT_EQ(count_groups(*block, fo4::GroupType::exterior_cell_subblock), 1u);
 
   static_cast<void>(fo4::forms::create_exterior_cell(
-      plugin, {.worldspace = world, .x = -40, .y = 40}));
+      plugin, cell_creation(world, -40, 40)));
   top = top_wrld(plugin);
   ASSERT_NE(top, nullptr);
   world_children = child_group(
@@ -189,13 +201,13 @@ TEST(ExteriorCellCreation, OccupiedCoordinateFailsWithoutConsumingFormId) {
   auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
   const auto world = fo4::FormKey::parse("000800:Cells.esp");
   static_cast<void>(fo4::forms::create_exterior_cell(
-      plugin, {.worldspace = world, .x = 1, .y = 2}));
+      plugin, cell_creation(world, 1, 2)));
   ASSERT_EQ(plugin.header.next_form_id, 0x901u);
   const auto before = fo4::write_plugin(plugin);
 
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_exterior_cell(
-          plugin, {.worldspace = world, .x = 1, .y = 2})),
+          plugin, cell_creation(world, 1, 2))),
       fo4::forms::CellError);
   EXPECT_EQ(plugin.header.next_form_id, 0x901u);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
@@ -208,12 +220,12 @@ TEST(ExteriorCellCreation, RejectsMissingWorldspaceAndOutOfBoundsBeforeAllocatio
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_exterior_cell(
           plugin,
-          {.worldspace = fo4::FormKey::parse("000801:Cells.esp"), .x = 0, .y = 0})),
+          cell_creation(fo4::FormKey::parse("000801:Cells.esp"), 0, 0))),
       fo4::forms::CellError);
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_exterior_cell(
           plugin,
-          {.worldspace = fo4::FormKey::parse("000800:Cells.esp"), .x = 111, .y = 0})),
+          cell_creation(fo4::FormKey::parse("000800:Cells.esp"), 111, 0))),
       fo4::forms::CellError);
   EXPECT_EQ(plugin.header.next_form_id, next_before);
 }
@@ -222,7 +234,7 @@ TEST(ExteriorCellCreation, MalformedExistingGridFailsClosedWithoutAllocation) {
   auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
   const auto world = fo4::FormKey::parse("000800:Cells.esp");
   static_cast<void>(fo4::forms::create_exterior_cell(
-      plugin, {.worldspace = world, .x = 1, .y = 2}));
+      plugin, cell_creation(world, 1, 2)));
 
   auto* created = const_cast<fo4::Record*>(
       fo4::forms::find_exterior_cell(plugin, world, 1, 2));
@@ -234,7 +246,7 @@ TEST(ExteriorCellCreation, MalformedExistingGridFailsClosedWithoutAllocation) {
 
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_exterior_cell(
-          plugin, {.worldspace = world, .x = 2, .y = 3})),
+          plugin, cell_creation(world, 2, 3))),
       fo4::forms::CellError);
   EXPECT_EQ(plugin.header.next_form_id, next_before);
 }
