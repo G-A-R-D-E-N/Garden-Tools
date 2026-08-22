@@ -1,0 +1,161 @@
+# formEnumString index -> 4CC -> factory class (RTTI ConcreteObjectFormFactory/ConcreteFormFactory)
+# 159 entries; index 0 = NONE, 17 = RACE (not file-loadable)
+  0 NONE  (no RTTI factory class)
+  1 TES4  (no RTTI factory class)
+  2 GRUP  (no RTTI factory class)
+  3 GMST  BGSKeyword
+  4 KYWD  BGSLocationRefType
+  5 LCRT  BGSAction
+  6 AACT  BGSTransform
+  7 TRNS  BGSComponent
+  8 CMPO  BGSTextureSet
+  9 TXST  BGSMenuIcon
+ 10 MICN  (no RTTI factory class)
+ 11 GLOB  (no RTTI factory class)
+ 12 DMGT  (no RTTI factory class)
+ 13 CLAS  (no RTTI factory class)
+ 14 FACT  (no RTTI factory class)
+ 15 HDPT  (no RTTI factory class)
+ 16 EYES  TESEyes
+ 17 RACE  TESRace
+ 18 SOUN  TESSound
+ 19 ASPC  BGSAcousticSpace
+ 20 SKIL  (no RTTI factory class)
+ 21 MGEF  EffectSetting
+ 22 SCPT  Script
+ 23 LTEX  TESLandTexture
+ 24 ENCH  EnchantmentItem
+ 25 SPEL  SpellItem
+ 26 SCRL  (no RTTI factory class)
+ 27 ACTI  (no RTTI factory class)
+ 28 TACT  (no RTTI factory class)
+ 29 ARMO  (no RTTI factory class)
+ 30 BOOK  (no RTTI factory class)
+ 31 CONT  (no RTTI factory class)
+ 32 DOOR  TESObjectDOOR
+ 33 INGR  IngredientItem
+ 34 LIGH  TESObjectLIGH
+ 35 MISC  TESObjectMISC
+ 36 STAT  TESObjectSTAT
+ 37 SCOL  BGSStaticCollection
+ 38 MSTT  BGSMovableStatic
+ 39 GRAS  TESGrass
+ 40 TREE  TESObjectTREE
+ 41 FLOR  TESFlora
+ 42 FURN  (no RTTI factory class)
+ 43 WEAP  (no RTTI factory class)
+ 44 AMMO  (no RTTI factory class)
+ 45 NPC_  (no RTTI factory class)
+ 46 LVLN  (no RTTI factory class)
+ 47 KEYM  (no RTTI factory class)
+ 48 ALCH  AlchemyItem
+ 49 IDLM  BGSIdleMarker
+ 50 NOTE  BGSNote
+ 51 PROJ  BGSProjectile
+ 52 HAZD  BGSHazard
+ 53 BNDS  BGSBendableSpline
+ 54 SLGM  TESSoulGem
+ 55 TERM  BGSTerminal
+ 56 LVLI  TESLevItem
+ 57 WTHR  TESWeather
+ 58 CLMT  (no RTTI factory class)
+ 59 SPGD  (no RTTI factory class)
+ 60 RFCT  (no RTTI factory class)
+ 61 REGN  (no RTTI factory class)
+ 62 NAVI  (no RTTI factory class)
+ 63 CELL  ConcreteFormFactory<TESObjectCELL,63>  (doc 23)
+ 64 REFR  TESObjectREFRFactory + TESObjectREFRSerializer (doc 23; no ConcreteFormFactory)
+ 65 ACHR  (no RTTI factory class)
+ 66 PMIS  (no RTTI factory class)
+ 67 PARW  (no RTTI factory class)
+ 68 PGRE  (no RTTI factory class)
+ 69 PBEA  (no RTTI factory class)
+ 70 PFLA  (no RTTI factory class)
+ 71 PCON  (no RTTI factory class)
+ 72 PBAR  (no RTTI factory class)
+ 73 PHZD  (no RTTI factory class)
+ 74 WRLD  ConcreteFormFactory<TESWorldSpace,74>  (doc 23)
+ 75 LAND  ConcreteFormFactory<TESObjectLAND,75>  (doc 23)
+ 76 NAVM  (no RTTI factory class)
+ 77 TLOD  (no RTTI factory class)
+ 78 DIAL  (no RTTI factory class)
+ 79 INFO  (no RTTI factory class)
+ 80 QUST  TESQuest
+ 81 IDLE  TESIdleForm
+ 82 PACK  (no RTTI factory class)
+ 83 CSTY  TESCombatStyle
+ 84 LSCR  TESLoadScreen
+ 85 LVSP  TESLevSpell
+ 86 ANIO  TESObjectANIO
+ 87 WATR  TESWaterForm
+ 88 EFSH  TESEffectShader
+ 89 TOFT  (no RTTI factory class)
+ 90 EXPL  (no RTTI factory class)
+ 91 DEBR  (no RTTI factory class)
+ 92 IMGS  (no RTTI factory class)
+ 93 IMAD  (no RTTI factory class)
+ 94 FLST  (no RTTI factory class)
+ 95 PERK  (no RTTI factory class)
+ 96 BPTD  BGSBodyPartData
+ 97 ADDN  BGSAddonNode
+ 98 AVIF  ActorValueInfo
+ 99 CAMS  BGSCameraShot
+100 CPTH  BGSCameraPath
+101 VTYP  BGSVoiceType
+102 MATT  BGSMaterialType
+103 IPCT  BGSImpactData
+104 IPDS  BGSImpactDataSet
+105 ARMA  TESObjectARMA
+106 ECZN  (no RTTI factory class)
+107 LCTN  (no RTTI factory class)
+108 MESG  (no RTTI factory class)
+109 RGDL  (no RTTI factory class)
+110 DOBJ  (no RTTI factory class)
+111 DFOB  (no RTTI factory class)
+112 LGTM  BGSLightingTemplate
+113 MUSC  BGSMusicType
+114 FSTP  BGSFootstep
+115 FSTS  BGSFootstepSet
+116 SMBN  BGSStoryManagerBranchNode
+117 SMQN  BGSStoryManagerQuestNode
+118 SMEN  BGSStoryManagerEventNode
+119 DLBR  BGSDialogueBranch
+120 MUST  BGSMusicTrackFormWrapper
+121 DLVW  BGSDialogueView
+122 WOOP  (no RTTI factory class)
+123 SHOU  (no RTTI factory class)
+124 EQUP  (no RTTI factory class)
+125 RELA  (no RTTI factory class)
+126 SCEN  (no RTTI factory class)
+127 ASTP  (no RTTI factory class)
+128 OTFT  BGSOutfit
+129 ARTO  BGSArtObject
+130 MATO  BGSMaterialObject
+131 MOVT  BGSMovementType
+132 SNDR  BGSSoundDescriptorForm
+133 DUAL  BGSDualCastData
+134 SNCT  BGSSoundCategory
+135 SOPM  BGSSoundOutput
+136 COLL  BGSCollisionLayer
+137 CLFM  BGSColorForm
+138 REVB  (no RTTI factory class)
+139 PKIN  (no RTTI factory class)
+140 RFGP  (no RTTI factory class)
+141 AMDL  (no RTTI factory class)
+142 LAYR  (no RTTI factory class)
+143 COBJ  (no RTTI factory class)
+144 OMOD  (no RTTI factory class)
+145 MSWP  BGSMaterialSwap
+146 ZOOM  BGSZoomData
+147 INNR  BGSInstanceNamingRules
+148 KSSM  BGSSoundKeywordMapping
+149 AECH  BGSAudioEffectChain
+150 SCCO  BGSSceneCollection
+151 AORU  BGSAttractionRule
+152 SCSN  BGSSoundCategorySnapshot
+153 STAG  BGSSoundTagSet
+154 NOCM  (no RTTI factory class)
+155 LENS  (no RTTI factory class)
+156 LSPR  (no RTTI factory class)
+157 GDRY  (no RTTI factory class)
+158 OVIS  (no RTTI factory class)

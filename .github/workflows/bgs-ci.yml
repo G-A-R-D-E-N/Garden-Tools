@@ -1,0 +1,113 @@
+name: bgs-ci
+
+# Build/test lane for BGS/ (BehaviourGraphStudio), the C#/.NET tool imported
+# from github.com/G-A-R-D-E-N/BGS. It replaces BGS/.github/workflows/ci.yml,
+# which is inert here: GitHub only reads workflows from the repository root.
+#
+# Two deliberate differences from the original:
+#
+#  * Self-hosted, not hosted. BGS was a public repo with free hosted minutes.
+#    This repository is private and both orgs are over the Free Actions
+#    allowance (GHRUNNER#24), where hosted jobs fail silently -- the same
+#    reason native-ci.yml pins the `garden` runner.
+#  * Shell is chosen per leg, and both choices are deliberate. On the Windows
+#    runner `bash` resolves to C:\Windows\system32\bash.EXE -- the WSL stub,
+#    which has no distro installed -- and the default `powershell` cannot run
+#    the .ps1 Actions writes per step, because script execution is disabled on
+#    that host. `cmd` avoids both. Every step is a single command, so nothing
+#    needs shell-specific syntax.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "BGS/**"
+      - ".github/workflows/bgs-ci.yml"
+  pull_request:
+    paths:
+      - "BGS/**"
+      - ".github/workflows/bgs-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bgs-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: BGS build and test (${{ matrix.rid }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: [self-hosted, Linux, X64, garden]
+            rid: linux-x64
+            shell: bash
+            executable: ./publish-check/BehaviourGraphStudio
+          - runner: [self-hosted, Windows, X64, garden]
+            rid: win-x64
+            shell: cmd
+            executable: .\publish-check\BehaviourGraphStudio.exe
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+        working-directory: BGS
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # setup-dotnet installs into /usr/share/dotnet by default, which the
+      # runner account cannot write to on this host -- that path is only
+      # runner-owned on GitHub's hosted images. The tool cache is writable and
+      # persists between jobs, so the SDK is downloaded once, not per run.
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@v6
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 8.0.424
+
+      # Unrolled rather than looped: a loop needs a specific shell, and the
+      # two legs do not share one. Each restore is its own step so a lock-file
+      # mismatch names the offending project directly.
+      - name: Restore BehaviourGraph.Core
+        run: dotnet restore src/BehaviourGraph.Core.csproj --locked-mode
+
+      - name: Restore BehaviourStudio
+        run: dotnet restore app/BehaviourStudio.csproj --locked-mode
+
+      - name: Restore symrm
+        run: dotnet restore tools/symrm/symrm.csproj --locked-mode
+
+      - name: Restore tests
+        run: dotnet restore tools/tests/BehaviourGraph.Tests.csproj --locked-mode
+
+      - name: Restore uismoke
+        run: dotnet restore tools/uismoke/uismoke.csproj --locked-mode
+
+      - name: Build app
+        run: dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore
+
+      - name: Run native regression harness
+        run: dotnet run --project tools/symrm/symrm.csproj --configuration Release --no-restore -- test
+
+      - name: Run xUnit suite
+        run: dotnet test tools/tests/BehaviourGraph.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"
+
+      - name: Run UI smoke harness
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore
+
+      - name: Publish platform package
+        run: >
+          dotnet publish app/BehaviourStudio.csproj --configuration Release
+          --runtime ${{ matrix.rid }} --self-contained true --no-restore
+          --output publish-check
+
+      - name: Verify published executable
+        run: ${{ matrix.executable }} --version

@@ -1,0 +1,314 @@
+address,existing_name,decoded_name
+0x1428CE3A0,ImageSpaceEffectGetHit::Render,"public virtual void __thiscall ImageSpaceEffect::Render(class BSTriShape * __ptr64,class ImageSpaceEffectParam * __ptr64) __ptr64 "
+0x1425917C0,"bnet::_impl::Observer<bnet::_impl::Observable<bnet::_impl::AsyncOperation,bnet::BNetError>_>::Release",public __thiscall bnet::AsyncOperationProxy::~AsyncOperationProxy(void) __ptr64 
+0x142576D70,_GetBNetResultString_BSPlatform___APEBDW4BNetResult_1__Z,public static char const * __ptr64 __cdecl BSPlatform::BSBethesdaPlatform::GetBNetResultString(enum BSPlatform::BNetResult) 
+0x14250C520,BSNavmeshGrid::DoGetTriangleDataForAABB<BSScrapArrayAllocator>,"public void __thiscall BSNavmeshGrid::GetTriangleDataForAABB(class NiPoint3 const & __ptr64,class NiPoint3 const & __ptr64,class BSScrapArray<unsigned short> & __ptr64) const __ptr64 "
+0x1424B6280,BSNavmesh::GetOverlappedTriangleList_Priv<BSTArrayHeapAllocator>,"public void __thiscall BSNavmesh::GetOverlappedTriangleList(class NiPointer<BSNavmeshObstacleData> const & __ptr64,class NiPoint3 const & __ptr64,class BSTArray<unsigned short,BSTArrayHeapAllocator> & __ptr64) __ptr64 "
+0x1424854F0,_Close_RAD_3D_image_pow2___AXPEAUBINKTEXTURESET___Z,public static void __cdecl Movie::HandleDelete(struct BINKTEXTURESET * __ptr64) 
+0x142483B20,Movie::GetCurrentFrame,"private virtual enum BSEventNotifyControl __thiscall Movie::ProcessEvent(struct BSAudioUtil::MasterVolumeChangedEvent const & __ptr64,class BSTEventSource<BSAudioUtil::MasterVolumeChangedEvent> * __ptr64) __ptr64 "
+0x1422F3770,CRectTracker::CRectTracker,public __thiscall Scaleform::HeapPT::SysAllocGranulator::SysAllocGranulator(class Scaleform::SysAllocPaged * __ptr64) __ptr64 
+0x1422E2C30,Concurrency::details::TaskStack::`scalar_deleting_destructor',"public void * __ptr64 __thiscall Scaleform::HashNode<Scaleform::GFx::Movie * __ptr64,Scaleform::Ptr<Scaleform::GFx::ASIMEManager>,Scaleform::FixedSizeHash<Scaleform::GFx::Movie * __ptr64> >::`scalar deleting destructor'(unsigned int) __ptr64 "
+0x142283BA0,Concurrency::details::TaskStack::`scalar_deleting_destructor',"public void * __ptr64 __thiscall Scaleform::HashNode<Scaleform::Render::Text::TextFormat const * __ptr64,Scaleform::Ptr<Scaleform::Render::Text::FontHandle>,Scaleform::IdentityHash<Scaleform::Render::Text::TextFormat const * __ptr64> >::`scalar deleting destructor'(unsigned int) __ptr64 "
+0x142216DC0,CControlRectTracker::CControlRectTracker,private __thiscall Scaleform::GFx::AS3::Classes::fl_events::EventDispatcher::EventDispatcher(class Scaleform::GFx::AS3::ClassTraits::Traits & __ptr64) __ptr64 
+0x1421246D0,MSVCR110.DLL::_stricmp,"public static int __cdecl Scaleform::String::CompareNoCase(char const * __ptr64,char const * __ptr64) "
+0x142122990,KERNEL32.DLL::GetTickCount64,public static unsigned long __cdecl Scaleform::Timer::GetTicksMs(void) 
+0x14211E360,KERNEL32.DLL::DeleteCriticalSection,public __thiscall Scaleform::Lock::~Lock(void) __ptr64 
+0x1420B9C80,Scaleform::GFx::Value::ObjectRelease_1,"public void __thiscall Scaleform::GFx::Value::ObjectInterface::ObjectRelease(class Scaleform::GFx::Value * __ptr64,void * __ptr64) __ptr64 "
+0x1420B9C30,Scaleform::GFx::Value::ObjectRelease,"public void __thiscall Scaleform::GFx::Value::ObjectInterface::ObjectAddRef(class Scaleform::GFx::Value * __ptr64,void * __ptr64) __ptr64 "
+0x14203A9F0,ShutdownHeapEngine,protected virtual bool __thiscall Scaleform::SysAlloc::shutdownHeapEngine(void) __ptr64 
+0x14203A890,InitHeapEngine,protected virtual bool __thiscall Scaleform::SysAlloc::initHeapEngine(void const * __ptr64) __ptr64 
+0x141E250E0,CControlRectTracker::CControlRectTracker,public __thiscall hknpDummyShape::hknpDummyShape(class hkFinishLoadedObjectFlag) __ptr64 
+0x141D819B0,bhkCharacterController::SetSceneGraphObject,public virtual void __thiscall bhkNPCollisionObjectUnlinked::SetSceneGraphObject(class NiAVObject * __ptr64) __ptr64 
+0x141D81170,bhkCharacterController::UpdateWorldData,public virtual void __thiscall bhkNPCollisionObject::UpdateWorldData(class NiUpdateData & __ptr64) __ptr64 
+0x141D7EAA0,bhkCharacterController::SaveBinary,public virtual void __thiscall bhkNPCollisionObject::SaveBinary(class NiStream & __ptr64) __ptr64 
+0x141D7EA60,bhkCharacterController::RegisterStreamables,public virtual bool __thiscall bhkNPCollisionObject::RegisterStreamables(class NiStream & __ptr64) __ptr64 
+0x141D7E9D0,bhkCharacterController::LinkObject,public virtual void __thiscall bhkNPCollisionObject::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141D7E930,bhkCharacterController::ClearCollectorDataImpl,public virtual void __thiscall bhkNPCollisionObject::LoadBinary(class NiStream & __ptr64) __ptr64 
+0x141D7E7D0,bhkCharacterController::ApplyMoveImmediately,public virtual class NiObject * __ptr64 __thiscall bhkNPCollisionObject::CreateClone(class NiCloningProcess & __ptr64) __ptr64 
+0x141CCDA70,_KillSDM_CullingJob___AXXZ,public static void __cdecl BSCullingGroup::KillSDM(void) 
+0x141CCDA60,_InitSDM_CullingJob___AXXZ,public static void __cdecl BSCullingGroup::InitSDM(void) 
+0x141CCC7D0,"BSTObjectArena<BSCuller,CullingJob::SubGroupAlloc,1>::Clear",public __thiscall CullingJob::SubGroup::~SubGroup(void) __ptr64 
+0x141CC2C00,BSTempEffectDebris::IsEqual,public virtual bool __thiscall BSMultiBoundShape::IsEqual(class NiObject * __ptr64) __ptr64 
+0x141CC2BF0,BSTempEffectDebris::SaveBinary,public virtual void __thiscall BSMultiBoundShape::SaveBinary(class NiStream & __ptr64) __ptr64 
+0x141CC2BC0,BSTempEffectDebris::LinkObject,public virtual void __thiscall BSMultiBoundShape::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141CC2BB0,BSTempEffectDebris::LoadBinary,public virtual void __thiscall BSMultiBoundShape::LoadBinary(class NiStream & __ptr64) __ptr64 
+0x141CADF40,Concurrency::scheduler_resource_allocation_error::scheduler_resource_allocation_error,public __thiscall NiIntegerExtraData::NiIntegerExtraData(int) __ptr64 
+0x141CABAB0,BSTempEffectDebris::LinkObject,public virtual void __thiscall BSMultiBoundAABB::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141C63F50,BSTempEffectDebris::RegisterStreamables,public virtual bool __thiscall NiPSysData::RegisterStreamables(class NiStream & __ptr64) __ptr64 
+0x141C47CF0,BSTempEffectDebris::LinkObject,public virtual void __thiscall BSAnimNote::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141C33F50,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiBoolInterpolator::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141C2C9C0,BSTempEffectDebris::IsEqual,public virtual bool __thiscall NiKeyBasedInterpolator::IsEqual(class NiObject * __ptr64) __ptr64 
+0x141C2C9B0,BSTempEffectDebris::SaveBinary,public virtual void __thiscall NiKeyBasedInterpolator::SaveBinary(class NiStream & __ptr64) __ptr64 
+0x141C2C9A0,BSTempEffectDebris::RegisterStreamables,public virtual bool __thiscall NiKeyBasedInterpolator::RegisterStreamables(class NiStream & __ptr64) __ptr64 
+0x141C2C990,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiKeyBasedInterpolator::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141C2C980,BSTempEffectDebris::LoadBinary,public virtual void __thiscall NiKeyBasedInterpolator::LoadBinary(class NiStream & __ptr64) __ptr64 
+0x141C2BD10,BSTempEffectDebris::IsEqual,public virtual bool __thiscall NiInterpolator::IsEqual(class NiObject * __ptr64) __ptr64 
+0x141C2BD00,BSTempEffectDebris::SaveBinary,public virtual void __thiscall NiInterpolator::SaveBinary(class NiStream & __ptr64) __ptr64 
+0x141C2BCF0,BSTempEffectDebris::RegisterStreamables,public virtual bool __thiscall NiInterpolator::RegisterStreamables(class NiStream & __ptr64) __ptr64 
+0x141C2BCE0,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiInterpolator::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141C2BCD0,BSTempEffectDebris::LoadBinary,public virtual void __thiscall NiInterpolator::LoadBinary(class NiStream & __ptr64) __ptr64 
+0x141C29D10,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiBlendInterpolator::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141C1FE90,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiTransformInterpolator::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141BDA600,BSTempEffectDebris::IsEqual,public virtual bool __thiscall NiAccumulator::IsEqual(class NiObject * __ptr64) __ptr64 
+0x141BDA5F0,BSTempEffectDebris::SaveBinary,public virtual void __thiscall NiAccumulator::SaveBinary(class NiStream & __ptr64) __ptr64 
+0x141BDA5E0,BSTempEffectDebris::RegisterStreamables,public virtual bool __thiscall NiAccumulator::RegisterStreamables(class NiStream & __ptr64) __ptr64 
+0x141BDA5D0,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiAccumulator::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141BDA5C0,BSTempEffectDebris::LoadBinary,public virtual void __thiscall NiAccumulator::LoadBinary(class NiStream & __ptr64) __ptr64 
+0x141BD2B40,BSTempEffectDebris::RegisterStreamables,public virtual bool __thiscall NiParticlesData::RegisterStreamables(class NiStream & __ptr64) __ptr64 
+0x141BC9AC0,BSTempEffectDebris::SaveBinary,public virtual void __thiscall NiAVObjectPalette::SaveBinary(class NiStream & __ptr64) __ptr64 
+0x141BC9A90,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiAVObjectPalette::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141BC9A80,BSTempEffectDebris::LoadBinary,public virtual void __thiscall NiAVObjectPalette::LoadBinary(class NiStream & __ptr64) __ptr64 
+0x141B97E70,BSShaderProperty::ProcessClone,public virtual void __thiscall NiObjectNET::ProcessClone(class NiCloningProcess & __ptr64) __ptr64 
+0x141B97E60,NiAVObject::PostLinkObject,public virtual void __thiscall NiObjectNET::PostLinkObject(class NiStream & __ptr64) __ptr64 
+0x141B94EB0,BSShaderProperty::GetGroup,public virtual class NiObjectGroup * __ptr64 __thiscall NiObject::GetGroup(void) const __ptr64 
+0x141B94EA0,BSShaderProperty::GetBlockAllocationSize,public virtual unsigned int __thiscall NiObject::GetBlockAllocationSize(void) const __ptr64 
+0x141B94E70,BSTempEffectDebris::PostLinkObject,public virtual void __thiscall NiObject::PostLinkObject(class NiStream & __ptr64) __ptr64 
+0x141B94CE0,BSTempEffectDebris::ProcessClone,public virtual void __thiscall NiObject::ProcessClone(class NiCloningProcess & __ptr64) __ptr64 
+0x141B94A90,BSTempEffectDebris::IsEqual,public virtual bool __thiscall NiObject::IsEqual(class NiObject * __ptr64) __ptr64 
+0x141B94A80,BSTempEffectDebris::SaveBinary,public virtual void __thiscall NiObject::SaveBinary(class NiStream & __ptr64) __ptr64 
+0x141B94A60,BSTempEffectDebris::RegisterStreamables,public virtual bool __thiscall NiObject::RegisterStreamables(class NiStream & __ptr64) __ptr64 
+0x141B94A50,BSTempEffectDebris::LinkObject,public virtual void __thiscall NiObject::LinkObject(class NiStream & __ptr64) __ptr64 
+0x141B94A40,BSTempEffectDebris::LoadBinary,public virtual void __thiscall NiObject::LoadBinary(class NiStream & __ptr64) __ptr64 
+0x141B94970,BSHandleRefObject::DeleteThis,protected virtual void __thiscall NiRefObject::DeleteThis(void) __ptr64 
+0x141B785A0,DoOpen_1,private virtual enum BSResource::ErrorCode __thiscall BSResource::Archive2::AsyncReaderStream::DoOpen(void) __ptr64 
+0x141B784E0,DoClose_1,private virtual void __thiscall BSResource::Archive2::AsyncReaderStream::DoClose(void) __ptr64 
+0x141B78430,DoClone_1,"private virtual void __thiscall BSResource::Archive2::AsyncReaderStream::DoClone(class BSTSmartPointer<BSResource::AsyncStream,BSTSmartPointerIntrusiveRefCount> & __ptr64) const __ptr64 "
+0x141B670E0,WS2_32.DLL::WSACleanup,public static void __cdecl BSSocket::KillSDM(void) 
+0x141B42FD0,BSStringPool::Entry::release,public static void __cdecl BSStringPool::Entry::Release(class BSStringPool::Entry * & __ptr64) 
+0x141B42C00,BSStringPool::Entry::release,public __thiscall BSFixedStringWCS::~BSFixedStringWCS(void) __ptr64 
+0x141B427E0,BSStringPool::Entry::release,public __thiscall BSFixedStringCS::~BSFixedStringCS(void) __ptr64 
+0x141B41E60,BSStringPool::Entry::release,public __thiscall BSFixedString::~BSFixedString(void) __ptr64 
+0x141B1FA60,__$Iterate_ULeftRight__A0x526e74bc____A0x526e74bc___APEAVHeapBlockFreeHead__PEAV1__Z,public static class HeapBlockFreeHead * __ptr64 __cdecl HeapBlockFreeHead::GetSuccessor(class HeapBlockFreeHead * __ptr64) 
+0x141B1A4E0,MemoryHeap::GetStats,protected virtual void __thiscall MemoryHeap::DecommitPages(class HeapBlock * __ptr64) __ptr64 
+0x141B1A490,MemoryHeap::FreeSysDirect,"protected virtual unsigned __int64 __thiscall MemoryHeap::CleanExtraPages(void * __ptr64,unsigned __int64,unsigned __int64) __ptr64 "
+0x141B1A420,MemoryHeap::AllocSysDirect,"protected virtual unsigned __int64 __thiscall MemoryHeap::CreateMorePages(void * __ptr64,unsigned __int64,unsigned __int64) __ptr64 "
+0x141B1A360,MemoryHeap::GetAllocHeap,"protected virtual void * __ptr64 __thiscall MemoryHeap::DoHeapAllocation(unsigned __int64,unsigned __int64) __ptr64 "
+0x141B10BA0,BSReadWriteLock::try_lock_write,public bool __thiscall BSReadWriteLock::TryLockForWrite(void) __ptr64 
+0x141B10B30,BSReadWriteLock::try_lock_read,public bool __thiscall BSReadWriteLock::TryLockForRead(void) __ptr64 
+0x141B109B0,BSReadWriteLock::lock_write,public void __thiscall BSReadWriteLock::LockForWrite(void) __ptr64 
+0x141B10930,BSReadWriteLock::lock_read,public void __thiscall BSReadWriteLock::LockForRead(void) __ptr64 
+0x141B0ED40,MemoryManager::AutoScrapBuffer::Dtor,public __thiscall MemoryManager::AutoScrapBuffer::~AutoScrapBuffer(void) __ptr64 
+0x141B0EC90,MemoryManager::AutoScrapBuffer::Ctor,public __thiscall MemoryManager::AutoScrapBuffer::AutoScrapBuffer(void) __ptr64 
+0x141B09C40,CControlRectTracker::CControlRectTracker,public __thiscall BSCompanionThread::BSCompanionThread(void) __ptr64 
+0x141AC78B0,hkGetMsvcClassName,"public static void __cdecl hkCurrentFunctionUtil::getClassName(char const * __ptr64,char * __ptr64) "
+0x141AA61D0,CMFCRibbonInfo::XID::operator=,public __thiscall hkMonitorStreamColorTable::ColorPair::ColorPair(struct hkMonitorStreamColorTable::ColorPair const & __ptr64) __ptr64 
+0x141A7EA90,hkMemorySystem::GarbageCollect,public virtual void __thiscall hkMemorySystem::garbageCollect(void) __ptr64 
+0x141A77300,_getTicksPerSecond_hkSystemClock___A_KXZ,public static unsigned __int64 __cdecl hkStopwatch::getTicksPerSecond(void) 
+0x141A772F0,_getTickCounter_hkSystemClock___A_KXZ,public static unsigned __int64 __cdecl hkStopwatch::getTickCounter(void) 
+0x141A14980,WS2_32.DLL::WSAGetLastError,private int __thiscall hkbInternal::hks::netTransportTCPIP::getNetworkErrorCode(void) __ptr64 
+0x1419FBEF0,_lua_pushinteger_hkbInternal___AXPEAUlua_State_1_H_Z,"private static void __cdecl hkbLuaBase::int_push(struct hkbInternal::lua_State * __ptr64,int) "
+0x1419FBEA0,_lua_pushnumber_hkbInternal___AXPEAUlua_State_1_M_Z,"private static void __cdecl hkbLuaBase::hkReal_push(struct hkbInternal::lua_State * __ptr64,float) "
+0x1419FBE90,_luaL_checknumber_hkbInternal___AMPEAUlua_State_1_H_Z,"private static float __cdecl hkbLuaBase::hkReal_check(struct hkbInternal::lua_State * __ptr64,int) "
+0x1419F7D10,_luaL_openlibs_hkbInternal___AXPEAUlua_State_1__Z,public static void __cdecl hkbLuaBase::openLuaStdLibs(struct hkbInternal::lua_State * __ptr64) 
+0x1418F06E0,KERNEL32.DLL::LeaveCriticalSection,public void __thiscall hkJobQueue::unlockQueue(struct hkJobQueue::DynamicData * __ptr64) __ptr64 
+0x14174CAB0,hkLifoAllocator::BlockFreeBatch,"public virtual void __thiscall hkMemoryAllocator::blockFreeBatch(void * __ptr64 *,int,int) __ptr64 "
+0x14174CA40,hkLifoAllocator::BlockAllocBatch,"public virtual void __thiscall hkMemoryAllocator::blockAllocBatch(void * __ptr64 *,int,int) __ptr64 "
+0x14174C9C0,hkMemoryAllocator::BufRealloc,"public virtual void * __ptr64 __thiscall hkMemoryAllocator::bufRealloc(void * __ptr64,int,int & __ptr64) __ptr64 "
+0x1416330F0,CMFCRibbonInfo::XID::operator=,public __thiscall BShkbUtils::ClipGeneratorSaveData::ClipGeneratorSaveData(struct BShkbUtils::ClipGeneratorSaveData const & __ptr64) __ptr64 
+0x141626C10,BShkbAnimationGraph::GetQuadVariableImplHelper<hkQuaternionf>,"private bool __thiscall BShkbAnimationGraph::GetVariableImpl(class BSFixedString const & __ptr64,class hkQuaternionf & __ptr64) const __ptr64 "
+0x141626B10,BShkbAnimationGraph::GetWordVariableImplHelper<int>,"private bool __thiscall BShkbAnimationGraph::GetVariableImpl(class BSFixedString const & __ptr64,int & __ptr64) const __ptr64 "
+0x141626B00,BShkbAnimationGraph::GetWordVariableImplHelper<float>,"private bool __thiscall BShkbAnimationGraph::GetVariableImpl(class BSFixedString const & __ptr64,float & __ptr64) const __ptr64 "
+0x141626AF0,BShkbAnimationGraph::GetWordVariableImplHelper<bool>,"private bool __thiscall BShkbAnimationGraph::GetVariableImpl(class BSFixedString const & __ptr64,bool & __ptr64) const __ptr64 "
+0x141626A20,BShkbAnimationGraph::SetWordVariableImplHelper<int>,"private bool __thiscall BShkbAnimationGraph::SetVariableImpl(class BSFixedString const & __ptr64,int) __ptr64 "
+0x141626A10,BShkbAnimationGraph::SetWordVariableImplHelper<float>,"private bool __thiscall BShkbAnimationGraph::SetVariableImpl(class BSFixedString const & __ptr64,float) __ptr64 "
+0x141626A00,BShkbAnimationGraph::SetWordVariableImplHelper<bool>,"private bool __thiscall BShkbAnimationGraph::SetVariableImpl(class BSFixedString const & __ptr64,bool) __ptr64 "
+0x141506E40,BufRealloc,"public virtual void * __ptr64 __thiscall hkLifoAllocator::bufRealloc(void * __ptr64,int,int & __ptr64) __ptr64 "
+0x141506E00,BufFree,"public virtual void __thiscall hkLifoAllocator::bufFree(void * __ptr64,int) __ptr64 "
+0x141506DC0,BufAlloc,public virtual void * __ptr64 __thiscall hkLifoAllocator::bufAlloc(int & __ptr64) __ptr64 
+0x141506D80,BlockFree,"public virtual void __thiscall hkLifoAllocator::blockFree(void * __ptr64,int) __ptr64 "
+0x141506D40,BlockAlloc,public virtual void * __ptr64 __thiscall hkLifoAllocator::blockAlloc(int) __ptr64 
+0x141506C30,Quit,public void __thiscall hkLifoAllocator::quit(class hkMemoryAllocator const * __ptr64 *) __ptr64 
+0x141506B90,Init,"public void __thiscall hkLifoAllocator::init(class hkMemoryAllocator * __ptr64,class hkMemoryAllocator * __ptr64,class hkMemoryAllocator * __ptr64) __ptr64 "
+0x1414D95D0,hknpShape::BuildSurfaceGeometry,"public virtual void __thiscall hknpShape::queryAabbImpl(struct hknpCollisionQueryContext * __ptr64,struct hknpAabbQuery const & __ptr64,struct hknpShapeQueryInfo const & __ptr64,struct hknpQueryFilterData const & __ptr64,struct hknpShapeQueryInfo const & __ptr64,class hknpCollisionQueryCollector * __ptr64,class hkAabb * __ptr64) const __ptr64 "
+0x1414D9560,hknpShape::CheckConsistency,"public virtual void __thiscall hknpShape::queryAabbImpl(struct hknpCollisionQueryContext * __ptr64,struct hknpAabbQuery const & __ptr64,struct hknpShapeQueryInfo const & __ptr64,struct hknpQueryFilterData const & __ptr64,struct hknpShapeQueryInfo const & __ptr64,class hkArray<unsigned int,hkContainerHeapAllocator> * __ptr64,class hkAabb * __ptr64) const __ptr64 "
+0x1414D94D0,hknpShape::SelectLevelOfDetail,"public virtual void __thiscall hknpShape::castRayImpl(struct hknpCollisionQueryContext * __ptr64,struct hknpRayCastQuery const & __ptr64,struct hknpQueryFilterData const & __ptr64,struct hknpShapeQueryInfo const & __ptr64,class hknpCollisionQueryCollector * __ptr64) const __ptr64 "
+0x1414D9460,hknpShape::QueryAabbImpl,"public virtual int __thiscall hknpShape::getLeafShapes(unsigned int const * __ptr64,int,struct hknpShapeCollector * __ptr64) const __ptr64 "
+0x1414D93F0,hknpShape::QueryAabbImpl,"public virtual int __thiscall hknpShape::getShapeKeys(unsigned int * __ptr64,int,unsigned int,struct hknpShape::GetShapeKeysConfig const & __ptr64) const __ptr64 "
+0x1414D9380,hknpShape::QueryPointImpl,public virtual struct hknpShapeKeyMask * __ptr64 __thiscall hknpShape::createShapeKeyMask(void) const __ptr64 
+0x1414D8BB0,hknpShape::CastRayImpl,"public virtual int __thiscall hknpShape::getSignedDistanceContacts(struct hknpCdBody const & __ptr64,float,int,class hkBlockStream<hknpShape::SdfContactPoint>::Writer & __ptr64) const __ptr64 "
+0x1414D8B40,hknpShape::GetLeafShapes,"public virtual void __thiscall hknpShape::getSignedDistances(struct hknpShape::SdfQuery const & __ptr64,struct hknpShape::SdfContactPoint * __ptr64) const __ptr64 "
+0x1414D8AD0,hknpShape::GetShapeKeys,public virtual float __thiscall hknpShape::calcMinAngleBetweenFaces(void) const __ptr64 
+0x1414D8A60,hknpShape::CreateShapeKeyMask,"public virtual int __thiscall hknpShape::getSupportingFace(class hkVector4f const & __ptr64,class hkVector4f const & __ptr64,struct hkcdGsk::Cache const * __ptr64,bool,unsigned int,class hkVector4f & __ptr64,int & __ptr64) const __ptr64 "
+0x1414D89F0,hknpShape::GetSignedDistanceContacts,"public virtual int __thiscall hknpShape::getFaceVertices(int,class hkVector4f & __ptr64,class hkcdVertex const * __ptr64) const __ptr64 "
+0x1414D8980,hknpShape::GetSignedDistances,"public virtual void __thiscall hknpShape::getFaceInfo(int,class hkVector4f & __ptr64,int & __ptr64) const __ptr64 "
+0x1414D8910,hknpShape::CalcMinAngleBetweenFaces,public virtual int __thiscall hknpShape::getNumberOfFaces(void) const __ptr64 
+0x1414D88A0,hknpShape::GetSupportingFace,"public virtual void __thiscall hknpShape::convertVertexIdsToVertices(unsigned char const * __ptr64,int,class hkcdVertex * __ptr64) const __ptr64 "
+0x1414D8830,hknpShape::GetFaceVertices,"public virtual void __thiscall hknpShape::getSupportingVertex(class hkVector4f const & __ptr64,class hkcdVertex * __ptr64) const __ptr64 "
+0x1414D87C0,hknpShape::GetFaceInfo,"public virtual class hkcdVertex const * __ptr64 __thiscall hknpShape::getSupportVertices(class hkcdVertex * __ptr64,int) const __ptr64 "
+0x1414D8750,hknpShape::GetNumberOfFaces,public virtual int __thiscall hknpShape::getNumberOfSupportVertices(void) const __ptr64 
+0x1414D86D0,hknpShape::GetSupportingVertex,"public virtual void __thiscall hknpShape::calcAabb(class hkTransformf const & __ptr64,class hkAabb & __ptr64) const __ptr64 "
+0x1414D8660,hknpShape::GetSupportVertices,public virtual int __thiscall hknpShape::calcSize(void) const __ptr64 
+0x1414D85F0,hknpShape::GetNumberOfSupportVertices,public virtual enum hknpShapeType::Enum __thiscall hknpShape::getType(void) const __ptr64 
+0x1414BA340,hkReferencedObject::DeleteThisReferencedObject,protected virtual void __thiscall hkReferencedObject::deleteThisReferencedObject(void) const __ptr64 
+0x1414B03B0,assign,"public void __thiscall hkStringPtr::set(char const * __ptr64,int) __ptr64 "
+0x141481640,GetSingleton_1,public static class BSAwardsSystemUtility & __ptr64 __cdecl BSAwardsSystemUtility::QInstance(void) 
+0x141317920,ReplaceArray,"public void __thiscall BSScript::ArrayWrapper<BSScript::Variable>::ReplaceArray<BSScrapArrayAllocator>(class BSTArray<BSScript::Variable,BSScrapArrayAllocator> const & __ptr64,class BSScript::IVirtualMachine & __ptr64) __ptr64 "
+0x1412AFF90,SitWaitMenu::OnAddedToMenuStack,"public virtual void __thiscall SitWaitMenu::OnMenuStackChanged(class BSFixedString const & __ptr64,bool) __ptr64 "
+0x1412ADEE0,MessageBoxMenu::OnAddedToMenuStack,public virtual enum UI_MESSAGE_RESULTS __thiscall MessageBoxMenu::ProcessMessage(class UIMessage & __ptr64) __ptr64 
+0x1412AA9B0,DisconnectHandler::OnDeviceConnectEvent,public virtual void __thiscall DisconnectHandler::HandleEvent(class DeviceConnectEvent const * __ptr64) __ptr64 
+0x14129CAE0,LockpickingMenu::TransferCachedShaderFXQuadsForRenderer,public virtual bool __thiscall LockpickingMenu::OnButtonEventRelease(class BSFixedString const & __ptr64) __ptr64 
+0x141051EE0,Concurrency::scheduler_worker_creation_error::scheduler_worker_creation_error,public __thiscall CombatInventoryItemOneHandedBlock::CombatInventoryItemOneHandedBlock(class CombatInventoryItemOneHandedBlock const & __ptr64) __ptr64 
+0x140FC4880,MissileProjectile::RunTargetPick,protected virtual void __thiscall MissileProjectile::Revert(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140FC4840,MissileProjectile::CleanUpPointersOnDisable,protected virtual void __thiscall MissileProjectile::FinishLoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140FC47C0,MissileProjectile::IsPermanent,protected virtual void __thiscall MissileProjectile::LoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140FC46F0,MissileProjectile::TurnOff,protected virtual void __thiscall MissileProjectile::SaveGame(class BGSSaveFormBuffer * __ptr64) __ptr64 
+0x140FACDA0,Explosion::GetExclusiveBranch,public virtual void __thiscall Explosion::Revert(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140FACD70,Explosion::UpdateInDialogue,public virtual void __thiscall Explosion::FinishLoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140FACD20,Explosion::SetCurrentScene,public virtual void __thiscall Explosion::InitLoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140FACA20,Explosion::GetCurrentScene,public virtual void __thiscall Explosion::LoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140FAC640,Explosion::CheckForCurrentAliasPackage,public virtual void __thiscall Explosion::SaveGame(class BGSSaveFormBuffer * __ptr64) __ptr64 
+0x140F455E0,DoRegisterHandler,"private void __thiscall PlayerControls::RegisterHandler(class PlayerInputHandler * __ptr64,bool) __ptr64 "
+0x140EC2180,ScopedInventoryChangeMessageContext::dtor,public __thiscall PlayerCharacter::ScopedInventoryChangeMessageContext::~ScopedInventoryChangeMessageContext(void) __ptr64 
+0x140EC2130,ScopedInventoryChangeMessageContext::ctor,"public __thiscall PlayerCharacter::ScopedInventoryChangeMessageContext::ScopedInventoryChangeMessageContext(bool,bool) __ptr64 "
+0x140EBAE90,_Request_SpellExpiredFeedback___AXPEAVMagicItem___Z,public static void __cdecl PlayerCharacter::RequestSpellExpiredFeedback(class MagicItem * __ptr64) 
+0x140EB1070,PlayerCharacter::TryUpdateActorLastSeenTime,public virtual void __thiscall PlayerCharacter::UpdateRefLight(float) __ptr64 
+0x140EA6590,_UpdateGrenadeTrajectory_PerkUtilities___AXXZ,public void __thiscall PlayerCharacter::UpdateMainThread(void) __ptr64 
+0x140DC12D0,Actor::GetDecalGroup,"protected virtual void __thiscall Actor::SendContainerChangedEvent(class TESObjectREFR const * __ptr64,class TESObjectREFR const * __ptr64,class TESBoundObject const * __ptr64,int,unsigned int,unsigned short) const __ptr64 "
+0x140DC0310,Actor::GetSaveParentCell,"protected virtual void __thiscall Actor::AddWornOutfitImpl(class BGSOutfit * __ptr64,bool) __ptr64 "
+0x140D7E890,HandleDefaultAnimationSwitch,public void __thiscall Actor::HandleDefaultAnimationsSwitch(void) __ptr64 
+0x140D3C320,_anon_1EB8B661::InitGameDataThread::Start,public static void __cdecl Main::StartLoadGameData(void) 
+0x140CE9C30,__$ClearArrayOfArrays_DVBSTArrayHeapAllocator_____AXAEAV_$BSTArray_PEADVBSTArrayHeapAllocator_____N_Z,public void __thiscall BGSSaveLoadHistory::Clear(bool) __ptr64 
+0x140C3F890,CBrowserControlSite::CBrowserControlSite,"public __thiscall PipboySpecialData::PipboySpecialData(class PipboyThrottleManager & __ptr64,class PipboyArray & __ptr64) __ptr64 "
+0x140C20170,PipboyManager::OnCharacterEvent,public virtual void __thiscall PipboyManager::HandleEvent(class ThumbstickEvent const * __ptr64) __ptr64 
+0x140C20130,PipboyManager::OnMouseMoveEvent,public virtual bool __thiscall PipboyManager::ShouldHandleEvent(class InputEvent const * __ptr64) __ptr64 
+0x140C20120,_QPipboyMenu_InterfaceStrings___AAEBVBSFixedString__XZ,public class BSFixedString const & __ptr64 __thiscall PipboyManager::Get3DRendererName(void) const __ptr64 
+0x140BEFE30,RequestExitWorkshop,public static void __cdecl WorkshopMenu::CloseWorkshop(bool) 
+0x140BEA9B0,ExamineMenu::OnThumbstickEvent,"public virtual void __thiscall WorkbenchMenuBase::OnMenuStackChanged(class BSFixedString const & __ptr64,bool) __ptr64 "
+0x140BCAC00,TerminalMenu::CacheShaderFXQuadsForRenderer_Impl,public virtual bool __thiscall TerminalMenu::CanHandleWhenDisabled(class ButtonEvent const * __ptr64) __ptr64 
+0x140BCA870,TerminalMenu::TransferCachedShaderFXQuadsForRenderer,public virtual bool __thiscall TerminalMenu::OnButtonEventRelease(class BSFixedString const & __ptr64) __ptr64 
+0x140BA8110,PowerArmorModMenu::AddLooseModToModChoiceArray,protected virtual bool __thiscall PowerArmorModMenu::GetCurrent3DLoaded(void) const __ptr64 
+0x140BA3E20,PowerArmorModMenu::RenameCurrent,protected virtual void __thiscall PowerArmorModMenu::ShowCurrent3D(void) __ptr64 
+0x140BA34E0,PowerArmorModMenu::ShouldShowModSlot,"protected virtual bool __thiscall PowerArmorModMenu::GetIsValidInventoryItem(class BGSInventoryItem const & __ptr64,unsigned int) const __ptr64 "
+0x140BA33E0,PowerArmorModMenu::ShouldInitToFirstMod,protected virtual bool __thiscall PowerArmorModMenu::GetCanRepairSelectedItem(void) __ptr64 
+0x140BA3350,PowerArmorModMenu::QIgnoreRank,"protected virtual void __thiscall PowerArmorModMenu::GetBuildConfirmQuestion(char * __ptr64,unsigned int) const __ptr64 "
+0x140BA2200,CMFCRibbonInfo::XID::operator=,public __thiscall nsPlayBinkMenu::InitData::InitData(struct nsPlayBinkMenu::InitData const & __ptr64) __ptr64 
+0x140BA0450,UpdateData_5,public virtual void __thiscall PipboyWorkshopMenu::UpdateData(void) __ptr64 
+0x140B9DBC0,UpdateData_1,public virtual void __thiscall PipboySpecialMenu::UpdateData(void) __ptr64 
+0x140B9C1B0,UpdateData_9,public virtual void __thiscall PipboyPlayerInfoMenu::UpdateData(void) __ptr64 
+0x140B9B180,UpdateData_8,public virtual void __thiscall PipboyRadioMenu::UpdateData(void) __ptr64 
+0x140B99570,UpdateData_4,public virtual void __thiscall PipboyQuestMenu::UpdateData(void) __ptr64 
+0x140B987D0,UpdateData_2,public virtual void __thiscall PipboyPerksMenu::UpdateData(void) __ptr64 
+0x140B8D5C0,UpdateData_3,public virtual void __thiscall PipboyInventoryMenu::UpdateData(void) __ptr64 
+0x140B86000,UpdateData_7,public virtual void __thiscall PipboyMapMenu::UpdateData(void) __ptr64 
+0x140B84D60,UpdateData_6,public virtual void __thiscall PipboyLogMenu::UpdateData(void) __ptr64 
+0x140B83250,HolotapeMenu::CacheShaderFXQuadsForRenderer_Impl,public virtual bool __thiscall HolotapeMenu::CanHandleWhenDisabled(class ButtonEvent const * __ptr64) __ptr64 
+0x140B825C0,HolotapeMenu::TransferCachedShaderFXQuadsForRenderer,public virtual bool __thiscall HolotapeMenu::OnButtonEventRelease(class BSFixedString const & __ptr64) __ptr64 
+0x140B45650,CharacterEvent::QUserEvent,public virtual class BSFixedString const & __ptr64 __thiscall InputEvent::QUserEvent(void) const __ptr64 
+0x140B0AF60,ItemSorter::IncrementSort,public void __thiscall ContainerMenuBase::ItemSorter::IncrementSort(void) __ptr64 
+0x140AFAE80,BarterMenu::UpdateItemPickpocketInfo,private virtual bool __thiscall BarterMenu::OnButtonEventRelease(class BSFixedString const & __ptr64) __ptr64 
+0x140AECEC0,InventoryItemDisplayData::ctor,"public __thiscall InventoryItemDisplayData::InventoryItemDisplayData(class BSPointerHandle<TESObjectREFR,BSUntypedPointerHandle<21,5> >,class InventoryUserUIInterfaceEntry const & __ptr64) __ptr64 "
+0x140821B70,PowerArmorGeometry::ConstructAnimationGraph,"private virtual bool __thiscall SimpleAnimationGraphManagerHolder::ConstructAnimationGraph(class BSTSmartPointer<BShkbAnimationGraph,BSTSmartPointerIntrusiveRefCount> & __ptr64) __ptr64 "
+0x140821B10,PowerArmorGeometry::SetAnimationGraphManagerImpl,"private virtual bool __thiscall SimpleAnimationGraphManagerHolder::SetAnimationGraphManagerImpl(class BSTSmartPointer<BSAnimationGraphManager,BSTSmartPointerIntrusiveRefCount> const & __ptr64) __ptr64 "
+0x140821AC0,PowerArmorGeometry::GetAnimationGraphManagerImpl,"private virtual bool __thiscall SimpleAnimationGraphManagerHolder::GetAnimationGraphManagerImpl(class BSTSmartPointer<BSAnimationGraphManager,BSTSmartPointerIntrusiveRefCount> & __ptr64) const __ptr64 "
+0x14081D440,IAnimationGraphManagerHolder::SetGraphVariableHelper<NiQuaternion>,"public bool __thiscall IAnimationGraphManagerHolder::SetGraphVariable(class BSFixedString const & __ptr64,class NiQuaternion const & __ptr64) __ptr64 "
+0x14081D430,IAnimationGraphManagerHolder::SetGraphVariableHelper<NiPoint3>,"public bool __thiscall IAnimationGraphManagerHolder::SetGraphVariable(class BSFixedString const & __ptr64,class NiPoint3 const & __ptr64) __ptr64 "
+0x14081D410,SetGraphVariableFloat,"public bool __thiscall IAnimationGraphManagerHolder::SetGraphVariable(class BSFixedString const & __ptr64,float) __ptr64 "
+0x14081D3F0,SetGraphVariableInt,"public bool __thiscall IAnimationGraphManagerHolder::SetGraphVariable(class BSFixedString const & __ptr64,int) __ptr64 "
+0x14081D3D0,SetGraphVariableBool,"public bool __thiscall IAnimationGraphManagerHolder::SetGraphVariable(class BSFixedString const & __ptr64,bool) __ptr64 "
+0x14081D3C0,IAnimationGraphManagerHolder::GetGraphVariableHelper<NiPoint3>,"public bool __thiscall IAnimationGraphManagerHolder::GetGraphVariable(class BSFixedString const & __ptr64,class NiPoint3 & __ptr64) const __ptr64 "
+0x1407F20B0,BGSStoryManagerNodeBase::GetPlayable,public virtual void __thiscall BGSStoryManagerNodeBase::InitItemImpl(void) __ptr64 
+0x1407F1E10,BGSStoryManagerNodeBase::CheckSaveGame,public virtual bool __thiscall BGSStoryManagerNodeBase::Load(class TESFile * __ptr64) __ptr64 
+0x1407F1DB0,BGSStoryManagerNodeBase::FindInFileFast,public virtual void __thiscall BGSStoryManagerNodeBase::ClearData(void) __ptr64 
+0x1407F1D80,BGSStoryManagerNodeBase::RemoveChange,public virtual void __thiscall BGSStoryManagerNodeBase::InitializeData(void) __ptr64 
+0x1407E7630,BGSPickLockEvent::ctor,"public __thiscall BGSPickLockEvent::BGSPickLockEvent(class TESObjectREFR * __ptr64,class TESObjectREFR * __ptr64,bool) __ptr64 "
+0x1407E61B0,BSSpinLock::try_lock,public bool __thiscall BSSpinLock::TryLock(void) __ptr64 
+0x14074A340,NavMesh::QHasCurrents,"public virtual void __thiscall NavMesh::GetFormDetailedString(char * __ptr64,unsigned int) const __ptr64 "
+0x140749F80,NavMesh::GetPlayable,public virtual void __thiscall NavMesh::InitItemImpl(void) __ptr64 
+0x140749EA0,NavMesh::Activate,"public virtual void __thiscall NavMesh::CreateGroupData(struct FORM * __ptr64,struct FORM_GROUP * __ptr64) __ptr64 "
+0x140749DF0,NavMesh::LoopingActivate,"public virtual bool __thiscall NavMesh::BelongsInGroup(struct FORM * __ptr64,bool,bool) __ptr64 "
+0x140749D70,NavMesh::IsMagicItem,public virtual void __thiscall NavMesh::SetAltered(bool) __ptr64 
+0x140749CC0,NavMesh::IsObject,public virtual void __thiscall NavMesh::SetDelete(bool) __ptr64 
+0x140749800,NavMesh::CheckSaveGame,public virtual bool __thiscall NavMesh::Load(class TESFile * __ptr64) __ptr64 
+0x14072E7B0,BSTempEffectDebris::FinishLoadGame,public virtual void __thiscall BSTempEffect::FinishLoadGame(class BGSLoadGameBuffer * __ptr64) __ptr64 
+0x14072E730,BSTempEffectDebris::LoadGame,public virtual void __thiscall BSTempEffect::LoadGame(class BGSLoadGameBuffer * __ptr64) __ptr64 
+0x14072E650,BSTempEffectDebris::SaveGame,public virtual void __thiscall BSTempEffect::SaveGame(class BGSSaveGameBuffer * __ptr64) __ptr64 
+0x14071DC40,TESPackage::GetRandomAnim,public virtual void __thiscall TESPackage::Revert(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x14071DAB0,TESPackage::GetSavedFormType,public virtual void __thiscall TESPackage::LoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x14071D990,TESPackage::GetDescriptionOwnerFile,public virtual void __thiscall TESPackage::SaveGame(class BGSSaveFormBuffer * __ptr64) __ptr64 
+0x140719C30,TESPackage::GetPlayable,public virtual void __thiscall TESPackage::InitItemImpl(void) __ptr64 
+0x140719180,TESPackage::CheckSaveGame,public virtual bool __thiscall TESPackage::Load(class TESFile * __ptr64) __ptr64 
+0x1407190D0,TESPackage::FindInFileFast,public virtual void __thiscall TESPackage::ClearData(void) __ptr64 
+0x140718FE0,TESPackage::RemoveChange,public virtual void __thiscall TESPackage::InitializeData(void) __ptr64 
+0x1405A2B80,BGSStoryManagerNodeBase::GetRandomAnim,public virtual void __thiscall TESActorBase::Revert(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x1405A2AC0,TESActorBase::GetSavedFormType,public virtual void __thiscall TESActorBase::LoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x1405A2A40,TESActorBase::GetDescriptionOwnerFile,public virtual void __thiscall TESActorBase::SaveGame(class BGSSaveFormBuffer * __ptr64) __ptr64 
+0x1405A29D0,TESActorBase::OnCheckModels,public virtual void __thiscall TESActorBase::RemoveChange(int) __ptr64 
+0x1405A2950,TESActorBase::OnRemove3D,public virtual bool __thiscall TESActorBase::AddChange(int) __ptr64 
+0x14047ED20,GetOwner_1,public class TESForm * __ptr64 __thiscall TESObjectREFR::GetOwner(void) const __ptr64 
+0x14040F080,Explosion::GetBehaviorRootData,public virtual class BGSLocation * __ptr64 __thiscall TESObjectREFR::GetEditorLocation(void) const __ptr64 
+0x1403FE600,Explosion::HasKeywordHelper,public virtual void __thiscall TESObjectREFR::RemoveAllObjectsWorn(void) __ptr64 
+0x1403FB990,Explosion::GetDecalGroup,"public virtual void __thiscall TESObjectREFR::SendContainerChangedEvent(class TESObjectREFR const * __ptr64,class TESObjectREFR const * __ptr64,class TESBoundObject const * __ptr64,int,unsigned int,unsigned short) const __ptr64 "
+0x1403FB720,Explosion::ApplyCurrent,"public virtual void __thiscall TESObjectREFR::SetEquipStateLocked(class TESBoundObject * __ptr64,bool) __ptr64 "
+0x1403FAF70,Explosion::SetParentCell,"public virtual bool __thiscall TESObjectREFR::AddWornItem(class TESBoundObject * __ptr64,class BSTSmartPointer<ExtraDataList,BSTSmartPointerIntrusiveRefCount>,int,bool,class BGSEquipIndex) __ptr64 "
+0x1403F9830,Explosion::SaveGameTest,"public virtual class BSPointerHandle<TESObjectREFR,BSUntypedPointerHandle<21,5> > __thiscall TESObjectREFR::RemoveItem(struct TESObjectREFR::RemoveItemData & __ptr64) __ptr64 "
+0x1403F87C0,Actor::SetDisplayGeometry,public virtual void __thiscall TESObjectREFR::SetStartingPosition(class NiPoint3 const & __ptr64) __ptr64 
+0x1403F8790,Explosion::TryChangeSkyCellActorsProcessLevel,public virtual class NiPoint3 __thiscall TESObjectREFR::GetStartingLocation(void) __ptr64 
+0x1403F8760,Explosion::TryMoveToMiddleLow,public virtual class NiPoint3 __thiscall TESObjectREFR::GetStartingAngle(void) __ptr64 
+0x1403F84E0,Explosion::GetCurrent3D,public virtual void __thiscall TESObjectREFR::ResumeCurrentDialogue(void) __ptr64 
+0x1403F8480,Explosion::ResetInventory,public virtual void __thiscall TESObjectREFR::PauseCurrentDialogue(void) __ptr64 
+0x1403F8390,Explosion::Disable,public virtual void __thiscall TESObjectREFR::FadeCurrentDialogue(void) __ptr64 
+0x1403F8220,Explosion::SetMovementComplete,public virtual void __thiscall TESObjectREFR::StopCurrentDialogue(bool) __ptr64 
+0x1403F81F0,Explosion::SetActionComplete,public virtual void __thiscall TESObjectREFR::SetExclusiveBranch(class BGSDialogueBranch * __ptr64) __ptr64 
+0x1403F81C0,Explosion::ApplyMovementDelta,public virtual class BGSDialogueBranch * __ptr64 __thiscall TESObjectREFR::GetExclusiveBranch(void) const __ptr64 
+0x1403F7B20,Explosion::GetLinearVelocity,"public virtual bool __thiscall TESObjectREFR::UpdateInDialogue(class DialogueResponse * __ptr64,bool) __ptr64 "
+0x1403F79A0,Explosion::MoveHavok,public virtual void __thiscall TESObjectREFR::SetCurrentScene(class BGSScene * __ptr64) __ptr64 
+0x1403F70E0,RemoveKeyword_1,public void __thiscall TESObjectREFR::RemoveKeyword(class BGSKeyword const * __ptr64) __ptr64 
+0x1403F7040,AddKeyword_1,public void __thiscall TESObjectREFR::AddKeyword(class BGSKeyword const * __ptr64) __ptr64 
+0x1403F3FF0,Explosion::AttachWeapon,public virtual class BGSAnimationSequencer * __ptr64 __thiscall TESObjectREFR::GetSequencer(void) const __ptr64 
+0x1403F3CF0,Explosion::SendContainerChangedEvent,public virtual void __thiscall TESObjectREFR::SetDelete(bool) __ptr64 
+0x1403F33F0,Explosion::UpdateAnimation,"public virtual void __thiscall TESObjectREFR::GetPreviousDynamicIdleCRCS(unsigned int * __ptr64,unsigned int) const __ptr64 "
+0x1403EF150,Explosion::ShouldSaveAnimationOnSaving,"public virtual bool __thiscall TESObjectREFR::SetDialoguewithPlayer(bool,bool,class TESTopicInfo * __ptr64) __ptr64 "
+0x1403EEBB0,Explosion::ShouldSaveAnimationOnUnloading,public virtual void __thiscall TESObjectREFR::UpdateSoundCallBack(bool) __ptr64 
+0x1403EE210,Explosion::ModifyAnimationUpdateData,public virtual void __thiscall TESObjectREFR::Update3DPosition(bool) __ptr64 
+0x1403EE040,Explosion::InitNonNPCAnimation,public virtual bool __thiscall TESObjectREFR::IsTalking(void) const __ptr64 
+0x1403EDD80,Explosion::OnHeadInitialized,"public virtual bool __thiscall TESObjectREFR::GetEditorLocation(class NiPoint3 & __ptr64,class NiPoint3 & __ptr64,class TESForm * & __ptr64,class TESForm * __ptr64) __ptr64 "
+0x1403ED0F0,Explosion::SetExclusiveBranch,public virtual void __thiscall TESObjectREFR::InitItemImpl(void) __ptr64 
+0x1403EB950,Explosion::GetBehaviorRootNameOverrides,public virtual void __thiscall TESObjectREFR::Predestroy(void) __ptr64 
+0x140344D90,TESObjectMISC::GetSavedFormType,public virtual void __thiscall TESObjectMISC::LoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140344D50,TESObjectMISC::GetDescriptionOwnerFile,public virtual void __thiscall TESObjectMISC::SaveGame(class BGSSaveFormBuffer * __ptr64) __ptr64 
+0x140344C00,TESObjectMISC::GetPlayable,public virtual void __thiscall TESObjectMISC::InitItemImpl(void) __ptr64 
+0x1403446B0,TESObjectMISC::ReplaceModel,public virtual bool __thiscall TESObjectMISC::Load(class TESFile * __ptr64) __ptr64 
+0x140344640,TESObjectMISC::Clone3D,public virtual void __thiscall TESObjectMISC::ClearData(void) __ptr64 
+0x140327E40,BGSTalkingActivator::Clone3D,public virtual void __thiscall TESObjectACTI::ClearData(void) __ptr64 
+0x140325660,MagicItem::GetFilledSlotsImpl,"public virtual bool __thiscall TESBoundObject::Activate(class TESObjectREFR * __ptr64,class TESObjectREFR * __ptr64,class TESBoundObject * __ptr64,int) __ptr64 "
+0x140325220,BGSTalkingActivator::IsReference,public virtual void __thiscall TESBoundObject::LoadObjectBound(class TESFile * __ptr64) __ptr64 
+0x140306460,BGSTalkingActivator::GetRandomAnim,public virtual void __thiscall BGSTalkingActivator::Revert(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x1403063E0,BGSTalkingActivator::GetSavedFormType,public virtual void __thiscall BGSTalkingActivator::LoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140306390,BGSTalkingActivator::GetDescriptionOwnerFile,public virtual void __thiscall BGSTalkingActivator::SaveGame(class BGSSaveFormBuffer * __ptr64) __ptr64 
+0x1403060D0,BGSTalkingActivator::GetFilledSlotsImpl,"public virtual bool __thiscall BGSTalkingActivator::Activate(class TESObjectREFR * __ptr64,class TESObjectREFR * __ptr64,class TESBoundObject * __ptr64,int) __ptr64 "
+0x140306040,BGSTalkingActivator::GetPlayable,public virtual void __thiscall BGSTalkingActivator::InitItemImpl(void) __ptr64 
+0x140305F90,BGSTalkingActivator::ReplaceModel,public virtual bool __thiscall BGSTalkingActivator::Load(class TESFile * __ptr64) __ptr64 
+0x1402F7B50,BGSObjectInstance::ctor,"public __thiscall BGSObjectInstance::BGSObjectInstance(class TESForm * __ptr64,class TBO_InstanceData * __ptr64) __ptr64 "
+0x1402D7DD0,CMFCRibbonInfo::XID::operator=,public __thiscall BGSMaterialSwap::Entry::Entry(struct BGSMaterialSwap::Entry const & __ptr64) __ptr64 
+0x1402D1B70,ctor,"public __thiscall BGSDefaultObject::BGSDefaultObject(char const * __ptr64,unsigned char,char const * __ptr64) __ptr64 "
+0x14028B620,TESRegion::GetPlayable,public virtual void __thiscall TESRegion::InitItemImpl(void) __ptr64 
+0x14028B520,TESRegion::FindInFileFast,public virtual void __thiscall TESRegion::ClearData(void) __ptr64 
+0x14028AF80,TESRegion::CheckSaveGame,public virtual bool __thiscall TESRegion::Load(class TESFile * __ptr64) __ptr64 
+0x1401D4BF0,"BSPointerHandleManager<BSUntypedPointerHandle<21,5>_>::KillSDM",public static void __cdecl HandleManager::KillSDM(void) 
+0x1401BD700,BIPOBJECT::Dtor,public __thiscall BIPOBJECT::~BIPOBJECT(void) __ptr64 
+0x1401AB0E0,BGSInventoryList::ctor,"public __thiscall BGSInventoryList::BGSInventoryList(class TESContainer const * __ptr64,class BSPointerHandle<TESObjectREFR,BSUntypedPointerHandle<21,5> >) __ptr64 "
+0x140160230,__$LoadModelChildDataChunkIntoArrays_Helper_VBSTArrayHeapAllocator____A0x4287a765___AXAEAV_$BSTArray_UID_BSResource__VBSTArrayHeapAllocator____AEAEAEAV_$BSTArray_IVBSTArrayHeapAllocator____0PEAVTESFile___Z,"public static void __cdecl TESModel::LoadModelChildDataChunkIntoArrays(class BSTArray<BSResource::ID,BSTArrayHeapAllocator> & __ptr64,unsigned char & __ptr64,class BSTArray<unsigned int,BSTArrayHeapAllocator> & __ptr64,class BSTArray<BSResource::ID,BSTArrayHeapAllocator> & __ptr64,class TESFile * __ptr64) "
+0x14015CED0,TESLeveledList::GetCanContainFormsOfType,public virtual void __thiscall TESLeveledList::InitComponent(class TESForm * __ptr64) __ptr64 
+0x1401546F0,BGSStoryManagerNodeBase::LoopingActivate,"public virtual bool __thiscall TESForm::BelongsInGroup(struct FORM * __ptr64,bool,bool) __ptr64 "
+0x140154510,SetAlpha,public virtual char const * __ptr64 __thiscall TESForm::GetTextForParsedSubTag(class BSFixedString const & __ptr64) const __ptr64 
+0x140153D90,BGSStoryManagerNodeBase::IsMagicItem,public virtual void __thiscall TESForm::SetAltered(bool) __ptr64 
+0x140153D20,BGSStoryManagerNodeBase::IsObject,public virtual void __thiscall TESForm::SetDelete(bool) __ptr64 
+0x1401538F0,BGSStoryManagerNodeBase::QHasCurrents,"public virtual void __thiscall TESForm::GetFormDetailedString(char * __ptr64,unsigned int) const __ptr64 "
+0x140152BB0,BGSStoryManagerNodeBase::GetRandomAnim,public virtual void __thiscall TESForm::Revert(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140152BA0,BGSStoryManagerNodeBase::GetKnown,public virtual void __thiscall TESForm::FinishLoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140152B90,BGSStoryManagerNodeBase::GetFormDetailedString,public virtual void __thiscall TESForm::InitLoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140152A90,BGSStoryManagerNodeBase::GetSavedFormType,public virtual void __thiscall TESForm::LoadGame(class BGSLoadFormBuffer * __ptr64) __ptr64 
+0x140152A00,BGSStoryManagerNodeBase::GetDescriptionOwnerFile,public virtual void __thiscall TESForm::SaveGame(class BGSSaveFormBuffer * __ptr64) __ptr64 
+0x1401529F0,BGSStoryManagerNodeBase::GetRevertFile,public virtual bool __thiscall TESForm::CheckSaveGame(class BGSSaveFormBuffer * __ptr64) const __ptr64 
+0x140152600,BGSStoryManagerNodeBase::InitLoadGame,"public virtual class TESForm * __ptr64 __thiscall TESForm::CreateDuplicateForm(bool,class BSTHashMap<TESForm * __ptr64,TESForm * __ptr64,BSTDefaultScatterTable> * __ptr64) __ptr64 "
+0x140152220,BGSStoryManagerTreeForm::FindInFileFast,public virtual void __thiscall TESForm::ClearData(void) __ptr64 
+0x140152130,BGSStoryManagerTreeForm::RemoveChange,public virtual void __thiscall TESForm::InitializeData(void) __ptr64 
+0x14014FAF0,BGSLocalizedStringDL::GetDescription,"public void __thiscall TESDescription::GetDescription(class BSStringT<char,-1,DynamicMemoryManagementPol> & __ptr64,class TESForm const * __ptr64) const __ptr64 "
+0x14011D930,TESDataHandler::IsFormIDInuse,protected bool __thiscall TESDataHandler::IsFormIDInUse(unsigned int) __ptr64 
+0x140086EC0,ExtraDataList::SetHealthPercent,public void __thiscall ExtraDataList::SetHealthPerc(float) __ptr64 
+0x140077D70,MagicItem::CopyMagicItemData,public virtual void __thiscall MagicItem::InitItemImpl(void) __ptr64 
+0x140077CB0,MagicItem::IsFormTypeChild,public virtual void __thiscall MagicItem::Copy(class TESForm * __ptr64) __ptr64 
+0x140077730,BGSStoryManagerTreeForm::RemoveChange,public virtual void __thiscall MagicItem::InitializeData(void) __ptr64 
+0x14003B5C0,ctor_1,"public __thiscall BGSObjectInstanceExtra::BGSObjectInstanceExtra(class BGSMod::Template::Item const * __ptr64,class TESForm * __ptr64,struct INSTANCE_FILTER const * __ptr64) __ptr64 "
+0x1400244D0,BSSpinLock::lock,public void __thiscall BSSpinLock::Lock(char const * __ptr64) __ptr64 
+0x1400048A0,MemoryManager::GetSingleton,public static class MemoryManager & __ptr64 __cdecl MemoryManager::Instance(void) 

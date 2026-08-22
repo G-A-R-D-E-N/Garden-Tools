@@ -36,6 +36,13 @@ public static class PackfileConverter
         if (data == null) return false;
 
         var source = image.Layout;
+
+        // PackfileImage.Read only ever produces 4 or 8, but a caller can hand us an image built
+        // or mutated in memory. A width outside that set derives garbage layouts, and simple
+        // enough classes would still convert "successfully" and get a readable header stamped
+        // over bytes that were never interpreted correctly.
+        if (source.PointerSize != 4 && source.PointerSize != 8) return false;
+
         if (source.PointerSize == target.PointerSize)
         {
             // Same pointer width means no relayout is needed: the bytes are not transcoded, so
@@ -331,8 +338,15 @@ public static class PackfileConverter
 
             if (member.VType is "TYPE_STRINGPTR" or "TYPE_CSTRING")
             {
-                if (aims.TryGetValue(at, out int text) && seen.Add(text))
-                    blocks.Add(StringBlock(objects, text));
+                // A fixed array of string pointers has ArrSize slots and TranscodeObject
+                // registers every one of them. Following only the first leaves the rest
+                // without blocks, and Remap then rejects a file that is representable.
+                for (int e = 0; e < Math.Max(1, member.ArrSize); e++)
+                    if (aims.TryGetValue(at + e * source.PointerSize, out int text) && seen.Add(text))
+                    {
+                        if (StringBlock(objects, text) is not Block textBlock) return false;
+                        blocks.Add(textBlock);
+                    }
                 continue;
             }
 
@@ -417,6 +431,11 @@ public static class PackfileConverter
                 int tgtStride = LayoutWalker.Of(types, member.CType, target).Size;
                 if (srcStride <= 0 || tgtStride <= 0) continue;
 
+                // The untyped ArrayAt above only proved count <= remaining bytes. Multi-byte
+                // elements can still run past the section end, and the block below would size
+                // the copy from that count.
+                if (objects.ArrayAt(at, srcStride) == null) return false;
+
                 if (seen.Add(array.At))
                     blocks.Add(new Block
                     {
@@ -445,6 +464,7 @@ public static class PackfileConverter
             int srcWidth = RelElementWidth(types, source, member);
             int tgtWidth = RelElementWidth(types, target, member);
             if (srcWidth <= 0 || tgtWidth <= 0) continue;
+            if (objects.ArrayAt(at, srcWidth) == null) return false;
 
             string kind = member.VSub switch
             {
@@ -466,7 +486,10 @@ public static class PackfileConverter
             if (member.VSub is "TYPE_STRINGPTR" or "TYPE_CSTRING")
                 for (int e = 0; e < array.Count; e++)
                     if (aims.TryGetValue(array.At + e * srcWidth, out int text) && seen.Add(text))
-                        blocks.Add(StringBlock(objects, text, "element string"));
+                    {
+                        if (StringBlock(objects, text, "element string") is not Block element) return false;
+                        blocks.Add(element);
+                    }
         }
         return true;
     }
@@ -500,8 +523,18 @@ public static class PackfileConverter
         }
     }
 
-    private static Block StringBlock(PackfileObjects objects, int at, string kind = "string") =>
-        new() { SourceAt = at, Kind = kind, TargetLen = objects.RunToNull(at) };
+    // Null when the destination is not a readable, NUL-terminated run. RunToNull answers 0 for
+    // an out-of-range start and "rest of the section" for a run with no terminator; both used to
+    // become blocks, the first making the later Array.Copy throw and the second emitting an
+    // unterminated string as a successful conversion.
+    private static Block? StringBlock(PackfileObjects objects, int at, string kind = "string")
+    {
+        if (at < 0 || at >= objects.DataLength) return null;
+        int len = objects.RunToNull(at);
+        if (len <= 0 || at + len > objects.DataLength) return null;
+        if (objects.ByteAt(at + len - 1) != 0) return null;
+        return new Block { SourceAt = at, Kind = kind, TargetLen = len };
+    }
 
     private static bool Transcode(HavokClassTypes types, PointerLayout source, PointerLayout target,
                                   byte[] from, byte[] to, Block block, Dictionary<int, int> siteMap,

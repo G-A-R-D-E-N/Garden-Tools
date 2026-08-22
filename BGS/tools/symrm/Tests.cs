@@ -9138,7 +9138,17 @@ public static class Tests
         string outside = Path.Combine(temp, "symrm-outside-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         Directory.CreateDirectory(outside);
-        Directory.CreateSymbolicLink(Path.Combine(folder, "inside"), outside);
+        // Creating a symlink on Windows needs SeCreateSymbolicLinkPrivilege, which
+        // an unelevated service account does not hold unless Developer Mode is on.
+        // Skip rather than take the whole harness down, as PapyrusEventsTests does.
+        try { Directory.CreateSymbolicLink(Path.Combine(folder, "inside"), outside); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            Console.WriteLine("  skip  symlink creation is not permitted on this host");
+            Directory.Delete(folder, true);
+            Directory.Delete(outside, true);
+            return;
+        }
         string archive = OneEntryArchive("inside/escape.hkx",
                                          System.Text.Encoding.UTF8.GetBytes("gotcha"), false,
                                          (uint)"gotcha".Length);

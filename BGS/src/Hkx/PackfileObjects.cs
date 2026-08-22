@@ -372,6 +372,12 @@ public sealed class PackfileObjects
         return array;
     }
 
+    // The size of the data section, and a raw byte from it. StringBlock needs both to tell a
+    // readable NUL-terminated run from one RunToNull merely clamped to the end of the section.
+    public int DataLength => _data.Data.Length;
+
+    public byte ByteAt(int at) => _data.Data[at];
+
     public int RunToNull(int at)
     {
         if (at < 0 || at >= _data.Data.Length) return 0;

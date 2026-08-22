@@ -464,26 +464,37 @@ public class MainWindow : Window
     private static bool Contains(string? text, string needle) =>
         (text ?? "").Contains(needle, StringComparison.OrdinalIgnoreCase);
 
-    private static bool HasDroppedFiles(Avalonia.Input.IDataObject data) =>
-        data.Contains(Avalonia.Input.DataFormats.Files)
-        || data.Contains(Avalonia.Input.DataFormats.FileNames);
+    // Avalonia 12 exposes a single file format, DataFormat.File. The legacy FileNames format
+    // that 11 also carried no longer exists, so the guard and the reader below cannot disagree
+    // about what counts as a file drop -- which is what let a FileNames-only source pass this
+    // check, yield no paths, and drop silently under 11.
+    private static bool HasDroppedFiles(Avalonia.Input.IDataTransfer data) =>
+        Avalonia.Input.DataTransferExtensions.Contains(data, Avalonia.Input.DataFormat.File);
 
     private void BridgeDragOver(object? sender, Avalonia.Input.DragEventArgs e)
     {
-        bool files = HasDroppedFiles(e.Data);
+        bool files = HasDroppedFiles(e.DataTransfer);
         e.DragEffects = files ? Avalonia.Input.DragDropEffects.Copy : Avalonia.Input.DragDropEffects.None;
         e.Handled = true;
-        if (files) ShowDropHint(FirstDroppedFileName(e.Data));
+        if (files) ShowDropHint(FirstDroppedFileName(e.DataTransfer));
         else HideDropHint();
     }
+
+    // Items that carry no local path (a virtual or remote file) are dropped rather than turned
+    // into a bogus path, so a drop of only those still reports zero files to the caller.
+    private static List<string> DroppedPaths(Avalonia.Input.IDataTransfer data) =>
+        (Avalonia.Input.DataTransferExtensions.TryGetFiles(data) ?? Array.Empty<IStorageItem>())
+        .Select(item => item.TryGetLocalPath())
+        .Where(path => !string.IsNullOrEmpty(path))
+        .Select(path => path!)
+        .ToList();
 
     private void BridgeDrop(object? sender, Avalonia.Input.DragEventArgs e)
     {
         HideDropHint();
-        if (!HasDroppedFiles(e.Data)) return;
+        if (!HasDroppedFiles(e.DataTransfer)) return;
 
-        var files = (Avalonia.Input.DataObjectExtensions.GetFileNames(e.Data)
-                     ?? Enumerable.Empty<string>()).ToList();
+        var files = DroppedPaths(e.DataTransfer);
         if (files.Count == 0) return;
         e.Handled = true;
 
@@ -493,11 +504,11 @@ public class MainWindow : Window
                       "path bar or the recent row.", Ux.MetaBrush);
     }
 
-    private static string? FirstDroppedFileName(Avalonia.Input.IDataObject data)
+    private static string? FirstDroppedFileName(Avalonia.Input.IDataTransfer data)
     {
         try
         {
-            return Avalonia.Input.DataObjectExtensions.GetFileNames(data).FirstOrDefault();
+            return DroppedPaths(data).FirstOrDefault();
         }
         catch (Exception)
         {

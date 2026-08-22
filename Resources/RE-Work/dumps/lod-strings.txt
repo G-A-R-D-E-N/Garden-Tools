@@ -1,0 +1,273 @@
+2@iFadeNodeMinNearDistance:LOD
+All LOD loaded in %f seconds.
+All LOD unloaded in %f seconds.
+Analying LOD object usage...
+Are you sure you want to delete LOD Visibility Data for the selected cell?
+Atlas layout failed. This probably means the LOD for this world is using too much texture space (max total size is %u x %u).
+Auto Assign LOD Filename Depth
+Auto-assign LOD Filenames
+.?AVBSBoneLODExtraData@@
+.?AVBSLODMultiIndexTriShape@@
+.?AVBSLODTriShape@@
+.?AVBSMeshLODTriShape@@
+.?AVBSPSysLODModifier@@
+.?AVExtraInteriorLODWorldspace@@
+.?AVhknpLodShape@@
+.?AVLODPrefsDlg@?A0x968a8574@@
+Bad bone LOD (distance %f, name '%s') on skeleton '%s'.
+bAllowMeshLODDebug:General
+bAnimClothLOD:Cloth
+bDisplayCloudLOD:TerrainManager
+Beginning force load of all LOD...
+Beginning unload of all LOD...
+bExternalLODDataFiles:General
+bFadePortals:LOD
+bIsFullLOD
+bLODFade
+bLODFadingOut
+bLODRespectsEnableState
+bMeshLODRenderAllLevels:LOD
+ BoneLOD COUNT
+ BoneLODIndex
+bReflectLODLand:Water
+bReflectLODObjects:Water
+bReflectLODTrees:Water
+BSBoneLOD
+BSBoneLODExtraData
+bShowLODClipVolumes:Visibility
+bShowLODInEditor:TerrainManager
+BSLODMultiIndexTriShape
+BSLODTriShape
+BSMeshCombiner: Trishape added for LOD level > 0 is not a meshLOD trishape.
+BSMeshLODTriShape
+BSPSysLODModifier
+Building LOD for %s...
+Building LOD water for cell %i, %i. Water height is %f. Min land height is %f.
+bUpdateDistantRefDataOnLoad:DistantLOD
+bUseTextureUpgrade:LOD
+Cell %i, %i: %u / %u LOD nodes are visible from this cell.
+Cloth '%s' doesn't allow proper LOD, asset '%s'
+Cloud LOD Ambient
+Cloud LOD Diffuse
+Connecting LOD tiles
+Could not find BSBoneLODExtraData on skeleton '%s'.
+Create an LOD Clip Volume
+Created LOD node list
+currentLod
+Data\LODSettings
+Data\LODSettings\%s.LOD
+Data\Textures\Terrain\%s\Trees\%sTreeLOD.DDS
+=DATAtw=XLODtC=NAMEt
+DirLight (local + distant lod)
+e:\buildagent\work\4a2aa37ca4b2ffa3\scripts\_workspace\code\bsshader\bslodmultiindextrishape.cpp
+e:\buildagent\work\4a2aa37ca4b2ffa3\scripts\_workspace\code\bsshader\bsmeshlodtrishape.cpp
+e:\buildagent\work\4a2aa37ca4b2ffa3\scripts\_workspace\code\bsshader\bspsyslodmodifier.cpp
+e:\buildagent\work\4a2aa37ca4b2ffa3\scripts\_workspace\code\construction set\misc\bgsdistantlodmeshdialog.cpp
+e:\buildagent\work\4a2aa37ca4b2ffa3\scripts\_workspace\code\construction set\misc\bgsworldlodsettingsdialog.cpp
+e:\buildagent\work\4a2aa37ca4b2ffa3\scripts\_workspace\code\gamebryogen9\corelibs\nimain\bslodtrishape.cpp
+Envmap LOD Fade
+Envmap min LOD
+Envmap Min LOD
+ExplodableCar_DO
+Explode
+ExplodeAndDismember
+Explode only
+Explode Part
+Exporting combined LOD takes a few minutes and may require as much as 2gb of available memory and 5gb of hard disk space. Are you sure?
+Failed to reuse existing ID remap from (%08X) to (%08X) for form '%s' because ID is already in use. Script, NavMesh, or LOD data for this form may become disconnected.
+fBoneLODDistanceScale:Animation
+FbxLODGroup
+fDecalLOD0:Display
+fDistanceMultiplier:LOD
+fExplodeLimbRemovalDelay
+fExplodeLimbRemovalDelayVATS
+fExplosionKnockStateExplodeDownTime
+fFadeInThreshold:LOD
+fFadeInTime:LOD
+fFadeOutThreshold:LOD
+fFadeOutTime:LOD
+fInteriorMeshLODLevel1FadeDist:Display
+fInteriorMeshLODLevel2FadeDist:Display
+fLODBoundRadiusMult:LOD
+fLODDimmer
+fLodDistance:LOD
+fLODFadeOutMultActors:LOD
+fLODFadeOutMultItems:LOD
+fLODFadeOutMultObjects:LOD
+fLODFadeOutMultSkyCell:LOD
+fLODFadeOutPercent:LOD
+fLODLandSpecPower:TerrainManager
+fLODLandSpecScale:TerrainManager
+fLODMultTrees:LOD
+fMeshLODFadeBoundDefault:Display
+fMeshLODFadePercentDefault:Display
+fMeshLODFadeScalar:Display
+fMeshLODFadeTime:Display
+fMeshLODLevel1FadeDist:Display
+fMeshLODLevel1FadeTreeDistance:Display
+fMeshLODLevel2FadeDist:Display
+fMeshLODLevel2FadeTreeDistance:Display
+fNoLODFarDistanceMax:Display
+fNoLODFarDistanceMin:Display
+fNoLODFarDistancePct:Display
+fPortalFadeMultiplier:LOD
+fPrimitiveAlphaLODClipVolume:Graphics
+fSubmergedLODDistance
+fTalkingDistance:LOD
+FullOdd
+Generating LOD tiles using %d threads
+!hknpLodShape
+hknpLodShape
+!hknpLodShape::LevelOfDetailInfo
+hknpLodShapeLevelOfDetailInfo
+iBoneLODDistMult
+iCombatExplodePartChance
+iEnvmapMinLOD
+iMessCrippledLimbExplodeBonus
+iMessIntactLimbExplodeBonus
+iMessTargetedLimbExplodeBonus
+iMessTorsoExplodeChance
+Importing combined LOD takes a few minutes and may require as much as 2gb of available memory. You also need to have writable LOD textures and combined textures. Are you sure?
+Invalid Cell X in AddLODLandRef
+Invalid Cell Y in AddLODLandRef
+Invalid LOD multiplier
+Invalid LOD Respects Enable State flag found on ref '%s' (%08X).
+Invalid Toggleable LOD Refs
+I see you are building LOD for SanctuaryHillsWorld. Do you want to use Commonwealth extents?
+Is Full LOD
+Keyword indicating explodable cars.
+LandAndObjectLOD
+LAND_LOD_BLEND
+LandLODParamsPS
+LandLODParamsVS
+loData
+LOD blend texture
+LODBox
+LOD build error: Geometry '%s' does not have a lighting shader property.
+LODClipVolume
+LOD Clip volume has a non-zero rotation: %s
+LOD detail normal map missing
+LOD diffuse texture and normal texture on geometry '%s' are not the same size (but should be). This could also mean the normal texture is missing.
+LOD diffuse texture and specular texture on geometry '%s' are not the same size (but should be). This could also mean the specular texture is missing.
+LOD diffuse texture '%s' missing
+LODEmitScale
+_lod_flat.NIF
+LodGroup
+LOD: group instance over-flow.
+LOD: Invalid LOD tree type %u found. TreeTypes file may be out of date or corrupt.
+LOD Land
+LODLand
+LODLand 
+LODLandNoise
+LODLandNoise 
+LODLANDNOISE
+lod landscape
+LOD_LANDSCAPE
+LODLANDSCAPE
+LOD Landscape Material
+LOD Land Static '%s' (%08X) has 0 bound size. References to this object may not correctly be added to all cells they overlap.
+LOD Level 0 size
+LOD Level 1 size
+LOD Level 2 size
+LODLinkDO
+LOD Mesh '%s' could not be found.
+LOD Mesh '%s' for object %08X '%s' could not be found.
+LOD minimum level > tree block level
+LOD Mode
+lodNames
+_lod.NIF
+LOD noise texture missing
+LOD normal texture '%s' missing
+LODObj
+LOD_OBJECT
+LOD_OBJECT_INSTANCED
+lod objects
+LOD Objects
+LODOBJECTS
+LODObjectsHD 
+LODOBJECTSHD
+LODObjHD
+LOD Respects Enable State
+LODRoot
+LODSettings\%s.*
+LODSettings\%s.LOD
+LODSizeScale
+LOD specular texture '%s' missing
+LOD System
+LODTexParams
+LOD Tree
+LOD Trees
+LOD tree texture atlas for current worldspace not found.
+LOD: Tree texture atlas for world '%s' not found!
+   - LOD %u: %s (%u vertices)
+LODWater
+LOD Water Type (%08X) '%s', 
+Map LOD chunk is being force loaded.  May cause hitch.
+Map LOD object block is being force loaded.  May cause hitch.
+Max LOD levels does not match saved data
+Mesh LOD Level
+Min LOD
+Mismatching texture counts for LOD objects (%Iu diffuse textures, %Iu normal textures, %Iu specular textures). This will cause UV mapping issues with the atlas.
+Mod Mine Explode Chance
+More than 255 LOD tree types reported but only 255 are supported.  Some LOD trees may be displayed incorrectly.
+MTLandLODBlend
+Multiref LOD cannot have a gap between levels 1 and 3. Must assign a mesh to level 2 before continuing.
+Multiref LOD Object
+NeitherExplodeNorDismember
+No dismember/explode
+no lod land blend
+numBonesPerLod
+numTracksInLod
+Object LOD only supported for statics.  %s (%08X) is not a static.
+Only a single LOD clip volume can be placed in a cell.
+Pants Exploded
+  Processing LOD chunk %i: cell x=%i, cell y=%i
+     Rejected because this ref is linked to a multiref LOD object at this level (ref %x to '%s').
+Select LOD mesh.
+Select multiple static objects to batch-apply LOD meshes.
+Select multiple unique static objects to batch-apply LOD meshes.
+Set Can Explode Pants
+SetLODObjectDistance
+SetMeshLODLevel
+Set mipmap LOD bias values for tree billboards.
+ShowMeshLOD
+Shows/Hides tint for mesh LOD to see current levels.
+%s_LOD
+sMiscStatPantsExploded
+Snow LOD Material
+Snow LOD Material (HD)
+Specify LOD meshes
+Specular LOD Fade
+Static '%s' (%08X) has no files for any LOD level.
+Sun Directional Light (Cloud LOD)
+%sVertex count: The LOD object named '%s' is %stoo complex for level %u (%u vertices; limit is %u).  Simplify this object if possible, especially if it is used multiple times.
+TESObjectCELL::LoadedVisibleDistantRef should only be called on refs with LOD
+Texture::SetLODLevel out of bounds
+TEXTURES\, MESHES\, FACEGEN\, INTERFACE\ , MUSIC\, SOUND\, SCRIPTS\, MAXHEIGHTS\, VIS\, GRASS\, STRINGS\, MATERIALS\, LODSETTINGS\, MISC\, SHADERSFX\, PROGRAMS\
+Texture '%s' used by reference '%s' (%x) is not in the LOD folder. All LOD textures must be in textures/LOD.
+The following files are missing and need to be present to build LOD:
+The following toggleable LOD refs are not markers; this is unsupported and needs to be fixed.
+There are a lot of toggleable LOD refs (refs with 'LOD respects enable state' checked) in the game (%u, recommended maximum = %u). Make sure to only check this flag on an enable parent of the cluster of objects, not every single one.
+ToggleLODLand
+Too Many Toggleable LOD Refs
+Total refs with LOD: %u
+Total verts of LOD:
+Tree Block (%i,%i):%u has %u LOD trees in it.
+True if this reference has full LOD
+True if this reference's LOD respects the enable state
+uCityLODBudgetAdjustment:BudgetCaps
+uDistantObjectExtraHideDelayMS:LOD
+uLockedObjectMapLOD:MapMenu
+uLockedTerrainLOD:MapMenu
+%u LOD object triangles.
+Unable to find lod water type (%08X) on owner worldspace (%08X).
+Unable to find lod water type (%08X) on owner worldspace "%s".
+Unable to find LOD worldspace %08X. Worldspace data will be removed.
+Unable to write LOD settings file.
+%u total LOD object vertices.
+uWastelandLODBudgetAdjustment:BudgetCaps
+WaterLOD
+We should only have one state if we don't support LOD.
+Whether a weapon may dismember or explode a limb.
+Wrapping: A vertex in geom '%s' has a texture coordinate well outside of the (0,1) range.  Wrapping is NOT supported in LOD.
+=XRGDtC=XLOD
