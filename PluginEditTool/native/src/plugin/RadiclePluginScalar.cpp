@@ -23,6 +23,10 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     const nlohmann::json& arguments) {
     const auto fieldPath = stringArgument(arguments, 2);
+    if (fieldPath.starts_with("ARMO\\") || fieldPath.starts_with("ARMA\\")) {
+        return setArmorField(arguments);
+    }
+
     const auto field = fo4::schema::scalar_field_descriptor(fieldPath);
     if (!field.has_value()) {
         return setField(arguments);
