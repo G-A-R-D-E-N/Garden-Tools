@@ -1862,6 +1862,243 @@ def fmt_result(d, verdict, note):
         verdict, d["key"], d["section"], d.get("letter", ""), note)
 
 
+# --------------------------------------------------------------------------
+# OBTE/OBTS object-template block (doc 26 / xEdit wbDefinitionsFO4 OBTSReq)
+#
+# Record layout: OBTE (u32 combination count) followed by N combinations, each
+# ``[OBTF (empty, optional)] FULL (4B localized ID) OBTS``, terminated by
+# STOP. OBTE's value equals the number of OBTS bodies that follow.
+#
+# OBTS body (the BGSMod::Template block, bgsmod_template.cpp):
+#
+#   offset  size  field
+#   0x00    4     u32 Include Count
+#   0x04    4     u32 Property Count
+#   0x08    1     u8  Level Min
+#   0x09    1     u8  (unused)
+#   0x0A    1     u8  Level Max
+#   0x0B    1     u8  (unused)
+#   0x0C    2     s16 Addon Index
+#   0x0E    1     u8  Default
+#   0x0F    1     u8  Keyword Count        (u8, NOT u32 -- verified 665/665)
+#   0x10   4*K   u32 keyword formIDs       (K == Keyword Count)
+#   0x10+4K     1  u8  Min Level For Ranks
+#   0x11+4K     1  u8  Alt Levels Per Tier
+#   0x12+4K     7*I include rows: { u32 OMOD formID; u8 AttachPoint;
+#                                   u8 Optional; u8 DontUseAll }   (I == Include Count)
+#   ...         24*P property rows: { u8 ValueType; u8[3] unused;
+#                                     u8 FunctionType; u8[3] unused;
+#                                     u16 Property; u16 unused;
+#                                     u32 Value1; u32 Value2; f32 Step }
+#                                   (P == Property Count)
+#
+# The 7-byte include row and 24-byte property row match xEdit exactly; the
+# keyword-count width is the one divergence from xEdit's ``-4`` array marker
+# (real files use a u8).
+# --------------------------------------------------------------------------
+
+_OBTS_PROPERTY_VALUE_TYPES = {
+    0: "Int", 1: "Float", 2: "Bool", 3: "Unknown 3",
+    4: "FormID,Int", 5: "Enum", 6: "FormID,Float",
+}
+
+
+def parse_obts_body(payload):
+    """Parse one OBTS payload; return (ok, info-or-error-dict)."""
+    if len(payload) < 16:
+        return False, {"error": "body shorter than 16-byte header"}
+    inc, prop = struct.unpack_from("<II", payload, 0)
+    level_min, level_max = payload[8], payload[10]
+    addon = struct.unpack_from("<h", payload, 12)[0]
+    default = payload[14]
+    kw_count = payload[15]
+    pos = 16 + 4 * kw_count
+    if pos + 2 > len(payload):
+        return False, {"error": "keyword table overruns body",
+                       "kw_count": kw_count, "body_len": len(payload)}
+    keywords = [struct.unpack_from("<I", payload, 16 + 4 * i)[0]
+                for i in range(kw_count)]
+    min_rank = payload[pos]
+    alt_levels = payload[pos + 1]
+    pos += 2
+    includes = []
+    for _ in range(inc):
+        if pos + 7 > len(payload):
+            return False, {"error": "include row overruns body",
+                           "include": len(includes), "inc": inc,
+                           "body_len": len(payload), "pos": pos}
+        fid, attach, optional, dont_use_all = struct.unpack_from(
+            "<IBBB", payload, pos)
+        includes.append({"formid": fid, "attach_point": attach,
+                         "optional": optional, "dont_use_all": dont_use_all})
+        pos += 7
+    props = []
+    for _ in range(prop):
+        if pos + 24 > len(payload):
+            return False, {"error": "property row overruns body",
+                           "property": len(props), "prop": prop,
+                           "body_len": len(payload), "pos": pos}
+        vt, ft = payload[pos], payload[pos + 4]
+        prop_id = struct.unpack_from("<H", payload, pos + 8)[0]
+        v1, v2 = struct.unpack_from("<II", payload, pos + 12)
+        step = struct.unpack_from("<f", payload, pos + 20)[0]
+        props.append({"value_type": vt, "function_type": ft,
+                      "property_id": prop_id, "value1": v1,
+                      "value2": v2, "step": step})
+        pos += 24
+    if pos != len(payload):
+        return False, {"error": "trailing bytes after last property",
+                       "pos": pos, "body_len": len(payload)}
+    return True, {"include_count": inc, "property_count": prop,
+                  "level_min": level_min, "level_max": level_max,
+                  "addon_index": addon, "default": default,
+                  "keyword_count": kw_count, "keywords": keywords,
+                  "min_rank": min_rank, "alt_levels": alt_levels,
+                  "includes": includes, "properties": props}
+
+
+_BLOCK_SUBRECORDS = (b"OBTE", b"OBTF", b"FULL", b"OBTS", b"STOP")
+
+
+def parse_obts_block(raw):
+    """Parse a serialized template block (subrecord stream) from bytes.
+
+    Returns (ok, info-or-error). The block must start with OBTE, end with
+    STOP, and contain exactly OBTE.value OBTS bodies, each preceded by an
+    optional OBTF and a 4-byte FULL.
+    """
+    subs = []
+    pos = 0
+    while pos + 6 <= len(raw):
+        tag = raw[pos:pos + 4]
+        size = struct.unpack_from("<H", raw, pos + 4)[0]
+        if pos + 6 + size > len(raw):
+            return False, {"error": "subrecord overruns stream",
+                           "tag": tag, "pos": pos}
+        subs.append((tag, raw[pos + 6:pos + 6 + size]))
+        pos += 6 + size
+    if pos != len(raw):
+        return False, {"error": "trailing bytes after last subrecord"}
+    if not subs or subs[0][0] != b"OBTE":
+        return False, {"error": "block does not start with OBTE"}
+    if subs[-1][0] != b"STOP":
+        return False, {"error": "block does not end with STOP"}
+    if len(subs[0][1]) != 4:
+        return False, {"error": "OBTE payload not 4 bytes"}
+    expected = struct.unpack_from("<I", subs[0][1], 0)[0]
+    combos = []
+    i = 1
+    while i < len(subs) - 1:
+        # Each combination is [OBTF (empty, optional)] [FULL (4B, optional)]
+        # OBTS. The CK reader (FUN_140350930) allocates `expected`
+        # BGSMod::Template::Item objects and lets FUN_14034f9b0 consume the
+        # marker subrecords, so records like ARMO omit FULL entirely.
+        tag, payload = subs[i]
+        full_id = None
+        if tag == b"OBTF":
+            if payload:
+                return False, {"error": "OBTF must be empty", "index": i}
+            i += 1
+            tag, payload = subs[i]
+        if tag == b"FULL":
+            if len(payload) != 4:
+                return False, {"error": "FULL not a 4-byte string ID",
+                               "index": i}
+            full_id = struct.unpack_from("<I", payload, 0)[0]
+            i += 1
+            tag, payload = subs[i]
+        if tag != b"OBTS":
+            return False, {"error": "expected OBTS in combination",
+                           "tag": tag, "index": i}
+        ok, body = parse_obts_body(payload)
+        if not ok:
+            body["index"] = i
+            return False, body
+        combos.append({"full_id": full_id, "body": body})
+        i += 1
+    if len(combos) != expected:
+        return False, {"error": "OBTE count != OBTS combinations",
+                       "obte": expected, "combos": len(combos)}
+    return True, {"obte": expected, "combos": combos}
+
+
+def check_obts_files(paths):
+    """Validate OBTE/OBTS template blocks (files or directories).
+
+    Each input must be a serialized subrecord stream starting with OBTE and
+    ending with STOP (the format of tools/samples/obts/payloads/*.bin).
+    Returns (ok, lines).
+    """
+    files = []
+    for p in paths:
+        if os.path.isdir(p):
+            files.extend(sorted(os.path.join(p, f) for f in os.listdir(p)
+                                if f.endswith(".bin")))
+        else:
+            files.append(p)
+    if not files:
+        return False, ["ERROR: no .bin files found under the given paths"]
+    ok = True
+    lines = []
+    n_blocks = n_bodies = n_includes = n_props = 0
+    for f in files:
+        try:
+            raw = open(f, "rb").read()
+        except OSError as e:
+            ok = False
+            lines.append("FAIL %s: %s" % (f, e))
+            continue
+        b_ok, info = parse_obts_block(raw)
+        if not b_ok:
+            ok = False
+            lines.append("FAIL %s: %s" % (f, info))
+            continue
+        n_blocks += 1
+        n_bodies += info["obte"]
+        body_lines = []
+        for j, c in enumerate(info["combos"]):
+            b = c["body"]
+            n_includes += b["include_count"]
+            n_props += b["property_count"]
+            full_s = ("0x%08X" % c["full_id"]) if c["full_id"] is not None \
+                else "(none)"
+            body_lines.append(
+                "  combo %d: FULL=%s inc=%d prop=%d kw=%d addon=%d "
+                "lvl=%d..%d default=%d minRank=%d alt=%d" % (
+                    j, full_s, b["include_count"],
+                    b["property_count"], b["keyword_count"],
+                    b["addon_index"], b["level_min"], b["level_max"],
+                    b["default"], b["min_rank"], b["alt_levels"]))
+            if b["keywords"]:
+                body_lines.append(
+                    "    keywords: " + ", ".join(
+                        "0x%08X" % k for k in b["keywords"]))
+            for inc_row in b["includes"]:
+                body_lines.append(
+                    "    include OMOD 0x%08X attach=%d optional=%d "
+                    "dontUseAll=%d" % (inc_row["formid"],
+                                       inc_row["attach_point"],
+                                       inc_row["optional"],
+                                       inc_row["dont_use_all"]))
+            for pr in b["properties"]:
+                body_lines.append(
+                    "    property vt=%s(%d) ft=%d id=%d v1=0x%08X "
+                    "v2=0x%08X step=%g" % (
+                        _OBTS_PROPERTY_VALUE_TYPES.get(
+                            pr["value_type"], "?"), pr["value_type"],
+                        pr["function_type"], pr["property_id"],
+                        pr["value1"], pr["value2"], pr["step"]))
+        lines.append("OK %s: OBTE=%d combos=%d" % (os.path.basename(f),
+                                                    info["obte"],
+                                                    len(info["combos"])))
+        lines.extend(body_lines)
+    lines.append("SUMMARY: %d block(s), %d OBTS body(ies), %d include(s), "
+                 "%d propert(ies)" % (n_blocks, n_bodies, n_includes,
+                                       n_props))
+    lines.append("VERDICT: %s" % ("PASS" if ok else "FAIL"))
+    return ok, lines
+
+
 def main(argv):
     ap = argparse.ArgumentParser(
         description="CreationKit.ini compatibility oracle (reader FUN_1425c7f90)")
@@ -1889,6 +2126,14 @@ def main(argv):
                          "When --command is also given, the roots are taken from the command; "
                          "otherwise the positional ROOT directories are used. Fixtures: "
                          "tools/samples/compile-text/")
+    ap.add_argument("--obts", nargs="*", default=None, metavar="PATH",
+                    help="validate OBTE/OBTS object-template blocks against the "
+                         "doc-26 / xEdit layout: OBTE count == OBTS combinations, "
+                         "FULL before each OBTS, STOP terminator, and per-body "
+                         "header (u32 include/property counts, u8 keyword count, "
+                         "7-byte OMOD includes, 24-byte properties). Inputs are "
+                         "serialized subrecord streams or directories of .bin "
+                         "files: tools/samples/obts/payloads/")
     ap.add_argument("--strings", nargs="*", default=None, metavar="PATH",
                     help="validate compiled localized-string files (.STRINGS/.DLSTRINGS/"
                          ".ILSTRINGS) or directories of them against the byte format from "
@@ -1941,6 +2186,11 @@ def main(argv):
     if args.json and args.composition_in is not None:
         ap.error("--json cannot be combined with --composition-in (the drift report "
                  "replaces the JSON payload on stdout)")
+
+    if args.obts is not None:
+        ok, lines = check_obts_files(args.obts)
+        print("\n".join(lines))
+        return 0 if ok else 1
 
     if args.strings is not None and args.compile_text is None:
         # Standalone --strings validation. When --compile-text is also given

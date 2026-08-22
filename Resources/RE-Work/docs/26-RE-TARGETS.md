@@ -13,31 +13,56 @@ pair**, and the old understanding ("OBTE = template formID") was wrong:
 
 | subrecord | size | content |
 |---|---|---|
-| `OBTE` | 4 B | u32 `0x00000001` — the **template-array present flag** (not a formID) |
+| `OBTE` | 4 B | u32 — the **combination count** (equals the number of `OBTS` bodies that follow; 0x00000001 on simple records) |
 | `OBTS` | variable | the **BGSMod::Template block body** (`bgsmod_template.cpp`, FUN_14034f010 read / FUN_140359f50 write) |
 
-**OBTS body layout (validated 547/547 real payloads, 2,367/2,367 includes):**
+**OBTS body layout (validated 665/665 real payloads; every include formID
+resolves to an OMOD record):**
 
 ```text
 offset  size  field
 ------  ----  ------------------------------------------------------
-0x00    1     u8  numIncludes     (count of 7-byte include rows)
-0x01    1     u8  numProperties   (count of 7-byte property rows)
-0x02    16    u8[16] ?            (reserved / alignment; present on disk)
-0x12    7*N   include rows        { u32 formID; u8 flags; u16 ? }
-       7*M   property rows        { u32 formID; u8 flags; u16 ? }
+0x00    4     u32 Include Count     (count of 7-byte include rows)
+0x04    4     u32 Property Count    (count of 24-byte property rows)
+0x08    1     u8  Level Min
+0x09    1     u8  (unused)
+0x0A    1     u8  Level Max
+0x0B    1     u8  (unused)
+0x0C    2     s16 Addon Index
+0x0E    1     u8  Default
+0x0F    1     u8  Keyword Count     (u8, NOT u32 -- verified on real files)
+0x10   4*K   u32 keyword formIDs    (K == Keyword Count)
+0x10+4K     1  u8  Min Level For Ranks
+0x11+4K     1  u8  Alt Levels Per Tier
+0x12+4K     7*I include rows        { u32 OMOD formID; u8 AttachPoint;
+                                     u8 Optional; u8 DontUseAll }
+       24*P property rows           { u8 ValueType; u8[3] unused;
+                                     u8 FunctionType; u8[3] unused;
+                                     u16 Property; u16 unused;
+                                     u32 Value1; u32 Value2; f32 Step }
 ```
 
+- **The template block grammar:** `OBTE` (u32 combination count), then N
+  combinations each `[OBTF (empty, optional)] [FULL (4B localized ID,
+  optional)] OBTS`, then `STOP`. **OBTE's value equals the number of OBTS
+  bodies** — verified on every record (0 mismatches across 153 records).
+  NPC_/WEAP emit `OBTF FULL OBTS`; **ARMO emits `OBTS` with no FULL** — the
+  CK reader (FUN_140350930) allocates N `BGSMod::Template::Item` objects and
+  lets FUN_14034f9b0 consume the markers, so markers are per-record-type
+  optional.
 - **Every include formID resolves to an OMOD record** (2,367/2,367) — the
   template includes are Object Modifier records, not actor bases.
-- xEdit's FO4 definitions agree: OBTS → `DefTemplate` struct with
-  `wbFormIDCk` includes restricted to OMOD.
-- The modern CK reader (FUN_14034f010) parses a **10-byte header + 4-byte
-  entries**; the shipped 2015 master uses the **older 18-byte-header +
-  7-byte-entry layout** above. Both exist in the binary; the file format is
-  the 7-byte-entry one.
-- OBTE appears only on NPC_ records that actually use templates (783 NPC_
-  sampled, ~547 carry OBTE/OBTS).
+- xEdit's FO4 definitions agree on the field set and both row shapes; the
+  **one divergence is the keyword count width** — xEdit declares it as a
+  `-4` (u32) array marker, but real files use a **u8 at body+0x0F**. The
+  7-byte include and 24-byte property rows match exactly.
+- **Correction to the earlier draft:** the header is 16 bytes + keywords,
+  not a fixed 18-byte header with counts at 0x00/0x01. The 18-byte bodies
+  seen in the master are keyword-free 16-byte headers + 2 trailer bytes
+  (min-rank/alt-levels), not a different header shape.
+- OBTE/OBTS appear on NPC_, ARMO and WEAP records that actually use
+  templates (153 records in Fallout4.esm: 60 NPC_, 63 ARMO, 30 WEAP,
+  665 OBTS bodies total).
 
 **Note on "blocks ARMO FULL":** the user's report that OBTE blocks reading
 ARMO FULL is consistent with a template-boundary bug in a parser that stops
