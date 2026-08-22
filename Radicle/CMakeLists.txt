@@ -92,6 +92,7 @@ add_library(fo4
   src/plugin/writer.cpp
   src/schema/form_links.cpp
   src/schema/formlink_lists.cpp
+  src/schema/nested_formlink_lists.cpp
   src/schema/preflight.cpp
   src/schema/scalar.cpp
   src/schema/vmad.cpp
@@ -204,6 +205,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
     tests/test_formlink_lists.cpp
+    tests/test_nested_formlink_lists.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
