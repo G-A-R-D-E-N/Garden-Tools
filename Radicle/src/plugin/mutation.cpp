@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <set>
 #include <string_view>
 #include <utility>
@@ -45,13 +46,7 @@ bool has_master(const Plugin& plugin, const PluginKey& owner) {
   return false;
 }
 
-GroupHeader source_top_group_header(const Plugin& source, Signature signature) {
-  for (const auto& group : source.groups) {
-    if (group.header.group_type == 0 && group.header.top_label() == signature) {
-      return group.header;
-    }
-  }
-
+GroupHeader new_top_group_header(Signature signature) {
   GroupHeader header;
   const auto label = signature.bytes();
   for (std::size_t i = 0; i < label.size(); ++i) {
@@ -59,6 +54,15 @@ GroupHeader source_top_group_header(const Plugin& source, Signature signature) {
   }
   header.group_type = 0;
   return header;
+}
+
+GroupHeader source_top_group_header(const Plugin& source, Signature signature) {
+  for (const auto& group : source.groups) {
+    if (group.header.group_type == 0 && group.header.top_label() == signature) {
+      return group.header;
+    }
+  }
+  return new_top_group_header(signature);
 }
 
 void clear_group_originals(Plugin& plugin) {
@@ -76,7 +80,121 @@ Record* find_mutable_record(Plugin& plugin, const FormKey& record_key) {
   return target;
 }
 
+void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
+  Subrecord* hedr = nullptr;
+  for (auto& subrecord : plugin.tes4.subrecords) {
+    if (subrecord.signature != sig_hedr) continue;
+    if (hedr != nullptr) {
+      throw FormIdError("TES4 contains duplicate HEDR subrecords");
+    }
+    hedr = &subrecord;
+  }
+  if (hedr == nullptr || hedr->data.size() != 12) {
+    throw FormIdError("TES4 HEDR must be exactly 12 bytes to update nextFormID");
+  }
+
+  std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
+  plugin.header.next_form_id = next_form_id;
+  plugin.tes4.original_bytes.clear();
+  plugin.tes4.decompressed_payload.clear();
+  plugin.tes4.header.data_size = 0;
+  plugin.tes4.uncompressed_size = 0;
+}
+
+Group* find_or_create_top_group(Plugin& plugin, Signature signature) {
+  for (auto& group : plugin.groups) {
+    if (group.header.group_type == 0 && group.header.top_label() == signature) {
+      return &group;
+    }
+  }
+
+  Group group;
+  group.header = new_top_group_header(signature);
+  plugin.groups.push_back(std::move(group));
+  return &plugin.groups.back();
+}
+
+bool erase_record(Group& group, const FormKey& record_key) {
+  for (auto it = group.children.begin(); it != group.children.end(); ++it) {
+    if (auto* record = std::get_if<Record>(&*it)) {
+      if (record->form_key != record_key) continue;
+      group.children.erase(it);
+      return true;
+    }
+    if (erase_record(std::get<Group>(*it), record_key)) return true;
+  }
+  return false;
+}
+
 }  // namespace
+
+FormKey create_local_record(Plugin& plugin, Signature signature) {
+  if (signature.packed() == 0 || signature == sig_tes4 || signature == sig_grup) {
+    throw FormIdError("invalid major-record signature for local record creation");
+  }
+  if (plugin.header.tes4_flags.is_small_file()) {
+    throw FormIdError(
+        "light-plugin record creation is disabled until CheckValidIDForSmallFile is proven");
+  }
+  if (plugin.key.empty()) {
+    throw FormIdError("plugin has no identity for local record creation");
+  }
+
+  auto next = plugin;
+  assign_record_form_keys(next);
+
+  auto candidate = next.header.next_form_id;
+  if (candidate == 0 || candidate > k_full_local_mask) {
+    throw FormIdError("HEDR nextFormID is outside the full-plugin local FormID range");
+  }
+
+  while (candidate <= k_full_local_mask) {
+    const FormKey probe{next.key, LocalFormId{candidate}};
+    if (find_record(next, probe) == nullptr) break;
+    ++candidate;
+  }
+  if (candidate > k_full_local_mask) {
+    throw FormIdError("no local FormID remains at or above HEDR nextFormID");
+  }
+
+  const FormKey key{next.key, LocalFormId{candidate}};
+  Record record;
+  record.header.signature = signature;
+  record.header.form_id = encode_plugin_form_id(key, plugin_form_id_context(next));
+  record.header.form_version = next.header.form_version;
+  record.form_key = key;
+
+  auto* group = find_or_create_top_group(next, signature);
+  group->children.emplace_back(std::move(record));
+
+  set_hedr_next_form_id(next, candidate + 1u);
+  next.original_bytes.clear();
+  clear_group_originals(next);
+  plugin = std::move(next);
+  return key;
+}
+
+RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key) {
+  if (record_key.owner() != plugin.key) return RecordDeleteStatus::not_local;
+
+  auto next = plugin;
+  assign_record_form_keys(next);
+  if (find_record(next, record_key) == nullptr) return RecordDeleteStatus::record_missing;
+
+  bool erased = false;
+  for (auto& group : next.groups) {
+    if (erase_record(group, record_key)) {
+      erased = true;
+      break;
+    }
+  }
+  if (!erased) return RecordDeleteStatus::record_missing;
+
+  next.original_bytes.clear();
+  clear_group_originals(next);
+  plugin = std::move(next);
+  return RecordDeleteStatus::deleted;
+}
 
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,
