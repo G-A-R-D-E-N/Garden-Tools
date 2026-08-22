@@ -473,13 +473,31 @@ public class MainWindow : Window
         else HideDropHint();
     }
 
+    // HasDroppedFiles accepts either the Files format or the legacy FileNames one, so both
+    // have to be read back here. GetFiles only understands Files: a source publishing only
+    // FileNames would otherwise pass the guard, yield nothing, and drop silently.
+    private static List<string> DroppedPaths(Avalonia.Input.IDataObject data)
+    {
+        var paths = (Avalonia.Input.DataObjectExtensions.GetFiles(data) ?? Enumerable.Empty<IStorageItem>())
+                    .Select(item => item.TryGetLocalPath())
+                    .Where(path => !string.IsNullOrEmpty(path))
+                    .Select(path => path!)
+                    .ToList();
+        if (paths.Count > 0) return paths;
+
+#pragma warning disable CS0618 // the legacy format is exactly what this fallback exists for
+        return (Avalonia.Input.DataObjectExtensions.GetFileNames(data) ?? Enumerable.Empty<string>())
+               .Where(path => !string.IsNullOrEmpty(path))
+               .ToList();
+#pragma warning restore CS0618
+    }
+
     private void BridgeDrop(object? sender, Avalonia.Input.DragEventArgs e)
     {
         HideDropHint();
         if (!HasDroppedFiles(e.Data)) return;
 
-        var files = (Avalonia.Input.DataObjectExtensions.GetFileNames(e.Data)
-                     ?? Enumerable.Empty<string>()).ToList();
+        var files = DroppedPaths(e.Data);
         if (files.Count == 0) return;
         e.Handled = true;
 
@@ -493,7 +511,7 @@ public class MainWindow : Window
     {
         try
         {
-            return Avalonia.Input.DataObjectExtensions.GetFileNames(data).FirstOrDefault();
+            return DroppedPaths(data).FirstOrDefault();
         }
         catch (Exception)
         {
