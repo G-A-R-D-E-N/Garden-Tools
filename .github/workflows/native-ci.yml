@@ -5,12 +5,20 @@ name: native-ci
 # the Free Actions minutes allowance (GHRUNNER#24), and hosted jobs fail silently
 # once exhausted. Self-hosted minutes are free.
 
+# BGS/ is a self-contained C#/.NET tool with no bearing on the native C++ jobs
+# below, so changes confined to it skip this workflow. paths-ignore (not an
+# explicit paths allowlist) is deliberate: a commit touching BGS/ *and* anything
+# else still runs the full build.
 on:
   push:
     branches:
       - main
       - "work/**"
+    paths-ignore:
+      - "BGS/**"
   pull_request:
+    paths-ignore:
+      - "BGS/**"
   workflow_dispatch:
 
 concurrency:
