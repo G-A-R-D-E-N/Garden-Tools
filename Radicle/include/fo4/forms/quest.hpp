@@ -42,12 +42,29 @@ struct QuestExternalAliasReferenceFill {
   std::int32_t alias{0};
 };
 
+struct QuestSpecificLocationFill {
+  FormKey location;
+};
+
+struct QuestReferenceAliasLocationFill {
+  std::int32_t alias{0};
+  std::optional<FormKey> keyword;
+};
+
+struct QuestExternalAliasLocationFill {
+  std::optional<FormKey> quest;
+  std::optional<std::int32_t> alias;
+};
+
 using QuestAliasFill = std::variant<
     std::monostate,
     QuestSpecificReferenceFill,
     QuestUniqueActorFill,
     QuestLocationAliasReferenceFill,
-    QuestExternalAliasReferenceFill>;
+    QuestExternalAliasReferenceFill,
+    QuestSpecificLocationFill,
+    QuestReferenceAliasLocationFill,
+    QuestExternalAliasLocationFill>;
 
 // One alias is kept as an ordered subrecord sequence because reference and
 // location aliases are repeatable tagged unions with conditions/arrays inside
