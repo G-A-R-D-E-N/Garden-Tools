@@ -9,6 +9,7 @@
 #include <cstring>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -546,21 +547,17 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
   }
 
   const auto context = plugin_form_id_context(plugin);
-  for (std::size_t index = *anam_index + 1; index < record->subrecords.size();) {
+  std::set<std::uint32_t> alias_ids;
+  std::size_t index = *anam_index + 1;
+  while (index < record->subrecords.size() &&
+         is_alias_start(record->subrecords[index].signature)) {
     const auto& start = record->subrecords[index];
-    if (!is_alias_start(start.signature)) {
-      if (start.signature == k_aled || start.signature == k_almi) {
-        throw QuestError(
-            "QUST contains an orphan " + start.signature.to_string() +
-            " outside an alias container");
-      }
-      ++index;
-      continue;
-    }
-
     QuestAlias alias;
     alias.kind = alias_kind(start.signature);
     alias.id = alias_id(start, alias_label(alias.kind));
+    if (!alias_ids.insert(alias.id).second) {
+      throw QuestError("QUST contains duplicate Alias ID " + std::to_string(alias.id));
+    }
 
     if (alias.kind == QuestAliasKind::collection) {
       alias.subrecords.push_back(start);
@@ -599,6 +596,16 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
     }
     decode_alias_semantics(alias, &context);
     result.aliases.push_back(std::move(alias));
+  }
+
+  // xEdit places optional NNAM/GNAM/SNAM after the single contiguous Alias
+  // array. Once a non-alias tail member is reached, a later alias marker is a
+  // malformed second array and must not be silently accepted.
+  for (; index < record->subrecords.size(); ++index) {
+    const auto signature = record->subrecords[index].signature;
+    if (is_alias_start(signature) || signature == k_aled || signature == k_almi) {
+      throw QuestError("QUST alias member appears after the Alias array tail boundary");
+    }
   }
 
   return result;
