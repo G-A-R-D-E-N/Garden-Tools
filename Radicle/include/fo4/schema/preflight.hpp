@@ -27,4 +27,12 @@ struct PreflightIssue {
 std::vector<PreflightIssue> preflight_record(const Record& record);
 std::vector<PreflightIssue> preflight_plugin(const Plugin& plugin);
 
+// Validates a newly authored record against the generated creation contract:
+// supported containment, required/cardinality rules, and relative ordering of
+// schema-known subrecords. This is intentionally separate from legacy-read
+// preflight so old files are not rejected merely for differing authoring shape.
+std::vector<PreflightIssue> preflight_authoring_record(
+    const Plugin& plugin,
+    const FormKey& record_key);
+
 }  // namespace fo4::schema
