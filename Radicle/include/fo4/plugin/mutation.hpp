@@ -13,6 +13,7 @@ enum class RecordCopyStatus {
   replaced,
   already_exists,
   source_missing,
+  source_containment_unsupported,
 };
 
 enum class ScalarMutationStatus {
