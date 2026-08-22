@@ -153,3 +153,30 @@ OG 1.10.163 named API, `confirmed` as existing (bodies not all decompiled in thi
 `OpenTES`, `CloseTES`, `CreateTES`, `LoadTESInfo`, `NextForm`, `NextChunk`, `GetChunkData`, `GetChunkSize`, `StartGroup` / `EndGroup`, `GetMasterList`, `AddMaster`, `RemoveMaster`, `GenIndexTable`, `AdjustFormIDFileIndex`, `GetCompileIndex`, `SetSmallCompileIndex`, `GetSmallFile` / `SetSmallFile`, `CheckValidIDForSmallFile`.
 
 `AdjustFormIDFileIndex` is the engine function that maps plugin-relative FormIDs onto runtime compile indexes. The replacement library must do the equivalent using `FormKey`, not by editing high bytes ad hoc.
+
+## Exterior CELL block / sub-block GRUP labels
+
+Measured, not inferred. Every exterior CELL in `Fallout4.esm` (38,965) and
+`DLCCoast.esm` (17,917) was walked, its enclosing block (GRUP type 4) and
+sub-block (type 5) labels recorded, and compared against its own XCLC grid
+coordinates.
+
+```
+block    label = (int16 floor(y / 32), int16 floor(x / 32))   bytes 0..1 = y, 2..3 = x
+subblock label = (int16 floor(y /  8), int16 floor(x /  8))   bytes 0..1 = y, 2..3 = x
+```
+
+- **Y is stored first.** `(floor(y/d), floor(x/d))` matched 38,965/38,965 on
+  Fallout4.esm; the transposed form matched only 6,932 (block) and 1,850
+  (sub-block) — exactly the diagonal cases where x and y bucket the same.
+- **Division is mathematical floor, not C truncation toward zero.** 29,343 of
+  the Fallout4.esm cells have a negative coordinate; floor matched all of them,
+  truncation matched 585 (block) and 2,568 (sub-block) — only the cases that
+  divide evenly, where the two agree.
+- DLCCoast.esm reproduces both formulas 17,917/17,917 as an independent
+  worldspace.
+
+This is the calculation #71 flags as "do not guess". `exterior_cell_grid_layout`
+and `exterior_grid_group_label_u32` in `fo4/forms/cell.hpp` implement it, and
+`tests/test_exterior_cell_grid_real.cpp` re-checks it against the shipped
+masters when `FO4_DATA_DIR` is set (it skips in CI, which has no game files).
