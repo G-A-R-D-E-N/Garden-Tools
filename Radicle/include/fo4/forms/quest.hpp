@@ -87,4 +87,18 @@ QuestAlias encode_quest_alias(const Plugin& plugin,
                               const QuestAliasCreation& creation);
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
 
+// Mutates only the xEdit-proven contiguous Alias array immediately following
+// ANAM. Add/replace encode through the destination plugin's master table.
+// ANAM Next Alias ID grows monotonically when an inserted ID reaches/exceeds it.
+void add_quest_alias(Plugin& plugin,
+                     const FormKey& quest,
+                     const QuestAliasCreation& creation);
+void replace_quest_alias(Plugin& plugin,
+                         const FormKey& quest,
+                         std::uint32_t alias_id,
+                         const QuestAliasCreation& creation);
+bool remove_quest_alias(Plugin& plugin,
+                        const FormKey& quest,
+                        std::uint32_t alias_id);
+
 }  // namespace fo4::forms
