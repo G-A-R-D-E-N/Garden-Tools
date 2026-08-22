@@ -10,10 +10,10 @@ inline constexpr Signature k_generated_formlink_list_targets[] = {
 };
 
 inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {
-  {Signature::from_string("RACE"), "RACE\\FemaleFaceDetails", "Female Face Details", Signature::from_string("FTSF"), true, false, 0, 1},
-  {Signature::from_string("RACE"), "RACE\\FemaleHairColors", "Female Hair Colors", Signature::from_string("AHCF"), true, false, 1, 1},
-  {Signature::from_string("RACE"), "RACE\\FemalePresets", "Female Race Presets", Signature::from_string("RPRF"), true, false, 2, 1},
-  {Signature::from_string("RACE"), "RACE\\MaleFaceDetails", "Male Face Details", Signature::from_string("FTSM"), true, false, 3, 1},
-  {Signature::from_string("RACE"), "RACE\\MaleHairColors", "Male Hair Colors", Signature::from_string("AHCM"), true, false, 4, 1},
-  {Signature::from_string("RACE"), "RACE\\MalePresets", "Male Race Presets", Signature::from_string("RPRM"), true, false, 5, 1},
+  {Signature::from_string("RACE"), "RACE\\FemaleFaceDetails", "Female Face Details", Signature::from_string("FTSF"), true, true, 0, 1},
+  {Signature::from_string("RACE"), "RACE\\FemaleHairColors", "Female Hair Colors", Signature::from_string("AHCF"), true, true, 1, 1},
+  {Signature::from_string("RACE"), "RACE\\FemalePresets", "Female Race Presets", Signature::from_string("RPRF"), true, true, 2, 1},
+  {Signature::from_string("RACE"), "RACE\\MaleFaceDetails", "Male Face Details", Signature::from_string("FTSM"), true, true, 3, 1},
+  {Signature::from_string("RACE"), "RACE\\MaleHairColors", "Male Hair Colors", Signature::from_string("AHCM"), true, true, 4, 1},
+  {Signature::from_string("RACE"), "RACE\\MalePresets", "Male Race Presets", Signature::from_string("RPRM"), true, true, 5, 1},
 };
