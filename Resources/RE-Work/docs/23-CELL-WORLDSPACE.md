@@ -1157,6 +1157,35 @@ SaveRecord dispatch. Running against Fallout4.esm (46 interior CELLs):
 
 Validator: `ghidra-dump/validate_cell_save.py` — `--json` flag for machine output.
 
+#### 10a.4 Full-file recheck + XCLC audit (2026-08-22)
+
+The validator's scan was rebuilt to byte-step every 4-aligned offset and accept a
+record only when its subrecord stream parses cleanly to EOF (false `CELL` matches
+inside compressed payloads and GRUP data are rejected). This finds the full
+population the earlier GRUP-walk sample missed:
+
+- **10,027 CELL records** — 9,741 exterior + 286 interior (the earlier doc-10a
+  sample of 46 was interior-only)
+- **26 unique subrecords** — all accounted for; three were added to the
+  SaveRecord dispatch as a result: `XRNK` (Owner Faction Rank, s32),
+  `XILL` (Lock List, formID → FLST/NPC_), `XGDR` (God Rays, formID → GDRY)
+- Exterior detection uses **DATA bit 0 (Interior)** — the record-header flags do
+  not carry interior-ness in FO4; DATA-bit0 vs XCLC presence has 0 mismatches
+
+**XCLC Force-Hide-Land audit** (new `--json` `xclc` section, doc 26 §3):
+
+- 9,741 exterior cells carry XCLC, **0 interior** (exterior-only rule holds)
+- All payloads are exactly **12 bytes** = [X s32][Y s32][hide byte][3B padding]
+- Only **byte 8** is meaningful: low nibble = quad mask; **high nibble must be
+  0**. Bytes 9-11 are padding the CK reader skips (FUN_140d146d0 stores byte 8
+  into cell+0x1E) and are nonzero in 9,725/9,741 vanilla cells — they are NOT
+  flagged (xEdit's u32 display of the trailing dword is a UI convenience, not
+  engine semantics)
+- Quad values in the master: `0x0` × 9,727 (no quads hidden), `0xF` × 14
+  (all four quads hidden, formIDs 0x00000FCA–0x00000FE1) — no partial masks
+- Violations caught: XCLC on interior cells, wrong payload length, high nibble
+  of byte 8 set (values above 0x0F)
+
 ### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
 
 | slot | function | name | evidence | `__FILE__` anchors |
