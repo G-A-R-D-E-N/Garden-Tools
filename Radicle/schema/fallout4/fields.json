@@ -212,7 +212,8 @@
       "signature": "QUST",
       "fields": [],
       "localized_subrecords": [
-        "CNAM"
+        "CNAM",
+        "NNAM"
       ]
     },
     {

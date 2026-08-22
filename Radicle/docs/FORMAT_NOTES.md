@@ -314,3 +314,31 @@ which takes **byte 8 into `cell+0x1E` and skips three padding bytes**.
 
 `create_exterior_cell` writes all four bytes zero: the quad flags clear, and no
 fabricated padding.
+
+## QUST objective / target grammar
+
+Measured on `Fallout4.esm`: 1,198 objectives, 1,500 targets. The array runs
+from the first `QOBJ` up to `ANAM`:
+
+```
+QOBJ  u16 objective index            (2 bytes, all 1,198)
+  FNAM  u32 objective flags          (4 bytes, all 1,198)
+  NNAM  display text, LOCALIZED      (4 bytes, all 1,198)
+  QSTA  12 bytes, all 1,500          -- one target
+          i32 alias id     @0
+          u32 target flags @4        (0 in 1,479; also 1, 2, 4)
+          u32 keyword FormID @8      (zero in 1,498 of 1,500)
+    CTDA / CIS1 / CIS2  per-target conditions
+```
+
+Targets per objective: 0 (66 objectives), 1 (950), and 2–19 (182). Both the
+empty and multi-target shapes must be representable.
+
+**`QSTA`'s keyword is a FormID inside a mixed-type payload** and needs a
+structured FormID slot, otherwise a master remap leaves it pointing at whatever
+record now occupies the old index. Only 2 of 1,500 shipped targets carry one,
+so the corruption is easy to miss —
+`QuestObjectives.TargetKeywordIsRemappedWithTheMasterTable` pins it; with the
+slot removed, a `Beta.esm` keyword silently becomes an `Alpha.esm` one.
+
+`QOBJ` and `NNAM` are also used by the alias array, so the walk stops at `ANAM`.
