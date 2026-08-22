@@ -58,6 +58,7 @@ fo4::forms::QuestAliasCreation base_reference() {
       .flags = 0x12u,
       .force_into_alias = std::nullopt,
       .max_initial_fill_count = std::nullopt,
+      .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
   };
 }
