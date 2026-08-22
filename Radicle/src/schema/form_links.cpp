@@ -59,8 +59,17 @@ constexpr auto k_nvmi = Signature::from_string("NVMI");
 constexpr auto k_nvpp = Signature::from_string("NVPP");
 constexpr auto k_nvsi = Signature::from_string("NVSI");
 constexpr auto k_mnam = Signature::from_string("MNAM");
+constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_race = Signature::from_string("RACE");
 constexpr auto k_sraf = Signature::from_string("SRAF");
+constexpr auto k_alfr = Signature::from_string("ALFR");
+constexpr auto k_anam = Signature::from_string("ANAM");
+constexpr auto k_cnam = Signature::from_string("CNAM");
+constexpr auto k_dnam = Signature::from_string("DNAM");
+constexpr auto k_fnam = Signature::from_string("FNAM");
+constexpr auto k_nam2 = Signature::from_string("NAM2");
+constexpr auto k_nnam = Signature::from_string("NNAM");
+constexpr auto k_snam = Signature::from_string("SNAM");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -107,6 +116,22 @@ bool record_specific_formid_array(const Record& record, const Subrecord& sub) {
   // xEdit FO4 NAVM: ONAM is Base Objects, an array of FormIDs. PNAM and NNAM
   // beside it are arrays of u16 vertex indexes and must not be scanned as IDs.
   return record.header.signature == k_navm && sub.signature == sig_onam;
+}
+
+bool qust_non_formid_signature(Signature signature) {
+  // xEdit FO4 QUST reuses several signatures that are FormIDs in other record
+  // types. Within QUST they are scalar/string data and must never be sent
+  // through the global signature-only FormID table:
+  //   DNAM General quest data
+  //   NAM2 stage note
+  //   CNAM stage log-entry text
+  //   FNAM objective/alias flags
+  //   ANAM next alias ID
+  //   NNAM objective text / quest description
+  //   SNAM SWF filename
+  return signature == k_dnam || signature == k_nam2 || signature == k_cnam ||
+         signature == k_fnam || signature == k_anam || signature == k_nnam ||
+         signature == k_snam;
 }
 
 bool consume_counted_fixed(std::span<const std::byte> data,
@@ -368,6 +393,20 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   // terminates one subgraph. Never interpret the RACE flags as a FormID.
   if (record.header.signature == k_race && sub.signature == k_sraf) {
     return;
+  }
+  // QUST has the same signature-reuse problem on a larger scale. Classify the
+  // proven QUST-only meanings before consulting the global signature table.
+  // ALFR is a Specific Reference FormLink but is not present in the generated
+  // wbFormIDCk signature list. The listed signatures below are scalar/string
+  // data in QUST even though they are FormIDs elsewhere.
+  if (record.header.signature == k_qust) {
+    if (sub.signature == k_alfr) {
+      if (sub.data.size() == 4) fn(0);
+      return;
+    }
+    if (qust_non_formid_signature(sub.signature)) {
+      return;
+    }
   }
   if (is_navmesh_mixed_payload(record, sub)) {
     const auto offsets = navmesh_mixed_formid_offsets(record, sub);
