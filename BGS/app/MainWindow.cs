@@ -3728,6 +3728,18 @@ public class MainWindow : Window
         _ = CloseAfterDecision();
     }
 
+    // The window owns the GameData, and GameData holds a file handle for every .ba2 it has
+    // opened. BuildChain disposes the previous one when it rebuilds, but nothing released the
+    // last one when the window went away, so the game's archives stayed locked for the life of
+    // the process. Closing is the only point where the window is certainly finished with it --
+    // OnClosing can still be cancelled.
+    protected override void OnClosed(EventArgs e)
+    {
+        _gameData?.Dispose();
+        _gameData = null;
+        base.OnClosed(e);
+    }
+
     private async Task CloseAfterDecision()
     {
         DiscardChoice choice;
