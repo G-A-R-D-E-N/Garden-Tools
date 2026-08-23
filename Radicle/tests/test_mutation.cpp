@@ -102,6 +102,30 @@ std::vector<std::byte> make_lifecycle_plugin(std::uint32_t next_form_id = 0x900,
   return out.bytes;
 }
 
+std::vector<std::byte> make_two_record_lifecycle_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(3);  // one top-level GRUP + two MISC records
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  for (const auto& [form_id, editor_id] : {
+           std::pair<std::uint32_t, std::string_view>{0x00000800, "First"},
+           std::pair<std::uint32_t, std::string_view>{0x00000801, "Second"},
+       }) {
+    const auto record = fo4::test::begin_record(out, "MISC", 0, form_id);
+    const std::string value{editor_id};
+    fo4::test::write_subrecord(out, "EDID", value + '\0');
+    fo4::test::end_record(out, record);
+  }
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 std::string editor_id(const fo4::Record& record) {
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != fo4::sig_edid) continue;
@@ -144,18 +168,18 @@ TEST(Mutation, InsertsMissingEditorId) {
 TEST(Mutation, NoOpStillReportsRecordFound) {
   auto plugin = fo4::read_plugin(make_plugin(true), "Patch.esp");
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   ASSERT_TRUE(fo4::set_record_editor_id(plugin, key, "OldEditorId"));
   // A same-value write must not dirty the serialized payload.
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(Mutation, MissingRecordReturnsFalseAndDoesNotDirtyPlugin) {
   auto plugin = fo4::read_plugin(make_plugin(true), "Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   EXPECT_FALSE(fo4::set_record_editor_id(
       plugin, fo4::FormKey::parse("000999:Patch.esp"), "Nope"));
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(Mutation, CopyOverrideAddsMasterAndReencodesDestinationSafely) {
@@ -270,6 +294,18 @@ TEST(Mutation, DeleteLocalRecordDoesNotRecycleNextFormId) {
   EXPECT_EQ(third, fo4::FormKey::parse("000902:Lifecycle.esp"));
 }
 
+TEST(Mutation, DeleteLocalRecordRebuildsHedrWithoutPriorMutation) {
+  auto plugin = fo4::read_plugin(make_two_record_lifecycle_plugin(), "Lifecycle.esp");
+  const auto deleted = fo4::FormKey::parse("000800:Lifecycle.esp");
+
+  ASSERT_EQ(fo4::delete_local_record(plugin, deleted), fo4::RecordDeleteStatus::deleted);
+
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), "Lifecycle.esp");
+  EXPECT_EQ(reloaded.header.record_count, 2u);
+  EXPECT_EQ(fo4::find_record(reloaded, deleted), nullptr);
+  EXPECT_NE(fo4::find_record(reloaded, fo4::FormKey::parse("000801:Lifecycle.esp")), nullptr);
+}
+
 // Light-plugin creation is allowed now that the range is proven from the
 // engine rather than guessed. See #26 and docs/ESL_FORMIDS.md.
 TEST(Mutation, CreateLocalRecordAllocatesInALightPlugin) {
@@ -305,10 +341,10 @@ TEST(Mutation, LightPluginAllocatesBelowTheFullPluginFloor) {
 // so the writer has to refuse it -- the engine never reports the collision.
 TEST(Mutation, LightPluginExhaustsAtTwelveBits) {
   auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x1000, true), "Lifecycle.esl");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   EXPECT_THROW(
       static_cast<void>(
           fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"))),
       fo4::FormIdError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }

@@ -1,6 +1,6 @@
 # HEDR record-count rebuild rule
 
-Radicle recomputes TES4 `HEDR` record count whenever a plugin is rebuilt. A completely clean plugin still returns its preserved `original_bytes` unchanged, so merely reading and writing a plugin does not normalize its stored count.
+Radicle recomputes TES4 `HEDR` record count whenever a plugin is rebuilt. A completely clean plugin still returns its preserved source range unchanged, so merely reading and writing a plugin does not normalize its stored count.
 
 ## Proven rule
 
@@ -30,7 +30,7 @@ This independently matches the existing real `FW_HeatherSurvivalPatch.esp` obser
 - count every group child `Record` as one;
 - patch bytes 4..7 of the 12-byte HEDR payload;
 - reject duplicate HEDR, missing HEDR, wrong-width HEDR, or counts exceeding u32 storage;
-- do not alter clean plugins whose `original_bytes` are still present.
+- do not alter clean plugins whose `plugin_original_bytes(plugin)` span is still non-empty.
 
 The HEDR patch is applied to a TES4 copy during serialization, so the const input `Plugin` object is not mutated by `write_plugin`.
 

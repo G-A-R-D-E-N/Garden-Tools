@@ -8,12 +8,27 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <variant>
 #include <vector>
 
 namespace fo4 {
+
+struct OriginalByteRange {
+  const std::vector<std::byte>* owner{nullptr};
+  std::size_t offset{0};
+  std::size_t size{0};
+
+  [[nodiscard]] constexpr bool empty() const noexcept { return size == 0; }
+  constexpr void clear() noexcept {
+    owner = nullptr;
+    offset = 0;
+    size = 0;
+  }
+};
 
 struct Subrecord {
   Signature signature{};
@@ -25,7 +40,7 @@ struct Record {
   RecordHeader header{};
   FormKey form_key{};
   std::vector<Subrecord> subrecords{};
-  std::vector<std::byte> original_bytes{};
+  OriginalByteRange original_range{};
   std::vector<std::byte> decompressed_payload{};
   bool compressed{false};
   std::uint32_t uncompressed_size{0};
@@ -38,7 +53,6 @@ using GroupChild = std::variant<Record, Group>;
 struct Group {
   GroupHeader header{};
   std::vector<GroupChild> children{};
-  std::vector<std::byte> original_bytes{};
 };
 
 struct MasterReference {
@@ -68,7 +82,13 @@ struct Plugin {
   Record tes4;
   PluginHeader header;
   std::vector<Group> groups;
-  std::vector<std::byte> original_bytes;
+  std::shared_ptr<const std::vector<std::byte>> original_data;
+  OriginalByteRange original_range;
+  std::uint64_t original_structure_fingerprint{0};
 };
+
+[[nodiscard]] std::span<const std::byte> plugin_original_bytes(const Plugin& plugin);
+[[nodiscard]] std::span<const std::byte> record_original_bytes(const Plugin& plugin,
+                                                                const Record& record);
 
 }  // namespace fo4

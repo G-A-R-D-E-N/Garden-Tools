@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <fstream>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 
 namespace fo4 {
@@ -115,7 +116,7 @@ std::vector<Subrecord> parse_subrecords(std::span<const std::byte> payload,
   return subrecords;
 }
 
-Record read_record(binary::Cursor& cursor) {
+Record read_record(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
   const auto start = cursor.position();
   const auto start_abs = cursor.absolute_offset();
   Record record;
@@ -125,8 +126,7 @@ Record read_record(binary::Cursor& cursor) {
                                      " overruns file");
   }
   const auto payload = cursor.read_bytes(record.header.data_size);
-  record.original_bytes.assign(cursor.data().begin() + static_cast<std::ptrdiff_t>(start),
-                               cursor.data().begin() + static_cast<std::ptrdiff_t>(cursor.position()));
+  record.original_range = OriginalByteRange{owner, start, cursor.position() - start};
   record.compressed = record.header.flags.is_compressed();
   if (!record.compressed) {
     record.subrecords = parse_subrecords(payload, start_abs + k_record_header_size);
@@ -145,9 +145,9 @@ Record read_record(binary::Cursor& cursor) {
   return record;
 }
 
-Group read_group(binary::Cursor& cursor);
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner);
 
-GroupChild read_child(binary::Cursor& cursor) {
+GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
   if (cursor.remaining() < 4) {
     throw parse_error(cursor.absolute_offset(), "truncated group child");
   }
@@ -158,12 +158,12 @@ GroupChild read_child(binary::Cursor& cursor) {
       static_cast<char>(std::to_integer<std::uint8_t>(cursor.peek(4)[3])),
   };
   if (sig == sig_grup) {
-    return read_group(cursor);
+    return read_group(cursor, owner);
   }
-  return read_record(cursor);
+  return read_record(cursor, owner);
 }
 
-Group read_group(binary::Cursor& cursor) {
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
   const auto start = cursor.position();
   const auto start_abs = cursor.absolute_offset();
   Group group;
@@ -179,13 +179,11 @@ Group read_group(binary::Cursor& cursor) {
     throw parse_error(start_abs, "GRUP overruns file");
   }
   while (cursor.position() < end) {
-    group.children.push_back(read_child(cursor));
+    group.children.push_back(read_child(cursor, owner));
   }
   if (cursor.position() != end) {
     throw parse_error(start_abs, "GRUP children did not consume the declared size");
   }
-  group.original_bytes.assign(cursor.data().begin() + static_cast<std::ptrdiff_t>(start),
-                              cursor.data().begin() + static_cast<std::ptrdiff_t>(end));
   return group;
 }
 
@@ -208,30 +206,58 @@ void collect_groups_in_group(const Group& group, std::vector<const Group*>& out)
   }
 }
 
-}  // namespace
-
-Plugin read_plugin(std::span<const std::byte> bytes, std::filesystem::path path) {
+Plugin read_plugin_from_owned_bytes(
+    std::shared_ptr<const std::vector<std::byte>> original_data,
+    std::filesystem::path path) {
+  const auto& bytes = *original_data;
   if (bytes.size() < k_record_header_size) {
     throw parse_error(0, "file too small to contain a TES4 header");
   }
   Plugin plugin;
   plugin.path = std::move(path);
-  plugin.original_bytes.assign(bytes.begin(), bytes.end());
+  plugin.original_data = std::move(original_data);
+  plugin.original_range = OriginalByteRange{&bytes, 0, bytes.size()};
   if (!plugin.path.empty()) {
     plugin.key = PluginKey::from_filename(plugin.path.filename().string());
   }
   binary::Cursor cursor{bytes};
-  plugin.tes4 = read_record(cursor);
+  plugin.tes4 = read_record(cursor, &bytes);
   if (plugin.tes4.header.signature != sig_tes4) {
     throw parse_error(0, "first record is not TES4");
   }
   plugin.header = parse_tes4_header(plugin.tes4);
   while (!cursor.at_end()) {
-    plugin.groups.push_back(read_group(cursor));
+    plugin.groups.push_back(read_group(cursor, &bytes));
   }
   assign_record_form_keys(plugin);
+  const auto group_count = collect_groups(plugin).size();
+  const auto record_count = collect_records(plugin).size();
+  plugin.original_structure_fingerprint =
+      (static_cast<std::uint64_t>(group_count) << 32) |
+      static_cast<std::uint64_t>(record_count);
   return plugin;
 }
+
+std::span<const std::byte> original_bytes_for_range(
+    const Plugin& plugin, OriginalByteRange range) {
+  if (range.empty()) {
+    return {};
+  }
+  if (!plugin.original_data) {
+    return {};
+  }
+  if (range.owner != plugin.original_data.get()) {
+    throw std::logic_error("original byte range belongs to a different plugin backing store");
+  }
+  const auto& original_data = *plugin.original_data;
+  if (range.offset > original_data.size() ||
+      range.size > original_data.size() - range.offset) {
+    throw std::out_of_range("original byte range exceeds plugin backing storage");
+  }
+  return std::span<const std::byte>{original_data}.subspan(range.offset, range.size);
+}
+
+}  // namespace
 
 Plugin read_plugin_file(const std::filesystem::path& path) {
   std::ifstream in{path, std::ios::binary};
@@ -241,14 +267,34 @@ Plugin read_plugin_file(const std::filesystem::path& path) {
   in.seekg(0, std::ios::end);
   const auto size = static_cast<std::size_t>(in.tellg());
   in.seekg(0, std::ios::beg);
-  std::vector<std::byte> bytes(size);
+  auto bytes = std::make_shared<std::vector<std::byte>>(size);
   if (size > 0) {
-    in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
+    in.read(reinterpret_cast<char*>(bytes->data()), static_cast<std::streamsize>(size));
     if (!in) {
       throw parse_error(0, "unable to read " + path.string());
     }
   }
-  return read_plugin(bytes, path);
+  return read_plugin_from_owned_bytes(std::move(bytes), path);
+}
+
+Plugin read_plugin(std::span<const std::byte> bytes, std::filesystem::path path) {
+  auto owned = std::make_shared<const std::vector<std::byte>>(bytes.begin(), bytes.end());
+  return read_plugin_from_owned_bytes(std::move(owned), std::move(path));
+}
+
+std::span<const std::byte> plugin_original_bytes(const Plugin& plugin) {
+  if (!plugin.original_data) {
+    return {};
+  }
+  return original_bytes_for_range(plugin, plugin.original_range);
+}
+
+std::span<const std::byte> record_original_bytes(const Plugin& plugin,
+                                                 const Record& record) {
+  if (!plugin.original_data) {
+    return {};
+  }
+  return original_bytes_for_range(plugin, record.original_range);
 }
 
 std::vector<const Record*> collect_records(const Plugin& plugin) {

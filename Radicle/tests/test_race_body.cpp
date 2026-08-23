@@ -152,7 +152,7 @@ TEST(RaceBodyData, EmptyMaleAndFemaleArraysStillEmitRequiredMarkers) {
 
 TEST(RaceBodyData, DuplicateModelMemberFailsBeforeCallerMutation) {
   auto plugin = fo4::read_plugin(empty_plugin(), "RaceBody.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   auto creation = basic_race();
   fo4::forms::RaceBodyPart bad;
   bad.model_subrecords = {
@@ -163,7 +163,7 @@ TEST(RaceBodyData, DuplicateModelMemberFailsBeforeCallerMutation) {
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_race(plugin, creation)),
       fo4::forms::RaceError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
 }
 

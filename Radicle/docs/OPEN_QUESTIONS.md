@@ -68,4 +68,4 @@ Speculative answers must not be hardcoded as facts.
 
 ## Writer policy
 
-23. When CK omits default/zero subrecords, should an unmodified native rewrite match CK or match the original bytes? Default: keep `original_bytes` when the record was not edited.
+23. When CK omits default/zero subrecords, should an unmodified native rewrite match CK or match the original bytes? Default: keep the shared source range when the record was not edited.

@@ -41,6 +41,14 @@ TEST(HedrCount, CleanPluginPreservesOriginalBytesEvenWhenStoredCountIsStale) {
   EXPECT_EQ(fo4::write_plugin(plugin), bytes);
 }
 
+TEST(HedrCount, MixedPathPreservesNoncanonicalCountWhenStructureIsUnchanged) {
+  const auto bytes = make_nested_plugin(999);
+  auto plugin = fo4::read_plugin(bytes, "StaleButMixed.esp");
+  plugin.original_range.clear();
+
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+}
+
 TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   auto plugin = fo4::read_plugin(make_nested_plugin(999), "Rebuilt.esp");
 
@@ -48,7 +56,8 @@ TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   // 1 + its recursive children, then subtracts one for TES4 itself.
   // This fixture therefore has: top GRUP + first record + nested GRUP +
   // second record = 4.
-  plugin.original_bytes.clear();
+  plugin.original_range.clear();
+  plugin.tes4.original_range.clear();
 
   const auto written = fo4::write_plugin(plugin);
   const auto reread = fo4::read_plugin(written, "Rebuilt.esp");

@@ -215,7 +215,7 @@ TEST_CASE("Native LVSP Spell edit refuses non-spell targets without touching dis
     const auto patchPath = root / "Patch.esp";
     writeBytes(masterPath, makeMasterPlugin());
     writeBytes(patchPath, makePatchPlugin());
-    const auto before = fo4::read_plugin_file(patchPath).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(patchPath));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, masterPath, patchPath);
@@ -225,7 +225,7 @@ TEST_CASE("Native LVSP Spell edit refuses non-spell targets without touching dis
     }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "InvalidLeveledSpellReference");
-    CHECK(fo4::read_plugin_file(patchPath).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(patchPath)) == before);
 }
 
 TEST_CASE("Native LVSP edits validate numeric widths and defined flag bits") {

@@ -136,13 +136,13 @@ TEST(Eyes, FourByteFullStaysOpaqueAndCannotBeReinterpretedAsText) {
   const auto model = fo4::forms::decode_eyes(plugin, key);
   EXPECT_FALSE(model.full_text.has_value());
   ASSERT_EQ(model.full_raw.size(), 4u);
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   EXPECT_THROW(
       fo4::forms::set_eyes_text_fields(
           plugin, key, std::nullopt, std::string_view{"Unsafe Guess"}, std::nullopt),
       fo4::forms::EyesError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(Eyes, EmbeddedNulFullStaysOpaqueAndCannotEraseTrailingBytes) {
@@ -151,23 +151,23 @@ TEST(Eyes, EmbeddedNulFullStaysOpaqueAndCannotEraseTrailingBytes) {
   const auto model = fo4::forms::decode_eyes(plugin, key);
   EXPECT_FALSE(model.full_text.has_value());
   ASSERT_EQ(model.full_raw.size(), 9u);
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   EXPECT_THROW(
       fo4::forms::set_eyes_text_fields(
           plugin, key, std::nullopt, std::string_view{"Unsafe Rewrite"}, std::nullopt),
       fo4::forms::EyesError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(Eyes, NoOpEditDoesNotDirtyParsedPlugin) {
   auto plugin = fo4::read_plugin(make_eyes_plugin(), "EyesPatch.esp");
   const auto key = fo4::FormKey::parse("000800:EyesPatch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   ASSERT_TRUE(fo4::forms::set_eyes_text_fields(
       plugin, key, std::string_view{"BlueEyes"}, std::string_view{"Blue Eyes"},
       std::string_view{"Textures\\Actors\\Character\\Eyes\\Blue.dds"}));
   ASSERT_TRUE(fo4::forms::set_eyes_data_flags(plugin, key, 0x85));
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }

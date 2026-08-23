@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fo4/plugin/container.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -8,6 +10,17 @@
 #include <vector>
 
 namespace fo4::test {
+
+inline std::vector<std::byte> original_bytes(const fo4::Plugin& plugin) {
+  const auto bytes = fo4::plugin_original_bytes(plugin);
+  return {bytes.begin(), bytes.end()};
+}
+
+inline std::vector<std::byte> record_original_bytes(const fo4::Plugin& plugin,
+                                                     const fo4::Record& record) {
+  const auto bytes = fo4::record_original_bytes(plugin, record);
+  return {bytes.begin(), bytes.end()};
+}
 
 class ByteWriter {
 public:

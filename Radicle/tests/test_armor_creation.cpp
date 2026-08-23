@@ -125,28 +125,28 @@ TEST(ArmorCreation, CreatesArmaBipedAndFirstPersonGenderedModels) {
 
 TEST(ArmorCreation, InvalidGenderedStringDoesNotConsumeFormId) {
   auto plugin = fo4::read_plugin(empty_plugin(), "ArmorPatch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   fo4::forms::ArmorCreation creation;
   creation.male_world_model = std::string_view{"Bad\0Model", 9};
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_armor(plugin, creation)),
       fo4::forms::ArmorError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
   EXPECT_TRUE(plugin.groups.empty());
 }
 
 TEST(ArmorCreation, InvalidArmaWeightSliderFlagsDoNotConsumeFormId) {
   auto plugin = fo4::read_plugin(empty_plugin(), "ArmorPatch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   fo4::forms::ArmorAddonCreation creation;
   creation.male_weight_slider = 0x80;
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_armor_addon(plugin, creation)),
       fo4::forms::ArmorError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
   EXPECT_TRUE(plugin.groups.empty());
 }

@@ -68,10 +68,6 @@ const Group* source_top_group_for_record(const Plugin& source,
   return nullptr;
 }
 
-void clear_group_originals(Plugin& plugin) {
-  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
-}
-
 Record* find_mutable_record(Plugin& plugin, const FormKey& record_key) {
   Record* target = nullptr;
   visit_records(plugin, [&](Record& record) {
@@ -109,7 +105,7 @@ void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
 
   std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
   plugin.header.next_form_id = next_form_id;
-  plugin.tes4.original_bytes.clear();
+  plugin.tes4.original_range.clear();
   plugin.tes4.decompressed_payload.clear();
   plugin.tes4.header.data_size = 0;
   plugin.tes4.uncompressed_size = 0;
@@ -188,8 +184,7 @@ FormKey create_local_record(Plugin& plugin, Signature signature) {
   group->children.emplace_back(std::move(record));
 
   set_hedr_next_form_id(next, candidate + 1u);
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   plugin = std::move(next);
   return key;
 }
@@ -221,8 +216,7 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   }
   if (!erased) return RecordDeleteStatus::record_missing;
 
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   plugin = std::move(next);
   return RecordDeleteStatus::deleted;
 }
@@ -259,7 +253,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
 
   target->form_key = new_key;
   target->header.form_id = encode_plugin_form_id(new_key, plugin_form_id_context(next));
-  target->original_bytes.clear();
+  target->original_range.clear();
   target->decompressed_payload.clear();
   target->header.data_size = 0;
   target->uncompressed_size = 0;
@@ -267,8 +261,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   if (new_local.value() >= next.header.next_form_id) {
     set_hedr_next_form_id(next, new_local.value() + 1u);
   }
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   plugin = std::move(next);
   return RecordRenumberStatus::renumbered;
 }
@@ -291,7 +284,7 @@ bool set_record_editor_id(Plugin& plugin,
       const auto next = zstring(editor_id);
       if (subrecord.data == next) return;
       subrecord.data = next;
-      record.original_bytes.clear();
+      record.original_range.clear();
       changed = true;
       return;
     }
@@ -300,15 +293,14 @@ bool set_record_editor_id(Plugin& plugin,
     edid.signature = sig_edid;
     edid.data = zstring(editor_id);
     record.subrecords.insert(record.subrecords.begin(), std::move(edid));
-    record.original_bytes.clear();
+    record.original_range.clear();
     changed = true;
   });
 
   if (!found) return false;
   if (!changed) return true;
 
-  plugin.original_bytes.clear();
-  clear_group_originals(plugin);
+  plugin.original_range.clear();
   return true;
 }
 
@@ -354,12 +346,11 @@ ScalarMutationStatus set_record_scalar(
   // Patch in place: an embedded field shares its payload with every other
   // field in the struct, so replacing the payload would erase its neighbours.
   schema::patch_scalar_field(found->data, field.scalar, encoded);
-  target->original_bytes.clear();
+  target->original_range.clear();
   target->decompressed_payload.clear();
   target->header.data_size = 0;
   target->uncompressed_size = 0;
-  plugin.original_bytes.clear();
-  clear_group_originals(plugin);
+  plugin.original_range.clear();
   return ScalarMutationStatus::updated;
 }
 
@@ -435,7 +426,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   const auto destination_context = plugin_form_id_context(next);
   copied_record.header.form_id = encode_plugin_form_id(record_key, destination_context);
   remap_record_form_links(copied_record, source_context, destination_context);
-  copied_record.original_bytes.clear();
+  copied_record.original_range.clear();
   copied_record.decompressed_payload.clear();
   copied_record.header.data_size = 0;
   copied_record.uncompressed_size = 0;
@@ -464,15 +455,13 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
     if (target_group == nullptr) {
       Group group;
       group.header = source_top_group->header;
-      group.original_bytes.clear();
       next.groups.push_back(std::move(group));
       target_group = &next.groups.back();
     }
     target_group->children.emplace_back(std::move(copied_record));
   }
 
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   destination = std::move(next);
   return replaced ? RecordCopyStatus::replaced : RecordCopyStatus::inserted;
 }

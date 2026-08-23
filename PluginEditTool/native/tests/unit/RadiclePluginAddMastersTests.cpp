@@ -175,12 +175,12 @@ TEST_CASE("Native AddMasters duplicate is a no-op") {
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
     REQUIRE(backend.invokeBackend(
         "AddMasters", nlohmann::json::array({"Target.esp", "Master.esm"})).has_value());
-    const auto before = fo4::read_plugin_file(targetPath).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(targetPath));
 
     const auto message = textResult(backend.invokeBackend(
         "AddMasters", nlohmann::json::array({"Target.esp", "Master.esm, Master.esm"})));
     CHECK(message.find("No new masters") == 0);
-    CHECK(fo4::read_plugin_file(targetPath).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(targetPath)) == before);
 }
 
 TEST_CASE("Native AddMasters rejects self master and unknown ESP kind") {
@@ -216,7 +216,7 @@ TEST_CASE("Native AddMasters refuses protected target") {
     const auto targetPath = root / "Target.esp";
     writeBytes(masterPath, makeMaster());
     writeBytes(targetPath, makeTarget());
-    const auto before = fo4::read_plugin_file(targetPath).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(targetPath));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
@@ -231,5 +231,5 @@ TEST_CASE("Native AddMasters refuses protected target") {
         "AddMasters", nlohmann::json::array({"Target.esp", "Master.esm"}));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "PluginReadOnly");
-    CHECK(fo4::read_plugin_file(targetPath).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(targetPath)) == before);
 }

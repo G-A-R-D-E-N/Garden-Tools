@@ -169,7 +169,7 @@ TEST_CASE("Native schema SetField rejects invalid generated Scale without touchi
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, makePlugin(true, false, 50, false, true, 1.0f));
-    const auto before = fo4::read_plugin_file(path).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(path));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
@@ -179,7 +179,7 @@ TEST_CASE("Native schema SetField rejects invalid generated Scale without touchi
     }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "ScalarFieldWriteFailed");
-    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
 TEST_CASE("Native schema SetField rejects invalid REFR percentage without touching disk") {
@@ -187,7 +187,7 @@ TEST_CASE("Native schema SetField rejects invalid REFR percentage without touchi
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, makePlugin());
-    const auto before = fo4::read_plugin_file(path).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(path));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
@@ -197,7 +197,7 @@ TEST_CASE("Native schema SetField rejects invalid REFR percentage without touchi
     }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "ScalarFieldWriteFailed");
-    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
 TEST_CASE("Native schema SetField refuses missing scalar rather than guessing insertion order") {
@@ -205,7 +205,7 @@ TEST_CASE("Native schema SetField refuses missing scalar rather than guessing in
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, makePlugin(false));
-    const auto before = fo4::read_plugin_file(path).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(path));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
@@ -221,7 +221,7 @@ TEST_CASE("Native schema SetField refuses missing scalar rather than guessing in
     }));
     REQUIRE_FALSE(scale.has_value());
     CHECK(scale.error().type == "ScalarFieldMissing");
-    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
 TEST_CASE("Native schema SetField requires REFR record type") {
@@ -245,7 +245,7 @@ TEST_CASE("Native schema SetField refuses protected Data plugin") {
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, makePlugin());
-    const auto before = fo4::read_plugin_file(path).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(path));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path, "Data");
@@ -255,7 +255,7 @@ TEST_CASE("Native schema SetField refuses protected Data plugin") {
     }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "PluginReadOnly");
-    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
 TEST_CASE("REFR spreadsheet exposes generated scalar fields") {

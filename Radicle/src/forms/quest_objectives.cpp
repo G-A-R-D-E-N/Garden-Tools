@@ -191,12 +191,11 @@ void write_quest_objectives(Plugin& plugin,
                  record->subrecords.end());
 
   record->subrecords = std::move(rebuilt);
-  record->original_bytes.clear();
+  record->original_range.clear();
   record->decompressed_payload.clear();
   record->header.data_size = 0;
   record->uncompressed_size = 0;
-  next.original_bytes.clear();
-  visit_groups(next, [](Group& group) { group.original_bytes.clear(); });
+  next.original_range.clear();
   plugin = std::move(next);
 }
 
