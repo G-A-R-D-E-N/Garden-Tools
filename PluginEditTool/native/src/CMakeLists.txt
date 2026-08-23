@@ -173,6 +173,7 @@ add_library(
     graph/GraphCompiler.cpp
     graph/GraphLifter.cpp
     graph/GraphScriptLoader.cpp
+    graph/GraphToolService.cpp
 )
 target_link_libraries(fo4ide_graph PUBLIC fo4ide_core fo4ide_papyrus)
 fo4ide_enable_warnings(fo4ide_graph)
