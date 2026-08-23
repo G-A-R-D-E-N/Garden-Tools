@@ -22,6 +22,7 @@ internal static class NativeAuthoringSmoke
         ADocumentChangeInvalidatesAPendingPreview();
         ReopeningTheSourceInvalidatesAPendingPreview();
         SaveAfterApplyStillGoesThroughTheVerifiedTransaction();
+        VariablesAreAuthoredInTheSameVerifiedBatch();
     }
 
     private static void StripAttachesOnceOnTheProductionPath()
@@ -225,6 +226,50 @@ internal static class NativeAuthoringSmoke
         });
     }
 
+    private static void VariablesAreAuthoredInTheSameVerifiedBatch()
+    {
+        Console.WriteLine("\nvariables are authored in the same verified batch as the clips");
+        WithFixture(GraphBytes(), (window, path) =>
+        {
+            byte[] before = File.ReadAllBytes(path);
+            window.Open(path);
+            Dispatcher.UIThread.RunJobs();
+
+            var batch = Queue(window, ("Idle", "Animations\\Idle.hkx"));
+            batch.QueueVariableForTest("Speed", "real", "1.5");
+            batch.QueueVariableForTest("Armed", "bool", "true");
+            Dispatcher.UIThread.RunJobs();
+            Smoke.Check("both variables are queued", 2, batch.QueuedVariablesForTest);
+
+            batch.QueueVariableForTest("Speed", "int32", "0");
+            Smoke.Check("a name already in the batch is refused", 2, batch.QueuedVariablesForTest);
+            batch.QueueVariableForTest("Broken", "int32", "not a number");
+            Smoke.Check("a value the type cannot hold is refused", 2, batch.QueuedVariablesForTest);
+            Smoke.CheckTrue("and it says which value: " + batch.SummaryForTest,
+                            batch.SummaryForTest.Contains("not a number", StringComparison.Ordinal));
+
+            batch.PreviewForTest();
+            Dispatcher.UIThread.RunJobs();
+            Smoke.CheckTrue("preview verifies clips and variables together: " + batch.SummaryForTest,
+                            batch.HasPendingPreviewForTest &&
+                            batch.SummaryForTest.Contains("2 variables", StringComparison.Ordinal));
+            Smoke.CheckTrue("preview writes nothing", File.ReadAllBytes(path).SequenceEqual(before));
+
+            batch.ApplyForTest();
+            Dispatcher.UIThread.RunJobs();
+
+            Smoke.Check("clips and variables land as one undo step", 1, window.UndoStepsForTest);
+            Smoke.CheckTrue("the variable names reached the document",
+                            window.LoadedXml.Contains(">Speed<", StringComparison.Ordinal) &&
+                            window.LoadedXml.Contains(">Armed<", StringComparison.Ordinal));
+            Smoke.CheckTrue("and the state did too",
+                            window.LoadedXml.Contains(">Idle<", StringComparison.Ordinal));
+            Smoke.CheckTrue("the file on disk is still untouched",
+                            File.ReadAllBytes(path).SequenceEqual(before));
+            batch.Close();
+        });
+    }
+
     private static BatchAuthoringWindow Queue(MainWindow window, params (string State, string Animation)[] entries)
     {
         var batch = NativeAuthoringUi.OpenBatchAuthoringForTest(window);
@@ -235,10 +280,30 @@ internal static class NativeAuthoringSmoke
         return batch;
     }
 
-    private static void WithFixture(Action<MainWindow, string> test)
+    // A graph with somewhere to declare variables as well as a machine to hang states on.
+    // OneMachineBytes holds only the machine, so variable authoring correctly refuses it.
+    private static byte[] GraphBytes()
+    {
+        var image = new OpenCommonwealth.Services.Hkx.PackfileImage();
+        foreach (string tag in new[] { "__classnames__", "__data__" })
+        {
+            var bytes = new byte[20];
+            System.Text.Encoding.ASCII.GetBytes(tag).CopyTo(bytes, 0);
+            image.Sections.Add(new OpenCommonwealth.Services.Hkx.PackfileSection { TagBytes = bytes });
+        }
+        foreach (string className in new[]
+                 { "hkbStateMachine", "hkbBehaviorGraphStringData", "hkbBehaviorGraphData", "hkbVariableValueSet" })
+            OpenCommonwealth.Services.Hkx.NativeAppend.Object(image, className);
+        OpenCommonwealth.Services.Hkx.FixupOrder.Reorder(image);
+        return image.Rebuild();
+    }
+
+    private static void WithFixture(Action<MainWindow, string> test) => WithFixture(Smoke.OneMachineBytes(), test);
+
+    private static void WithFixture(byte[] fixture, Action<MainWindow, string> test)
     {
         string path = Path.Combine(Path.GetTempPath(), $"bgs-authoring-{Guid.NewGuid():N}.hkx");
-        File.WriteAllBytes(path, Smoke.OneMachineBytes());
+        File.WriteAllBytes(path, fixture);
         var window = AppHost.CreateMainWindow();
         window.Show();
         Dispatcher.UIThread.RunJobs();
