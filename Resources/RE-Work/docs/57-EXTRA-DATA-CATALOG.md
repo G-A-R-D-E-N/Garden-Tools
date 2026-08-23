@@ -122,3 +122,26 @@ XLYR(526004), XMSP(238132), XLKR(87139), XRFG(70585), XRDS(59288), XLIG(58542), 
 * The three precombined tags (XWPG/XEMI/XCRI) share the
   ExtraCombinedRefs constructor (type 0xc6); XCRI's wire format is
   fully solved in doc 25 §6.
+
+## Field maps for the top helper-routed tags (2026-08-23)
+
+Sizes measured over every shipped instance; helpers identified in the
+switch bodies.
+
+| tag | size | grammar | semantics |
+|---|---|---|---|
+| XLYR | 4 | `LAYR formID` | layer membership (522,247 samples) |
+| XMSP | 4 | `SNDr formID` | multi-sound marker (238,065) |
+| XLKR | 8 | `[keyword formID][linkedRef formID]` | linked-ref pair (69,849); loader version-splits 4-vs-8 but vanilla ships only 8 |
+| XRDS | 4 | `REFR formID` | water-damage source (59,288) |
+| XPRM | 32 | fixed prompt block | activation prompt (29,614); fields not yet named |
+
+Loader-side notes:
+
+* XLYR/XMSP route to `FUN_1407f5fd0` / `FUN_1407f66f0` after a 4-byte
+  read - the tag IS the payload.
+* XLKR branches on subrecord size: 4 B -> `FUN_1407e6db0(id,0,1)`
+  (legacy), 8 B -> keyword+ref pair. Writers should emit 8 B.
+* Remaining helper-routed tags keep their `-` status until their own
+  pass; none of them exceed ~12k shipped records except XCLR (already
+  covered at CELL level).
