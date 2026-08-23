@@ -105,7 +105,24 @@ triangles start immediately after the vertex array as `[u32 T]` then
 | +0x14 | u8 | pad |
 
 Semantic names for +0x10/+0x13 are inferred from value distributions,
-not yet reader-confirmed. The earlier stream-slot width analysis
-(section 2c) describes the in-memory read API; the shipped files are
-plain little-endian 21-B records - no bit unpacking needed (supersedes
-§2a's packing hypothesis).
+not yet reader-confirmed.
+
+## 5. Open tension: reader function vs on-disk reality
+
+`FUN_1426c5970` (bsnavmesh.cpp) parses: version u32 -> dispatched
+header-object ctor -> vertex array (12 B/el) -> triangle array via
+`FUN_142706c90` (which stream-reads 6x u16 + 1x u32 = 16 B) -> three
+more counted arrays (12 B, 16 B, and a u16 array gated on version < 13).
+Stream slots verified: +0x30 = ReadU16 (2 B), +0x20 = ReadU32 (4 B),
++0x08 = 4 B float path (`PathingStreamMasterFileRead`, correct slot
+indices account for Ghidra's COL-entry-at-slot-0 dump convention).
+
+Yet shipped files validate at **21 B/tri**, not 16. Five bytes per
+triangle are written that this reader does not consume - so either the
+editor saves through a different (versioned-factory) path than this
+runtime-side load function, or an additional per-tri read hides behind
+the dispatched header object. The 21-byte empirical layout (section 4)
+is the ground truth for files on disk; reconciling it with the C++
+call graph is the remaining exercise. Sections after the triangles
+(counted 12 B / 16 B / u16 arrays) are parsed by the same function and
+map onto the post-tri region once the 5-byte question settles.
