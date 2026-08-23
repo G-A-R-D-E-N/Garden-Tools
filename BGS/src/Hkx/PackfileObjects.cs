@@ -27,14 +27,16 @@ public sealed class PackfileObjects
 
     public IReadOnlyList<Instance> Instances => _instances;
 
+    public const string DataSection = "__data__";
+
     public PackfileObjects(PackfileImage image, HavokClasses? classes = null,
-                           HavokClassTypes? types = null)
+                           HavokClassTypes? types = null, string sectionTag = DataSection)
     {
         _classes = classes ?? HavokClasses.Shipped;
         _types = types ?? HavokClassTypes.Shipped;
         _pointer = image.Layout.PointerSize;
-        _data = image.Section("__data__")
-                ?? throw new InvalidOperationException("The file has no __data__ section.");
+        _data = image.Section(sectionTag)
+                ?? throw new InvalidOperationException($"The file has no {sectionTag} section.");
         _classNames = image.Section("__classnames__")
                       ?? throw new InvalidOperationException("The file has no __classnames__ section.");
 

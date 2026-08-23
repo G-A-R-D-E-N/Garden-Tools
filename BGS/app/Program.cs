@@ -12,12 +12,18 @@ public class App : Application
 {
     public override void Initialize() => Styles.Add(new FluentTheme());
 
+    public static MainWindow CreateMainWindow()
+    {
+        var window = new MainWindow();
+        NativeAuthoringUi.Attach(window);
+        return window;
+    }
+
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var window = new MainWindow();
-            NativeAuthoringUi.Attach(window);
+            var window = CreateMainWindow();
             desktop.MainWindow = window;
 
             var args = desktop.Args ?? Array.Empty<string>();

@@ -47,6 +47,7 @@ public static class Program
             case "conditions": return Conditions(argv);
             case "savedelete": return SaveDelete(argv);
             case "classcheck": return ClassCheck(argv);
+            case "types": return Types(argv);
             case "chain": return Chain(argv);
             case "crash": return Crash(argv);
             case "hash": return Hash(argv);
@@ -4936,6 +4937,50 @@ public static class Program
             return "the result has a pointer aiming outside everything written";
 
         return "";
+    }
+
+    // Read the class metadata a file carries in its __types__ section and set it against the
+    // shipped table. Fallout 4 files ship the section empty, so this reports "not described"
+    // for them and only has something to say about files that describe themselves.
+    private static int Types(string[] argv)
+    {
+        if (argv.Length < 2) { Usage(); return 1; }
+
+        string path = Path.GetFullPath(argv[1]);
+        if (!File.Exists(path)) { Console.WriteLine($"no file at {path}"); return 1; }
+
+        var image = PackfileImage.Read(path);
+        var result = EmbeddedClassCheck.Compare(image);
+        var described = result.Described.Definitions;
+
+        Console.WriteLine($"{Path.GetFileName(path)}  layout {string.Join(".", image.LayoutRules)}  " +
+                          $"{described.Count} class(es) described");
+
+        if (described.Count == 0 && result.Conflicts.Count == 0)
+        {
+            Console.WriteLine("the file carries no class metadata, so there is nothing to check the table against");
+            return 0;
+        }
+
+        bool verbose = argv.Contains("--members");
+        foreach (var definition in described.OrderBy(d => d.Name, StringComparer.Ordinal))
+        {
+            Console.WriteLine($"  {definition.Name,-44} size {definition.ObjectSize,5}  " +
+                              $"{definition.Declared.Count,3} member(s)  parent {definition.Parent ?? "-"}");
+            if (!verbose) continue;
+            foreach (var member in definition.Declared)
+                Console.WriteLine($"      +{member.Offset,-5} {member.Name,-32} {member.TypeName}" +
+                                  (member.SubTypeName == "TYPE_VOID" ? "" : " of " + member.SubTypeName));
+        }
+
+        foreach (var group in result.Conflicts.GroupBy(c => c.Kind))
+        {
+            Console.WriteLine($"\n{group.Key}: {group.Count()}");
+            foreach (var conflict in group.Take(40)) Console.WriteLine("  " + conflict);
+        }
+
+        Console.WriteLine($"\n{result}");
+        return result.Agrees ? 0 : 1;
     }
 
     private static int ClassCheck(string[] argv)
