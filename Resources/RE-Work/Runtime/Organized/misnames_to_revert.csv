@@ -1,0 +1,14 @@
+address,wrongly_renamed_to,revert_to_commonlib_confirmed_name
+0x1428CE3A0,"public virtual void __thiscall ImageSpaceEffect::Render(class BSTriShape * __ptr64,class ImageSpaceEffectParam * __ptr64) __ptr64 ",ImageSpaceEffectGetHit::Render
+0x142483B20,"private virtual enum BSEventNotifyControl __thiscall Movie::ProcessEvent(struct BSAudioUtil::MasterVolumeChangedEvent const & __ptr64,class BSTEventSource<BSAudioUtil::MasterVolumeChangedEvent> * __ptr64) __ptr64 ",Movie::GetCurrentFrame
+0x1420B9C30,"public void __thiscall Scaleform::GFx::Value::ObjectInterface::ObjectAddRef(class Scaleform::GFx::Value * __ptr64,void * __ptr64) __ptr64 ",Scaleform::GFx::Value::ObjectRelease
+0x141D7E930,public virtual void __thiscall bhkNPCollisionObject::LoadBinary(class NiStream & __ptr64) __ptr64 ,bhkCharacterController::ClearCollectorDataImpl
+0x141D7E7D0,public virtual class NiObject * __ptr64 __thiscall bhkNPCollisionObject::CreateClone(class NiCloningProcess & __ptr64) __ptr64 ,bhkCharacterController::ApplyMoveImmediately
+0x141B1A4E0,protected virtual void __thiscall MemoryHeap::DecommitPages(class HeapBlock * __ptr64) __ptr64 ,MemoryHeap::GetStats
+0x141B1A490,"protected virtual unsigned __int64 __thiscall MemoryHeap::CleanExtraPages(void * __ptr64,unsigned __int64,unsigned __int64) __ptr64 ",MemoryHeap::FreeSysDirect
+0x141B1A420,"protected virtual unsigned __int64 __thiscall MemoryHeap::CreateMorePages(void * __ptr64,unsigned __int64,unsigned __int64) __ptr64 ",MemoryHeap::AllocSysDirect
+0x141B1A360,"protected virtual void * __ptr64 __thiscall MemoryHeap::DoHeapAllocation(unsigned __int64,unsigned __int64) __ptr64 ",MemoryHeap::GetAllocHeap
+0x140C20130,public virtual bool __thiscall PipboyManager::ShouldHandleEvent(class InputEvent const * __ptr64) __ptr64 ,PipboyManager::OnMouseMoveEvent
+0x140BEA9B0,"public virtual void __thiscall WorkbenchMenuBase::OnMenuStackChanged(class BSFixedString const & __ptr64,bool) __ptr64 ",ExamineMenu::OnThumbstickEvent
+0x14015CED0,public virtual void __thiscall TESLeveledList::InitComponent(class TESForm * __ptr64) __ptr64 ,TESLeveledList::GetCanContainFormsOfType
+0x140077D70,public virtual void __thiscall MagicItem::InitItemImpl(void) __ptr64 ,MagicItem::CopyMagicItemData

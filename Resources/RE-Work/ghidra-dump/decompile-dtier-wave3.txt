@@ -1,0 +1,2720 @@
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (520 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1389 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xb77730:0xb77c30'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140b77730 RVA 0xb77730 size=814 :: undefined FUN_140b77730(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140b77730(longlong *param_1,longlong param_2)
+
+{
+  longlong lVar1;
+  ulonglong *puVar2;
+  ulonglong *puVar3;
+  undefined8 uVar4;
+  char cVar5;
+  int iVar6;
+  uint uVar7;
+  uint uVar8;
+  longlong *plVar9;
+  longlong lVar10;
+  ulonglong *puVar11;
+  ulonglong uVar12;
+  ulonglong local_res18;
+  undefined8 local_res20;
+  undefined1 local_28 [16];
+  
+  iVar6 = thunk_FUN_14087e2e0(param_2);
+  if (iVar6 != 100) {
+    return 0;
+  }
+  plVar9 = (longlong *)thunk_FUN_140b7bdf0();
+  if (param_1 == plVar9) {
+    lVar10 = thunk_FUN_140b7c1c0(DAT_143d59b18);
+    uVar7 = thunk_FUN_14094eae0(lVar10,param_1);
+    if (uVar7 != 0xffffffff) {
+      if (uVar7 < *(uint *)(lVar10 + 0x14)) {
+        lVar1 = *(longlong *)(*(longlong *)(lVar10 + 8) + (ulonglong)uVar7 * 8);
+        *(undefined8 *)(*(longlong *)(lVar10 + 8) + (ulonglong)uVar7 * 8) = 0;
+        if (lVar1 != 0) {
+          *(int *)(lVar10 + 0x18) = *(int *)(lVar10 + 0x18) + -1;
+        }
+        uVar8 = *(int *)(lVar10 + 0x14) - 1;
+        if (uVar7 == uVar8) {
+          *(uint *)(lVar10 + 0x14) = uVar8;
+        }
+      }
+      thunk_FUN_14094ebc0(lVar10);
+    }
+  }
+  thunk_FUN_1408bf480(param_1,param_2);
+  iVar6 = thunk_FUN_14087e760(param_2);
+  do {
+    if (iVar6 == 0) {
+      return 1;
+    }
+    if (iVar6 < 0x4c4d4250) {
+      if (iVar6 == 0x4c4d424f) {
+LAB_140b77914:
+        lVar10 = (**(code **)(*param_1 + 0x3b0))(param_1);
+        if (lVar10 != 0) {
+          thunk_FUN_140350930(lVar10,param_2);
+        }
+      }
+      else if (iVar6 < 0x44494446) {
+        if (iVar6 == 0x44494445) {
+          thunk_FUN_141ffb470(local_28,0x62,1,
+                              "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\gameplay\\bgscamerapath.cpp"
+                              ,0xea);
+          thunk_FUN_141ff68b0(&local_res20,*(undefined4 *)(param_2 + 0x2c0),8);
+          uVar4 = local_res20;
+          thunk_FUN_14087e870(param_2,local_res20,*(undefined4 *)(param_2 + 0x2c0));
+          thunk_FUN_1408bfb80(param_1,uVar4);
+          thunk_FUN_141ff6930(&local_res20);
+          thunk_FUN_141ffb550(local_28);
+        }
+        else if (iVar6 == 0x41445443) {
+          thunk_FUN_1407bb4e0(param_1 + 5,param_2);
+        }
+        else if (iVar6 == 0x41544144) {
+          thunk_FUN_1408bd0e0(param_1,param_2,param_1 + 10);
+        }
+        else if (iVar6 == 0x44414d56) {
+          thunk_FUN_1408bf1a0(param_1,param_2);
+        }
+      }
+      else if (iVar6 == 0x444e424f) {
+        (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+      }
+      else if (iVar6 == 0x4554424f) goto LAB_140b77914;
+    }
+    else if (iVar6 == 0x4d414e41) {
+      local_res18 = 0;
+      thunk_FUN_14087e870(param_2,&local_res18,8);
+      param_1[0xc] = local_res18 & 0xffffffff;
+      param_1[0xd] = local_res18 >> 0x20;
+      thunk_FUN_140b7be00(DAT_143d59b18,param_1);
+    }
+    else if (iVar6 == 0x4d414e53) {
+      local_res18 = local_res18 & 0xffffffff00000000;
+      thunk_FUN_14087e870(param_2,&local_res18,4);
+      uVar12 = local_res18 & 0xffffffff;
+      if (uVar12 != 0) {
+        puVar11 = (ulonglong *)param_1[9];
+        puVar3 = (ulonglong *)(param_1 + 8);
+        while (puVar2 = puVar11, puVar2 != (ulonglong *)0x0) {
+          puVar3 = puVar2;
+          puVar11 = (ulonglong *)puVar2[1];
+        }
+        if (*puVar3 == 0) {
+          *puVar3 = uVar12;
+        }
+        else {
+          if (DAT_143d1293c != 2) {
+            thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+          }
+          puVar11 = (ulonglong *)thunk_FUN_141ff6d30(&DAT_143d11e80,0x10,0);
+          if (puVar11 == (ulonglong *)0x0) {
+            puVar3[1] = 0;
+          }
+          else {
+            *puVar11 = uVar12;
+            puVar11[1] = 0;
+            puVar3[1] = (ulonglong)puVar11;
+          }
+        }
+      }
+    }
+    else if (iVar6 == 0x4e525450) {
+      (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+    }
+    else if (iVar6 == 0x50435453) {
+      thunk_FUN_1408bf430(param_1,param_2);
+    }
+    else if (iVar6 == 0x544c424f) goto LAB_140b77914;
+    cVar5 = thunk_FUN_14087e7b0(param_2);
+    if (cVar5 == '\0') {
+      return 1;
+    }
+    iVar6 = thunk_FUN_14087e760(param_2);
+  } while( true );
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140b77a70 RVA 0xb77a70 size=562 :: undefined FUN_140b77a70(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140b77a70(longlong *param_1)
+
+{
+  longlong *plVar1;
+  longlong *plVar2;
+  int iVar3;
+  undefined8 uVar4;
+  longlong *plVar5;
+  longlong *plVar6;
+  longlong *plVar7;
+  longlong *plVar8;
+  undefined4 local_res8 [2];
+  
+  if ((*(uint *)(param_1 + 2) >> 3 & 1) == 0) {
+    thunk_FUN_1407bb5a0(param_1 + 5,param_1);
+    plVar5 = param_1 + 8;
+    plVar2 = (longlong *)0x0;
+    while ((plVar8 = plVar5, plVar8 != (longlong *)0x0 && ((plVar8[1] != 0 || (*plVar8 != 0))))) {
+      local_res8[0] = (undefined4)*plVar8;
+      uVar4 = thunk_FUN_1408be010(param_1,0xffffffff);
+      thunk_FUN_1408c68d0(local_res8,uVar4);
+      uVar4 = thunk_FUN_1408bdd20(local_res8[0]);
+      plVar5 = (longlong *)
+               __RTDynamicCast(uVar4,0,&TESForm::RTTI_Type_Descriptor,
+                               &BGSCameraShot::RTTI_Type_Descriptor,0);
+      if (plVar5 == (longlong *)0x0) {
+        if (plVar2 == (longlong *)0x0) {
+          plVar5 = (longlong *)plVar8[1];
+          if (plVar5 == (longlong *)0x0) {
+            *plVar8 = 0;
+          }
+          else {
+            plVar8[1] = plVar5[1];
+            *plVar8 = *plVar5;
+            plVar5[1] = 0;
+            thunk_FUN_140b79ad0(plVar5,0,0);
+            FUN_140001c4e(plVar5,0x10);
+          }
+        }
+        else if ((*plVar8 == 0) ||
+                ((plVar5 = (longlong *)plVar2[1], plVar6 = plVar2, plVar7 = plVar2,
+                 plVar5 == (longlong *)0x0 && (*plVar2 == 0)))) {
+LAB_140b77bc7:
+          plVar8 = (longlong *)plVar2[1];
+        }
+        else {
+          do {
+            if (*plVar7 == *plVar8) {
+              if (plVar7 == plVar2) {
+                if (plVar5 == (longlong *)0x0) {
+                  plVar8 = (longlong *)plVar2[1];
+                  *plVar2 = 0;
+                  goto LAB_140b77c07;
+                }
+                plVar2[1] = plVar5[1];
+                *plVar2 = *plVar5;
+                plVar5[1] = 0;
+                thunk_FUN_140b79ad0(plVar5,0,0);
+                plVar7 = plVar5;
+              }
+              else {
+                plVar6[1] = plVar7[1];
+                plVar7[1] = 0;
+                thunk_FUN_140b79ad0(plVar7,0,0);
+              }
+              FUN_140001c4e(plVar7,0x10);
+              goto LAB_140b77bc7;
+            }
+            plVar1 = plVar7 + 1;
+            plVar6 = plVar7;
+            plVar7 = (longlong *)*plVar1;
+          } while ((longlong *)*plVar1 != (longlong *)0x0);
+          plVar8 = (longlong *)plVar2[1];
+        }
+LAB_140b77c07:
+        iVar3 = (**(code **)(*param_1 + 0x230))(param_1);
+        plVar5 = plVar8;
+        if (iVar3 == 0) {
+          thunk_FUN_141ff9fd0(0xe,"Unable to find Camera Shot Form (%08X) for Camera Path (%08X).",
+                              local_res8[0],*(undefined4 *)((longlong)param_1 + 0x14));
+        }
+        else {
+          uVar4 = (**(code **)(*param_1 + 0x238))(param_1);
+          thunk_FUN_141ff9fd0(0xe,"Unable to find Camera Shot Form (%08X) for Camera Path \"%s\".",
+                              local_res8[0],uVar4);
+        }
+      }
+      else {
+        *plVar8 = (longlong)plVar5;
+        (**(code **)(*plVar5 + 600))(plVar5,param_1);
+        plVar5 = (longlong *)plVar8[1];
+        plVar2 = plVar8;
+      }
+    }
+    FUN_14000ff83(param_1,1);
+  }
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xb77730-0xb77c30: 2 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (508 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1303 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xbd64c0:0xbd69c0'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140bd64c0 RVA 0xbd64c0 size=1301 :: undefined FUN_140bd64c0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140bd64c0(longlong *param_1,longlong param_2)
+
+{
+  char cVar1;
+  undefined8 uVar2;
+  longlong lVar3;
+  ulonglong *puVar4;
+  ulonglong *puVar5;
+  ulonglong *puVar6;
+  int iVar7;
+  uint local_res18 [2];
+  undefined8 local_res20;
+  undefined1 local_48 [16];
+  undefined1 local_38 [16];
+  
+  thunk_FUN_1408bf480();
+  FUN_14000ff83(param_1,0);
+  uVar2 = thunk_FUN_14087e760(param_2);
+  if ((int)uVar2 == 0) {
+    return 1;
+  }
+  puVar6 = (ulonglong *)0x0;
+  do {
+    iVar7 = (int)uVar2;
+    if (iVar7 < 0x4c4d4250) {
+      if (iVar7 == 0x4c4d424f) {
+LAB_140bd6953:
+        lVar3 = (**(code **)(*param_1 + 0x3b0))(param_1);
+        if (lVar3 != 0) {
+          thunk_FUN_140350930(lVar3,param_2);
+        }
+      }
+      else if (iVar7 < 0x44414d57) {
+        if (iVar7 == 0x44414d56) {
+          thunk_FUN_1408bf1a0(param_1,param_2);
+        }
+        else if (iVar7 == 0x32444f4d) {
+          if (*(int *)(param_2 + 0x2c0) != 0) {
+            if (param_1[0xd] == 0) {
+              lVar3 = thunk_FUN_1402c9670(0x58);
+              puVar4 = puVar6;
+              if (lVar3 != 0) {
+                puVar4 = (ulonglong *)thunk_FUN_140bd6e40(lVar3);
+              }
+              param_1[0xd] = (longlong)puVar4;
+            }
+            thunk_FUN_14087eb70(param_2,&DAT_143d5a6c0);
+            (**(code **)(*(longlong *)(param_1[0xd] + 0x10) + 0xb8))
+                      ((longlong *)(param_1[0xd] + 0x10),&DAT_143d5a6c0);
+          }
+        }
+        else if (iVar7 == 0x41445443) {
+          thunk_FUN_1407bb4e0(param_1 + 10,param_2);
+        }
+        else if (iVar7 == 0x43534544) {
+          cVar1 = thunk_FUN_14087f440(param_2);
+          if (cVar1 == '\0') {
+            puVar4 = (ulonglong *)(param_1 + 5);
+            if (param_1 == (longlong *)0x0) {
+              puVar4 = puVar6;
+            }
+            thunk_FUN_1408b8c30(puVar4,param_2);
+          }
+          else {
+            thunk_FUN_140914c20(local_38);
+            thunk_FUN_140914f10(local_38,param_2);
+            uVar2 = thunk_FUN_140915320(local_38);
+            uVar2 = thunk_FUN_142425070(uVar2);
+            thunk_FUN_1409158e0(param_1 + 7,uVar2);
+            thunk_FUN_1409152a0(local_38);
+          }
+        }
+      }
+      else if (iVar7 == 0x44494445) {
+        thunk_FUN_141ffb470(local_48,0x62,CONCAT71((uint7)((ulonglong)uVar2 >> 8) & 0xffffff,1),
+                            "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\gameplay\\tesloadscreen.cpp"
+                            ,0x57);
+        thunk_FUN_141ff68b0(&local_res20,*(undefined4 *)(param_2 + 0x2c0),8);
+        uVar2 = local_res20;
+        thunk_FUN_14087e870(param_2,local_res20,*(undefined4 *)(param_2 + 0x2c0));
+        thunk_FUN_1408bfb80(param_1,uVar2);
+        thunk_FUN_141ff6930(&local_res20);
+        thunk_FUN_141ffb550(local_48);
+      }
+      else if (iVar7 == 0x444e424f) {
+        (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+      }
+      else if (iVar7 == 0x4554424f) goto LAB_140bd6953;
+    }
+    else if (iVar7 < 0x4d414e5b) {
+      if (iVar7 == 0x4d414e5a) {
+        puVar4 = (ulonglong *)param_1[0xd];
+        if (puVar4 == (ulonglong *)0x0) {
+          if (DAT_143d1293c != 2) {
+            thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+          }
+          puVar5 = (ulonglong *)thunk_FUN_141ff6d30(&DAT_143d11e80,0x58,0);
+          puVar4 = puVar6;
+          if (puVar5 != (ulonglong *)0x0) {
+            *puVar5 = 0;
+            thunk_FUN_1408e3460(puVar5 + 2);
+            puVar5[9] = 0;
+            *(undefined4 *)(puVar5 + 1) = 0xb4ff4c;
+            *(undefined4 *)(puVar5 + 10) = 0xbf800000;
+            *(undefined4 *)((longlong)puVar5 + 0x54) = 0x3f800000;
+            puVar4 = puVar5;
+          }
+          param_1[0xd] = (longlong)puVar4;
+        }
+        thunk_FUN_14087e870(param_2,puVar4 + 10,8);
+      }
+      else if (iVar7 == 0x4d414e4e) {
+        local_res18[0] = 0;
+        thunk_FUN_14087e870(param_2,local_res18,4);
+        puVar4 = (ulonglong *)param_1[0xd];
+        if ((ulonglong *)param_1[0xd] == (ulonglong *)0x0) {
+          if (DAT_143d1293c != 2) {
+            thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+          }
+          lVar3 = thunk_FUN_141ff6d30(&DAT_143d11e80,0x58,0);
+          if (lVar3 != 0) {
+            puVar4 = (ulonglong *)thunk_FUN_140bd6e40(lVar3);
+            param_1[0xd] = (longlong)puVar4;
+            *puVar4 = (ulonglong)local_res18[0];
+            goto LAB_140bd698d;
+          }
+          param_1[0xd] = 0;
+          puVar4 = puVar6;
+        }
+        *puVar4 = (ulonglong)local_res18[0];
+      }
+      else if (iVar7 == 0x4d414e4f) {
+        puVar4 = (ulonglong *)param_1[0xd];
+        if (puVar4 == (ulonglong *)0x0) {
+          if (DAT_143d1293c != 2) {
+            thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+          }
+          lVar3 = thunk_FUN_141ff6d30(&DAT_143d11e80,0x58,0);
+          puVar4 = puVar6;
+          if (lVar3 != 0) {
+            puVar4 = (ulonglong *)thunk_FUN_140bd6e40(lVar3);
+          }
+          param_1[0xd] = (longlong)puVar4;
+        }
+        thunk_FUN_14087e870(param_2,puVar4 + 1,4);
+      }
+      else if (iVar7 == 0x4d414e54) {
+        local_res18[0] = 0;
+        thunk_FUN_14087e870(param_2,local_res18,4);
+        puVar4 = (ulonglong *)param_1[0xd];
+        if ((ulonglong *)param_1[0xd] == (ulonglong *)0x0) {
+          if (DAT_143d1293c != 2) {
+            thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+          }
+          lVar3 = thunk_FUN_141ff6d30(&DAT_143d11e80,0x58,0);
+          if (lVar3 != 0) {
+            lVar3 = thunk_FUN_140bd6e40(lVar3);
+            param_1[0xd] = lVar3;
+            *(ulonglong *)(lVar3 + 0x48) = (ulonglong)local_res18[0];
+            goto LAB_140bd698d;
+          }
+          param_1[0xd] = 0;
+          puVar4 = puVar6;
+        }
+        puVar4[9] = (ulonglong)local_res18[0];
+      }
+    }
+    else if (iVar7 == 0x4e525450) {
+      (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+    }
+    else if (iVar7 == 0x50435453) {
+      thunk_FUN_1408bf430(param_1,param_2);
+    }
+    else if (iVar7 == 0x544c424f) goto LAB_140bd6953;
+LAB_140bd698d:
+    cVar1 = thunk_FUN_14087e7b0(param_2);
+    if ((cVar1 == '\0') || (uVar2 = thunk_FUN_14087e760(param_2), (int)uVar2 == 0)) {
+      return 1;
+    }
+  } while( true );
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xbd64c0-0xbd69c0: 1 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (470 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1302 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0x438d20:0x439120'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140438d20 RVA 0x438d20 size=440 :: undefined FUN_140438d20(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140438d20(longlong *param_1,longlong param_2)
+
+{
+  undefined8 uVar1;
+  char cVar2;
+  int iVar3;
+  longlong lVar4;
+  uint local_res10 [2];
+  undefined8 local_res18 [2];
+  undefined1 local_28 [16];
+  
+  if (param_2 != 0) {
+    thunk_FUN_1408bf480();
+    iVar3 = thunk_FUN_14087e760(param_2);
+    if (iVar3 != 0) {
+      do {
+        if (iVar3 < 0x45544250) {
+          if (iVar3 == 0x4554424f) {
+LAB_140438e66:
+            lVar4 = (**(code **)(*param_1 + 0x3b0))(param_1);
+            if (lVar4 != 0) {
+              thunk_FUN_140350930(lVar4,param_2);
+            }
+          }
+          else if (iVar3 == 0x41544144) {
+            local_res10[0] = 0;
+            thunk_FUN_14087e870(param_2,local_res10,4);
+            param_1[5] = (ulonglong)local_res10[0];
+          }
+          else if (iVar3 == 0x44414d56) {
+            thunk_FUN_1408bf1a0(param_1,param_2);
+          }
+          else if (iVar3 == 0x44494445) {
+            thunk_FUN_141ffb470(local_28,0x62,1,
+                                "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\gameplay\\bgsdefaultobject.cpp"
+                                ,0x5c);
+            thunk_FUN_141ff68b0(local_res18,*(undefined4 *)(param_2 + 0x2c0),8);
+            uVar1 = local_res18[0];
+            thunk_FUN_14087e870(param_2,local_res18[0],*(undefined4 *)(param_2 + 0x2c0));
+            thunk_FUN_1408bfb80(param_1,uVar1);
+            thunk_FUN_141ff6930(local_res18);
+            thunk_FUN_141ffb550(local_28);
+          }
+          else if (iVar3 == 0x444e424f) {
+            (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+          }
+        }
+        else {
+          if (iVar3 == 0x4c4d424f) goto LAB_140438e66;
+          if (iVar3 == 0x4e525450) {
+            (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+          }
+          else if (iVar3 == 0x50435453) {
+            thunk_FUN_1408bf430(param_1,param_2);
+          }
+          else if (iVar3 == 0x544c424f) goto LAB_140438e66;
+        }
+        cVar2 = thunk_FUN_14087e7b0(param_2);
+        if ((cVar2 == '\0') || (iVar3 = thunk_FUN_14087e760(param_2), iVar3 == 0)) {
+          return 1;
+        }
+      } while( true );
+    }
+  }
+  return 1;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140438ee0 RVA 0x438ee0 size=190 :: undefined FUN_140438ee0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140438ee0(longlong *param_1)
+
+{
+  undefined4 uVar1;
+  undefined8 uVar2;
+  longlong *plVar3;
+  longlong lVar4;
+  int local_res8 [2];
+  
+  lVar4 = param_1[5];
+  if (lVar4 == 0) {
+    return;
+  }
+  if ((*(uint *)(param_1 + 2) >> 3 & 1) != 0) {
+    return;
+  }
+  local_res8[0] = (int)lVar4;
+  if (local_res8[0] != 0) {
+    uVar2 = thunk_FUN_1408be010(param_1,0xffffffff);
+    thunk_FUN_1408c68d0(local_res8,uVar2);
+    plVar3 = (longlong *)thunk_FUN_1408bdd20(local_res8[0]);
+    param_1[5] = (longlong)plVar3;
+    if (plVar3 == (longlong *)0x0) goto LAB_140438f5a;
+    (**(code **)(*plVar3 + 600))(plVar3,param_1);
+    lVar4 = param_1[5];
+  }
+  if ((lVar4 != 0) && (*(char *)(lVar4 + 0x26) == (char)param_1[6])) {
+    return;
+  }
+LAB_140438f5a:
+  uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+  uVar2 = (**(code **)(*param_1 + 0x238))(param_1);
+  thunk_FUN_141ff9fd0(0xe,
+                      "Could not find valid form (%08X) in init for default object \'%s\' (%08X)",
+                      local_res8[0],uVar2,uVar1);
+  param_1[5] = 0;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140438fb0 RVA 0x438fb0 size=9 :: undefined FUN_140438fb0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140438fb0(longlong param_1)
+
+{
+  *(undefined8 *)(param_1 + 0x28) = 0;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0x438d20-0x439120: 3 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (512 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1116 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0x9aee30:0x9af330'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_1409aee30 RVA 0x9aee30 size=1302 :: undefined FUN_1409aee30(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_1409aee30(longlong *param_1,longlong param_2)
+
+{
+  undefined8 uVar1;
+  char cVar2;
+  int iVar3;
+  uint *puVar4;
+  ulonglong *puVar5;
+  longlong *plVar6;
+  longlong *plVar7;
+  ulonglong uVar8;
+  longlong lVar9;
+  uint local_res18 [2];
+  uint local_res20 [2];
+  undefined4 local_178 [2];
+  undefined8 local_170;
+  undefined **local_168;
+  longlong *local_160;
+  undefined1 local_158 [16];
+  undefined1 local_148 [272];
+  
+  iVar3 = thunk_FUN_14087e2e0(param_2);
+  if (iVar3 != 0xf) {
+    return 0;
+  }
+  thunk_FUN_1408bf480(param_1,param_2);
+  plVar6 = param_1 + 0x1e;
+  local_res18[0] = 0;
+  lVar9 = 3;
+  plVar7 = plVar6;
+  do {
+    (**(code **)(*plVar6 + 0x18))(plVar7);
+    plVar7 = plVar7 + 7;
+    plVar6 = plVar6 + 7;
+    lVar9 = lVar9 + -1;
+  } while (lVar9 != 0);
+  iVar3 = thunk_FUN_14087e760(param_2);
+  if (iVar3 != 0) {
+    do {
+      if (iVar3 < 0x4c4c5547) {
+        if (iVar3 == 0x4c4c5546) {
+          plVar6 = param_1 + 5;
+          if (param_1 == (longlong *)0x0) {
+            plVar6 = (longlong *)0x0;
+          }
+          thunk_FUN_1408d51c0(plVar6,param_2);
+        }
+        else if (iVar3 < 0x44444f4e) {
+          if (iVar3 == 0x44444f4d) goto LAB_1409af03b;
+          if (iVar3 < 0x41544145) {
+            if (iVar3 == 0x41544144) {
+              thunk_FUN_14087e870(param_2,param_1 + 0x12,1);
+            }
+            else if (iVar3 == 0x304d414e) {
+              thunk_FUN_14087e870(param_2,local_res18,4);
+            }
+            else if (iVar3 == 0x314d414e) {
+              thunk_FUN_14087eb70(param_2,local_148);
+              (**(code **)(param_1[(ulonglong)local_res18[0] * 7 + 0x1e] + 0xb8))
+                        (param_1 + (ulonglong)local_res18[0] * 7 + 0x1e,local_148);
+            }
+            else if (iVar3 == 0x41445443) {
+              thunk_FUN_1407bb4e0(param_1 + 0x35,param_2);
+            }
+          }
+          else if (iVar3 == 0x43444f4d) {
+            local_res20[0] = 0;
+            thunk_FUN_14087e870(param_2,local_res20,4);
+            puVar4 = (uint *)(param_1 + 0x11);
+            if (param_1 == (longlong *)0x0) {
+              puVar4 = (uint *)&DAT_00000048;
+            }
+            *puVar4 = local_res20[0];
+          }
+          else if (iVar3 == 0x44414d56) {
+            thunk_FUN_1408bf1a0(param_1,param_2);
+          }
+        }
+        else if (iVar3 == 0x44494445) {
+          thunk_FUN_141ffb470(local_158,0x62,1,
+                              "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\character\\bgsheadpart.cpp"
+                              ,0x67);
+          thunk_FUN_141ff68b0(&local_170,*(undefined4 *)(param_2 + 0x2c0),8);
+          uVar1 = local_170;
+          thunk_FUN_14087e870(param_2,local_170,*(undefined4 *)(param_2 + 0x2c0));
+          thunk_FUN_1408bfb80(param_1,uVar1);
+          thunk_FUN_141ff6930(&local_170);
+          thunk_FUN_141ffb550(local_158);
+        }
+        else if (iVar3 == 0x444e424f) {
+          (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+        }
+        else {
+          if (iVar3 != 0x44534f4d) {
+            if (iVar3 == 0x4554424f) goto LAB_1409af284;
+            if (iVar3 != 0x4c444f4d) goto LAB_1409af2f3;
+          }
+LAB_1409af03b:
+          plVar6 = param_1 + 8;
+          if (param_1 == (longlong *)0x0) {
+            plVar6 = (longlong *)0x0;
+          }
+          thunk_FUN_1408e3ef0(plVar6,param_2);
+        }
+      }
+      else if (iVar3 < 0x4d414e55) {
+        if (iVar3 == 0x4d414e54) {
+          local_res20[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res20,4);
+          param_1[0x16] = (ulonglong)local_res20[0];
+        }
+        else if (iVar3 == 0x4c4d424f) {
+LAB_1409af284:
+          lVar9 = (**(code **)(*param_1 + 0x3b0))(param_1);
+          if (lVar9 != 0) {
+            thunk_FUN_140350930(lVar9,param_2);
+          }
+        }
+        else if (iVar3 == 0x4d414e43) {
+          local_res20[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res20,4);
+          param_1[0x33] = (ulonglong)local_res20[0];
+        }
+        else if (iVar3 == 0x4d414e48) {
+          local_res20[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res20,4);
+          uVar8 = (ulonglong)local_res20[0];
+          plVar6 = param_1 + 0x13;
+          local_168 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+          local_160 = plVar6;
+          cVar2 = thunk_FUN_141ffc6a0(param_1 + 0x15,&local_168,*plVar6,(int)param_1[0x14],0,8);
+          local_168 = BSTArrayBase::IAllocatorFunctor::vftable;
+          if (cVar2 != '\0') {
+            *(ulonglong *)*plVar6 = uVar8;
+          }
+        }
+        else if (iVar3 == 0x4d414e50) {
+          thunk_FUN_14087e870(param_2,local_178,4);
+          *(undefined4 *)((longlong)param_1 + 0x94) = local_178[0];
+        }
+        else if (iVar3 == 0x4d414e52) {
+          local_res20[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res20,4);
+          param_1[0x34] = (ulonglong)local_res20[0];
+        }
+      }
+      else if (iVar3 == 0x4e525450) {
+        (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+      }
+      else if (iVar3 == 0x50435453) {
+        thunk_FUN_1408bf430(param_1,param_2);
+      }
+      else if (iVar3 == 0x53444f4d) {
+        local_res20[0] = 0;
+        thunk_FUN_14087e870(param_2,local_res20,4);
+        puVar5 = (ulonglong *)(param_1 + 0x10);
+        if (param_1 == (longlong *)0x0) {
+          puVar5 = (ulonglong *)&DAT_00000040;
+        }
+        *puVar5 = (ulonglong)local_res20[0];
+      }
+      else {
+        if (iVar3 == 0x54444f4d) goto LAB_1409af03b;
+        if (iVar3 == 0x544c424f) goto LAB_1409af284;
+      }
+LAB_1409af2f3:
+      cVar2 = thunk_FUN_14087e7b0(param_2);
+    } while ((cVar2 != '\0') && (iVar3 = thunk_FUN_14087e760(param_2), iVar3 != 0));
+  }
+  return 1;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0x9aee30-0x9af330: 1 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (493 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1327 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0x734e70:0x735370'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140734e70 RVA 0x734e70 size=941 :: undefined FUN_140734e70(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140734e70(longlong *param_1,longlong param_2)
+
+{
+  uint uVar1;
+  char cVar2;
+  int iVar3;
+  undefined8 uVar4;
+  char *_Str1;
+  longlong lVar5;
+  longlong *plVar6;
+  undefined4 local_res18 [2];
+  undefined8 local_res20;
+  undefined1 local_138 [16];
+  wchar_t local_128 [136];
+  
+  cVar2 = thunk_FUN_14087e2e0(param_2);
+  if (cVar2 != 'b') {
+    return 0;
+  }
+  thunk_FUN_1408bf480(param_1,param_2);
+  FUN_14000ff83(param_1,0);
+  iVar3 = thunk_FUN_14087e760(param_2);
+  if (iVar3 != 0) {
+    do {
+      if (iVar3 < 0x4c465642) {
+        if (iVar3 == 0x4c465641) {
+          local_res18[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res18,4);
+          if (-1 < *(int *)((longlong)param_1 + 0x184)) {
+            *(undefined4 *)((longlong)param_1 + 0x184) = local_res18[0];
+          }
+        }
+        else if (iVar3 < 0x44414d57) {
+          if (iVar3 == 0x44414d56) {
+            thunk_FUN_1408bf1a0(param_1);
+          }
+          else if (iVar3 == 0x304d414e) {
+            thunk_FUN_14087e870(param_2,(longlong)param_1 + 0x19c,4);
+            if (*(ushort *)(param_2 + 0x2b8) < 0x51) {
+              uVar1 = *(uint *)((longlong)param_1 + 0x184);
+              if ((uVar1 >> 10 & 1) == 0) {
+                if ((uVar1 >> 0xb & 1) == 0) {
+                  if ((uVar1 >> 0xc & 1) != 0) {
+                    *(undefined4 *)((longlong)param_1 + 0x19c) = 0x42c80000;
+                  }
+                }
+                else {
+                  *(undefined4 *)((longlong)param_1 + 0x19c) = 0x3f800000;
+                }
+              }
+              else {
+                *(undefined4 *)((longlong)param_1 + 0x19c) = 0;
+              }
+            }
+          }
+          else if (iVar3 == 0x314d414e) {
+            local_res18[0] = 0;
+            thunk_FUN_14087e870(param_2,local_res18,4);
+            *(undefined4 *)(param_1 + 0x31) = local_res18[0];
+          }
+          else if (iVar3 == 0x43534544) {
+            plVar6 = param_1 + 8;
+            if (param_1 == (longlong *)0x0) {
+              plVar6 = (longlong *)0x0;
+            }
+            thunk_FUN_1408b8c30(plVar6);
+          }
+        }
+        else if (iVar3 == 0x44494445) {
+          thunk_FUN_141ffb470(local_138,0x62,1,
+                              "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\ai\\actorvalue.cpp"
+                              ,1000);
+          thunk_FUN_141ff68b0(&local_res20,*(undefined4 *)(param_2 + 0x2c0),8);
+          thunk_FUN_14087e870(param_2,local_res20,*(undefined4 *)(param_2 + 0x2c0));
+          thunk_FUN_1408bfb80(param_1);
+          thunk_FUN_141ff6930(&local_res20);
+          thunk_FUN_141ffb550(local_138);
+        }
+        else if (iVar3 == 0x444e424f) {
+          (**(code **)(*param_1 + 0x1b8))(param_1);
+        }
+        else if (iVar3 == 0x4554424f) goto LAB_140735148;
+      }
+      else if (iVar3 < 0x4e4f434a) {
+        if (iVar3 == 0x4e4f4349) {
+          uVar4 = __RTDynamicCast(param_1,0,&ActorValueInfo::RTTI_Type_Descriptor,
+                                  &TESTexture::RTTI_Type_Descriptor,0);
+          thunk_FUN_1408f7870(uVar4);
+        }
+        else if (iVar3 == 0x4c4c5546) {
+          plVar6 = param_1 + 5;
+          if (param_1 == (longlong *)0x0) {
+            plVar6 = (longlong *)0x0;
+          }
+          thunk_FUN_1408d51c0(plVar6);
+        }
+        else if (iVar3 == 0x4c4d424f) {
+LAB_140735148:
+          lVar5 = (**(code **)(*param_1 + 0x3b0))(param_1);
+          if (lVar5 != 0) {
+            thunk_FUN_140350930(lVar5);
+          }
+        }
+        else if (iVar3 == 0x4d414e41) {
+          thunk_FUN_140914f10(param_1 + 0x2e);
+        }
+      }
+      else if (iVar3 == 0x4e525450) {
+        (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+      }
+      else if (iVar3 == 0x50435453) {
+        thunk_FUN_1408bf430(param_1,param_2);
+      }
+      else if (iVar3 == 0x544c424f) goto LAB_140735148;
+      cVar2 = thunk_FUN_14087e7b0(param_2);
+    } while ((cVar2 != '\0') && (iVar3 = thunk_FUN_14087e760(param_2), iVar3 != 0));
+  }
+  if (*(ushort *)(param_2 + 0x2b8) < 0x4f) {
+    _Str1 = (char *)(**(code **)(*param_1 + 0x238))(param_1);
+    iVar3 = _strnicmp(_Str1,"AV",2);
+    if (iVar3 == 0) {
+      lVar5 = (**(code **)(*param_1 + 0x238))(param_1);
+      FID_conflict_sprintf_s(local_128,0x104,L"猥",lVar5 + 2);
+      thunk_FUN_1408bfb80(param_1,local_128);
+    }
+  }
+  return 1;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0x734e70-0x735370: 1 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (607 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1584 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xbc01e0:0xbc06e0'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140bc01e0 RVA 0xbc01e0 size=1255 :: undefined FUN_140bc01e0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+undefined8 FUN_140bc01e0(longlong *param_1,longlong param_2)
+
+{
+  uint *puVar1;
+  float fVar2;
+  float fVar3;
+  undefined4 uVar4;
+  undefined4 uVar5;
+  undefined4 uVar6;
+  undefined8 uVar7;
+  char cVar8;
+  int iVar9;
+  longlong *plVar10;
+  longlong lVar11;
+  byte bVar12;
+  byte bVar13;
+  byte bVar14;
+  byte bVar15;
+  byte bVar16;
+  undefined1 uVar17;
+  longlong *plVar18;
+  float fVar19;
+  float fVar20;
+  float fVar21;
+  uint local_res18 [2];
+  undefined8 local_res20;
+  undefined1 local_88 [16];
+  undefined1 local_78 [4];
+  float local_74;
+  float local_70;
+  char local_6c;
+  byte local_6b;
+  byte local_6a;
+  byte local_69;
+  undefined1 local_68;
+  
+  iVar9 = thunk_FUN_14087e2e0(param_2);
+  if (iVar9 != 0x87) {
+    return 0;
+  }
+  thunk_FUN_1408bf480(param_1,param_2);
+  iVar9 = thunk_FUN_14087e760(param_2);
+  fVar3 = DAT_142f9b5dc;
+  fVar2 = DAT_142f9379c;
+  if (iVar9 != 0) {
+    plVar18 = (longlong *)0x0;
+    do {
+      if (iVar9 < 0x4d414e47) {
+        if (iVar9 == 0x4d414e46) {
+          puVar1 = (uint *)(param_1 + 9);
+          thunk_FUN_14087e870(param_2,puVar1);
+          *(undefined1 *)((longlong)param_1 + 0x4b) = 0;
+          *puVar1 = *puVar1 | 0x32000000;
+        }
+        else if (iVar9 < 0x45544250) {
+          if (iVar9 == 0x4554424f) {
+LAB_140bc05df:
+            lVar11 = (**(code **)(*param_1 + 0x3b0))(param_1);
+            if (lVar11 != 0) {
+              thunk_FUN_140350930(lVar11,param_2);
+            }
+          }
+          else {
+            if (iVar9 == 0x314d414e) {
+              plVar10 = param_1 + 9;
+              goto LAB_140bc0669;
+            }
+            if (iVar9 == 0x44414d56) {
+              thunk_FUN_1408bf1a0(param_1,param_2);
+            }
+            else if (iVar9 == 0x44494445) {
+              thunk_FUN_141ffb470(local_88,0x62,1,
+                                  "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\gameplay\\bgssoundoutput.cpp"
+                                  ,0xd0);
+              thunk_FUN_141ff68b0(&local_res20,*(undefined4 *)(param_2 + 0x2c0),8);
+              uVar7 = local_res20;
+              thunk_FUN_14087e870(param_2,local_res20);
+              thunk_FUN_1408bfb80(param_1,uVar7);
+              thunk_FUN_141ff6930(&local_res20);
+              thunk_FUN_141ffb550(local_88);
+            }
+            else if (iVar9 == 0x444e424f) {
+              (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+            }
+          }
+        }
+        else {
+          if (iVar9 == 0x4c4d424f) goto LAB_140bc05df;
+          if (iVar9 == 0x4d414e41) {
+            if (param_1[6] == 0) {
+              lVar11 = thunk_FUN_1402c9670(0x20);
+              plVar10 = plVar18;
+              if (lVar11 != 0) {
+                plVar10 = (longlong *)thunk_FUN_140bc0800(lVar11);
+              }
+              param_1[6] = (longlong)plVar10;
+            }
+            thunk_FUN_14087e870(param_2,local_78,0x14);
+            lVar11 = param_1[6];
+            if (local_6c == '\0') {
+              fVar20 = local_70 - local_74;
+              if (local_70 - local_74 <= fVar3) {
+                fVar20 = fVar3;
+              }
+              cVar8 = (char)((int)(100 - (uint)local_6b) / 2) + local_6b;
+              bVar12 = local_6b >> 1;
+              fVar19 = fVar20 * fVar2 + local_74;
+              fVar20 = fVar19;
+              fVar21 = local_74;
+              bVar15 = local_69 >> 1;
+              bVar13 = 100 - (char)((int)(100 - (uint)local_69) / 2);
+              bVar16 = local_69;
+              bVar14 = local_6b;
+              uVar17 = 0;
+            }
+            else {
+              cVar8 = '\0';
+              bVar14 = 0;
+              bVar12 = 0;
+              fVar19 = 0.0;
+              fVar21 = 0.0;
+              fVar20 = local_74;
+              bVar15 = local_69;
+              bVar13 = local_6b;
+              bVar16 = local_6a;
+              uVar17 = local_68;
+            }
+            *(float *)(lVar11 + 8) = fVar21;
+            *(float *)(lVar11 + 0xc) = fVar19;
+            *(float *)(lVar11 + 0x10) = fVar20;
+            *(float *)(lVar11 + 0x14) = local_70;
+            *(undefined1 *)(lVar11 + 0x18) = 0;
+            *(byte *)(lVar11 + 0x19) = bVar12;
+            *(byte *)(lVar11 + 0x1a) = bVar14;
+            *(char *)(lVar11 + 0x1b) = cVar8;
+            *(byte *)(lVar11 + 0x1c) = bVar13;
+            *(byte *)(lVar11 + 0x1d) = bVar16;
+            *(byte *)(lVar11 + 0x1e) = bVar15;
+            *(undefined1 *)(lVar11 + 0x1f) = uVar17;
+          }
+          else if (iVar9 == 0x4d414e45) {
+            local_res18[0] = 0;
+            cVar8 = thunk_FUN_14087e870(param_2,local_res18);
+            if (cVar8 != '\0') {
+              param_1[8] = (ulonglong)local_res18[0];
+            }
+          }
+        }
+      }
+      else if (iVar9 < 0x4e525451) {
+        if (iVar9 == 0x4e525450) {
+          (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+        }
+        else if (iVar9 == 0x4d414e4d) {
+          local_res18[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res18);
+          *(uint *)((longlong)param_1 + 0x4c) = local_res18[0];
+        }
+        else if (iVar9 == 0x4d414e4f) {
+          if (DAT_143d1293c != 2) {
+            thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+          }
+          plVar10 = (longlong *)thunk_FUN_141ff6d30(&DAT_143d11e80,0x18,0);
+          uVar6 = _UNK_143052c44;
+          uVar5 = _UNK_143052c40;
+          uVar4 = _UNK_143052c3c;
+          if (plVar10 == (longlong *)0x0) {
+            param_1[7] = 0;
+            plVar10 = plVar18;
+          }
+          else {
+            *(undefined4 *)plVar10 = _DAT_143052c38;
+            *(undefined4 *)((longlong)plVar10 + 4) = uVar4;
+            *(undefined4 *)(plVar10 + 1) = uVar5;
+            *(undefined4 *)((longlong)plVar10 + 0xc) = uVar6;
+            plVar10[2] = DAT_143052c48;
+            param_1[7] = (longlong)plVar10;
+          }
+LAB_140bc0669:
+          thunk_FUN_14087e870(param_2,plVar10);
+        }
+        else if (iVar9 == 0x4d414e53) {
+          thunk_FUN_141ff9fd0(0xe,"OutputModel 0x%08X contains unsupported (old) data.");
+        }
+        else if (iVar9 == 0x4d414e56) {
+          plVar10 = param_1 + 10;
+          goto LAB_140bc0669;
+        }
+      }
+      else {
+        if (iVar9 == 0x4e545441) {
+          plVar10 = (longlong *)param_1[6];
+          if (plVar10 == (longlong *)0x0) {
+            if (DAT_143d1293c != 2) {
+              thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+            }
+            lVar11 = thunk_FUN_141ff6d30(&DAT_143d11e80,0x20,0);
+            plVar10 = plVar18;
+            if (lVar11 != 0) {
+              plVar10 = (longlong *)thunk_FUN_140bc0800(lVar11);
+            }
+            param_1[6] = (longlong)plVar10;
+          }
+          plVar10 = plVar10 + 1;
+          goto LAB_140bc0669;
+        }
+        if (iVar9 == 0x50435453) {
+          thunk_FUN_1408bf430(param_1,param_2);
+        }
+        else if (iVar9 == 0x544c424f) goto LAB_140bc05df;
+      }
+      cVar8 = thunk_FUN_14087e7b0(param_2);
+    } while ((cVar8 != '\0') && (iVar9 = thunk_FUN_14087e760(param_2), iVar9 != 0));
+  }
+  return 1;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140bc06d0 RVA 0xbc06d0 size=188 :: undefined FUN_140bc06d0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140bc06d0(longlong *param_1)
+
+{
+  undefined4 uVar1;
+  undefined8 uVar2;
+  longlong *plVar3;
+  int local_res8 [2];
+  
+  local_res8[0] = (int)param_1[8];
+  if ((local_res8[0] != 0) && (param_1 != (longlong *)0x0)) {
+    uVar2 = thunk_FUN_1408be010(param_1,0xffffffff);
+    thunk_FUN_1408c68d0(local_res8,uVar2);
+    uVar2 = thunk_FUN_1408bdd20(local_res8[0]);
+    plVar3 = (longlong *)
+             __RTDynamicCast(uVar2,0,&TESForm::RTTI_Type_Descriptor,
+                             &BGSAudioEffectChain::RTTI_Type_Descriptor,0);
+    param_1[8] = (longlong)plVar3;
+    if (plVar3 != (longlong *)0x0) {
+      (**(code **)(*plVar3 + 600))(plVar3,param_1);
+      return;
+    }
+    uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+    uVar2 = (**(code **)(*param_1 + 0x238))(param_1);
+    thunk_FUN_141ff9fd0(0xe,
+                        "Could not find parent Audio Effect Chain (%08X) for Sound Output Model \'%s\' (%08X)."
+                        ,local_res8[0],uVar2,uVar1);
+  }
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xbc01e0-0xbc06e0: 2 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (539 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1316 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xb93890:0xb93d90'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140b93890 RVA 0xb93890 size=758 :: undefined FUN_140b93890(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140b93890(longlong *param_1,longlong param_2)
+
+{
+  undefined4 uVar1;
+  longlong lVar2;
+  char cVar3;
+  int iVar4;
+  longlong lVar5;
+  longlong lVar6;
+  undefined8 uVar7;
+  undefined1 local_res18 [8];
+  uint local_res20;
+  uint local_res24;
+  undefined8 local_58;
+  longlong local_50;
+  longlong local_48;
+  undefined1 local_40 [16];
+  undefined1 local_30 [24];
+  
+  thunk_FUN_141ffb470(local_30,0x62,1,
+                      "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\gameplay\\bgsimpactdataset.cpp"
+                      ,0x5d);
+  iVar4 = thunk_FUN_14087e2e0(param_2);
+  if (iVar4 == 0x68) {
+    thunk_FUN_1408bf480(param_1,param_2);
+    iVar4 = thunk_FUN_14087e760(param_2);
+    while (iVar4 != 0) {
+      if (iVar4 < 0x4c4d4250) {
+        if (iVar4 == 0x4c4d424f) {
+LAB_140b939f0:
+          lVar5 = (**(code **)(*param_1 + 0x3b0))(param_1);
+          if (lVar5 != 0) {
+            thunk_FUN_140350930(lVar5,param_2);
+          }
+        }
+        else if (iVar4 == 0x44414d56) {
+          thunk_FUN_1408bf1a0(param_1,param_2);
+        }
+        else if (iVar4 == 0x44494445) {
+          thunk_FUN_141ffb470(local_40,0x62,1,
+                              "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\gameplay\\bgsimpactdataset.cpp"
+                              ,0x6e);
+          thunk_FUN_141ff68b0(&local_58,*(undefined4 *)(param_2 + 0x2c0),8);
+          uVar7 = local_58;
+          thunk_FUN_14087e870(param_2,local_58,*(undefined4 *)(param_2 + 0x2c0));
+          thunk_FUN_1408bfb80(param_1,uVar7);
+          thunk_FUN_141ff6930(&local_58);
+          thunk_FUN_141ffb550(local_40);
+        }
+        else if (iVar4 == 0x444e424f) {
+          (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+        }
+        else if (iVar4 == 0x4554424f) goto LAB_140b939f0;
+      }
+      else if (iVar4 == 0x4d414e50) {
+        thunk_FUN_14087e870(param_2,&local_res20,8);
+        local_48 = 0;
+        local_50 = 0;
+        thunk_FUN_1408c68d0(&local_res20,param_2);
+        lVar5 = thunk_FUN_1408bdd20(local_res20);
+        if ((lVar5 == 0) || (lVar6 = lVar5, *(char *)(lVar5 + 0x26) != 'f')) {
+          uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+          uVar7 = (**(code **)(*param_1 + 0x238))(param_1);
+          thunk_FUN_141ff9fd0(0xe,
+                              "Unable to find material type (%08X) for impact data set \'%s\' (%08X)."
+                              ,local_res20,uVar7,uVar1);
+          lVar5 = 0;
+          lVar6 = local_48;
+        }
+        local_48 = lVar6;
+        thunk_FUN_1408c68d0(&local_res24,param_2);
+        lVar6 = thunk_FUN_1408bdd20(local_res24);
+        if ((lVar6 == 0) || (lVar2 = lVar6, *(char *)(lVar6 + 0x26) != 'g')) {
+          uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+          uVar7 = (**(code **)(*param_1 + 0x238))(param_1);
+          thunk_FUN_141ff9fd0(0xe,
+                              "Unable to find impact data (%08X) for impact data set \'%s\' (%08X)."
+                              ,local_res24,uVar7,uVar1);
+          lVar6 = 0;
+          lVar2 = local_50;
+        }
+        local_50 = lVar2;
+        if ((lVar5 != 0) && (lVar6 != 0)) {
+          thunk_FUN_140b94200(param_1 + 7,&local_48,&local_50,local_res18);
+        }
+      }
+      else if (iVar4 == 0x4e525450) {
+        (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+      }
+      else if (iVar4 == 0x50435453) {
+        thunk_FUN_1408bf430(param_1,param_2);
+      }
+      else if (iVar4 == 0x544c424f) goto LAB_140b939f0;
+      cVar3 = thunk_FUN_14087e7b0(param_2);
+      if (cVar3 == '\0') break;
+      iVar4 = thunk_FUN_14087e760(param_2);
+    }
+    uVar7 = 1;
+  }
+  else {
+    uVar7 = 0;
+  }
+  thunk_FUN_141ffb550(local_30);
+  return uVar7;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140b93b90 RVA 0xb93b90 size=472 :: undefined FUN_140b93b90(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140b93b90(longlong param_1)
+
+{
+  longlong *plVar1;
+  int iVar2;
+  undefined8 *puVar3;
+  undefined8 *puVar4;
+  undefined8 *puVar5;
+  undefined8 *puVar6;
+  longlong *plVar7;
+  longlong *plVar8;
+  bool bVar9;
+  undefined1 local_28 [16];
+  
+  thunk_FUN_141ffb470(local_28,0x62,1,
+                      "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\gameplay\\bgsimpactdataset.cpp"
+                      ,0xd4);
+  if ((*(uint *)(param_1 + 0x10) >> 3 & 1) == 0) {
+    puVar4 = *(undefined8 **)(param_1 + 0x60);
+    puVar6 = (undefined8 *)0x0;
+    puVar5 = (undefined8 *)0x0;
+    if (puVar4 != (undefined8 *)0x0) {
+      bVar9 = false;
+      puVar6 = puVar4 + (ulonglong)*(uint *)(param_1 + 0x3c) * 3;
+      do {
+        puVar5 = puVar4;
+        if (puVar6 <= puVar4) break;
+        puVar5 = puVar4 + 3;
+        if (puVar4[2] != 0) {
+          bVar9 = true;
+          puVar5 = puVar4;
+        }
+        puVar4 = puVar5;
+      } while (!bVar9);
+    }
+    iVar2 = *(int *)(param_1 + 0x50);
+    while( true ) {
+      puVar4 = *(undefined8 **)(param_1 + 0x60);
+      if (puVar4 == (undefined8 *)0x0) {
+        puVar3 = (undefined8 *)0x0;
+      }
+      else {
+        puVar3 = puVar4 + (ulonglong)*(uint *)(param_1 + 0x3c) * 3;
+      }
+      if (puVar5 == puVar3) break;
+      plVar7 = (longlong *)0x0;
+      plVar8 = (longlong *)0x0;
+      if (puVar4 == (undefined8 *)0x0) {
+        bVar9 = puVar6 == (undefined8 *)0x0;
+      }
+      else {
+        bVar9 = puVar6 == puVar4 + (ulonglong)*(uint *)(param_1 + 0x3c) * 3;
+      }
+      if (!bVar9) {
+        thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstscattertable.h"
+                            ,0x582,"Bad Table iterator end");
+        puVar4 = *(undefined8 **)(param_1 + 0x60);
+      }
+      puVar3 = puVar5;
+      if (puVar5 != (undefined8 *)0x0) {
+        if ((puVar5 < puVar4) || (puVar4 + (ulonglong)*(uint *)(param_1 + 0x3c) * 3 <= puVar5)) {
+          thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstscattertable.h"
+                              ,0x585,"Bad Table iterator curr");
+        }
+        if (iVar2 != *(int *)(param_1 + 0x50)) {
+          thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstscattertable.h"
+                              ,0x587,"Accessing using stale iterator");
+        }
+        plVar7 = (longlong *)*puVar5;
+        plVar8 = (longlong *)puVar5[1];
+      }
+      do {
+        puVar5 = puVar3 + 3;
+        if (puVar6 <= puVar5) break;
+        plVar1 = puVar3 + 5;
+        puVar3 = puVar5;
+      } while (*plVar1 == 0);
+      if ((plVar7 != (longlong *)0x0) && (plVar8 != (longlong *)0x0)) {
+        (**(code **)(*plVar7 + 600))(plVar7,param_1);
+        (**(code **)(*plVar8 + 600))(plVar8,param_1);
+      }
+    }
+    FUN_14000ff83(param_1,CONCAT71((int7)((ulonglong)puVar4 >> 8),1));
+  }
+  thunk_FUN_141ffb550(local_28);
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140b93d70 RVA 0xb93d70 size=265 :: undefined FUN_140b93d70(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+longlong FUN_140b93d70(longlong param_1,longlong param_2)
+
+{
+  longlong *plVar1;
+  longlong *plVar2;
+  longlong *plVar3;
+  longlong *plVar4;
+  uint local_res8 [2];
+  
+  thunk_FUN_141ffe210(local_res8,param_2,0);
+  plVar1 = *(longlong **)(param_1 + 0x60);
+  if (plVar1 == (longlong *)0x0) {
+    return 0;
+  }
+  plVar4 = plVar1 + (ulonglong)(*(int *)(param_1 + 0x3c) - 1U & local_res8[0]) * 3;
+  if ((plVar4 != (longlong *)0x0) && (plVar4[2] != 0)) {
+    plVar3 = *(longlong **)(param_1 + 0x48);
+    do {
+      plVar2 = (longlong *)plVar4[2];
+      if ((plVar2 != plVar3) &&
+         ((plVar2 < plVar1 ||
+          (*(uint *)(param_1 + 0x3c) <= (uint)(((longlong)plVar2 - (longlong)plVar1) / 0x18))))) {
+        thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstscattertable.h"
+                            ,0x13c,"Scatter table has been trashed.");
+      }
+      if (*plVar4 == param_2) {
+        if (plVar4 == (longlong *)0x0) {
+          return 0;
+        }
+        return plVar4[1];
+      }
+      plVar4 = (longlong *)plVar4[2];
+      if (plVar4 == (longlong *)0x0) {
+        return 0;
+      }
+      plVar3 = *(longlong **)(param_1 + 0x48);
+    } while (plVar4 != plVar3);
+    return 0;
+  }
+  return 0;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xb93890-0xb93d90: 3 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (528 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1323 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xca5580:0xca5a80'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140ca5580 RVA 0xca5580 size=530 :: undefined FUN_140ca5580(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140ca5580(longlong *param_1,longlong param_2)
+
+{
+  undefined8 uVar1;
+  char cVar2;
+  int iVar3;
+  longlong lVar4;
+  undefined8 local_res18 [2];
+  undefined1 local_38 [16];
+  undefined8 local_28;
+  undefined4 local_20;
+  undefined8 local_18;
+  undefined2 local_10;
+  
+  cVar2 = thunk_FUN_14087e2e0(param_2);
+  if (cVar2 != 'j') {
+    return 0;
+  }
+  thunk_FUN_1408bf480(param_1,param_2);
+  FUN_14000ff83(param_1,0);
+  iVar3 = thunk_FUN_14087e760(param_2);
+  do {
+    if (iVar3 == 0) {
+      return 1;
+    }
+    if (iVar3 < 0x45544250) {
+      if (iVar3 == 0x4554424f) {
+LAB_140ca572a:
+        lVar4 = (**(code **)(*param_1 + 0x3b0))(param_1);
+        if (lVar4 != 0) {
+          thunk_FUN_140350930(lVar4,param_2);
+        }
+      }
+      else if (iVar3 == 0x41544144) {
+        local_20 = *(undefined4 *)(param_2 + 0x2c0);
+        thunk_FUN_1424378e0(&local_28);
+        local_10 = *(undefined2 *)(param_2 + 0x2b8);
+        local_18 = local_28;
+        cVar2 = thunk_FUN_14087e870(param_2,local_28,local_20);
+        if (cVar2 != '\0') {
+          thunk_FUN_140ca52e0(param_1 + 5,&local_28);
+        }
+        thunk_FUN_142437940(&local_28);
+        if (*(ushort *)(param_2 + 0x2b8) < 0x27) {
+          *(undefined1 *)((longlong)param_1 + 0x3b) = 0;
+        }
+      }
+      else if (iVar3 == 0x44414d56) {
+        thunk_FUN_1408bf1a0(param_1,param_2);
+      }
+      else if (iVar3 == 0x44494445) {
+        thunk_FUN_141ffb470(local_38,0x62,1,
+                            "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\world\\bgsencounterzone.cpp"
+                            ,0x62);
+        thunk_FUN_141ff68b0(local_res18,*(undefined4 *)(param_2 + 0x2c0),8);
+        uVar1 = local_res18[0];
+        thunk_FUN_14087e870(param_2,local_res18[0],*(undefined4 *)(param_2 + 0x2c0));
+        thunk_FUN_1408bfb80(param_1,uVar1);
+        thunk_FUN_141ff6930(local_res18);
+        thunk_FUN_141ffb550(local_38);
+      }
+      else if (iVar3 == 0x444e424f) {
+        (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+      }
+    }
+    else {
+      if (iVar3 == 0x4c4d424f) goto LAB_140ca572a;
+      if (iVar3 == 0x4e525450) {
+        (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+      }
+      else if (iVar3 == 0x50435453) {
+        thunk_FUN_1408bf430(param_1,param_2);
+      }
+      else if (iVar3 == 0x544c424f) goto LAB_140ca572a;
+    }
+    cVar2 = thunk_FUN_14087e7b0(param_2);
+    if (cVar2 == '\0') {
+      return 1;
+    }
+    iVar3 = thunk_FUN_14087e760(param_2);
+  } while( true );
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140ca57a0 RVA 0xca57a0 size=702 :: undefined FUN_140ca57a0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140ca57a0(longlong *param_1)
+
+{
+  undefined4 uVar1;
+  undefined4 uVar2;
+  longlong *plVar3;
+  undefined8 uVar4;
+  longlong *plVar5;
+  undefined8 uVar6;
+  int local_res8 [2];
+  ulonglong in_stack_ffffffffffffffb8;
+  undefined4 uVar7;
+  
+  if ((*(uint *)(param_1 + 2) >> 3 & 1) == 0) {
+    local_res8[0] = (int)param_1[5];
+    if (local_res8[0] != 0) {
+      uVar4 = thunk_FUN_1408be010(param_1,0xffffffff);
+      thunk_FUN_1408c68d0(local_res8,uVar4);
+      plVar5 = (longlong *)thunk_FUN_1408bdd20(local_res8[0]);
+      uVar7 = (undefined4)(in_stack_ffffffffffffffb8 >> 0x20);
+      param_1[5] = (longlong)plVar5;
+      if (plVar5 == (longlong *)0x0) {
+        uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+        uVar4 = (**(code **)(*param_1 + 0x238))(param_1);
+        in_stack_ffffffffffffffb8 = CONCAT44(uVar7,uVar1);
+        thunk_FUN_141ff9fd0(0xf,"Unable to find owner form (%08X) on encounter zone \'%s\' (%08X).",
+                            local_res8[0],uVar4,in_stack_ffffffffffffffb8);
+      }
+      else {
+        (**(code **)(*plVar5 + 600))(plVar5,param_1);
+      }
+    }
+    local_res8[0] = (int)param_1[6];
+    if (local_res8[0] != 0) {
+      uVar4 = thunk_FUN_1408be010(param_1,0xffffffff);
+      thunk_FUN_1408c68d0(local_res8,uVar4);
+      uVar4 = thunk_FUN_1408bdd20(local_res8[0]);
+      in_stack_ffffffffffffffb8 = in_stack_ffffffffffffffb8 & 0xffffffff00000000;
+      plVar5 = (longlong *)
+               __RTDynamicCast(uVar4,0,&TESForm::RTTI_Type_Descriptor,
+                               &BGSLocation::RTTI_Type_Descriptor,in_stack_ffffffffffffffb8);
+      uVar7 = (undefined4)(in_stack_ffffffffffffffb8 >> 0x20);
+      param_1[6] = (longlong)plVar5;
+      if (plVar5 == (longlong *)0x0) {
+        uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+        uVar4 = (**(code **)(*param_1 + 0x238))(param_1);
+        in_stack_ffffffffffffffb8 = CONCAT44(uVar7,uVar1);
+        thunk_FUN_141ff9fd0(0xf,"Unable to find location (%08X) on encounter zone \'%s\' (%08X).",
+                            local_res8[0],uVar4,in_stack_ffffffffffffffb8);
+      }
+      else {
+        (**(code **)(*plVar5 + 600))(plVar5,param_1);
+      }
+    }
+    if (param_1[6] != 0) {
+      plVar5 = (longlong *)FUN_1400836fe(param_1[6],0);
+      if ((plVar5 != (longlong *)0x0) && (plVar5 != param_1)) {
+        plVar3 = (longlong *)param_1[6];
+        uVar7 = *(undefined4 *)((longlong)param_1 + 0x14);
+        uVar1 = *(undefined4 *)((longlong)plVar5 + 0x14);
+        uVar2 = *(undefined4 *)((longlong)plVar3 + 0x14);
+        uVar4 = (**(code **)(*param_1 + 0x238))(param_1);
+        in_stack_ffffffffffffffb8 = (**(code **)(*plVar5 + 0x238))(plVar5);
+        uVar6 = (**(code **)(*plVar3 + 0x238))(plVar3);
+        thunk_FUN_141ff9fd0(0xf,
+                            "Location \'%s\' (%08X) pre-existing zone \'%s\' (%08X) being bashed by zone \'%s\' (%08X)."
+                            ,uVar6,uVar2,in_stack_ffffffffffffffb8,uVar1,uVar4,uVar7);
+      }
+      *(longlong **)(param_1[6] + 0x80) = param_1;
+    }
+    local_res8[0] = (int)param_1[8];
+    if (local_res8[0] != 0) {
+      uVar4 = thunk_FUN_1408be010(param_1,0xffffffff);
+      thunk_FUN_1408c68d0(local_res8,uVar4);
+      uVar4 = thunk_FUN_1408bdd20(local_res8[0]);
+      in_stack_ffffffffffffffb8 = in_stack_ffffffffffffffb8 & 0xffffffff00000000;
+      plVar5 = (longlong *)
+               __RTDynamicCast(uVar4,0,&TESForm::RTTI_Type_Descriptor,
+                               &BGSLocation::RTTI_Type_Descriptor,in_stack_ffffffffffffffb8);
+      uVar7 = (undefined4)(in_stack_ffffffffffffffb8 >> 0x20);
+      param_1[8] = (longlong)plVar5;
+      if (plVar5 == (longlong *)0x0) {
+        uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+        uVar4 = (**(code **)(*param_1 + 0x238))(param_1);
+        thunk_FUN_141ff9fd0(0xf,
+                            "Unable to find master location (%08X) on encounter zone \'%s\' (%08X)."
+                            ,local_res8[0],uVar4,CONCAT44(uVar7,uVar1));
+      }
+      else {
+        (**(code **)(*plVar5 + 600))(plVar5,param_1);
+      }
+    }
+    FUN_14000ff83(param_1,1);
+  }
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140ca5a70 RVA 0xca5a70 size=259 :: undefined FUN_140ca5a70(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140ca5a70(void)
+
+{
+  longlong *plVar1;
+  
+  if (DAT_143d5c868 == (longlong *)0x0) {
+    if (DAT_143d1293c != 2) {
+      thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+    }
+    plVar1 = (longlong *)thunk_FUN_141ff6d30(&DAT_143d11e80,0x48,0);
+    if (plVar1 == (longlong *)0x0) {
+      plVar1 = (longlong *)0x0;
+    }
+    else {
+      thunk_FUN_1408bc610(plVar1);
+      *plVar1 = (longlong)BGSEncounterZone::vftable;
+      plVar1[6] = 0;
+      *(undefined4 *)(plVar1 + 7) = 0;
+      *(undefined1 *)((longlong)plVar1 + 0x26) = 0x6a;
+      plVar1[8] = 0;
+      plVar1[5] = 0;
+      plVar1[6] = 0;
+      plVar1[7] = 0;
+    }
+    DAT_143d5c868 = plVar1;
+    (**(code **)(*plVar1 + 0x398))(plVar1,0x1e,1);
+    thunk_FUN_1408bfb80(DAT_143d5c868,"NoZoneZone");
+    if (DAT_143d17148 == 0) {
+      thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstsingleton.h"
+                          ,0x87,"BSTSingletonSDMBase isn\'t initialized yet.");
+    }
+    thunk_FUN_1408565b0(DAT_143d17148,DAT_143d5c868);
+    return;
+  }
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xca5580-0xca5a80: 3 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (469 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1070 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xcb1380:0xcb1880'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140cb1380 RVA 0xcb1380 size=3164 :: undefined FUN_140cb1380(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140cb1380(longlong *param_1,longlong param_2)
+
+{
+  uint *puVar1;
+  undefined4 uVar2;
+  undefined4 *puVar3;
+  uint uVar4;
+  uint uVar5;
+  char cVar6;
+  int iVar7;
+  int iVar8;
+  undefined8 uVar9;
+  undefined4 *puVar10;
+  longlong lVar11;
+  longlong *plVar12;
+  uint *puVar13;
+  longlong *plVar14;
+  undefined8 **ppuVar15;
+  uint uVar16;
+  undefined8 *puVar17;
+  uint uVar18;
+  longlong *plVar19;
+  uint *puVar20;
+  ulonglong uVar21;
+  undefined8 *puVar22;
+  uint uVar23;
+  undefined1 local_res18 [8];
+  uint local_res20 [2];
+  undefined8 local_f8;
+  undefined8 *local_f0;
+  undefined8 *local_e8;
+  longlong *local_e0;
+  longlong local_d8;
+  undefined **local_d0;
+  longlong *local_c8;
+  undefined **local_c0;
+  longlong *local_b8;
+  undefined **local_b0;
+  longlong *local_a8;
+  undefined **local_a0;
+  longlong *local_98;
+  undefined **local_90;
+  longlong *local_88;
+  undefined **local_80;
+  longlong *local_78;
+  undefined1 local_70 [16];
+  undefined1 local_60 [32];
+  
+  thunk_FUN_141ffb470(local_60,0x68,1,
+                      "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\world\\bgslocation.cpp"
+                      ,0xfa);
+  local_res20[0] = 0;
+  cVar6 = thunk_FUN_14087e2e0(param_2);
+  if (cVar6 == 'k') {
+    thunk_FUN_1408bf480(param_1,param_2);
+    FUN_14000ff83(param_1,0);
+    iVar7 = thunk_FUN_14087e760(param_2);
+    while (iVar7 != 0) {
+      plVar19 = (longlong *)0x0;
+      if (iVar7 < 0x4d414e4e) {
+        if (iVar7 == 0x4d414e4d) {
+          local_res20[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res20,4);
+          *(uint *)(param_1 + 0x11) = local_res20[0];
+        }
+        else if (iVar7 < 0x444e4250) {
+          if (iVar7 == 0x444e424f) {
+            (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+          }
+          else if (iVar7 < 0x4345434d) {
+            if (iVar7 == 0x4345434c) {
+LAB_140cb1496:
+              uVar23 = *(uint *)(param_2 + 0x2c0) >> 2;
+              if (1 < uVar23) {
+                uVar9 = thunk_FUN_140678450();
+                uVar9 = thunk_FUN_141ff5bd0(uVar9);
+                puVar10 = (undefined4 *)thunk_FUN_141fffd50(uVar9,(ulonglong)uVar23 << 2,8);
+                thunk_FUN_14087e870(param_2,puVar10,uVar23 * 4);
+                thunk_FUN_1408c68d0(puVar10,param_2);
+                lVar11 = thunk_FUN_1408bdd20(*puVar10);
+                if ((lVar11 == 0) || (*(char *)(lVar11 + 0x26) != 'J')) {
+                  uVar2 = *(undefined4 *)((longlong)param_1 + 0x14);
+                  uVar9 = (**(code **)(*param_1 + 0x238))(param_1);
+                  thunk_FUN_141ff9fd0(0xe,
+                                      "Could not find worldspace (%08X) in load for Location \'%s\' (%08X) in file %s."
+                                      ,*puVar10,uVar9,uVar2,param_2 + 0x78);
+                }
+                else {
+                  local_d8 = lVar11;
+                  plVar12 = (longlong *)thunk_FUN_1402c9670(0x18);
+                  if (plVar12 != (longlong *)0x0) {
+                    thunk_FUN_141ffc960(plVar12);
+                    thunk_FUN_141ffc4f0(plVar12 + 2);
+                    plVar19 = plVar12;
+                  }
+                  lVar11 = 0x188;
+                  if (iVar7 != 0x43454341) {
+                    lVar11 = 0x150;
+                  }
+                  local_e0 = plVar19;
+                  thunk_FUN_140cb4ca0(lVar11 + (longlong)param_1,&local_d8,&local_e0,local_res18);
+                  thunk_FUN_140423fb0(plVar19,uVar23 - 1);
+                  uVar18 = 1;
+                  puVar3 = puVar10;
+                  if (1 < uVar23) {
+                    do {
+                      uVar16 = uVar18 - 1;
+                      if (*(uint *)(plVar19 + 2) <= uVar16) {
+                        thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstarray.inl"
+                                            ,0x1ed,"Invalid index %u|%u passed to SetAt",uVar16,
+                                            *(uint *)(plVar19 + 2));
+                      }
+                      lVar11 = *plVar19;
+                      if (lVar11 == 0) {
+                        thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstarray.inl"
+                                            ,0x1ee,"Array doesn\'t have a buffer");
+                        lVar11 = *plVar19;
+                      }
+                      uVar18 = uVar18 + 1;
+                      *(undefined4 *)(lVar11 + (ulonglong)uVar16 * 4) = puVar3[1];
+                      puVar3 = puVar3 + 1;
+                    } while (uVar18 < uVar23);
+                  }
+                }
+                uVar9 = thunk_FUN_140678450();
+                uVar9 = thunk_FUN_141ff5bd0(uVar9);
+                thunk_FUN_1420003f0(uVar9,puVar10);
+              }
+            }
+            else if (iVar7 == 0x304d414e) {
+              local_res20[0] = 0;
+              thunk_FUN_14087e870(param_2,local_res20,4);
+              *(uint *)((longlong)param_1 + 0x94) = local_res20[0];
+            }
+            else if (iVar7 == 0x314d414e) {
+              local_res20[0] = 0;
+              thunk_FUN_14087e870(param_2,local_res20,4);
+              param_1[0xf] = (ulonglong)local_res20[0];
+            }
+            else if (iVar7 == 0x43454341) goto LAB_140cb1496;
+          }
+          else if (iVar7 == 0x44414d56) {
+            thunk_FUN_1408bf1a0(param_1,param_2);
+          }
+          else if (iVar7 == 0x44494445) {
+            thunk_FUN_141ffb470(local_70,0x62,1,
+                                "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\world\\bgslocation.cpp"
+                                ,0x11f);
+            thunk_FUN_141ff68b0(&local_f8,*(undefined4 *)(param_2 + 0x2c0),8);
+            uVar9 = local_f8;
+            thunk_FUN_14087e870(param_2,local_f8,*(undefined4 *)(param_2 + 0x2c0));
+            thunk_FUN_1408bfb80(param_1,uVar9);
+            thunk_FUN_141ff6930(&local_f8);
+            thunk_FUN_141ffb550(local_70);
+          }
+        }
+        else if (iVar7 < 0x4d414e42) {
+          if (iVar7 == 0x4d414e41) {
+            thunk_FUN_14087e870(param_2,param_1 + 0x12,4);
+          }
+          else if (iVar7 == 0x4554424f) {
+LAB_140cb1757:
+            lVar11 = (**(code **)(*param_1 + 0x3b0))(param_1);
+            if (lVar11 != 0) {
+              thunk_FUN_140350930(lVar11,param_2);
+            }
+          }
+          else if (iVar7 == 0x4c4c5546) {
+            plVar12 = param_1 + 5;
+            if (param_1 == (longlong *)0x0) {
+              plVar12 = plVar19;
+            }
+            thunk_FUN_1408d51c0(plVar12,param_2);
+          }
+          else if (iVar7 == 0x4c4d424f) goto LAB_140cb1757;
+        }
+        else if (iVar7 == 0x4d414e43) {
+          thunk_FUN_14087e870(param_2,param_1 + 0xd,4);
+        }
+        else if (iVar7 == 0x4d414e46) {
+          local_res20[0] = 0;
+          thunk_FUN_14087e870(param_2,local_res20,4);
+          param_1[0xe] = (ulonglong)local_res20[0];
+        }
+      }
+      else if (iVar7 < 0x52504342) {
+        if (iVar7 == 0x52504341) {
+          plVar19 = param_1 + 0x19;
+          uVar21 = (ulonglong)*(uint *)(param_2 + 0x2c0) / 0xc;
+          if ((ulonglong)*(uint *)(param_2 + 0x2c0) != uVar21 * 0xc) {
+            thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\world\\bgslocation.cpp"
+                                ,0x155,"Data in file does not match UnloadedRefData size");
+          }
+          iVar7 = (int)uVar21;
+          if (iVar7 != 0) {
+            thunk_FUN_141ff68b0(&local_f0,uVar21 * 0xc,8);
+            puVar17 = local_f0;
+            thunk_FUN_14087e870(param_2,local_f0,iVar7 * 0xc);
+            uVar23 = (int)param_1[0x1b] + iVar7;
+            if (*(uint *)(param_1 + 0x1a) < uVar23) {
+              local_b0 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+              local_a8 = plVar19;
+              thunk_FUN_141ffc880(param_1 + 0x1b,&local_b0,*(uint *)(param_1 + 0x1a),uVar23,0xc);
+              local_b0 = BSTArrayBase::IAllocatorFunctor::vftable;
+            }
+            puVar22 = puVar17;
+            if (iVar7 != 0) {
+              do {
+                thunk_FUN_1408c68d0(puVar22,param_2);
+                thunk_FUN_1408c68d0((longlong)puVar22 + 4,param_2);
+                local_a0 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+                local_98 = plVar19;
+                uVar23 = thunk_FUN_141ffc5d0(param_1 + 0x1b,&local_a0,(int)param_1[0x1a],0xc);
+                local_a0 = BSTArrayBase::IAllocatorFunctor::vftable;
+                if (uVar23 != 0xffffffff) {
+                  lVar11 = *plVar19;
+                  *(undefined8 *)(lVar11 + (ulonglong)uVar23 * 0xc) = *puVar17;
+                  *(undefined4 *)(lVar11 + (ulonglong)uVar23 * 0xc + 8) =
+                       *(undefined4 *)(puVar17 + 1);
+                }
+                puVar17 = (undefined8 *)((longlong)puVar17 + 0xc);
+                uVar21 = uVar21 - 1;
+                puVar22 = (undefined8 *)((longlong)puVar22 + 0xc);
+              } while (uVar21 != 0);
+            }
+            ppuVar15 = &local_f0;
+LAB_140cb1f62:
+            thunk_FUN_141ff6930(ppuVar15);
+          }
+        }
+        else if (iVar7 < 0x4e554342) {
+          if (iVar7 == 0x4e554341) {
+LAB_140cb18c5:
+            lVar11 = 0x130;
+            if (iVar7 != 0x4e554341) {
+              lVar11 = 0xb0;
+            }
+            plVar12 = (longlong *)(lVar11 + (longlong)param_1);
+            if (*(ushort *)(param_2 + 0x2b8) < 0x13) {
+              thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\world\\bgslocation.cpp"
+                                  ,0x1d5,"File contains old location data.");
+            }
+            uVar23 = *(uint *)(param_2 + 0x2c0) / 0xc;
+            if (*(uint *)(param_2 + 0x2c0) != uVar23 * 0xc) {
+              thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\world\\bgslocation.cpp"
+                                  ,0x1dd,"Data in file does not match UniqueNPCData size");
+            }
+            if (DAT_143d1293c != 2) {
+              thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+            }
+            uVar9 = thunk_FUN_141ff5bd0(&DAT_143d11e80);
+            puVar13 = (uint *)thunk_FUN_141fffd50(uVar9,(ulonglong)uVar23 * 0x18,8);
+            thunk_FUN_140cb4a00(param_2,puVar13,(ulonglong)uVar23);
+            uVar18 = (int)plVar12[2] + uVar23;
+            if (*(uint *)(plVar12 + 1) < uVar18) {
+              local_d0 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+              local_c8 = plVar12;
+              thunk_FUN_141ffc880(plVar12 + 2,&local_d0,*(uint *)(plVar12 + 1),uVar18,0x18);
+              local_d0 = BSTArrayBase::IAllocatorFunctor::vftable;
+            }
+            puVar20 = puVar13;
+            if (uVar23 != 0) {
+              do {
+                local_res20[0] = *puVar20;
+                if ((local_res20[0] != 0) && (param_1 != (longlong *)0x0)) {
+                  uVar9 = thunk_FUN_1408be010(param_1,0xffffffff);
+                  thunk_FUN_1408c68d0(local_res20,uVar9);
+                  uVar9 = thunk_FUN_1408bdd20(local_res20[0]);
+                  plVar14 = (longlong *)
+                            __RTDynamicCast(uVar9,0,&TESForm::RTTI_Type_Descriptor,
+                                            &TESNPC::RTTI_Type_Descriptor,0);
+                  *(longlong **)puVar20 = plVar14;
+                  if (plVar14 == (longlong *)0x0) {
+                    uVar2 = *(undefined4 *)((longlong)param_1 + 0x14);
+                    uVar9 = (**(code **)(*param_1 + 0x238))();
+                    thunk_FUN_141ff9fd0(4,
+                                        "Unable to find unique NPC (%08X) for Location \'%s\' (%08X)"
+                                        ,local_res20[0],uVar9,uVar2);
+                  }
+                  else {
+                    (**(code **)(*plVar14 + 600))(plVar14,param_1);
+                  }
+                }
+                if (*(longlong *)puVar20 != 0) {
+                  thunk_FUN_1408c68d0(puVar13 + (longlong)plVar19 * 6 + 2,param_2);
+                  local_c0 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+                  local_b8 = plVar12;
+                  uVar18 = thunk_FUN_141ffc5d0(plVar12 + 2,&local_c0,(int)plVar12[1],0x18);
+                  local_c0 = BSTArrayBase::IAllocatorFunctor::vftable;
+                  if (uVar18 != 0xffffffff) {
+                    uVar16 = puVar20[1];
+                    uVar4 = puVar20[2];
+                    uVar5 = puVar20[3];
+                    lVar11 = *plVar12;
+                    puVar1 = (uint *)(lVar11 + (ulonglong)uVar18 * 0x18);
+                    *puVar1 = *puVar20;
+                    puVar1[1] = uVar16;
+                    puVar1[2] = uVar4;
+                    puVar1[3] = uVar5;
+                    *(longlong *)(lVar11 + 0x10 + (ulonglong)uVar18 * 0x18) =
+                         *(longlong *)(puVar20 + 4);
+                  }
+                }
+                uVar18 = (int)plVar19 + 1;
+                plVar19 = (longlong *)(ulonglong)uVar18;
+                puVar20 = puVar20 + 6;
+              } while (uVar18 < uVar23);
+            }
+            goto LAB_140cb1b02;
+          }
+          if (iVar7 == 0x4d414e50) {
+            local_res20[0] = 0;
+            thunk_FUN_14087e870(param_2,local_res20,4);
+            param_1[0xc] = (ulonglong)local_res20[0];
+          }
+          else if (iVar7 == 0x4d414e52) {
+            thunk_FUN_14087e870(param_2,(longlong)param_1 + 0x8c,4);
+          }
+          else if (iVar7 == 0x4e525450) {
+            (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+          }
+        }
+        else {
+          if (iVar7 == 0x4e55434c) goto LAB_140cb18c5;
+          if (iVar7 == 0x50435453) {
+            thunk_FUN_1408bf430(param_1,param_2);
+          }
+        }
+      }
+      else if (iVar7 == 0x52504352) {
+        uVar23 = *(uint *)(param_2 + 0x2c0) >> 2;
+        if (uVar23 != 0) {
+          uVar21 = (ulonglong)uVar23;
+          thunk_FUN_141ff68b0(&local_e8,uVar23 * 4,8);
+          puVar17 = local_e8;
+          thunk_FUN_14087e870(param_2,local_e8,uVar23 * 4);
+          if (uVar23 != 0) {
+            do {
+              thunk_FUN_1408c68d0(puVar17,param_2);
+              thunk_FUN_140805ba0(param_1 + 0x1d,puVar17,puVar17,local_res18);
+              puVar17 = (undefined8 *)((longlong)puVar17 + 4);
+              uVar21 = uVar21 - 1;
+            } while (uVar21 != 0);
+          }
+          ppuVar15 = &local_e8;
+          goto LAB_140cb1f62;
+        }
+      }
+      else if ((iVar7 == 0x52534341) || (iVar7 == 0x5253434c)) {
+        lVar11 = 0x118;
+        if (iVar7 != 0x52534341) {
+          lVar11 = 0x98;
+        }
+        plVar12 = (longlong *)(lVar11 + (longlong)param_1);
+        uVar23 = *(uint *)(param_2 + 0x2c0) >> 4;
+        if (DAT_143d1293c != 2) {
+          thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+        }
+        uVar9 = thunk_FUN_141ff5bd0(&DAT_143d11e80);
+        puVar13 = (uint *)thunk_FUN_141fffd50(uVar9,(ulonglong)uVar23 * 0x18,8);
+        thunk_FUN_140cb4700(param_2,puVar13,(ulonglong)uVar23);
+        uVar18 = (int)plVar12[2] + uVar23;
+        if (*(uint *)(plVar12 + 1) < uVar18) {
+          local_90 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+          local_88 = plVar12;
+          thunk_FUN_141ffc880(plVar12 + 2,&local_90,*(uint *)(plVar12 + 1),uVar18,0x18);
+          local_90 = BSTArrayBase::IAllocatorFunctor::vftable;
+        }
+        puVar20 = puVar13;
+        if (uVar23 != 0) {
+          do {
+            local_res20[0] = *puVar20;
+            if ((local_res20[0] != 0) && (param_1 != (longlong *)0x0)) {
+              uVar9 = thunk_FUN_1408be010(param_1,0xffffffff);
+              thunk_FUN_1408c68d0(local_res20,uVar9);
+              uVar9 = thunk_FUN_1408bdd20(local_res20[0]);
+              plVar14 = (longlong *)
+                        __RTDynamicCast(uVar9,0,&TESForm::RTTI_Type_Descriptor,
+                                        &BGSLocationRefType::RTTI_Type_Descriptor,0);
+              *(longlong **)puVar20 = plVar14;
+              if (plVar14 == (longlong *)0x0) {
+                uVar2 = *(undefined4 *)((longlong)param_1 + 0x14);
+                uVar9 = (**(code **)(*param_1 + 0x238))();
+                thunk_FUN_141ff9fd0(0xe,
+                                    "Unable to find location ref type (%08X) for special ref in Location \'%s\' (%08X)"
+                                    ,local_res20[0],uVar9,uVar2);
+              }
+              else {
+                (**(code **)(*plVar14 + 600))(plVar14,param_1);
+              }
+            }
+            if (*(longlong *)puVar20 != 0) {
+              thunk_FUN_1408c68d0(puVar13 + (longlong)plVar19 * 6 + 3,param_2);
+              thunk_FUN_1408c68d0(puVar13 + (longlong)plVar19 * 6 + 2,param_2);
+              local_80 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+              local_78 = plVar12;
+              uVar18 = thunk_FUN_141ffc5d0(plVar12 + 2,&local_80,(int)plVar12[1],0x18);
+              local_80 = BSTArrayBase::IAllocatorFunctor::vftable;
+              if (uVar18 != 0xffffffff) {
+                uVar16 = puVar20[1];
+                uVar4 = puVar20[2];
+                uVar5 = puVar20[3];
+                lVar11 = *plVar12;
+                puVar1 = (uint *)(lVar11 + (ulonglong)uVar18 * 0x18);
+                *puVar1 = *puVar20;
+                puVar1[1] = uVar16;
+                puVar1[2] = uVar4;
+                puVar1[3] = uVar5;
+                *(longlong *)(lVar11 + 0x10 + (ulonglong)uVar18 * 0x18) = *(longlong *)(puVar20 + 4)
+                ;
+              }
+            }
+            uVar18 = (int)plVar19 + 1;
+            plVar19 = (longlong *)(ulonglong)uVar18;
+            puVar20 = puVar20 + 6;
+          } while (uVar18 < uVar23);
+        }
+LAB_140cb1b02:
+        if (DAT_143d1293c != 2) {
+          thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+        }
+        uVar9 = thunk_FUN_141ff5bd0(&DAT_143d11e80);
+        thunk_FUN_1420003f0(uVar9,puVar13);
+      }
+      else {
+        if (iVar7 == 0x544c424f) goto LAB_140cb1757;
+        if (iVar7 == 0x5a49534b) {
+          iVar7 = thunk_FUN_14032c4b0();
+          thunk_FUN_140890c00(param_1 + 8,param_2);
+          iVar8 = thunk_FUN_14032c4b0();
+          if (iVar7 != iVar8) {
+            uVar2 = *(undefined4 *)((longlong)param_1 + 0x14);
+            uVar9 = (**(code **)(*param_1 + 0x238))(param_1);
+            thunk_FUN_141ff9fd0(0xf,
+                                "Warnings were encountered loading keyword data for form \'%s\' (%08X)."
+                                ,uVar9,uVar2);
+          }
+        }
+      }
+      cVar6 = thunk_FUN_14087e7b0(param_2);
+      if (cVar6 == '\0') break;
+      iVar7 = thunk_FUN_14087e760(param_2);
+    }
+    uVar9 = 1;
+  }
+  else {
+    uVar9 = 0;
+  }
+  thunk_FUN_141ffb550(local_60);
+  return uVar9;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xcb1380-0xcb1880: 1 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (463 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1177 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /home/ciusr/ckre-home/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /home/ciusr/ckre-home/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xc0e6e0:0xc0ebe0'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140c0e6e0 RVA 0xc0e6e0 size=891 :: undefined FUN_140c0e6e0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140c0e6e0(longlong *param_1,longlong param_2)
+
+{
+  longlong *plVar1;
+  uint uVar2;
+  char cVar3;
+  int iVar4;
+  longlong lVar5;
+  undefined8 uVar6;
+  uint *puVar7;
+  uint uVar8;
+  ulonglong uVar9;
+  uint *puVar10;
+  undefined8 local_res18;
+  undefined1 local_78 [16];
+  undefined1 local_68 [16];
+  undefined **local_58;
+  longlong *local_50;
+  undefined **local_48;
+  longlong *local_40;
+  
+  thunk_FUN_141ffb470(local_68,0x62,1,
+                      "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\objects\\bgsoutfit.cpp"
+                      ,0x3d);
+  thunk_FUN_1408bf480(param_1,param_2);
+  FUN_14000ff83(param_1,0);
+  iVar4 = thunk_FUN_14087e760(param_2);
+  while (iVar4 != 0) {
+    if (iVar4 < 0x4c4d4250) {
+      if (iVar4 == 0x4c4d424f) {
+LAB_140c0e879:
+        lVar5 = (**(code **)(*param_1 + 0x3b0))(param_1);
+        if (lVar5 != 0) {
+          thunk_FUN_140350930(lVar5,param_2);
+        }
+      }
+      else if (iVar4 == 0x44414d56) {
+        thunk_FUN_1408bf1a0(param_1,param_2);
+      }
+      else if (iVar4 == 0x44494445) {
+        thunk_FUN_141ffb470(local_78,0x62,1,
+                            "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\objects\\bgsoutfit.cpp"
+                            ,0x4b);
+        thunk_FUN_141ff68b0(&local_res18,*(undefined4 *)(param_2 + 0x2c0),8);
+        uVar6 = local_res18;
+        thunk_FUN_14087e870(param_2,local_res18,*(undefined4 *)(param_2 + 0x2c0));
+        thunk_FUN_1408bfb80(param_1,uVar6);
+        thunk_FUN_141ff6930(&local_res18);
+        thunk_FUN_141ffb550(local_78);
+      }
+      else if (iVar4 == 0x444e424f) {
+        (**(code **)(*param_1 + 0x1b8))(param_1,param_2);
+      }
+      else if (iVar4 == 0x4554424f) goto LAB_140c0e879;
+    }
+    else if (iVar4 == 0x4d414e49) {
+      uVar2 = *(uint *)(param_2 + 0x2c0);
+      uVar8 = uVar2 >> 2;
+      uVar9 = (ulonglong)uVar8;
+      if (DAT_143d1293c != 2) {
+        thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+      }
+      uVar6 = thunk_FUN_141ff5bd0(&DAT_143d11e80);
+      puVar7 = (uint *)thunk_FUN_141fffd50(uVar6,uVar2,8);
+      thunk_FUN_14087e870(param_2,puVar7,uVar8 * 4);
+      plVar1 = param_1 + 5;
+      uVar8 = (int)param_1[7] + uVar8;
+      if (*(uint *)(param_1 + 6) < uVar8) {
+        local_58 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+        local_50 = plVar1;
+        thunk_FUN_141ffc880(param_1 + 7,&local_58,*(uint *)(param_1 + 6),uVar8,8);
+        local_58 = BSTArrayBase::IAllocatorFunctor::vftable;
+      }
+      puVar10 = puVar7;
+      if (uVar2 >> 2 != 0) {
+        do {
+          uVar2 = *puVar10;
+          local_48 = BSTArrayAllocatorFunctor<BSTArrayHeapAllocator>::vftable;
+          local_40 = plVar1;
+          uVar8 = thunk_FUN_141ffc5d0(param_1 + 7,&local_48,(int)param_1[6],8);
+          local_48 = BSTArrayBase::IAllocatorFunctor::vftable;
+          *(ulonglong *)(*plVar1 + (ulonglong)uVar8 * 8) = (ulonglong)uVar2;
+          uVar9 = uVar9 - 1;
+          puVar10 = puVar10 + 1;
+        } while (uVar9 != 0);
+      }
+      if (DAT_143d1293c != 2) {
+        thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+      }
+      uVar6 = thunk_FUN_141ff5bd0(&DAT_143d11e80);
+      thunk_FUN_1420003f0(uVar6,puVar7);
+    }
+    else if (iVar4 == 0x4e525450) {
+      (**(code **)(*param_1 + 0x1c8))(param_1,param_2);
+    }
+    else if (iVar4 == 0x50435453) {
+      thunk_FUN_1408bf430(param_1,param_2);
+    }
+    else if (iVar4 == 0x544c424f) goto LAB_140c0e879;
+    cVar3 = thunk_FUN_14087e7b0(param_2);
+    if (cVar3 == '\0') break;
+    iVar4 = thunk_FUN_14087e760(param_2);
+  }
+  thunk_FUN_141ffb550(local_68);
+  return 1;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140c0ea70 RVA 0xc0ea70 size=703 :: undefined FUN_140c0ea70(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140c0ea70(longlong *param_1)
+
+{
+  undefined4 uVar1;
+  char cVar2;
+  uint uVar3;
+  undefined8 uVar4;
+  longlong *plVar5;
+  undefined8 *puVar6;
+  undefined8 uVar7;
+  longlong lVar8;
+  uint uVar9;
+  ulonglong uVar10;
+  uint uVar11;
+  uint uVar12;
+  undefined4 local_res8 [2];
+  undefined8 in_stack_ffffffffffffffb8;
+  undefined4 uVar13;
+  undefined1 local_38 [16];
+  
+  uVar7 = CONCAT44((int)((ulonglong)in_stack_ffffffffffffffb8 >> 0x20),0x7d);
+  thunk_FUN_141ffb470(local_38,0x62,1,
+                      "e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\tesforms\\objects\\bgsoutfit.cpp"
+                      ,uVar7);
+  if ((*(uint *)(param_1 + 2) >> 3 & 1) == 0) {
+    uVar10 = 0;
+    if ((int)param_1[7] != 0) {
+      uVar12 = 0;
+      do {
+        uVar11 = uVar12 + 1;
+        uVar9 = (uint)uVar10;
+        if (*(uint *)(param_1 + 7) <= uVar9) {
+          uVar7 = CONCAT44((int)((ulonglong)uVar7 >> 0x20),*(uint *)(param_1 + 7));
+          thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstarray.inl"
+                              ,0x1cf,"Invalid index %u|%u passed to operator[]",uVar10,uVar7);
+        }
+        lVar8 = param_1[5];
+        if (lVar8 == 0) {
+          thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstarray.inl"
+                              ,0x1d0,"Array doesn\'t have a buffer");
+          lVar8 = param_1[5];
+        }
+        local_res8[0] = *(undefined4 *)(lVar8 + uVar10 * 8);
+        uVar4 = thunk_FUN_1408be010(param_1,0xffffffff);
+        thunk_FUN_1408c68d0(local_res8,uVar4);
+        plVar5 = (longlong *)thunk_FUN_1408bdd20(local_res8[0]);
+        uVar13 = (undefined4)((ulonglong)uVar7 >> 0x20);
+        if ((plVar5 == (longlong *)0x0) ||
+           ((*(char *)((longlong)plVar5 + 0x26) != '\x1d' &&
+            (*(char *)((longlong)plVar5 + 0x26) != '8')))) {
+          uVar1 = *(undefined4 *)((longlong)param_1 + 0x14);
+          uVar4 = (**(code **)(*param_1 + 0x238))(param_1);
+          uVar7 = CONCAT44(uVar13,uVar1);
+          thunk_FUN_141ff9fd0(0xe,"Unable to find valid outfit form (%08X) on outfit %s (%08X).",
+                              local_res8[0],uVar4,uVar7);
+          uVar3 = *(uint *)(param_1 + 7);
+          if (uVar3 <= uVar9) {
+            thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstarray.inl"
+                                ,0x411,"Invalid index");
+            uVar3 = *(uint *)(param_1 + 7);
+          }
+          if (uVar3 < uVar11) {
+            thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstarray.inl"
+                                ,0x413,"Too many items to remove");
+            uVar3 = *(uint *)(param_1 + 7);
+          }
+          if (uVar3 == 1) {
+            if (param_1[5] == 0) {
+              if (((int)param_1[6] != 0) || (lVar8 = 0, (int)param_1[7] != 0)) {
+                thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bscore\\bstarray.inl"
+                                    ,0x4a9,"Invalid array");
+                lVar8 = param_1[5];
+              }
+              if (lVar8 == 0) goto LAB_140c0ecd7;
+            }
+            *(undefined4 *)(param_1 + 7) = 0;
+          }
+          else {
+            uVar7 = CONCAT44((int)((ulonglong)uVar7 >> 0x20),((int)param_1[7] - uVar9) + -1);
+            thunk_FUN_141ffc500(param_1 + 7,param_1[5],uVar10,uVar11,uVar7,8);
+            *(int *)(param_1 + 7) = (int)param_1[7] + -1;
+          }
+LAB_140c0ecd7:
+          uVar10 = (ulonglong)(uVar9 - 1);
+        }
+        else {
+          puVar6 = (undefined8 *)thunk_FUN_1408743b0(param_1 + 5,uVar10);
+          *puVar6 = plVar5;
+          (**(code **)(*plVar5 + 600))(plVar5,param_1);
+          uVar12 = uVar11;
+          if (*(char *)((longlong)plVar5 + 0x26) == '8') {
+            cVar2 = thunk_FUN_140c47c20(plVar5,0x1d);
+            if (cVar2 == '\0') {
+              uVar13 = *(undefined4 *)((longlong)param_1 + 0x14);
+              uVar1 = *(undefined4 *)((longlong)plVar5 + 0x14);
+              uVar7 = (**(code **)(*param_1 + 0x238))(param_1);
+              uVar4 = (**(code **)(*plVar5 + 0x238))(plVar5);
+              thunk_FUN_141ff9fd0(0xe,
+                                  "LeveledItem \'%s\' (%08X) used in outfit \'%s\' (%08X) contains non-armor objects."
+                                  ,uVar4,uVar1,uVar7,uVar13);
+            }
+          }
+        }
+        uVar9 = (int)uVar10 + 1;
+        uVar10 = (ulonglong)uVar9;
+      } while (uVar9 < *(uint *)(param_1 + 7));
+    }
+    FUN_14000ff83(param_1,1);
+  }
+  thunk_FUN_141ffb550(local_38);
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xc0e6e0-0xc0ebe0: 2 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  

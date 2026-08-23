@@ -1,0 +1,34 @@
+# Hard no: never tracked in RE-Work
+*.pdb
+*.idb
+*.idc
+*.exe
+*.dll
+*.nif
+*.hkx
+*.ba2
+*.bsa
+*.esm
+*.esp
+*.UVD
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.mcpb
+*.log
+*.bundle
+
+# CompileTextExport fixtures use .esm as a directory name (not a plugin)
+!tools/samples/compile-text/**/Fallout4.esm/
+!tools/samples/compile-text/**/Fallout4.esm/*
+
+Decompiles/
+Projects/
+Ghidra/
+Havok/
+Symbols/
+Bins/
+EXE/
+node_modules/
+dist/
+__pycache__/

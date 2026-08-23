@@ -1,0 +1,744 @@
+INFO  Using log config file: jar:file:/run/media/user/Games-Storage/Projects/Tools%20&%20Reverse%20Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/ciusr/.config/ghidra/ghidra_12.1_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/ciusr/.config/ghidra/ghidra_12.1.3_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (467 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1156 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/BSim/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/Tools & Reverse Engineering/ReverseEngineering/Ghidra/ghidra_12.1_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: /tmp/ckre-ghidra/CKRE (HeadlessAnalyzer)  
+INFO  Opening project: /tmp/ckre-ghidra/CKRE (HeadlessProject)  
+INFO  REPORT: Processing project file: /CreationKit.exe (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: DecompileRange.java 'range:0xf8e000:0xf8f400'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /run/media/user/Games-Storage/Projects/GARDEN-TOOLS/Resources/RE-Work/scripts/DecompileRange.java (HeadlessAnalyzer)  
+INFO  DecompileRange.java> ### FUNC FUN_140f8e1b0 RVA 0xf8e1b0 size=1436 :: undefined FUN_140f8e1b0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+ulonglong FUN_140f8e1b0(longlong param_1,longlong *param_2,undefined4 param_3)
+
+{
+  float fVar1;
+  float fVar2;
+  float fVar3;
+  undefined8 uVar4;
+  longlong *plVar5;
+  float fVar6;
+  int iVar7;
+  int iVar8;
+  longlong lVar9;
+  ulonglong uVar10;
+  undefined8 *puVar11;
+  undefined8 *puVar12;
+  undefined8 *puVar13;
+  longlong *plVar14;
+  longlong *plVar15;
+  longlong lVar16;
+  longlong *plVar17;
+  undefined8 *puVar18;
+  longlong *plVar19;
+  ulonglong uVar20;
+  undefined8 *puVar21;
+  longlong lVar22;
+  uint uVar23;
+  ulonglong uVar24;
+  float fVar25;
+  ulonglong local_res10;
+  undefined4 local_res18 [2];
+  uint local_res20;
+  longlong *local_b8;
+  ulonglong *puStack_b0;
+  longlong local_a8;
+  longlong lStack_a0;
+  longlong local_98;
+  
+  local_b8 = &local_a8;
+  puStack_b0 = &local_res10;
+  uVar20 = 0;
+  local_a8 = 0;
+  lStack_a0 = 0;
+  local_98 = 0;
+  local_res10 = 0;
+  local_res18[0] = param_3;
+  thunk_FUN_140f8fd90(&local_a8,*(int *)(param_1 + 0xc) * *(int *)(param_1 + 0xc),&local_b8);
+  puVar21 = (undefined8 *)*param_2;
+  local_res10 = local_res10 & 0xffffffffffffff00;
+  if (puVar21 != (undefined8 *)param_2[1]) {
+    do {
+      uVar4 = *puVar21;
+      iVar7 = FUN_140045d1d(uVar4);
+      iVar8 = thunk_FUN_140d196a0(uVar4);
+      iVar7 = iVar7 - *(short *)(param_1 + 8);
+      iVar8 = iVar8 - *(short *)(param_1 + 10);
+      if (DAT_143d1293c != 2) {
+        thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+      }
+      lVar9 = thunk_FUN_141ff6d30(&DAT_143d11e80,0xc0,0,0);
+      uVar10 = uVar20;
+      if (lVar9 != 0) {
+        uVar10 = thunk_FUN_142663140(lVar9,0x200000);
+      }
+      thunk_FUN_140f8ec20(param_1,uVar10,local_res18,iVar7,iVar8,1);
+      if (*(longlong *)(uVar10 + 0x90) - *(longlong *)(uVar10 + 0x88) >> 3 == 0) {
+        thunk_FUN_1426631e0(uVar10);
+        FUN_140001c4e(uVar10,0xc0);
+      }
+      else {
+        local_res10 = CONCAT71(local_res10._1_7_,1);
+        *(ulonglong *)(local_a8 + (ulonglong)(uint)(iVar7 * *(int *)(param_1 + 0xc) + iVar8) * 8) =
+             uVar10;
+        DAT_143d952f4 =
+             DAT_143d952f4 + (int)(*(longlong *)(uVar10 + 0xb0) - *(longlong *)(uVar10 + 0xa8) >> 3)
+        ;
+      }
+      puVar21 = puVar21 + 1;
+    } while (puVar21 != (undefined8 *)param_2[1]);
+  }
+  fVar6 = DAT_142f8beb4;
+  local_res20 = 0;
+  lVar9 = lStack_a0;
+  lVar22 = local_a8;
+  uVar10 = uVar20;
+  if (lStack_a0 - local_a8 >> 3 != 0) {
+    do {
+      plVar5 = *(longlong **)(lVar22 + uVar10 * 8);
+      uVar23 = (uint)uVar10;
+      if ((plVar5 != (longlong *)0x0) &&
+         (lVar16 = plVar5[0x15], uVar24 = uVar20, plVar5[0x16] - lVar16 >> 3 != 0)) {
+        do {
+          lVar9 = *(longlong *)(lVar16 + uVar24 * 8);
+          lVar22 = *(longlong *)(lVar9 + 0x50);
+          puVar21 = *(undefined8 **)(lVar9 + 0x38);
+          uVar10 = *(ulonglong *)(lVar9 + 0x68) & 0x8c30350da8960e6b;
+          puVar11 = *(undefined8 **)(lVar22 + uVar10 * 0x10);
+          while( true ) {
+            puVar12 = puVar21;
+            if (*(undefined8 **)(lVar22 + uVar10 * 0x10) != puVar21) {
+              puVar12 = (undefined8 *)**(undefined8 **)(lVar22 + 8 + uVar10 * 0x10);
+            }
+            puVar13 = puVar21;
+            if ((puVar11 == puVar12) || (puVar13 = puVar11, *(int *)(puVar11 + 2) == 0x736f70))
+            break;
+            puVar11 = (undefined8 *)*puVar11;
+          }
+          uVar10 = uVar20;
+          if ((puVar13 == puVar21) || (uVar10 = puVar13[3], uVar10 == 0)) {
+            thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bsmain\\bshalfedgemesh\\bsheattribute.h"
+                                ,0xa4,"Null Attribute ptr.");
+          }
+          fVar25 = fVar6 / (float)*(uint *)(param_1 + 0xc);
+          fVar1 = *(float *)(uVar10 + 8);
+          fVar2 = *(float *)(uVar10 + 0xc);
+          fVar3 = *(float *)(uVar10 + 0x10);
+          puVar12 = (undefined8 *)(**(code **)(*plVar5 + 0x90))(plVar5,0x18);
+          *puVar12 = BSHEAttribute<NiPoint3>::vftable;
+          *(float *)(puVar12 + 1) = fVar25 * fVar1;
+          *(float *)((longlong)puVar12 + 0xc) = fVar25 * fVar2;
+          *(float *)(puVar12 + 2) = fVar25 * fVar3;
+          lVar9 = *(longlong *)(plVar5[0x15] + uVar24 * 8);
+          lVar22 = *(longlong *)(lVar9 + 0x50);
+          uVar10 = *(ulonglong *)(lVar9 + 0x68) & 0x8c30350da8960e6b;
+          puVar21 = *(undefined8 **)(lVar9 + 0x38);
+          puVar11 = *(undefined8 **)(lVar22 + uVar10 * 0x10);
+          while( true ) {
+            puVar13 = puVar21;
+            if (*(undefined8 **)(lVar22 + uVar10 * 0x10) != puVar21) {
+              puVar13 = (undefined8 *)**(undefined8 **)(lVar22 + 8 + uVar10 * 0x10);
+            }
+            puVar18 = puVar21;
+            if ((puVar11 == puVar13) || (puVar18 = puVar11, *(int *)(puVar11 + 2) == 0x736f70))
+            break;
+            puVar11 = (undefined8 *)*puVar11;
+          }
+          if (puVar18 != puVar21) {
+            (**(code **)(**(longlong **)(lVar9 + 0x18) + 0x98))
+                      (*(longlong **)(lVar9 + 0x18),puVar18[3],0);
+          }
+          lVar22 = *(longlong *)(lVar9 + 0x50);
+          plVar15 = *(longlong **)(lVar9 + 0x38);
+          uVar10 = *(ulonglong *)(lVar9 + 0x68) & 0x8c30350da8960e6b;
+          plVar14 = *(longlong **)(lVar22 + uVar10 * 0x10);
+          while( true ) {
+            plVar17 = plVar15;
+            if (*(longlong **)(lVar22 + uVar10 * 0x10) != plVar15) {
+              plVar17 = (longlong *)**(undefined8 **)(lVar22 + 8 + uVar10 * 0x10);
+            }
+            plVar19 = plVar15;
+            if (plVar14 == plVar17) goto LAB_140f8e57e;
+            if ((int)plVar14[2] == 0x736f70) break;
+            plVar14 = (longlong *)*plVar14;
+          }
+          plVar15 = plVar14;
+          plVar19 = *(longlong **)(lVar9 + 0x38);
+LAB_140f8e57e:
+          if (plVar15 == plVar19) {
+            lVar22 = **(longlong **)(lVar9 + 0x38);
+            puVar21 = *(undefined8 **)(lVar22 + 8);
+            plVar15 = (longlong *)
+                      (**(code **)(**(longlong **)(lVar9 + 0x30) + 0x90))
+                                (*(longlong **)(lVar9 + 0x30),0x20);
+            *plVar15 = lVar22;
+            plVar15[1] = (longlong)puVar21;
+            *(undefined4 *)(plVar15 + 2) = 0x736f70;
+            plVar15[3] = 0;
+            if (*(longlong *)(lVar9 + 0x40) == 0x3fffff) {
+                    /* WARNING: Subroutine does not return */
+              std::_Xlength_error("list<T> too long");
+            }
+            *(longlong *)(lVar9 + 0x40) = *(longlong *)(lVar9 + 0x40) + 1;
+            *(longlong **)(lVar22 + 8) = plVar15;
+            *puVar21 = plVar15;
+            thunk_FUN_140f880a0(lVar9 + 0x28,&local_b8,**(longlong **)(lVar9 + 0x38) + 0x10);
+          }
+          else {
+            puStack_b0 = (ulonglong *)((ulonglong)puStack_b0 & 0xffffffffffffff00);
+            local_b8 = plVar15;
+          }
+          uVar24 = (ulonglong)((int)uVar24 + 1);
+          local_b8[3] = (longlong)puVar12;
+          lVar16 = plVar5[0x15];
+          lVar9 = lStack_a0;
+          lVar22 = local_a8;
+          uVar23 = local_res20;
+        } while (uVar24 < (ulonglong)(plVar5[0x16] - lVar16 >> 3));
+      }
+      local_res20 = uVar23 + 1;
+      uVar10 = (ulonglong)local_res20;
+    } while (uVar10 < (ulonglong)(lVar9 - lVar22 >> 3));
+  }
+  uVar10 = uVar20;
+  if ((char)local_res10 != '\0') {
+    uVar10 = thunk_FUN_142666070(&local_a8);
+    lVar9 = lStack_a0;
+    lVar22 = local_a8;
+  }
+  if (lVar9 - lVar22 >> 3 != 0) {
+    do {
+      lVar16 = *(longlong *)(lVar22 + uVar20 * 8);
+      if (lVar16 != 0) {
+        thunk_FUN_1426631e0(lVar16);
+        FUN_140001c4e(lVar16,0xc0);
+        lVar9 = lStack_a0;
+        lVar22 = local_a8;
+      }
+      uVar20 = (ulonglong)((int)uVar20 + 1);
+    } while (uVar20 < (ulonglong)(lVar9 - lVar22 >> 3));
+  }
+  if (lVar22 != 0) {
+    uVar20 = local_98 - lVar22 & 0xfffffffffffffff8;
+    lVar9 = lVar22;
+    if (0xfff < uVar20) {
+      lVar9 = *(longlong *)(lVar22 + -8);
+      uVar20 = uVar20 + 0x27;
+      if (0x1f < (lVar22 - lVar9) - 8U) {
+                    /* WARNING: Subroutine does not return */
+        _invalid_parameter_noinfo_noreturn();
+      }
+    }
+    FUN_140001c4e(lVar9,uVar20);
+  }
+  return uVar10;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140f8e760 RVA 0xf8e760 size=1207 :: undefined FUN_140f8e760(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+undefined8 FUN_140f8e760(longlong param_1,longlong *param_2)
+
+{
+  float fVar1;
+  float fVar2;
+  float fVar3;
+  char cVar4;
+  short sVar5;
+  longlong *plVar6;
+  longlong lVar7;
+  float fVar8;
+  longlong *plVar9;
+  short sVar10;
+  short sVar11;
+  longlong lVar12;
+  longlong *plVar13;
+  undefined8 *puVar14;
+  undefined8 *puVar15;
+  undefined8 *puVar16;
+  undefined8 *puVar17;
+  longlong *plVar18;
+  undefined8 uVar19;
+  ulonglong uVar20;
+  undefined8 *puVar21;
+  longlong lVar22;
+  ulonglong uVar23;
+  float fVar24;
+  undefined8 *local_78;
+  undefined1 local_70;
+  
+  if (DAT_143d1293c != 2) {
+    thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+  }
+  lVar12 = thunk_FUN_141ff6d30(&DAT_143d11e80,0xc0,0,0);
+  plVar13 = (longlong *)0x0;
+  if (lVar12 != 0) {
+    plVar13 = (longlong *)thunk_FUN_142663140(lVar12,0x400000);
+  }
+  plVar18 = *(longlong **)*param_2;
+  if (plVar18 != (longlong *)*param_2) {
+    do {
+      uVar23 = 0;
+      lVar12 = plVar18[5];
+      if (plVar18[6] - lVar12 >> 3 != 0) {
+        do {
+          uVar19 = *(undefined8 *)(lVar12 + uVar23 * 8);
+          sVar10 = FUN_140045d1d(uVar19);
+          sVar5 = *(short *)(param_1 + 8);
+          sVar11 = thunk_FUN_140d196a0(uVar19);
+          thunk_FUN_140f8ec20(param_1,plVar13,plVar18 + 4,(int)(short)(sVar10 - sVar5),
+                              (int)(short)(sVar11 - *(short *)(param_1 + 10)),1);
+          lVar12 = plVar18[5];
+          uVar23 = (ulonglong)((int)uVar23 + 1);
+        } while (uVar23 < (ulonglong)(plVar18[6] - lVar12 >> 3));
+      }
+      plVar6 = (longlong *)plVar18[2];
+      if (*(char *)((longlong)plVar6 + 0x19) == '\0') {
+        cVar4 = *(char *)(*plVar6 + 0x19);
+        plVar18 = plVar6;
+        plVar6 = (longlong *)*plVar6;
+        while (cVar4 == '\0') {
+          cVar4 = *(char *)(*plVar6 + 0x19);
+          plVar18 = plVar6;
+          plVar6 = (longlong *)*plVar6;
+        }
+      }
+      else {
+        cVar4 = *(char *)(plVar18[1] + 0x19);
+        plVar9 = (longlong *)plVar18[1];
+        plVar6 = plVar18;
+        while ((plVar18 = plVar9, cVar4 == '\0' && (plVar6 == (longlong *)plVar18[2]))) {
+          cVar4 = *(char *)(plVar18[1] + 0x19);
+          plVar9 = (longlong *)plVar18[1];
+          plVar6 = plVar18;
+        }
+      }
+    } while (plVar18 != (longlong *)*param_2);
+  }
+  fVar8 = DAT_142f8beb4;
+  uVar23 = 0;
+  if ((plVar13 != (longlong *)0x0) && (lVar12 = plVar13[0x15], plVar13[0x16] - lVar12 >> 3 != 0)) {
+    do {
+      lVar22 = 0;
+      lVar12 = *(longlong *)(lVar12 + uVar23 * 8);
+      lVar7 = *(longlong *)(lVar12 + 0x50);
+      puVar17 = *(undefined8 **)(lVar12 + 0x38);
+      uVar20 = *(ulonglong *)(lVar12 + 0x68) & 0x8c30350da8960e6b;
+      puVar16 = *(undefined8 **)(lVar7 + uVar20 * 0x10);
+      while( true ) {
+        puVar14 = puVar17;
+        if (*(undefined8 **)(lVar7 + uVar20 * 0x10) != puVar17) {
+          puVar14 = (undefined8 *)**(undefined8 **)(lVar7 + 8 + uVar20 * 0x10);
+        }
+        puVar15 = puVar17;
+        if ((puVar16 == puVar14) || (puVar15 = puVar16, *(int *)(puVar16 + 2) == 0x736f70)) break;
+        puVar16 = (undefined8 *)*puVar16;
+      }
+      if ((puVar15 == puVar17) || (lVar22 = puVar15[3], lVar22 == 0)) {
+        thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\bsmain\\bshalfedgemesh\\bsheattribute.h"
+                            ,0xa4,"Null Attribute ptr.");
+      }
+      fVar24 = fVar8 / (float)*(uint *)(param_1 + 0xc);
+      fVar1 = *(float *)(lVar22 + 8);
+      fVar2 = *(float *)(lVar22 + 0xc);
+      fVar3 = *(float *)(lVar22 + 0x10);
+      puVar14 = (undefined8 *)(**(code **)(*plVar13 + 0x90))(plVar13,0x18);
+      *puVar14 = BSHEAttribute<NiPoint3>::vftable;
+      *(float *)(puVar14 + 1) = fVar24 * fVar1;
+      *(float *)((longlong)puVar14 + 0xc) = fVar24 * fVar2;
+      *(float *)(puVar14 + 2) = fVar24 * fVar3;
+      lVar12 = *(longlong *)(plVar13[0x15] + uVar23 * 8);
+      lVar7 = *(longlong *)(lVar12 + 0x50);
+      uVar20 = *(ulonglong *)(lVar12 + 0x68) & 0x8c30350da8960e6b;
+      puVar17 = *(undefined8 **)(lVar12 + 0x38);
+      puVar16 = *(undefined8 **)(lVar7 + uVar20 * 0x10);
+      while( true ) {
+        puVar15 = puVar17;
+        if (*(undefined8 **)(lVar7 + uVar20 * 0x10) != puVar17) {
+          puVar15 = (undefined8 *)**(undefined8 **)(lVar7 + 8 + uVar20 * 0x10);
+        }
+        puVar21 = puVar17;
+        if ((puVar16 == puVar15) || (puVar21 = puVar16, *(int *)(puVar16 + 2) == 0x736f70)) break;
+        puVar16 = (undefined8 *)*puVar16;
+      }
+      if (puVar21 != puVar17) {
+        (**(code **)(**(longlong **)(lVar12 + 0x18) + 0x98))
+                  (*(longlong **)(lVar12 + 0x18),puVar21[3],0);
+      }
+      lVar7 = *(longlong *)(lVar12 + 0x50);
+      puVar17 = *(undefined8 **)(lVar12 + 0x38);
+      uVar20 = *(ulonglong *)(lVar12 + 0x68) & 0x8c30350da8960e6b;
+      puVar16 = *(undefined8 **)(lVar7 + uVar20 * 0x10);
+      while( true ) {
+        puVar15 = puVar17;
+        if (*(undefined8 **)(lVar7 + uVar20 * 0x10) != puVar17) {
+          puVar15 = (undefined8 *)**(undefined8 **)(lVar7 + 8 + uVar20 * 0x10);
+        }
+        puVar21 = puVar17;
+        if (puVar16 == puVar15) goto LAB_140f8eac2;
+        if (*(int *)(puVar16 + 2) == 0x736f70) break;
+        puVar16 = (undefined8 *)*puVar16;
+      }
+      puVar17 = puVar16;
+      puVar21 = *(undefined8 **)(lVar12 + 0x38);
+LAB_140f8eac2:
+      if (puVar17 == puVar21) {
+        lVar7 = **(longlong **)(lVar12 + 0x38);
+        puVar17 = *(undefined8 **)(lVar7 + 8);
+        plVar18 = (longlong *)
+                  (**(code **)(**(longlong **)(lVar12 + 0x30) + 0x90))
+                            (*(longlong **)(lVar12 + 0x30),0x20);
+        *plVar18 = lVar7;
+        plVar18[1] = (longlong)puVar17;
+        *(undefined4 *)(plVar18 + 2) = 0x736f70;
+        plVar18[3] = 0;
+        if (*(longlong *)(lVar12 + 0x40) == 0x3fffff) {
+                    /* WARNING: Subroutine does not return */
+          std::_Xlength_error("list<T> too long");
+        }
+        *(longlong *)(lVar12 + 0x40) = *(longlong *)(lVar12 + 0x40) + 1;
+        *(longlong **)(lVar7 + 8) = plVar18;
+        *puVar17 = plVar18;
+        thunk_FUN_140f880a0(lVar12 + 0x28,&local_78,**(longlong **)(lVar12 + 0x38) + 0x10);
+      }
+      else {
+        local_70 = 0;
+        local_78 = puVar17;
+      }
+      local_78[3] = puVar14;
+      lVar12 = plVar13[0x15];
+      uVar23 = (ulonglong)((int)uVar23 + 1);
+    } while (uVar23 < (ulonglong)(plVar13[0x16] - lVar12 >> 3));
+  }
+  uVar19 = 0;
+  if (plVar13[0x12] - plVar13[0x11] >> 3 != 0) {
+    uVar19 = thunk_FUN_142665960(plVar13);
+    DAT_143d952f4 = DAT_143d952f4 + (int)(plVar13[0x16] - plVar13[0x15] >> 3);
+  }
+  thunk_FUN_1426631e0(plVar13);
+  FUN_140001c4e(plVar13,0xc0);
+  return uVar19;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140f8ec20 RVA 0xf8ec20 size=1195 :: undefined FUN_140f8ec20(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_140f8ec20(longlong param_1,longlong *param_2,undefined4 *param_3,int param_4,uint param_5,
+                  uint param_6)
+
+{
+  undefined4 uVar1;
+  longlong lVar2;
+  undefined1 auVar3 [16];
+  float fVar4;
+  uint uVar5;
+  undefined8 uVar6;
+  longlong lVar7;
+  undefined8 *puVar8;
+  undefined8 *puVar9;
+  undefined8 *puVar10;
+  undefined8 *puVar11;
+  undefined8 *puVar12;
+  longlong *plVar13;
+  uint uVar14;
+  ulonglong uVar15;
+  undefined8 *puVar16;
+  uint uVar17;
+  uint uVar18;
+  uint uVar19;
+  uint uVar20;
+  float fVar21;
+  float fVar22;
+  float fVar23;
+  float fVar24;
+  float fVar25;
+  undefined8 *local_d8;
+  undefined1 local_d0;
+  
+  uVar20 = param_6 + 1;
+  fVar23 = (float)(uint)(*(int *)(param_1 + 0xc) << 0xc);
+  auVar3 = ZEXT816(8) * ZEXT416(uVar20 * uVar20);
+  uVar6 = auVar3._0_8_;
+  fVar25 = (float)(int)param_5;
+  if (auVar3._8_8_ != 0) {
+    uVar6 = 0xffffffffffffffff;
+  }
+  if (DAT_143d1293c != 2) {
+    thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+  }
+  lVar7 = thunk_FUN_141ff6d30(&DAT_143d11e80,uVar6,0,0);
+  fVar4 = _DAT_142f95154;
+  param_5 = 0;
+  if (uVar20 != 0) {
+    fVar24 = DAT_142f8beb4 / (float)param_6;
+    do {
+      uVar17 = 0;
+      fVar21 = ((float)param_5 * fVar24 + (float)param_4) * fVar4;
+      do {
+        puVar8 = (undefined8 *)(**(code **)(*param_2 + 0x90))(param_2,0x78);
+        thunk_FUN_140f90370(puVar8 + 3,param_2);
+        puVar8[1] = 0;
+        *(undefined4 *)(puVar8 + 2) = 0;
+        _DAT_1479a2134 = _DAT_1479a2134 + 1;
+        *puVar8 = param_2;
+        uVar1 = *param_3;
+        *(undefined8 **)(lVar7 + (ulonglong)(uVar17 * uVar20 + param_5) * 8) = puVar8;
+        fVar22 = ((float)uVar17 * fVar24 + fVar25) * fVar4;
+        puVar9 = (undefined8 *)(**(code **)(*param_2 + 0x90))(param_2,0x18);
+        *(float *)(puVar9 + 1) = fVar21;
+        *(float *)((longlong)puVar9 + 0xc) = fVar22;
+        *(undefined4 *)(puVar9 + 2) = uVar1;
+        *puVar9 = BSHEAttribute<NiPoint3>::vftable;
+        lVar2 = puVar8[10];
+        uVar15 = puVar8[0xd] & 0x8c30350da8960e6b;
+        puVar12 = (undefined8 *)puVar8[7];
+        puVar11 = *(undefined8 **)(lVar2 + uVar15 * 0x10);
+        while( true ) {
+          puVar10 = puVar12;
+          if (*(undefined8 **)(lVar2 + uVar15 * 0x10) != puVar12) {
+            puVar10 = (undefined8 *)**(undefined8 **)(lVar2 + 8 + uVar15 * 0x10);
+          }
+          puVar16 = puVar12;
+          if ((puVar11 == puVar10) || (puVar16 = puVar11, *(int *)(puVar11 + 2) == 0x736f70)) break;
+          puVar11 = (undefined8 *)*puVar11;
+        }
+        if (puVar16 != puVar12) {
+          plVar13 = (longlong *)puVar8[3];
+          (**(code **)(*plVar13 + 0x98))(plVar13,puVar16[3],0);
+        }
+        lVar2 = puVar8[10];
+        puVar12 = (undefined8 *)puVar8[7];
+        uVar15 = puVar8[0xd] & 0x8c30350da8960e6b;
+        puVar11 = *(undefined8 **)(lVar2 + uVar15 * 0x10);
+        while( true ) {
+          puVar10 = puVar12;
+          if (*(undefined8 **)(lVar2 + uVar15 * 0x10) != puVar12) {
+            puVar10 = (undefined8 *)**(undefined8 **)(lVar2 + 8 + uVar15 * 0x10);
+          }
+          puVar16 = puVar12;
+          if (puVar11 == puVar10) goto LAB_140f8eebf;
+          if (*(int *)(puVar11 + 2) == 0x736f70) break;
+          puVar11 = (undefined8 *)*puVar11;
+        }
+        puVar12 = puVar11;
+        puVar16 = (undefined8 *)puVar8[7];
+LAB_140f8eebf:
+        if (puVar12 == puVar16) {
+          lVar2 = *(longlong *)puVar8[7];
+          puVar12 = *(undefined8 **)(lVar2 + 8);
+          plVar13 = (longlong *)
+                    (**(code **)(*(longlong *)puVar8[6] + 0x90))((longlong *)puVar8[6],0x20);
+          *plVar13 = lVar2;
+          plVar13[1] = (longlong)puVar12;
+          *(undefined4 *)(plVar13 + 2) = 0x736f70;
+          plVar13[3] = 0;
+          if (puVar8[8] == 0x3fffff) {
+                    /* WARNING: Subroutine does not return */
+            std::_Xlength_error("list<T> too long");
+          }
+          puVar8[8] = puVar8[8] + 1;
+          *(longlong **)(lVar2 + 8) = plVar13;
+          *puVar12 = plVar13;
+          thunk_FUN_140f880a0(puVar8 + 5,&local_d8);
+        }
+        else {
+          local_d0 = 0;
+          local_d8 = puVar12;
+        }
+        local_d8[3] = puVar9;
+        if ((fVar21 < 0.0) || (fVar23 < fVar21)) {
+          thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\distantterrain\\bgsterrainwatermeshbuilder.cpp"
+                              ,0x145);
+        }
+        if ((fVar22 < 0.0) || (fVar23 < fVar22)) {
+          thunk_FUN_141ffa0a0("e:\\buildagent\\work\\4a2aa37ca4b2ffa3\\scripts\\_workspace\\code\\shared\\distantterrain\\bgsterrainwatermeshbuilder.cpp"
+                              ,0x146);
+        }
+        uVar17 = uVar17 + 1;
+      } while (uVar17 < uVar20);
+      param_5 = param_5 + 1;
+    } while (param_5 < uVar20);
+  }
+  uVar17 = 0;
+  if (param_6 != 0) {
+    do {
+      uVar5 = 0;
+      do {
+        uVar18 = uVar5 + 1;
+        uVar14 = uVar5 * uVar20 + uVar17;
+        uVar19 = uVar18 * uVar20 + uVar17;
+        uVar5 = uVar14 + 1;
+        thunk_FUN_142662490(param_2,*(undefined8 *)(lVar7 + (ulonglong)uVar14 * 8),
+                            *(undefined8 *)(lVar7 + (ulonglong)uVar5 * 8),
+                            *(undefined8 *)(lVar7 + (ulonglong)uVar19 * 8),0);
+        thunk_FUN_142662490(param_2,*(undefined8 *)(lVar7 + (ulonglong)uVar5 * 8),
+                            *(undefined8 *)(lVar7 + (ulonglong)(uVar19 + 1) * 8),
+                            *(undefined8 *)(lVar7 + (ulonglong)uVar19 * 8),0);
+        uVar5 = uVar18;
+      } while (uVar18 < param_6);
+      uVar17 = uVar17 + 1;
+    } while (uVar17 < param_6);
+  }
+  if (DAT_143d1293c != 2) {
+    thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+  }
+  thunk_FUN_141ff72e0(&DAT_143d11e80,lVar7,0);
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140f8f0e0 RVA 0xf8f0e0 size=191 :: undefined FUN_140f8f0e0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140f8f0e0(longlong param_1,undefined8 param_2,undefined8 param_3,longlong *param_4,
+                  undefined4 param_5)
+
+{
+  short sVar1;
+  undefined8 uVar2;
+  short sVar3;
+  short sVar4;
+  ulonglong uVar5;
+  longlong lVar6;
+  
+  uVar5 = 0;
+  lVar6 = *param_4;
+  if (param_4[1] - lVar6 >> 3 != 0) {
+    do {
+      uVar2 = *(undefined8 *)(lVar6 + uVar5 * 8);
+      sVar3 = FUN_140045d1d(uVar2);
+      sVar1 = *(short *)(param_1 + 8);
+      sVar4 = thunk_FUN_140d196a0(uVar2);
+      thunk_FUN_140f8ec20(param_1,param_2,param_3,(int)(short)(sVar3 - sVar1),
+                          (int)(short)(sVar4 - *(short *)(param_1 + 10)),param_5);
+      lVar6 = *param_4;
+      uVar5 = (ulonglong)((int)uVar5 + 1);
+    } while (uVar5 < (ulonglong)(param_4[1] - lVar6 >> 3));
+  }
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> ### FUNC FUN_140f8f1b0 RVA 0xf8f1b0 size=469 :: undefined FUN_140f8f1b0(void) (GhidraScript)  
+INFO  DecompileRange.java> 
+void FUN_140f8f1b0(undefined8 param_1,longlong param_2,float *param_3,float *param_4,float *param_5)
+
+{
+  longlong *plVar1;
+  longlong lVar2;
+  longlong *plVar3;
+  longlong *plVar4;
+  float fVar5;
+  float fVar6;
+  float fVar7;
+  float local_48;
+  float local_44;
+  float local_40;
+  
+  fVar5 = (*param_4 - *param_3) * DAT_142f9379c;
+  fVar6 = (param_4[1] - param_3[1]) * DAT_142f9379c;
+  fVar7 = (param_4[2] - param_3[2]) * DAT_142f9379c;
+  local_48 = fVar5 + *param_3 + *param_5;
+  local_40 = fVar7 + param_3[2] + param_5[2];
+  local_44 = fVar6 + param_3[1] + param_5[1];
+  if (DAT_143d1293c != 2) {
+    thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+  }
+  lVar2 = thunk_FUN_141ff6d30(&DAT_143d11e80,0x40,0x10,1);
+  plVar4 = (longlong *)0x0;
+  plVar3 = plVar4;
+  if (lVar2 != 0) {
+    plVar3 = (longlong *)thunk_FUN_14264ce60(lVar2);
+  }
+  *(float *)(plVar3 + 6) = fVar5;
+  *(float *)((longlong)plVar3 + 0x34) = fVar6;
+  *(float *)(plVar3 + 7) = fVar7;
+  (**(code **)(*plVar3 + 0x1a8))(plVar3,&local_48);
+  if (DAT_143d1293c != 2) {
+    thunk_FUN_141ff7ac0(&DAT_143d11e80,&DAT_143d1293c);
+  }
+  lVar2 = thunk_FUN_141ff6d30(&DAT_143d11e80,0x20,0);
+  if (lVar2 != 0) {
+    plVar4 = (longlong *)thunk_FUN_14264b670(lVar2);
+  }
+  plVar1 = (longlong *)plVar4[3];
+  if (plVar1 != plVar3) {
+    LOCK();
+    *(int *)(plVar3 + 1) = (int)plVar3[1] + 1;
+    UNLOCK();
+    plVar4[3] = (longlong)plVar3;
+    if (plVar1 != (longlong *)0x0) {
+      LOCK();
+      plVar3 = plVar1 + 1;
+      lVar2 = *plVar3;
+      *(int *)plVar3 = (int)*plVar3 + -1;
+      UNLOCK();
+      if ((int)lVar2 == 1) {
+        (**(code **)(*plVar1 + 8))();
+      }
+    }
+  }
+  plVar3 = *(longlong **)(param_2 + 0x140);
+  if (plVar3 != plVar4) {
+    if (plVar4 != (longlong *)0x0) {
+      LOCK();
+      *(int *)(plVar4 + 1) = (int)plVar4[1] + 1;
+      UNLOCK();
+    }
+    *(longlong **)(param_2 + 0x140) = plVar4;
+    if (plVar3 != (longlong *)0x0) {
+      LOCK();
+      plVar4 = plVar3 + 1;
+      lVar2 = *plVar4;
+      *(int *)plVar4 = (int)*plVar4 + -1;
+      UNLOCK();
+      if ((int)lVar2 == 1) {
+        (**(code **)(*plVar3 + 8))();
+      }
+    }
+  }
+  return;
+}
+
+ (GhidraScript)  
+INFO  DecompileRange.java>  (GhidraScript)  
+INFO  DecompileRange.java> === RANGE 0xf8e000-0xf8f400: 5 function(s) === (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /CreationKit.exe (HeadlessAnalyzer)  
