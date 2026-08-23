@@ -132,6 +132,7 @@ public static class Tests
         ("ProjectChainResolvesAnimationsThroughGameData", ProjectChainResolvesAnimationsThroughGameData),
         ("GameDataLoadOrderFollowsPlugins", GameDataLoadOrderFollowsPlugins),
         ("GameDataCollapsesBorrowedPaths", GameDataCollapsesBorrowedPaths),
+        ("RealFilesSurviveAPointerLayoutRoundTrip", RealFilesSurviveAPointerLayoutRoundTrip),
         ("PackedAnimationsAndSkeletonsPlayBackFromArchives", PackedAnimationsAndSkeletonsPlayBackFromArchives),
         ("WeaponSubgraphPerWeaponCoverageIsReportedOnce", WeaponSubgraphPerWeaponCoverageIsReportedOnce),
         ("WeaponSubgraphGapNamesTheExactEngineSearch", WeaponSubgraphGapNamesTheExactEngineSearch),
@@ -3001,6 +3002,64 @@ public static class Tests
                                             @"..\PowerArmor\Animations\1HM\Nope.HKT"));
         }
         finally { Directory.Delete(data, true); }
+    }
+
+    // The converter's own tests all build their packfiles in code. This runs it over the two
+    // genuine Fallout 4 files in samples/ and checks the thing that actually matters: convert
+    // 8 -> 4 -> 8 and every decoded value must survive unchanged.
+    //
+    // Byte equality is deliberately not the contract. TurretIdleWeapReady does return
+    // byte-identical, but TurretStandingSkeleton comes back 256 bytes smaller: the converter
+    // sizes a relocated array to its element count, so capacity a file was over-allocating is
+    // reclaimed. That is intended, and it is why the assertion is on decoded content and on
+    // the file never growing, not on the bytes matching.
+    private static void RealFilesSurviveAPointerLayoutRoundTrip()
+    {
+        Console.WriteLine("\nreal Fallout 4 packfiles survive an 8 -> 4 -> 8 round trip unchanged");
+
+        string folder = Path.Combine(AppContext.BaseDirectory, "samples");
+        var samples = Directory.Exists(folder)
+            ? Directory.GetFiles(folder, "*.hkx").OrderBy(p => p, StringComparer.Ordinal).ToList()
+            : new List<string>();
+        if (samples.Count == 0)
+        {
+            Console.WriteLine("        skipped: the genuine samples are not here");
+            return;
+        }
+
+        foreach (string path in samples)
+        {
+            string name = Path.GetFileName(path);
+            byte[] original = File.ReadAllBytes(path);
+
+            var source = PackfileImage.Read(original);
+            Check($"{name}: starts as an 8-byte packfile", 8, source.Layout.PointerSize);
+
+            CheckTrue($"{name}: converts down to the 4-byte layout",
+                      PackfileConverter.ConvertTo(source, PointerLayout.FourByte));
+            byte[] narrow = source.Rebuild();
+            var narrowImage = PackfileImage.Read(narrow);
+            Check($"{name}: the narrowed file really is 4-byte", 4, narrowImage.Layout.PointerSize);
+
+            CheckTrue($"{name}: converts back up to the 8-byte layout",
+                      PackfileConverter.ConvertTo(narrowImage, PointerLayout.EightByte));
+            byte[] back = narrowImage.Rebuild();
+            var backImage = PackfileImage.Read(back);
+            Check($"{name}: the widened file really is 8-byte", 8, backImage.Layout.PointerSize);
+
+            // Compared as a boolean: these dumps run to six figures of characters, and a
+            // failing Check would print both of them in full.
+            string before = NativeXml.From(original);
+            CheckTrue($"{name}: the 4-byte form decodes to the same values",
+                      NativeXml.From(narrow) == before);
+            CheckTrue($"{name}: and so does the file that came back",
+                      NativeXml.From(back) == before);
+
+            Check($"{name}: the object count is unchanged", new PackfileObjects(source).Instances.Count,
+                  new PackfileObjects(backImage).Instances.Count);
+            CheckTrue($"{name}: the round trip never grows the file ({original.Length} -> {back.Length})",
+                      back.Length <= original.Length);
+        }
     }
 
     private static void PackedAnimationsAndSkeletonsPlayBackFromArchives()
