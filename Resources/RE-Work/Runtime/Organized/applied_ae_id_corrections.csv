@@ -1,9 +1,0 @@
-address,name,og_rel_id,old_ae_rel_id,new_ae_rel_id,method,note
-0x140034A6D0,"BGSInventoryItem::IsEquipped(BIPED_OBJECT)",1259182,2194085,2194086,crossref:LucaDotGit+libxse,applied
-0x140395100,"Workshop::ToggleEditMode(Workshop::ContextData const &)",1243386,2195138,2195130,crossref:LucaDotGit+libxse,applied
-0x1403A1760,"Workshop::UpdateActiveEdit(Workshop::ContextData const &,bool)",69261,2195152,2195210,crossref:LucaDotGit+libxse,applied
-0x140457100,"TESBoundObject::ApplyMods(BSTSmartPointer<TBO_InstanceData,BSTSmartPointerIntrusiveRefCount> &,BGSMod::Property::Mod const *,uint)",365818,2198326,2198325,crossref:LucaDotGit+libxse,applied
-0x1404AD830,"ImageSpaceModifierInstanceDOF::Trigger(NiAVObject *,ImageSpaceModifierInstanceDOF::DepthOfFieldMode,float,float)",1130395,2199923,2199922,crossref:LucaDotGit+libxse,applied
-0x14069E660,"TESTopicInfo::GetSpeaker(void)",1048628,2208441,2208449,crossref:LucaDotGit+libxse,applied
-0x140EF27F0,"CombatUtilities::CalculateProjectileTrajectory(Projectile const &,float,NiPoint3 &)",458671,2240608,2240611,crossref:LucaDotGit+libxse,applied
-0x140181A2D0,"BSGraphics::Renderer::DecRef(BSGraphics::TriShape *)",1039714,2276851,2276870,crossref:LucaDotGit+libxse,applied

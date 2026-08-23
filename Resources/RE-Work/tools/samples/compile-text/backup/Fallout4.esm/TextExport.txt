@@ -1,5 +1,0 @@
-; CompileTextExport fixture -- BACKUP root, traversed FIRST by FUN_140916980.
-; ID 0x0001000A also exists in the primary root: the same string ID in both
-; roots is a duplicate-ID diagnostic on the aggregate string table.
-0x0001000A	0x00000001	Misc	backup-only text
-0x00010001	0x00000002	Topic Text	backup dialogue line
