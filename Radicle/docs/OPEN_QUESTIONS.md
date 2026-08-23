@@ -5,8 +5,20 @@ Speculative answers must not be hardcoded as facts.
 ## FormID / ESL
 
 1. What FormID appears in an ESL's **own** major-record headers on disk: `00xxxxxx`, `FExxxxxx`, or `(master_count << 24) | local`? **Partial answer:** `ccBGSFO4096-AS_Enclave.esl` uses `(master_count << 24) | local` (`0x01xxxxxx` with one master). Repeat on more ESLs before treating as universal.
-2. Exact predicate of `TESFile::CheckValidIDForSmallFile`. **Answered for OG 1.10.163.** The body is `f7 c1 00 f0 ff 00 0f 94 c0 c3` = `test ecx, 0x00FFF000; sete al; ret`, i.e. `(id & 0x00FFF000) == 0` — bits 12–23 must be clear, so a small-file local ID is valid iff it is `<= 0xFFF`. This independently confirms the range derived from `AdjustFormIDFileIndex` in `ESL_FORMIDS.md`.
-   **Address:** RVA `0x130550` (raw `0x12f950`), not the listed `0x130560`. The symbol table is offset by `0x10` in this region — the same shift as `AdjustFormIDFileIndex`, listed `0x131fa0` but actually starting at `0x131f90`. Verified by disassembly and by an exact byte search: the pattern occurs once in the image, at `0x12f950`; raw `0x12f960` holds `48 89 5c 24 08 ...`, a different function's prologue. Section-aware raw mapping is correct and necessary, but it is not what caused the drift.
+2. Exact predicate of `TESFile::CheckValidIDForSmallFile`. **Answered.** The body is
+   `f7 c1 00 f0 ff 00 0f 94 c0 c3` = `test ecx, 0x00FFF000; sete al; ret`, i.e.
+   `(id & 0x00FFF000) == 0` — bits 12–23 must be clear, so a small-file local ID is
+   valid iff it is `<= 0xFFF`. This independently confirms the range derived from
+   `AdjustFormIDFileIndex` in `ESL_FORMIDS.md`.
+   **Address depends on the build, and the workspace holds two unpacked images of
+   identical size (65,319,936 bytes), which is an easy trap.**
+   `Symbols/Fallout4.exe` is timestamp `0x5dac778e` (1.10.155): predicate at RVA
+   `0x130550`, `AdjustFormIDFileIndex` at `0x131f90`.
+   `Symbols/1.10.163/Fallout4.exe.unpacked.exe` is `0x5ddc40fa` (1.10.163):
+   predicate at `0x130560`, `AdjustFormIDFileIndex` at `0x131fa0` — the listed RVAs.
+   Each symbol table matches its own image byte-for-byte. An earlier note here
+   claimed a `0x10` symbol-table shift; that was this cross-build mix-up, not a
+   shift. Check the PE timestamp before trusting an address.
 3. Exact bytes of `TESFile::AdjustFormIDFileIndex` (OG RVA `0x131fa0`).
 4. **Answered.** `TESFile::AdjustFormIDFileIndex` (RVA `0x131f90`, 55 bytes) masks a light plugin's local to 12 bits *destructively* before OR-ing in the slot, so anything above `0xFFF` silently aliases onto another record. Usable range is `0x001`–`0xFFF` — the `0x800` floor belongs to the full-plugin encoding only. Six of the nine shipped ESLs allocate below `0x800`, and `ccFSVFO4007-Halloween.esl` has 2078 own records, disproving the `0x800`–`0xFFF`/2048 folklore. See `ESL_FORMIDS.md`.
 5. How next-gen 1.11.x assigns `smallFileCompileIndex` vs OG 1.10.163.

@@ -59,6 +59,9 @@ constexpr auto k_nvmi = Signature::from_string("NVMI");
 constexpr auto k_nvpp = Signature::from_string("NVPP");
 constexpr auto k_nvsi = Signature::from_string("NVSI");
 constexpr auto k_mnam = Signature::from_string("MNAM");
+constexpr auto k_proj = Signature::from_string("PROJ");
+constexpr auto k_expl = Signature::from_string("EXPL");
+constexpr auto k_hazd = Signature::from_string("HAZD");
 constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_race = Signature::from_string("RACE");
 constexpr auto k_sraf = Signature::from_string("SRAF");
@@ -384,6 +387,52 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
   return matched;
 }
 
+// FormID slots inside the PROJ/EXPL/HAZD runtime-struct payloads.
+//
+// DATA and DNAM mean different things in different records, so these are keyed
+// on the record signature and can never go in the signature-only table.
+//
+// Offsets come from CommonLibF4's BGSProjectileData / BGSExplosionData /
+// BGSHazardData and were confirmed against the four shipped masters plus a
+// local mod corpus: every slot resolves to the expected record type with zero
+// contradictions, and the values carry real master indices in the DLCs.
+//
+// Deliberately absent: PROJ DNAM +88. vatsProjectile does not serialize into
+// DNAM at all -- the tail is [tracerFrequency u8][3 bytes heap padding] -- so
+// remapping it would rewrite padding.
+std::optional<std::vector<std::size_t>> struct_payload_formid_offsets(const Record& record,
+                                                                     const Subrecord& sub) {
+  const auto signature = record.header.signature;
+  const auto size = sub.data.size();
+
+  if (signature == k_expl && sub.signature == sig_data) {
+    // 84 bytes canonical; 52/56/60/64 are truncated legacy shapes that stop
+    // short of later slots, so each offset is gated on its own extent.
+    static constexpr std::size_t k_slots[] = {0, 4, 8, 12, 16};  // LIGH SNDR SNDR IPDS placed
+    std::vector<std::size_t> offsets;
+    for (const auto offset : k_slots) {
+      if (offset + 4 <= size) offsets.push_back(offset);
+    }
+    return offsets;
+  }
+
+  if (signature == k_proj && sub.signature == k_dnam) {
+    static constexpr std::size_t k_slots[] = {16, 20, 32, 36, 84};  // LIGH LIGH EXPL SNDR COLL
+    std::vector<std::size_t> offsets;
+    for (const auto offset : k_slots) {
+      if (offset + 4 <= size) offsets.push_back(offset);
+    }
+    return offsets;
+  }
+
+  if (signature == k_hazd && sub.signature == k_dnam) {
+    if (24 + 4 > size) return std::vector<std::size_t>{};
+    return std::vector<std::size_t>{24};  // SPEL
+  }
+
+  return std::nullopt;
+}
+
 void visit_link_offsets(const Record& record, const Subrecord& sub,
                         bool strict_remap, auto&& fn) {
   if (sub.signature == sig_xxxx || sub.data.empty()) {
@@ -409,6 +458,10 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     if (qust_non_formid_signature(sub.signature)) {
       return;
     }
+  }
+  if (const auto offsets = struct_payload_formid_offsets(record, sub)) {
+    for (const auto offset : *offsets) fn(offset);
+    return;
   }
   if (is_navmesh_mixed_payload(record, sub)) {
     const auto offsets = navmesh_mixed_formid_offsets(record, sub);
