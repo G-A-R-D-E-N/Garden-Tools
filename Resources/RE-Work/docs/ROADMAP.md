@@ -48,7 +48,7 @@ The four world-building classes — the skeleton of the CK.
 
 | doc | what | state |
 |---|---|---|
-| 12 | record-definition dispatch table (all ~159 form types) | 🟡 factory map done; LoadRecord/SaveRecord only for 4 classes |
+| 12 | record-definition dispatch table (all ~159 form types) | 🟡 factory map done; LoadRecord/SaveRecord for CELL/WRLD/LAND/REFR + QUST (doc 28) |
 | 23 §1–7 | CELL vftable, ctor, member layout (0x170 bytes) | ✅ |
 | 23 §8 | cell-data blocks (0x20 exterior, 0x88 interior) | ✅ |
 | 23 §9 | exteriorcellloader streaming contract | ✅ |
@@ -128,7 +128,7 @@ Priority form types by game impact:
 
 | tier | types | why |
 |---|---|---|
-| **S-tier** | QUST, DIAL, INFO, SCEN, PACK | quest/dialogue system — most of the game's content |
+| **S-tier** | QUST ✅ (doc 28), DIAL, INFO, SCEN, PACK | quest/dialogue system — most of the game's content |
 | **A-tier** | NPC_, RACE, CSTY, FACT, CLAS | actor/NPC system |
 | **B-tier** | SPEL, ENCH, ALCH, MGEF, PERK, LVLI, LVLN, LVSP | magic/perk/leveled-list system |
 | **C-tier** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
@@ -230,7 +230,7 @@ Phase 0 (foundation)
 
 1. ~~Decompile `bgsterrainwatermeshbuilder.cpp` body~~ ✅ done 2026-08-22 — dumps/decompile-bgsterrainwatermeshbuilder.md
 2. ~~Add `validate_wrld_save.py`~~ ✅ done 2026-08-22 — doc 23 §10b.2
-3. **Start S-tier form types** — QUST LoadRecord/SaveRecord (Phase 5, highest-value next record)
+3. **Start S-tier form types** — ✅ QUST started 2026-08-22: LoadRecord/SaveRecord located + 1,862-record census (doc 28)
 4. **Write `validate_esp.py`** — generalizes the subrecord cross-check to all form types (Phase 8 → M7)
 5. **Decompile exteriorcellloader grid-walk** — the cell-grid construction and background-load enqueue (Phase 2 remaining gap)
 
