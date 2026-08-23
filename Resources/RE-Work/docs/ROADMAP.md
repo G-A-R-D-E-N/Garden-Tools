@@ -187,7 +187,7 @@ Scripts that turn the docs into usable utilities.
 | `parse_wrld_esm.py` | ✅ | extract WRLD subrecord sets from `.esm` |
 | `decompile-some-function.java` | ✅ | Ghidra Query.java script for batch decompilation |
 | `validate_wrld_save.py` | ✅ | WRLD subrecord census + contract check across all four masters — 17 records, 0 issues; CLSZ/OFST/RNAM shapes corrected (doc 23 §10b.1/§10b.2) |
-| `validate_esp.py` | 🔴 | general .esm/.esp validator — all form types |
+| `validate_esp.py` | ✅ | general .esm/.esp/.esl validator — structural + formID-range + localization-shape checks plus proven contracts (CELL/WRLD/PROJ/EXPL/HAZD/template grammar/QUST); 2.2M records across four masters in ~3 s, negative-test corpus rejected correctly |
 | `batch_cli_runner.py` | 🔴 | wrap CK headless switches with arg validation |
 | `precombined_inspector.py` | 🔴 | parse _OC.NIF and verify block types |
 | `uvd_compiler.py` | 🔴 | standalone .uvd compiler from doc 21 spec |
@@ -231,7 +231,7 @@ Phase 0 (foundation)
 1. ~~Decompile `bgsterrainwatermeshbuilder.cpp` body~~ ✅ done 2026-08-22 — dumps/decompile-bgsterrainwatermeshbuilder.md
 2. ~~Add `validate_wrld_save.py`~~ ✅ done 2026-08-22 — doc 23 §10b.2
 3. **Start S-tier form types** — ✅ QUST started 2026-08-22: LoadRecord/SaveRecord located + 1,862-record census (doc 28)
-4. **Write `validate_esp.py`** — generalizes the subrecord cross-check to all form types (Phase 8 → M7)
+4. ~~Write `validate_esp.py`~~ ✅ done 2026-08-22 — Phase 8/M7 groundwork
 5. **Decompile exteriorcellloader grid-walk** — the cell-grid construction and background-load enqueue (Phase 2 remaining gap)
 
 ---
