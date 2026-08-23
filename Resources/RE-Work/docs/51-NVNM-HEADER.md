@@ -55,6 +55,20 @@ the vertex array as I first read it - all counts arrive through the
 versioned header object (section 1). The 296-B sample is consistent
 with T=4 fixed 24-B triangles plus tail sections.
 
+## 2c. Stream slot semantics (PathingStreamMasterFileRead vtable)
+
+* slot +0x30 (`FUN_140f358d0`): consumes **4 bytes**, stores low 16 bits
+* slot +0x20 (`FUN_140f35970`): consumes **8 bytes**
+* slot +0x08 (`FUN_140f35a30` region): 4-byte float path
+
+Therefore the triangle reader's six +0x30 calls plus one +0x20 call
+consume about **32 on-disk bytes per triangle** for version 15 - not
+the 16-byte stride assumed in the first empirical pass (which
+over-counted T by fitting windows coincidentally). Re-deriving the
+post-vertex offsets with a 32-B stride is the immediate next step;
+the bit-packed hypothesis from §2a is superseded by these plain
+fixed-width reads.
+
 ## 3. Element readers (decoded)
 
 * **Vertex** (`FUN_142754050`): three f32 reads - X, Y, Z.
