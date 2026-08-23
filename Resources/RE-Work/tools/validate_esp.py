@@ -174,6 +174,16 @@ def check_land(rec, smap, body, add):
             add('LAND-VTXT-SIZE', 'ERROR')
 
 
+def check_mswp(rec, smap, body, add):
+    if len(smap.get('BNAM', []) or []) != len(smap.get('SNAM', []) or []):
+        add('MSWP-PAIR-MISMATCH', 'ERROR')
+
+
+def check_cobj(rec, smap, body, add):
+    if not smap.get('INTV'):
+        add('COBJ-MISSING-INTV', 'ERROR')
+
+
 def check_mgef(rec, smap, body, add):
     for t in ('EDID', 'DATA', 'SNDD', 'DNAM'):
         if not smap.get(t):
@@ -200,6 +210,8 @@ CONTRACTS = {
     'SCOL': check_scol,
     'MGEF': check_mgef,
     'LAND': check_land,
+    'MSWP': check_mswp,
+    'COBJ': check_cobj,
 }
 
 
