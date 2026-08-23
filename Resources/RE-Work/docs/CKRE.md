@@ -38,6 +38,7 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | [20-WINE-PAPYRUS-ZIP-CRASH.md](20-WINE-PAPYRUS-ZIP-CRASH.md) | the Wine startup crash explained — Papyrus source-zip extraction via Shell COM (`IShellDispatch::NameSpace` returns S_OK + NULL `Folder*`), with patch/workaround analysis |
 | [21-UVD-FORMAT.md](21-UVD-FORMAT.md) | the compiled PreVis `.uvd` scene format (magic `0xD6000012`) — CRC-32C framing, full 0x150 header field map, and version string, verified against 3 shipped samples + the writer decompiles |
 | [26-RE-TARGETS.md](26-RE-TARGETS.md) | the high-value RE targets — OBTE/OBTS object-template block layout (3,297 four-master payloads, template FULL invariant, OMOD includes), string-table resolution (reader-variant dispatch, no ID bits, reader recipe in §2a), XCLC trailing field = Force-Hide-Land byte + 3B padding (38,970 exterior cells), and the Fallout4.exe section-delta RVA rebase rule with the 1.10.155-vs-1.10.163 build-mismatch note |
+| [48-NAVM-MUST-SCCO.md](48-NAVM-MUST-SCCO.md) | NAVM CK-side loader + NVNM blob stats; MUST; SCCO internal-record grammar |
 | [47-DTIER-WAVE6.md](47-DTIER-WAVE6.md) | Wave 6 audit fix: GMST/MESG/TRNS/ARMA(48 tags)/PKIN/MOVT/FSTP/MUSC/SMBN/LCRT/AACT/PHZD loaders |
 | [46-DTIER-WAVE5.md](46-DTIER-WAVE5.md) | D-tier wave 5: twenty loaders (LTEX..FSTS); coverage complete for all types >= 50 records |
 | [45-DTIER-WAVE4.md](45-DTIER-WAVE4.md) | D-tier wave 4: SOUN/REGN/ANIO/IMGS/IMAD/ADDN/MATT/SMQN/DLBR/ARTO/CLFM/KSSM loaders |
