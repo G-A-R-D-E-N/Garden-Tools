@@ -7,11 +7,11 @@ name: validate-ckini-golden
 # the fixture itself must be accompanied by a regenerated golden file.
 #
 # Regenerate locally, FROM THE REPO ROOT (the "roots" field is CWD-relative):
-#   python3 tools/ckini/validate_ckini.py \
-#     --compile-text tools/ckini/samples/compile-text/cross-check/input \
-#     --strings tools/ckini/samples/compile-text/cross-check/STRINGS \
+#   python3 Resources/RE-Work/tools/validate_ckini.py \
+#     --compile-text Resources/RE-Work/tools/samples/compile-text/cross-check/input \
+#     --strings Resources/RE-Work/tools/samples/compile-text/cross-check/STRINGS \
 #     --composition-out \
-#     tools/ckini/samples/compile-text/cross-check/composition.golden.json
+#     Resources/RE-Work/tools/samples/compile-text/cross-check/composition.golden.json
 
 on:
   push:
@@ -19,13 +19,13 @@ on:
       - main
       - "work/**"
     paths:
-      - "tools/ckini/validate_ckini.py"
-      - "tools/ckini/samples/compile-text/**"
+      - "Resources/RE-Work/tools/validate_ckini.py"
+      - "Resources/RE-Work/tools/samples/compile-text/**"
       - ".github/workflows/validate-ckini-golden.yml"
   pull_request:
     paths:
-      - "tools/ckini/validate_ckini.py"
-      - "tools/ckini/samples/compile-text/**"
+      - "Resources/RE-Work/tools/validate_ckini.py"
+      - "Resources/RE-Work/tools/samples/compile-text/**"
       - ".github/workflows/validate-ckini-golden.yml"
   workflow_dispatch:
 
@@ -47,9 +47,9 @@ jobs:
         # expected; anything above 1 means the validator crashed and fails.
         run: |
           set +e
-          python3 tools/ckini/validate_ckini.py \
-            --compile-text tools/ckini/samples/compile-text/cross-check/input \
-            --strings tools/ckini/samples/compile-text/cross-check/STRINGS \
+          python3 Resources/RE-Work/tools/validate_ckini.py \
+            --compile-text Resources/RE-Work/tools/samples/compile-text/cross-check/input \
+            --strings Resources/RE-Work/tools/samples/compile-text/cross-check/STRINGS \
             --composition-out "$RUNNER_TEMP/composition.json" >/dev/null 2>&1
           rc=$?
           set -e
@@ -61,7 +61,7 @@ jobs:
       - name: Diff against the committed golden file
         run: |
           if ! diff -u \
-            tools/ckini/samples/compile-text/cross-check/composition.golden.json \
+            Resources/RE-Work/tools/samples/compile-text/cross-check/composition.golden.json \
             "$RUNNER_TEMP/composition.json"; then
             echo "::error::composition drifted from the committed golden file; regenerate it with --composition-out (from the repo root) and commit the updated golden file"
             exit 1
