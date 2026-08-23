@@ -135,6 +135,11 @@ Every alternative was eliminated before concluding:
   strides 14..22): unique perfect fit remains start=+0, stride=21
   (80/80); runner-up scores under 9%.
 
+Factory-object corroboration (2026-08-23, check_name_confidence +
+PDB): the created object's +0x18 virtual is
+**`PathingCell::Read(BSPathingStreamRead&)`**, confirmed by the
+1.10.155 private symbols - it loads only cell-link IDs as described.
+
 Conclusion: the loader function provably consumes 16 B/triangle while
 shipped masters provably contain 21 B/triangles. Both measurements are
 solid, so shipped navmeshes were serialized by a pipeline whose writer
