@@ -48,7 +48,7 @@ TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   // 1 + its recursive children, then subtracts one for TES4 itself.
   // This fixture therefore has: top GRUP + first record + nested GRUP +
   // second record = 4.
-  plugin.original_bytes.clear();
+  plugin.original_range.clear();
 
   const auto written = fo4::write_plugin(plugin);
   const auto reread = fo4::read_plugin(written, "Rebuilt.esp");

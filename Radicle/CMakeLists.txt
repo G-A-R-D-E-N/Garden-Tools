@@ -273,6 +273,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_hardening.cpp
     tests/test_localized_strings.cpp
     tests/test_c_api.cpp
+    tests/test_original_storage.cpp
     tests/plugin_bytes.cpp
   )
   target_include_directories(fo4_tests PRIVATE tests)

@@ -91,8 +91,8 @@ void rebuild_tes4_onam(Plugin& plugin) {
   }
 
   plugin.tes4.subrecords = std::move(subrecords);
-  plugin.tes4.original_bytes.clear();
-  plugin.original_bytes.clear();
+  plugin.tes4.original_range.clear();
+  plugin.original_range.clear();
   plugin.header.overrides = overrides;
 }
 

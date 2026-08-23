@@ -10,7 +10,7 @@
 
 The first milestone is a preservation-safe generic plugin container plus a FormID model that cannot silently corrupt references when masters are reordered.
 
-Loaded records now carry a `FormKey`. `write_plugin` emits `original_bytes` when the plugin was not mutated. `remap_plugin_masters` rebuilds TES4 masters, record-header FormIDs, and interior FormLinks (`NAME`, `KWDA`, `CTDA`, `VMAD` objects, plus structured slots such as `CNTO`/`LVLO`/`XTEL`/`XLOC`/`XESP`) from FormKeys. Other subrecords stay raw until the schema grows. Master light vs full is `MasterReference.kind`: TES4 SmallFile when known, `.esl` filename as fallback. `remap_plugin_masters` accepts `MasterDescriptor` so an ESP flagged light can be passed without renaming it `.esl`.
+Loaded records now carry a `FormKey`. A plugin owns one immutable shared source buffer and a clean-plugin byte range. `plugin_original_bytes` exposes that range as a read-only span, while `record_original_bytes` resolves each record's `OriginalByteRange` into the same source. `write_plugin` returns the clean source range unchanged and rebuilds dirty groups while reusing untouched record ranges. `remap_plugin_masters` rebuilds TES4 masters, record-header FormIDs, and interior FormLinks (`NAME`, `KWDA`, `CTDA`, `VMAD` objects, plus structured slots such as `CNTO`/`LVLO`/`XTEL`/`XLOC`/`XESP`) from FormKeys. Other subrecords stay raw until the schema grows. Master light vs full is `MasterReference.kind`: TES4 SmallFile when known, `.esl` filename as fallback. `remap_plugin_masters` accepts `MasterDescriptor` so an ESP flagged light can be passed without renaming it `.esl`.
 
 ## Non-goals for this pass
 
@@ -43,13 +43,19 @@ A plugin is:
 2. Zero or more top-level `GRUP`s
 3. Nested groups and major records
 
+The plugin keeps:
+
+- one immutable shared source byte vector
+- a clean-plugin `OriginalByteRange`
+
 Every record keeps:
 
 - parsed `RecordHeader`
 - parsed `Subrecord` list (including unknown signatures)
-- `original_bytes` covering the on-disk header + payload
+- an `OriginalByteRange` covering the on-disk header + payload
 
-Compressed records also keep `decompressed_payload`. The original compressed bytes stay in `original_bytes`.
+Compressed records also keep `decompressed_payload`. The original compressed
+bytes stay in the plugin source and are addressed through the record range.
 
 Unknown data is never dropped. If a field's meaning is uncertain, it stays in the raw subrecord bytes and is listed in `OPEN_QUESTIONS.md`.
 

@@ -12,6 +12,7 @@
 #include "fo4/forms/quest.hpp"
 #include "fo4/forms/race.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -143,4 +144,46 @@ TEST(PluginCorpus, EveryDecoderSurvivesThirdPartyPlugins) {
   EXPECT_TRUE(read_tally.failures.empty()) << "plugins failed to parse";
   EXPECT_TRUE(decode_tally.failures.empty()) << "records failed to decode";
   EXPECT_GT(read_tally.plugins, 100u);
+}
+
+TEST(PluginCorpus, EveryUnmodifiedPluginWritesByteIdentically) {
+  const char* dir = std::getenv("FO4_PLUGIN_CORPUS");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_PLUGIN_CORPUS to a directory of plugins to run this";
+  }
+
+  std::vector<std::filesystem::path> paths;
+  for (const auto& entry : std::filesystem::recursive_directory_iterator{
+           dir, std::filesystem::directory_options::skip_permission_denied}) {
+    if (!entry.is_regular_file()) continue;
+    auto ext = entry.path().extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (ext == ".esp" || ext == ".esl" || ext == ".esm") paths.push_back(entry.path());
+  }
+  if (paths.empty()) GTEST_SKIP() << "no plugins under " << dir;
+  std::sort(paths.begin(), paths.end());
+
+  std::vector<std::string> failures;
+  std::size_t processed = 0;
+  for (const auto& path : paths) {
+    try {
+      const auto plugin = fo4::read_plugin_file(path);
+      const auto original = fo4::plugin_original_bytes(plugin);
+      const auto written = fo4::write_plugin(plugin);
+      if (written.size() != original.size() ||
+          !std::equal(written.begin(), written.end(), original.begin())) {
+        failures.push_back(path.string());
+      }
+      ++processed;
+    } catch (const std::exception& error) {
+      failures.push_back(path.string() + ": " + error.what());
+    }
+  }
+
+  for (std::size_t i = 0; i < failures.size() && i < 25; ++i) {
+    ADD_FAILURE() << failures[i];
+  }
+  EXPECT_TRUE(failures.empty()) << failures.size() << " plugin(s) were not byte-identical";
+  EXPECT_GT(processed, 100u);
 }

@@ -662,7 +662,7 @@ void rekey_form_links(Plugin& plugin,
       });
     }
     if (changed) {
-      record.original_bytes.clear();
+      record.original_range.clear();
       record.decompressed_payload.clear();
       record.header.data_size = 0;
       record.uncompressed_size = 0;
@@ -671,8 +671,7 @@ void rekey_form_links(Plugin& plugin,
   });
 
   if (any_changed) {
-    next.original_bytes.clear();
-    visit_groups(next, [](Group& group) { group.original_bytes.clear(); });
+    next.original_range.clear();
   }
   plugin = std::move(next);
 }

@@ -91,12 +91,12 @@ void write_subrecords(ByteWriter& out, const std::vector<Subrecord>& subrecords)
   }
 }
 
-void write_record(ByteWriter& out, const Record& record);
-void write_group(ByteWriter& out, const Group& group);
+void write_record(ByteWriter& out, const Plugin& plugin, const Record& record);
+void write_group(ByteWriter& out, const Plugin& plugin, const Group& group);
 
-void write_record(ByteWriter& out, const Record& record) {
-  if (!record.original_bytes.empty()) {
-    out.raw(record.original_bytes);
+void write_record(ByteWriter& out, const Plugin& plugin, const Record& record) {
+  if (const auto original = record_original_bytes(plugin, record); !original.empty()) {
+    out.raw(original);
     return;
   }
 
@@ -125,12 +125,7 @@ void write_record(ByteWriter& out, const Record& record) {
   out.patch_u32(header_offset + 4, payload_size);
 }
 
-void write_group(ByteWriter& out, const Group& group) {
-  if (!group.original_bytes.empty()) {
-    out.raw(group.original_bytes);
-    return;
-  }
-
+void write_group(ByteWriter& out, const Plugin& plugin, const Group& group) {
   const auto header_offset = out.bytes.size();
   out.sig(sig_grup);
   out.u32(0);
@@ -143,9 +138,9 @@ void write_group(ByteWriter& out, const Group& group) {
 
   for (const auto& child : group.children) {
     if (const auto* record = std::get_if<Record>(&child)) {
-      write_record(out, *record);
+      write_record(out, plugin, *record);
     } else {
-      write_group(out, std::get<Group>(child));
+      write_group(out, plugin, std::get<Group>(child));
     }
   }
 
@@ -210,7 +205,7 @@ void patch_hedr_record_count(Record& tes4, std::uint32_t count) {
   hedr->data[5] = std::byte{static_cast<std::uint8_t>(count >> 8)};
   hedr->data[6] = std::byte{static_cast<std::uint8_t>(count >> 16)};
   hedr->data[7] = std::byte{static_cast<std::uint8_t>(count >> 24)};
-  tes4.original_bytes.clear();
+  tes4.original_range.clear();
 }
 
 Subrecord zstring_subrecord(Signature signature, std::string_view text) {
@@ -258,24 +253,22 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
     write_masters();
   }
   tes4.subrecords = std::move(next);
-  tes4.original_bytes.clear();
+  tes4.original_range.clear();
 }
 
 void clear_original_bytes(Plugin& plugin) {
-  plugin.original_bytes.clear();
-  plugin.tes4.original_bytes.clear();
-  visit_records(plugin, [](Record& record) { record.original_bytes.clear(); });
-  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
+  plugin.original_range.clear();
+  visit_records(plugin, [](Record& record) { record.original_range.clear(); });
 }
 
 }  // namespace
 
 std::vector<std::byte> write_plugin(const Plugin& plugin) {
-  if (!plugin.original_bytes.empty()) {
-    return plugin.original_bytes;
+  if (const auto original = plugin_original_bytes(plugin); !original.empty()) {
+    return {original.begin(), original.end()};
   }
 
-  // Clean plugins return original_bytes above. Once a master-flagged plugin is
+  // Clean plugins return the original source range above. Once a master-flagged plugin is
   // dirty, rebuild ONAM from the current hierarchy before serialization so
   // stale temporary-override metadata cannot survive a mutation.
   auto prepared = plugin;
@@ -287,9 +280,9 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
   patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
 
   ByteWriter out;
-  write_record(out, tes4);
+  write_record(out, prepared, tes4);
   for (const auto& group : prepared.groups) {
-    write_group(out, group);
+    write_group(out, prepared, group);
   }
   return out.bytes;
 }

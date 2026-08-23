@@ -19,13 +19,13 @@ TEST(Writer, UnmodifiedHeatherIsByteIdentical) {
   const auto path = testdata("FW_HeatherSurvivalPatch.esp");
   const auto plugin = fo4::read_plugin_file(path);
   const auto written = fo4::write_plugin(plugin);
-  EXPECT_EQ(written, plugin.original_bytes);
+  EXPECT_EQ(written, fo4::test::original_bytes(plugin));
 }
 
 TEST(Writer, UnmodifiedSlowTimeIsByteIdentical) {
   const auto path = testdata("SlowTime.esp");
   const auto plugin = fo4::read_plugin_file(path);
-  EXPECT_EQ(fo4::write_plugin(plugin), plugin.original_bytes);
+  EXPECT_EQ(fo4::write_plugin(plugin), fo4::test::original_bytes(plugin));
 }
 
 TEST(Writer, RebuildsCompressedAndXxxxRecords) {
@@ -64,15 +64,14 @@ TEST(Writer, RebuildsCompressedAndXxxxRecords) {
 
   auto plugin = fo4::read_plugin(out.bytes, "rebuild.esp");
   for (auto& group : plugin.groups) {
-    group.original_bytes.clear();
     for (auto& child : group.children) {
       if (auto* record = std::get_if<fo4::Record>(&child)) {
-        record->original_bytes.clear();
+        record->original_range.clear();
       }
     }
   }
-  plugin.tes4.original_bytes.clear();
-  plugin.original_bytes.clear();
+  plugin.tes4.original_range.clear();
+  plugin.original_range.clear();
 
   const auto written = fo4::write_plugin(plugin);
   const auto reread = fo4::read_plugin(written, "rebuild.esp");

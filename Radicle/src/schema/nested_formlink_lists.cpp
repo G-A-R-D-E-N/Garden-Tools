@@ -69,12 +69,11 @@ void write_u32(std::vector<std::byte>& data, std::uint32_t value) {
 }
 
 void mark_modified(Plugin& plugin, Record& record) {
-  record.original_bytes.clear();
+  record.original_range.clear();
   record.decompressed_payload.clear();
   record.header.data_size = 0;
   record.uncompressed_size = 0;
-  plugin.original_bytes.clear();
-  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
+  plugin.original_range.clear();
 }
 
 struct GroupRange {

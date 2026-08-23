@@ -54,12 +54,11 @@ Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
 }
 
 void mark_modified(Plugin& plugin, Record& record) {
-  record.original_bytes.clear();
+  record.original_range.clear();
   record.decompressed_payload.clear();
   record.header.data_size = 0;
   record.uncompressed_size = 0;
-  plugin.original_bytes.clear();
-  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
+  plugin.original_range.clear();
 }
 
 std::optional<std::size_t> rule_index(

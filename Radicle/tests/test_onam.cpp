@@ -102,7 +102,7 @@ TEST(Onam, RebuildIncludesOnlyNonPersistentMasterOwnedFo4Participants) {
   dialogue.children.emplace_back(record("DIAL", 0x00000200u));
   plugin.groups.push_back(std::move(dialogue));
 
-  plugin.original_bytes.clear();
+  plugin.original_range.clear();
   fo4::rebuild_tes4_onam(plugin);
 
   ASSERT_EQ(plugin.header.overrides.size(), 3u);
@@ -126,7 +126,7 @@ TEST(Onam, DirtyMasterWriteRebuildsStaleOnamAutomatically) {
   auto dialogue = top_group("DIAL");
   dialogue.children.emplace_back(record("DIAL", 0x00000222u));
   plugin.groups.push_back(std::move(dialogue));
-  plugin.original_bytes.clear();
+  plugin.original_range.clear();
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esm");
   ASSERT_EQ(reread.header.overrides.size(), 1u);
@@ -138,13 +138,13 @@ TEST(Onam, DirtyMasterWriteDropsOnamAfterOverrideRemoval) {
   auto dialogue = top_group("DIAL");
   dialogue.children.emplace_back(record("DIAL", 0x00000222u));
   plugin.groups.push_back(std::move(dialogue));
-  plugin.original_bytes.clear();
+  plugin.original_range.clear();
 
   auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esm");
   ASSERT_EQ(reread.header.overrides.size(), 1u);
 
   reread.groups.clear();
-  reread.original_bytes.clear();
+  reread.original_range.clear();
   const auto without_override =
       fo4::read_plugin(fo4::write_plugin(reread), "Patch.esm");
   EXPECT_TRUE(without_override.header.overrides.empty());
@@ -156,7 +156,7 @@ TEST(Onam, EmptyRebuildRemovesStaleOnam) {
   ASSERT_EQ(onam_subrecord_count(plugin), 1u);
   ASSERT_EQ(plugin.header.overrides.size(), 1u);
 
-  plugin.original_bytes.clear();
+  plugin.original_range.clear();
   fo4::rebuild_tes4_onam(plugin);
   EXPECT_TRUE(plugin.header.overrides.empty());
   EXPECT_EQ(onam_subrecord_count(plugin), 0u);
@@ -168,7 +168,7 @@ TEST(Onam, MasterReorderPreservesLogicalOverrideIdentity) {
   auto dialogue = top_group("DIAL");
   dialogue.children.emplace_back(record("DIAL", 0x01000123u));
   plugin.groups.push_back(std::move(dialogue));
-  plugin.original_bytes.clear();
+  plugin.original_range.clear();
 
   fo4::rebuild_tes4_onam(plugin);
   ASSERT_EQ(plugin.header.overrides.size(), 1u);

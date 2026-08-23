@@ -78,7 +78,7 @@ TEST(LeveledSpellCreation, CreatesRequiredStructureAndInitialEntries) {
 
 TEST(LeveledSpellCreation, InvalidLocalReferenceDoesNotConsumeAFormId) {
   auto plugin = fo4::read_plugin(make_target("MISC"), "Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   fo4::forms::LeveledSpellEntry entry;
   entry.spell = fo4::FormKey::parse("000800:Patch.esp");
@@ -88,7 +88,7 @@ TEST(LeveledSpellCreation, InvalidLocalReferenceDoesNotConsumeAFormId) {
       static_cast<void>(fo4::forms::create_leveled_spell(
           plugin, 0u, 0u, 0u, entries)),
       fo4::forms::LeveledSpellError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x801u);
   EXPECT_EQ(plugin.groups.size(), 1u);
 }

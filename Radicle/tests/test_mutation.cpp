@@ -144,18 +144,18 @@ TEST(Mutation, InsertsMissingEditorId) {
 TEST(Mutation, NoOpStillReportsRecordFound) {
   auto plugin = fo4::read_plugin(make_plugin(true), "Patch.esp");
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   ASSERT_TRUE(fo4::set_record_editor_id(plugin, key, "OldEditorId"));
   // A same-value write must not dirty the serialized payload.
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(Mutation, MissingRecordReturnsFalseAndDoesNotDirtyPlugin) {
   auto plugin = fo4::read_plugin(make_plugin(true), "Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   EXPECT_FALSE(fo4::set_record_editor_id(
       plugin, fo4::FormKey::parse("000999:Patch.esp"), "Nope"));
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(Mutation, CopyOverrideAddsMasterAndReencodesDestinationSafely) {
@@ -305,10 +305,10 @@ TEST(Mutation, LightPluginAllocatesBelowTheFullPluginFloor) {
 // so the writer has to refuse it -- the engine never reports the collision.
 TEST(Mutation, LightPluginExhaustsAtTwelveBits) {
   auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x1000, true), "Lifecycle.esl");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   EXPECT_THROW(
       static_cast<void>(
           fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"))),
       fo4::FormIdError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }

@@ -1,12 +1,15 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "plugin_bytes.hpp"
 #include "fo4/schema/form_links.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -96,6 +99,23 @@ void expect_same_logical_links(const std::vector<fo4::FormLinkHit>& before,
 
 }  // namespace
 
+TEST(RealPluginPreservation, UnmodifiedFallout4MasterIsByteIdentical) {
+  const char* data_dir = std::getenv("FO4_DATA_DIR");
+  if (data_dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  }
+
+  const auto path = std::filesystem::path{data_dir} / "Fallout4.esm";
+  if (!std::filesystem::exists(path)) {
+    GTEST_SKIP() << "Fallout4.esm is not present under " << data_dir;
+  }
+
+  const auto plugin = fo4::read_plugin_file(path);
+  const auto original = fo4::plugin_original_bytes(plugin);
+  const std::vector<std::byte> expected{original.begin(), original.end()};
+  EXPECT_EQ(fo4::write_plugin(plugin), expected);
+}
+
 TEST(RealPlugin, ReadsHeatherSurvivalPatch) {
   const auto path = testdata("FW_HeatherSurvivalPatch.esp");
   ASSERT_TRUE(std::filesystem::exists(path)) << path;
@@ -125,7 +145,7 @@ TEST(RealPlugin, ReadsHeatherSurvivalPatch) {
   const auto* mgef = fo4::find_record(plugin, fo4::RawFormId{0x03000800});
   ASSERT_NE(mgef, nullptr);
   EXPECT_EQ(mgef->header.signature.to_string(), "MGEF");
-  EXPECT_EQ(plugin.original_bytes.size(), std::filesystem::file_size(path));
+  EXPECT_EQ(fo4::plugin_original_bytes(plugin).size(), std::filesystem::file_size(path));
 }
 
 TEST(RealPlugin, ReadsSlowTime) {
