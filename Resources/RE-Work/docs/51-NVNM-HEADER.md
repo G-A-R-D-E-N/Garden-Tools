@@ -21,7 +21,22 @@ Sanity checks that hold: two independent meshes give plausible vertex
 coordinates (Y constant within a cell height, X/Z spread across the
 cell); T scales with mesh size (4 tris / 296 B blob vs 10 / 518 B).
 
-## 2. Section sequence (from the CK parser)
+## 2a. Empirical validation (7,894 blobs)
+
+* Version field is **always 15** in shipped masters.
+* Header `[version][hash][0][packed cell coords][vertexCount]` +
+  float3 vertex array confirmed across all sampled blobs (u32[3] values
+  like 246000/492200/828000 are packed cell coordinates, not formIDs -
+  corrects §1).
+* The section AFTER vertices is **bit-packed**, not byte-aligned:
+  no fixed byte stride fits the post-vertex region across blobs. The
+  loader wraps the payload in `PathingStreamMasterFileRead`/
+  `BSPathingStreamRead`, whose read methods are bit-level. All element
+  layouts in §3 are therefore LOGICAL (post-unpacking) structures;
+  decoding the bit-stream packing itself requires the stream class's
+  reader internals - flagged as the remaining task.
+
+## 2b. Section sequence (from the CK parser)
 
 The loader wraps the blob in a PathingStreamMasterFileRead and hands it
 to **`FUN_1426c5970`** (bsnavmesh.cpp), which parses in this order:
