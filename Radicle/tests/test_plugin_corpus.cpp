@@ -168,8 +168,9 @@ TEST(PluginCorpus, EveryUnmodifiedPluginWritesByteIdentically) {
   std::size_t processed = 0;
   for (const auto& path : paths) {
     try {
-      const auto plugin = fo4::read_plugin_file(path);
+      auto plugin = fo4::read_plugin_file(path);
       const auto original = fo4::plugin_original_bytes(plugin);
+      plugin.original_range.clear();
       const auto written = fo4::write_plugin(plugin);
       if (written.size() != original.size() ||
           !std::equal(written.begin(), written.end(), original.begin())) {

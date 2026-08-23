@@ -259,6 +259,8 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
 void clear_original_bytes(Plugin& plugin) {
   plugin.original_range.clear();
   visit_records(plugin, [](Record& record) { record.original_range.clear(); });
+  plugin.original_data.reset();
+  plugin.original_structure_fingerprint = 0;
 }
 
 }  // namespace
@@ -273,11 +275,13 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
   // stale temporary-override metadata cannot survive a mutation.
   auto prepared = plugin;
   if (prepared.header.tes4_flags.is_master()) {
-    rebuild_tes4_onam(prepared);
+    rebuild_tes4_onam(prepared, true);
   }
 
   auto tes4 = prepared.tes4;
-  patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
+  if (tes4.original_range.empty()) {
+    patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
+  }
 
   ByteWriter out;
   write_record(out, prepared, tes4);

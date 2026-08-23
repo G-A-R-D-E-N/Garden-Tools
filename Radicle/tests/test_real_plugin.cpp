@@ -110,10 +110,12 @@ TEST(RealPluginPreservation, UnmodifiedFallout4MasterIsByteIdentical) {
     GTEST_SKIP() << "Fallout4.esm is not present under " << data_dir;
   }
 
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto original = fo4::plugin_original_bytes(plugin);
   const std::vector<std::byte> expected{original.begin(), original.end()};
-  EXPECT_EQ(fo4::write_plugin(plugin), expected);
+  plugin.original_range.clear();
+  const auto written = fo4::write_plugin(plugin);
+  EXPECT_EQ(written, expected);
 }
 
 TEST(RealPlugin, ReadsHeatherSurvivalPatch) {

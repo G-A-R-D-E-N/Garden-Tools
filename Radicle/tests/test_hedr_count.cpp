@@ -49,6 +49,7 @@ TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   // This fixture therefore has: top GRUP + first record + nested GRUP +
   // second record = 4.
   plugin.original_range.clear();
+  plugin.tes4.original_range.clear();
 
   const auto written = fo4::write_plugin(plugin);
   const auto reread = fo4::read_plugin(written, "Rebuilt.esp");

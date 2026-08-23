@@ -34,11 +34,11 @@ Measured process:
 | Record count including TES4 | 1,549,277 | 1,549,277 |
 | Compressed record count | 56,399 | 56,399 |
 | Subrecord count | 6,743,366 | 6,743,366 |
-| Parse wall time | 5,138 ms | 4,392 ms |
-| VmRSS after parse | 3,860,880 KiB | 1,884,524 KiB |
-| VmHWM | 4,183,412 KiB | 1,884,660 KiB |
+| Parse wall time | 5,138 ms | 4,257 ms |
+| VmRSS after parse | 3,860,880 KiB | 1,905,100 KiB |
+| VmHWM | 4,183,412 KiB | 1,921,528 KiB |
 
-The shared-backing run is 14.5% faster in this paired warmed-cache
+The shared-backing run is 17.1% faster in this paired warmed-cache
 measurement. Its peak RSS is below the 2.5 GB acceptance target.
 
 ## Baseline retained allocations
@@ -64,21 +64,22 @@ HWM includes the temporary 330,776,576-byte reader vector that existed while
 ## Shared-backing allocations
 
 The implementation keeps one immutable 330,776,576-byte plugin source buffer.
-Records retain only an offset and length into that source. Group preservation
-copies are removed. The remaining measured byte-vector and object allocations
-are:
+Records retain only an offset, length, and backing-store identity into that
+source. Group preservation copies are removed. The remaining measured
+byte-vector and object allocations are:
 
 | Allocation | Capacity |
 |---|---:|
 | Plugin backing bytes | 330,776,576 |
 | Decompressed payloads | 368,737,740 |
 | Subrecord data | 447,715,631 |
-| GroupChild object capacity | 336,036,528 |
+| GroupChild object capacity | 354,705,224 |
 | Subrecord object capacity | 349,568,000 |
 | Top-level group object capacity | 12,288 |
 
-The modeled live allocation total is 1,832,846,763 bytes, with approximately
-92 MiB of measured RSS remainder.
+The modeled live allocation total is 1,851,515,459 bytes, with approximately
+95 MiB of measured RSS remainder after parse. The peak RSS remainder is
+approximately 111 MiB.
 
 ## Verification
 
@@ -87,7 +88,7 @@ Safe suite:
     env -u FO4_DATA_DIR -u FO4_PLUGIN_CORPUS \
       /tmp/radicle-memory-test-build/fo4_tests
 
-Result: 315 passed, 17 skipped real-data tests.
+Result: 315 passed, 19 skipped real-data tests.
 
 Fallout 4 data filters:
 

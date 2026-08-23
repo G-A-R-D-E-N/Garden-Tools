@@ -116,7 +116,7 @@ std::vector<Subrecord> parse_subrecords(std::span<const std::byte> payload,
   return subrecords;
 }
 
-Record read_record(binary::Cursor& cursor) {
+Record read_record(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
   const auto start = cursor.position();
   const auto start_abs = cursor.absolute_offset();
   Record record;
@@ -126,7 +126,7 @@ Record read_record(binary::Cursor& cursor) {
                                      " overruns file");
   }
   const auto payload = cursor.read_bytes(record.header.data_size);
-  record.original_range = OriginalByteRange{start, cursor.position() - start};
+  record.original_range = OriginalByteRange{owner, start, cursor.position() - start};
   record.compressed = record.header.flags.is_compressed();
   if (!record.compressed) {
     record.subrecords = parse_subrecords(payload, start_abs + k_record_header_size);
@@ -145,9 +145,9 @@ Record read_record(binary::Cursor& cursor) {
   return record;
 }
 
-Group read_group(binary::Cursor& cursor);
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner);
 
-GroupChild read_child(binary::Cursor& cursor) {
+GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
   if (cursor.remaining() < 4) {
     throw parse_error(cursor.absolute_offset(), "truncated group child");
   }
@@ -158,12 +158,12 @@ GroupChild read_child(binary::Cursor& cursor) {
       static_cast<char>(std::to_integer<std::uint8_t>(cursor.peek(4)[3])),
   };
   if (sig == sig_grup) {
-    return read_group(cursor);
+    return read_group(cursor, owner);
   }
-  return read_record(cursor);
+  return read_record(cursor, owner);
 }
 
-Group read_group(binary::Cursor& cursor) {
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
   const auto start = cursor.position();
   const auto start_abs = cursor.absolute_offset();
   Group group;
@@ -179,7 +179,7 @@ Group read_group(binary::Cursor& cursor) {
     throw parse_error(start_abs, "GRUP overruns file");
   }
   while (cursor.position() < end) {
-    group.children.push_back(read_child(cursor));
+    group.children.push_back(read_child(cursor, owner));
   }
   if (cursor.position() != end) {
     throw parse_error(start_abs, "GRUP children did not consume the declared size");
@@ -216,28 +216,40 @@ Plugin read_plugin_from_owned_bytes(
   Plugin plugin;
   plugin.path = std::move(path);
   plugin.original_data = std::move(original_data);
-  plugin.original_range = OriginalByteRange{0, bytes.size()};
+  plugin.original_range = OriginalByteRange{&bytes, 0, bytes.size()};
   if (!plugin.path.empty()) {
     plugin.key = PluginKey::from_filename(plugin.path.filename().string());
   }
   binary::Cursor cursor{bytes};
-  plugin.tes4 = read_record(cursor);
+  plugin.tes4 = read_record(cursor, &bytes);
   if (plugin.tes4.header.signature != sig_tes4) {
     throw parse_error(0, "first record is not TES4");
   }
   plugin.header = parse_tes4_header(plugin.tes4);
   while (!cursor.at_end()) {
-    plugin.groups.push_back(read_group(cursor));
+    plugin.groups.push_back(read_group(cursor, &bytes));
   }
   assign_record_form_keys(plugin);
+  const auto group_count = collect_groups(plugin).size();
+  const auto record_count = collect_records(plugin).size();
+  plugin.original_structure_fingerprint =
+      (static_cast<std::uint64_t>(group_count) << 32) |
+      static_cast<std::uint64_t>(record_count);
   return plugin;
 }
 
 std::span<const std::byte> original_bytes_for_range(
-    const std::vector<std::byte>& original_data, OriginalByteRange range) {
+    const Plugin& plugin, OriginalByteRange range) {
   if (range.empty()) {
     return {};
   }
+  if (!plugin.original_data) {
+    return {};
+  }
+  if (range.owner != plugin.original_data.get()) {
+    throw std::logic_error("original byte range belongs to a different plugin backing store");
+  }
+  const auto& original_data = *plugin.original_data;
   if (range.offset > original_data.size() ||
       range.size > original_data.size() - range.offset) {
     throw std::out_of_range("original byte range exceeds plugin backing storage");
@@ -274,7 +286,7 @@ std::span<const std::byte> plugin_original_bytes(const Plugin& plugin) {
   if (!plugin.original_data) {
     return {};
   }
-  return original_bytes_for_range(*plugin.original_data, plugin.original_range);
+  return original_bytes_for_range(plugin, plugin.original_range);
 }
 
 std::span<const std::byte> record_original_bytes(const Plugin& plugin,
@@ -282,7 +294,7 @@ std::span<const std::byte> record_original_bytes(const Plugin& plugin,
   if (!plugin.original_data) {
     return {};
   }
-  return original_bytes_for_range(*plugin.original_data, record.original_range);
+  return original_bytes_for_range(plugin, record.original_range);
 }
 
 std::vector<const Record*> collect_records(const Plugin& plugin) {

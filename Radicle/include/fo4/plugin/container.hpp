@@ -18,11 +18,13 @@
 namespace fo4 {
 
 struct OriginalByteRange {
+  const std::vector<std::byte>* owner{nullptr};
   std::size_t offset{0};
   std::size_t size{0};
 
   [[nodiscard]] constexpr bool empty() const noexcept { return size == 0; }
   constexpr void clear() noexcept {
+    owner = nullptr;
     offset = 0;
     size = 0;
   }
@@ -82,6 +84,7 @@ struct Plugin {
   std::vector<Group> groups;
   std::shared_ptr<const std::vector<std::byte>> original_data;
   OriginalByteRange original_range;
+  std::uint64_t original_structure_fingerprint{0};
 };
 
 [[nodiscard]] std::span<const std::byte> plugin_original_bytes(const Plugin& plugin);
