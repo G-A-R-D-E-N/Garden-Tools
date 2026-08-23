@@ -151,6 +151,12 @@ Empirical pass over all Fallout4.esm localized string fields plus the three
 * **Delocalized plugins:** none observed in the local corpus (23 plain/text,
   16 localized/id32, no plain-with-ID case). Rule: trust the bit; if a
   plain plugin carries 4-byte FULLs that look like IDs, they are still text.
+* **EXCEPTION (2026-08-23, validator-discovered): `NNAM` is not a
+  localized string.** DLCNukaWorld SNDR 01039631-33 ship NNAM as inline
+  text (11-20 B) *inside a localized plugin* - so NNAM never enters the
+  ID32 path regardless of bit 7. Writers must always emit NNAM inline;
+  readers must treat it as raw bytes. (doc 50's SNAM is likewise a raw
+  numeric block, not text.)
 
 This unblocks Radicle's display-text resolution: store `(plugin, bit7,
 payload)`; resolve at render time via the recipe above.
