@@ -155,6 +155,25 @@ def check_scol(rec, smap, body, add):
         add('SCOL-PAIR-MISMATCH', 'ERROR')
 
 
+def check_land(rec, smap, body, add):
+    for s in smap.get('VNML', []) or []:
+        if s.size != 3267:
+            add('LAND-VNML-SIZE', 'ERROR')
+    for s in smap.get('VHGT', []) or []:
+        if s.size != 1096:
+            add('LAND-VHGT-SIZE', 'ERROR')
+    vclr = smap.get('VCLR')
+    if vclr and vclr[0].size != 3267:
+        add('LAND-VCLR-SIZE', 'ERROR')
+    for t in ('BTXT', 'ATXT'):
+        for s in smap.get(t, []) or []:
+            if s.size != 8:
+                add('LAND-%s-SIZE' % t, 'ERROR')
+    for s in smap.get('VTXT', []) or []:
+        if s.size % 8:
+            add('LAND-VTXT-SIZE', 'ERROR')
+
+
 def check_mgef(rec, smap, body, add):
     for t in ('EDID', 'DATA', 'SNDD', 'DNAM'):
         if not smap.get(t):
@@ -180,6 +199,7 @@ CONTRACTS = {
     'LVLN': check_leveled,
     'SCOL': check_scol,
     'MGEF': check_mgef,
+    'LAND': check_land,
 }
 
 
