@@ -1,6 +1,6 @@
 # MANIFEST
 
-Creation Kit (`CreationKit.exe` 1.11.137.0) and runtime (`Fallout4.exe` OG 1.10.163 / AE 1.11.221) notes.
+Creation Kit (`CreationKit.exe` 1.11.137.0) and runtime (`Fallout4.exe` OG 1.10.163 / AE 1.11.240) notes.
 
 Never push game binaries, debug files, or decompiled function bodies.
 

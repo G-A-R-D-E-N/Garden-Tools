@@ -1142,49 +1142,83 @@ write `XCLL` where exterior cells write `XCLC`.
 | `XCLW` (water height) | ✅ core | ✅ | both types |
 | `XCLR` (region list) | sporadic | rare | varies |
 | `LTMP` (lighting template) | ✅ core | rare | ✓ |
-| `XCWT` (water type) | rare | ? | FO4-only (1/46 cells), 4B formID |
+| `XCWT` (water type) | rare | rare | FO4-only (518 cells), 4B formID |
 
-#### 10a.3 SaveRecord validator (`validate_cell_save.py`)
+#### 10a.3 SaveRecord validator (`tools/validate_cell_save.py`)
 
-A dedicated byte-parser cross-checks every CELL subrecord in any `.esm` against the
-SaveRecord dispatch. Running against Fallout4.esm (46 interior CELLs):
+A dedicated parser cross-checks every CELL subrecord in any `.esm` against the
+SaveRecord dispatch. It walks the GRUP tree strictly via
+`tools/plugin_parse.py` (see §10a.4 for why byte-scanning is unsound).
+Running against Fallout4.esm (full population):
 
-- **18 unique subrecords found** — 100% in SaveRecord, none in TESForm base or LoadRecord-only
-- **0 unknowns** — every 4CC has a known write path
-- **9 SaveRecord keys not seen in the sampled cells** (exterior-only `XCLC`/`CNAM`/`XCLR`/`XCLP`/`XCLS`,
-  rare `MHDT`/`RVIS`/`XILW`/`XWEM`) — all explained by the sample being interior-only
-- **`XCWT`** (cell water type, 4B formID) is new to the SaveRecord list — found in 1/46 cells
+- **40,165 CELL records** — 38,970 exterior + 1,195 interior; compressed
+  7,276 ext / 1,195 int (interiors are always compressed, exteriors mostly not)
+- **29 unique subrecords** — 26 in SaveRecord dispatch; `XWCU` (48 B, one
+  exterior cell `0x0001DF0A`, water-current family by neighbourhood) is real
+  but has no decompile-backed write path yet, so it stays unclassified;
+  `CNAM`/`XCLP`/`XCLS`/`XWEM` are declared in the SaveRecord contract but
+  never appear in the shipped master
+- Exterior detection uses **DATA bit 0 (Interior)** — the record-header flags
+  do not carry interior-ness in FO4 (flag bit 0 is never set anywhere; bit 1
+  is "has water", which the old walkers mistook for exterior); DATA-bit0 vs
+  XCLC presence has 0 mismatches on all four masters
 
-Validator: `ghidra-dump/validate_cell_save.py` — `--json` flag for machine output.
+Validator: `tools/validate_cell_save.py` (`--json` flag for machine output);
+shared plugin-walk library: `tools/plugin_parse.py`.
 
-#### 10a.4 Full-file recheck + XCLC audit (2026-08-22)
+#### 10a.4 Full-file recheck + XCLC audit (2026-08-22, strict-walk numbers)
 
-The validator's scan was rebuilt to byte-step every 4-aligned offset and accept a
-record only when its subrecord stream parses cleanly to EOF (false `CELL` matches
-inside compressed payloads and GRUP data are rejected). This finds the full
-population the earlier GRUP-walk sample missed:
+History of the walker, since every CELL-derived number below depended on it:
 
-- **10,027 CELL records** — 9,741 exterior + 286 interior (the earlier doc-10a
-  sample of 46 was interior-only)
-- **26 unique subrecords** — all accounted for; three were added to the
-  SaveRecord dispatch as a result: `XRNK` (Owner Faction Rank, s32),
-  `XILL` (Lock List, formID → FLST/NPC_), `XGDR` (God Rays, formID → GDRY)
-- Exterior detection uses **DATA bit 0 (Interior)** — the record-header flags do
-  not carry interior-ness in FO4; DATA-bit0 vs XCLC presence has 0 mismatches
+1. First validator byte-scanned for `CELL` magic and advanced past any match
+   by its *unvalidated* size field; one garbage match threw the cursor past
+   EOF and the scan died ~7% into Fallout4.esm (46 cells, all interior —
+   hence the "interior-only sample" notes elsewhere in this doc).
+2. Its replacement stepped the file on a fixed **4-byte stride**, believing
+   record headers are 4-aligned. FO4 records are unaligned (subrecord =
+   6+len bytes), so it saw only ~25% of headers: that produced the old
+   "10,027 CELL / 9,741 exterior" figures and the false "all cells
+   0x40000-compressed" impression.
+3. Current walker: strict recursive GRUP-tree walk (`plugin_parse.py`),
+   record extents taken from headers only. Numbers below are re-measured.
 
-**XCLC Force-Hide-Land audit** (new `--json` `xclc` section, doc 26 §3):
+- **40,165 CELL records** — 38,970 exterior + 1,195 interior
+- **26 unique subrecords accounted for**, plus unclassified `XWCU` above
+- `XCWT` (cell water type, 4B formID): 518 cells (512 ext / 6 int), not the
+  1-cell sample first seen
 
-- 9,741 exterior cells carry XCLC, **0 interior** (exterior-only rule holds)
-- All payloads are exactly **12 bytes** = [X s32][Y s32][hide byte][3B padding]
-- Only **byte 8** is meaningful: low nibble = quad mask; **high nibble must be
-  0**. Bytes 9-11 are padding the CK reader skips (FUN_140d146d0 stores byte 8
-  into cell+0x1E) and are nonzero in 9,725/9,741 vanilla cells — they are NOT
-  flagged (xEdit's u32 display of the trailing dword is a UI convenience, not
-  engine semantics)
-- Quad values in the master: `0x0` × 9,727 (no quads hidden), `0xF` × 14
-  (all four quads hidden, formIDs 0x00000FCA–0x00000FE1) — no partial masks
-- Violations caught: XCLC on interior cells, wrong payload length, high nibble
-  of byte 8 set (values above 0x0F)
+**XCLC Force-Hide-Land audit** (`--json` `xclc` section, doc 26 §3):
+
+- 38,970 exterior cells carry XCLC, **0 interior** (exterior-only rule holds)
+- All payloads are exactly **12 bytes** = [X s32][Y s32][hide byte][3B pad]
+- The trailing field is **byte 8 + three bytes of uninitialised padding**, not
+  a u32: the CK reader stores byte 8 into cell+0x1E and skips bytes 9-11.
+  Padding is nonzero in 38,886/38,970 cells but takes only 20 distinct values
+  (`71 a3 76` alone covers 29,389) — reused heap, not data. Byte 8's high
+  nibble also carries stray junk in 4 vanilla cells (`0x11/0x22/0x44/0x88`),
+  so only the **low nibble** is validated
+- Quad masks: `0x0` ×38,928, `0xF` ×38 (formIDs 0x00000FC6–0x00000FEE) — no
+  genuine partial masks
+- Violations caught: XCLC on interior cells, wrong payload length. High-nibble
+  values are reported but no longer failed (vanilla carries them)
+
+### 9.1 Grid-walk decompiled: ExteriorCellLoader task path (2026-08-22)
+
+Closes the remaining Phase 2 gap. Source anchor `exteriorcellloader.cpp`
+(`STR 0x3096ec0`) pins five functions; raw dump
+`ghidra-dump/decompile-exteriorcellloader.txt`.
+
+| function | RVA | size | role |
+|---|---|---|---|
+| `FUN_140ccfdd0` | 0xccfdd0 | 1121 | **background-load enqueue** - builds a `CellLoaderTask` (literal `CellLoaderTask::vftable`) and submits it through the IO manager (`iomanager.h` assert anchors) |
+| `FUN_140cd0530` | 0xcd0530 | 2162 | **queue pump / grid walk** - scatter-table iteration (`bstscattertable.h` anchors) draining pending entries; allocates 0x208-B task objects from `bstobjectarena.h` arenas |
+| `FUN_140cd11d0` | 0xcd11d0 | 463 | synchronous ensure-loaded: coord resolve -> cell, then worldspace setup (`FUN_140d19a80`, water height `FUN_140d1cbc0`, flag store from `DAT_143d33c70+0xC1`) |
+| `FUN_140ccf610` | 0xccf610 | 186 | cancel/drain helper over the task list at loader+0x60 |
+| `FUN_140ccf870` | 0xccf870 | 88 | diagnostic: `"Found queued interior cell load without interior cell. GetKey will not correctly find a key for a canceled task."` |
+
+Call/data anchors worth naming later: coord->cell resolve `FUN_1405b9850`,
+handle registry `DAT_143d33c70` (`FUN_140844940/140844a20/140838780`),
+load-gate predicates `FUN_140ccfc30`/`FUN_140ccfcb0`.
 
 ### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
 
@@ -1224,27 +1258,49 @@ per-class list): `OBND`, `PTRN`, `STCP`, `VMAD`.
 no `NNAM` subrecord (that's a LeveledList subrecord). It was likely
 `MNAM` (world map path) rendered by an arg-display mismatch.
 
-#### 10b.1 Newly discovered: CLSZ, OFST, RNAM
+#### 10b.1 CLSZ, OFST, RNAM — corrected by full-population survey (2026-08-22)
 
-Byte-parsed from Fallout4.esm WRLD records:
+The original 3-record read got all three shapes wrong at scale. Full census
+(17 WRLD records across Fallout4/DLCCoast/DLCRobot/DLCNukaWorld,
+`tools/validate_wrld_save.py`):
 
-| 4CC | size | description |
+| 4CC | real shape | correction vs earlier draft |
 |---|---|---|
-| `CLSZ` | 4 | cell size for world map (u32) — present in all 3 sampled WRLDs |
-| `OFST` | N × 4 | world map offset data (u32 array) — present in all 3 |
-| `RNAM` | 4 | region reference (formID of a REGN record) — repeated, 41× in DiamondCity, many in Goodneighbor |
+| `CLSZ` | u32 array, **byte-length identical to OFST within every record** (Commonwealth: 148,996 B = 37,249 entries) | not a 4-byte scalar — the sampled interiors just had single-cell arrays |
+| `OFST` | u32 array, parallel to CLSZ | confirmed, always paired with CLSZ of equal length |
+| `RNAM` | `[u16 ox][u16 oy][u32 n]` then n × `[u32 REFR formID][u16 cellX][u16 cellY]` | **not** REGN references: all 107,216 entry formIDs across the four masters resolve to placed `REFR` records of the owning file (100%, zero exceptions). Grouped world-cell coordinate arrays, repeated per area (7,111 blocks on the Commonwealth alone) |
 
-These are in the LoadRecord switch tree (recovered subrecord set of 26 reads)
-but were missed in the initial doc summary because `CLSZ`/`OFST` appear as
-hex immediates without adjacent CONCAT44 clues, and `RNAM` blended with
-CELL's `RNAM`. The dispatch tree decoder now confirms them as part of the
-WRLD surface.
+The old "41× in DiamondCity, 4 B each" reading was the small-world special
+case where each block holds one entry.
 
-WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
-`NAM0`, `NAM2`, `NAM3`, `NAM4`, `NAM9`, `NAMA`, `ONAM`, `PNAM`, `WCTR`,
-`WLEV`, `WNAM`, `XEZN`, `XLCN`, `ZNAM`. (Note: `CLSZ`, `OFST`, and `RNAM`
-are also saved — they go through the `NAM*`-array and map-data iterators
-dispatched from `vl+0x3b8`/`vl+0x3c0`, not inline in the SaveRecord body.)
+#### 10b.2 Validator (`tools/validate_wrld_save.py`)
+
+Mirrors the CELL validator; walks strictly via `tools/plugin_parse.py`.
+Full four-master result: **17 WRLD records, 0 subrecord issues**, no
+unknowns. `SaveRecord` (FUN_140e54420) writes inline: `CNAM`, `DATA`,
+`DNAM`, `LTMP`, `MHDT`, `MNAM`, `NAM0`–`NAM4`, `NAM9`, `NAMA`, `ONAM`,
+`PNAM`, `WCTR`, `WLEV`, `WNAM`, `XEZN`, `XLCN`, `ZNAM`; `CLSZ`, `OFST`,
+and `RNAM` go through the `vl+0x3b8`/`vl+0x3c0` iterators instead of the
+inline body. Census highlights:
+
+- Every record carries `EDID ONAM NAMA DATA NAM0 NAM9 OFST CLSZ`;
+  `FULL` on 16/17; `RNAM` on 15; `NAM2 DNAM` on 14; `MNAM NAM3 NAM4 XLCN`
+  on 11; `ZNAM` 10; `XWEM CNAM` 9; `PNAM WNAM` 7; `MHDT` 6; `WLEV WCTR` 5;
+  `ICON` 4; `XEZN` 1.
+- `DATA` is exactly 1 byte everywhere (flags only); histogram:
+  `0x00`×6, `0x01`×5, `0x41`×2, `0xD9`×2, `0x51`×1, `0x9B`×1.
+- `WNAM` parents: Commonwealth `0x0000003C` ×4, plus DLC sub-world parents
+  (`0100290F`, `01000B0F`).
+- Payload shapes measured: `DNAM` 8 B = [u32][f32]; `ONAM` 16 B floats
+  (leading 1.0f); `NAMA` f32; `NAM0`/`NAM9` 8 B = two equal u32/f32 pairs;
+  `MNAM` 16 B numerics (4×s16-like bounds pattern — *not* a path string);
+  `PNAM` 2 B; `XWEM` = NUL-terminated cubemap path string
+  (`data\Textures\Shared\Cubemaps\...`).
+- `ICON` (world-map texture path, 33–37 B strings) appears in shipped
+  masters but has **no proven write path** in the recovered contract —
+  flagged LoadRecord-only until a decompile shows its writer.
+- Dispatch members never seen in shipped files: `ATDM BTDM LTMP NAM1
+  NAM5-NAM8 TNAM UNAM WMAD`.
 
 #### 10b.3 WRLD DATA — byte-level field map
 

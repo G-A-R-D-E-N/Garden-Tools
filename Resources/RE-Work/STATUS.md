@@ -54,6 +54,9 @@ Legend: ✅ done/verified · 🟡 partial (known gaps in-doc) · 🔴 blocked/no
 | game-setting-table | ✅ 5,137 bare-name `GameSetting` records under `SettingT<GameSettingCollection>` | — |
 | elric-engine-ghidra-import | 🟡 persistent Ghidra project with ElricInterop + engine DLL layer | project is local-only (repo policy); coverage report exists |
 | cell-worldspace-vtables/ | ✅ `FindVftable.java` RTTI→vftable resolver + raw dumps for TESForm and the 4 world-building classes | — |
+| Cell & worldspace completeness | 🟡 started: base docs 23/24/39/41 done; child-GRUP grammar + extra-data tag payloads + placed-ref families next (docs 53+) |
+| Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP | 🟡 workstream started: VM execution, compiled-script linking, native registration, quests/aliases, and persistence | decompile P1 operands and P2 LoadAndLinkClass next |
+| Runtime/Organized/1.10.163/README-Papyrus-VM | 🟡 first OG decompile pass: VM scheduler, tasklet opcode dispatch, compiled-script loader, linker anchor | operand encoding, exact `.pex` fields, native registration, save/load, AE parity |
 
 ## Tools
 
@@ -80,4 +83,5 @@ Legend: ✅ done/verified · 🟡 partial (known gaps in-doc) · 🔴 blocked/no
 3. **Runtime verification**: the batch exit-code matrix (doc 19) and `.scene`/TextExport live runs need the CK to actually execute — blocked by the Wine Papyrus-zip crash (doc 20). Any working launch (wine patch, Windows box) unblocks these.
 4. **Standalone strings JSON**: give the `--strings` mode the same structured `--json` output the compile-text modes have, so every validator mode is machine-readable.
 5. **Policy reminder**: raw Elric symbol dumps (`elric-pdb-symbols.txt`, `elric-setting-records.txt`) and the Elric Ghidra project stay local; only prose analysis (doc 18) is published.
-6. **LOD-side topics** (WaterDelta=0, hide-quads, skirt depth/topology, FO4 BTR chunking, water-height grouping, VTXT quadrant rules, greedy-reducer tie-breaking) belong to the xLODGen/F4LODGEN analysis, not this workspace.
+6. **Papyrus VM workstream**: P1/P2 has started with the VM scheduler, tasklet dispatch, loader, and linker anchors in [Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md](Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md); next is operand decoding and `LoadAndLinkClass`, keeping OG 1.10.163 and AE 1.11.240 layouts separate.
+7. **LOD-side topics** (WaterDelta=0, hide-quads, skirt depth/topology, FO4 BTR chunking, water-height grouping, VTXT quadrant rules, greedy-reducer tie-breaking) belong to the xLODGen/F4LODGEN analysis, not this workspace.

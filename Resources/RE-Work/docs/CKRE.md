@@ -37,7 +37,38 @@ Reverse-engineering workspace for `CreationKit.exe` **1.11.137.0** (the Fallout 
 | [22-BATCH-SETTING-DEPENDENCIES.md](22-BATCH-SETTING-DEPENDENCIES.md) | batch-pipeline setting dependencies — direct descriptor value references for PreCombined/PreVis, dialogue/text/FaceGen exporters, VCS services, the negative `iPlacedObjectRender` result, and dependency tiers |
 | [20-WINE-PAPYRUS-ZIP-CRASH.md](20-WINE-PAPYRUS-ZIP-CRASH.md) | the Wine startup crash explained — Papyrus source-zip extraction via Shell COM (`IShellDispatch::NameSpace` returns S_OK + NULL `Folder*`), with patch/workaround analysis |
 | [21-UVD-FORMAT.md](21-UVD-FORMAT.md) | the compiled PreVis `.uvd` scene format (magic `0xD6000012`) — CRC-32C framing, full 0x150 header field map, and version string, verified against 3 shipped samples + the writer decompiles |
-| [26-RE-TARGETS.md](26-RE-TARGETS.md) | the high-value RE targets — OBTE/OBTS object-template block layout (547/547 payloads, OMOD includes), string-table resolution (reader-variant dispatch, no ID bits), XCLC trailing dword = Force-Hide-Land (9,741 cells), and the Fallout4.exe section-delta RVA rebase rule |
+| [26-RE-TARGETS.md](26-RE-TARGETS.md) | the high-value RE targets — OBTE/OBTS object-template block layout (3,297 four-master payloads, template FULL invariant, OMOD includes), string-table resolution (reader-variant dispatch, no ID bits, reader recipe in §2a), XCLC trailing field = Force-Hide-Land byte + 3B padding (38,970 exterior cells), and the Fallout4.exe section-delta RVA rebase rule with the 1.10.155-vs-1.10.163 build-mismatch note |
+| [57-EXTRA-DATA-CATALOG.md](57-EXTRA-DATA-CATALOG.md) | Complete extra-data switch map: 87 tags, type IDs, alloc sizes, classes, shipped frequencies |
+| [56-WRLD-SUBRECORDS.md](56-WRLD-SUBRECORDS.md) | Full WRLD reference: map bounds (NAM0/NAM9), DNAM/MNAM defaults, dual-form WLEV incl. 33x33 heightmap |
+| [55-XCLL-LIGHTING.md](55-XCLL-LIGHTING.md) | Interior lighting block: 34-lane field map, 136/128/92 B variants, validation notes |
+| [54-CELL-SUBRECORDS.md](54-CELL-SUBRECORDS.md) | Full CELL subrecord reference: universal/exterior/interior tags with exact sizes, EDID-less auto-cells |
+| [53-CELL-CHILDREN-GROUPS.md](53-CELL-CHILDREN-GROUPS.md) | Cell/worldspace child-block grammar: GRUP census, t6/t8/t9 nesting, LAND+NAVM placement, t10 correction |
+| [52-AUDIT-PDB-CROSSCHECK.md](52-AUDIT-PDB-CROSSCHECK.md) | Cross-binary audit vs runtime PDB: 84/88 factories, 33/33 template IDs, KEYM=MISC proven, zero corrections |
+| [51-NVNM-HEADER.md](51-NVNM-HEADER.md) | NVNM blob header v15 decoded through vertex array; triangle section pending |
+| [50-TERM-SCREEN-FORMAT.md](50-TERM-SCREEN-FORMAT.md) | TERM screen/text grammar: BTXT/ISIZ/items{ITXT,RNAM?,ANAM,ITID,UNAM?}, localized string refs, BSIZ advisory |
+| [49-DTIER-WAVE7-TAIL.md](49-DTIER-WAVE7-TAIL.md) | Final wave: fourteen tail loaders; **form-type coverage complete** (147/147) |
+| [48-NAVM-MUST-SCCO.md](48-NAVM-MUST-SCCO.md) | NAVM CK-side loader + NVNM blob stats; MUST; SCCO internal-record grammar |
+| [47-DTIER-WAVE6.md](47-DTIER-WAVE6.md) | Wave 6 audit fix: GMST/MESG/TRNS/ARMA(48 tags)/PKIN/MOVT/FSTP/MUSC/SMBN/LCRT/AACT/PHZD loaders |
+| [46-DTIER-WAVE5.md](46-DTIER-WAVE5.md) | D-tier wave 5: twenty loaders (LTEX..FSTS); coverage complete for all types >= 50 records |
+| [45-DTIER-WAVE4.md](45-DTIER-WAVE4.md) | D-tier wave 4: SOUN/REGN/ANIO/IMGS/IMAD/ADDN/MATT/SMQN/DLBR/ARTO/CLFM/KSSM loaders |
+| [44-DTIER-WAVE3.md](44-DTIER-WAVE3.md) | D-tier wave 3: CPTH/LSCR/DFOB/HDPT/AVIF/SOPM/IPDS/ECZN/LCTN/OTFT loaders |
+| [43-DTIER-WAVE2.md](43-DTIER-WAVE2.md) | D-tier wave 2: CONT/DOOR/TXST/FLST/CAMS/LIGH/MSTT/VTYP/IPCT/TERM loaders; RttiWalk.java for undefined-RTTI classes |
+| [42-DTIER-WAVE1.md](42-DTIER-WAVE1.md) | D-tier wave 1: STAT/OMOD/COBJ/MSWP/SNDR/IDLE/KYWD/LAYR loaders + RFGP/ACHR notes |
+| [41-LAND-LAYOUT.md](41-LAND-LAYOUT.md) | LAND geometry trio (VNML/VHGT exact sizes) + per-quadrant BTXT/ATXT/VTXT grammar |
+| [40-ALL-TYPE-CENSUS.md](40-ALL-TYPE-CENSUS.md) | Complete 147-type/2.24M-record census of the four masters; coverage map of documented loaders |
+| [39-REFR-EXTRA-DATA.md](39-REFR-EXTRA-DATA.md) | REFR LoadRecord + BSExtraDataList::Load switch; XCRI→ExtraCombinedRefs ctor layout (doc 25 §6 correction) |
+| [38-CTIER-INVENTORY-OBJECTS.md](38-CTIER-INVENTORY-OBJECTS.md) | C-tier loaders (WEAP 67-tag record, ARMO dual models) + censuses; KEYM=MISC loader, INGR=MagicItem loader |
+| [37-BTIER-MAGIC-PERK-LEVELED.md](37-BTIER-MAGIC-PERK-LEVELED.md) | B-tier census (SPEL/ALCH/ENCH/MGEF/PERK/LVLI/LVLN/SCOL) + MGEF/PERK LoadRecords; EFID+EFIT atomity, LVLI grammar, SCOL pair rule |
+| [36-CSTY-RECORD.md](36-CSTY-RECORD.md) | CSTY LoadRecord + 143-record census; variable-length CSLR (12/16/20 B); A-tier complete |
+| [35-CLAS-RECORD.md](35-CLAS-RECORD.md) | CLAS LoadRecord (11 tags) + 32-record census: shipped DATA is always the legacy 8-byte shape |
+| [34-FACT-RECORD.md](34-FACT-RECORD.md) | FACT LoadRecord via ck_decompile end-to-end (23 tags, version-branched DATA) + 845-record census; rank-block RNAM/MNAM/FNAM/INAM unit |
+| [33-RACE-RECORD.md](33-RACE-RECORD.md) | RACE LoadRecord (FUN_140aeff50 - largest: 9.6 KB, 125 tags) + 84-record census across 101 types; version-branched RBPC reader |
+| [32-NPC-RECORD.md](32-NPC-RECORD.md) | NPC_ LoadRecord (FUN_140a89910 - largest documented: 55 readers, 100 tags) + 4,319-record census; mandatory set and computed-tag families |
+| [31-SCEN-RECORD.md](31-SCEN-RECORD.md) | SCEN LoadRecord (FUN_140a20ae0) + 4,714-record census with the scene-action computed-tag family - completes the S-tier set |
+| [30-PACK-RECORD.md](30-PACK-RECORD.md) | PACK LoadRecord (FUN_140790640, 39 tags) + 4,844-record census; mandatory PKDT/PSDT/PKCU/XNAM/POBA/POEA/POCA set; computed-tag procedure fields |
+| [29-DIAL-INFO-RECORDS.md](29-DIAL-INFO-RECORDS.md) | DIAL/INFO LoadRecord addresses + shipped census (147k records): mandatory subrecord sets, the atomic TRDA+NAM1..4 response block, computed-tag CIS1/CIS2 |
+| [28-QUST-RECORD.md](28-QUST-RECORD.md) | QUST LoadRecord (FUN_140abdaf0) + SaveRecord addresses, 45-tag static dispatch, and the full shipped census: 1,862 records, alias-family computed tags, VMAD-only script attachment |
+| [27-PROJ-EXPL-HAZD-DATA.md](27-PROJ-EXPL-HAZD-DATA.md) | PROJ DNAM (93 B), EXPL DATA (84 B canonical + short variants), HAZD DNAM (52 B) full field maps with FormID-slot verdicts — unblocks typed creation for #76 |
 
 ## Data dumps (`../dumps/`)
 

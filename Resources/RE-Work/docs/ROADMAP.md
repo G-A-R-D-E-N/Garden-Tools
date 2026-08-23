@@ -48,7 +48,7 @@ The four world-building classes — the skeleton of the CK.
 
 | doc | what | state |
 |---|---|---|
-| 12 | record-definition dispatch table (all ~159 form types) | 🟡 factory map done; LoadRecord/SaveRecord only for 4 classes |
+| 12 | record-definition dispatch table (all ~159 form types) | 🟡 factory map done; LoadRecord documented for CELL/WRLD/LAND/REFR + S-tier (docs 28–31) + A-tier (docs 32–36) |
 | 23 §1–7 | CELL vftable, ctor, member layout (0x170 bytes) | ✅ |
 | 23 §8 | cell-data blocks (0x20 exterior, 0x88 interior) | ✅ |
 | 23 §9 | exteriorcellloader streaming contract | ✅ |
@@ -61,11 +61,11 @@ The four world-building classes — the skeleton of the CK.
 | 23 §11 | file I/O primitives (TESFile read, subrecord writer, buffer/seek contract) | ✅ |
 | 23 §12 | WRLD cell-map insert, NewCell helper chain, interior XCLC asymmetry | ✅ |
 
-**Tools:** `validate_cell_save.py` — byte-parses CELL subrecords in `.esm` against SaveRecord contract
+**Tools:** `validate_cell_save.py` + `plugin_parse.py` — strict GRUP-tree plugin walk; classifies every CELL subrecord in `.esm` against the SaveRecord contract
 
 **Remaining for Phase 2:**
 - LoadRecord/SaveRecord for the other ~155 form types (see Phase 5)
-- REFR extra-data block layout (the 0xC6 tag internals)
+- REFR extra-data block layout ✅ doc 39 (XCRI case, ctor layout confirmed)
 - NAVM record model (separate from the four main classes)
 
 ---
@@ -98,9 +98,9 @@ Cross-referenced from the xLODGen reverse-engineering in `lodgen/reverse-enginee
 | area | what | state |
 |---|---|---|
 | XLODGEN_TERRAIN_INTERNALS.md | WaterDelta, hide quads, skirts/ZSHIFT, BTR chunking, water nodes, reducers | ✅ (xLODGen side) |
-| XWEM → water mesh builder | WRLD water height feeds CK's bgsterrainwatermeshbuilder.cpp | 🟡 traced, function bodies not fully decompiled |
+| XWEM → water mesh builder | WRLD water height feeds CK's bgsterrainwatermeshbuilder.cpp | ✅ decompiled 2026-08-22 — see dumps/decompile-bgsterrainwatermeshbuilder.md (roadmap range was stale; real functions 0xf8e1b0..0xf8f0e0) |
 | CK LOD subsystem (doc 08) | overview of built-in LOD generation | 🟡 summary only |
-| Distant terrain pipeline | bgsterrainmanager, chunk/node tree, texture/object builders | 🔴 17 source files, none decompiled |
+| Distant terrain pipeline | bgsterrainmanager, chunk/node tree, texture/object builders | 🟡 all source files mapped to functions via __FILE__ strings (see watermeshbuilder dump); bodies still to document |
 | `_WaterHeights.dds` | runtime water height texture | 🔴 not investigated |
 | BTR2RAW `.raw` format | int32 heightmap, lengthX/lengthY derivation | ✅ documented |
 
@@ -128,11 +128,11 @@ Priority form types by game impact:
 
 | tier | types | why |
 |---|---|---|
-| **S-tier** | QUST, DIAL, INFO, SCEN, PACK | quest/dialogue system — most of the game's content |
-| **A-tier** | NPC_, RACE, CSTY, FACT, CLAS | actor/NPC system |
-| **B-tier** | SPEL, ENCH, ALCH, MGEF, PERK, LVLI, LVLN, LVSP | magic/perk/leveled-list system |
-| **C-tier** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
-| **D-tier** | everything else (~100 types) | one-off, simple, or rarely used |
+| **S-tier** | ✅ COMPLETE — QUST (28), DIAL/INFO (29), PACK (30), SCEN (31) | quest/dialogue system — most of the game's content |
+| **A-tier** | ✅ COMPLETE — NPC_ (32), RACE (33), FACT (34), CLAS (35), CSTY (36) | actor/NPC system |
+| **B-tier** | 🟡 census complete + MGEF/PERK LoadRecords (doc 37); SPEL/ALCH/ENCH/LVLI loaders pending | magic/perk/leveled-list system |
+| **C-tier 🟡 complete (doc 38): all 10 loaders located** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
+| **D-tier** | 🟡 census (doc 40) + waves 1-3 (docs 42-44): ✅ docs 42-49: **complete** - all 147 census types covered (docs 28-49) | one-off, simple, or rarely used |
 
 **Estimated effort:** ~2-4 hours per form type (vftable diff + LoadRecord decompile + cross-check),
 or ~300-600 hours for all 155. The S/A-tier types are the highest-value next targets.
@@ -171,8 +171,8 @@ Things we know exist but haven't fully documented.
 | STRINGS/DLSTRINGS/ILSTRINGS format doc | Phase 3 | low — byte-parsed, needs write-up |
 | FaceGenExporter doc | Phase 3 | medium |
 | 9 remaining JSONSerializer classes | doc 23 §7d | low — only REFR/WEAP/AIMS schema builders decompiled |
-| Missing exterior cells in parser | validate_cell_save.py | low — all cells compressed, need deeper group walk |
-| WRLD SaveRecord validator | — | medium — mirror validate_cell_save.py for WRLD |
+| Missing exterior cells in parser | validate_cell_save.py | ✅ resolved 2026-08-22 — walker rebuilt on strict GRUP walk (`plugin_parse.py`); full population is 40,165 CELL, see doc 23 §10a.4 |
+| WRLD SaveRecord validator | validate_wrld_save.py | ✅ done 2026-08-22 — see doc 23 §10b.2 |
 
 ---
 
@@ -186,8 +186,8 @@ Scripts that turn the docs into usable utilities.
 | `validate_cell_save.py` | ✅ | cross-check CELL subrecords in `.esm` against SaveRecord |
 | `parse_wrld_esm.py` | ✅ | extract WRLD subrecord sets from `.esm` |
 | `decompile-some-function.java` | ✅ | Ghidra Query.java script for batch decompilation |
-| `validate_wrld_save.py` | 🔴 | mirror validate_cell_save.py for WRLD records |
-| `validate_esp.py` | 🔴 | general .esm/.esp validator — all form types |
+| `validate_wrld_save.py` | ✅ | WRLD subrecord census + contract check across all four masters — 17 records, 0 issues; CLSZ/OFST/RNAM shapes corrected (doc 23 §10b.1/§10b.2) |
+| `validate_esp.py` | ✅ | general .esm/.esp/.esl validator — structural + formID-range + localization-shape checks plus proven contracts (CELL/WRLD/PROJ/EXPL/HAZD/template grammar/QUST); 2.2M records across four masters in ~3 s, negative-test corpus rejected correctly |
 | `batch_cli_runner.py` | 🔴 | wrap CK headless switches with arg validation |
 | `precombined_inspector.py` | 🔴 | parse _OC.NIF and verify block types |
 | `uvd_compiler.py` | 🔴 | standalone .uvd compiler from doc 21 spec |
@@ -228,11 +228,11 @@ Phase 0 (foundation)
 
 ## Next Immediate Steps (Recommended Order)
 
-1. **Decompile `bgsterrainwatermeshbuilder.cpp` body** — closes the WaterDelta LOD question (Phase 4)
-2. **Add `validate_wrld_save.py`** — mirrors the CELL validator for WRLD records (Phase 8)
-3. **Start S-tier form types** — QUST LoadRecord/SaveRecord (Phase 5, highest-value next record)
-4. **Write `validate_esp.py`** — generalizes the subrecord cross-check to all form types (Phase 8 → M7)
-5. **Decompile exteriorcellloader grid-walk** — the cell-grid construction and background-load enqueue (Phase 2 remaining gap)
+1. ~~Decompile `bgsterrainwatermeshbuilder.cpp` body~~ ✅ done 2026-08-22 — dumps/decompile-bgsterrainwatermeshbuilder.md
+2. ~~Add `validate_wrld_save.py`~~ ✅ done 2026-08-22 — doc 23 §10b.2
+3. **Start S-tier form types** — ✅ QUST started 2026-08-22: LoadRecord/SaveRecord located + 1,862-record census (doc 28)
+4. ~~Write `validate_esp.py`~~ ✅ done 2026-08-22 — Phase 8/M7 groundwork
+5. ~~Decompile exteriorcellloader grid-walk~~ ✅ done 2026-08-22 — doc 23 §9.1 (CellLoaderTask enqueue + scatter-table pump identified)
 
 ---
 
@@ -253,6 +253,8 @@ F4SE/CommonLibF4 plugin development (PrismaHUD, FalloutChat, Rad Mod, C# bridge)
 | Runtime/02-WORKFLOW.md | day-to-day: search, decompile, re-name | ✅ |
 | Runtime/03-FINDINGS.md | verified facts log — offsets, addresses, bugs caught | ✅ |
 | Runtime/04-ROADMAP.md | runtime RE capability menu + next targets | ✅ |
+| Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md | Papyrus VM, compiled-script linking, native registration, quests/aliases, persistence | 🟡 P1/P2 started |
+| Runtime/Organized/1.10.163/README-Papyrus-VM.md | first OG decompile pass: scheduler, tasklet opcode dispatch, loader, linker anchor | 🟡 |
 | Runtime/05-LABEL-RECOVERY.md | community IDC label decode/apply technique | ✅ |
 | Runtime/06-FUNCTION-INDEX.md | subsystem function index + 1.10.155-vs-1.10.163 cross-ref (313 candidate misnames) | ✅ |
 | Runtime/07-DECOMPILE-CANDIDATES.md | decompile verification: 150 confirmed bugs, 68 false-positives, 63 correct | ✅ |
@@ -269,6 +271,8 @@ F4SE/CommonLibF4 plugin development (PrismaHUD, FalloutChat, Rad Mod, C# bridge)
 - **AE 1.11.240 project** auto-propagated from 1.11.191 with vtable cross-check
 
 ### Runtime roadmap (from Runtime/04-ROADMAP.md)
+
+The dedicated Papyrus/quest/scripting workstream is tracked in [Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md](../Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md), with P1 VM execution and P2 script loading/linking as the first decompile queue.
 
 1. **Quick-loot container suppression** — find clean activation interception point (PrismaHUD)
 2. **Vanilla ammo readout via GFx** — confirm HUD ammo push path (PrismaHUD)

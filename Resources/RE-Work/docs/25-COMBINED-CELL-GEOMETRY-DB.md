@@ -86,6 +86,17 @@ Allocated by `PreCombinedWorld` at the start of cell processing:
 The two arrays at +0x08 and +0x10 are `BSTArray` growable vectors. The scatter table
 maps ref formIDs to array indices for fast combined-ref lookups.
 
+> **2026-08-22 correction / status:** the section 7 flow-diagram attribution
+> "`FUN_140d38ac0` - Alloc ExtraCombinedRefs" is **wrong** - decompiling
+> 0xd38ac0 shows a linked-list attach/cleanup helper walking a +0xA0 chain
+> (`bstobjectarena.h` asserts, counter decrement), not a constructor of this
+> object. RTTI for `.?AVExtraCombinedRefs@@` is pinned: TypeDescriptor at
+> RVA `0x3c86af8`, relative-form COL references at `0x35a6344`/`0x35a6398`
+> (this CK build uses image-relative RTTI pointers - scan for RVA32, not
+> absolute VAs; see `scripts/FindDataQword.java`, `scripts/ScanScalar.java`).
+> The vftable/constructor remain unlocated; treat every field above as
+> provisional until the real ctor is decompiled.
+
 ---
 
 ## 3. The Two Processing Paths
@@ -210,11 +221,43 @@ NIF path that the runtime resolves to the matching `_OC.NIF` file.
 
 ### Wire Format for `ExtraCombinedRefs` subrecord:
 
-In the ESP, each CELL record gets an `XCRF` subrecord (or similar) containing
+> **2026-08-22 CORRECTION + CONFIRMATION (code-side).** The subrecord 4CC
+> is **`XCRI`**, not `XCRF` as provisionally written here. Proof:
+> `BSExtraDataList::Load` (`FUN_1407d8100`, extradatalist.cpp) gates on
+> constant `0x49524358`; byte order calibrated against the same function's
+> assert "Expected XCZA chunk after XCZC chunk." (`0x415a4358`/`0x435a4358`)
+> gives file-order bytes X,C,R,I. The case constructs `ExtraCombinedRefs`
+> inline: alloc 0x68 B, `+0x12 = 0xC6`, hash table capacity = next pow2 of
+> payload count N (16-B entries), BSTArray tail holding `[3-byte formID
+> truncated from u32][u32 value]`. Payload prefix read as
+> `[formID u32][count N u32]`. None of XCRI/XCRF/XCRC/XCRD appear in the
+> four vanilla masters (measured); `CombinedObjects.esp` is CK-generated,
+> so byte-level wire verification still needs a user-generated copy.
+> The old "FUN_140d38ac0 alloc" claim below stays wrong; the real ctor is
+> inlined in `FUN_1407d8100` at RVA 0x7d8100.
+>
+> **2026-08-23 SOLVED - full wire format, validated 7387/7387:**
+>
+> ```
+> XCRI := u32 C1            # combined-ref count (hash inserts)
+>      ;  u32 C2            # array-entry count
+>      ;  C1 x u32          # combinedRefIDs (FULL u32 formIDs)
+>      ;  C2 x u32          # refIDs (FULL u32 formIDs)
+> ```
+>
+> Every shipped record consumes exactly 8 + 4(C1+C2) bytes. Refs are
+> full u32s; the 3-byte form seen in the ctor is an in-memory hash-key
+> truncation only. The loader adds per-entry extra u32s only when its
+> stream version > 113 - shipped files are stream-version 15, so no
+> extras on disk. Shipped census: 7,387 XCRI records, all on CELLs,
+> all inside compressed records (raw byte-scans miss DEFLATEd content -
+> the earlier "zero occurrences" was an artifact).
+
+In the ESP, each CELL record gets an `XCRI` subrecord containing
 the array of combined-ref formIDs. The exact 4CC and structure are:
 
 ```
-XCRF [count:u32] [refFormID:u32]...  (count entries)
+XCRI [formID:u32][count:u32][... entries ...]   # prefix confirmed from loader
 ```
 
 Or possibly:
@@ -246,7 +289,7 @@ This needs verification against a real `CombinedObjects.esp` sample.
   │
   └─► Save CombinedObjects.esp
         ├─► TES4 header
-        ├─► CELL records with XCRF extra data
+        ├─► CELL records with XCRI extra data
         └─► REFR records for combined objects
 ```
 
@@ -265,8 +308,9 @@ This needs verification against a real `CombinedObjects.esp` sample.
 
 ## 9. Open Questions
 
-1. **XCRF subrecord 4CC** — confirmed 4CC and exact wire format of the
-   `ExtraCombinedRefs` subrecord in `CombinedObjects.esp`. Verify against a
+1. **XCRI subrecord wire format** — reader-side grammar confirmed from
+   `FUN_1407d8100`; full entry-tail semantics and a real-file check of the
+   `ExtraCombinedRefs` subrecord in `CombinedObjects.esp` still need a
    real output file via byte-parse.
 
 2. **Cell key encoding** — confirm the packed key format
