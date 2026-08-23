@@ -132,7 +132,7 @@ Priority form types by game impact:
 | **A-tier** | ✅ COMPLETE — NPC_ (32), RACE (33), FACT (34), CLAS (35), CSTY (36) | actor/NPC system |
 | **B-tier** | 🟡 census complete + MGEF/PERK LoadRecords (doc 37); SPEL/ALCH/ENCH/LVLI loaders pending | magic/perk/leveled-list system |
 | **C-tier 🟡 complete (doc 38): all 10 loaders located** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
-| **D-tier** | 🟡 full census done (doc 40): 147 types, 2.24M recs; per-type loaders only where needed | one-off, simple, or rarely used |
+| **D-tier** | 🟡 census (doc 40) + waves 1-3 (docs 42-44): every type ≥ 350 vanilla records has its LoadRecord located | one-off, simple, or rarely used |
 
 **Estimated effort:** ~2-4 hours per form type (vftable diff + LoadRecord decompile + cross-check),
 or ~300-600 hours for all 155. The S/A-tier types are the highest-value next targets.
