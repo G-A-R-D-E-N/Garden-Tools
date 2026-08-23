@@ -232,7 +232,7 @@ Phase 0 (foundation)
 2. ~~Add `validate_wrld_save.py`~~ ✅ done 2026-08-22 — doc 23 §10b.2
 3. **Start S-tier form types** — ✅ QUST started 2026-08-22: LoadRecord/SaveRecord located + 1,862-record census (doc 28)
 4. ~~Write `validate_esp.py`~~ ✅ done 2026-08-22 — Phase 8/M7 groundwork
-5. **Decompile exteriorcellloader grid-walk** — the cell-grid construction and background-load enqueue (Phase 2 remaining gap)
+5. ~~Decompile exteriorcellloader grid-walk~~ ✅ done 2026-08-22 — doc 23 §9.1 (CellLoaderTask enqueue + scatter-table pump identified)
 
 ---
 

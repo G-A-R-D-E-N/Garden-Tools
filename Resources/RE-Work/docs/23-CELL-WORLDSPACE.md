@@ -1202,6 +1202,24 @@ History of the walker, since every CELL-derived number below depended on it:
 - Violations caught: XCLC on interior cells, wrong payload length. High-nibble
   values are reported but no longer failed (vanilla carries them)
 
+### 9.1 Grid-walk decompiled: ExteriorCellLoader task path (2026-08-22)
+
+Closes the remaining Phase 2 gap. Source anchor `exteriorcellloader.cpp`
+(`STR 0x3096ec0`) pins five functions; raw dump
+`ghidra-dump/decompile-exteriorcellloader.txt`.
+
+| function | RVA | size | role |
+|---|---|---|---|
+| `FUN_140ccfdd0` | 0xccfdd0 | 1121 | **background-load enqueue** - builds a `CellLoaderTask` (literal `CellLoaderTask::vftable`) and submits it through the IO manager (`iomanager.h` assert anchors) |
+| `FUN_140cd0530` | 0xcd0530 | 2162 | **queue pump / grid walk** - scatter-table iteration (`bstscattertable.h` anchors) draining pending entries; allocates 0x208-B task objects from `bstobjectarena.h` arenas |
+| `FUN_140cd11d0` | 0xcd11d0 | 463 | synchronous ensure-loaded: coord resolve -> cell, then worldspace setup (`FUN_140d19a80`, water height `FUN_140d1cbc0`, flag store from `DAT_143d33c70+0xC1`) |
+| `FUN_140ccf610` | 0xccf610 | 186 | cancel/drain helper over the task list at loader+0x60 |
+| `FUN_140ccf870` | 0xccf870 | 88 | diagnostic: `"Found queued interior cell load without interior cell. GetKey will not correctly find a key for a canceled task."` |
+
+Call/data anchors worth naming later: coord->cell resolve `FUN_1405b9850`,
+handle registry `DAT_143d33c70` (`FUN_140844940/140844a20/140838780`),
+load-gate predicates `FUN_140ccfc30`/`FUN_140ccfcb0`.
+
 ### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
 
 | slot | function | name | evidence | `__FILE__` anchors |
