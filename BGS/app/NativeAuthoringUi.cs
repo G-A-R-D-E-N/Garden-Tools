@@ -10,12 +10,17 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
+public sealed class NativeAuthoringStrip : Border
+{
+}
+
 public static class NativeAuthoringUi
 {
     public static void Attach(MainWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
         if (window.Content is not Control current) return;
+        if (AlreadyAttached(current)) return;
 
         var open = Ux.Secondary("Batch authoring");
         ToolTip.SetTip(open, "Create native clip generators and states in one verified batch.");
@@ -33,7 +38,7 @@ public static class NativeAuthoringUi
         row.Children.Add(label);
         row.Children.Add(open);
 
-        var strip = new Border
+        var strip = new NativeAuthoringStrip
         {
             Background = Ux.BaseBrush,
             BorderBrush = Ux.BorderBrush,
@@ -42,11 +47,29 @@ public static class NativeAuthoringUi
             Child = row,
         };
 
+        // The existing content has to leave the window before it joins the dock panel.
+        // Adding it while the window still holds it gives it two logical parents, and
+        // Avalonia refuses the second attach rather than reparenting.
+        window.Content = null;
+
         var host = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(strip, Dock.Top);
         host.Children.Add(strip);
         host.Children.Add(current);
         window.Content = host;
+    }
+
+    // Attach wraps the window content in a DockPanel carrying the strip, so a second
+    // attach is visible as a strip already sitting at the top of that panel.
+    private static bool AlreadyAttached(Control current) =>
+        current is DockPanel host && host.Children.Any(child => child is NativeAuthoringStrip);
+
+    public static BatchAuthoringWindow OpenBatchAuthoringForTest(MainWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        var batch = new BatchAuthoringWindow(window);
+        batch.Present();
+        return batch;
     }
 }
 
@@ -185,6 +208,29 @@ public sealed class BatchAuthoringWindow : Window
         Activate();
         Focus();
     }
+
+    public IReadOnlyList<string> MachineNamesForTest =>
+        _machines.ItemsSource is IEnumerable<MachineOption> options
+            ? options.Select(option => option.Name).ToList()
+            : Array.Empty<string>();
+
+    public int QueuedForTest => _entries.Count;
+    public bool HasPendingPreviewForTest => _pending != null;
+    public bool ApplyOfferedForTest => _apply.IsEnabled;
+    public string SummaryForTest => _summary.Text ?? "";
+
+    public void RefreshMachinesForTest() => RefreshMachines();
+
+    public void QueueForTest(string state, string animation)
+    {
+        _stateName.Text = state;
+        _animationName.Text = animation;
+        AddEntry();
+    }
+
+    public void PreviewForTest() => Preview();
+
+    public void ApplyForTest() => Apply();
 
     private static void Add(Grid grid, Control control, int row, Thickness margin)
     {
