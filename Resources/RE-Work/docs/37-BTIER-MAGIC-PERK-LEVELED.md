@@ -5,20 +5,39 @@ MGEF and PERK; the rest have censuses and pinned RTTI, loader locations
 pending. All counts = four masters (Fallout4 + DLCCoast + DLCRobot +
 DLCNukaWorld). Raw dump: `ghidra-dump/decompile-btier-magic.txt`.
 
-## 1. LoadRecord locations
+## 1. LoadRecord locations (all resolved 2026-08-22)
 
-| type | class | LoadRecord | status |
+Found via vftable slot walk: LoadRecord/SaveRecord live at fixed slots
+(24/27 in the doc 23 numbering) of every form class's vftable, so one
+known class calibrates the slot for all others (`FindVftable.java`).
+
+| type | class | LoadRecord | SaveRecord (slot 27) |
 |---|---|---|---|
-| MGEF | EffectSetting | **`FUN_140e66e40`** (0xe66e40, 2225 B) | ✅ 19 tags: `CTDA DATA DNAM EDID ESCE FULL KSIZ MDOB SNDD TNDD` + base (`OBLT OBML OBND OBTE PBTE PTRN QTRN STCP VMAD`) |
-| PERK | BGSPerk | **`FUN_1409f15b0`** (0x9f15b0, 1346 B) | ✅ 20 tags: `CTDA DATA DESC EDID FDID FNAM FULL GULL ICON JCON NNAM PRKE SNAM` + base |
-| ENCH | EnchantmentItem | candidate `FUN_140e72740` is a helper (0 tags) | 🔴 pending - no assert strings in its loader |
-| SPEL | SpellItem | 🔴 pending | RTTI TypeDescriptor pinned via `.?AVSpellItem@@` |
-| ALCH | AlchemyItem | 🔴 pending | RTTI pinned (`.?AVAlchemyItem@@`) |
-| LVLI / LVLN | TESLeveledList | 🔴 pending | shared component file `formcomponents\tesleveledlist.cpp` pinned; `teslevspell.cpp` (LVSP) found at FUN_140c483a0 |
+| SPEL / ALCH / ENCH | SpellItem / AlchemyItem / EnchantmentItem | **shared**: `FUN_140e76b30` (magicitem.cpp, 784 B) | `FUN_140e79f80` |
+| LVLI / LVLN | TESLevItem | **`FUN_140c47480`** (teslevitem.cpp, 1318 B) | `FUN_1408db250` |
+| MGEF | EffectSetting | `FUN_140e66e40` (2225 B) - 19 literal tags | - |
+| PERK | BGSPerk | `FUN_1409f15b0` (1346 B) - 20 literal tags | - |
 
-Hunt note: these loaders emit few/no assert strings, so the __FILE__-anchor
-technique does not reach them; next step is relative-RTTI vftable walks
-(see doc 25 correction for the method).
+MagicItem shared-loader notes:
+
+* Literal tags only `FULL EDID VMAD OBND OBTE OBML PTRN STCP KSIZ` plus
+  the atomic effect block: `EFID` and interleaved `CTDA` both route into
+  `FUN_140e771f0`.
+* Subclass-specific tags (`SPIT` for SPEL, `ENIT/DNAM/DATA` for
+  ALCH/ENCH) never appear here: after every subrecord the loader calls a
+  **subclass hook virtual (vt+0x598)**, plus post-hooks vt+0x570/0x5c0/
+  0x5a0 - that is where each derived class consumes its own fields.
+* `KSIZ` triggers the keyword-array reader and warns on version skew
+  ("Warnings were encountered loading keyword data").
+
+TESLevItem loader notes (phase-gated on reader state '8'):
+
+* Tags: `EDID OBND VMAD LVLG LVLD(1B) LVLF(1B) LVLM(1B) LLCT LVLO LLCK
+  COED ONAM LLOF`.
+* `LVLO` is a 12-byte entry `[level u16][formID u32][count u16][flag u8
+  + pad]`, with the trailing flag byte gated on file form-version >= 0x45.
+* `LLCT` allocates the entry array (n x 0x18 B); `COED` patches the last
+  entry when present.
 
 ## 2. Censuses
 
