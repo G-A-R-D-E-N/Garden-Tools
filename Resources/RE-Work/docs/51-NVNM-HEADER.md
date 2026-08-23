@@ -121,8 +121,26 @@ Yet shipped files validate at **21 B/tri**, not 16. Five bytes per
 triangle are written that this reader does not consume - so either the
 editor saves through a different (versioned-factory) path than this
 runtime-side load function, or an additional per-tri read hides behind
-the dispatched header object. The 21-byte empirical layout (section 4)
-is the ground truth for files on disk; reconciling it with the C++
-call graph is the remaining exercise. Sections after the triangles
+the dispatched header object. ## 6. Investigation closed - findings summary
+
+Every alternative was eliminated before concluding:
+
+* Factory registry has exactly ONE registrant ("PathingCell" ->
+  BSPathingCell/PathingCell); the created object's +0x18 loads only
+  two cell-link IDs, not geometry.
+* Stream slots re-verified under the correct Ghidra indexing:
+  +0x20 = ReadU32 (all counts), +0x30 = ReadU16 (triangle indices),
+  +0x90 = pure version getter (consumes nothing).
+* Brute-force alignment search (80 blobs, offsets -8..+24 step 1,
+  strides 14..22): unique perfect fit remains start=+0, stride=21
+  (80/80); runner-up scores under 9%.
+
+Conclusion: the loader function provably consumes 16 B/triangle while
+shipped masters provably contain 21 B/triangles. Both measurements are
+solid, so shipped navmeshes were serialized by a pipeline whose writer
+emits five extra per-triangle bytes this CreationKit load path does not
+consume. For tooling purposes the **21-byte layout in section 4 is the
+authoritative on-disk format**; do not derive writers from the runtime
+reader. Sections after the triangles
 (counted 12 B / 16 B / u16 arrays) are parsed by the same function and
 map onto the post-tri region once the 5-byte question settles.
