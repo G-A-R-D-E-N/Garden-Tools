@@ -98,9 +98,9 @@ Cross-referenced from the xLODGen reverse-engineering in `lodgen/reverse-enginee
 | area | what | state |
 |---|---|---|
 | XLODGEN_TERRAIN_INTERNALS.md | WaterDelta, hide quads, skirts/ZSHIFT, BTR chunking, water nodes, reducers | ✅ (xLODGen side) |
-| XWEM → water mesh builder | WRLD water height feeds CK's bgsterrainwatermeshbuilder.cpp | 🟡 traced, function bodies not fully decompiled |
+| XWEM → water mesh builder | WRLD water height feeds CK's bgsterrainwatermeshbuilder.cpp | ✅ decompiled 2026-08-22 — see dumps/decompile-bgsterrainwatermeshbuilder.md (roadmap range was stale; real functions 0xf8e1b0..0xf8f0e0) |
 | CK LOD subsystem (doc 08) | overview of built-in LOD generation | 🟡 summary only |
-| Distant terrain pipeline | bgsterrainmanager, chunk/node tree, texture/object builders | 🔴 17 source files, none decompiled |
+| Distant terrain pipeline | bgsterrainmanager, chunk/node tree, texture/object builders | 🟡 all source files mapped to functions via __FILE__ strings (see watermeshbuilder dump); bodies still to document |
 | `_WaterHeights.dds` | runtime water height texture | 🔴 not investigated |
 | BTR2RAW `.raw` format | int32 heightmap, lengthX/lengthY derivation | ✅ documented |
 
@@ -228,8 +228,8 @@ Phase 0 (foundation)
 
 ## Next Immediate Steps (Recommended Order)
 
-1. **Decompile `bgsterrainwatermeshbuilder.cpp` body** — closes the WaterDelta LOD question (Phase 4)
-2. **Add `validate_wrld_save.py`** — mirrors the CELL validator for WRLD records (Phase 8)
+1. ~~Decompile `bgsterrainwatermeshbuilder.cpp` body~~ ✅ done 2026-08-22 — dumps/decompile-bgsterrainwatermeshbuilder.md
+2. ~~Add `validate_wrld_save.py`~~ ✅ done 2026-08-22 — doc 23 §10b.2
 3. **Start S-tier form types** — QUST LoadRecord/SaveRecord (Phase 5, highest-value next record)
 4. **Write `validate_esp.py`** — generalizes the subrecord cross-check to all form types (Phase 8 → M7)
 5. **Decompile exteriorcellloader grid-walk** — the cell-grid construction and background-load enqueue (Phase 2 remaining gap)
