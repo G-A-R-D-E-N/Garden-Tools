@@ -363,82 +363,153 @@ three, so it is declared localized.
 **EXPL `DATA` is not fixed-width**: 84 bytes (299), 56 (11) and 64 (3), so a
 decoder must accept the shorter legacy shapes.
 
-### Typed creation is blocked on the payload structs
+### Measured payload layouts
 
-`PROJ DNAM` (93 bytes), `EXPL DATA` (84) and `HAZD DNAM` (52) are unmodelled
-and have no usable default: 199 distinct DNAM payloads across 218 PROJ records,
-and only 13 of the 93 byte positions are constant. A creator cannot invent a
-valid one, so these need their field layouts pinned before typed creation is
-possible.
+The disk layouts below are measured from 239 PROJ, 342 EXPL and 78 HAZD
+records across `Fallout4.esm` and all six DLC masters, then re-checked on 1,187
+PROJ / 867 EXPL / 55 HAZD records in the third-party corpus. CommonLibF4's
+`BGSProjectileData` / `BGSExplosionData` / `BGSHazardData` supply the field
+*names*; they do not supply the offsets, and in two places they do not even
+supply the order.
 
-### FormID slots — confirmed and wired
+Every field was validated three ways: FormID slots must resolve to a coherent
+record type, floats must be finite and in a sane range, and enum/count fields
+must have a small closed value set. Sizes are exact — the field lists below sum
+to 93, 84 and 52 bytes with nothing left over.
 
-Confirmed against CommonLibF4's `BGSProjectileData` / `BGSExplosionData` /
-`BGSHazardData` and validated on shipped data. Every slot resolves to the
-record type the struct says it holds, with zero contradictions
-(`StructPayloadFormLinksRealData`):
+#### `PROJ DNAM` — 93 bytes, fixed
 
-| Subrecord | Offset | Target |
+| Offset | Field | Type |
 |---|---|---|
-| `EXPL DATA` | +0 | LIGH |
-| `EXPL DATA` | +4 | SNDR |
-| `EXPL DATA` | +8 | SNDR |
-| `EXPL DATA` | +12 | IPDS |
-| `EXPL DATA` | +16 | placed object — any placeable base (NPC_, LVLI, LIGH, MSTT, …) |
-| `PROJ DNAM` | +16 | LIGH |
-| `PROJ DNAM` | +20 | LIGH |
-| `PROJ DNAM` | +32 | EXPL |
-| `PROJ DNAM` | +36 | SNDR |
-| `PROJ DNAM` | +84 | COLL |
-| `HAZD DNAM` | +24 | SPEL / ENCH |
+| +0 | flags | u32 |
+| +4 | gravity | float (−0.01 … 10) |
+| +8 | speed | float (0 … 16000) |
+| +12 | range | float (200 … 25000) |
+| +16 | light | FormID → LIGH |
+| +20 | muzzleFlashLight | FormID → LIGH |
+| +24 | explosionProximity | float (0 … 200) |
+| +28 | explosionTimer | float (0 … 5) |
+| +32 | explosionType | FormID → EXPL |
+| +36 | activeSoundLoop | FormID → SNDR |
+| +40 | muzzleFlashDuration | float (0 … 2) |
+| +44 | fadeOutTime | float (0 … 5) |
+| +48 | force | float (0 … 1000) |
+| +52 | countdownSound | FormID → SNDR |
+| +56 | deactivateSound | FormID → SNDR |
+| +60 | defaultWeaponSource | FormID → WEAP |
+| +64 | coneSpread | float (0 … 5) |
+| +68 | collisionRadius | float (0.01 … 50) |
+| +72 | lifetime | float (0 … 100) |
+| +76 | relaunchInterval | float (0.001 … 1) |
+| +80 | decalData | FormID → TXST |
+| +84 | collisionLayer | FormID → COLL |
+| +88 | tracerFrequency | u8 (0, 1 or 4) |
+| +89 | vatsProjectile | FormID → PROJ, **unaligned** |
 
-`PROJ DNAM +84` is a real slot. It failed the earlier DLC master-index test
-only because every vanilla `COLL` lives in `Fallout4.esm`, so no DLC reference
-to one ever carries index `0x01` — absence of that signal is not evidence of
-absence.
+**The tail is the reverse of the in-memory struct.** `BGSProjectileData` holds
+`vatsProjectile` at `0x80` and `tracerFrequency` at `0x88`; on disk the byte
+comes first and the FormID is the final four bytes, straddling the natural
+alignment. A previous note in this file claimed `+88` was
+`[tracerFrequency u8][3 bytes heap padding]` — that is wrong, and it left a
+live FormID unremapped in 25 shipped and 453 corpus records.
 
-**`PROJ DNAM +88` is deliberately not wired.** `vatsProjectile` does not
-serialize into DNAM; the tail is `[tracerFrequency u8][3 bytes heap padding]`,
-so remapping it would rewrite padding.
+#### `EXPL DATA` — 84 bytes, with truncated legacy shapes
+
+| Offset | Field | Type |
+|---|---|---|
+| +0 | light | FormID → LIGH |
+| +4 | sound1 | FormID → SNDR |
+| +8 | sound2 | FormID → SNDR |
+| +12 | impactDataSet | FormID → IPDS |
+| +16 | impactPlacedObject | FormID → any placeable base |
+| +20 | spawnProjectile | FormID → PROJ |
+| +24 | force | float |
+| +28 | damage | float |
+| +32 | innerRadius | float |
+| +36 | outerRadius | float |
+| +40 | imageSpaceRadius | float |
+| +44 | verticalOffsetMult | float (0 … 64, usually 0.3) |
+| +48 | flags | u32 |
+| +52 | soundLevel † | u32 (0 … 4) |
+| +56 | placedObjectFadeDelay | float (0 … 500) |
+| +60 | staggerMagnitude † | u32 (0 … 4) |
+| +64 | spawnProjectileVector X | float |
+| +68 | spawnProjectileVector Y | float |
+| +72 | spawnProjectileVector Z | float |
+| +76 | projectileSpread | float (0 … 180, degrees) |
+| +80 | projectileCount | u32 (0 … 15) |
+
+† **`soundLevel` and `staggerMagnitude` are the two labels the files cannot
+discriminate.** Both are `u32` with the identical observed domain 0…4, so
+swapping them fits the data exactly as well. Their order here follows
+`BGSExplosionData`, which is inference, not measurement — every other field in
+these three tables is pinned by a signal that a wrong label would break.
+Discriminate them against xEdit's `wbEXPL` or the CK before typed creation
+writes either one.
+
+**The field order is not `BGSExplosionData`'s.** In memory the projectile
+vector, spread and count sit in the middle, before `force`; on disk they are
+the tail. Reading the memory order off disk lands `projectileCount` on a float
+and `flags` on `1.0f` — which is exactly how this was caught.
+
+The truncated shapes are a clean prefix, one field group at a time: 52 bytes
+ends after `flags`, 56 after `soundLevel`, 60 after `placedObjectFadeDelay`,
+64 after `staggerMagnitude`, 84 is current. Observed counts across the masters:
+52×3, 56×11, 60×1, 64×3, 84×324.
+
+#### `HAZD DNAM` — 52 bytes, fixed
+
+| Offset | Field | Type |
+|---|---|---|
+| +0 | limit | u32 (0 … 20) |
+| +4 | radius | float (0 … 351) |
+| +8 | lifetime | float (0 … 30) |
+| +12 | imageSpaceRadius | float (0 in every shipped record) |
+| +16 | targetInterval | float (0.1 … 10) |
+| +20 | flags | u32 — `BGSHazardFlags` |
+| +24 | spell | FormID → SPEL or ENCH |
+| +28 | light | FormID → LIGH |
+| +32 | impactDataSet | FormID → IPDS |
+| +36 | sound | FormID → SNDR |
+| +40 | fullEffectRadius | float (0 … 187) |
+| +44 | taperWeight | float (0 … 1) |
+| +48 | taperCurve | float (0 … 1) |
+
+HAZD is the one family whose disk layout matches the memory struct field for
+field.
+
+### FormID slots — all twenty, wired
+
+Twenty slots across the three families, gated on each payload's own extent in
+`struct_payload_formid_offsets`. Every one resolves to its stated type in all
+659 shipped records and all 2,109 corpus records, with zero contradictions
+(`StructPayloadFormLinksRealData`).
+
+| Record | Subrecord | Offsets |
+|---|---|---|
+| PROJ | `DNAM` | +16 +20 +32 +36 +52 +56 +60 +80 +84 +89 |
+| EXPL | `DATA` | +0 +4 +8 +12 +16 +20 |
+| HAZD | `DNAM` | +24 +28 +32 +36 |
+
+Nine of those twenty (`PROJ` +52 +56 +60 +80 +89, `EXPL` +20, `HAZD` +28 +32
++36) were unwired until the layouts above were measured — silent master-remap
+corruption in the same class as the QSTA keyword bug.
+
+Several slots are sparse enough that a single-file test proves nothing:
+`HAZD DNAM +36` is non-zero in exactly one shipped record and it lives in
+`DLCRobot.esm`; `PROJ DNAM +80` has one instance in `Fallout4.esm` and seven in
+`DLCworkshop02.esm`. The test walks every master and DLC and fails a slot that
+was never exercised.
+
+`PROJ DNAM +84` is a real slot. It failed an earlier DLC master-index test only
+because every vanilla `COLL` lives in `Fallout4.esm`, so no DLC reference to
+one ever carries index `0x01` — absence of that signal is not evidence of
+absence. The same reasoning retired the earlier "carries a DLC master index"
+screen entirely: it rejects true slots whose targets are all first-party.
 
 `DATA` and `DNAM` mean different things in different records, so these are
 keyed on the record signature in `form_links.cpp` rather than the
-signature-only table. `EXPL DATA` also occurs at 52, 56, 60 and 64 bytes — 18
-vanilla records, truncated legacy shapes — so each offset is gated on its own
-extent and short bodies simply expose fewer slots.
-
-### Superseded: the earlier unconfirmed candidate list
-
-These payloads appear to carry FormIDs, and none of the three families has any
-entry in the FormLink schema, which would mean a master remap leaves them
-pointing at whatever record now occupies the old index — the same class of bug
-as the QSTA keyword.
-
-Two independent signals agree:
-
-| Subrecord | Offset | Resolves to (Fallout4.esm) | Carries a DLC master index |
-|---|---|---|---|
-| `EXPL DATA` | +0 | LIGH 85/220 | yes |
-| `EXPL DATA` | +4 | SNDR 165/220 | yes |
-| `EXPL DATA` | +8 | SNDR 38/220 | yes |
-| `EXPL DATA` | +12 | IPDS 70/220 | yes |
-| `EXPL DATA` | +16 | EXPL/MSTT/HAZD 47/220 | yes |
-| `PROJ DNAM` | +16 | LIGH 26/139 | yes |
-| `PROJ DNAM` | +20 | LIGH 120/139 | yes |
-| `PROJ DNAM` | +32 | EXPL 98/139 | yes |
-| `PROJ DNAM` | +36 | SNDR 70/139 | yes |
-| `HAZD DNAM` | +24 | SPEL 53 / ENCH 2 of 59 | yes |
-
-The target types are semantically coherent (a light at a light slot, sounds at
-sound slots), and in the DLCs those offsets carry index byte `0x01` pointing
-into Fallout4.esm, which a float or small integer would not do systematically.
-`PROJ DNAM +0` and `+84` and `EXPL DATA +52`/`+60` were rejected: they never
-carry a DLC master index, so their Fallout4.esm matches are coincidence.
-
-**These are deliberately not added to `structured_formids.inc`.** The evidence
-is inferential, and a wrong offset would make master remapping corrupt a float
-or integer field — worse than the current omission. Confirm against xEdit's
-`wbEXPL`/`wbPROJ`/`wbHAZD` definitions or the CK before wiring them.
+signature-only table.
 
 ## ARMO FULL and the object-template boundary
 
