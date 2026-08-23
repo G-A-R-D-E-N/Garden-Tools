@@ -17,6 +17,7 @@ fo4ide_add_test(fo4ide_test_graph_document unit/GraphDocumentTests.cpp fo4ide_gr
 fo4ide_add_test(fo4ide_test_graph_palette unit/NodePaletteTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_validator unit/GraphValidatorTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_flow unit/GraphFlowTests.cpp fo4ide_graph)
+fo4ide_add_test(fo4ide_test_graph_compiler unit/GraphCompilerTests.cpp fo4ide_graph)
 # The corpus sweep parses thousands of real base scripts; give it headroom.
 add_executable(fo4ide_test_papyrus_corpus unit/PapyrusCorpusTests.cpp)
 target_link_libraries(fo4ide_test_papyrus_corpus PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)

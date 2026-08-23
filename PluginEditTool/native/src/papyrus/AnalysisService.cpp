@@ -22,6 +22,11 @@ namespace fo4ide::papyrus {
 
 namespace {
 
+// File-facing aliases of the public compile types (PapyrusCompiler.CompileFile
+// uses the same switches and result shape as Compile).
+using CompileOptions = PapyrusCompileOptions;
+using CompileResult = PapyrusCompileResult;
+
 bool iequals(std::string_view a, std::string_view b) {
     if (a.size() != b.size()) return false;
     for (std::size_t i = 0; i < a.size(); ++i) {
@@ -169,48 +174,17 @@ void resolveSources(const std::string& source, std::vector<std::filesystem::path
     error = "Not found: '" + source + "'.";
 }
 
-struct CompileOptions {
-    std::vector<std::filesystem::path> importRoots;
-    std::optional<std::filesystem::path> flagFile;
-    bool emitDebugInfo{true};
-    bool emitDebugOnlyCode{true};
-    bool emitBetaOnlyCode{true};
-    std::string userName;
-    std::string computerName;
-    std::int64_t compilationTime{0};
-};
+}  // namespace
 
-// Port of PapyrusCompileResult.
-struct CompileResult {
-    const Script* script{nullptr};
-    std::unique_ptr<PexFile> pex;
-    std::vector<Diagnostic> diagnostics;
-    bool sourcesComplete{true};
-
-    bool success() const { return pex != nullptr; }
-};
-
-// Port of PapyrusCompiler.CompileFile: parse -> declaration check -> resolve
-// -> type check -> generate, with the Creation Kit fidelity pass applied to
-// the emitted PEX.
-CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
-                          const CompileOptions& options) {
-    for (const auto& root : options.importRoots) index.addRoot(root);
-
-    const Script* script = index.parseCached(path);
-    if (!script) {
-        CompileResult result;
-        result.script = nullptr;
-        result.diagnostics.push_back(Diagnostic{DiagnosticCode::CannotEmit, Severity::Error,
-                                                "Could not read the source.", Span{},
-                                                path.string()});
-        result.sourcesComplete = false;
-        return result;
-    }
-
+// Port of PapyrusCompiler.Compile: declaration check -> resolve -> type check
+// -> generate over an already-parsed script, with the Creation Kit fidelity
+// pass applied to the emitted PEX.
+PapyrusCompileResult compileScript(ScriptIndex& index, const Script* script,
+                                   const std::string& sourceFileName,
+                                   const PapyrusCompileOptions& options) {
     std::vector<Diagnostic> diagnostics = script->diagnostics;
     if (script->hasErrors()) {
-        CompileResult result;
+        PapyrusCompileResult result;
         result.script = script;
         result.diagnostics = std::move(diagnostics);
         result.sourcesComplete = false;
@@ -220,7 +194,7 @@ CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
     const auto declarationProblems = declarationCheck(*script);
     diagnostics.insert(diagnostics.end(), declarationProblems.begin(), declarationProblems.end());
     if (hasError(diagnostics)) {
-        CompileResult result;
+        PapyrusCompileResult result;
         result.script = script;
         result.diagnostics = std::move(diagnostics);
         result.sourcesComplete = false;
@@ -236,7 +210,7 @@ CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
     diagnostics.insert(diagnostics.end(), checked.begin(), checked.end());
 
     if (hasError(diagnostics)) {
-        CompileResult result;
+        PapyrusCompileResult result;
         result.script = script;
         result.diagnostics = std::move(diagnostics);
         result.sourcesComplete = resolution.baseChainComplete;
@@ -247,7 +221,7 @@ CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
         options.flagFile ? *options.flagFile : UserFlagTable::findFlagFile(index.roots());
     std::optional<UserFlagTable> ownedTable;
     CodeGenOptions codegenOptions;
-    codegenOptions.sourceFileName = fullPath(path);
+    codegenOptions.sourceFileName = sourceFileName;
     codegenOptions.userName = options.userName;
     codegenOptions.computerName = options.computerName;
     codegenOptions.compilationTime = options.compilationTime;
@@ -265,7 +239,7 @@ CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
     if (pex) CreationKitFidelity::normalize(*pex, index);
     diagnostics.insert(diagnostics.end(), codegenDiagnostics.begin(), codegenDiagnostics.end());
 
-    CompileResult result;
+    PapyrusCompileResult result;
     result.script = script;
     result.pex.reset(pex);
     result.diagnostics = std::move(diagnostics);
@@ -273,7 +247,25 @@ CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
     return result;
 }
 
-}  // namespace
+// Port of PapyrusCompiler.CompileFile: parse -> compileScript, with import
+// roots registered first.
+CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
+                          const CompileOptions& options) {
+    for (const auto& root : options.importRoots) index.addRoot(root);
+
+    const Script* script = index.parseCached(path);
+    if (!script) {
+        CompileResult result;
+        result.script = nullptr;
+        result.diagnostics.push_back(Diagnostic{DiagnosticCode::CannotEmit, Severity::Error,
+                                                "Could not read the source.", Span{},
+                                                path.string()});
+        result.sourcesComplete = false;
+        return result;
+    }
+
+    return compileScript(index, script, fullPath(path), options);
+}
 
 std::vector<std::filesystem::path> papyrusBaseImports() {
     // The C# also probes app-relative tools/papyrus folders, the Fallout 4

@@ -14,11 +14,15 @@
 
 namespace fo4ide::graph::test {
 
-// The BaseStubs fixture tree lives next to the test sources:
-// native/tests/fixtures/BaseStubs.
-inline std::filesystem::path baseStubs() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path() / "fixtures" / "BaseStubs";
+// The BaseStubs and GraphScripts fixture trees live next to the test
+// sources: native/tests/fixtures/BaseStubs and .../GraphScripts.
+inline std::filesystem::path fixtureRoot(std::string_view name) {
+    return std::filesystem::path(__FILE__).parent_path().parent_path() / "fixtures" /
+           std::string(name);
 }
+
+inline std::filesystem::path baseStubs() { return fixtureRoot("BaseStubs"); }
+inline std::filesystem::path graphScripts() { return fixtureRoot("GraphScripts"); }
 
 // Port of the C# GraphBuilder: the minimal document builder the graph tests
 // use. Node ids are n1..nN, wire ids w1..wN, mirroring the sequence counter.
@@ -102,12 +106,16 @@ struct GraphBuilder {
     }
 };
 
-// Port of GraphTestEnvironment: index over the BaseStubs tree.
+// Port of GraphTestEnvironment: index over the BaseStubs tree (the graph
+// tests that compile against scripts use GraphScripts too).
 struct Env {
     papyrus::ScriptIndex index;
     NodePalette palette;
 
-    Env() : palette(index) { index.addRoot(baseStubs()); }
+    Env(bool withGraphScripts = false) : palette(index) {
+        index.addRoot(baseStubs());
+        if (withGraphScripts) index.addRoot(graphScripts());
+    }
 };
 
 }  // namespace fo4ide::graph::test

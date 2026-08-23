@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -17,140 +16,12 @@
 #include <fo4ide/papyrus/ScriptIndex.hpp>
 #include <fo4ide/papyrus/TypeChecker.hpp>
 
+#include "../helpers/PexComparer.hpp"
+
 using namespace fo4ide::papyrus;
+using namespace fo4ide::papyrus::test;
 
 namespace {
-
-bool iequals(std::string_view a, std::string_view b) {
-    if (a.size() != b.size()) return false;
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(a[i])) !=
-            std::tolower(static_cast<unsigned char>(b[i]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool startsWith(std::string_view text, std::string_view prefix) {
-    return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
-}
-
-std::string lower(std::string_view text) {
-    std::string out(text);
-    for (auto& ch : out) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-    return out;
-}
-
-// Port of the C# PexComparer used by the DecompilerSweep oracle.
-std::string normaliseName(const std::string& name) {
-    if (startsWith(name, "::temp")) return "::temp";
-    if (startsWith(name, "::mangled_")) return "::mangled";
-    return lower(name);
-}
-
-std::string operand(const PexValue& value) {
-    switch (value.type) {
-        case PexValueType::Identifier:
-            return normaliseName(value.str);
-        case PexValueType::String:
-            return "\"" + value.str + "\"";
-        case PexValueType::Integer:
-            return std::to_string(value.int_);
-        case PexValueType::Float: {
-            char buffer[32];
-            std::snprintf(buffer, sizeof(buffer), "%.6f", static_cast<double>(value.float_));
-            return buffer;
-        }
-        case PexValueType::Bool:
-            return value.bool_ ? "true" : "false";
-        default:
-            return "None";
-    }
-}
-
-std::string normalise(const PexInstruction& instruction) {
-    std::string out = instruction.mnemonic;
-    for (const auto& arg : instruction.args) out += " " + operand(arg);
-    return out;
-}
-
-std::string firstDifference(const PexObject& theirs, const PexObject& ours) {
-    if (!iequals(theirs.parentClassName, ours.parentClassName)) {
-        return "parent '" + theirs.parentClassName + "' vs '" + ours.parentClassName + "'";
-    }
-
-    for (const auto& state : theirs.states) {
-        const auto* ourState = [&]() -> const PexState* {
-            for (const auto& s : ours.states) {
-                if (iequals(s.name, state.name)) return &s;
-            }
-            return nullptr;
-        }();
-        if (!ourState) return "missing state '" + state.name + "'";
-
-        for (const auto& fn : state.functions) {
-            const PexFunction* ourFn = nullptr;
-            for (const auto& f : ourState->functions) {
-                if (iequals(f.name, fn.name)) {
-                    ourFn = &f;
-                    break;
-                }
-            }
-            if (!ourFn) return "missing function " + fn.name;
-
-            if (fn.isNative != ourFn->isNative) return fn.name + ": native flag";
-            if (fn.isGlobal != ourFn->isGlobal) return fn.name + ": global flag";
-            if (!iequals(fn.returnType, ourFn->returnType)) {
-                return fn.name + ": returns " + fn.returnType + " vs " + ourFn->returnType;
-            }
-            if (fn.params.size() != ourFn->params.size()) return fn.name + ": parameter count";
-
-            const std::size_t shared = std::min(fn.instructions.size(), ourFn->instructions.size());
-            for (std::size_t i = 0; i < shared; ++i) {
-                const std::string a = normalise(fn.instructions[i]);
-                const std::string b = normalise(ourFn->instructions[i]);
-                if (a != b) {
-                    return fn.name + ": [" + std::to_string(i) + "] original: " + a + " | ours: " + b;
-                }
-            }
-            if (fn.instructions.size() != ourFn->instructions.size()) {
-                return fn.name + ": " + std::to_string(fn.instructions.size()) +
-                       " instructions vs " + std::to_string(ourFn->instructions.size());
-            }
-        }
-
-        for (const auto& fn : ourState->functions) {
-            bool found = false;
-            for (const auto& f : state.functions) {
-                if (iequals(f.name, fn.name)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) return "extra function " + fn.name;
-        }
-    }
-
-    for (const auto& property : theirs.properties) {
-        const PexProperty* ourProperty = nullptr;
-        for (const auto& p : ours.properties) {
-            if (iequals(p.name, property.name)) {
-                ourProperty = &p;
-                break;
-            }
-        }
-        if (!ourProperty) return "missing property " + property.name;
-        if (property.flags != ourProperty->flags) {
-            return "property " + property.name + " flags";
-        }
-        if (property.userFlags != ourProperty->userFlags) {
-            return "property " + property.name + " user flags";
-        }
-    }
-
-    return std::string();
-}
 
 std::string uniqueRoot() {
     return (std::filesystem::temp_directory_path() / "fo4ide-decompile-" /

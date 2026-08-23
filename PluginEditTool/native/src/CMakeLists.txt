@@ -167,6 +167,10 @@ add_library(
     graph/GraphValidator.cpp
     graph/GraphExecFlow.cpp
     graph/GraphDefiniteAssignment.cpp
+    graph/GraphNameTable.cpp
+    graph/GraphLinearizer.cpp
+    graph/PapyrusSourceWriter.cpp
+    graph/GraphCompiler.cpp
 )
 target_link_libraries(fo4ide_graph PUBLIC fo4ide_core fo4ide_papyrus)
 fo4ide_enable_warnings(fo4ide_graph)
