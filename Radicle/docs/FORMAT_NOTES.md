@@ -371,7 +371,43 @@ and only 13 of the 93 byte positions are constant. A creator cannot invent a
 valid one, so these need their field layouts pinned before typed creation is
 possible.
 
-### Candidate FormID slots — NOT wired, needs confirmation
+### FormID slots — confirmed and wired
+
+Confirmed against CommonLibF4's `BGSProjectileData` / `BGSExplosionData` /
+`BGSHazardData` and validated on shipped data. Every slot resolves to the
+record type the struct says it holds, with zero contradictions
+(`StructPayloadFormLinksRealData`):
+
+| Subrecord | Offset | Target |
+|---|---|---|
+| `EXPL DATA` | +0 | LIGH |
+| `EXPL DATA` | +4 | SNDR |
+| `EXPL DATA` | +8 | SNDR |
+| `EXPL DATA` | +12 | IPDS |
+| `EXPL DATA` | +16 | placed object — any placeable base (NPC_, LVLI, LIGH, MSTT, …) |
+| `PROJ DNAM` | +16 | LIGH |
+| `PROJ DNAM` | +20 | LIGH |
+| `PROJ DNAM` | +32 | EXPL |
+| `PROJ DNAM` | +36 | SNDR |
+| `PROJ DNAM` | +84 | COLL |
+| `HAZD DNAM` | +24 | SPEL / ENCH |
+
+`PROJ DNAM +84` is a real slot. It failed the earlier DLC master-index test
+only because every vanilla `COLL` lives in `Fallout4.esm`, so no DLC reference
+to one ever carries index `0x01` — absence of that signal is not evidence of
+absence.
+
+**`PROJ DNAM +88` is deliberately not wired.** `vatsProjectile` does not
+serialize into DNAM; the tail is `[tracerFrequency u8][3 bytes heap padding]`,
+so remapping it would rewrite padding.
+
+`DATA` and `DNAM` mean different things in different records, so these are
+keyed on the record signature in `form_links.cpp` rather than the
+signature-only table. `EXPL DATA` also occurs at 52, 56, 60 and 64 bytes — 18
+vanilla records, truncated legacy shapes — so each offset is gated on its own
+extent and short bodies simply expose fewer slots.
+
+### Superseded: the earlier unconfirmed candidate list
 
 These payloads appear to carry FormIDs, and none of the three families has any
 entry in the FormLink schema, which would mean a master remap leaves them

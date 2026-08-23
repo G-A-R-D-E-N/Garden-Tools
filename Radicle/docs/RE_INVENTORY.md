@@ -27,7 +27,7 @@ Confidence: `confirmed` / `strong` / `probable` / `speculative`.
 
 **Proves:** 159-entry index→4CC table, 24-byte entries, index 0 `NONE`, packed 4CC little-endian `'TES4' = 0x34534554`. Validator lives in `tesform.cpp`. Factory setter `FUN_1408bc350` bounds-checks `< 0x9f`.
 
-**Confidence:** `confirmed` that these symbols exist in the unpacked OG index. `CheckValidIDForSmallFile` is `confirmed` as `(id & 0x00FFF000) == 0` from its disassembled body at RVA `0x130550`, and `AdjustFormIDFileIndex` is `confirmed` at RVA `0x131f90`. Both sit `0x10` below their listed RVAs; take addresses from the disassembly, not the symbol table, in this region.
+**Confidence:** `confirmed`. `CheckValidIDForSmallFile` is `(id & 0x00FFF000) == 0` and `AdjustFormIDFileIndex` is as described in `ESL_FORMIDS.md`, both read from their disassembled bodies. Addresses are build-specific: the workspace holds two unpacked images of identical size, 1.10.155 (`0x5dac778e`) and 1.10.163 (`0x5ddc40fa`), whose RVAs for these functions differ by `0x10`. Match the symbol table to the image by PE timestamp; there is no symbol-table shift to compensate for.
 
 **Library impact:** The generic reader does not need the factory. The schema system should use this 4CC list as the closed set of known signatures, while still preserving unknown signatures.
 

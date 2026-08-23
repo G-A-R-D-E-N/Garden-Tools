@@ -59,6 +59,9 @@ constexpr auto k_nvmi = Signature::from_string("NVMI");
 constexpr auto k_nvpp = Signature::from_string("NVPP");
 constexpr auto k_nvsi = Signature::from_string("NVSI");
 constexpr auto k_mnam = Signature::from_string("MNAM");
+constexpr auto k_proj = Signature::from_string("PROJ");
+constexpr auto k_expl = Signature::from_string("EXPL");
+constexpr auto k_hazd = Signature::from_string("HAZD");
 constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_race = Signature::from_string("RACE");
 constexpr auto k_obts = Signature::from_string("OBTS");
@@ -385,6 +388,44 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
   return matched;
 }
 
+// FormID slots inside the PROJ/EXPL/HAZD runtime-struct payloads.
+//
+// DATA and DNAM mean different things in different records, so these are keyed
+// on the record signature and can never go in the signature-only table.
+//
+// Offsets come from CommonLibF4's BGSProjectileData / BGSExplosionData /
+// BGSHazardData, confirmed against the shipped masters plus a mod corpus:
+// every slot resolves to the record type the struct says it holds.
+//
+// Deliberately absent: PROJ DNAM +88. vatsProjectile does not serialize into
+// DNAM -- the tail is [tracerFrequency u8][3 bytes heap padding] -- so
+// remapping it would rewrite padding.
+std::optional<std::vector<std::size_t>> struct_payload_formid_offsets(const Record& record,
+                                                                     const Subrecord& sub) {
+  const auto signature = record.header.signature;
+  const auto size = sub.data.size();
+  // EXPL DATA also ships truncated at 52/56/60/64 bytes, so gate each slot on
+  // its own extent rather than assuming the canonical 84.
+  auto within = [&](std::initializer_list<std::size_t> slots) {
+    std::vector<std::size_t> offsets;
+    for (const auto offset : slots) {
+      if (offset + 4 <= size) offsets.push_back(offset);
+    }
+    return offsets;
+  };
+
+  if (signature == k_expl && sub.signature == sig_data) {
+    return within({0, 4, 8, 12, 16});   // LIGH SNDR SNDR IPDS placed-object
+  }
+  if (signature == k_proj && sub.signature == k_dnam) {
+    return within({16, 20, 32, 36, 84});  // LIGH LIGH EXPL SNDR COLL
+  }
+  if (signature == k_hazd && sub.signature == k_dnam) {
+    return within({24});                  // SPEL
+  }
+  return std::nullopt;
+}
+
 // Returns every FormID offset inside an OBTS body, or nullopt when the counts
 // do not describe the payload exactly -- which is the only safe signal that
 // the shape is not what we think it is.
@@ -449,6 +490,10 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   // Layout validated on all 3,297 shipped OBTS bodies (ARMO, WEAP, NPC_ and
   // FURN): the computed size matches the payload exactly, zero mismatches,
   // and all 7,342 Fallout4.esm include FormIDs resolve to OMOD records.
+  if (const auto offsets = struct_payload_formid_offsets(record, sub)) {
+    for (const auto offset : *offsets) fn(offset);
+    return;
+  }
   if (sub.signature == k_obts) {
     const auto offsets = obts_formid_offsets(sub);
     if (!offsets.has_value()) {
