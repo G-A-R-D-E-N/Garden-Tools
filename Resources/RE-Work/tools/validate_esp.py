@@ -37,7 +37,7 @@ import sys
 
 from plugin_parse import Plugin
 
-LSTRING_FIELDS = {'FULL', 'DESC', 'SHRT', 'ITXT', 'NNAM'}
+LSTRING_FIELDS = {'FULL', 'DESC', 'SHRT', 'ITXT'}
 
 QUST_TAGS = {
     'ALCS', 'ALLS', 'ALST', 'ANAM', 'BNAM', 'CNAM', 'CTDA', 'DATA', 'DNAM',
@@ -224,6 +224,12 @@ CONTRACTS = {
     'OTFT': _requires('INAM'),
     'ECZN': _requires('DATA'),
     'DFOB': _requires('EDID'),
+    # census-universal tags (docs 42-47)
+    'STAT': _requires('OBND', 'DNAM'),
+    'SNDR': _requires('CNAM'),
+    'OMOD': _requires('DATA', 'DESC'),
+    'MUST': _requires('CNAM', 'EDID'),
+    'SOPM': _requires('EDID'),
 }
 
 
