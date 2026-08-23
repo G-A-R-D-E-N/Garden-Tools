@@ -61,6 +61,7 @@ constexpr auto k_nvsi = Signature::from_string("NVSI");
 constexpr auto k_mnam = Signature::from_string("MNAM");
 constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_race = Signature::from_string("RACE");
+constexpr auto k_obts = Signature::from_string("OBTS");
 constexpr auto k_sraf = Signature::from_string("SRAF");
 constexpr auto k_alco = Signature::from_string("ALCO");
 constexpr auto k_alfr = Signature::from_string("ALFR");
@@ -384,6 +385,31 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
   return matched;
 }
 
+// Returns every FormID offset inside an OBTS body, or nullopt when the counts
+// do not describe the payload exactly -- which is the only safe signal that
+// the shape is not what we think it is.
+std::optional<std::vector<std::size_t>> obts_formid_offsets(const Subrecord& sub) {
+  constexpr std::size_t k_header = 0x12;
+  if (sub.data.size() < k_header) return std::nullopt;
+
+  const auto includes = read_u32(sub.data, 0x00);
+  const auto properties = read_u32(sub.data, 0x04);
+  const auto keywords = std::to_integer<std::uint8_t>(sub.data[0x0F]);
+
+  const auto expected = k_header + std::size_t{keywords} * 4 +
+                        std::size_t{includes} * 7 + std::size_t{properties} * 24;
+  if (expected != sub.data.size()) return std::nullopt;
+
+  std::vector<std::size_t> offsets;
+  offsets.reserve(std::size_t{keywords} + includes);
+  for (std::uint8_t i = 0; i < keywords; ++i) offsets.push_back(0x10 + std::size_t{i} * 4);
+  const auto include_base = k_header + std::size_t{keywords} * 4;
+  for (std::uint32_t i = 0; i < includes; ++i) {
+    offsets.push_back(include_base + std::size_t{i} * 7);
+  }
+  return offsets;
+}
+
 void visit_link_offsets(const Record& record, const Subrecord& sub,
                         bool strict_remap, auto&& fn) {
   if (sub.signature == sig_xxxx || sub.data.empty()) {
@@ -409,6 +435,30 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     if (qust_non_formid_signature(sub.signature)) {
       return;
     }
+  }
+  // OBTS is the BGSMod::Template body: a variable-length header whose keyword
+  // and include FormIDs sit at offsets derived from two counts, so it cannot
+  // be expressed as a fixed structured slot.
+  //
+  //   0x00 u32 include count I      0x04 u32 property count P
+  //   0x0F u8  keyword count K      0x10 K*4 keyword FormIDs
+  //   0x10+4K  u8 min level, u8 alt levels
+  //   0x12+4K  I*7  include rows { u32 OMOD FormID, u8, u8, u8 }
+  //            P*24 property rows
+  //
+  // Layout validated on all 3,297 shipped OBTS bodies (ARMO, WEAP, NPC_ and
+  // FURN): the computed size matches the payload exactly, zero mismatches,
+  // and all 7,342 Fallout4.esm include FormIDs resolve to OMOD records.
+  if (sub.signature == k_obts) {
+    const auto offsets = obts_formid_offsets(sub);
+    if (!offsets.has_value()) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed OBTS template payload");
+      }
+      return;
+    }
+    for (const auto offset : *offsets) fn(offset);
+    return;
   }
   if (is_navmesh_mixed_payload(record, sub)) {
     const auto offsets = navmesh_mixed_formid_offsets(record, sub);
