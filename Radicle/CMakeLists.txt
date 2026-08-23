@@ -234,6 +234,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_proj_expl_hazd_real.cpp
     tests/test_proj_expl_hazd_creation.cpp
     tests/test_proj_expl_hazd_reencode_real.cpp
+    tests/test_scalar_embedded.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp

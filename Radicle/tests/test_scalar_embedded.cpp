@@ -1,0 +1,218 @@
+// Scalar fields addressed at a byte offset inside a struct payload.
+//
+// The original scalar schema assumed a field *was* its whole subrecord, which
+// is true of REFR XHLT/XSCL and of nothing in PROJ/EXPL/HAZD -- those pack
+// dozens of fields into one DNAM or DATA. The behaviour that matters here is
+// that writing one field leaves its neighbours byte-identical; replacing the
+// payload, which is what the old write path did, would erase them.
+
+#include "fo4/forms/proj_expl_hazd.hpp"
+#include "fo4/plugin/mutation.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
+#include "fo4/schema/preflight.hpp"
+#include "fo4/schema/scalar.hpp"
+#include "plugin_bytes.hpp"
+
+#include <gtest/gtest.h>
+
+#include <string>
+#include <vector>
+
+namespace {
+
+std::vector<std::byte> empty_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  return out.bytes;
+}
+
+const fo4::Subrecord* find_subrecord(const fo4::Record& record, std::string_view signature) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature.to_string() == signature) return &sub;
+  }
+  return nullptr;
+}
+
+fo4::schema::ScalarFieldDescriptor field(std::string_view path) {
+  const auto descriptor = fo4::schema::scalar_field_descriptor(path);
+  EXPECT_TRUE(descriptor.has_value()) << path << " is not in the scalar schema";
+  return *descriptor;
+}
+
+}  // namespace
+
+TEST(ScalarEmbedded, ReadsEveryPayloadFieldAtItsMeasuredOffset) {
+  auto plugin = fo4::read_plugin(empty_plugin(), "Patch.esp");
+
+  fo4::forms::ProjectileCreation creation;
+  creation.editor_id = "Probe";
+  creation.speed = 12000.0F;
+  creation.collision_radius = 2.5F;
+  creation.tracer_frequency = 4;
+  const auto key = fo4::forms::create_projectile(plugin, creation);
+
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto* dnam = find_subrecord(*record, "DNAM");
+  ASSERT_NE(dnam, nullptr);
+
+  const auto speed = field("PROJ\\Speed");
+  const auto radius = field("PROJ\\CollisionRadius");
+  const auto tracer = field("PROJ\\TracerFrequency");
+
+  EXPECT_EQ(fo4::schema::decode_scalar(
+                fo4::schema::scalar_field_bytes(dnam->data, speed.scalar), speed.scalar),
+            "12000");
+  EXPECT_EQ(fo4::schema::decode_scalar(
+                fo4::schema::scalar_field_bytes(dnam->data, radius.scalar), radius.scalar),
+            "2.5");
+  EXPECT_EQ(fo4::schema::decode_scalar(
+                fo4::schema::scalar_field_bytes(dnam->data, tracer.scalar), tracer.scalar),
+            "4");
+}
+
+// The whole point of offsets: a write must not disturb the rest of the struct.
+TEST(ScalarEmbedded, WritingOneFieldLeavesEveryOtherByteUntouched) {
+  auto plugin = fo4::read_plugin(empty_plugin(), "Patch.esp");
+
+  fo4::forms::ExplosionCreation creation;
+  creation.editor_id = "Blast";
+  creation.force = 1024.0F;
+  creation.damage = 25.0F;
+  creation.inner_radius = 300.0F;
+  creation.outer_radius = 1024.0F;
+  creation.sound_level = 3;
+  creation.stagger_magnitude = 2;
+  creation.projectile_count = 15;
+  const auto key = fo4::forms::create_explosion(plugin, creation);
+
+  const auto* before_record = fo4::find_record(plugin, key);
+  ASSERT_NE(before_record, nullptr);
+  const auto before = find_subrecord(*before_record, "DATA")->data;
+
+  const auto damage = field("EXPL\\Damage");
+  ASSERT_EQ(fo4::set_record_scalar(plugin, key, damage, "40"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto* after_record = fo4::find_record(plugin, key);
+  ASSERT_NE(after_record, nullptr);
+  const auto after = find_subrecord(*after_record, "DATA")->data;
+
+  ASSERT_EQ(after.size(), before.size());
+  for (std::size_t i = 0; i < before.size(); ++i) {
+    const bool in_field = i >= damage.scalar.offset && i < damage.scalar.offset + 4;
+    if (in_field) continue;
+    EXPECT_EQ(after[i], before[i]) << "byte " << i << " changed but is not part of the field";
+  }
+
+  // And the neighbours still decode to what they were.
+  const auto decoded = fo4::forms::decode_explosion(plugin, key);
+  EXPECT_EQ(decoded.damage, 40.0F);
+  EXPECT_EQ(decoded.force, 1024.0F);
+  EXPECT_EQ(decoded.inner_radius, 300.0F);
+  EXPECT_EQ(decoded.outer_radius, 1024.0F);
+  EXPECT_EQ(decoded.sound_level, 3u);
+  EXPECT_EQ(decoded.stagger_magnitude, 2u);
+  EXPECT_EQ(decoded.projectile_count, 15u);
+}
+
+TEST(ScalarEmbedded, SurvivesAWriteThroughSerialization) {
+  auto plugin = fo4::read_plugin(empty_plugin(), "Patch.esp");
+
+  fo4::forms::HazardCreation creation;
+  creation.editor_id = "Rads";
+  creation.model = "Effects\\FXFireMedSmokey01.nif";
+  creation.radius = 256.0F;
+  creation.taper_weight = 0.5F;
+  const auto key = fo4::forms::create_hazard(plugin, creation);
+
+  ASSERT_EQ(fo4::set_record_scalar(plugin, key, field("HAZD\\TaperCurve"), "0.75"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto decoded = fo4::forms::decode_hazard(reread, key);
+  EXPECT_EQ(decoded.taper_curve, 0.75F);
+  EXPECT_EQ(decoded.radius, 256.0F);
+  EXPECT_EQ(decoded.taper_weight, 0.5F);
+}
+
+TEST(ScalarEmbedded, RejectsAValueOutsideTheFieldBounds) {
+  auto plugin = fo4::read_plugin(empty_plugin(), "Patch.esp");
+
+  fo4::forms::ExplosionCreation creation;
+  creation.editor_id = "Blast";
+  const auto key = fo4::forms::create_explosion(plugin, creation);
+
+  // Sound level is a closed engine enum: 0..4 in every shipped and corpus record.
+  EXPECT_THROW(
+      static_cast<void>(fo4::set_record_scalar(plugin, key, field("EXPL\\SoundLevel"), "9")),
+      fo4::schema::ScalarError);
+}
+
+// EXPL DATA also ships at 52/56/60/64 bytes. Those are clean prefixes, so a
+// field past the end is absent -- it must not be read from beyond the payload,
+// and a write must not silently extend the record.
+TEST(ScalarEmbedded, TreatsAFieldPastATruncatedPayloadAsAbsent) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x801);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "EXPL", 0);
+  const auto record = fo4::test::begin_record(out, "EXPL", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
+  fo4::test::write_subrecord(out, "OBND", std::vector<std::byte>(12, std::byte{0}));
+  fo4::test::ByteWriter data;
+  for (int i = 0; i < 6; ++i) data.u32(0);
+  data.f32(500.0F);
+  data.f32(10.0F);
+  data.f32(0.0F);
+  data.f32(256.0F);
+  data.f32(0.0F);
+  data.f32(0.3F);
+  data.u32(1);  // 52 bytes: ends at flags
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Legacy.esp");
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+
+  // Present in the prefix.
+  const auto force = field("EXPL\\Force");
+  ASSERT_EQ(fo4::set_record_scalar(plugin, key, force, "600"),
+            fo4::ScalarMutationStatus::updated);
+
+  // Past the end: reported absent, and the payload keeps its length.
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, field("EXPL\\ProjectileCount"), "3"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  const auto* after = fo4::find_record(plugin, key);
+  ASSERT_NE(after, nullptr);
+  EXPECT_EQ(find_subrecord(*after, "DATA")->data.size(), 52u);
+
+  // And preflight must not report the absent field as malformed storage.
+  for (const auto& issue : fo4::schema::preflight_record(*after)) {
+    EXPECT_NE(issue.code, "invalid_scalar_storage") << issue.message;
+  }
+}
+
+// Looking a field up by signature alone cannot name one of many fields packed
+// into a shared DNAM, and several records disagree about what DNAM means.
+TEST(ScalarEmbedded, SignatureOnlyLookupSkipsEmbeddedFields) {
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DNAM")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DATA")).has_value());
+  // Whole-payload fields still resolve.
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("VNAM")).has_value());
+}

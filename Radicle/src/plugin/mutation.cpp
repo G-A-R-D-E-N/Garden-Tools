@@ -339,11 +339,21 @@ ScalarMutationStatus set_record_scalar(
   }
   if (found == nullptr) return ScalarMutationStatus::subrecord_missing;
 
-  static_cast<void>(schema::decode_scalar(found->data, field.scalar));
-  const auto encoded = schema::encode_scalar(value, field.scalar);
-  if (found->data == encoded) return ScalarMutationStatus::unchanged;
+  // Reject a payload this field cannot address before touching anything. For
+  // an embedded field that means the payload is too short to reach it, which
+  // is the truncated-legacy case, not a malformed record.
+  const auto existing = schema::scalar_field_bytes(found->data, field.scalar);
+  if (existing.empty()) return ScalarMutationStatus::subrecord_missing;
+  static_cast<void>(schema::decode_scalar(existing, field.scalar));
 
-  found->data = encoded;
+  const auto encoded = schema::encode_scalar(value, field.scalar);
+  if (std::equal(existing.begin(), existing.end(), encoded.begin(), encoded.end())) {
+    return ScalarMutationStatus::unchanged;
+  }
+
+  // Patch in place: an embedded field shares its payload with every other
+  // field in the struct, so replacing the payload would erase its neighbours.
+  schema::patch_scalar_field(found->data, field.scalar, encoded);
   target->original_bytes.clear();
   target->decompressed_payload.clear();
   target->header.data_size = 0;

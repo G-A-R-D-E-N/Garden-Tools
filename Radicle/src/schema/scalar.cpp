@@ -1,6 +1,7 @@
 #include "fo4/schema/scalar.hpp"
 
 #include <charconv>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iterator>
@@ -85,9 +86,40 @@ std::string format_float(float value) {
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
   for (const auto& field : k_scalar_fields) {
+    // Embedded fields share a signature with their neighbours, so a lookup by
+    // signature alone cannot name one of them. See the header.
+    if (field.scalar.embedded) continue;
     if (field.scalar.subrecord == subrecord) return field.scalar;
   }
   return std::nullopt;
+}
+
+std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
+                                              const ScalarDescriptor& descriptor) {
+  const auto width = scalar_storage_size(descriptor.storage);
+  if (!descriptor.embedded) {
+    if (payload.size() != width) {
+      throw ScalarError(std::string(descriptor.field_name) + " has unexpected binary width");
+    }
+    return payload;
+  }
+  if (payload.size() < descriptor.offset + width) return {};
+  return payload.subspan(descriptor.offset, width);
+}
+
+void patch_scalar_field(std::span<std::byte> payload,
+                        const ScalarDescriptor& descriptor,
+                        std::span<const std::byte> encoded) {
+  const auto width = scalar_storage_size(descriptor.storage);
+  if (encoded.size() != width) {
+    throw ScalarError(std::string(descriptor.field_name) + " encoded to the wrong width");
+  }
+  const auto offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
+  if (payload.size() < offset + width) {
+    throw ScalarError(std::string(descriptor.field_name) +
+                      " does not fit in the subrecord payload");
+  }
+  std::copy(encoded.begin(), encoded.end(), payload.begin() + static_cast<std::ptrdiff_t>(offset));
 }
 
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(

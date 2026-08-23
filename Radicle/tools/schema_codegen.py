@@ -89,10 +89,20 @@ def load_fields(schema_path: Path):
             subrecord = field.get("subrecord", "")
             if not isinstance(subrecord, str) or not valid_signature(subrecord):
                 raise ValueError(f"subrecord signature must be four printable ASCII characters: {subrecord!r}")
-            subrecord_key = (record_signature, subrecord)
+            # A struct payload holds many fields, so uniqueness is per byte
+            # offset, not per subrecord. Whole-payload fields have no offset and
+            # so remain one-per-subrecord as before.
+            offset = field.get("offset")
+            embedded = offset is not None
+            if embedded:
+                if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+                    raise ValueError(f"scalar offset must be a non-negative integer: {path!r}")
+            else:
+                offset = 0
+            subrecord_key = (record_signature, subrecord, offset)
             if subrecord_key in seen_record_subrecords:
                 raise ValueError(
-                    f"duplicate scalar subrecord mapping for {record_signature}.{subrecord}")
+                    f"duplicate scalar mapping for {record_signature}.{subrecord}+{offset}")
             seen_record_subrecords.add(subrecord_key)
 
             storage = field.get("storage")
@@ -132,8 +142,28 @@ def load_fields(schema_path: Path):
                 "presentation": presentation,
                 "minimum": minimum,
                 "maximum": maximum,
+                "offset": offset,
+                "embedded": embedded,
                 "can_insert": False,
             })
+
+    # Two embedded fields in one payload must not overlap. A transposed offset
+    # is otherwise invisible until a write corrupts the neighbouring field.
+    widths = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4}
+    by_payload = {}
+    for field in fields:
+        if not field["embedded"]:
+            continue
+        by_payload.setdefault((field["record"], field["subrecord"]), []).append(field)
+    for (record_signature, subrecord), group in by_payload.items():
+        group.sort(key=lambda item: item["offset"])
+        for earlier, later in zip(group, group[1:]):
+            end = earlier["offset"] + widths[earlier["storage"]]
+            if end > later["offset"]:
+                raise ValueError(
+                    f"overlapping scalar fields in {record_signature}.{subrecord}: "
+                    f"{earlier['path']!r} ends at {end}, {later['path']!r} starts at "
+                    f"{later['offset']}")
 
     fields.sort(key=lambda item: (item["record"], item["path"]))
     return fields
@@ -154,7 +184,9 @@ def render(fields) -> str:
             f"{cpp_string(field['label'])}, " +
             f"ScalarStorage::{field['storage']}, " +
             f"ScalarPresentation::{field['presentation']}, " +
-            f"{cpp_number(field['minimum'])}, {cpp_number(field['maximum'])}" +
+            f"{cpp_number(field['minimum'])}, {cpp_number(field['maximum'])}, " +
+            f"{field['offset']}, " +
+            ("true" if field["embedded"] else "false") +
             "}, " +
             ("true" if field["can_insert"] else "false") +
             "},"
