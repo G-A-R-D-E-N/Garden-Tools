@@ -129,6 +129,38 @@ def check_qust(rec, smap, body, add):
             add('QUST-UNKNOWN-TAG:%s' % s.type, 'INFO')
 
 
+def check_magic(rec, smap, body, add):
+    efid = len(smap.get('EFID', []) or [])
+    efit = len(smap.get('EFIT', []) or [])
+    if efid != efit:
+        add('EFFECT-PAIR-MISMATCH', 'ERROR')
+
+
+def check_leveled(rec, smap, body, add):
+    types = [s.type for s in rec.subs]
+    if 'LVLD' not in types or 'LVLF' not in types:
+        add('LEVELD-HEADER', 'ERROR')
+    llct = smap.get('LLCT')
+    lvlo = len(smap.get('LVLO', []) or [])
+    if llct:
+        n = body[llct[0].data_offset]
+        if n != lvlo:
+            add('LLCT-COUNT-MISMATCH', 'ERROR')
+
+
+def check_scol(rec, smap, body, add):
+    onam = len(smap.get('ONAM', []) or [])
+    data = len(smap.get('DATA', []) or [])
+    if onam != data:
+        add('SCOL-PAIR-MISMATCH', 'ERROR')
+
+
+def check_mgef(rec, smap, body, add):
+    for t in ('EDID', 'DATA', 'SNDD', 'DNAM'):
+        if not smap.get(t):
+            add('MGEF-MISSING-%s' % t, 'ERROR')
+
+
 CONTRACTS = {
     'CELL': check_cell,
     'WRLD': check_wrld,
@@ -140,6 +172,14 @@ CONTRACTS = {
     'NPC_': check_template,
     'FURN': check_template,
     'QUST': check_qust,
+    'SPEL': check_magic,
+    'ALCH': check_magic,
+    'ENCH': check_magic,
+    'INGR': check_magic,
+    'LVLI': check_leveled,
+    'LVLN': check_leveled,
+    'SCOL': check_scol,
+    'MGEF': check_mgef,
 }
 
 
