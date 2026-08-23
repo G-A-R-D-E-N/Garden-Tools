@@ -236,12 +236,12 @@
           },
           {
             "signature": "MODL",
-            "minimum": 0,
+            "minimum": 1,
             "maximum": 1
           },
           {
             "signature": "MODT",
-            "minimum": 0,
+            "minimum": 1,
             "maximum": 1
           },
           {
