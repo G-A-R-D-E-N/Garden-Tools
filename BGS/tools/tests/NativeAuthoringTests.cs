@@ -253,6 +253,119 @@ public sealed class NativeAuthoringTests
         return NativeGraphModel.From(objects) ?? throw new InvalidOperationException("test file could not be modeled");
     }
 
+    [Fact]
+    public void SelectorChoosesBetweenGeneratorsNatively()
+    {
+        var session = new BehaviourAuthoringSession(Source("hkbStateMachine"));
+        var idle = session.AddClip("Idle", "Animations\\Idle.hkx");
+        var walk = session.AddClip("Walk", "Animations\\Walk.hkx");
+        var selector = session.AddManualSelector("Move", new[] { idle.Id, walk.Id }, 1);
+        session.AddState(NativeGraphModel.FirstId, "Move", selector.Id);
+
+        var model = Model(session.Build().Bytes);
+        var built = model.Get(selector.Id.ToString())!;
+        Assert.Equal("hkbManualSelectorGenerator", built.Class);
+        Assert.Equal("Move", built.Str("name"));
+        Assert.Equal(new[] { idle.Id.ToString(), walk.Id.ToString() }, built.Refs("generators").ToArray());
+        Assert.Equal(1, built.Int("selectedGeneratorIndex"));
+    }
+
+    [Fact]
+    public void SelectorRefusesAnIndexOutsideItsGenerators()
+    {
+        var session = new BehaviourAuthoringSession(Source("hkbStateMachine"));
+        var idle = session.AddClip("Idle", "Animations\\Idle.hkx");
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            session.AddManualSelector("Move", new[] { idle.Id }, 1));
+        Assert.Throws<ArgumentException>(() =>
+            session.AddManualSelector("Move", Array.Empty<int>()));
+    }
+
+    [Fact]
+    public void SelectorRefusesSomethingThatIsNotAGenerator()
+    {
+        var session = new BehaviourAuthoringSession(Source(
+            "hkbStateMachine", "hkbBehaviorGraphStringData"));
+        var reference = session.AddBehaviorReference("Sub", "Behaviors\\Sub.hkx");
+
+        // a behaviour reference and a state machine are both generators, so both are allowed
+        Assert.NotNull(session.AddManualSelector("Move",
+            new[] { reference.Id, NativeGraphModel.FirstId }));
+
+        // the graph's string data is not
+        Assert.Throws<ArgumentException>(() =>
+            session.AddManualSelector("Bad", new[] { NativeGraphModel.FirstId + 1 }));
+    }
+
+    [Fact]
+    public void BehaviorReferenceCarriesOnlyTheNameItPlays()
+    {
+        var session = new BehaviourAuthoringSession(Source("hkbStateMachine"));
+        var reference = session.AddBehaviorReference("Sub", "Behaviors\\Sub.hkx");
+        session.AddState(NativeGraphModel.FirstId, "Sub", reference.Id);
+
+        var built = Model(session.Build().Bytes).Get(reference.Id.ToString())!;
+        Assert.Equal("hkbBehaviorReferenceGenerator", built.Class);
+        Assert.Equal("Behaviors\\Sub.hkx", built.Str("behaviorName"));
+    }
+
+    [Fact]
+    public void CloningAStateSharesItsGeneratorAndTakesTheNextStateId()
+    {
+        var session = new BehaviourAuthoringSession(Source("hkbStateMachine"));
+        var clip = session.AddClip("Idle", "Animations\\Idle.hkx");
+        var first = session.AddState(NativeGraphModel.FirstId, "Idle", clip.Id);
+        var clone = session.CloneState(NativeGraphModel.FirstId, first.ObjectId, "IdleAgain");
+
+        Assert.NotEqual(first.ObjectId, clone.ObjectId);
+        Assert.Equal(first.StateId + 1, clone.StateId);
+
+        var model = Model(session.Build().Bytes);
+        var states = StateEditor.States(model, NativeGraphModel.FirstId.ToString());
+        Assert.Equal(new[] { "Idle", "IdleAgain" }, states.Select(s => s.Name).ToArray());
+        Assert.Equal(states[0].GeneratorRef, states[1].GeneratorRef);
+    }
+
+    [Fact]
+    public void RemovingAStateAlsoDropsTheTransitionsAimedAtIt()
+    {
+        var session = new BehaviourAuthoringSession(Source(
+            "hkbStateMachine", "hkbBehaviorGraphStringData", "hkbBehaviorGraphData"));
+        int machine = NativeGraphModel.FirstId;
+        int go = session.AddEvent("Go");
+
+        var idleClip = session.AddClip("Idle", "Animations\\Idle.hkx");
+        var walkClip = session.AddClip("Walk", "Animations\\Walk.hkx");
+        var idle = session.AddState(machine, "Idle", idleClip.Id);
+        var walk = session.AddState(machine, "Walk", walkClip.Id);
+        session.AddTransition(machine, idle.ObjectId, walk.ObjectId, go);
+
+        var removal = session.RemoveState(machine, walk.ObjectId);
+        Assert.Equal(walk.ObjectId, removal.StateObjectId);
+        Assert.Equal(1, removal.TransitionsDropped);
+
+        var model = Model(session.Build().Bytes);
+        var states = StateEditor.States(model, machine.ToString());
+        Assert.Equal(new[] { "Idle" }, states.Select(s => s.Name).ToArray());
+
+        string? array = model.Get(idle.ObjectId.ToString())?.Ref("transitions");
+        var rows = array == null ? null : model.Get(array)?.StructLists.GetValueOrDefault("transitions");
+        Assert.True(rows == null || rows.Count == 0,
+                    "the transition aimed at the removed state is still there");
+    }
+
+    [Fact]
+    public void RemovingAStateRefusesToEmptyTheMachine()
+    {
+        var session = new BehaviourAuthoringSession(Source("hkbStateMachine"));
+        var clip = session.AddClip("Idle", "Animations\\Idle.hkx");
+        var only = session.AddState(NativeGraphModel.FirstId, "Idle", clip.Id);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            session.RemoveState(NativeGraphModel.FirstId, only.ObjectId));
+    }
+
     private static byte[] Source(params string[] classes)
     {
         var image = new PackfileImage();

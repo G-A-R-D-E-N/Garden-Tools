@@ -165,6 +165,10 @@ public sealed class NativeAuthoringPlan
             new NativeSave.Change(obj.ClassName, IndexOf(id), field,
                 count.ToString(CultureInfo.InvariantCulture), Element: 0, Grow: true, Id: id),
             c => c.Id == id && c.Field == field && c.Grow);
+
+        // Shrinking drops the elements past the new end, so any member write already planned
+        // for one of them has nowhere to land. Leaving it planned makes the whole save refuse.
+        _changes.RemoveAll(c => c.Id == id && c.Field == field && c.InElement && c.Element >= count);
     }
 
     public void SetStructMember(int id, string field, int element, string member, string value)
@@ -322,7 +326,14 @@ public sealed class BehaviourAuthoringSession
     private readonly Dictionary<int, int> _stateIds = new();
     private readonly Dictionary<(int Owner, string Field), int> _transitionArrays = new();
     private readonly Dictionary<int, int> _transitionCounts = new();
+    // The source model is the file as opened, so it knows nothing about objects this session
+    // has planned. Clone and remove have to see those too, or they only work on states that
+    // were already on disk.
+    private readonly Dictionary<int, CreatedState> _created = new();
+    private readonly Dictionary<int, List<Dictionary<string, string>>> _rows = new();
     private List<string>? _events;
+
+    private sealed record CreatedState(int GeneratorId, float Probability, bool Enable);
 
     public BehaviourAuthoringSession(byte[] source)
     {
@@ -369,6 +380,7 @@ public sealed class BehaviourAuthoringSession
 
         states.Add(state.Id);
         _stateIds[state.Id] = stateId;
+        _created[state.Id] = new CreatedState(generatorId, 1.0f, true);
         _plan.SetPointerArray(machineId, "states", states);
         return new StateRef(state.Id, stateId);
     }
@@ -452,17 +464,176 @@ public sealed class BehaviourAuthoringSession
 
         SetInterval(arrayId, index, "triggerInterval");
         SetInterval(arrayId, index, "initiateInterval");
-        _plan.SetStructMember(arrayId, "transitions", index, "transition",
+        Record(arrayId, index, "transition",
             effectId.HasValue ? "#" + effectId.Value.ToString(CultureInfo.InvariantCulture) : "null");
-        _plan.SetStructMember(arrayId, "transitions", index, "condition", "null");
-        _plan.SetStructMember(arrayId, "transitions", index, "eventId", eventId.ToString(CultureInfo.InvariantCulture));
-        _plan.SetStructMember(arrayId, "transitions", index, "toStateId",
-            _stateIds[toStateObjectId].ToString(CultureInfo.InvariantCulture));
-        _plan.SetStructMember(arrayId, "transitions", index, "fromNestedStateId", "0");
-        _plan.SetStructMember(arrayId, "transitions", index, "toNestedStateId", "0");
-        _plan.SetStructMember(arrayId, "transitions", index, "priority", "0");
-        _plan.SetStructMember(arrayId, "transitions", index, "flags", "0");
+        Record(arrayId, index, "condition", "null");
+        Record(arrayId, index, "eventId", eventId.ToString(CultureInfo.InvariantCulture));
+        Record(arrayId, index, "toStateId", _stateIds[toStateObjectId].ToString(CultureInfo.InvariantCulture));
+        Record(arrayId, index, "fromNestedStateId", "0");
+        Record(arrayId, index, "toNestedStateId", "0");
+        Record(arrayId, index, "priority", "0");
+        Record(arrayId, index, "flags", "0");
         return new TransitionRef(arrayId, index);
+    }
+
+    // A selector picks one of several generators by index. Adding one natively means the
+    // batch and editor paths can build a choice between clips without an XML round trip.
+    public NativeAuthoringPlan.ObjectRef AddManualSelector(string name, IEnumerable<int> generatorIds,
+                                                           int selectedIndex = 0)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("selector name is required", nameof(name));
+
+        var ids = (generatorIds ?? throw new ArgumentNullException(nameof(generatorIds))).ToList();
+        if (ids.Count == 0)
+            throw new ArgumentException("a selector needs at least one generator", nameof(generatorIds));
+        foreach (int id in ids) _plan.RequireAssignable(id, "hkbGenerator", "selector generator");
+        if (selectedIndex < 0 || selectedIndex >= ids.Count)
+            throw new ArgumentOutOfRangeException(nameof(selectedIndex),
+                $"a selector over {ids.Count} generator(s) cannot start at index {selectedIndex}");
+
+        var selector = _plan.AddObject("hkbManualSelectorGenerator");
+        _plan.SetString(selector.Id, "name", name);
+        _plan.SetPointerArray(selector.Id, "generators", ids);
+        _plan.SetInt(selector.Id, "selectedGeneratorIndex", selectedIndex);
+        _plan.SetReference(selector.Id, "indexSelector", null);
+        _plan.SetBool(selector.Id, "selectedIndexCanChangeAfterActivate", false);
+        _plan.SetReference(selector.Id, "generatorChangedTransitionEffect", null);
+        return selector;
+    }
+
+    // Plays another behaviour graph by name. The pointer to the loaded graph is filled in by
+    // the runtime, so only the name is written.
+    public NativeAuthoringPlan.ObjectRef AddBehaviorReference(string name, string behaviorName)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("name is required", nameof(name));
+        if (string.IsNullOrWhiteSpace(behaviorName))
+            throw new ArgumentException("behaviour name is required", nameof(behaviorName));
+
+        var reference = _plan.AddObject("hkbBehaviorReferenceGenerator");
+        _plan.SetString(reference.Id, "name", name);
+        _plan.SetString(reference.Id, "behaviorName", behaviorName);
+        return reference;
+    }
+
+    // Another state on the same machine driving the same generator. The generator is shared
+    // rather than copied: duplicating the subtree is a paste, not a clone.
+    public StateRef CloneState(int machineId, int stateObjectId, string name)
+    {
+        var states = EnsureMachine(machineId);
+        if (!states.Contains(stateObjectId))
+            throw new ArgumentException($"#{stateObjectId} is not a state of #{machineId}", nameof(stateObjectId));
+
+        var was = Described(stateObjectId)
+            ?? throw new InvalidOperationException($"#{stateObjectId} has no generator to clone");
+
+        var clone = AddState(machineId, name, was.GeneratorId);
+        _plan.SetReal(clone.ObjectId, "probability", was.Probability);
+        _plan.SetBool(clone.ObjectId, "enable", was.Enable);
+        _created[clone.ObjectId] = was with { };
+        return clone;
+    }
+
+    // Takes a state off its machine and clears what pointed at it. A transition naming the
+    // removed state is dropped rather than left aiming at a state id nothing answers to,
+    // which is the failure the graph validator would otherwise only find later.
+    public sealed record Removal(int StateObjectId, int StateId, int TransitionsDropped);
+
+    public Removal RemoveState(int machineId, int stateObjectId)
+    {
+        var states = EnsureMachine(machineId);
+        if (!states.Contains(stateObjectId))
+            throw new ArgumentException($"#{stateObjectId} is not a state of #{machineId}", nameof(stateObjectId));
+        if (states.Count == 1)
+            throw new InvalidOperationException(
+                $"#{stateObjectId} is the only state of #{machineId}; a state machine with no states cannot start");
+
+        int stateId = _stateIds[stateObjectId];
+        states.Remove(stateObjectId);
+        _plan.SetPointerArray(machineId, "states", states);
+
+        int dropped = 0;
+        foreach (int owner in states.Append(machineId))
+        {
+            string field = owner == machineId ? "wildcardTransitions" : "transitions";
+            dropped += DropTransitionsTo(owner, field, stateId);
+        }
+
+        if (_model.Get(machineId.ToString(CultureInfo.InvariantCulture))?.Int("startStateId") == stateId)
+            _plan.SetInt(machineId, "startStateId", _stateIds[states[0]]);
+
+        return new Removal(stateObjectId, stateId, dropped);
+    }
+
+    private CreatedState? Described(int stateObjectId)
+    {
+        if (_created.TryGetValue(stateObjectId, out var created)) return created;
+
+        var state = _model.Get(stateObjectId.ToString(CultureInfo.InvariantCulture));
+        string? generator = state?.Ref("generator");
+        if (generator == null ||
+            !int.TryParse(generator, NumberStyles.Integer, CultureInfo.InvariantCulture, out int generatorId))
+            return null;
+
+        float probability = float.TryParse(state!.Str("probability"), NumberStyles.Float,
+                                           CultureInfo.InvariantCulture, out float read) && read >= 0
+            ? read : 1.0f;
+        return new CreatedState(generatorId, probability,
+                                !bool.TryParse(state.Str("enable"), out bool enable) || enable);
+    }
+
+    private int DropTransitionsTo(int owner, string field, int stateId)
+    {
+        int? arrayId = TransitionArray(owner, field);
+        if (arrayId == null) return 0;
+
+        var rows = Rows(arrayId.Value);
+        if (rows.Count == 0) return 0;
+
+        string target = stateId.ToString(CultureInfo.InvariantCulture);
+        var kept = rows.Where(row => !row.TryGetValue("toStateId", out string? to) || to != target).ToList();
+        if (kept.Count == rows.Count) return 0;
+
+        for (int i = 0; i < kept.Count; i++)
+            foreach (var (member, value) in kept[i])
+                _plan.SetStructMember(arrayId.Value, "transitions", i, member, value);
+
+        _plan.ResizeStructArray(arrayId.Value, "transitions", kept.Count);
+        _transitionCounts[arrayId.Value] = kept.Count;
+        _rows[arrayId.Value] = kept;
+        return rows.Count - kept.Count;
+    }
+
+    private int? TransitionArray(int owner, string field)
+    {
+        if (_transitionArrays.TryGetValue((owner, field), out int planned)) return planned;
+
+        string? reference = _model.Get(owner.ToString(CultureInfo.InvariantCulture))?.Ref(field);
+        return reference != null &&
+               int.TryParse(reference, NumberStyles.Integer, CultureInfo.InvariantCulture, out int existing)
+            ? existing
+            : null;
+    }
+
+    // What the array will hold once this session is applied: the rows it came with, with the
+    // ones this session added on the end.
+    private List<Dictionary<string, string>> Rows(int arrayId)
+    {
+        if (_rows.TryGetValue(arrayId, out var known)) return known;
+
+        var array = _model.Get(arrayId.ToString(CultureInfo.InvariantCulture));
+        var rows = array != null && array.StructLists.TryGetValue("transitions", out var existing)
+            ? existing.Select(row => new Dictionary<string, string>(row, StringComparer.Ordinal)).ToList()
+            : new List<Dictionary<string, string>>();
+        _rows[arrayId] = rows;
+        return rows;
+    }
+
+    private void Record(int arrayId, int index, string member, string value)
+    {
+        var rows = Rows(arrayId);
+        while (rows.Count <= index) rows.Add(new Dictionary<string, string>(StringComparer.Ordinal));
+        rows[index][member] = value;
+        _plan.SetStructMember(arrayId, "transitions", index, member, value);
     }
 
     public NativeAuthoringPlan.Result Build() => _plan.Apply();
@@ -495,10 +666,10 @@ public sealed class BehaviourAuthoringSession
 
     private void SetInterval(int arrayId, int index, string interval)
     {
-        _plan.SetStructMember(arrayId, "transitions", index, interval + ".enterEventId", "-1");
-        _plan.SetStructMember(arrayId, "transitions", index, interval + ".exitEventId", "-1");
-        _plan.SetStructMember(arrayId, "transitions", index, interval + ".enterTime", "0");
-        _plan.SetStructMember(arrayId, "transitions", index, interval + ".exitTime", "0");
+        Record(arrayId, index, interval + ".enterEventId", "-1");
+        Record(arrayId, index, interval + ".exitEventId", "-1");
+        Record(arrayId, index, interval + ".enterTime", "0");
+        Record(arrayId, index, interval + ".exitTime", "0");
     }
 }
 
