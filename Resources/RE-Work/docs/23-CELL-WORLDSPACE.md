@@ -1240,27 +1240,49 @@ per-class list): `OBND`, `PTRN`, `STCP`, `VMAD`.
 no `NNAM` subrecord (that's a LeveledList subrecord). It was likely
 `MNAM` (world map path) rendered by an arg-display mismatch.
 
-#### 10b.1 Newly discovered: CLSZ, OFST, RNAM
+#### 10b.1 CLSZ, OFST, RNAM — corrected by full-population survey (2026-08-22)
 
-Byte-parsed from Fallout4.esm WRLD records:
+The original 3-record read got all three shapes wrong at scale. Full census
+(17 WRLD records across Fallout4/DLCCoast/DLCRobot/DLCNukaWorld,
+`tools/validate_wrld_save.py`):
 
-| 4CC | size | description |
+| 4CC | real shape | correction vs earlier draft |
 |---|---|---|
-| `CLSZ` | 4 | cell size for world map (u32) — present in all 3 sampled WRLDs |
-| `OFST` | N × 4 | world map offset data (u32 array) — present in all 3 |
-| `RNAM` | 4 | region reference (formID of a REGN record) — repeated, 41× in DiamondCity, many in Goodneighbor |
+| `CLSZ` | u32 array, **byte-length identical to OFST within every record** (Commonwealth: 148,996 B = 37,249 entries) | not a 4-byte scalar — the sampled interiors just had single-cell arrays |
+| `OFST` | u32 array, parallel to CLSZ | confirmed, always paired with CLSZ of equal length |
+| `RNAM` | `[u16 ox][u16 oy][u32 n]` then n × `[u32 REFR formID][u16 cellX][u16 cellY]` | **not** REGN references: all 107,216 entry formIDs across the four masters resolve to placed `REFR` records of the owning file (100%, zero exceptions). Grouped world-cell coordinate arrays, repeated per area (7,111 blocks on the Commonwealth alone) |
 
-These are in the LoadRecord switch tree (recovered subrecord set of 26 reads)
-but were missed in the initial doc summary because `CLSZ`/`OFST` appear as
-hex immediates without adjacent CONCAT44 clues, and `RNAM` blended with
-CELL's `RNAM`. The dispatch tree decoder now confirms them as part of the
-WRLD surface.
+The old "41× in DiamondCity, 4 B each" reading was the small-world special
+case where each block holds one entry.
 
-WRLD `SaveRecord` writes: `CNAM`, `DATA`, `DNAM`, `LTMP`, `MHDT`, `MNAM`,
-`NAM0`, `NAM2`, `NAM3`, `NAM4`, `NAM9`, `NAMA`, `ONAM`, `PNAM`, `WCTR`,
-`WLEV`, `WNAM`, `XEZN`, `XLCN`, `ZNAM`. (Note: `CLSZ`, `OFST`, and `RNAM`
-are also saved — they go through the `NAM*`-array and map-data iterators
-dispatched from `vl+0x3b8`/`vl+0x3c0`, not inline in the SaveRecord body.)
+#### 10b.2 Validator (`tools/validate_wrld_save.py`)
+
+Mirrors the CELL validator; walks strictly via `tools/plugin_parse.py`.
+Full four-master result: **17 WRLD records, 0 subrecord issues**, no
+unknowns. `SaveRecord` (FUN_140e54420) writes inline: `CNAM`, `DATA`,
+`DNAM`, `LTMP`, `MHDT`, `MNAM`, `NAM0`–`NAM4`, `NAM9`, `NAMA`, `ONAM`,
+`PNAM`, `WCTR`, `WLEV`, `WNAM`, `XEZN`, `XLCN`, `ZNAM`; `CLSZ`, `OFST`,
+and `RNAM` go through the `vl+0x3b8`/`vl+0x3c0` iterators instead of the
+inline body. Census highlights:
+
+- Every record carries `EDID ONAM NAMA DATA NAM0 NAM9 OFST CLSZ`;
+  `FULL` on 16/17; `RNAM` on 15; `NAM2 DNAM` on 14; `MNAM NAM3 NAM4 XLCN`
+  on 11; `ZNAM` 10; `XWEM CNAM` 9; `PNAM WNAM` 7; `MHDT` 6; `WLEV WCTR` 5;
+  `ICON` 4; `XEZN` 1.
+- `DATA` is exactly 1 byte everywhere (flags only); histogram:
+  `0x00`×6, `0x01`×5, `0x41`×2, `0xD9`×2, `0x51`×1, `0x9B`×1.
+- `WNAM` parents: Commonwealth `0x0000003C` ×4, plus DLC sub-world parents
+  (`0100290F`, `01000B0F`).
+- Payload shapes measured: `DNAM` 8 B = [u32][f32]; `ONAM` 16 B floats
+  (leading 1.0f); `NAMA` f32; `NAM0`/`NAM9` 8 B = two equal u32/f32 pairs;
+  `MNAM` 16 B numerics (4×s16-like bounds pattern — *not* a path string);
+  `PNAM` 2 B; `XWEM` = NUL-terminated cubemap path string
+  (`data\Textures\Shared\Cubemaps\...`).
+- `ICON` (world-map texture path, 33–37 B strings) appears in shipped
+  masters but has **no proven write path** in the recovered contract —
+  flagged LoadRecord-only until a decompile shows its writer.
+- Dispatch members never seen in shipped files: `ATDM BTDM LTMP NAM1
+  NAM5-NAM8 TNAM UNAM WMAD`.
 
 #### 10b.3 WRLD DATA — byte-level field map
 

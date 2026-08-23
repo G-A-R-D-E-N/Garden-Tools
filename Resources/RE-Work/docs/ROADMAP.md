@@ -172,7 +172,7 @@ Things we know exist but haven't fully documented.
 | FaceGenExporter doc | Phase 3 | medium |
 | 9 remaining JSONSerializer classes | doc 23 §7d | low — only REFR/WEAP/AIMS schema builders decompiled |
 | Missing exterior cells in parser | validate_cell_save.py | ✅ resolved 2026-08-22 — walker rebuilt on strict GRUP walk (`plugin_parse.py`); full population is 40,165 CELL, see doc 23 §10a.4 |
-| WRLD SaveRecord validator | — | medium — mirror validate_cell_save.py for WRLD |
+| WRLD SaveRecord validator | validate_wrld_save.py | ✅ done 2026-08-22 — see doc 23 §10b.2 |
 
 ---
 
@@ -186,7 +186,7 @@ Scripts that turn the docs into usable utilities.
 | `validate_cell_save.py` | ✅ | cross-check CELL subrecords in `.esm` against SaveRecord |
 | `parse_wrld_esm.py` | ✅ | extract WRLD subrecord sets from `.esm` |
 | `decompile-some-function.java` | ✅ | Ghidra Query.java script for batch decompilation |
-| `validate_wrld_save.py` | 🔴 | mirror validate_cell_save.py for WRLD records |
+| `validate_wrld_save.py` | ✅ | WRLD subrecord census + contract check across all four masters — 17 records, 0 issues; CLSZ/OFST/RNAM shapes corrected (doc 23 §10b.1/§10b.2) |
 | `validate_esp.py` | 🔴 | general .esm/.esp validator — all form types |
 | `batch_cli_runner.py` | 🔴 | wrap CK headless switches with arg validation |
 | `precombined_inspector.py` | 🔴 | parse _OC.NIF and verify block types |
