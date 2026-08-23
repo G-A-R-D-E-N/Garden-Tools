@@ -131,7 +131,7 @@ Priority form types by game impact:
 | **S-tier** | ✅ COMPLETE — QUST (28), DIAL/INFO (29), PACK (30), SCEN (31) | quest/dialogue system — most of the game's content |
 | **A-tier** | ✅ COMPLETE — NPC_ (32), RACE (33), FACT (34), CLAS (35), CSTY (36) | actor/NPC system |
 | **B-tier** | 🟡 census complete + MGEF/PERK LoadRecords (doc 37); SPEL/ALCH/ENCH/LVLI loaders pending | magic/perk/leveled-list system |
-| **C-tier** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
+| **C-tier 🟡 complete (doc 38): all 10 loaders located** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
 | **D-tier** | everything else (~100 types) | one-off, simple, or rarely used |
 
 **Estimated effort:** ~2-4 hours per form type (vftable diff + LoadRecord decompile + cross-check),
