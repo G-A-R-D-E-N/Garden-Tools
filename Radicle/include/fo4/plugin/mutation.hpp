@@ -2,8 +2,10 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/ctda.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <span>
 #include <string_view>
 
 namespace fo4 {
@@ -63,6 +65,14 @@ ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
                                        Signature subrecord_signature,
                                        std::string_view value);
+
+// Replaces the record's CTDA condition list with freshly serialized
+// conditions (see write_ctda_conditions for the subrecord-level contract).
+// Returns false when the record has no CTDA subrecords; on success the
+// record's and plugin's original bytes are invalidated for rewriting.
+bool set_record_conditions(Plugin& plugin,
+                           const FormKey& record_key,
+                           std::span<const CtdaCondition> conditions);
 
 RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,

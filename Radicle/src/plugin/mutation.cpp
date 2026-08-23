@@ -464,4 +464,29 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   return replaced ? RecordCopyStatus::replaced : RecordCopyStatus::inserted;
 }
 
+bool set_record_conditions(Plugin& plugin,
+                           const FormKey& record_key,
+                           std::span<const CtdaCondition> conditions) {
+  assign_record_form_keys(plugin);
+  bool found = false;
+  bool changed = false;
+
+  visit_records(plugin, [&](Record& record) {
+    if (found || record.header.signature == sig_tes4 || record.form_key != record_key) {
+      return;
+    }
+    found = true;
+    if (!write_ctda_conditions(record, conditions)) return;
+    record.original_bytes.clear();
+    changed = true;
+  });
+
+  if (!found) return false;
+  if (!changed) return true;
+
+  plugin.original_bytes.clear();
+  clear_group_originals(plugin);
+  return true;
+}
+
 }  // namespace fo4

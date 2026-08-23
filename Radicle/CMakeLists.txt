@@ -95,6 +95,7 @@ add_library(fo4
   src/plugin/mutation.cpp
   src/plugin/onam.cpp
   src/plugin/writer.cpp
+  src/schema/ctda.cpp
   src/schema/form_links.cpp
   src/schema/formlink_lists.cpp
   src/schema/nested_formlink_lists.cpp
@@ -225,6 +226,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
+    tests/test_ctda_model.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_navmesh_formlinks.cpp

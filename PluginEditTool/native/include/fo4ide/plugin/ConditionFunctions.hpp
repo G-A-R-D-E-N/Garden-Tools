@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -40,5 +42,19 @@ std::string conditionFunctionNames();
 // Port of WriteService.ConditionRunOnNames: the Condition.RunOnType enum
 // names in declaration order, as a JSON array.
 std::string conditionRunOnNames();
+
+// Port of the Condition.Function enum index<->name mapping (479 members).
+// functionName returns the enum name for a binary function index (empty when
+// unknown); functionIndex is the case-insensitive reverse, like
+// Enum.TryParse<Condition.Function>(name, ignoreCase: true), returning nullopt
+// when the name is not a member.
+std::string functionName(std::uint16_t index);
+std::optional<std::uint16_t> functionIndex(std::string_view name);
+
+// Port of the Condition.RunOnType enum value<->name mapping (values are not
+// contiguous: 0-7, 9, 10, 11). runOnName returns the name for a binary run-on
+// value (empty when unknown); runOnValue is the case-insensitive reverse.
+std::string runOnName(std::uint32_t value);
+std::optional<std::uint32_t> runOnValue(std::string_view name);
 
 }  // namespace fo4ide::plugin

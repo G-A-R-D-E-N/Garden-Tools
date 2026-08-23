@@ -82,6 +82,16 @@ private:
     Result<nlohmann::json> setLight(const nlohmann::json& arguments);
     Result<nlohmann::json> saveMastersPlugin(const nlohmann::json& arguments);
 
+    // Condition-editing surface, mirroring WriteService.Conditions.cs and
+    // WriteService.SetConditions. getConditions serializes the record's CTDA
+    // list with the DescribeCondition JSON contract; setConditions replaces it
+    // from the same JSON shape. getConditionFunctions / getConditionRunOnTypes
+    // expose the editor's data tables.
+    Result<nlohmann::json> getConditions(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> setConditions(const nlohmann::json& arguments);
+    Result<nlohmann::json> getConditionFunctions() const;
+    Result<nlohmann::json> getConditionRunOnTypes() const;
+
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
     bool isEditable(const LoadedPlugin& plugin) const;

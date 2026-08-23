@@ -13,10 +13,13 @@
 #include <type_traits>
 #include <utility>
 
+#include <fo4ide/plugin/ConditionCodec.hpp>
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/mutation.hpp>
+#include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/ctda.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -116,6 +119,21 @@ bool isEyesField(std::string_view field) {
            field == "EYES\\DataFlags";
 }
 
+std::string editorId(const fo4::Record& record) {
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
+        std::string out;
+        out.reserve(subrecord.data.size());
+        for (const auto byte : subrecord.data) {
+            const auto ch = static_cast<char>(std::to_integer<std::uint8_t>(byte));
+            if (ch == '\0') break;
+            out.push_back(ch);
+        }
+        return out;
+    }
+    return {};
+}
+
 }
 
 bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
@@ -160,6 +178,151 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "GetContainmentPath") return getContainmentPath(arguments);
 
     return invoke("backend." + std::string(method), arguments);
+}
+
+
+Result<nlohmann::json> RadiclePluginBackend::setConditions(
+    const nlohmann::json& arguments) {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto recordId = stringArgument(arguments, 1);
+    const auto conditionsJson = stringArgument(arguments, 2);
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
+    if (recordId.empty()) {
+        return std::unexpected(Error{"RecordMissing", "Record FormKey is empty"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{
+            "PluginNotLoaded",
+            "Plugin is not loaded: " + pluginName
+        });
+    }
+    if (!isEditable(*loaded)) {
+        return std::unexpected(Error{
+            "PluginReadOnly",
+            "Refusing to edit protected or game-Data plugin: " + loaded->name
+        });
+    }
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
+        });
+    }
+
+    // Editor-ID resolver: scan the loaded set for an EDID match, mirroring the
+    // C# link-cache resolution in ResolveFk.
+    const auto resolveEditorId = [&](std::string_view text)
+        -> std::optional<fo4::RawFormId> {
+        for (const auto& candidate : plugins_) {
+            for (const auto* record : fo4::collect_records(candidate.plugin)) {
+                const auto id = editorId(*record);
+                if (id.empty()) continue;
+                std::string lowerId = id;
+                std::string lowerText(text);
+                std::transform(lowerId.begin(), lowerId.end(), lowerId.begin(),
+                               [](unsigned char ch) {
+                                   return static_cast<char>(std::tolower(ch));
+                               });
+                std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(),
+                               [](unsigned char ch) {
+                                   return static_cast<char>(std::tolower(ch));
+                               });
+                if (lowerId == lowerText) {
+                    try {
+                        const auto raw = fo4::encode_plugin_form_id(
+                            record->form_key, fo4::plugin_form_id_context(candidate.plugin));
+                        return fo4::RawFormId{raw.value()};
+                    } catch (const std::exception&) {
+                        return std::nullopt;
+                    }
+                }
+            }
+        }
+        return std::nullopt;
+    };
+
+    // Build the conditions from JSON, mirroring SetConditionsCore.
+    std::vector<fo4::CtdaCondition> built;
+    std::vector<std::string> failures;
+    try {
+        nlohmann::json document = nlohmann::json::parse(
+            conditionsJson.empty() ? "[]" : conditionsJson);
+        if (!document.is_array()) {
+            return std::unexpected(Error{
+                "InvalidConditionsJson",
+                "Could not parse conditions JSON: expected an array."
+            });
+        }
+        std::size_t index = 0;
+        for (const auto& element : document) {
+            index++;
+            std::string failure;
+            auto condition = buildCondition(element, loaded->plugin, resolveEditorId, failure);
+            if (!condition.has_value()) {
+                failures.push_back("#" + std::to_string(index) + ": " + failure);
+                continue;
+            }
+            built.push_back(std::move(*condition));
+        }
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{
+            "InvalidConditionsJson",
+            "Could not parse conditions JSON: " + std::string(error.what())
+        });
+    }
+
+    // Locate the mutable record.
+    fo4::FormKey key;
+    try {
+        key = fo4::FormKey::parse(recordId);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+
+    try {
+        auto mutated = loaded->plugin;
+        fo4::assign_record_form_keys(mutated);
+        if (fo4::find_record(mutated, key) == nullptr) {
+            return std::unexpected(Error{
+                "RecordNotFound",
+                "Record '" + recordId + "' not found in " + pluginName + "."
+            });
+        }
+        if (!fo4::set_record_conditions(
+                mutated, key, std::span<const fo4::CtdaCondition>{built})) {
+            return std::unexpected(Error{
+                "NoConditionList",
+                "Record '" + recordId + "' has no editable Conditions list."
+            });
+        }
+        fo4::write_plugin_file(mutated, loaded->path);
+        loaded->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
+        rebuildGraphLocked();
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"SetConditionsFailed", error.what()});
+    }
+
+    auto message = "Set " + std::to_string(built.size()) +
+                   " condition(s) on " + recordId + " in " + pluginName + ".";
+    if (!failures.empty()) {
+        message += " Skipped " + std::to_string(failures.size()) + ": ";
+        for (std::size_t i = 0; i < failures.size(); ++i) {
+            if (i > 0) message += "; ";
+            message += failures[i];
+        }
+        message += ".";
+    }
+    return nlohmann::json(std::move(message));
 }
 
 Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& arguments) {

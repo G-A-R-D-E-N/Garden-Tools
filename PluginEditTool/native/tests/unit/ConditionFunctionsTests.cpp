@@ -167,10 +167,10 @@ TEST_CASE("condition functions: labels insert a space at pascal-case boundaries"
     CHECK(keyword[0]["types"] == "Keyword");
 }
 
-TEST_CASE("condition functions: the enum name list is the full 474, sorted case-insensitively") {
+TEST_CASE("condition functions: the enum name list is the full 479, sorted case-insensitively") {
     const auto json = parseJson(conditionFunctionNames());
     REQUIRE(json.is_array());
-    CHECK(json.size() == 474);
+    CHECK(json.size() == 479);
 
     std::set<std::string> seen;
     std::string previous;
@@ -191,7 +191,7 @@ TEST_CASE("condition functions: the enum name list is the full 474, sorted case-
     CHECK(json[json.size() - 1] == "WouldRefuseCommand");
 }
 
-TEST_CASE("condition functions: the run-on type list is the 10 enum names in declaration order") {
+TEST_CASE("condition functions: the run-on type list is the 11 enum names in declaration order") {
     const auto json = parseJson(conditionRunOnNames());
     REQUIRE(json.is_array());
     const std::vector<std::string> expected = {
@@ -203,4 +203,58 @@ TEST_CASE("condition functions: the run-on type list is the 10 enum names in dec
     for (std::size_t i = 0; i < expected.size(); i++) {
         CHECK(json[i] == expected[i]);
     }
+}
+
+TEST_CASE("condition functions: index<->name lookups match the Mutagen enum") {
+    using namespace fo4ide::plugin;
+
+    // Known spot checks from the enum: GetWantBlocking=0, GetDistance=1,
+    // GetAngle=8. 4672 is the binary EventFunctionIndex discriminator, not a
+    // Condition.Function member, so it has no name here (the CTDA codec maps
+    // it to the GetEventData type via is_event_data).
+    CHECK(functionName(0) == "GetWantBlocking");
+    CHECK(functionName(1) == "GetDistance");
+    CHECK(functionName(8) == "GetAngle");
+    CHECK(functionName(4672).empty());
+    CHECK(functionName(9999).empty());
+
+    CHECK(functionIndex("GetDistance") == std::optional<std::uint16_t>{1});
+    CHECK(functionIndex("getdistance") == std::optional<std::uint16_t>{1});  // ignoreCase
+    CHECK(functionIndex("GetAngle") == std::optional<std::uint16_t>{8});
+    CHECK(functionIndex("NotAFunction") == std::nullopt);
+
+    // The 5 names the 474-count list was missing are present and resolvable.
+    for (const auto* name : {"EPMagic_SpellHasKeyword", "EPMagic_SpellHasSkill",
+                             "ObjectTemplateItem_GetLevel", "ObjectTemplateItem_HasKeyword",
+                             "ObjectTemplateItem_HasUniqueKeyword"}) {
+        CHECK(functionIndex(name).has_value());
+        CHECK(functionName(*functionIndex(name)) == name);
+    }
+
+    // Every JSON name round-trips through the index mapping.
+    const auto json = parseJson(conditionFunctionNames());
+    for (const auto& name : json) {
+        const auto text = name.get<std::string>();
+        const auto idx = functionIndex(text);
+        REQUIRE(idx.has_value());
+        CHECK(functionName(*idx) == text);
+    }
+}
+
+TEST_CASE("condition functions: run-on value<->name lookups match the Mutagen enum") {
+    using namespace fo4ide::plugin;
+
+    // RunOnType values are not contiguous: Subject=0..EventData=7, then
+    // CommandTarget=9, EventCameraRef=10, MyKiller=11.
+    CHECK(runOnName(0) == "Subject");
+    CHECK(runOnName(7) == "EventData");
+    CHECK(runOnName(8).empty());  // 8 is unused
+    CHECK(runOnName(9) == "CommandTarget");
+    CHECK(runOnName(11) == "MyKiller");
+    CHECK(runOnName(99).empty());
+
+    CHECK(runOnValue("Target") == std::optional<std::uint32_t>{1});
+    CHECK(runOnValue("reference") == std::optional<std::uint32_t>{2});  // ignoreCase
+    CHECK(runOnValue("MyKiller") == std::optional<std::uint32_t>{11});
+    CHECK(runOnValue("NotARunOn") == std::nullopt);
 }
