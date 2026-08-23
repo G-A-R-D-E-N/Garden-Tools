@@ -19,6 +19,7 @@ add_library(
     plugin/RadiclePluginMasterMutation.cpp
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp
+    plugin/ConditionFunctions.cpp
 )
 target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4)
 fo4ide_enable_warnings(fo4ide_plugin)
