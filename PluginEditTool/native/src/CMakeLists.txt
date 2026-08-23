@@ -163,6 +163,8 @@ add_library(
     graph/WikiDocs.cpp
     graph/BuiltinNodeDefinitions.cpp
     graph/NodePalette.cpp
+    graph/GraphTypeResolver.cpp
+    graph/GraphValidator.cpp
 )
 target_link_libraries(fo4ide_graph PUBLIC fo4ide_core fo4ide_papyrus)
 fo4ide_enable_warnings(fo4ide_graph)
