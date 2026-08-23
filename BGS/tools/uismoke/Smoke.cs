@@ -1532,6 +1532,8 @@ public static class Smoke
         PlaybackReadsPackedClipsFromArchives();
         ArchiveBrowserBuilds();
 
+        NativeAuthoringSmoke.Run();
+
         if (Settings.SettingsPathForTest != null)
         {
             System.IO.File.Delete(Settings.SettingsPathForTest);
@@ -1969,7 +1971,7 @@ public static class Smoke
         finally { System.IO.Directory.Delete(root, true); }
     }
 
-    private static void SelectTab(MainWindow window, string header)
+    internal static void SelectTab(MainWindow window, string header)
     {
         var tabs = Find<TabControl>(window).First();
         tabs.SelectedIndex = tabs.Items.OfType<TabItem>().ToList()
@@ -1977,7 +1979,7 @@ public static class Smoke
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
     }
 
-    private static void CloseForTest(MainWindow window)
+    internal static void CloseForTest(MainWindow window)
     {
         window.DiscardDecision = () => DiscardChoice.Discard;
         window.Close();
@@ -2197,7 +2199,7 @@ public static class Smoke
         CloseForTest(window);
     }
 
-    private static byte[] OneMachineBytes()
+    internal static byte[] OneMachineBytes()
     {
         var names = new byte[5 + "hkbStateMachine".Length + 1];
         BitConverter.GetBytes(OpenCommonwealth.Services.Hkx.HavokClassTypes.Shipped["hkbStateMachine"]!.Signature)
@@ -2809,14 +2811,14 @@ public static class Smoke
         button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
     }
 
-    private static void Click(Button button)
+    internal static void Click(Button button)
     {
         button.Command?.Execute(button.CommandParameter);
         button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
     }
 
-    private static System.Collections.Generic.List<T> Find<T>(Visual root) where T : Visual
+    internal static System.Collections.Generic.List<T> Find<T>(Visual root) where T : Visual
     {
         var found = new System.Collections.Generic.List<T>();
         var stack = new System.Collections.Generic.Stack<Visual>();
@@ -2830,7 +2832,7 @@ public static class Smoke
         return found;
     }
 
-    private static void Check(string what, object expected, object? actual)
+    internal static void Check(string what, object expected, object? actual)
     {
         _ran++;
         bool ok = Equals(expected, actual);
@@ -2838,7 +2840,7 @@ public static class Smoke
         Console.WriteLine($"  {(ok ? "ok  " : "FAIL")}  {what,-46} expected {expected}, got {actual ?? "null"}");
     }
 
-    private static void CheckTrue(string what, bool value)
+    internal static void CheckTrue(string what, bool value)
     {
         _ran++;
         if (!value) _failed++;

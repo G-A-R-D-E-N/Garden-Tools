@@ -2211,6 +2211,9 @@ public class MainWindow : Window
     public Task ScanPapyrusForTest(string folder) => ScanPapyrusFolder(folder, null);
     public void MarkAnimationEditedForTest() => _animationEdited = true;
     public bool IsDirty => _dirty;
+    public int UndoStepsForTest => _undo.Count;
+    public int RedoStepsForTest => _redo.Count;
+    public void UndoForTest() => Undo();
     public string StatusForTest => _status.Text ?? "";
     public string PathFieldForTest => _pathField.Text ?? "";
 
