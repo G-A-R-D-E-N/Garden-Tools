@@ -15,6 +15,8 @@ We rebuilt a real, working pipeline and wrote it down here so it never has to be
 | [02-WORKFLOW.md](./02-WORKFLOW.md) | Day-to-day: how to search for a function, decompile it, and re-name a fresh DB |
 | [03-FINDINGS.md](./03-FINDINGS.md) | Verified facts log — struct offsets, function addresses, and the bugs RE has already caught |
 | [04-ROADMAP.md](./04-ROADMAP.md) | What we plan to RE next, and the full menu of what this pipeline *can* answer |
+| [08-PAPYRUS-VM-QUESTS-ROADMAP.md](./08-PAPYRUS-VM-QUESTS-ROADMAP.md) | Dedicated Papyrus VM, script-linking, native-registration, quest, alias, and persistence workstream |
+| [Organized/1.10.163/README-Papyrus-VM.md](./Organized/1.10.163/README-Papyrus-VM.md) | First decompile-verified OG VM scheduler, tasklet opcode dispatch, compiled-script loader, and linker findings |
 | [05-LABEL-RECOVERY.md](./05-LABEL-RECOVERY.md) | The 2026-07-07 packed-exe fix + the community IDC label decode/apply technique (durable, reusable for future version gaps) |
 | [06-FUNCTION-INDEX.md](./06-FUNCTION-INDEX.md) | The 2026-07-10 subsystem function index + a 1.10.155-vs-1.10.163 cross-reference that surfaced 313 candidate CommonLib RTTI-matching errors and 2,803 safe naming-gap fills |
 | [07-DECOMPILE-CANDIDATES.md](./07-DECOMPILE-CANDIDATES.md) | The 2026-07-10 decompile-verification pass over all 313 candidates: 150 confirmed real naming bugs, 68 likely linker code-folding artifacts (a newly-documented false-positive pattern), 63 cases where the original name was actually right, 32 inconclusive |
@@ -32,7 +34,7 @@ We rebuilt a real, working pipeline and wrote it down here so it never has to be
   logged disagreements, mostly cosmetic — see `03-FINDINGS.md`). See `01-SETUP.md` for the full story and
   `05-LABEL-RECOVERY.md` for the reusable label-decode-and-apply technique. The old `fwgh_proj` is kept for
   reference only.
-- **NG/AE work: use `fwgh_proj_1.11.221_unpacked`** (added 2026-07-17, previously undocumented here —
+- **NG/AE work: use `fwgh_proj_1.11.221_unpacked` for the current AE project; the roadmap target is AE 1.11.240 where available** (added 2026-07-17, previously undocumented here —
   filled in 2026-07-18). CommonLibF4's own runtime classifier
   (`CommonLibF4/lib/commonlib-shared/src/REX/FModule.cpp`) draws the line at exactly `1.10.163` = `kOG`,
   `> 1.10.163` and `<= 1.10.984` = `kNG`, `> 1.10.984` = `kAE` — and `F4SE/Version.h` defines

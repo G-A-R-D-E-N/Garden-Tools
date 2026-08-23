@@ -93,10 +93,11 @@ CK Ghidra headless helpers: [scripts/](scripts/).
 OG 1.10.163 and AE 1.11.240. FormID / TESFile, layouts, naming.
 
 - [Runtime/README.md](Runtime/README.md)
+- [Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md](Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md) (Papyrus VM, script linking, native registration, quests, aliases, persistence)
 - [Runtime/03-FINDINGS.md](Runtime/03-FINDINGS.md)
 - [Runtime/06-FUNCTION-INDEX.md](Runtime/06-FUNCTION-INDEX.md)
 - [Runtime/Organized/INDEX.md](Runtime/Organized/INDEX.md)
-- [Runtime/Organized/1.10.163/](Runtime/Organized/1.10.163/) subsystem notes (landscape, quests, HUD, workshop)
+- [Runtime/Organized/1.10.163/](Runtime/Organized/1.10.163/) subsystem notes (Papyrus VM, landscape, quests, HUD, workshop)
 - [Runtime/Scripts/](Runtime/Scripts/)
 - [tools/rebase_runtime_symbols.py](tools/rebase_runtime_symbols.py) (section-aware RVA rebasing and OG small-file ID sweep)
 
