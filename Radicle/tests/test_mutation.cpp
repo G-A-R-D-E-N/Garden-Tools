@@ -102,6 +102,30 @@ std::vector<std::byte> make_lifecycle_plugin(std::uint32_t next_form_id = 0x900,
   return out.bytes;
 }
 
+std::vector<std::byte> make_two_record_lifecycle_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(3);  // one top-level GRUP + two MISC records
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  for (const auto& [form_id, editor_id] : {
+           std::pair<std::uint32_t, std::string_view>{0x00000800, "First"},
+           std::pair<std::uint32_t, std::string_view>{0x00000801, "Second"},
+       }) {
+    const auto record = fo4::test::begin_record(out, "MISC", 0, form_id);
+    const std::string value{editor_id};
+    fo4::test::write_subrecord(out, "EDID", value + '\0');
+    fo4::test::end_record(out, record);
+  }
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 std::string editor_id(const fo4::Record& record) {
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != fo4::sig_edid) continue;
@@ -268,6 +292,18 @@ TEST(Mutation, DeleteLocalRecordDoesNotRecycleNextFormId) {
 
   const auto third = fo4::create_local_record(plugin, eyes);
   EXPECT_EQ(third, fo4::FormKey::parse("000902:Lifecycle.esp"));
+}
+
+TEST(Mutation, DeleteLocalRecordRebuildsHedrWithoutPriorMutation) {
+  auto plugin = fo4::read_plugin(make_two_record_lifecycle_plugin(), "Lifecycle.esp");
+  const auto deleted = fo4::FormKey::parse("000800:Lifecycle.esp");
+
+  ASSERT_EQ(fo4::delete_local_record(plugin, deleted), fo4::RecordDeleteStatus::deleted);
+
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), "Lifecycle.esp");
+  EXPECT_EQ(reloaded.header.record_count, 2u);
+  EXPECT_EQ(fo4::find_record(reloaded, deleted), nullptr);
+  EXPECT_NE(fo4::find_record(reloaded, fo4::FormKey::parse("000801:Lifecycle.esp")), nullptr);
 }
 
 // Light-plugin creation is allowed now that the range is proven from the

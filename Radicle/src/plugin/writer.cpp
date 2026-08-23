@@ -279,9 +279,7 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
   }
 
   auto tes4 = prepared.tes4;
-  if (tes4.original_range.empty()) {
-    patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
-  }
+  patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
 
   ByteWriter out;
   write_record(out, prepared, tes4);
