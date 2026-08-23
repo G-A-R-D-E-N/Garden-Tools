@@ -184,6 +184,14 @@ def check_cobj(rec, smap, body, add):
         add('COBJ-MISSING-INTV', 'ERROR')
 
 
+def _requires(*tags):
+    def check(rec, smap, body, add):
+        for t in tags:
+            if not smap.get(t):
+                add('MISSING-%s' % t, 'ERROR')
+    return check
+
+
 def check_mgef(rec, smap, body, add):
     for t in ('EDID', 'DATA', 'SNDD', 'DNAM'):
         if not smap.get(t):
@@ -212,6 +220,10 @@ CONTRACTS = {
     'LAND': check_land,
     'MSWP': check_mswp,
     'COBJ': check_cobj,
+    'VTYP': _requires('DNAM'),
+    'OTFT': _requires('INAM'),
+    'ECZN': _requires('DATA'),
+    'DFOB': _requires('EDID'),
 }
 
 
