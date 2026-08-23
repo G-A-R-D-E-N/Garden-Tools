@@ -54,10 +54,17 @@ Total size 0x68. If an instance already exists the loader clears both
 arrays and rebuilds. This supersedes doc 25's provisional field map and
 its wrong allocator attribution.
 
-## 3. Shipment reality
+## 3. Shipment reality — CORRECTED 2026-08-23
 
-Measured across all four masters: zero occurrences of XCRI/XCRF/XCRC/
-XCRD; only one XCZA (Fallout4 + DLCCoast) and one XCZC (Fallout4).
-Combined-refs extras are produced by the CK precombined pipeline into
-`CombinedObjects.esp`, which does NOT ship in vanilla Data or any .ba2 -
-byte-level wire verification requires a user-generated copy.
+The original claim here ("zero XCRI/XCRF/XCRC/XCRD in the four masters")
+was an artifact of **raw byte-scanning compressed records**: CELLs are
+DEFLATE-compressed, hiding their subrecord strings from `bytes.count`.
+Parsed (decompressed) census says:
+
+* **XCRI ships 7,387 times** - all on **CELL** records (not REFR), all
+  inside compressed records.
+* XCZA: 2 (REFR); XCZC: 1 (REFR). XCRF/XCRC/XCRD: still zero.
+
+So ExtraCombinedRefs wire data DOES ship in vanilla cells and doc 25's
+§6 grammar is verifiable against shipped bytes after decompression -
+no user-generated CombinedObjects.esp required.
