@@ -40,6 +40,25 @@ the vertex array as I first read it - all counts arrive through the
 versioned header object (section 1). The 296-B sample is consistent
 with T=4 fixed 24-B triangles plus tail sections.
 
-Field-level maps for the 24-B triangle and 16-B entry need the
-polymorphic version readers decompiled - flagged as the continuation
-task.
+## 3. Element readers (decoded)
+
+* **Vertex** (`FUN_142754050`): three f32 reads - X, Y, Z.
+* **Triangle** (`FUN_142706c90`, in-memory 0x18 B):
+  | offset | type | meaning |
+  |---|---|---|
+  | +0x00 | u16 x3 | vertex indices (0xFFFF = no connection) |
+  | +0x06 | u16 x3 | edge/adjacency indices (same sentinel) |
+  | +0x0C | u32 | version > 0x39 only: extra field (default constant otherwise) |
+  | +0x10 | u32 | flags word |
+  | +0x14 | u8 | derived from flags for version <= 0x39: bit4->0x01, bit6->0x02, bit9->0x04, bit12->0x08 |
+
+  On-disk per-tri size is version-dependent (the <=0x39 path serializes
+  12 B of indices + 4 B flags; the +0x0C field exists only on newer
+  writes).
+* **16-B cover/edge entry** (`FUN_142724ef0`): an 8-byte key block via
+  `FUN_142724720` plus a u16 counter at +0x08 - structure confirmed,
+  key semantics deferred.
+
+Remaining unknowns are confined to the versioned header object's count
+layout and the 8-byte key semantics - both isolated, both decompilable
+with one more pass each.
