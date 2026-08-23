@@ -1142,49 +1142,65 @@ write `XCLL` where exterior cells write `XCLC`.
 | `XCLW` (water height) | ✅ core | ✅ | both types |
 | `XCLR` (region list) | sporadic | rare | varies |
 | `LTMP` (lighting template) | ✅ core | rare | ✓ |
-| `XCWT` (water type) | rare | ? | FO4-only (1/46 cells), 4B formID |
+| `XCWT` (water type) | rare | rare | FO4-only (518 cells), 4B formID |
 
-#### 10a.3 SaveRecord validator (`validate_cell_save.py`)
+#### 10a.3 SaveRecord validator (`tools/validate_cell_save.py`)
 
-A dedicated byte-parser cross-checks every CELL subrecord in any `.esm` against the
-SaveRecord dispatch. Running against Fallout4.esm (46 interior CELLs):
+A dedicated parser cross-checks every CELL subrecord in any `.esm` against the
+SaveRecord dispatch. It walks the GRUP tree strictly via
+`tools/plugin_parse.py` (see §10a.4 for why byte-scanning is unsound).
+Running against Fallout4.esm (full population):
 
-- **18 unique subrecords found** — 100% in SaveRecord, none in TESForm base or LoadRecord-only
-- **0 unknowns** — every 4CC has a known write path
-- **9 SaveRecord keys not seen in the sampled cells** (exterior-only `XCLC`/`CNAM`/`XCLR`/`XCLP`/`XCLS`,
-  rare `MHDT`/`RVIS`/`XILW`/`XWEM`) — all explained by the sample being interior-only
-- **`XCWT`** (cell water type, 4B formID) is new to the SaveRecord list — found in 1/46 cells
+- **40,165 CELL records** — 38,970 exterior + 1,195 interior; compressed
+  7,276 ext / 1,195 int (interiors are always compressed, exteriors mostly not)
+- **29 unique subrecords** — 26 in SaveRecord dispatch; `XWCU` (48 B, one
+  exterior cell `0x0001DF0A`, water-current family by neighbourhood) is real
+  but has no decompile-backed write path yet, so it stays unclassified;
+  `CNAM`/`XCLP`/`XCLS`/`XWEM` are declared in the SaveRecord contract but
+  never appear in the shipped master
+- Exterior detection uses **DATA bit 0 (Interior)** — the record-header flags
+  do not carry interior-ness in FO4 (flag bit 0 is never set anywhere; bit 1
+  is "has water", which the old walkers mistook for exterior); DATA-bit0 vs
+  XCLC presence has 0 mismatches on all four masters
 
-Validator: `ghidra-dump/validate_cell_save.py` — `--json` flag for machine output.
+Validator: `tools/validate_cell_save.py` (`--json` flag for machine output);
+shared plugin-walk library: `tools/plugin_parse.py`.
 
-#### 10a.4 Full-file recheck + XCLC audit (2026-08-22)
+#### 10a.4 Full-file recheck + XCLC audit (2026-08-22, strict-walk numbers)
 
-The validator's scan was rebuilt to byte-step every 4-aligned offset and accept a
-record only when its subrecord stream parses cleanly to EOF (false `CELL` matches
-inside compressed payloads and GRUP data are rejected). This finds the full
-population the earlier GRUP-walk sample missed:
+History of the walker, since every CELL-derived number below depended on it:
 
-- **10,027 CELL records** — 9,741 exterior + 286 interior (the earlier doc-10a
-  sample of 46 was interior-only)
-- **26 unique subrecords** — all accounted for; three were added to the
-  SaveRecord dispatch as a result: `XRNK` (Owner Faction Rank, s32),
-  `XILL` (Lock List, formID → FLST/NPC_), `XGDR` (God Rays, formID → GDRY)
-- Exterior detection uses **DATA bit 0 (Interior)** — the record-header flags do
-  not carry interior-ness in FO4; DATA-bit0 vs XCLC presence has 0 mismatches
+1. First validator byte-scanned for `CELL` magic and advanced past any match
+   by its *unvalidated* size field; one garbage match threw the cursor past
+   EOF and the scan died ~7% into Fallout4.esm (46 cells, all interior —
+   hence the "interior-only sample" notes elsewhere in this doc).
+2. Its replacement stepped the file on a fixed **4-byte stride**, believing
+   record headers are 4-aligned. FO4 records are unaligned (subrecord =
+   6+len bytes), so it saw only ~25% of headers: that produced the old
+   "10,027 CELL / 9,741 exterior" figures and the false "all cells
+   0x40000-compressed" impression.
+3. Current walker: strict recursive GRUP-tree walk (`plugin_parse.py`),
+   record extents taken from headers only. Numbers below are re-measured.
 
-**XCLC Force-Hide-Land audit** (new `--json` `xclc` section, doc 26 §3):
+- **40,165 CELL records** — 38,970 exterior + 1,195 interior
+- **26 unique subrecords accounted for**, plus unclassified `XWCU` above
+- `XCWT` (cell water type, 4B formID): 518 cells (512 ext / 6 int), not the
+  1-cell sample first seen
 
-- 9,741 exterior cells carry XCLC, **0 interior** (exterior-only rule holds)
-- All payloads are exactly **12 bytes** = [X s32][Y s32][hide byte][3B padding]
-- Only **byte 8** is meaningful: low nibble = quad mask; **high nibble must be
-  0**. Bytes 9-11 are padding the CK reader skips (FUN_140d146d0 stores byte 8
-  into cell+0x1E) and are nonzero in 9,725/9,741 vanilla cells — they are NOT
-  flagged (xEdit's u32 display of the trailing dword is a UI convenience, not
-  engine semantics)
-- Quad values in the master: `0x0` × 9,727 (no quads hidden), `0xF` × 14
-  (all four quads hidden, formIDs 0x00000FCA–0x00000FE1) — no partial masks
-- Violations caught: XCLC on interior cells, wrong payload length, high nibble
-  of byte 8 set (values above 0x0F)
+**XCLC Force-Hide-Land audit** (`--json` `xclc` section, doc 26 §3):
+
+- 38,970 exterior cells carry XCLC, **0 interior** (exterior-only rule holds)
+- All payloads are exactly **12 bytes** = [X s32][Y s32][hide byte][3B pad]
+- The trailing field is **byte 8 + three bytes of uninitialised padding**, not
+  a u32: the CK reader stores byte 8 into cell+0x1E and skips bytes 9-11.
+  Padding is nonzero in 38,886/38,970 cells but takes only 20 distinct values
+  (`71 a3 76` alone covers 29,389) — reused heap, not data. Byte 8's high
+  nibble also carries stray junk in 4 vanilla cells (`0x11/0x22/0x44/0x88`),
+  so only the **low nibble** is validated
+- Quad masks: `0x0` ×38,928, `0xF` ×38 (formIDs 0x00000FC6–0x00000FEE) — no
+  genuine partial masks
+- Violations caught: XCLC on interior cells, wrong payload length. High-nibble
+  values are reported but no longer failed (vanilla carries them)
 
 ### 10b. TESWorldSpace overrides (primary vftable `0x30aa510`)
 

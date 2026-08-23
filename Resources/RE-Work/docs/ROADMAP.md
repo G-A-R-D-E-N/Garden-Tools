@@ -61,7 +61,7 @@ The four world-building classes — the skeleton of the CK.
 | 23 §11 | file I/O primitives (TESFile read, subrecord writer, buffer/seek contract) | ✅ |
 | 23 §12 | WRLD cell-map insert, NewCell helper chain, interior XCLC asymmetry | ✅ |
 
-**Tools:** `validate_cell_save.py` — byte-parses CELL subrecords in `.esm` against SaveRecord contract
+**Tools:** `validate_cell_save.py` + `plugin_parse.py` — strict GRUP-tree plugin walk; classifies every CELL subrecord in `.esm` against the SaveRecord contract
 
 **Remaining for Phase 2:**
 - LoadRecord/SaveRecord for the other ~155 form types (see Phase 5)
@@ -171,7 +171,7 @@ Things we know exist but haven't fully documented.
 | STRINGS/DLSTRINGS/ILSTRINGS format doc | Phase 3 | low — byte-parsed, needs write-up |
 | FaceGenExporter doc | Phase 3 | medium |
 | 9 remaining JSONSerializer classes | doc 23 §7d | low — only REFR/WEAP/AIMS schema builders decompiled |
-| Missing exterior cells in parser | validate_cell_save.py | low — all cells compressed, need deeper group walk |
+| Missing exterior cells in parser | validate_cell_save.py | ✅ resolved 2026-08-22 — walker rebuilt on strict GRUP walk (`plugin_parse.py`); full population is 40,165 CELL, see doc 23 §10a.4 |
 | WRLD SaveRecord validator | — | medium — mirror validate_cell_save.py for WRLD |
 
 ---
@@ -253,6 +253,8 @@ F4SE/CommonLibF4 plugin development (PrismaHUD, FalloutChat, Rad Mod, C# bridge)
 | Runtime/02-WORKFLOW.md | day-to-day: search, decompile, re-name | ✅ |
 | Runtime/03-FINDINGS.md | verified facts log — offsets, addresses, bugs caught | ✅ |
 | Runtime/04-ROADMAP.md | runtime RE capability menu + next targets | ✅ |
+| Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md | Papyrus VM, compiled-script linking, native registration, quests/aliases, persistence | 🟡 P1/P2 started |
+| Runtime/Organized/1.10.163/README-Papyrus-VM.md | first OG decompile pass: scheduler, tasklet opcode dispatch, loader, linker anchor | 🟡 |
 | Runtime/05-LABEL-RECOVERY.md | community IDC label decode/apply technique | ✅ |
 | Runtime/06-FUNCTION-INDEX.md | subsystem function index + 1.10.155-vs-1.10.163 cross-ref (313 candidate misnames) | ✅ |
 | Runtime/07-DECOMPILE-CANDIDATES.md | decompile verification: 150 confirmed bugs, 68 false-positives, 63 correct | ✅ |
@@ -269,6 +271,8 @@ F4SE/CommonLibF4 plugin development (PrismaHUD, FalloutChat, Rad Mod, C# bridge)
 - **AE 1.11.240 project** auto-propagated from 1.11.191 with vtable cross-check
 
 ### Runtime roadmap (from Runtime/04-ROADMAP.md)
+
+The dedicated Papyrus/quest/scripting workstream is tracked in [Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md](../Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP.md), with P1 VM execution and P2 script loading/linking as the first decompile queue.
 
 1. **Quick-loot container suppression** — find clean activation interception point (PrismaHUD)
 2. **Vanilla ammo readout via GFx** — confirm HUD ammo push path (PrismaHUD)
