@@ -1,4 +1,5 @@
 #include <fo4ide/app/ServiceTargets.hpp>
+#include <fo4ide/app/WikiService.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -663,10 +664,22 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
         return nlohmann::json(opened ? std::string{} : "Error: " + opened.error().message);
     }
     if (method == "StageDroppedFile") return stageDroppedFile(args);
-    if (method == "LookupFunction" || method == "LookupScriptInfo") {
-        return nlohmann::json("No CK wiki mirror configured. Launch the MCP server with "
-                              "'--ck-wiki <folder>' pointing at an offline Creation Kit Wiki HTML "
-                              "mirror (or set CkWikiPath in Settings for the in-app AI panel).");
+    if (method == "LookupFunction") {
+        try {
+            const auto root = locator_.resolve(tools::Tool::CkWiki).string();
+            return nlohmann::json(wiki::lookupFunction(root, stringArgument(args, 0),
+                                                       stringArgument(args, 1)));
+        } catch (const std::exception& ex) {
+            return nlohmann::json("Error: " + std::string(ex.what()));
+        }
+    }
+    if (method == "LookupScriptInfo") {
+        try {
+            const auto root = locator_.resolve(tools::Tool::CkWiki).string();
+            return nlohmann::json(wiki::lookupScriptInfo(root, stringArgument(args, 0)));
+        } catch (const std::exception& ex) {
+            return nlohmann::json("Error: " + std::string(ex.what()));
+        }
     }
     return std::unexpected(Error{"UnknownMethod", "Unknown Papyrus RPC method: " + std::string(method)});
 }

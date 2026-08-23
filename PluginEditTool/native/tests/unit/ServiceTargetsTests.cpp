@@ -514,6 +514,30 @@ TEST_CASE("PapyrusTarget wiki lookups report no mirror until configured") {
     CHECK(result->get<std::string>().find("No CK wiki mirror configured") != std::string::npos);
 }
 
+TEST_CASE("PapyrusTarget wiki lookups resolve the configured mirror") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto wiki = root / "ckwiki" / "fallout4";
+    touch(wiki / "GetBaseObject_-_Form.html",
+          "<html><h1>GetBaseObject - Form</h1>"
+          "<h2><span id=\"Syntax\">Syntax</span></h2><p><b>Form</b> Function GetBaseObject()</p>"
+          "<div id=\"catlinks\"></div></html>");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    settings.ckWikiPath = wiki;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result = target.invoke("LookupFunction",
+                                nlohmann::json::array({"Form", "GetBaseObject"}));
+    REQUIRE(result.has_value());
+    const auto text = result->get<std::string>();
+    CHECK(text.find("GetBaseObject - Form") != std::string::npos);
+    CHECK(text.find("Syntax: Form Function GetBaseObject()") != std::string::npos);
+}
+
 TEST_CASE("PapyrusTarget StageDroppedFile mirrors the NIF staging contract") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

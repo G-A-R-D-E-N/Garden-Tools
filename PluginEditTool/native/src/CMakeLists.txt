@@ -181,6 +181,7 @@ add_library(
     app/MaterialTarget.cpp
     app/ArchiveTarget.cpp
     app/PluginBackendTarget.cpp
+    app/WikiService.cpp
 )
 target_link_libraries(
     fo4ide_app
