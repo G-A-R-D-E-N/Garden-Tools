@@ -33,6 +33,16 @@ struct ScalarDescriptor {
   ScalarPresentation presentation{ScalarPresentation::identity};
   double minimum{0.0};
   double maximum{0.0};
+  // Byte offset of the field within the subrecord payload. Meaningful only
+  // when `embedded` is set.
+  std::size_t offset{0};
+  // False: the field *is* the whole payload, which must be exactly the storage
+  // width -- the original shape, and still what REFR XHLT/XSCL are.
+  // True: the field lives at `offset` inside a larger struct payload, as every
+  // PROJ DNAM / EXPL DATA / HAZD DNAM field does. Such a payload carries many
+  // fields, and a short payload simply does not expose the ones past its end
+  // (EXPL DATA ships truncated at 52/56/60/64 bytes as well as 84).
+  bool embedded{false};
 };
 
 struct ScalarFieldDescriptor {
@@ -47,6 +57,10 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+// Looks a field up by subrecord signature alone. Only whole-payload fields can
+// be found this way: a signature that carries an embedded struct holds many
+// fields and several records disagree about what it means, so there is no one
+// descriptor to return. Embedded fields are addressed by path instead.
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept;
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     std::string_view path) noexcept;
@@ -54,6 +68,18 @@ std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     Signature record, std::string_view path) noexcept;
 std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept;
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
+
+// The bytes of one field within a subrecord payload. Empty when an embedded
+// field lies past the end of a legitimately shorter payload -- absent, not
+// malformed. Throws for a whole-payload field of the wrong width.
+std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
+                                              const ScalarDescriptor& descriptor);
+
+// Writes an encoded field back into a payload at the descriptor's offset,
+// leaving every other byte untouched. A whole-payload field replaces it.
+void patch_scalar_field(std::span<std::byte> payload,
+                        const ScalarDescriptor& descriptor,
+                        std::span<const std::byte> encoded);
 
 std::string decode_scalar(std::span<const std::byte> data,
                           const ScalarDescriptor& descriptor);

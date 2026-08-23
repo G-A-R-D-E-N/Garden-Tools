@@ -439,13 +439,15 @@ live FormID unremapped in 25 shipped and 453 corpus records.
 | +76 | projectileSpread | float (0 … 180, degrees) |
 | +80 | projectileCount | u32 (0 … 15) |
 
-† **`soundLevel` and `staggerMagnitude` are the two labels the files cannot
-discriminate.** Both are `u32` with the identical observed domain 0…4, so
-swapping them fits the data exactly as well. Their order here follows
-`BGSExplosionData`, which is inference, not measurement — every other field in
-these three tables is pinned by a signal that a wrong label would break.
-Discriminate them against xEdit's `wbEXPL` or the CK before typed creation
-writes either one.
+† **`soundLevel` and `staggerMagnitude` needed a separate discriminator.**
+Both are `u32` with the identical observed domain 0…4, so field ranges alone
+cannot tell them apart. Sound presence can: at `+52`, value 0 has a sound
+descriptor in 26 of 26 records while value 2 has none in 27 of 38 — the
+Loud/Silent poles of the sound-level enum. `+60` shows no relationship to
+sound at all across its values and instead tracks damage, as a stagger field
+should. The order matches `BGSExplosionData`, but it is now carried by the
+data rather than by the struct. This is strong evidence, not proof; a check
+against xEdit's `wbEXPL` or the CK would settle it outright.
 
 **The field order is not `BGSExplosionData`'s.** In memory the projectile
 vector, spread and count sit in the middle, before `force`; on disk they are

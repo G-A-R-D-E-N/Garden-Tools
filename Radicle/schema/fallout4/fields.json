@@ -131,7 +131,188 @@
     },
     {
       "signature": "EXPL",
-      "fields": [],
+      "fields": [
+        {
+          "path": "EXPL\\Force",
+          "label": "Force",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\Damage",
+          "label": "Damage",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\InnerRadius",
+          "label": "Inner radius",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\OuterRadius",
+          "label": "Outer radius",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 36,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ImageSpaceRadius",
+          "label": "Image space radius",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\VerticalOffsetMult",
+          "label": "Vertical offset multiplier",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 48,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SoundLevel",
+          "label": "Sound level",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 52,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\PlacedObjectFadeDelay",
+          "label": "Placed object fade delay",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 56,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\StaggerMagnitude",
+          "label": "Stagger magnitude",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 60,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SpawnProjectileVectorX",
+          "label": "Spawn projectile vector X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 64,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SpawnProjectileVectorY",
+          "label": "Spawn projectile vector Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 68,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SpawnProjectileVectorZ",
+          "label": "Spawn projectile vector Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 72,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ProjectileSpread",
+          "label": "Projectile spread",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 76,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ProjectileCount",
+          "label": "Projectile count",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 80,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        }
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
@@ -215,7 +396,116 @@
     },
     {
       "signature": "HAZD",
-      "fields": [],
+      "fields": [
+        {
+          "path": "HAZD\\Limit",
+          "label": "Limit",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Radius",
+          "label": "Radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Lifetime",
+          "label": "Lifetime",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\ImageSpaceRadius",
+          "label": "Image space radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\TargetInterval",
+          "label": "Target interval",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 20,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\FullEffectRadius",
+          "label": "Full effect radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\TaperWeight",
+          "label": "Taper weight",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\TaperCurve",
+          "label": "Taper curve",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 48,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        }
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
@@ -236,12 +526,12 @@
           },
           {
             "signature": "MODL",
-            "minimum": 0,
+            "minimum": 1,
             "maximum": 1
           },
           {
             "signature": "MODT",
-            "minimum": 0,
+            "minimum": 1,
             "maximum": 1
           },
           {
@@ -309,7 +599,187 @@
     },
     {
       "signature": "PROJ",
-      "fields": [],
+      "fields": [
+        {
+          "path": "PROJ\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Gravity",
+          "label": "Gravity",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Speed",
+          "label": "Speed",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Range",
+          "label": "Range",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ExplosionProximity",
+          "label": "Explosion proximity",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ExplosionTimer",
+          "label": "Explosion timer",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\MuzzleFlashDuration",
+          "label": "Muzzle flash duration",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\FadeOutTime",
+          "label": "Fade out time",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Force",
+          "label": "Force",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 48,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ConeSpread",
+          "label": "Cone spread",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 64,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\CollisionRadius",
+          "label": "Collision radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 68,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Lifetime",
+          "label": "Lifetime",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 72,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\RelaunchInterval",
+          "label": "Relaunch interval",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 76,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\TracerFrequency",
+          "label": "Tracer frequency",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 88,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\SoundLevel",
+          "label": "Sound level",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4,
+          "insertion": "existing_only"
+        }
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [

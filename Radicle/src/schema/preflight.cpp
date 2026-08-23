@@ -145,7 +145,12 @@ std::vector<PreflightIssue> preflight_record(const Record& record) {
 
     std::string decoded;
     try {
-      decoded = decode_scalar(found->data, field.scalar);
+      // An embedded field past the end of a legitimately shorter payload is
+      // absent, not malformed -- EXPL DATA ships at 52/56/60/64 bytes as well
+      // as 84, and the short shapes are clean prefixes.
+      const auto bytes = scalar_field_bytes(found->data, field.scalar);
+      if (bytes.empty()) continue;
+      decoded = decode_scalar(bytes, field.scalar);
     } catch (const ScalarError& error) {
       issues.push_back(issue_for(
           record,

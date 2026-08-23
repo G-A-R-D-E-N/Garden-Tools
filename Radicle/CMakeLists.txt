@@ -89,6 +89,7 @@ add_library(fo4
   src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
+  src/forms/proj_expl_hazd.cpp
   src/forms/quest_aliases.cpp
   src/forms/quest_stages.cpp
   src/forms/quest_objectives.cpp
@@ -231,6 +232,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_stages_real.cpp
     tests/test_quest_objectives_real.cpp
     tests/test_proj_expl_hazd_real.cpp
+    tests/test_proj_expl_hazd_creation.cpp
+    tests/test_proj_expl_hazd_reencode_real.cpp
+    tests/test_scalar_embedded.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
