@@ -221,11 +221,26 @@ NIF path that the runtime resolves to the matching `_OC.NIF` file.
 
 ### Wire Format for `ExtraCombinedRefs` subrecord:
 
-In the ESP, each CELL record gets an `XCRF` subrecord (or similar) containing
+> **2026-08-22 CORRECTION + CONFIRMATION (code-side).** The subrecord 4CC
+> is **`XCRI`**, not `XCRF` as provisionally written here. Proof:
+> `BSExtraDataList::Load` (`FUN_1407d8100`, extradatalist.cpp) gates on
+> constant `0x49524358`; byte order calibrated against the same function's
+> assert "Expected XCZA chunk after XCZC chunk." (`0x415a4358`/`0x435a4358`)
+> gives file-order bytes X,C,R,I. The case constructs `ExtraCombinedRefs`
+> inline: alloc 0x68 B, `+0x12 = 0xC6`, hash table capacity = next pow2 of
+> payload count N (16-B entries), BSTArray tail holding `[3-byte formID
+> truncated from u32][u32 value]`. Payload prefix read as
+> `[formID u32][count N u32]`. None of XCRI/XCRF/XCRC/XCRD appear in the
+> four vanilla masters (measured); `CombinedObjects.esp` is CK-generated,
+> so byte-level wire verification still needs a user-generated copy.
+> The old "FUN_140d38ac0 alloc" claim below stays wrong; the real ctor is
+> inlined in `FUN_1407d8100` at RVA 0x7d8100.
+
+In the ESP, each CELL record gets an `XCRI` subrecord containing
 the array of combined-ref formIDs. The exact 4CC and structure are:
 
 ```
-XCRF [count:u32] [refFormID:u32]...  (count entries)
+XCRI [formID:u32][count:u32][... entries ...]   # prefix confirmed from loader
 ```
 
 Or possibly:
@@ -257,7 +272,7 @@ This needs verification against a real `CombinedObjects.esp` sample.
   │
   └─► Save CombinedObjects.esp
         ├─► TES4 header
-        ├─► CELL records with XCRF extra data
+        ├─► CELL records with XCRI extra data
         └─► REFR records for combined objects
 ```
 
@@ -276,8 +291,9 @@ This needs verification against a real `CombinedObjects.esp` sample.
 
 ## 9. Open Questions
 
-1. **XCRF subrecord 4CC** — confirmed 4CC and exact wire format of the
-   `ExtraCombinedRefs` subrecord in `CombinedObjects.esp`. Verify against a
+1. **XCRI subrecord wire format** — reader-side grammar confirmed from
+   `FUN_1407d8100`; full entry-tail semantics and a real-file check of the
+   `ExtraCombinedRefs` subrecord in `CombinedObjects.esp` still need a
    real output file via byte-parse.
 
 2. **Cell key encoding** — confirm the packed key format

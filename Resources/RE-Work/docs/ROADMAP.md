@@ -65,7 +65,7 @@ The four world-building classes — the skeleton of the CK.
 
 **Remaining for Phase 2:**
 - LoadRecord/SaveRecord for the other ~155 form types (see Phase 5)
-- REFR extra-data block layout (the 0xC6 tag internals)
+- REFR extra-data block layout ✅ doc 39 (XCRI case, ctor layout confirmed)
 - NAVM record model (separate from the four main classes)
 
 ---
