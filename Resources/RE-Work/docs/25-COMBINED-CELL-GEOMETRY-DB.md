@@ -86,6 +86,17 @@ Allocated by `PreCombinedWorld` at the start of cell processing:
 The two arrays at +0x08 and +0x10 are `BSTArray` growable vectors. The scatter table
 maps ref formIDs to array indices for fast combined-ref lookups.
 
+> **2026-08-22 correction / status:** the section 7 flow-diagram attribution
+> "`FUN_140d38ac0` - Alloc ExtraCombinedRefs" is **wrong** - decompiling
+> 0xd38ac0 shows a linked-list attach/cleanup helper walking a +0xA0 chain
+> (`bstobjectarena.h` asserts, counter decrement), not a constructor of this
+> object. RTTI for `.?AVExtraCombinedRefs@@` is pinned: TypeDescriptor at
+> RVA `0x3c86af8`, relative-form COL references at `0x35a6344`/`0x35a6398`
+> (this CK build uses image-relative RTTI pointers - scan for RVA32, not
+> absolute VAs; see `scripts/FindDataQword.java`, `scripts/ScanScalar.java`).
+> The vftable/constructor remain unlocated; treat every field above as
+> provisional until the real ctor is decompiled.
+
 ---
 
 ## 3. The Two Processing Paths
