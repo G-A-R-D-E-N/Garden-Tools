@@ -393,13 +393,24 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
 // DATA and DNAM mean different things in different records, so these are keyed
 // on the record signature and can never go in the signature-only table.
 //
-// Offsets come from CommonLibF4's BGSProjectileData / BGSExplosionData /
-// BGSHazardData, confirmed against the shipped masters plus a mod corpus:
-// every slot resolves to the record type the struct says it holds.
+// The field lists come from CommonLibF4's BGSProjectileData /
+// BGSExplosionData / BGSHazardData, but the *disk* offsets are measured, not
+// derived from those structs. Two places where the file disagrees with memory:
 //
-// Deliberately absent: PROJ DNAM +88. vatsProjectile does not serialize into
-// DNAM -- the tail is [tracerFrequency u8][3 bytes heap padding] -- so
-// remapping it would rewrite padding.
+//   * PROJ DNAM is 93 bytes and ends [+88 u8 tracerFrequency]
+//     [+89 u32 vatsProjectile]. The FormID is UNALIGNED and it is the last
+//     field, the reverse of the in-memory order. An earlier note here claimed
+//     +88 was tracerFrequency followed by heap padding; the files say
+//     otherwise -- 25 vanilla and 453 corpus records carry a live PROJ FormID
+//     at +89 that a master remap was silently corrupting.
+//   * EXPL DATA serializes in a different field ORDER than BGSExplosionData
+//     holds in memory: the spawn-projectile vector, spread and count are the
+//     84-byte tail, not the middle. Only +20 spawnProjectile is a FormID
+//     beyond the leading five.
+//
+// See docs/FORMAT_NOTES.md for the full measured field tables. Every slot
+// below resolves to its stated record type in all 659 shipped PROJ/EXPL/HAZD
+// records and all 2,109 corpus records, with zero contradictions.
 std::optional<std::vector<std::size_t>> struct_payload_formid_offsets(const Record& record,
                                                                      const Subrecord& sub) {
   const auto signature = record.header.signature;
@@ -415,13 +426,16 @@ std::optional<std::vector<std::size_t>> struct_payload_formid_offsets(const Reco
   };
 
   if (signature == k_expl && sub.signature == sig_data) {
-    return within({0, 4, 8, 12, 16});   // LIGH SNDR SNDR IPDS placed-object
+    // LIGH SNDR SNDR IPDS placed-object PROJ
+    return within({0, 4, 8, 12, 16, 20});
   }
   if (signature == k_proj && sub.signature == k_dnam) {
-    return within({16, 20, 32, 36, 84});  // LIGH LIGH EXPL SNDR COLL
+    // LIGH LIGH EXPL SNDR SNDR SNDR WEAP TXST COLL PROJ(unaligned, +89)
+    return within({16, 20, 32, 36, 52, 56, 60, 80, 84, 89});
   }
   if (signature == k_hazd && sub.signature == k_dnam) {
-    return within({24});                  // SPEL
+    // SPEL/ENCH LIGH IPDS SNDR
+    return within({24, 28, 32, 36});
   }
   return std::nullopt;
 }
