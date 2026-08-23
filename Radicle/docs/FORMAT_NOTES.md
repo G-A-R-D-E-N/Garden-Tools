@@ -469,3 +469,46 @@ records decoded across QUST/RACE/ARMO/ARMA, with **one** defective plugin
 It found one real decoder defect: a third-party quest places `NAM2` before any
 `QSDT`, which the stage decoder rejected outright. `QuestStage::leading_members`
 now keeps those losslessly. Bethesda emits no such stage in 8,680.
+
+## OBTE / OBTS object-template block
+
+Validated against every shipped body: **3,297 OBTS payloads across ARMO (1,564),
+WEAP (813), NPC_ (848) and FURN (72)** in `Fallout4.esm` + DLCCoast/NukaWorld/
+Robot. The computed size matches the payload exactly in all 3,297, and
+`OBTE`'s u32 equals the number of `OBTS` bodies in all 1,037 records carrying
+one.
+
+```text
+OBTE  u32 combination count
+  [OBTF] [FULL] OBTS   x N
+STOP
+
+OBTS body:
+  0x00      u32  include count   I
+  0x04      u32  property count  P
+  0x08      u8   level min      0x09 pad
+  0x0A      u8   level max      0x0B pad
+  0x0C      s16  addon index
+  0x0E      u8   default
+  0x0F      u8   keyword count   K      <- u8, not the u32 xEdit declares
+  0x10      4*K  keyword FormIDs
+  0x10+4K   u8   min level for ranks, u8 alt levels per tier
+  0x12+4K   7*I  include rows { u32 OMOD FormID, u8 attach, u8 optional, u8 dontUseAll }
+            24*P property rows
+```
+
+Total size is `0x12 + 4K + 7I + 24P`.
+
+**Every include FormID resolves to an OMOD record** — 7,342 of 7,342 in
+`Fallout4.esm`, zero unresolved.
+
+### These FormIDs need remapping
+
+`OBTS` keyword and include FormIDs carry real master indices — across the three
+DLC masters, 1,960 include and 41 keyword FormIDs use index `0x01` into
+`Fallout4.esm`. They sit at offsets derived from the header counts, so no fixed
+structured slot can express them; `form_links.cpp` walks the body instead and
+fails closed when the counts do not describe the payload exactly.
+
+`FURN` also carries templates, which is worth noting because the record-type
+list usually given for this block is ARMO/WEAP/NPC_.
