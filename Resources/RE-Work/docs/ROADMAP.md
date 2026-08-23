@@ -48,7 +48,7 @@ The four world-building classes — the skeleton of the CK.
 
 | doc | what | state |
 |---|---|---|
-| 12 | record-definition dispatch table (all ~159 form types) | 🟡 factory map done; LoadRecord/SaveRecord for CELL/WRLD/LAND/REFR + QUST (doc 28) |
+| 12 | record-definition dispatch table (all ~159 form types) | 🟡 factory map done; LoadRecord documented for CELL/WRLD/LAND/REFR + S-tier (docs 28–31) + A-tier (docs 32–36) |
 | 23 §1–7 | CELL vftable, ctor, member layout (0x170 bytes) | ✅ |
 | 23 §8 | cell-data blocks (0x20 exterior, 0x88 interior) | ✅ |
 | 23 §9 | exteriorcellloader streaming contract | ✅ |
@@ -129,7 +129,7 @@ Priority form types by game impact:
 | tier | types | why |
 |---|---|---|
 | **S-tier** | ✅ COMPLETE — QUST (28), DIAL/INFO (29), PACK (30), SCEN (31) | quest/dialogue system — most of the game's content |
-| **A-tier** | NPC_ ✅ (32), RACE ✅ (33), FACT ✅ (34), CLAS ✅ (35), CSTY | actor/NPC system |
+| **A-tier** | ✅ COMPLETE — NPC_ (32), RACE (33), FACT (34), CLAS (35), CSTY (36) | actor/NPC system |
 | **B-tier** | SPEL, ENCH, ALCH, MGEF, PERK, LVLI, LVLN, LVSP | magic/perk/leveled-list system |
 | **C-tier** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
 | **D-tier** | everything else (~100 types) | one-off, simple, or rarely used |
