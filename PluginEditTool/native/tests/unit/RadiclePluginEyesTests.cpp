@@ -151,7 +151,7 @@ TEST_CASE("Native EYES FULL edit refuses opaque four-byte storage without touchi
     Cleanup cleanup{root};
     const auto path = root / "EyesPatch.esp";
     writeBytes(path, makeEyesPlugin(true));
-    const auto before = fo4::read_plugin_file(path).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(path));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
@@ -163,7 +163,7 @@ TEST_CASE("Native EYES FULL edit refuses opaque four-byte storage without touchi
         }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "EyesWriteFailed");
-    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
 TEST_CASE("Native EYES SetField validates DATA byte range") {
@@ -189,7 +189,7 @@ TEST_CASE("Native EYES writes refuse game Data plugins") {
     Cleanup cleanup{root};
     const auto path = root / "EyesPatch.esp";
     writeBytes(path, makeEyesPlugin());
-    const auto before = fo4::read_plugin_file(path).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(path));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path, "Data");
@@ -201,5 +201,5 @@ TEST_CASE("Native EYES writes refuse game Data plugins") {
         }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "PluginReadOnly");
-    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }

@@ -665,7 +665,7 @@ Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
             {"Kind", pluginKind(loaded.plugin)},
             {"LoadOrder", index},
             {"Editable", isEditable(loaded)},
-            {"Size", loaded.plugin.original_bytes.size()}
+            {"Size", fo4::plugin_original_bytes(loaded.plugin).size()}
         });
     }
     return nlohmann::json(rows.dump());
