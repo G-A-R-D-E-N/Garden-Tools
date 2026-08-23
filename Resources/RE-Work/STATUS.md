@@ -54,6 +54,7 @@ Legend: ✅ done/verified · 🟡 partial (known gaps in-doc) · 🔴 blocked/no
 | game-setting-table | ✅ 5,137 bare-name `GameSetting` records under `SettingT<GameSettingCollection>` | — |
 | elric-engine-ghidra-import | 🟡 persistent Ghidra project with ElricInterop + engine DLL layer | project is local-only (repo policy); coverage report exists |
 | cell-worldspace-vtables/ | ✅ `FindVftable.java` RTTI→vftable resolver + raw dumps for TESForm and the 4 world-building classes | — |
+| Cell & worldspace completeness | 🟡 started: base docs 23/24/39/41 done; child-GRUP grammar + extra-data tag payloads + placed-ref families next (docs 53+) |
 | Runtime/08-PAPYRUS-VM-QUESTS-ROADMAP | 🟡 workstream started: VM execution, compiled-script linking, native registration, quests/aliases, and persistence | decompile P1 operands and P2 LoadAndLinkClass next |
 | Runtime/Organized/1.10.163/README-Papyrus-VM | 🟡 first OG decompile pass: VM scheduler, tasklet opcode dispatch, compiled-script loader, linker anchor | operand encoding, exact `.pex` fields, native registration, save/load, AE parity |
 
