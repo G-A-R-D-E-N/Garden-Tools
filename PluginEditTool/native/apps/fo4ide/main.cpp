@@ -22,6 +22,7 @@
 #include <fo4ide/archive/ArchiveService.hpp>
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
 #include <fo4ide/assets/NifService.hpp>
+#include <fo4ide/assets/TextureResolver.hpp>
 #include <fo4ide/audio/AudioService.hpp>
 #include <fo4ide/events/EventBus.hpp>
 #if defined(FO4IDE_HAS_HTTP)
@@ -321,6 +322,18 @@ int main(int argc, char** argv) {
     fo4ide::material::MaterialService materialService;
     fo4ide::archive::RadicleArchiveBackend archiveBackend;
     fo4ide::archive::ArchiveService archiveService(processRunner, toolLocator, archiveBackend);
+    // Texture resolution mirrors the C# TextureService: data roots come from
+    // the configured game folder and MO2 instance (mods), so loose files and
+    // BA2 archives are searched in that order, matching the C# GlobalRoots.
+    fo4ide::assets::TextureResolver textureResolver;
+    {
+        std::vector<std::filesystem::path> roots;
+        if (!currentSettings.dataFolder.empty()) roots.push_back(currentSettings.dataFolder);
+        if (!currentSettings.mo2InstancePath.empty()) {
+            roots.push_back(currentSettings.mo2InstancePath / "mods");
+        }
+        textureResolver.setSessionRoots(std::move(roots));
+    }
     fo4ide::events::EventBus events;
     fo4ide::plugin::RadiclePluginBackend plugins;
     // Path-based game-Data protection: plugins physically inside the game's
@@ -335,7 +348,8 @@ int main(int argc, char** argv) {
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
         !registerTarget(rpc, "appInterop", appInteropTarget, log) ||
         !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
-        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log) ||
+        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, textureResolver, platformServices), log) ||
+        !registerTarget(rpc, "papyrus", std::make_shared<fo4ide::app::PapyrusTarget>(processRunner, toolLocator, platformServices), log) ||
         !registerTarget(rpc, "audio", std::make_shared<fo4ide::app::AudioTarget>(audioService, platformServices), log) ||
         !registerTarget(rpc, "material", std::make_shared<fo4ide::app::MaterialTarget>(materialService, platformServices), log) ||
         !registerTarget(rpc, "archive", std::make_shared<fo4ide::app::ArchiveTarget>(archiveService, platformServices), log) ||

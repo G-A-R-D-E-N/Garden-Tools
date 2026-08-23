@@ -33,6 +33,16 @@ set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory("${RADICLE_DIR}" "${CMAKE_BINARY_DIR}/radicle")
 
+# Radicle's radicle_c target is versioned (VERSION/SOVERSION), which makes
+# CMake emit a `cmake_symlink_library` step to create libradicle.so.0 and
+# libradicle.so. The build volume for this checkout is an ntfs3 mount that
+# cannot create symbolic links, so that step fails on every configure. Unset
+# the version properties here so only plain libradicle.so is produced; every
+# consumer in this tree links via -lradicle, so the unversioned name is all
+# that is needed.
+set_property(TARGET radicle_c PROPERTY VERSION)
+set_property(TARGET radicle_c PROPERTY SOVERSION)
+
 add_subdirectory(src)
 add_subdirectory(apps/fo4ide)
 

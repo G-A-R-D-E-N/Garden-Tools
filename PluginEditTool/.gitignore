@@ -14,6 +14,7 @@ web/dist/
 
 # Native CMake output
 native/out/
+native/build/
 
 # Release output from package.ps1
 dist/
