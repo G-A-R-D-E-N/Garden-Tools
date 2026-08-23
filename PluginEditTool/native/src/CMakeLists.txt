@@ -180,6 +180,25 @@ fo4ide_enable_warnings(fo4ide_graph)
 fo4ide_enable_sanitizers(fo4ide_graph)
 
 add_library(
+    fo4ide_f4se
+    f4se/TypeMap.cpp
+    f4se/BindingValidator.cpp
+    f4se/CppScanner.cpp
+    f4se/RegionMerge.cpp
+    f4se/RegistrationExtractor.cpp
+    f4se/NativeOracle.cpp
+    f4se/CrossCheck.cpp
+    f4se/VersionDiff.cpp
+    f4se/CppEmitter.cpp
+    f4se/PapyrusHeaderEmitter.cpp
+    f4se/PluginEmitter.cpp
+    f4se/Emitter.cpp
+)
+target_link_libraries(fo4ide_f4se PUBLIC fo4ide_core fo4ide_papyrus)
+fo4ide_enable_warnings(fo4ide_f4se)
+fo4ide_enable_sanitizers(fo4ide_f4se)
+
+add_library(
     fo4ide_assets
     assets/TextureResolver.cpp
 )

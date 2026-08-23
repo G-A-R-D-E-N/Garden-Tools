@@ -21,6 +21,20 @@ fo4ide_add_test(fo4ide_test_graph_compiler unit/GraphCompilerTests.cpp fo4ide_gr
 fo4ide_add_test(fo4ide_test_graph_lift unit/GraphLiftTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_loader unit/GraphScriptLoaderTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_tool unit/GraphToolServiceTests.cpp fo4ide_graph)
+# The F4SE corpus sweep scans real F4SE trees when FO4RE_F4SE_SRC is set.
+add_executable(
+    fo4ide_test_f4se
+    unit/F4SETypeMapTests.cpp
+    unit/F4SECrossCheckTests.cpp
+    unit/F4SERegionMergeTests.cpp
+    unit/F4SEEmitterTests.cpp
+    unit/F4SEExtractorTests.cpp
+    unit/F4SECorpusTests.cpp
+)
+target_link_libraries(fo4ide_test_f4se PRIVATE fo4ide_f4se fo4ide_papyrus Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_f4se)
+fo4ide_enable_sanitizers(fo4ide_test_f4se)
+catch_discover_tests(fo4ide_test_f4se PROPERTIES TIMEOUT 120)
 # The corpus sweep parses thousands of real base scripts; give it headroom.
 add_executable(fo4ide_test_papyrus_corpus unit/PapyrusCorpusTests.cpp)
 target_link_libraries(fo4ide_test_papyrus_corpus PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)
