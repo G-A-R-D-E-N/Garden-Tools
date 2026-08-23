@@ -118,9 +118,29 @@ TEST(Ba2General, ArchiveWithoutStringTablePreservesHashesAndLeavesPathsUnknown) 
   EXPECT_EQ(fo4::archive::extract_ba2_general_entry(reread.entries[0]), bytes("payload"));
 }
 
+TEST(Ba2General, RoundTripsNextGenVersions7And8) {
+  const std::string payload(2048, 'B');
+  for (const std::uint32_t version : {7u, 8u}) {
+    fo4::archive::Ba2GeneralArchive archive;
+    archive.version = version;
+    archive.entries = {
+        {0x11111111u, 0x22222222u, 0x33333333u, 0x7Fu,
+         "Meshes\\Weapons\\NextGen.nif",
+         {fo4::archive::make_compressed_ba2_chunk(bytes(payload))}},
+    };
+
+    const auto reread = fo4::archive::read_ba2_general(
+        fo4::archive::write_ba2_general(archive));
+    EXPECT_EQ(reread.version, version);
+    ASSERT_EQ(reread.entries.size(), 1u);
+    EXPECT_EQ(reread.entries[0].path, "Meshes\\Weapons\\NextGen.nif");
+    EXPECT_EQ(reread.entries[0].chunks[0].decompressed_size, 2048u);
+  }
+}
+
 TEST(Ba2General, RejectsUnprovenVersionAndDx10InsteadOfGuessing) {
-  auto next_gen = header(7u, 0x4C524E47u, 0u, 0u);
-  EXPECT_THROW(fo4::archive::read_ba2_general(next_gen.bytes), fo4::archive::Ba2Error);
+  auto unproven = header(2u, 0x4C524E47u, 0u, 0u);
+  EXPECT_THROW(fo4::archive::read_ba2_general(unproven.bytes), fo4::archive::Ba2Error);
 
   auto dx10 = header(1u, 0x30315844u, 0u, 0u);
   EXPECT_THROW(fo4::archive::read_ba2_general(dx10.bytes), fo4::archive::Ba2Error);

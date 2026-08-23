@@ -110,9 +110,9 @@ Ba2GeneralArchive read_ba2_general_impl(std::span<const std::byte> data) {
 
   Ba2GeneralArchive archive;
   archive.version = cursor.read_u32();
-  if (archive.version != 1u) {
+  if (!is_supported_ba2_general_version(archive.version)) {
     throw Ba2Error("unsupported BA2 version " + std::to_string(archive.version) +
-                   "; Radicle currently supports proven FO4 GNRL version 1 only");
+                   "; Radicle supports GNRL versions 1, 7 and 8");
   }
 
   const auto tag = cursor.read_u32();
@@ -218,6 +218,10 @@ Ba2GeneralArchive read_ba2_general_impl(std::span<const std::byte> data) {
 }
 
 }  // namespace
+
+bool is_supported_ba2_general_version(std::uint32_t version) noexcept {
+  return version == 1u || version == 7u || version == 8u;
+}
 
 Ba2GeneralArchive read_ba2_general(std::span<const std::byte> data) {
   try {
@@ -325,8 +329,8 @@ Ba2GeneralChunk make_compressed_ba2_chunk(std::span<const std::byte> data) {
 }
 
 std::vector<std::byte> write_ba2_general(const Ba2GeneralArchive& archive) {
-  if (archive.version != 1u) {
-    throw Ba2Error("Radicle writes proven FO4 GNRL version 1 only");
+  if (!is_supported_ba2_general_version(archive.version)) {
+    throw Ba2Error("Radicle writes proven GNRL versions 1, 7 and 8 only");
   }
   if (archive.entries.size() > std::numeric_limits<std::uint32_t>::max()) {
     throw Ba2Error("BA2 has too many entries for the 32-bit file count");

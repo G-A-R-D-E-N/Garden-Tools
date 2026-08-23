@@ -72,6 +72,8 @@ add_library(fo4
   src/plugin_key.cpp
   src/formid.cpp
   src/archive/ba2.cpp
+  src/archive/ba2_hash.cpp
+  src/archive/ba2_texture.cpp
   src/binary/cursor.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
@@ -240,6 +242,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_conflict_graph.cpp
     tests/test_ba2.cpp
     tests/test_ba2_hardening.cpp
+    tests/test_ba2_texture.cpp
     tests/test_localized_strings.cpp
     tests/test_c_api.cpp
     tests/plugin_bytes.cpp
