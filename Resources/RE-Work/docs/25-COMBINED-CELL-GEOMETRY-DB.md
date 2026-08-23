@@ -236,17 +236,22 @@ NIF path that the runtime resolves to the matching `_OC.NIF` file.
 > The old "FUN_140d38ac0 alloc" claim below stays wrong; the real ctor is
 > inlined in `FUN_1407d8100` at RVA 0x7d8100.
 >
-> **2026-08-23 shipped-file census:** XCRI appears **7,387 times** -
-> all on CELL records, all inside compressed records (the earlier
-> "zero occurrences" here and in doc 39 was a raw-scan artifact:
-> DEFLATE hides subrecords). Payload prefix verified as
-> `[combinedRefID u32 - top byte unused][count N u32]`; N correlates
-> with a following packed ID list (3-byte formIDs, per the ctor's
-> 3-byte keys). Full entry-tail layout is NOT yet solved - a minimal
-> 20-B record `[1][2]+12B` defeats naive fixed-width fits; the answer
-> sits in the truncated continuation of the XCRI case in
-> `FUN_1407d8100` (its existing-object branch) and/or the save-side
-> writer.
+> **2026-08-23 SOLVED - full wire format, validated 7387/7387:**
+>
+> ```
+> XCRI := u32 C1            # combined-ref count (hash inserts)
+>      ;  u32 C2            # array-entry count
+>      ;  C1 x u32          # combinedRefIDs (FULL u32 formIDs)
+>      ;  C2 x u32          # refIDs (FULL u32 formIDs)
+> ```
+>
+> Every shipped record consumes exactly 8 + 4(C1+C2) bytes. Refs are
+> full u32s; the 3-byte form seen in the ctor is an in-memory hash-key
+> truncation only. The loader adds per-entry extra u32s only when its
+> stream version > 113 - shipped files are stream-version 15, so no
+> extras on disk. Shipped census: 7,387 XCRI records, all on CELLs,
+> all inside compressed records (raw byte-scans miss DEFLATEd content -
+> the earlier "zero occurrences" was an artifact).
 
 In the ESP, each CELL record gets an `XCRI` subrecord containing
 the array of combined-ref formIDs. The exact 4CC and structure are:
