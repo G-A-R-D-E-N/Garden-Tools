@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/localized_fields.hpp"
 
 #include <array>
 #include <cstddef>
@@ -26,6 +27,9 @@ struct ArmorCreation {
   std::optional<std::string_view> female_world_model;
   std::optional<std::string_view> female_icon;
   std::optional<std::string_view> female_message_icon;
+  // Inline text only. Authoring into a localized plugin is refused: minting a
+  // string ID would mean owning the .STRINGS tables, which this path does not.
+  std::optional<std::string_view> description;
   std::int32_t value{0};
   float weight{0.0f};
   std::uint32_t health{0};
@@ -40,6 +44,16 @@ struct Armor {
   std::optional<std::string> female_world_model;
   std::optional<std::string> female_icon;
   std::optional<std::string> female_message_icon;
+  // DESC is localized: a string ID in a localized plugin, inline text
+  // otherwise. Exactly one per record across all 688 shipped ARMO.
+  //
+  // The record's own name. FULL is not unique in ARMO -- the OBTE template
+  // block emits [OBTF] FULL OBTS per combination, up to 20 in one record --
+  // but the record's own FULL always precedes OBTE. Verified across 5,792
+  // template-bearing ARMO/WEAP/NPC_ records: never more than one FULL before
+  // the boundary, zero exceptions.
+  std::optional<schema::LocalizedString> full_name;
+  std::optional<schema::LocalizedString> description;
   std::int32_t value{0};
   float weight{0.0f};
   std::uint32_t health{0};

@@ -270,13 +270,45 @@ TEST(Mutation, DeleteLocalRecordDoesNotRecycleNextFormId) {
   EXPECT_EQ(third, fo4::FormKey::parse("000902:Lifecycle.esp"));
 }
 
-TEST(Mutation, CreateLocalRecordRefusesLightPluginWithoutMutation) {
+// Light-plugin creation is allowed now that the range is proven from the
+// engine rather than guessed. See #26 and docs/ESL_FORMIDS.md.
+TEST(Mutation, CreateLocalRecordAllocatesInALightPlugin) {
   auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x900, true), "Lifecycle.esl");
+  const auto key = fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"));
+  EXPECT_EQ(key, fo4::FormKey::parse("000900:Lifecycle.esl"));
+  EXPECT_EQ(plugin.header.next_form_id, 0x901u);
+  EXPECT_NE(fo4::find_record(plugin, key), nullptr);
+}
+
+TEST(Mutation, LightPluginRangeStartsAtOneAndStopsAtTwelveBits) {
+  auto light = fo4::read_plugin(make_lifecycle_plugin(0x900, true), "Lifecycle.esl");
+  const auto [llo, lhi] = fo4::local_form_id_range(light);
+  EXPECT_EQ(llo, 0x001u);
+  EXPECT_EQ(lhi, 0xFFFu);
+
+  auto full = fo4::read_plugin(make_lifecycle_plugin(0x900, false), "Lifecycle.esp");
+  const auto [flo, fhi] = fo4::local_form_id_range(full);
+  EXPECT_EQ(flo, 0x800u);
+  EXPECT_EQ(fhi, 0xFFFFFFu);
+}
+
+// A light plugin whose HEDR nextFormID sits below the full-plugin floor must
+// allocate from its own floor, not be rejected.
+TEST(Mutation, LightPluginAllocatesBelowTheFullPluginFloor) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x001, true), "Lifecycle.esl");
+  const auto key = fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"));
+  EXPECT_EQ(key.local().value(), 0x001u);
+  EXPECT_LT(key.local().value(), 0x800u);
+}
+
+// 0x1000 would be masked to 0x000 by the engine, aliasing onto another record,
+// so the writer has to refuse it -- the engine never reports the collision.
+TEST(Mutation, LightPluginExhaustsAtTwelveBits) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x1000, true), "Lifecycle.esl");
   const auto original = plugin.original_bytes;
   EXPECT_THROW(
       static_cast<void>(
           fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"))),
       fo4::FormIdError);
   EXPECT_EQ(plugin.original_bytes, original);
-  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
 }

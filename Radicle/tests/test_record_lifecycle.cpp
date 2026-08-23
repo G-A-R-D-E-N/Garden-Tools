@@ -135,14 +135,26 @@ TEST(RecordLifecycle, RenumberFailsClosedOnMalformedMixedFormLinkSurface) {
   EXPECT_NE(fo4::find_record(plugin, fo4::FormKey::parse("000800:Lifecycle.esp")), nullptr);
 }
 
-TEST(RecordLifecycle, RenumberRefusesLightPluginWithoutMutation) {
+TEST(RecordLifecycle, RenumberLightPluginWithinTheProvenRange) {
+  auto plugin = fo4::read_plugin(make_renumber_plugin(false, true), "Lifecycle.esl");
+  EXPECT_EQ(fo4::renumber_local_record(plugin,
+                                       fo4::FormKey::parse("000800:Lifecycle.esl"),
+                                       fo4::LocalFormId{0x900}),
+            fo4::RecordRenumberStatus::renumbered);
+  EXPECT_NE(fo4::find_record(plugin, fo4::FormKey::parse("000900:Lifecycle.esl")), nullptr);
+  EXPECT_EQ(plugin.header.next_form_id, 0x901u);
+}
+
+// Above 0xFFF the engine masks the local down and the record aliases onto a
+// different one, so renumbering out of range must fail closed.
+TEST(RecordLifecycle, RenumberRefusesLightPluginAboveTwelveBits) {
   auto plugin = fo4::read_plugin(make_renumber_plugin(false, true), "Lifecycle.esl");
   const auto original = plugin.original_bytes;
   EXPECT_THROW(
       static_cast<void>(fo4::renumber_local_record(
           plugin,
           fo4::FormKey::parse("000800:Lifecycle.esl"),
-          fo4::LocalFormId{0x900})),
+          fo4::LocalFormId{0x1000})),
       fo4::FormIdError);
   EXPECT_EQ(plugin.original_bytes, original);
   EXPECT_EQ(plugin.header.next_form_id, 0x802u);

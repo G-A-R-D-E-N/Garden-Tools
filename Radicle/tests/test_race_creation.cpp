@@ -114,8 +114,11 @@ TEST(RaceCreation, CreatesRequiredCurrentFormatSkeleton) {
   ASSERT_TRUE(model.editor_id.has_value());
   EXPECT_EQ(*model.editor_id, "GardenRace");
   ASSERT_TRUE(model.full_name.has_value());
-  EXPECT_EQ(*model.full_name, "Garden Race");
-  EXPECT_EQ(model.description, "Native RACE authoring");
+  // Authored into a non-localized plugin, so both stay inline text.
+  EXPECT_FALSE(model.full_name->localized());
+  EXPECT_EQ(model.full_name->inline_text(), "Garden Race");
+  EXPECT_FALSE(model.description.localized());
+  EXPECT_EQ(model.description.inline_text(), "Native RACE authoring");
   EXPECT_FLOAT_EQ(model.male_height, 1.05f);
   EXPECT_FLOAT_EQ(model.female_height, 0.98f);
   EXPECT_EQ(model.male_default_weight, creation.male_default_weight);

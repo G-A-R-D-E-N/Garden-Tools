@@ -155,12 +155,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     }
     if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
-    if (loaded->plugin.header.tes4_flags.is_small_file()) {
-        return std::unexpected(Error{
-            "LightPluginLifecycleUnsupported",
-            "Creating records in light plugins is disabled until the engine's small-file FormID predicate is proven"
-        });
-    }
+    // Light plugins are allowed: the small-file FormID range is proven from
+    // TESFile::AdjustFormIDFileIndex (see Radicle/docs/ESL_FORMIDS.md, #26) and
+    // fo4::create_local_record enforces the 0x001..0xFFF bounds itself.
 
     try {
         auto mutated = loaded->plugin;
@@ -571,12 +568,8 @@ Result<nlohmann::json> RadiclePluginBackend::renumberRecord(const nlohmann::json
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     }
     if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
-    if (loaded->plugin.header.tes4_flags.is_small_file()) {
-        return std::unexpected(Error{
-            "LightPluginLifecycleUnsupported",
-            "Renumbering records in light plugins is disabled until the engine's small-file FormID predicate is proven"
-        });
-    }
+    // Light plugins are allowed; fo4::renumber_local_record enforces the proven
+    // 0x001..0xFFF small-file range. See Radicle/docs/ESL_FORMIDS.md and #26.
     if (oldKey.owner() != loaded->plugin.key || newKey.owner() != loaded->plugin.key) {
         return std::unexpected(Error{
             "RecordNotLocal",
