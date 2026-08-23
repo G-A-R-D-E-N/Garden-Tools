@@ -128,7 +128,7 @@ Priority form types by game impact:
 
 | tier | types | why |
 |---|---|---|
-| **S-tier** | QUST ✅ (doc 28), DIAL ✅ + INFO ✅ (doc 29), PACK ✅ (doc 30), SCEN | quest/dialogue system — most of the game's content |
+| **S-tier** | ✅ COMPLETE — QUST (28), DIAL/INFO (29), PACK (30), SCEN (31) | quest/dialogue system — most of the game's content |
 | **A-tier** | NPC_, RACE, CSTY, FACT, CLAS | actor/NPC system |
 | **B-tier** | SPEL, ENCH, ALCH, MGEF, PERK, LVLI, LVLN, LVSP | magic/perk/leveled-list system |
 | **C-tier** | WEAP, ARMO, AMMO, MISC, BOOK, NOTE, KEYM, ALCH, INGR, FLOR, TREE | inventory/object system |
