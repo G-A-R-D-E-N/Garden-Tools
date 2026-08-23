@@ -585,6 +585,18 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
     }
     if (method == "Compile") return compile(args);
     if (method == "Decompile") return decompile(args);
+    if (method == "Check") {
+        try {
+            const auto source = stripQuotes(stringArgument(args, 0));
+            const auto* semanticValue = argument(args, 1);
+            const bool semantic = !semanticValue || semanticValue->is_null() || boolArgument(args, 1);
+            const auto imports = stripQuotes(stringArgument(args, 2));
+            const std::string* importsPtr = imports.empty() ? nullptr : &imports;
+            return nlohmann::json(papyrus::AnalysisService::check(source, true, semantic, importsPtr));
+        } catch (const std::exception& ex) {
+            return nlohmann::json("Error: " + std::string(ex.what()));
+        }
+    }
     if (method == "Analyze") {
         try {
             const auto text = stringArgument(args, 0);
@@ -682,11 +694,16 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
         const auto flags = stripQuotes(stringArgument(args, 3));
         const bool optimize = boolArgument(args, 5);
         const bool release = boolArgument(args, 6);
+        const auto* debugInfoValue = argument(args, 9);
+        const bool debugInfo =
+            (!debugInfoValue || debugInfoValue->is_null() || !debugInfoValue->is_boolean())
+                ? true
+                : debugInfoValue->get<bool>();
         const std::string* outputPtr = output.empty() ? nullptr : &output;
         const std::string* importsPtr = imports.empty() ? nullptr : &imports;
         const std::string* flagsPtr = flags.empty() ? nullptr : &flags;
         auto result = papyrus::AnalysisService::compile(source, outputPtr, importsPtr, release,
-                                                        true, flagsPtr);
+                                                        debugInfo, flagsPtr);
         if (engine == PapyrusEngine::Auto) {
             result += "\n\nNo PapyrusCompiler.exe was found, so the built-in compiler was used. "
                       "That is not a fallback to something lesser -- it is measured against the "

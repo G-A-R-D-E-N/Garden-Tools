@@ -403,6 +403,35 @@ TEST_CASE("PapyrusTarget Analyze returns the analyze JSON contract") {
     CHECK(json.at("script") == "Greeter");
 }
 
+TEST_CASE("PapyrusTarget Check reports clean and broken scripts") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto good = root / "Good.psc";
+    touch(good, "Scriptname Good\nFunction Ping()\nEndFunction\n");
+    const auto bad = root / "Bad.psc";
+    touch(bad, "Scriptname Bad\nFunction Broken(\nEndFunction\n");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto clean = target.invoke("Check", nlohmann::json::array({good.string(), true, ""}));
+    REQUIRE(clean.has_value());
+    CHECK(clean->get<std::string>().find("RESULT: 1 clean") != std::string::npos);
+
+    auto broken = target.invoke("Check", nlohmann::json::array({bad.string(), true, ""}));
+    REQUIRE(broken.has_value());
+    const auto brokenText = broken->get<std::string>();
+    CHECK(brokenText.find("syntax errors") != std::string::npos);
+    CHECK(brokenText.find("Bad.psc") != std::string::npos);
+
+    auto syntaxOnly = target.invoke("Check", nlohmann::json::array({bad.string(), false, ""}));
+    REQUIRE(syntaxOnly.has_value());
+    CHECK(syntaxOnly->get<std::string>().find("Syntax only") != std::string::npos);
+}
+
 TEST_CASE("PapyrusTarget SymbolAt returns the symbol JSON contract") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

@@ -174,6 +174,71 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
     if (!add({"get_settings", "Return the current FO4IDE settings", emptySchema},
              "settings", "GetSettings")) return false;
 
+    const auto papyrusCompileSchema = objectSchema(
+        {
+            {"source", {{"type", "string"},
+                        {"description", "A .psc file path, or a folder of scripts (with all=true)."}}},
+            {"output", {{"type", "string"}, {"description", "Output dir for .pex (default: the source folder)."}}},
+            {"imports", {{"type", "string"}, {"description", "Extra import roots, semicolon-separated."}}},
+            {"flags", {{"type", "string"}, {"description", "Flags file (default Institute_Papyrus_Flags.flg)."}}},
+            {"all", {{"type", "boolean"}, {"description", "Compile every .psc in the source folder."}}},
+            {"optimize", {{"type", "boolean"}, {"description", "Optimize (-op). Creation Kit engine only."}}},
+            {"release", {{"type", "boolean"}, {"description", "Release build: strips DebugOnly/BetaOnly calls."}}},
+            {"engine", {{"type", "string"},
+                        {"description", "'auto' (default), 'builtin', or 'creationkit'."}}},
+            {"debug_info", {{"type", "boolean"}, {"description", "Emit line numbers and property groups (default true)."}}},
+            {"compiler_path", {{"type", "string"}, {"description", "Override path to PapyrusCompiler.exe."}}}
+        },
+        nlohmann::json::array({"source"}));
+    if (!add({
+            "compile_papyrus",
+            "Compile Papyrus source .psc -> .pex with the built-in engine (auto-detects a single file "
+            "or a folder; 'creationkit' shells out to PapyrusCompiler.exe). Returns a 'RESULT: X "
+            "succeeded, Y failed' summary.",
+            papyrusCompileSchema},
+            "papyrus", "Compile",
+            {"source", "output", "imports", "flags", "all", "optimize", "release",
+             "compiler_path", "engine", "debug_info"})) return false;
+    if (!add({
+            "decompile_papyrus",
+            "Decompile compiled Papyrus .pex -> source .psc with the built-in decompiler (single file "
+            "or folder; assembly=true emits a bytecode listing). Namespaced scripts are written into "
+            "namespace subfolders so they recompile as-is.",
+            objectSchema({
+                {"source", {{"type", "string"}, {"description", "A .pex file, or a folder of .pex files."}}},
+                {"output", {{"type", "string"}, {"description", "Output dir when writing."}}},
+                {"assembly", {{"type", "boolean"}, {"description", "Emit bytecode disassembly instead of source."}}},
+                {"write", {{"type", "boolean"}, {"description", "Write .psc/.pas files instead of returning text inline."}}}
+            }, nlohmann::json::array({"source"}))},
+            "papyrus", "Decompile", {"source", "output", "assembly", "write"})) return false;
+    if (!add({
+            "papyrus_check",
+            "Check Papyrus SOURCE (.psc) with the built-in front end (no Creation Kit): syntax, then "
+            "name resolution and type checking. Reports 'file(line,col): error CODE: message' per "
+            "problem; files whose parent/import/type is not on the roots are counted separately.",
+            objectSchema({
+                {"source", {{"type", "string"}, {"description", "A .psc file path, or a folder of scripts."}}},
+                {"semantic", {{"type", "boolean"}, {"description", "Resolve names and check types too (default true)."}}},
+                {"imports", {{"type", "string"}, {"description", "Extra source roots, semicolon-separated."}}}
+            }, nlohmann::json::array({"source"}))},
+            "papyrus", "Check", {"source", "semantic", "imports"})) return false;
+    if (!add({
+            "papyrus_function_lookup",
+            "Look up a Papyrus function in the offline Creation Kit Wiki mirror.",
+            objectSchema({
+                {"function", {{"type", "string"}, {"description", "Function name, e.g. 'GetBaseObject'."}}},
+                {"script", {{"type", "string"}, {"description", "Owning script (optional but disambiguates)."}}}
+            }, nlohmann::json::array({"function"}))},
+            "papyrus", "LookupFunction", {"script", "function"})) return false;
+    if (!add({
+            "papyrus_script_info",
+            "Get a Papyrus script's overview (Extends, Global/Member Functions, Events) from the "
+            "offline Creation Kit Wiki mirror.",
+            objectSchema({{"script", {{"type", "string"},
+                                         {"description", "Script name, e.g. 'ObjectReference' or 'Actor'."}}}},
+                         nlohmann::json::array({"script"}))},
+            "papyrus", "LookupScriptInfo", {"script"})) return false;
+
     const auto nifPathSchema = objectSchema(
         {{"path", {{"type", "string"}, {"description", "Path to the NIF file"}}}},
         nlohmann::json::array({"path"}));
