@@ -75,24 +75,30 @@ TEST(StructPayloadFormLinksRealData, EverySlotResolvesToItsDocumentedType) {
                                        "DLCNukaWorld.esm",  "DLCRobot.esm",
                                        "DLCworkshop01.esm", "DLCworkshop02.esm",
                                        "DLCworkshop03.esm"};
-  std::vector<fo4::Plugin> plugins;
+  std::vector<std::filesystem::path> present;
   std::vector<std::string> missing;
   for (const char* name : k_masters) {
-    const auto path = std::filesystem::path{dir} / name;
+    auto path = std::filesystem::path{dir} / name;
     if (!std::filesystem::exists(path)) {
       missing.push_back(name);
       continue;
     }
-    plugins.push_back(fo4::read_plugin_file(path));
+    present.push_back(std::move(path));
   }
-  if (plugins.empty()) {
+  if (present.empty()) {
     GTEST_SKIP() << "no official masters found under " << dir;
   }
 
-  // FormKey -> record signature, for resolving what each slot names. Built
-  // across every loaded file so DLC records can name Fallout4.esm targets.
+  // Two passes, one plugin resident at a time. Holding all seven parsed at
+  // once costs several gigabytes -- Fallout4.esm is 330 MB on disk and larger
+  // in memory -- and nothing here needs two files side by side. The only
+  // cross-file state is this signature index, which is small.
+  //
+  // Pass one: FormKey -> record signature, so a DLC record can name a
+  // Fallout4.esm target.
   std::map<std::string, std::string> kinds;
-  for (const auto& plugin : plugins) {
+  for (const auto& path : present) {
+    const auto plugin = fo4::read_plugin_file(path);
     for (const auto* record : fo4::collect_records(plugin)) {
       kinds[record->form_key.to_string()] = record->header.signature.to_string();
     }
@@ -101,9 +107,9 @@ TEST(StructPayloadFormLinksRealData, EverySlotResolvesToItsDocumentedType) {
   std::map<std::string, std::size_t> resolved;
   std::vector<std::string> wrong;
 
-  // Consumed one plugin at a time: nothing here needs links from two files
-  // side by side, and Fallout4.esm alone yields a very large hit list.
-  for (const auto& plugin : plugins) {
+  // Pass two: the links themselves, again one file at a time.
+  for (const auto& path : present) {
+    const auto plugin = fo4::read_plugin_file(path);
     for (const auto& hit : fo4::collect_form_links(plugin)) {
       // A zero slot is an absent link, not a target. Its FormKey is empty,
       // which would otherwise collide with the TES4 record's empty key.
