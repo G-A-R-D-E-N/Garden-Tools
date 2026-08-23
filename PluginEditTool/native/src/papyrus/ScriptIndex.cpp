@@ -35,6 +35,30 @@ bool hasSuffix(std::string_view text, std::string_view suffix) {
            text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
+// Recomputes the qualified name from the file's on-disk path so the returned
+// names carry the original casing, matching the C# (which keys by
+// QualifiedNameFor and exposes the keys as ScriptNames). Falls back to the
+// lowercased key when no root contains the path (should not happen).
+std::string qualifiedNameOf(const std::filesystem::path& path,
+                            const std::string& fallbackKey,
+                            const std::vector<std::filesystem::path>& roots) {
+    std::error_code error;
+    for (const auto& root : roots) {
+        auto relative = std::filesystem::relative(path, root, error);
+        if (error) {
+            error.clear();
+            continue;
+        }
+        const auto text = relative.generic_string();
+        if (text.starts_with("..")) continue;
+        if (!hasSuffix(lower(text), ".psc")) continue;
+        auto qualified = text.substr(0, text.size() - 4);
+        std::replace(qualified.begin(), qualified.end(), '/', ':');
+        return qualified;
+    }
+    return fallbackKey;
+}
+
 }  // namespace
 
 void ScriptIndex::addRoot(const std::filesystem::path& root) {
@@ -96,7 +120,10 @@ void ScriptIndex::addRoot(const std::filesystem::path& root) {
 std::vector<std::string> ScriptIndex::scriptNames() const {
     std::vector<std::string> names;
     names.reserve(byQualifiedName_.size());
-    for (const auto& [key, path] : byQualifiedName_) names.push_back(path.string());
+    for (const auto& [key, path] : byQualifiedName_) {
+        names.push_back(qualifiedNameOf(path, key, roots_));
+    }
+    // Mirrors the C# ScriptNames: OrdinalIgnoreCase sort of the keys.
     std::sort(names.begin(), names.end(),
               [](const std::string& a, const std::string& b) { return lower(a) < lower(b); });
     return names;
