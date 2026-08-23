@@ -182,6 +182,13 @@ std::uint32_t rebuilt_hedr_record_count(const Plugin& plugin) {
   return static_cast<std::uint32_t>(count);
 }
 
+std::uint64_t current_structure_fingerprint(const Plugin& plugin) {
+  const auto group_count = collect_groups(plugin).size();
+  const auto record_count = collect_records(plugin).size();
+  return (static_cast<std::uint64_t>(group_count) << 32) |
+         static_cast<std::uint64_t>(record_count);
+}
+
 void patch_hedr_record_count(Record& tes4, std::uint32_t count) {
   Subrecord* hedr = nullptr;
   for (auto& sub : tes4.subrecords) {
@@ -279,7 +286,12 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
   }
 
   auto tes4 = prepared.tes4;
-  patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
+  const bool structure_changed =
+      prepared.original_structure_fingerprint == 0 ||
+      current_structure_fingerprint(prepared) != prepared.original_structure_fingerprint;
+  if (tes4.original_range.empty() || structure_changed) {
+    patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
+  }
 
   ByteWriter out;
   write_record(out, prepared, tes4);
