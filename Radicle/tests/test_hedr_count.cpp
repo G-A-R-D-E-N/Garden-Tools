@@ -41,6 +41,14 @@ TEST(HedrCount, CleanPluginPreservesOriginalBytesEvenWhenStoredCountIsStale) {
   EXPECT_EQ(fo4::write_plugin(plugin), bytes);
 }
 
+TEST(HedrCount, MixedPathPreservesNoncanonicalCountWhenStructureIsUnchanged) {
+  const auto bytes = make_nested_plugin(999);
+  auto plugin = fo4::read_plugin(bytes, "StaleButMixed.esp");
+  plugin.original_range.clear();
+
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+}
+
 TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   auto plugin = fo4::read_plugin(make_nested_plugin(999), "Rebuilt.esp");
 

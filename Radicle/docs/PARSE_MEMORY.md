@@ -88,7 +88,7 @@ Safe suite:
     env -u FO4_DATA_DIR -u FO4_PLUGIN_CORPUS \
       /tmp/radicle-memory-test-build/fo4_tests
 
-Result: 337 total, 318 passed, 19 skipped, 0 failed real-data tests.
+Result: 338 total, 319 passed, 19 skipped, 0 failed real-data tests.
 
 Fallout 4 data filters:
 
