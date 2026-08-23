@@ -88,6 +88,24 @@ fixed-width reads.
   `FUN_142724720` plus a u16 counter at +0x08 - structure confirmed,
   key semantics deferred.
 
-Remaining unknowns are confined to the versioned header object's count
-layout and the 8-byte key semantics - both isolated, both decompilable
-with one more pass each.
+## 4. On-disk triangle record SOLVED: 21 bytes, stride validated 60/60
+
+Brute-force alignment search over 60 blobs gives a unique perfect fit:
+triangles start immediately after the vertex array as `[u32 T]` then
+**T x 21 bytes**:
+
+| offset | type | meaning |
+|---|---|---|
+| +0x00 | u16 x3 | vertex indices |
+| +0x06 | u16 x3 | neighbour-triangle refs per edge (0xFFFF = border) |
+| +0x0C | f32 | edge metric - real lengths inland, **FLT_MAX sentinel on perimeter tris** |
+| +0x10 | u16 | additional triangle ref (cover/link candidate) |
+| +0x12 | u8 | constant 0x08 |
+| +0x13 | u8 | flags (0..3 observed) |
+| +0x14 | u8 | pad |
+
+Semantic names for +0x10/+0x13 are inferred from value distributions,
+not yet reader-confirmed. The earlier stream-slot width analysis
+(section 2c) describes the in-memory read API; the shipped files are
+plain little-endian 21-B records - no bit unpacking needed (supersedes
+§2a's packing hypothesis).
