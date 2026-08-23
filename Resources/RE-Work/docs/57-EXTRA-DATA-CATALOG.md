@@ -145,3 +145,15 @@ Loader-side notes:
 * Remaining helper-routed tags keep their `-` status until their own
   pass; none of them exceed ~12k shipped records except XCLR (already
   covered at CELL level).
+
+### Batch 2
+
+| tag | size | grammar |
+|---|---|---|
+| XESP | 8 | `[enable-parent formID][flags u8 + pad]` (36,457) |
+| XTEL | 36 | `[destination REFR u32][pos 3xf32][rot 3xf32][8B tail - flags/coords TBD]`; positions verified sane in worldspace ranges (1,207) |
+| XATR | 4 | formID ref (5,677) |
+| XAPD | 1 | flags byte (3,045) |
+| XLOC | 16 | fixed block (1,795) |
+| XCNT | 4 | count/ref (133) |
+| XPSN / XRTM | - | zero shipped in REFRs |
