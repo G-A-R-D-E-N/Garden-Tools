@@ -2559,3 +2559,48 @@ and let `ProcessExitWorkshop` do the teardown. (Non-exit force-closes — load/c
 cell anyway.)
 
 **Evidence:** `ListCallsIn.java 217df0` on `fwgh_proj_1.10.163_unpacked`, 2026-08-17.
+
+---
+
+## [CONFIRMED] `IDA_Functions_OG_AE.csv` AE columns are ~79% self-inconsistent; 8 ids corrected
+
+**Date:** 2026-08-23. **Runtime:** AE 1.11.221 (OG 1.10.163 side unaffected).
+
+**Question:** Is `IDA_Functions_OG_AE.csv` (267,100 rows, `Name;OG_Addr;OG_REL_ID;AE_Addr;AE_REL_ID`)
+safe to source an AE Address Library id or an OG↔AE pairing from directly?
+
+**Answer: the OG columns are trustworthy; the AE columns are not, and the file cannot validate
+itself.** Cross-checked every row's `id → Address Library offset` against the shipping
+`version-1-10-163-0.bin` / `version-1-11-221-0.bin` bins:
+
+- **OG side: 100.0%** self-consistent (266,615/266,615 rows where both fields are present resolve
+  exactly), and OG has a real symbol table (`lookup_by_address` on the unpacked exe), so OG
+  names/ids are solid.
+- **AE side: only 20.5%** self-consistent (16,968/82,631 rows with both an AE address and AE id).
+  The other ~79% disagree by scattered function-sized offsets (−416..+400 bytes across 38 distinct
+  deltas — not a fixable constant base). AE has no symbol table, so a mismatched row alone can't say
+  whether the id or the address column is the bad one.
+
+**Fix applied.** Cross-matched the CSV's `bin_mismatch` rows against two independently-authored,
+structured id databases (LucaDotGit CommonLibF4 `IDs.hpp`: name→{og,ae}; libxse CommonLibF4
+`IDs.h`: name→ae) by `Class::Method` name. 38 rows got a single candidate replacement id this way,
+**but params-stripped name matching silently collapses distinct overloads onto one id** — e.g. 5
+different `BSGraphics::Renderer::IncRef(T*)` overloads all reduced to the same reference entry. The
+real filter: a relocation id names exactly one function, so after computing every candidate, keep it
+only if the target id has **zero other owners anywhere in the full 267,100-row file** (checked
+against the *entire* file, not just the batch — a naive within-batch-only check still misses
+collisions against untouched pre-existing rows, e.g. `AIProcess::GetPackageThatIsRunning`'s second
+overload collided with the id already correctly used by the first). That gate narrowed 38 candidates
+down to **8 genuinely safe corrections**, applied directly to `IDA_Functions_OG_AE.csv` (local
+master file; not tracked in this repo per `.gitignore` — the derived logs below are). The other 30
+stay as their original (known-wrong, unresolved) id; 1 further candidate was dropped outright for
+source disagreement (Luca and libxse suggested two different replacement ids).
+
+**Evidence / artifacts:**
+- [`Organized/applied_ae_id_corrections.csv`](Organized/applied_ae_id_corrections.csv) — the 8
+  applied corrections (address, name, OG id, old/new AE id, method).
+- [`Organized/ae_id_conflicts_held.csv`](Organized/ae_id_conflicts_held.csv) — the 31 rows
+  identified as wrong but deliberately left unresolved, with the specific collision/disagreement
+  reason for each (never guess a relocation id — a wrong one crashes via `REX::FAIL` at runtime).
+- Post-patch: zero new duplicate `AE_REL_ID` values anywhere in the file (verified against the
+  pre-patch backup), OG columns byte-identical to backup, all 8 corrected rows now bin-consistent.
