@@ -158,6 +158,14 @@ fo4ide_enable_warnings(fo4ide_papyrus)
 fo4ide_enable_sanitizers(fo4ide_papyrus)
 
 add_library(
+    fo4ide_graph
+    graph/GraphDocument.cpp
+)
+target_link_libraries(fo4ide_graph PUBLIC fo4ide_core)
+fo4ide_enable_warnings(fo4ide_graph)
+fo4ide_enable_sanitizers(fo4ide_graph)
+
+add_library(
     fo4ide_assets
     assets/TextureResolver.cpp
 )
