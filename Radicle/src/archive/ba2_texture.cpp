@@ -29,7 +29,6 @@ constexpr std::uint32_t k_dds_magic = 0x20534444u;     // "DDS "
 constexpr std::uint32_t k_dds_dx10_fourcc = 0x30315844u;
 constexpr std::size_t k_dds_dx10_header_size = 148;
 
-// Upper bound on a single entry's decompressed size, matching the GNRL path.
 constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
 
 std::uint64_t read_u64(binary::Cursor& cursor) {
@@ -113,10 +112,10 @@ std::pair<std::uint32_t, std::uint32_t> dds_pitch_and_flag(const Ba2TextureInfo&
   std::uint32_t flag = 0;
   if (layout->block_compressed) {
     value = ((width + 3u) / 4u) * ((height + 3u) / 4u) * layout->bytes_per_unit;
-    flag = 0x80000u;  // DDSD_LINEARSIZE
+    flag = 0x80000u;
   } else {
     value = width * layout->bytes_per_unit;
-    flag = 0x8u;      // DDSD_PITCH
+    flag = 0x8u;
   }
   if (value > std::numeric_limits<std::uint32_t>::max()) return {0u, 0u};
   return {static_cast<std::uint32_t>(value), flag};
@@ -129,7 +128,7 @@ std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
 
   const auto [pitch_or_linear, size_flag] = dds_pitch_and_flag(entry.texture);
   const auto mip_count = std::max<std::uint32_t>(1u, entry.texture.mip_count);
-  const bool cube = entry.texture.flags != 0;
+  const bool cube = (entry.texture.flags & 0x1u) != 0;
 
   std::vector<std::byte> out;
   out.reserve(k_dds_dx10_header_size);
@@ -143,7 +142,7 @@ std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
   append_u32(out, mip_count);
   for (int i = 0; i < 11; ++i) append_u32(out, 0u);
   append_u32(out, 32u);
-  append_u32(out, 0x4u);  // DDPF_FOURCC
+  append_u32(out, 0x4u);
   append_u32(out, k_dds_dx10_fourcc);
   append_u32(out, 0u);
   append_u32(out, 0u);
@@ -156,7 +155,7 @@ std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
   append_u32(out, 0u);
   append_u32(out, 0u);
   append_u32(out, entry.texture.dxgi_format);
-  append_u32(out, 3u);  // D3D10_RESOURCE_DIMENSION_TEXTURE2D
+  append_u32(out, 3u);
   append_u32(out, cube ? 0x4u : 0u);
   append_u32(out, 1u);
   append_u32(out, 0u);
