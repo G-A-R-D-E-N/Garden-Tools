@@ -66,6 +66,13 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> changeReferencingRecords(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "ReferenceRemapUnavailable",
+            "Native referencing-record remapping is unavailable for this backend"
+        });
+    }
+
     virtual Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json&) const {
         return std::unexpected(Error{
             "CircularLeveledListCheckUnavailable",
