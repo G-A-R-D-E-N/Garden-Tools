@@ -30,8 +30,12 @@ std::filesystem::path seqUtf8Path(std::string_view value) {
 
 bool pathWithin(const std::filesystem::path& root,
                 const std::filesystem::path& path) {
-    const auto rootEnd = std::mismatch(root.begin(), root.end(), path.begin(), path.end()).first;
-    return rootEnd == root.end();
+    auto rootIt = root.begin();
+    auto pathIt = path.begin();
+    for (; rootIt != root.end(); ++rootIt, ++pathIt) {
+        if (pathIt == path.end() || *rootIt != *pathIt) return false;
+    }
+    return true;
 }
 
 Result<bool> questStartGameEnabled(const fo4::Record& record) {
