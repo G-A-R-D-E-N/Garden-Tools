@@ -335,25 +335,32 @@ FormKey create_exterior_cell(Plugin& plugin, const ExteriorCellCreation& creatio
     throw CellError("exterior CELL grid coordinate is already occupied");
   }
 
+  if ((creation.flags & 0x0001u) != 0) {
+    throw CellError("exterior CELL DATA cannot set the interior flag");
+  }
+
   const auto key = create_local_record(next, k_cell);
   auto record = detach_created_cell(next, key);
   if (creation.editor_id.has_value()) {
     record.subrecords.push_back(Subrecord{sig_edid, zstring(*creation.editor_id), false});
   }
 
-  // CK LoadRecord accepts CELL DATA as either char or short. The in-memory
-  // CELL flag field is 16-bit, so new current-format exterior cells use the
-  // two-byte representation with all serialized flags clear (not interior,
-  // no water, no other optional behavior bits).
-  record.subrecords.push_back(Subrecord{
-      sig_data,
-      std::vector<std::byte>(2, std::byte{0}),
-      false,
-  });
+  // CK LoadRecord accepts CELL DATA as either char or short; the in-memory
+  // CELL flag field is 16-bit, so new current-format cells use two bytes.
+  //
+  // The value is not zero. Bit 1 is set on 61,542 of the 61,543 exterior cells
+  // across Fallout4.esm, DLCCoast and DLCNukaWorld, so all-clear flags produce
+  // a record shape that occurs exactly once in the shipped corpus. See
+  // k_exterior_cell_default_flags.
+  std::vector<std::byte> data(2, std::byte{0});
+  data[0] = std::byte{static_cast<std::uint8_t>(creation.flags)};
+  data[1] = std::byte{static_cast<std::uint8_t>(creation.flags >> 8)};
+  record.subrecords.push_back(Subrecord{sig_data, std::move(data), false});
 
-  // FO4 XCLC begins with signed X/Y and accepts the modern 12-byte shape with
-  // the trailing Force Hide Land word. New cells set that optional flag word
-  // to zero rather than fabricating hidden quadrants.
+  // FO4 XCLC is exterior-only and 12 bytes in all 38,970 shipped instances
+  // that carry it. The trailing dword stays zero: the CK's own coordinate
+  // setter (FUN_140d197c0) writes only x and y and leaves the rest of the
+  // cell-data block as initialised, and 84 shipped cells carry zero there.
   std::vector<std::byte> xclc(12, std::byte{0});
   write_i32(xclc, 0, creation.x);
   write_i32(xclc, 4, creation.y);

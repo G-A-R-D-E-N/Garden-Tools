@@ -190,10 +190,10 @@ TEST(LeveledSpell, NoOpEntryReplacementDoesNotDirtyAParsedPlugin) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   const auto decoded = fo4::forms::decode_leveled_spell(plugin, key);
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   ASSERT_TRUE(fo4::forms::replace_leveled_spell_entries(plugin, key, decoded.entries));
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(LeveledSpell, RejectsMalformedEntryAndLlctOverflow) {
@@ -217,11 +217,11 @@ TEST(LeveledSpell, RejectsMalformedEntryAndLlctOverflow) {
 TEST(LeveledSpell, MissingMasterFailureLeavesPluginUntouched) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   auto entries = fo4::forms::decode_leveled_spell(plugin, key).entries;
   entries[0].spell = fo4::FormKey::parse("000123:NotAMaster.esp");
 
   EXPECT_THROW(fo4::forms::replace_leveled_spell_entries(plugin, key, entries),
                fo4::forms::LeveledSpellError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }

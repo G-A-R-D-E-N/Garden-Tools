@@ -70,13 +70,13 @@ std::vector<std::byte> empty_target(std::uint32_t flags = 0) {
 TEST(CopyOverrideContainment, MissingNestedSourceRecordFailsWithoutMutation) {
   const auto source = fo4::read_plugin(nested_refr_source(), "Source.esp");
   auto target = fo4::read_plugin(empty_target(), "Target.esp");
-  const auto original = target.original_bytes;
+  const auto original = fo4::test::original_bytes(target);
 
   EXPECT_EQ(
       fo4::copy_record_as_override(
           target, source, fo4::FormKey::parse("000800:Base.esm"), false),
       fo4::RecordCopyStatus::source_containment_unsupported);
-  EXPECT_EQ(target.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(target), original);
   EXPECT_TRUE(target.groups.empty());
   EXPECT_TRUE(target.header.masters.empty());
 }

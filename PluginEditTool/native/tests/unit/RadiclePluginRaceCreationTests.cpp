@@ -119,8 +119,12 @@ TEST_CASE("PluginEditTool creates current-format RACE with required base skeleto
     REQUIRE(model.editor_id.has_value());
     CHECK(*model.editor_id == "GardenRace");
     REQUIRE(model.full_name.has_value());
-    CHECK(*model.full_name == "Garden Race");
-    CHECK(model.description == "Native race");
+    // Authored into a non-localized plugin, so both stay inline text rather
+    // than becoming .STRINGS ids.
+    CHECK_FALSE(model.full_name->localized());
+    CHECK(model.full_name->inline_text() == "Garden Race");
+    CHECK_FALSE(model.description.localized());
+    CHECK(model.description.inline_text() == "Native race");
     CHECK(model.male_height == 1.05f);
     CHECK(model.female_height == 0.97f);
     CHECK(model.flags == 1u);

@@ -68,14 +68,14 @@ TEST(EyesCreation, CreatesRequiredStructureThroughRecordLifecycleAndRoundTrips) 
 
 TEST(EyesCreation, InvalidInputDoesNotConsumeAFormId) {
   auto plugin = fo4::read_plugin(make_empty_plugin(), "EyesPatch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   const std::string_view bad_full{"Bad\0Name", 8};
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_eyes(
           plugin, std::nullopt, bad_full, "Textures\\Eyes\\Created.dds", 0u)),
       fo4::forms::EyesError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
   EXPECT_TRUE(plugin.groups.empty());
 }

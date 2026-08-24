@@ -113,7 +113,7 @@ void print_header(const fo4::Plugin& plugin) {
   std::cout << "  \"next_form_id\": " << json_string(hex_u32(plugin.header.next_form_id)) << ",\n";
   std::cout << "  \"author\": " << json_string(plugin.header.author) << ",\n";
   std::cout << "  \"description\": " << json_string(plugin.header.description) << ",\n";
-  std::cout << "  \"file_size\": " << plugin.original_bytes.size() << "\n";
+  std::cout << "  \"file_size\": " << fo4::plugin_original_bytes(plugin).size() << "\n";
   std::cout << "}\n";
 }
 
@@ -205,9 +205,10 @@ void print_raw(const fo4::Plugin& plugin, fo4::RawFormId form_id) {
   if (!record) {
     throw std::runtime_error("record not found: " + hex_u32(form_id.value()));
   }
+  const auto original = fo4::record_original_bytes(plugin, *record);
   std::cout << "{\n  \"form_id\": " << json_string(hex_u32(form_id.value()))
-            << ",\n  \"byte_count\": " << record->original_bytes.size() << ",\n  \"bytes\": \"";
-  for (const auto b : record->original_bytes) {
+            << ",\n  \"byte_count\": " << original.size() << ",\n  \"bytes\": \"";
+  for (const auto b : original) {
     char buf[3];
     std::snprintf(buf, sizeof(buf), "%02X", std::to_integer<unsigned>(b));
     std::cout << buf;
@@ -312,7 +313,7 @@ int main(int argc, char** argv) {
       }
       fo4::write_plugin_file(plugin, form_id_text);
       std::cout << "{\"wrote\": " << json_string(form_id_text)
-                << ", \"bytes\": " << plugin.original_bytes.size() << "}\n";
+                << ", \"bytes\": " << std::filesystem::file_size(form_id_text) << "}\n";
     } else {
       usage();
       return 2;

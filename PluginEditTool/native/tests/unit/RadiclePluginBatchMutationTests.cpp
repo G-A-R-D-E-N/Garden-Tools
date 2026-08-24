@@ -169,14 +169,14 @@ TEST_CASE("Native CopyAsOverrideMany preflights overwrite conflicts without writ
         "CopyAsOverrideMany",
         nlohmann::json::array({items.dump(), "Patch.esp", false}))).at("ok") == 2);
 
-    const auto before = fo4::read_plugin_file(target).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(target));
     const auto preflight = parseResult(backend.invokeBackend(
         "CopyAsOverrideMany",
         nlohmann::json::array({items.dump(), "Patch.esp", false})));
     CHECK(preflight.at("requiresOverwrite") == true);
     CHECK(preflight.at("existing").size() == 2);
     CHECK(preflight.at("ok") == 0);
-    CHECK(fo4::read_plugin_file(target).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(target)) == before);
 
     const auto overwrite = parseResult(backend.invokeBackend(
         "CopyAsOverrideMany",

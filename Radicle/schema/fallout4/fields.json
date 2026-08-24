@@ -6,97 +6,1019 @@
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          {"signature": "EDID", "minimum": 0, "maximum": 1},
-          {"signature": "DNAM", "minimum": 1, "maximum": 1},
-          {"signature": "MOD2", "minimum": 0, "maximum": 1},
-          {"signature": "MO2T", "minimum": 0, "maximum": 1},
-          {"signature": "MOD3", "minimum": 0, "maximum": 1},
-          {"signature": "MO3T", "minimum": 0, "maximum": 1},
-          {"signature": "MOD4", "minimum": 0, "maximum": 1},
-          {"signature": "MO4T", "minimum": 0, "maximum": 1},
-          {"signature": "MOD5", "minimum": 0, "maximum": 1},
-          {"signature": "MO5T", "minimum": 0, "maximum": 1}
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "MOD2",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MO2T",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MOD3",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MO3T",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MOD4",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MO4T",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MOD5",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MO5T",
+            "minimum": 0,
+            "maximum": 1
+          }
         ]
       },
-      "fields": []
+      "fields": [],
+      "localized_subrecords": []
     },
     {
       "signature": "ARMO",
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          {"signature": "EDID", "minimum": 0, "maximum": 1},
-          {"signature": "MOD2", "minimum": 0, "maximum": 1},
-          {"signature": "MO2T", "minimum": 0, "maximum": 1},
-          {"signature": "ICON", "minimum": 0, "maximum": 1},
-          {"signature": "MICO", "minimum": 0, "maximum": 1},
-          {"signature": "MOD4", "minimum": 0, "maximum": 1},
-          {"signature": "MO4T", "minimum": 0, "maximum": 1},
-          {"signature": "ICO2", "minimum": 0, "maximum": 1},
-          {"signature": "MIC2", "minimum": 0, "maximum": 1},
-          {"signature": "DATA", "minimum": 1, "maximum": 1}
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MOD2",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MO2T",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ICON",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MICO",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MOD4",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MO4T",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ICO2",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MIC2",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DESC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          }
         ]
       },
-      "fields": []
+      "fields": [],
+      "localized_subrecords": [
+        "FULL",
+        "DESC"
+      ]
+    },
+    {
+      "signature": "EXPL",
+      "fields": [
+        {
+          "path": "EXPL\\Force",
+          "label": "Force",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\Damage",
+          "label": "Damage",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\InnerRadius",
+          "label": "Inner radius",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\OuterRadius",
+          "label": "Outer radius",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 36,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ImageSpaceRadius",
+          "label": "Image space radius",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\VerticalOffsetMult",
+          "label": "Vertical offset multiplier",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 48,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SoundLevel",
+          "label": "Sound level",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 52,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\PlacedObjectFadeDelay",
+          "label": "Placed object fade delay",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 56,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\StaggerMagnitude",
+          "label": "Stagger magnitude",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 60,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SpawnProjectileVectorX",
+          "label": "Spawn projectile vector X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 64,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SpawnProjectileVectorY",
+          "label": "Spawn projectile vector Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 68,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SpawnProjectileVectorZ",
+          "label": "Spawn projectile vector Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 72,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ProjectileSpread",
+          "label": "Projectile spread",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 76,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ProjectileCount",
+          "label": "Projectile count",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 80,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "EITM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
     },
     {
       "signature": "EYES",
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          {"signature": "EDID", "minimum": 0, "maximum": 1},
-          {"signature": "FULL", "minimum": 1, "maximum": 1},
-          {"signature": "ICON", "minimum": 1, "maximum": 1},
-          {"signature": "DATA", "minimum": 1, "maximum": 1}
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "ICON",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          }
         ]
       },
-      "fields": []
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "HAZD",
+      "fields": [
+        {
+          "path": "HAZD\\Limit",
+          "label": "Limit",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Radius",
+          "label": "Radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Lifetime",
+          "label": "Lifetime",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\ImageSpaceRadius",
+          "label": "Image space radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\TargetInterval",
+          "label": "Target interval",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 20,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\FullEffectRadius",
+          "label": "Full effect radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\TaperWeight",
+          "label": "Taper weight",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\TaperCurve",
+          "label": "Taper curve",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 48,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "MODT",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
     },
     {
       "signature": "LVSP",
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          {"signature": "EDID", "minimum": 0, "maximum": 1},
-          {"signature": "OBND", "minimum": 0, "maximum": 1},
-          {"signature": "LVLD", "minimum": 1, "maximum": 1},
-          {"signature": "LVLM", "minimum": 1, "maximum": 1},
-          {"signature": "LVLF", "minimum": 1, "maximum": 1},
-          {"signature": "LLCT", "minimum": 1, "maximum": 1},
-          {"signature": "LVLO", "minimum": 0, "maximum": 255}
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "LVLD",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "LVLM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "LVLF",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "LLCT",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "LVLO",
+            "minimum": 0,
+            "maximum": 255
+          }
         ]
       },
-      "fields": []
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "PROJ",
+      "fields": [
+        {
+          "path": "PROJ\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Gravity",
+          "label": "Gravity",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Speed",
+          "label": "Speed",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Range",
+          "label": "Range",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ExplosionProximity",
+          "label": "Explosion proximity",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ExplosionTimer",
+          "label": "Explosion timer",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\MuzzleFlashDuration",
+          "label": "Muzzle flash duration",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\FadeOutTime",
+          "label": "Fade out time",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Force",
+          "label": "Force",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 48,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ConeSpread",
+          "label": "Cone spread",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 64,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\CollisionRadius",
+          "label": "Collision radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 68,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\Lifetime",
+          "label": "Lifetime",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 72,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\RelaunchInterval",
+          "label": "Relaunch interval",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 76,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\TracerFrequency",
+          "label": "Tracer frequency",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 88,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\SoundLevel",
+          "label": "Sound level",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM1",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM2",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "QUST",
+      "fields": [],
+      "localized_subrecords": [
+        "CNAM",
+        "NNAM"
+      ]
     },
     {
       "signature": "RACE",
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          {"signature": "EDID", "minimum": 0, "maximum": 1},
-          {"signature": "FULL", "minimum": 0, "maximum": 1},
-          {"signature": "DESC", "minimum": 1, "maximum": 1},
-          {"signature": "DATA", "minimum": 1, "maximum": 1},
-          {"signature": "VTCK", "minimum": 1, "maximum": 1},
-          {"signature": "PNAM", "minimum": 1, "maximum": 1},
-          {"signature": "UNAM", "minimum": 1, "maximum": 1},
-          {"signature": "NAM1", "minimum": 1, "maximum": 1},
-          {"signature": "NAM3", "minimum": 1, "maximum": 1}
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DESC",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "VTCK",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "UNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM1",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM3",
+            "minimum": 1,
+            "maximum": 1
+          }
         ]
       },
       "formlink_lists": [
-        {"path": "RACE\\MalePresets", "label": "Male Race Presets", "subrecord": "RPRM", "targets": ["NPC_"], "nullable": true, "mutation": "existing_neighbors"},
-        {"path": "RACE\\MaleHairColors", "label": "Male Hair Colors", "subrecord": "AHCM", "targets": ["CLFM"], "nullable": true, "mutation": "existing_neighbors"},
-        {"path": "RACE\\MaleFaceDetails", "label": "Male Face Details", "subrecord": "FTSM", "targets": ["TXST"], "nullable": true, "mutation": "existing_neighbors"},
-        {"path": "RACE\\FemalePresets", "label": "Female Race Presets", "subrecord": "RPRF", "targets": ["NPC_"], "nullable": true, "mutation": "existing_neighbors"},
-        {"path": "RACE\\FemaleHairColors", "label": "Female Hair Colors", "subrecord": "AHCF", "targets": ["CLFM"], "nullable": true, "mutation": "existing_neighbors"},
-        {"path": "RACE\\FemaleFaceDetails", "label": "Female Face Details", "subrecord": "FTSF", "targets": ["TXST"], "nullable": true, "mutation": "existing_neighbors"}
+        {
+          "path": "RACE\\MalePresets",
+          "label": "Male Race Presets",
+          "subrecord": "RPRM",
+          "targets": [
+            "NPC_"
+          ],
+          "nullable": true,
+          "mutation": "existing_neighbors"
+        },
+        {
+          "path": "RACE\\MaleHairColors",
+          "label": "Male Hair Colors",
+          "subrecord": "AHCM",
+          "targets": [
+            "CLFM"
+          ],
+          "nullable": true,
+          "mutation": "existing_neighbors"
+        },
+        {
+          "path": "RACE\\MaleFaceDetails",
+          "label": "Male Face Details",
+          "subrecord": "FTSM",
+          "targets": [
+            "TXST"
+          ],
+          "nullable": true,
+          "mutation": "existing_neighbors"
+        },
+        {
+          "path": "RACE\\FemalePresets",
+          "label": "Female Race Presets",
+          "subrecord": "RPRF",
+          "targets": [
+            "NPC_"
+          ],
+          "nullable": true,
+          "mutation": "existing_neighbors"
+        },
+        {
+          "path": "RACE\\FemaleHairColors",
+          "label": "Female Hair Colors",
+          "subrecord": "AHCF",
+          "targets": [
+            "CLFM"
+          ],
+          "nullable": true,
+          "mutation": "existing_neighbors"
+        },
+        {
+          "path": "RACE\\FemaleFaceDetails",
+          "label": "Female Face Details",
+          "subrecord": "FTSF",
+          "targets": [
+            "TXST"
+          ],
+          "nullable": true,
+          "mutation": "existing_neighbors"
+        }
       ],
       "nested_formlink_lists": [
-        {"container_path": "RACE\\Subgraphs", "member": "ActorKeywords", "label": "Subgraph Actor Keywords", "subrecord": "SAKD", "terminator": "SRAF", "terminator_size": 4, "targets": ["KYWD"], "nullable": false, "mutation": "terminated_group"},
-        {"container_path": "RACE\\Subgraphs", "member": "TargetKeywords", "label": "Subgraph Target Keywords", "subrecord": "STKD", "terminator": "SRAF", "terminator_size": 4, "targets": ["KYWD"], "nullable": false, "mutation": "terminated_group"}
+        {
+          "container_path": "RACE\\Subgraphs",
+          "member": "ActorKeywords",
+          "label": "Subgraph Actor Keywords",
+          "subrecord": "SAKD",
+          "terminator": "SRAF",
+          "terminator_size": 4,
+          "targets": [
+            "KYWD"
+          ],
+          "nullable": false,
+          "mutation": "terminated_group"
+        },
+        {
+          "container_path": "RACE\\Subgraphs",
+          "member": "TargetKeywords",
+          "label": "Subgraph Target Keywords",
+          "subrecord": "STKD",
+          "terminator": "SRAF",
+          "terminator_size": 4,
+          "targets": [
+            "KYWD"
+          ],
+          "nullable": false,
+          "mutation": "terminated_group"
+        }
       ],
-      "fields": []
+      "fields": [],
+      "localized_subrecords": [
+        "FULL",
+        "DESC"
+      ]
     },
     {
       "signature": "REFR",
@@ -123,7 +1045,8 @@
           "maximum": 10,
           "insertion": "existing_only"
         }
-      ]
+      ],
+      "localized_subrecords": []
     }
   ]
 }

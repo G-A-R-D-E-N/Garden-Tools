@@ -239,7 +239,7 @@ TEST_CASE("Native writes refuse plugins resolved directly from game Data") {
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, makePlugin());
-    const auto before = fo4::read_plugin_file(path).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(path));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path, "Data");
@@ -259,7 +259,7 @@ TEST_CASE("Native writes refuse plugins resolved directly from game Data") {
         "SavePlugin", nlohmann::json::array({"Patch.esp", ""}));
     REQUIRE_FALSE(save.has_value());
     CHECK(save.error().type == "PluginReadOnly");
-    CHECK(fo4::read_plugin_file(path).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
 TEST_CASE("Native CopyAsOverride persists a destination-safe override") {
@@ -348,7 +348,7 @@ TEST_CASE("Native CopyAsOverride refuses protected destination plugins") {
     const auto targetPath = root / "Target.esp";
     writeBytes(sourcePath, makeSourceOverride());
     writeBytes(targetPath, makeTargetPlugin());
-    const auto before = fo4::read_plugin_file(targetPath).original_bytes;
+    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(targetPath));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
@@ -369,5 +369,5 @@ TEST_CASE("Native CopyAsOverride refuses protected destination plugins") {
         }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "PluginReadOnly");
-    CHECK(fo4::read_plugin_file(targetPath).original_bytes == before);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(targetPath)) == before);
 }

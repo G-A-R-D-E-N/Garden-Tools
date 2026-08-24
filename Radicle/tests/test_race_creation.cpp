@@ -114,8 +114,11 @@ TEST(RaceCreation, CreatesRequiredCurrentFormatSkeleton) {
   ASSERT_TRUE(model.editor_id.has_value());
   EXPECT_EQ(*model.editor_id, "GardenRace");
   ASSERT_TRUE(model.full_name.has_value());
-  EXPECT_EQ(*model.full_name, "Garden Race");
-  EXPECT_EQ(model.description, "Native RACE authoring");
+  // Authored into a non-localized plugin, so both stay inline text.
+  EXPECT_FALSE(model.full_name->localized());
+  EXPECT_EQ(model.full_name->inline_text(), "Garden Race");
+  EXPECT_FALSE(model.description.localized());
+  EXPECT_EQ(model.description.inline_text(), "Native RACE authoring");
   EXPECT_FLOAT_EQ(model.male_height, 1.05f);
   EXPECT_FLOAT_EQ(model.female_height, 0.98f);
   EXPECT_EQ(model.male_default_weight, creation.male_default_weight);
@@ -193,7 +196,7 @@ TEST(RaceCreation, EmptyDescriptionStillCreatesRequiredDescSubrecord) {
 
 TEST(RaceCreation, InvalidNumericInputDoesNotConsumeFormId) {
   auto plugin = fo4::read_plugin(empty_plugin(), "RacePatch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   fo4::forms::RaceCreation creation;
   creation.description = "bad";
   creation.male_height = std::numeric_limits<float>::infinity();
@@ -201,33 +204,33 @@ TEST(RaceCreation, InvalidNumericInputDoesNotConsumeFormId) {
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_race(plugin, creation)),
       fo4::forms::RaceError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
 }
 
 TEST(RaceCreation, LocalizedPluginFailsBeforeAllocation) {
   auto plugin = fo4::read_plugin(
       empty_plugin(fo4::RecordFlags::localized), "Localized.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   fo4::forms::RaceCreation creation;
   creation.description = "requires string table";
 
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_race(plugin, creation)),
       fo4::forms::RaceError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
 }
 
 TEST(RaceCreation, NonCurrentFormVersionFailsBeforeAllocation) {
   auto plugin = fo4::read_plugin(empty_plugin(0, 123), "Old.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   fo4::forms::RaceCreation creation;
   creation.description = "old format";
 
   EXPECT_THROW(
       static_cast<void>(fo4::forms::create_race(plugin, creation)),
       fo4::forms::RaceError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
 }

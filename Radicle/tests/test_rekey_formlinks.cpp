@@ -50,7 +50,7 @@ TEST(FormLinkRekey, DirectRekeyInvalidatesSerializationCaches) {
   const auto ref_key = fo4::FormKey::parse("000802:Rekey.esp");
 
   fo4::rekey_form_links(plugin, old_key, new_key);
-  EXPECT_TRUE(plugin.original_bytes.empty());
+  EXPECT_TRUE(fo4::plugin_original_bytes(plugin).empty());
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Rekey.esp");
   bool found = false;
@@ -66,9 +66,9 @@ TEST(FormLinkRekey, DirectRekeyInvalidatesSerializationCaches) {
 TEST(FormLinkRekey, SameKeyStrictScanPreservesOriginalBytes) {
   auto plugin = fo4::read_plugin(make_plugin(), "Rekey.esp");
   const auto key = fo4::FormKey::parse("000800:Rekey.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   fo4::rekey_form_links(plugin, key, key);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(fo4::write_plugin(plugin), original);
 }

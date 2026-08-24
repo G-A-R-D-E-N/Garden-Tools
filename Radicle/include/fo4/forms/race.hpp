@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/localized_fields.hpp"
 
 #include <array>
 #include <cstdint>
@@ -24,6 +25,11 @@ public:
 // (INDX + generic-model bundle)*. The generic model is sparse/unordered in
 // xEdit, so preserve its proven MODL/MODT/MODC/MODS/MODF subrecords verbatim.
 struct RaceBodyPart {
+  // INDX carries a uint32 body-part index; it is not an empty separator and
+  // it is not derivable from list position. Across Fallout4.esm's 90 gender
+  // blocks, 17 are not a plain 0..n-1 run (they start 0,0,1,2,...), so the
+  // stored value is preserved rather than recomputed on write.
+  std::uint32_t index{0};
   std::vector<Subrecord> model_subrecords;
 };
 
@@ -65,8 +71,11 @@ struct RaceCreation {
 struct Race {
   FormKey key{};
   std::optional<std::string> editor_id;
-  std::optional<std::string> full_name;
-  std::string description;
+  // FULL and DESC are localized: in a localized plugin they hold a four-byte
+  // string ID rather than inline text. Resolve through fo4::localization when
+  // display text is needed; the stored form round-trips unchanged.
+  std::optional<schema::LocalizedString> full_name;
+  schema::LocalizedString description;
   float male_height{0.0f};
   float female_height{0.0f};
   std::array<float, 3> male_default_weight{};

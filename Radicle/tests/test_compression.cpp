@@ -27,7 +27,7 @@ TEST(Compression, InflatesCompressedRecordAndKeepsOriginalBytes) {
   EXPECT_EQ(record->uncompressed_size, inner.bytes.size());
   ASSERT_EQ(record->subrecords.size(), 1u);
   EXPECT_EQ(record->subrecords[0].signature, fo4::sig_edid);
-  EXPECT_GT(record->original_bytes.size(), inner.bytes.size());
+  EXPECT_GT(fo4::test::record_original_bytes(plugin, *record).size(), inner.bytes.size());
 }
 
 TEST(Compression, RejectsCorruptCompressedPayload) {

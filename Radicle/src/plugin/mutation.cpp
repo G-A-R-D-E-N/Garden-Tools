@@ -68,10 +68,6 @@ const Group* source_top_group_for_record(const Plugin& source,
   return nullptr;
 }
 
-void clear_group_originals(Plugin& plugin) {
-  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
-}
-
 Record* find_mutable_record(Plugin& plugin, const FormKey& record_key) {
   Record* target = nullptr;
   visit_records(plugin, [&](Record& record) {
@@ -109,7 +105,7 @@ void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
 
   std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
   plugin.header.next_form_id = next_form_id;
-  plugin.tes4.original_bytes.clear();
+  plugin.tes4.original_range.clear();
   plugin.tes4.decompressed_payload.clear();
   plugin.tes4.header.data_size = 0;
   plugin.tes4.uncompressed_size = 0;
@@ -142,13 +138,16 @@ bool erase_record(Group& group, const FormKey& record_key) {
 
 }  // namespace
 
+std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin) {
+  if (plugin.header.tes4_flags.is_small_file()) {
+    return {k_first_light_local_id, k_light_local_mask};
+  }
+  return {k_first_full_local_id, k_full_local_mask};
+}
+
 FormKey create_local_record(Plugin& plugin, Signature signature) {
   if (signature.packed() == 0 || signature == sig_tes4 || signature == sig_grup) {
     throw FormIdError("invalid major-record signature for local record creation");
-  }
-  if (plugin.header.tes4_flags.is_small_file()) {
-    throw FormIdError(
-        "light-plugin record creation is disabled until CheckValidIDForSmallFile is proven");
   }
   if (plugin.key.empty()) {
     throw FormIdError("plugin has no identity for local record creation");
@@ -157,17 +156,20 @@ FormKey create_local_record(Plugin& plugin, Signature signature) {
   auto next = plugin;
   assign_record_form_keys(next);
 
-  auto candidate = next.header.next_form_id;
-  if (candidate == 0 || candidate > k_full_local_mask) {
-    throw FormIdError("HEDR nextFormID is outside the full-plugin local FormID range");
+  const auto [lowest, highest] = local_form_id_range(next);
+  // A light plugin's HEDR nextFormID may legitimately sit below the full-plugin
+  // floor, so clamp up to this plugin's own floor rather than rejecting it.
+  auto candidate = std::max(next.header.next_form_id, lowest);
+  if (candidate > highest) {
+    throw FormIdError("HEDR nextFormID is outside this plugin's local FormID range");
   }
 
-  while (candidate <= k_full_local_mask) {
+  while (candidate <= highest) {
     const FormKey probe{next.key, LocalFormId{candidate}};
     if (find_record(next, probe) == nullptr) break;
     ++candidate;
   }
-  if (candidate > k_full_local_mask) {
+  if (candidate > highest) {
     throw FormIdError("no local FormID remains at or above HEDR nextFormID");
   }
 
@@ -182,8 +184,7 @@ FormKey create_local_record(Plugin& plugin, Signature signature) {
   group->children.emplace_back(std::move(record));
 
   set_hedr_next_form_id(next, candidate + 1u);
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   plugin = std::move(next);
   return key;
 }
@@ -215,8 +216,7 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   }
   if (!erased) return RecordDeleteStatus::record_missing;
 
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   plugin = std::move(next);
   return RecordDeleteStatus::deleted;
 }
@@ -225,12 +225,9 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
   if (record_key.owner() != plugin.key) return RecordRenumberStatus::not_local;
-  if (plugin.header.tes4_flags.is_small_file()) {
-    throw FormIdError(
-        "light-plugin record renumbering is disabled until CheckValidIDForSmallFile is proven");
-  }
-  if (new_local.value() == 0 || new_local.value() > k_full_local_mask) {
-    throw FormIdError("new local FormID is outside the full-plugin local FormID range");
+  const auto [lowest, highest] = local_form_id_range(plugin);
+  if (new_local.value() < lowest || new_local.value() > highest) {
+    throw FormIdError("new local FormID is outside this plugin's local FormID range");
   }
 
   auto next = plugin;
@@ -256,7 +253,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
 
   target->form_key = new_key;
   target->header.form_id = encode_plugin_form_id(new_key, plugin_form_id_context(next));
-  target->original_bytes.clear();
+  target->original_range.clear();
   target->decompressed_payload.clear();
   target->header.data_size = 0;
   target->uncompressed_size = 0;
@@ -264,8 +261,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   if (new_local.value() >= next.header.next_form_id) {
     set_hedr_next_form_id(next, new_local.value() + 1u);
   }
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   plugin = std::move(next);
   return RecordRenumberStatus::renumbered;
 }
@@ -288,7 +284,7 @@ bool set_record_editor_id(Plugin& plugin,
       const auto next = zstring(editor_id);
       if (subrecord.data == next) return;
       subrecord.data = next;
-      record.original_bytes.clear();
+      record.original_range.clear();
       changed = true;
       return;
     }
@@ -297,15 +293,14 @@ bool set_record_editor_id(Plugin& plugin,
     edid.signature = sig_edid;
     edid.data = zstring(editor_id);
     record.subrecords.insert(record.subrecords.begin(), std::move(edid));
-    record.original_bytes.clear();
+    record.original_range.clear();
     changed = true;
   });
 
   if (!found) return false;
   if (!changed) return true;
 
-  plugin.original_bytes.clear();
-  clear_group_originals(plugin);
+  plugin.original_range.clear();
   return true;
 }
 
@@ -336,17 +331,26 @@ ScalarMutationStatus set_record_scalar(
   }
   if (found == nullptr) return ScalarMutationStatus::subrecord_missing;
 
-  static_cast<void>(schema::decode_scalar(found->data, field.scalar));
-  const auto encoded = schema::encode_scalar(value, field.scalar);
-  if (found->data == encoded) return ScalarMutationStatus::unchanged;
+  // Reject a payload this field cannot address before touching anything. For
+  // an embedded field that means the payload is too short to reach it, which
+  // is the truncated-legacy case, not a malformed record.
+  const auto existing = schema::scalar_field_bytes(found->data, field.scalar);
+  if (existing.empty()) return ScalarMutationStatus::subrecord_missing;
+  static_cast<void>(schema::decode_scalar(existing, field.scalar));
 
-  found->data = encoded;
-  target->original_bytes.clear();
+  const auto encoded = schema::encode_scalar(value, field.scalar);
+  if (std::equal(existing.begin(), existing.end(), encoded.begin(), encoded.end())) {
+    return ScalarMutationStatus::unchanged;
+  }
+
+  // Patch in place: an embedded field shares its payload with every other
+  // field in the struct, so replacing the payload would erase its neighbours.
+  schema::patch_scalar_field(found->data, field.scalar, encoded);
+  target->original_range.clear();
   target->decompressed_payload.clear();
   target->header.data_size = 0;
   target->uncompressed_size = 0;
-  plugin.original_bytes.clear();
-  clear_group_originals(plugin);
+  plugin.original_range.clear();
   return ScalarMutationStatus::updated;
 }
 
@@ -422,7 +426,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   const auto destination_context = plugin_form_id_context(next);
   copied_record.header.form_id = encode_plugin_form_id(record_key, destination_context);
   remap_record_form_links(copied_record, source_context, destination_context);
-  copied_record.original_bytes.clear();
+  copied_record.original_range.clear();
   copied_record.decompressed_payload.clear();
   copied_record.header.data_size = 0;
   copied_record.uncompressed_size = 0;
@@ -451,15 +455,13 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
     if (target_group == nullptr) {
       Group group;
       group.header = source_top_group->header;
-      group.original_bytes.clear();
       next.groups.push_back(std::move(group));
       target_group = &next.groups.back();
     }
     target_group->children.emplace_back(std::move(copied_record));
   }
 
-  next.original_bytes.clear();
-  clear_group_originals(next);
+  next.original_range.clear();
   destination = std::move(next);
   return replaced ? RecordCopyStatus::replaced : RecordCopyStatus::inserted;
 }

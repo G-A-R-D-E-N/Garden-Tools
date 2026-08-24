@@ -13,6 +13,24 @@
 namespace fo4 {
 namespace {
 
+std::uint64_t structure_fingerprint(const Plugin& plugin) {
+  const auto group_count = collect_groups(plugin).size();
+  const auto record_count = collect_records(plugin).size();
+  return (static_cast<std::uint64_t>(group_count) << 32) |
+         static_cast<std::uint64_t>(record_count);
+}
+
+bool original_structure_is_intact(const Plugin& plugin) {
+  if (plugin.original_structure_fingerprint == 0 ||
+      structure_fingerprint(plugin) != plugin.original_structure_fingerprint) {
+    return false;
+  }
+  return std::ranges::all_of(collect_records(plugin),
+                             [](const Record* record) {
+                               return !record->original_range.empty();
+                             });
+}
+
 bool participates_in_fo4_onam(Signature signature) {
   return signature == Signature::from_string("NAVM") ||
          signature == Signature::from_string("LAND") ||
@@ -62,7 +80,8 @@ Subrecord make_onam(std::span<const RawFormId> form_ids) {
 
 }  // namespace
 
-void rebuild_tes4_onam(Plugin& plugin) {
+void rebuild_tes4_onam(Plugin& plugin, bool preserve_intact_structure) {
+  if (preserve_intact_structure && original_structure_is_intact(plugin)) return;
   assign_record_form_keys(plugin);
 
   std::vector<RawFormId> overrides;
@@ -72,6 +91,7 @@ void rebuild_tes4_onam(Plugin& plugin) {
 
   std::ranges::sort(overrides);
   overrides.erase(std::unique(overrides.begin(), overrides.end()), overrides.end());
+  if (overrides == plugin.header.overrides) return;
 
   std::vector<Subrecord> subrecords;
   subrecords.reserve(plugin.tes4.subrecords.size() + (overrides.empty() ? 0u : 1u));
@@ -91,8 +111,8 @@ void rebuild_tes4_onam(Plugin& plugin) {
   }
 
   plugin.tes4.subrecords = std::move(subrecords);
-  plugin.tes4.original_bytes.clear();
-  plugin.original_bytes.clear();
+  plugin.tes4.original_range.clear();
+  plugin.original_range.clear();
   plugin.header.overrides = overrides;
 }
 

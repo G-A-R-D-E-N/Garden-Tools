@@ -108,4 +108,17 @@ constexpr std::uint8_t k_light_runtime_index = 0xFE;
 constexpr std::uint32_t k_light_local_mask = 0x00000FFFu;
 constexpr std::uint32_t k_full_local_mask = 0x00FFFFFFu;
 
+// Lowest local FormID a plugin may allocate for its own records.
+//
+// Full plugins reserve everything below 0x800: their runtime FormID is
+// compileIndex << 24 | local, so a low local lands in the engine's reserved
+// range. Light plugins have no such floor -- their runtime FormID is
+// 0xFE | slot << 12 | local, which can never collide with a reserved low form.
+// Six of the nine shipped Bethesda ESLs allocate below 0x800.
+//
+// 0x000 is excluded for both: no shipped plugin uses it and nothing in the
+// engine rules it in, so it stays unavailable rather than guessed at.
+constexpr std::uint32_t k_first_full_local_id = 0x00000800u;
+constexpr std::uint32_t k_first_light_local_id = 0x00000001u;
+
 }  // namespace fo4

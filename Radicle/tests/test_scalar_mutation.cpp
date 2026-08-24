@@ -82,42 +82,42 @@ TEST(ScalarMutation, UpdatesExistingXhltAndRoundTripsBinary) {
 
 TEST(ScalarMutation, NoOpKeepsOriginalPluginBytes) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   const auto status = fo4::set_record_scalar(
       plugin, fo4::FormKey::parse("000800:Patch.esp"),
       fo4::Signature::from_string("XHLT"), "50");
   EXPECT_EQ(status, fo4::ScalarMutationStatus::unchanged);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(ScalarMutation, RefusesMissingScalarSubrecordInsteadOfGuessingOrder) {
   auto plugin = fo4::read_plugin(make_plugin(false), "Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   const auto status = fo4::set_record_scalar(
       plugin, fo4::FormKey::parse("000800:Patch.esp"),
       fo4::Signature::from_string("XHLT"), "50");
   EXPECT_EQ(status, fo4::ScalarMutationStatus::subrecord_missing);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(ScalarMutation, RejectsDuplicateScalarSubrecordsWithoutMutation) {
   auto plugin = fo4::read_plugin(make_plugin(true, true), "Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   EXPECT_THROW(
       fo4::set_record_scalar(
           plugin, fo4::FormKey::parse("000800:Patch.esp"),
           fo4::Signature::from_string("XHLT"), "25"),
       fo4::schema::ScalarError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(ScalarMutation, RejectsInvalidPercentWithoutMutation) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
   EXPECT_THROW(
       fo4::set_record_scalar(
           plugin, fo4::FormKey::parse("000800:Patch.esp"),
           fo4::Signature::from_string("XHLT"), "101"),
       fo4::schema::ScalarError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }

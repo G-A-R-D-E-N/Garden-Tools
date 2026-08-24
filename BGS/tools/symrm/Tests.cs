@@ -132,7 +132,25 @@ public static class Tests
         ("ProjectChainResolvesAnimationsThroughGameData", ProjectChainResolvesAnimationsThroughGameData),
         ("GameDataLoadOrderFollowsPlugins", GameDataLoadOrderFollowsPlugins),
         ("GameDataCollapsesBorrowedPaths", GameDataCollapsesBorrowedPaths),
+        ("RealFilesSurviveAPointerLayoutRoundTrip", RealFilesSurviveAPointerLayoutRoundTrip),
+        ("PackedAnimationsAndSkeletonsPlayBackFromArchives", PackedAnimationsAndSkeletonsPlayBackFromArchives),
         ("WeaponSubgraphPerWeaponCoverageIsReportedOnce", WeaponSubgraphPerWeaponCoverageIsReportedOnce),
+        ("WeaponSubgraphGapNamesTheExactEngineSearch", WeaponSubgraphGapNamesTheExactEngineSearch),
+        ("MergedSaptPathIsTruncatedToTheValidPrefix", MergedSaptPathIsTruncatedToTheValidPrefix),
+        ("CrashHashResolvesToTheNamedSubgraph", CrashHashResolvesToTheNamedSubgraph),
+        ("CrashResolvesToTheMissingPerWeaponClip", CrashResolvesToTheMissingPerWeaponClip),
+        ("CrashHashWithOnlyOffsetDataFallsBackToTheOffsetFile", CrashHashWithOnlyOffsetDataFallsBackToTheOffsetFile),
+        ("LooseManifestOverridesTheArchiveCopy", LooseManifestOverridesTheArchiveCopy),
+        ("ModdedMergedManifestsResolveInTheCrashLookup", ModdedMergedManifestsResolveInTheCrashLookup),
+        ("ModLooseAndPackedAnimationsLayerOverTheBaseGame", ModLooseAndPackedAnimationsLayerOverTheBaseGame),
+        ("SweepReportsEveryShippedSubgraphCleanOnVanilla", SweepReportsEveryShippedSubgraphCleanOnVanilla),
+        ("SweepFlagsModdedMergedGaps", SweepFlagsModdedMergedGaps),
+        ("ModlistPriorityFollowsTheTopOfTheFile", ModlistPriorityFollowsTheTopOfTheFile),
+        ("DiffReportsNewManifestsAndWeaponBehaviors", DiffReportsNewManifestsAndWeaponBehaviors),
+        ("SubgraphHashMatchesKnownGameValues", SubgraphHashMatchesKnownGameValues),
+        ("SubgraphHashLowHalfIsTheBehaviorPath", SubgraphHashLowHalfIsTheBehaviorPath),
+        ("SubgraphHashNormalizesCaseAndSlashes", SubgraphHashNormalizesCaseAndSlashes),
+        ("CrashLogFileYieldsTheHash", CrashLogFileYieldsTheHash),
         ("ProjectFilesAreSelectedByContent", ProjectFilesAreSelectedByContent),
         ("MissingClipAnimationIsReported", MissingClipAnimationIsReported),
         ("RepackDriftNamesWhatMoved", RepackDriftNamesWhatMoved),
@@ -2986,6 +3004,127 @@ public static class Tests
         finally { Directory.Delete(data, true); }
     }
 
+    // The converter's own tests all build their packfiles in code. This runs it over the two
+    // genuine Fallout 4 files in samples/ and checks the thing that actually matters: convert
+    // 8 -> 4 -> 8 and every decoded value must survive unchanged.
+    //
+    // Byte equality is deliberately not the contract. TurretIdleWeapReady does return
+    // byte-identical, but TurretStandingSkeleton comes back 256 bytes smaller: the converter
+    // sizes a relocated array to its element count, so capacity a file was over-allocating is
+    // reclaimed. That is intended, and it is why the assertion is on decoded content and on
+    // the file never growing, not on the bytes matching.
+    private static void RealFilesSurviveAPointerLayoutRoundTrip()
+    {
+        Console.WriteLine("\nreal Fallout 4 packfiles survive an 8 -> 4 -> 8 round trip unchanged");
+
+        string folder = Path.Combine(AppContext.BaseDirectory, "samples");
+        var samples = Directory.Exists(folder)
+            ? Directory.GetFiles(folder, "*.hkx").OrderBy(p => p, StringComparer.Ordinal).ToList()
+            : new List<string>();
+        if (samples.Count == 0)
+        {
+            Console.WriteLine("        skipped: the genuine samples are not here");
+            return;
+        }
+
+        foreach (string path in samples)
+        {
+            string name = Path.GetFileName(path);
+            byte[] original = File.ReadAllBytes(path);
+
+            var source = PackfileImage.Read(original);
+            Check($"{name}: starts as an 8-byte packfile", 8, source.Layout.PointerSize);
+
+            CheckTrue($"{name}: converts down to the 4-byte layout",
+                      PackfileConverter.ConvertTo(source, PointerLayout.FourByte));
+            byte[] narrow = source.Rebuild();
+            var narrowImage = PackfileImage.Read(narrow);
+            Check($"{name}: the narrowed file really is 4-byte", 4, narrowImage.Layout.PointerSize);
+
+            CheckTrue($"{name}: converts back up to the 8-byte layout",
+                      PackfileConverter.ConvertTo(narrowImage, PointerLayout.EightByte));
+            byte[] back = narrowImage.Rebuild();
+            var backImage = PackfileImage.Read(back);
+            Check($"{name}: the widened file really is 8-byte", 8, backImage.Layout.PointerSize);
+
+            // Compared as a boolean: these dumps run to six figures of characters, and a
+            // failing Check would print both of them in full.
+            string before = NativeXml.From(original);
+            CheckTrue($"{name}: the 4-byte form decodes to the same values",
+                      NativeXml.From(narrow) == before);
+            CheckTrue($"{name}: and so does the file that came back",
+                      NativeXml.From(back) == before);
+
+            Check($"{name}: the object count is unchanged", new PackfileObjects(source).Instances.Count,
+                  new PackfileObjects(backImage).Instances.Count);
+            CheckTrue($"{name}: the round trip never grows the file ({original.Length} -> {back.Length})",
+                      back.Length <= original.Length);
+        }
+    }
+
+    private static void PackedAnimationsAndSkeletonsPlayBackFromArchives()
+    {
+        Console.WriteLine("\na packed animation and its skeleton decode straight out of the .ba2");
+
+        string sample = Path.Combine(AppContext.BaseDirectory, "samples", "TurretIdleWeapReady.hkx");
+        string skeletonSample = Path.Combine(AppContext.BaseDirectory, "samples", "TurretStandingSkeleton.hkx");
+        if (!File.Exists(sample) || !File.Exists(skeletonSample))
+        {
+            Console.WriteLine("        skipped: the genuine samples are not here");
+            return;
+        }
+        byte[] animationBytes = File.ReadAllBytes(sample);
+        byte[] skeletonBytes = File.ReadAllBytes(skeletonSample);
+
+        string data = Directory.CreateTempSubdirectory("bgs-playback").FullName;
+        try
+        {
+            string projectRoot = Path.Combine(data, "Meshes", "Actors", "Turret");
+            Directory.CreateDirectory(projectRoot);
+            WriteTestArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                ("Meshes/Actors/Turret/Animations/Mounted/Idle_WeapReady.hkx", animationBytes),
+                ("Meshes/Actors/Turret/CharacterAssets/Skeleton.hkx", skeletonBytes));
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+
+            var read = gameData.ReadAnimation(projectRoot, @"Animations\Mounted\Idle_WeapReady.hkt");
+            CheckTrue("the packed clip resolves to an archive", read != null);
+            if (read == null) return;
+            Check("it names the archive it came from", "Fallout4 - Animations.ba2", read.Source);
+            Check("it carries the archive entry name", "Meshes/Actors/Turret/Animations/Mounted/Idle_WeapReady.hkx",
+                  read.EntryName);
+
+            var reader = new HkxBinaryReader();
+            CheckTrue("its bytes decode as an animation", reader.TryReadAnimation(read.Bytes, out var animation));
+            Check("of the spline-compressed class", "hkaSplineCompressedAnimation", animation.AnimationClass);
+            CheckTrue($"with frames to draw ({animation.NumFrames})", animation.NumFrames > 0);
+
+            var skeleton = reader.ReadSkeleton(skeletonBytes);
+            CheckTrue($"the packed skeleton reads with {skeleton.BoneNames.Count} bones",
+                      skeleton.BoneNames.Count > 0);
+
+            byte[]? packedSkeleton = gameData.SkeletonBytes(read.EntryName!);
+            CheckTrue("the animation's CharacterAssets folder yields the rig from the archive",
+                      packedSkeleton != null && packedSkeleton.SequenceEqual(skeletonBytes));
+
+            var viaSkeleton = new HkxBinaryReader().ReadSkeleton(packedSkeleton!);
+            CheckTrue("and it parses as the same skeleton",
+                      viaSkeleton.BoneNames.SequenceEqual(skeleton.BoneNames));
+
+            CheckTrue("the pose can be built from packed bytes alone",
+                      AnimationPose.WhyNotPosable(viaSkeleton, animation) == null);
+
+            string loose = Path.Combine(projectRoot, "Animations", "Mounted", "Idle_WeapReady.hkx");
+            Directory.CreateDirectory(Path.GetDirectoryName(loose)!);
+            File.WriteAllBytes(loose, animationBytes);
+            Check("a loose copy wins over the archive", "loose",
+                  gameData.ReadAnimation(projectRoot, @"Animations\Mounted\Idle_WeapReady.hkt")!.Source);
+
+            Check("an absent clip still reads nothing", null,
+                  gameData.ReadAnimation(projectRoot, @"Animations\Mounted\Nope.hkt"));
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
     private static string WeaponSubgraph() => """
         <hkpackfile><hksection name="__data__">
           <hkobject class="hkbClipGenerator" name="#1">
@@ -3005,7 +3144,7 @@ public static class Tests
 
     private static void WeaponSubgraphPerWeaponCoverageIsReportedOnce()
     {
-        Console.WriteLine("\na weapon subgraph reports per-weapon coverage as one bounded warning");
+        Console.WriteLine("\na per-weapon gap resolves each missing clip to the engine search");
 
         string data = Directory.CreateTempSubdirectory("bgs-weapon").FullName;
         try
@@ -3025,13 +3164,687 @@ public static class Tests
             var findings = GraphValidator.Check(BehaviourGraphModel.Parse(WeaponSubgraph()), chain);
 
             var weapon = findings.Where(f => f.What.Contains("per-weapon coverage")).ToList();
-            Check("one aggregate warning for the subgraph", 1, weapon.Count);
-            CheckTrue("it names the type with the gap", weapon[0].What.Contains("Pistol"));
-            CheckTrue("it names an example clip", weapon[0].What.Contains("WPNReload"));
+            Check("one finding per missing per-weapon clip", 1, weapon.Count);
+            CheckTrue("it names the type with the gap", weapon[0].What.Contains("'Pistol'"));
+            CheckTrue("it names the failing search path", weapon[0].What.Contains(@"Animations\Weapon\Pistol"));
+            CheckTrue("it names the generic fallback status", weapon[0].What.Contains("generic"));
+            CheckTrue("it says the generic copy plays the clip", weapon[0].What.Contains("falls back"));
             Check("no clip is reported missing when the generic copy exists", 0,
                   findings.Count(f => f.What.Contains("not on disk")));
         }
         finally { Directory.Delete(data, true); }
+    }
+
+    private static void WeaponSubgraphGapNamesTheExactEngineSearch()
+    {
+        Console.WriteLine("\na map-driven per-weapon gap names the failing chain prefix and the missing generic fallback");
+
+        string data = Directory.CreateTempSubdirectory("bgs-weapon-map").FullName;
+        try
+        {
+            string projectRoot = Path.Combine(data, "Meshes", "Actors", "Test");
+            Directory.CreateDirectory(projectRoot);
+
+            File.WriteAllBytes(Path.Combine(data, "Fallout4.esm"), WeaponEsm(
+                WeaponSet(1, @"Actors\Character\Behaviors\WeaponBehavior.hkx",
+                          @"Actors\Character\Animations\Weapon\44Pistol\Player",
+                          @"Actors\Character\Animations\Weapon\44Pistol",
+                          @"Actors\Character\Animations\Weapon\Pistol"),
+                WeaponSet(2, @"Actors\Character\Behaviors\WeaponBehavior.hkx",
+                          @"Actors\Character\Animations\Weapon\Pistol\Player",
+                          @"Actors\Character\Animations\Weapon\Pistol")));
+
+            WriteTestArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                ("Meshes/Actors/Test/Animations/Weapon/44Pistol/Player/WPNReload.hkx", new byte[] { 1 }),
+                ("Meshes/Actors/Test/Animations/Weapon/44Pistol/WPNAssemblyPose.hkx", new byte[] { 2 }),
+                ("Meshes/Actors/Test/Animations/Weapon/Pistol/WPNAssemblyPose.hkx", new byte[] { 3 }));
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+            Check("the synthetic master yields the weapon-type map", 2, gameData.WeaponTypeSets.Count);
+
+            var chain = new ProjectChain { Root = projectRoot, Data = gameData };
+            var findings = GraphValidator.Check(BehaviourGraphModel.Parse(WeaponSubgraph()), chain);
+
+            var weapon = findings.Where(f => f.What.Contains("per-weapon coverage")).ToList();
+            Check("the missing per-weapon clip is one finding", 1, weapon.Count);
+            CheckTrue("it names the weapon type", weapon[0].What.Contains("'Pistol'"));
+            CheckTrue("it names the failing chain prefix", weapon[0].What.Contains(@"Animations\Weapon\Pistol\Player"));
+            CheckTrue("it names the clip", weapon[0].What.Contains("WPNReload"));
+            CheckTrue("it states no generic fallback exists", weapon[0].What.Contains("no generic"));
+            CheckTrue("it marks the clip as a crash", weapon[0].What.Contains("crash"));
+            CheckTrue("44Pistol resolves through its chain and is not named", !weapon[0].What.Contains("44Pistol"));
+
+            WriteTestArchive(Path.Combine(data, "Generic - Animations.ba2"),
+                ("Meshes/Actors/Test/Animations/WPNReload.hkx", new byte[] { 4 }));
+            using var gameData2 = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+            var chain2 = new ProjectChain { Root = projectRoot, Data = gameData2 };
+            var findings2 = GraphValidator.Check(BehaviourGraphModel.Parse(WeaponSubgraph()), chain2);
+            Check("the generic fallback removes the per-weapon gap", 0,
+                  findings2.Count(f => f.What.Contains("per-weapon coverage")));
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
+    private static void MergedSaptPathIsTruncatedToTheValidPrefix()
+    {
+        Console.WriteLine("\na SAPT entry that concatenates two paths keeps only the leading valid prefix");
+
+        string data = Directory.CreateTempSubdirectory("bgs-sapt-merge").FullName;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(data, "Fallout4.esm"), WeaponEsm(
+                WeaponSet(1, @"Actors\Character\Behaviors\WeaponBehavior.hkx",
+                          @"Actors\Character\Animations\Weapon\44Pistol",
+                          @"Actors\Character\Animations\Weapon\44PistolActors\Character\Animations\Weapon\Pistol\Injured\Right")));
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+
+            var set = gameData.WeaponTypeSets.FirstOrDefault(s =>
+                s.Type.Equals("44Pistol", StringComparison.OrdinalIgnoreCase));
+            CheckTrue("the weapon type is 44Pistol, not the concatenation artifact", set != null);
+            CheckTrue("no prefix carries an embedded Actors\\ path",
+                      set!.Prefixes.All(p => p.IndexOf("Actors\\", StringComparison.OrdinalIgnoreCase) < 0));
+            CheckTrue("the valid leading prefix is kept",
+                      set.Prefixes.Any(p => p.Equals(@"Animations\Weapon\44Pistol", StringComparison.OrdinalIgnoreCase)));
+            Check("no bogus 44PistolActors weapon type is created", 0,
+                  gameData.WeaponTypeSets.Count(s => s.Type.Contains("Actors", StringComparison.OrdinalIgnoreCase)));
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
+    private static byte[] WeaponEsm(params byte[][] sets)
+    {
+        byte[] race = Record("RACE", sets.SelectMany(s => s).ToArray());
+        return Record("GRUP", race);
+    }
+
+    private static byte[] WeaponSet(uint id, string behavior, params string[] sapt)
+    {
+        var payload = new List<byte>();
+        void Sub(string tag, byte[] data)
+        {
+            payload.AddRange(System.Text.Encoding.ASCII.GetBytes(tag));
+            payload.Add((byte)(data.Length & 0xFF));
+            payload.Add((byte)((data.Length >> 8) & 0xFF));
+            payload.AddRange(data);
+        }
+        Sub("SAKD", BitConverter.GetBytes(id));
+        Sub("SGNM", System.Text.Encoding.UTF8.GetBytes(behavior + "\0"));
+        foreach (string path in sapt)
+            Sub("SAPT", System.Text.Encoding.UTF8.GetBytes(path + "\0"));
+        Sub("SRAF", BitConverter.GetBytes(0u));
+        return payload.ToArray();
+    }
+
+    private static byte[] Record(string type, byte[] payload)
+    {
+        uint size = type == "GRUP" ? (uint)payload.Length + 24 : (uint)payload.Length;
+        var record = new List<byte>();
+        record.AddRange(System.Text.Encoding.ASCII.GetBytes(type));
+        record.AddRange(BitConverter.GetBytes(size));
+        record.AddRange(BitConverter.GetBytes(0u));
+        record.AddRange(BitConverter.GetBytes(0x00000800u));
+        record.AddRange(BitConverter.GetBytes(0u));
+        record.AddRange(BitConverter.GetBytes((ushort)0));
+        record.AddRange(BitConverter.GetBytes((ushort)0));
+        record.AddRange(payload);
+        return record.ToArray();
+    }
+
+    private static byte[] OffsetFile(string behaviorPath, byte[] junk)
+    {
+        var path = System.Text.Encoding.UTF8.GetBytes(behaviorPath);
+        var head = new List<byte>();
+        head.AddRange(System.Text.Encoding.UTF8.GetBytes("V4\n"));
+        head.Add((byte)(path.Length + 1));
+        head.AddRange(path);
+        head.Add(0);
+        head.AddRange(junk);
+        return head.ToArray();
+    }
+
+    private static void CrashHashResolvesToTheNamedSubgraph()
+    {
+        Console.WriteLine("\na crash-log hash resolves to the subgraph the game data names");
+
+        string data = Directory.CreateTempSubdirectory("bgs-crash").FullName;
+        try
+        {
+            const string manifest =
+                "3\n1\n10448007347639226270\n3\n" +
+                "Actors\\Character\\Behaviors\\SyncedAnimBehavior.hkx\n" +
+                "Actors\\Character\\Animations\\WPNReload.hkx\n" +
+                "Actors\\Character\\Animations\\Gone.hkx\n";
+            WriteSingleEntryArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                "Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                System.Text.Encoding.UTF8.GetBytes(manifest));
+            WriteSingleEntryArchive(Path.Combine(data, "DLCRobot - Main.ba2"),
+                "Meshes/Actors/Character/Animations/WPNReload.hkx", new byte[] { 1, 2, 3 });
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+            var index = OpenCommonwealth.Services.Archive.SubgraphIndex.Discover(gameData);
+
+            var sub = index.Find(10448007347639226270UL);
+            Check("the hash resolves to a manifest", true, sub != null);
+            if (sub == null) return;
+            Check("the subgraph behavior is named",
+                  "Actors\\Character\\Behaviors\\SyncedAnimBehavior.hkx", sub.PrimaryBehavior);
+            Check("the manifest counts its animations", 2, sub.AnimationPaths.Count);
+            Check("the packed animation is present", true,
+                  gameData.ContainsAnimation(Path.Combine(data, "Meshes"), sub.AnimationPaths[0]));
+            Check("the absent animation is missing", false,
+                  gameData.ContainsAnimation(Path.Combine(data, "Meshes"), sub.AnimationPaths[1]));
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
+    private static void CrashResolvesToTheMissingPerWeaponClip()
+    {
+        Console.WriteLine("\nthe crash hash resolves to the per-weapon clip the engine search cannot cover");
+
+        string data = Directory.CreateTempSubdirectory("bgs-crash-weapon").FullName;
+        try
+        {
+            const string manifest =
+                "3\n1\n10448007347639226270\n1\n" +
+                "Actors\\Character\\Behaviors\\SyncedAnimBehavior.hkx\n";
+            WriteSingleEntryArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                "Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                System.Text.Encoding.UTF8.GetBytes(manifest));
+            WriteSingleEntryArchive(Path.Combine(data, "DLCRobot - Main.ba2"),
+                "Meshes/AnimTextData/AnimationOffsets/10448007347639226270.txt",
+                OffsetFile(@"Actors\Character\Behaviors\WeaponBehavior.hkx", new byte[] { 1, 2, 3 }));
+            WriteTestArchive(Path.Combine(data, "WeaponClips.ba2"),
+                ("Meshes/Actors/Character/Behaviors/WeaponBehavior.hkx", WeaponSubgraphBytes()),
+                ("Meshes/Actors/Character/Animations/Weapon/44Pistol/Player/WPNReload.hkx", new byte[] { 1 }));
+            File.WriteAllBytes(Path.Combine(data, "Fallout4.esm"), WeaponEsm(
+                WeaponSet(1, @"Actors\Character\Behaviors\WeaponBehavior.hkx",
+                          @"Actors\Character\Animations\Weapon\44Pistol\Player",
+                          @"Actors\Character\Animations\Weapon\44Pistol",
+                          @"Actors\Character\Animations\Weapon\Pistol"),
+                WeaponSet(2, @"Actors\Character\Behaviors\WeaponBehavior.hkx",
+                          @"Actors\Character\Animations\Weapon\Pistol\Player",
+                          @"Actors\Character\Animations\Weapon\Pistol")));
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+            var index = OpenCommonwealth.Services.Archive.SubgraphIndex.Discover(gameData);
+            var sub = index.Find(10448007347639226270UL);
+            Check("the crash hash resolves to a manifest", true, sub != null);
+            if (sub == null) return;
+
+            var off = index.FindOffsetData(10448007347639226270UL);
+            Check("the offset file hints at the weapon behavior",
+                  @"Actors\Character\Behaviors\WeaponBehavior.hkx", off?.FirstPathHint);
+
+            var paths = sub.BehaviorPaths.ToList();
+            if (off?.FirstPathHint != null &&
+                !paths.Contains(off.FirstPathHint, StringComparer.OrdinalIgnoreCase))
+                paths.Add(off.FirstPathHint);
+
+            var (weaponSubgraph, gaps) = OpenCommonwealth.Services.Archive.SubgraphIndex.WeaponGapFindings(gameData, paths);
+            Check("the weapon subgraph is found through the offset hint", true, weaponSubgraph);
+            Check("the engine search resolves one missing clip", 1, gaps.Count);
+            CheckTrue("it names the weapon type", gaps[0].What.Contains("'Pistol'"));
+            CheckTrue("it names the failing chain prefix", gaps[0].What.Contains(@"Animations\Weapon\Pistol\Player"));
+            CheckTrue("it names the clip", gaps[0].What.Contains("WPNReload"));
+            CheckTrue("it marks the crash condition", gaps[0].What.Contains("crash"));
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
+    private static byte[] WeaponSubgraphBytes(params string[] clips)
+    {
+        if (clips.Length == 0)
+            clips = new[]
+            {
+                @"Animations\Weapon\44Pistol\WPNAssemblyPose.hkt",
+                @"Animations\WPNReload.hkt",
+            };
+
+        var classes = HavokClasses.Shipped;
+        int size = classes["hkbClipGenerator"]!.Size;
+        int nameField = classes.Field("hkbClipGenerator", "animationName")!.Offset;
+
+        var names = new byte[5 + "hkbClipGenerator".Length + 1];
+        BitConverter.GetBytes(HavokClassTypes.Shipped["hkbClipGenerator"]!.Signature)
+                    .CopyTo(names, 0);
+        names[4] = 0x09;
+        System.Text.Encoding.ASCII.GetBytes("hkbClipGenerator").CopyTo(names, 5);
+
+        var data = new List<byte>();
+        var locals = new List<byte>();
+        var virtuals = new List<byte>();
+        foreach (string clip in clips)
+        {
+            byte[] text = System.Text.Encoding.UTF8.GetBytes(clip);
+            int at = data.Count;
+            data.AddRange(new byte[size]);
+            int strAt = data.Count;
+            data.AddRange(text);
+            data.Add(0);
+            locals.AddRange(BitConverter.GetBytes(at + nameField));
+            locals.AddRange(BitConverter.GetBytes(strAt));
+            virtuals.AddRange(Triple(at, 0, 5));
+        }
+
+        var image = new PackfileImage();
+        image.Sections.Add(new PackfileSection
+        {
+            TagBytes = MakeTag("__classnames__"),
+            Data = names,
+        });
+        image.Sections.Add(new PackfileSection
+        {
+            TagBytes = MakeTag("__data__"),
+            Data = data.ToArray(),
+            LocalFixups = locals.ToArray(),
+            VirtualFixups = virtuals.ToArray(),
+        });
+        image.ContentsSectionIndex = 1;
+        return image.Rebuild();
+    }
+
+    private static void SubgraphHashMatchesKnownGameValues()
+    {
+        Console.WriteLine("\nthe subgraph id recomputes exactly from the behavior and its prefixes");
+
+        var known = new (ulong Id, string Behavior, string[] Sapt)[]
+        {
+            (10063049680076617785UL, @"Actors\Shared\Behaviors\BloodbugSharedCoreWrappingBehavior.hkx",
+                new[] { @"Actors\Mosquito\Animations\Injured", @"Actors\Mosquito\Animations" }),
+            (10121085405136975821UL, @"Actors\Character\Behaviors\MTBehavior.hkx",
+                new[] { @"Actors\Character\Animations\MT\Injured\Right", @"Actors\Character\Animations\MT\Player",
+                        @"Actors\Character\Animations\MT\Neutral", @"Actors\Character\Animations",
+                        @"actors\Character\Animations\Furniture\Water" }),
+            (10669390995239814013UL, @"Actors\Vertibird\Behaviors\FlightBehavior.hkx",
+                new[] { @"Actors\Vertibird\Animations\InjuredLeftWing", @"Actors\Vertibird\Animations" }),
+            (10715738121632629791UL, @"Actors\Shared\Behaviors\MirelurkQueenCoreWrappingBehavior.hkx",
+                new[] { @"Actors\MirelurkQueen\Animations\Injured\RightLegs",
+                        @"Actors\MirelurkQueen\Animations\Injured\Arms\LeftArm", @"Actors\MirelurkQueen\Animations" }),
+            (11081849303742838364UL, @"Actors\Character\Behaviors\LeftArmInjuredMeleeWrappingBehavior.hkx",
+                new[] { @"Actors\Character\Animations\H2H", @"Actors\Character\Animations\1HM",
+                        @"Actors\Character\Animations\Paired", @"Actors\Character\Animations" }),
+        };
+        foreach (var (id, behavior, sapt) in known)
+        {
+            ulong computed = OpenCommonwealth.Services.Archive.SubgraphHash.Compute(behavior, sapt);
+            Check($"{behavior.Split('\\').Last()} recomputes its shipped id", id, computed);
+        }
+    }
+
+    private static void SubgraphHashLowHalfIsTheBehaviorPath()
+    {
+        Console.WriteLine("\nthe low half of a subgraph id is the CRC of the lowercased behavior path");
+
+        Check("crash hash low half is the weapon behavior path", 0xa6b50f9eu,
+              OpenCommonwealth.Services.Archive.SubgraphHash.BehaviorHalf(
+                  @"Actors\Character\Behaviors\WeaponBehavior.hkx"));
+        Check("right-arm wrapping behavior", 0x7eff6266u,
+              OpenCommonwealth.Services.Archive.SubgraphHash.BehaviorHalf(
+                  @"Actors\Character\Behaviors\RightArmInjuredWeaponWrappingBehavior.hkx"));
+        Check("both-arm wrapping behavior", 0x85c72449u,
+              OpenCommonwealth.Services.Archive.SubgraphHash.BehaviorHalf(
+                  @"Actors\Character\Behaviors\BothArmInjuredWeaponWrappingBehavior.hkx"));
+        Check("left-arm wrapping behavior", 0x8b1f2debu,
+              OpenCommonwealth.Services.Archive.SubgraphHash.BehaviorHalf(
+                  @"Actors\Character\Behaviors\LeftArmInjuredWeaponWrappingBehavior.hkx"));
+    }
+
+    private static void SubgraphHashNormalizesCaseAndSlashes()
+    {
+        Console.WriteLine("\nthe subgraph id ignores case and forward slashes in its inputs");
+
+        const string behavior = @"Actors\Character\Behaviors\WeaponBehavior.hkx";
+        string[] sapt = { @"Actors\Character\Animations\Weapon\44Pistol", @"Actors\Character\Animations\Weapon\Pistol" };
+        ulong canonical = OpenCommonwealth.Services.Archive.SubgraphHash.Compute(behavior, sapt);
+        ulong mixedCase = OpenCommonwealth.Services.Archive.SubgraphHash.Compute(
+            "Actors\\Character\\Behaviors\\WeaponBehavior.HKX",
+            new[] { "Actors\\Character\\Animations\\Weapon\\44Pistol", "Actors\\Character\\Animations\\Weapon\\PISTOL" });
+        ulong forwardSlashes = OpenCommonwealth.Services.Archive.SubgraphHash.Compute(
+            "Actors/Character/Behaviors/WeaponBehavior.hkx",
+            new[] { "Actors/Character/Animations/Weapon/44Pistol", "Actors/Character/Animations/Weapon/Pistol" });
+        Check("case does not change the id", canonical, mixedCase);
+        Check("forward slashes do not change the id", canonical, forwardSlashes);
+        Check("the normalized join is lowercased with backslashes", canonical,
+              OpenCommonwealth.Services.Archive.SubgraphHash.Compute(behavior.ToLowerInvariant(),
+                  new[] { sapt[0].ToLowerInvariant(), sapt[1].ToLowerInvariant() }));
+    }
+
+    private static void CrashHashWithOnlyOffsetDataFallsBackToTheOffsetFile()
+    {
+        Console.WriteLine("\nan id with only offset data still reports the offset file and its path hint");
+
+        string data = Directory.CreateTempSubdirectory("bgs-offsets").FullName;
+        try
+        {
+            WriteSingleEntryArchive(Path.Combine(data, "DLCRobot - Main.ba2"),
+                "Meshes/AnimTextData/AnimationOffsets/123456789012345.txt",
+                OffsetFile("Actors\\Character\\Behaviors\\WeaponBehavior.hkx", new byte[] { 1, 2, 3, 4 }));
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+            var index = OpenCommonwealth.Services.Archive.SubgraphIndex.Discover(gameData);
+
+            Check("no named manifest exists", null, index.Find(123456789012345UL));
+            var off = index.FindOffsetData(123456789012345UL);
+            Check("the offset file is found", true, off != null);
+            Check("its embedded behavior path is read as a hint",
+                  "Actors\\Character\\Behaviors\\WeaponBehavior.hkx", off!.FirstPathHint);
+            Check("the offset file is attributed to its archive", true,
+                  off.Source.Contains("DLCRobot"));
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
+    private static void LooseManifestOverridesTheArchiveCopy()
+    {
+        Console.WriteLine("\na loose AnimTextData manifest overrides the archive entry for the same id");
+
+        string data = Directory.CreateTempSubdirectory("bgs-loose").FullName;
+        try
+        {
+            const string packed =
+                "3\n1\n99\n2\n" +
+                "Actors\\Character\\Behaviors\\PackedBehavior.hkx\n" +
+                "Actors\\Character\\Animations\\A.hkx\n";
+            WriteSingleEntryArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                "Meshes/AnimTextData/AnimationFileData/99.txt",
+                System.Text.Encoding.UTF8.GetBytes(packed));
+
+            string looseDir = Path.Combine(data, "Meshes", "AnimTextData", "AnimationFileData");
+            Directory.CreateDirectory(looseDir);
+            File.WriteAllText(Path.Combine(looseDir, "99.txt"),
+                "3\n1\n99\n2\n" +
+                "Actors\\Character\\Behaviors\\LooseBehavior.hkx\n" +
+                "Actors\\Character\\Animations\\B.hkx\n");
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+            var index = OpenCommonwealth.Services.Archive.SubgraphIndex.Discover(gameData);
+
+            var sub = index.Find(99UL);
+            Check("the loose manifest wins over the archive", true, sub != null);
+            Check("its behavior is the loose one",
+                  "Actors\\Character\\Behaviors\\LooseBehavior.hkx", sub!.PrimaryBehavior);
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
+    private static void ModdedMergedManifestsResolveInTheCrashLookup()
+    {
+        Console.WriteLine("\nthe crash lookup sees merged manifests and modded animations from a modlist");
+
+        string data = Directory.CreateTempSubdirectory("bgs-mods-data").FullName;
+        string mods = Directory.CreateTempSubdirectory("bgs-mods-mods").FullName;
+        try
+        {
+            const string vanilla =
+                "3\n1\n10448007347639226270\n2\n" +
+                "Actors\\Character\\Behaviors\\SyncedAnimBehavior.hkx\n" +
+                "Actors\\Character\\Animations\\WPNReload.hkx\n";
+            WriteSingleEntryArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                "Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                System.Text.Encoding.UTF8.GetBytes(vanilla));
+
+            Directory.CreateDirectory(Path.Combine(mods, "profiles", "Fallen World"));
+            File.WriteAllText(Path.Combine(mods, "profiles", "Fallen World", "modlist.txt"),
+                "# generated by Mod Organizer.\r\n" +
+                "-Outdated Merge\r\n" +
+                "+AnimTextData Subgraph Manifest Merge\r\n" +
+                "+Weapon Anim Overhaul\r\n");
+
+            string merge = Path.Combine(mods, "mods", "AnimTextData Subgraph Manifest Merge");
+            string fileData = Path.Combine(merge, "Meshes", "AnimTextData", "AnimationFileData");
+            Directory.CreateDirectory(fileData);
+            File.WriteAllText(Path.Combine(fileData, "8806872131610908823.txt"),
+                "3\n1\n8806872131610908823\n2\n" +
+                "Actors\\Character\\_1stPerson\\Behaviors\\1stPSyncedAnimBehavior.hkx\n" +
+                "Actors\\Character\\_1stPerson\\Animations\\Common\\WPNMineThrow.hkx\n");
+
+            string overhaul = Path.Combine(mods, "mods", "Weapon Anim Overhaul");
+            Directory.CreateDirectory(Path.Combine(overhaul, "Meshes", "Actors", "Character", "_1stPerson", "Animations", "Common"));
+            File.WriteAllBytes(Path.Combine(overhaul, "Meshes", "Actors", "Character", "_1stPerson", "Animations", "Common", "WPNMineThrow.hkx"),
+                new byte[] { 9, 9, 9 });
+
+            string disabled = Path.Combine(mods, "mods", "Outdated Merge");
+            Directory.CreateDirectory(Path.Combine(disabled, "Meshes", "AnimTextData", "AnimationFileData"));
+            File.WriteAllText(Path.Combine(disabled, "Meshes", "AnimTextData", "AnimationFileData", "111111111111111.txt"),
+                "3\n1\n111111111111111\n1\nActors\\Character\\Behaviors\\Gone.hkx\n");
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.DiscoverModded(data, mods, "Fallen World");
+
+            Check("the modlist enables the two active mods", 2, gameData.ModRoots.Count);
+            Check("a disabled mod is not a root", false,
+                  gameData.ModRoots.Any(r => r.Contains("Outdated", StringComparison.OrdinalIgnoreCase)));
+
+            var index = OpenCommonwealth.Services.Archive.SubgraphIndex.Discover(gameData);
+            Check("the vanilla manifest still resolves", true, index.Find(10448007347639226270UL) != null);
+            Check("the disabled mod's manifest is not seen", null, index.Find(111111111111111UL));
+
+            var modded = index.Find(8806872131610908823UL);
+            Check("the merged manifest resolves", true, modded != null);
+            if (modded == null) return;
+            Check("its behavior is the merged one",
+                  "Actors\\Character\\_1stPerson\\Behaviors\\1stPSyncedAnimBehavior.hkx",
+                  modded.PrimaryBehavior);
+            Check("its source is the loose merge mod", "loose", modded.Source);
+            Check("the modded animation is present through the mod root", true,
+                  gameData.ContainsAnimation(Path.Combine(data, "Meshes"), modded.AnimationPaths[0]));
+        }
+        finally { Directory.Delete(data, true); Directory.Delete(mods, true); }
+    }
+
+    private static void ModLooseAndPackedAnimationsLayerOverTheBaseGame()
+    {
+        Console.WriteLine("\nmod loose files and mod archives override the base game data");
+
+        string data = Directory.CreateTempSubdirectory("bgs-layer-data").FullName;
+        string mods = Directory.CreateTempSubdirectory("bgs-layer-mods").FullName;
+        try
+        {
+            WriteTestArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                ("Meshes/Actors/Character/Animations/Reload.hkx", new byte[] { 1 }),
+                ("Meshes/Actors/Character/Animations/Mine.hkx", new byte[] { 2 }),
+                ("Meshes/Actors/Character/Animations/LooseOnly.hkx", new byte[] { 5 }));
+            Directory.CreateDirectory(Path.Combine(data, "Meshes", "Actors", "Character", "Animations"));
+            File.WriteAllBytes(Path.Combine(data, "Meshes", "Actors", "Character", "Animations", "LooseOnly.hkx"),
+                new byte[] { 5 });
+
+            File.WriteAllText(Path.Combine(mods, "modlist.txt"), "+Anim Overhaul\n");
+            string root = Path.Combine(mods, "mods", "Anim Overhaul");
+            Directory.CreateDirectory(Path.Combine(root, "Meshes", "Actors", "Character", "Animations"));
+            File.WriteAllBytes(Path.Combine(root, "Meshes", "Actors", "Character", "Animations", "Reload.hkx"),
+                new byte[] { 9 });
+            WriteTestArchive(Path.Combine(root, "AnimOverhaul - Main.ba2"),
+                ("Meshes/Actors/Character/Animations/Mine.hkx", new byte[] { 8 }),
+                ("Meshes/Actors/Character/Animations/LooseOnly.hkx", new byte[] { 6 }));
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.DiscoverModded(data, mods);
+            string projectRoot = Path.Combine(data, "Meshes");
+
+            Check("the mod loose copy is read", 9,
+                  (int)(gameData.ReadAnimation(projectRoot, @"Actors\Character\Animations\Reload.hkx")?.Bytes[0] ?? -1));
+            Check("the mod archive copy wins over the base archive", 8,
+                  (int)(gameData.ReadAnimation(projectRoot, @"Actors\Character\Animations\Mine.hkx")?.Bytes[0] ?? -1));
+            Check("the mod archive is attributed to its mod", true,
+                  gameData.ReadAnimation(projectRoot, @"Actors\Character\Animations\Mine.hkx")?.Source.Contains("AnimOverhaul") == true);
+            Check("a base loose file wins over a mod archive", 5,
+                  (int)(gameData.ReadAnimation(projectRoot, @"Actors\Character\Animations\LooseOnly.hkx")?.Bytes[0] ?? -1));
+        }
+        finally { Directory.Delete(data, true); Directory.Delete(mods, true); }
+    }
+
+    // Nothing pinned which end of modlist.txt wins, and the direction had been inverted. MO2
+    // writes the file highest priority first -- the tail of a real modlist is the DLC and
+    // unmanaged content everything overrides -- so the mod nearest the top must win.
+    private static void ModlistPriorityFollowsTheTopOfTheFile()
+    {
+        Console.WriteLine("\nthe mod nearest the top of modlist.txt wins a conflict");
+
+        string data = Directory.CreateTempSubdirectory("bgs-order-data").FullName;
+        string mods = Directory.CreateTempSubdirectory("bgs-order-mods").FullName;
+        try
+        {
+            WriteTestArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                ("Meshes/Actors/Character/Animations/Clash.hkx", new byte[] { 1 }));
+
+            // Written the way MO2 writes one: winner first, base content last.
+            File.WriteAllText(Path.Combine(mods, "modlist.txt"),
+                "# This file was automatically generated by Mod Organizer.\n" +
+                "+Wins\n" +
+                "+Loses\n" +
+                "*DLC: Far Harbor\n");
+
+            foreach (var (name, mark) in new[] { ("Wins", (byte)7), ("Loses", (byte)3) })
+            {
+                string root = Path.Combine(mods, "mods", name,
+                                           "Meshes", "Actors", "Character", "Animations");
+                Directory.CreateDirectory(root);
+                File.WriteAllBytes(Path.Combine(root, "Clash.hkx"), new byte[] { mark });
+            }
+
+            using var gameData = OpenCommonwealth.Services.Archive.GameData.DiscoverModded(data, mods);
+
+            Check("both mods are roots", 2, gameData.ModRoots.Count);
+            Check("the mod nearer the top of the file wins", 7,
+                  (int)(gameData.ReadAnimation(Path.Combine(data, "Meshes"),
+                        @"Actors\Character\Animations\Clash.hkx")?.Bytes[0] ?? -1));
+            Check("the winning root is last, so overwrite still outranks it", true,
+                  gameData.ModRoots[^1].EndsWith("Wins", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(data, true); Directory.Delete(mods, true); }
+    }
+
+    private static void SweepReportsEveryShippedSubgraphCleanOnVanilla()
+    {
+        Console.WriteLine("\nthe sweep resolves every shipped subgraph without a per-weapon gap on vanilla data");
+
+        string data = Directory.CreateTempSubdirectory("bgs-sweep-clean").FullName;
+        try
+        {
+            WriteSweepVanillaData(data);
+            Check("the sweep over vanilla data is clean", 0,
+                  Program.Sweep(new[] { "sweep", "--data", data }));
+        }
+        finally { Directory.Delete(data, true); }
+    }
+
+    private static void SweepFlagsModdedMergedGaps()
+    {
+        Console.WriteLine("\nthe sweep flags per-weapon gaps the modded merged manifests introduce");
+
+        string data = Directory.CreateTempSubdirectory("bgs-sweep-mods-data").FullName;
+        string mods = Directory.CreateTempSubdirectory("bgs-sweep-mods").FullName;
+        try
+        {
+            WriteSweepVanillaData(data);
+
+            File.WriteAllText(Path.Combine(mods, "modlist.txt"), "+AnimTextData Merge\n");
+            string merge = Path.Combine(mods, "mods", "AnimTextData Merge");
+            string fileData = Path.Combine(merge, "Meshes", "AnimTextData", "AnimationFileData");
+            Directory.CreateDirectory(fileData);
+            File.WriteAllText(Path.Combine(fileData, "8806872131610908823.txt"),
+                "3\n1\n8806872131610908823\n1\n" +
+                @"Actors\Character\Behaviors\WeaponOverhaulBehavior.hkx" + "\n");
+            string behaviors = Path.Combine(merge, "Meshes", "Actors", "Character", "Behaviors");
+            Directory.CreateDirectory(behaviors);
+            File.WriteAllBytes(Path.Combine(behaviors, "WeaponOverhaulBehavior.hkx"),
+                WeaponSubgraphBytes(@"Animations\Weapon\44Pistol\WPNAssemblyPose.hkt",
+                                    @"Animations\OverhaulClip.hkt"));
+
+            Check("without --mods the sweep never sees the merged manifest", 0,
+                  Program.Sweep(new[] { "sweep", "--data", data }));
+            Check("with --mods the sweep flags the merged subgraph's missing clip", 1,
+                  Program.Sweep(new[] { "sweep", "--data", data, "--mods", mods }));
+        }
+        finally { Directory.Delete(data, true); Directory.Delete(mods, true); }
+    }
+
+    private static void DiffReportsNewManifestsAndWeaponBehaviors()
+    {
+        Console.WriteLine("\nthe coverage diff names what the modlist adds to the load order");
+
+        string data = Directory.CreateTempSubdirectory("bgs-diff-data").FullName;
+        string mods = Directory.CreateTempSubdirectory("bgs-diff-mods").FullName;
+        try
+        {
+            const string baseManifest =
+                "3\n1\n10448007347639226270\n1\n" +
+                @"Actors\Character\Behaviors\WeaponBehavior.hkx" + "\n";
+            WriteSingleEntryArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+                "Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+                System.Text.Encoding.UTF8.GetBytes(baseManifest));
+
+            File.WriteAllText(Path.Combine(mods, "modlist.txt"), "+AnimTextData Merge\n");
+            string merge = Path.Combine(mods, "mods", "AnimTextData Merge");
+            string fileData = Path.Combine(merge, "Meshes", "AnimTextData", "AnimationFileData");
+            Directory.CreateDirectory(fileData);
+            File.WriteAllText(Path.Combine(fileData, "8806872131610908823.txt"),
+                "3\n1\n8806872131610908823\n1\n" +
+                @"Actors\Character\Behaviors\NewOverhaulBehavior.hkx" + "\n");
+            string behaviors = Path.Combine(merge, "Meshes", "Actors", "Character", "Behaviors");
+            Directory.CreateDirectory(behaviors);
+            File.WriteAllBytes(Path.Combine(behaviors, "NewOverhaulBehavior.hkx"),
+                WeaponSubgraphBytes(@"Animations\Weapon\44Pistol\WPNAssemblyPose.hkt",
+                                    @"Animations\WPNReload.hkt"));
+
+            using var vanilla = OpenCommonwealth.Services.Archive.GameData.Discover(data);
+            using var modded = OpenCommonwealth.Services.Archive.GameData.DiscoverModded(data, mods);
+            var diff = OpenCommonwealth.Services.Archive.SubgraphIndex.CompareCoverage(vanilla, modded);
+
+            Check("the modded index adds one manifest", 2, diff.ModdedManifests);
+            Check("exactly the merged id is new", 1, diff.NewIds.Count);
+            Check("the new id is the merged one", 8806872131610908823UL, diff.NewIds[0]);
+            Check("nothing is gone from the modded load order", 0, diff.GoneIds.Count);
+            Check("the new behavior path is named", 1, diff.NewBehaviorPaths.Count);
+            Check("it is the overhaul behavior",
+                  @"Actors\Character\Behaviors\NewOverhaulBehavior.hkx",
+                  diff.NewBehaviorPaths[0]);
+            Check("the new manifest is attributed to that behavior", 1,
+                  diff.NewManifestsPerBehavior[@"Actors\Character\Behaviors\NewOverhaulBehavior.hkx"]);
+            Check("the new behavior is classified as a weapon subgraph", 1,
+                  diff.NewWeaponBehaviors.Count);
+        }
+        finally { Directory.Delete(data, true); Directory.Delete(mods, true); }
+    }
+
+    private static void WriteSweepVanillaData(string data)
+    {
+        const string manifest =
+            "3\n1\n10448007347639226270\n1\n" +
+            @"Actors\Character\Behaviors\WeaponBehavior.hkx" + "\n";
+        WriteSingleEntryArchive(Path.Combine(data, "Fallout4 - Animations.ba2"),
+            "Meshes/AnimTextData/AnimationFileData/10448007347639226270.txt",
+            System.Text.Encoding.UTF8.GetBytes(manifest));
+        WriteTestArchive(Path.Combine(data, "WeaponClips.ba2"),
+            ("Meshes/Actors/Character/Behaviors/WeaponBehavior.hkx", WeaponSubgraphBytes()),
+            ("Meshes/Actors/Character/Animations/Weapon/44Pistol/Player/WPNReload.hkx", new byte[] { 1 }),
+            ("Meshes/Actors/Character/Animations/WPNReload.hkx", new byte[] { 2 }));
+        File.WriteAllBytes(Path.Combine(data, "Fallout4.esm"), WeaponEsm(
+            WeaponSet(1, @"Actors\Character\Behaviors\WeaponBehavior.hkx",
+                      @"Actors\Character\Animations\Weapon\44Pistol\Player",
+                      @"Actors\Character\Animations\Weapon\44Pistol",
+                      @"Actors\Character\Animations\Weapon\Pistol"),
+            WeaponSet(2, @"Actors\Character\Behaviors\WeaponBehavior.hkx",
+                      @"Actors\Character\Animations\Weapon\Pistol\Player",
+                      @"Actors\Character\Animations\Weapon\Pistol")));
+    }
+
+    private static void CrashLogFileYieldsTheHash()
+    {
+        Console.WriteLine("\ncrash logs and bare hashes both feed the resolver");
+
+        string dir = Directory.CreateTempSubdirectory("bgs-log").FullName;
+        try
+        {
+            string log = Path.Combine(dir, "crash.txt");
+            File.WriteAllText(log,
+                "... EXCEPTION_ACCESS_VIOLATION reading AnimTextData\\AnimationOffsets\\10448007347639226270.txt ...");
+            Check("the log's AnimationOffsets hash is extracted", 10448007347639226270UL,
+                  OpenCommonwealth.Services.Archive.SubgraphIndex.ExtractSubgraphHash(log));
+            Check("a bare hash is accepted", 10448007347639226270UL,
+                  OpenCommonwealth.Services.Archive.SubgraphIndex.ExtractSubgraphHash("10448007347639226270"));
+            Check("garbage is rejected", null, OpenCommonwealth.Services.Archive.SubgraphIndex.ExtractSubgraphHash("not a hash at all"));
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     private static void RepackDriftNamesWhatMoved()

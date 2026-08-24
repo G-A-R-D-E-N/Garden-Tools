@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/localized_fields.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -117,6 +118,16 @@ struct QuestAlias {
   std::optional<std::uint8_t> max_initial_fill_count;
   std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
+  // Subrecord signatures in this alias whose FormID names a master index
+  // outside the plugin's master table. Real mods ship these dangling links --
+  // OWR.esp has 28 ALFR references to index 3 with a single master -- and
+  // refusing to decode would make the whole quest unreadable in an editor
+  // whose job is to surface exactly that kind of problem.
+  //
+  // The raw subrecord is preserved verbatim in `subrecords`, so nothing is
+  // lost and a rewrite is unaffected; only the semantic fill cannot name a
+  // target.
+  std::vector<Signature> unresolved_links;
   std::vector<Subrecord> subrecords;
 };
 
@@ -130,6 +141,124 @@ struct QuestAliasCreation {
   std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
 };
+
+/*
+ * Quest stages, measured on Fallout4.esm's 1,336 QUST records (8,680 stages,
+ * 9,058 log entries).
+ *
+ * The array runs from the first INDX up to the first QOBJ or ANAM:
+ *
+ *   INDX (4 bytes: u16 index, u8 flags, u8 unknown)
+ *     QSDT (1 byte flags)          -- one log entry; 0..9 of them per stage
+ *       CNAM  log text, localized  -- 4 bytes in all 921 shipped instances
+ *       NAM2  note text, inline    -- never localized
+ *       CTDA/CIS2 per-entry conditions
+ *
+ * NAM0 does not occur in FO4 quest stages at all (0 of 8,680) despite being a
+ * documented Skyrim stage field, so it is not modelled.
+ */
+struct QuestLogEntry {
+  // QSDT: bit 0 completes the quest, bit 1 fails it. Observed values 0, 1, 2.
+  std::uint8_t flags{0};
+  // Decoded views of CNAM and NAM2. Read-only: `members` is what gets written.
+  std::optional<schema::LocalizedString> log_text;
+  std::optional<std::string> note;
+  // Every member after QSDT, in file order, CNAM and NAM2 included.
+  //
+  // This is authoritative on encode. The shipped order is
+  // QSDT [CTDA...] [NAM2] [CNAM] -- conditions come first -- so rebuilding
+  // from the decoded fields instead would silently reorder the 8,000+ entries
+  // that carry both.
+  std::vector<Subrecord> members;
+};
+
+struct QuestStage {
+  std::uint16_t index{0};
+  std::uint8_t flags{0};
+  // Not always zero in shipped data, so it is preserved rather than rebuilt.
+  std::uint8_t unknown{0};
+  // 63 shipped stages carry no log entry at all, so this may be empty.
+  std::vector<QuestLogEntry> log_entries;
+  // Members between INDX and the first QSDT. Bethesda never emits these, but
+  // third-party plugins do (a NAM2 ahead of any log entry), and rejecting the
+  // record would make the whole quest unreadable. Written back immediately
+  // after INDX.
+  std::vector<Subrecord> leading_members;
+};
+
+struct QuestStages {
+  std::vector<QuestStage> stages;
+};
+
+QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest);
+
+/*
+ * Quest objectives, measured on Fallout4.esm (1,198 objectives, 1,500
+ * targets). The array runs from the first QOBJ up to ANAM:
+ *
+ *   QOBJ (u16 objective index)
+ *     FNAM (u32 objective flags)    -- exactly one per objective
+ *     NNAM (display text, localized) -- exactly one; 4 bytes in all 1,198
+ *     QSTA (12 bytes)               -- one target; 0..19 of them
+ *       CTDA / CIS1 / CIS2 per-target conditions
+ */
+struct QuestObjectiveTarget {
+  // QSTA: int32 alias id at 0, uint32 flags at 4, optional keyword FormID at
+  // 8. The keyword is zero in 1,498 of the 1,500 shipped targets.
+  std::int32_t alias{0};
+  std::uint32_t flags{0};
+  std::optional<FormKey> keyword;
+  // Per-target conditions and anything unmodelled, kept in order.
+  std::vector<Subrecord> subrecords;
+};
+
+struct QuestObjective {
+  std::uint16_t index{0};
+  std::uint32_t flags{0};
+  std::optional<schema::LocalizedString> display_text;
+  // 66 shipped objectives carry no target at all.
+  std::vector<QuestObjectiveTarget> targets;
+};
+
+struct QuestObjectives {
+  std::vector<QuestObjective> objectives;
+};
+
+QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& quest);
+
+/*
+ * Authoring.
+ *
+ * Each writer rebuilds only its own contiguous array and splices it back into
+ * the record, so stages, objectives and aliases never disturb one another:
+ * the stage array is bounded by the first INDX and the first QOBJ/ANAM, the
+ * objective array by the first QOBJ and ANAM.
+ *
+ * Round-tripping an unmodified quest reproduces its exact subrecord sequence.
+ */
+void write_quest_stages(Plugin& plugin, const FormKey& quest, const QuestStages& stages);
+void write_quest_objectives(Plugin& plugin,
+                            const FormKey& quest,
+                            const QuestObjectives& objectives);
+
+// Convenience mutations over the decode/write pair. Each preserves everything
+// outside the array it touches.
+void add_quest_stage(Plugin& plugin, const FormKey& quest, const QuestStage& stage);
+bool remove_quest_stage(Plugin& plugin, const FormKey& quest, std::uint16_t index);
+// Moves the stage with `index` to position `to` in the array order.
+bool reorder_quest_stage(Plugin& plugin,
+                         const FormKey& quest,
+                         std::uint16_t index,
+                         std::size_t to);
+
+void add_quest_objective(Plugin& plugin,
+                         const FormKey& quest,
+                         const QuestObjective& objective);
+bool remove_quest_objective(Plugin& plugin, const FormKey& quest, std::uint16_t index);
+bool reorder_quest_objective(Plugin& plugin,
+                             const FormKey& quest,
+                             std::uint16_t index,
+                             std::size_t to);
 
 struct QuestAliases {
   std::uint32_t next_alias_id{0};
@@ -156,5 +285,13 @@ void replace_quest_alias(Plugin& plugin,
 bool remove_quest_alias(Plugin& plugin,
                         const FormKey& quest,
                         std::uint32_t alias_id);
+
+// Moves the alias with `alias_id` to position `to` in the array order. The
+// alias's whole contiguous subrecord run moves with it, so ALCS/ALMI prefixes
+// and per-alias conditions stay attached.
+bool reorder_quest_alias(Plugin& plugin,
+                         const FormKey& quest,
+                         std::uint32_t alias_id,
+                         std::size_t to);
 
 }  // namespace fo4::forms

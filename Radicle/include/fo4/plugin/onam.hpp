@@ -8,6 +8,6 @@ namespace fo4 {
 // rule evidenced in xEdit. Only master-owned, non-persistent overrides of the
 // record families that participate in ONAM are emitted. Existing ONAM data is
 // replaced deterministically.
-void rebuild_tes4_onam(Plugin& plugin);
+void rebuild_tes4_onam(Plugin& plugin, bool preserve_intact_structure = false);
 
 }  // namespace fo4

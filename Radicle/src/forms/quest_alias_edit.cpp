@@ -64,12 +64,11 @@ Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
 }
 
 void mark_modified(Plugin& plugin, Record& record) {
-  record.original_bytes.clear();
+  record.original_range.clear();
   record.decompressed_payload.clear();
   record.header.data_size = 0;
   record.uncompressed_size = 0;
-  plugin.original_bytes.clear();
-  visit_groups(plugin, [](Group& group) { group.original_bytes.clear(); });
+  plugin.original_range.clear();
 }
 
 std::uint32_t required_alias_id(const Subrecord& start) {
@@ -251,6 +250,48 @@ bool remove_quest_alias(Plugin& plugin,
   record->subrecords.erase(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->begin),
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->end));
+  mark_modified(next, *record);
+  plugin = std::move(next);
+  return true;
+}
+
+bool reorder_quest_alias(Plugin& plugin,
+                         const FormKey& quest,
+                         std::uint32_t alias_id,
+                         std::size_t to) {
+  auto next = plugin;
+  assign_record_form_keys(next);
+  validate_quest_record(next, quest);
+  auto* record = find_mutable_record(next, quest);
+  if (record == nullptr) throw QuestError("QUST record not found: " + quest.to_string());
+
+  const auto section = inspect_alias_section(*record);
+  const auto* range = find_range(section, alias_id);
+  if (range == nullptr) return false;
+  if (to >= section.ranges.size()) {
+    throw QuestError("QUST alias reorder target is out of range");
+  }
+
+  // Lift the alias's contiguous subrecord run out, then reinsert it at the
+  // start of whichever alias currently sits at `to`. Positions are recomputed
+  // against the shortened list so a forward move lands where the caller means.
+  const std::vector<Subrecord> moved(
+      record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->begin),
+      record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->end));
+  const auto from = static_cast<std::size_t>(range - section.ranges.data());
+  if (from == to) return true;
+
+  record->subrecords.erase(
+      record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->begin),
+      record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->end));
+
+  const auto after = inspect_alias_section(*record);
+  const auto insert_at =
+      to < after.ranges.size() ? after.ranges[to].begin : after.insertion_index;
+  record->subrecords.insert(
+      record->subrecords.begin() + static_cast<std::ptrdiff_t>(insert_at),
+      moved.begin(), moved.end());
+
   mark_modified(next, *record);
   plugin = std::move(next);
   return true;

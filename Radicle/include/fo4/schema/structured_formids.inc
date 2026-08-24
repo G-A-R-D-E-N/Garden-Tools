@@ -15,6 +15,11 @@
 // DSTD: health/index/stage/flags, self-damage, explosion FormID at 8, debris at 12.
 {0x44545344u, 8, 12},  // DSTD explosion
 {0x44545344u, 12, 16}, // DSTD debris
+// QSTA: objective target. int32 alias id at 0, uint32 flags at 4, optional
+// keyword FormID at 8 (zero when absent). 12 bytes in all 1,500 shipped
+// instances; only 2 carry a non-zero keyword, which is why a missing remap
+// slot here would be nearly invisible.
+{0x41545351u, 8, 12},  // QSTA target keyword
 // XNDP: navmesh FormID at 0, int16 triangle, pad.
 {0x50444E58u, 0, 4},   // XNDP
 // RACE VTCK: required male/female voice pair. Single-form VTCK uses are

@@ -118,7 +118,7 @@ TEST(ArmorEdit, InsertsMissingArmaBipedAndFirstPersonModels) {
 TEST(ArmorEdit, RefusesMissingFieldInsertionAroundUnmodeledLegacySubrecords) {
   auto plugin = fo4::read_plugin(legacy_armor(false), "Legacy.esp");
   const auto key = fo4::FormKey::parse("000800:Legacy.esp");
-  const auto original = plugin.original_bytes;
+  const auto original = fo4::test::original_bytes(plugin);
 
   EXPECT_THROW(
       static_cast<void>(fo4::forms::set_armor_model_fields(
@@ -131,7 +131,7 @@ TEST(ArmorEdit, RefusesMissingFieldInsertionAroundUnmodeledLegacySubrecords) {
           std::nullopt,
           std::nullopt)),
       fo4::forms::ArmorError);
-  EXPECT_EQ(plugin.original_bytes, original);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
 TEST(ArmorEdit, ReplacesExistingLegacyFieldWithoutGuessingInsertion) {
