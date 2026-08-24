@@ -81,9 +81,6 @@ std::span<const Signature> formlink_list_targets(
 bool formlink_list_target_allowed(const FormLinkListDescriptor& descriptor,
                                   Signature signature) noexcept;
 
-// Returns the number of schema-declared list elements, or nullopt when the
-// record does not exist. Record-type mismatches and malformed element storage
-// throw FormLinkListError instead of being treated as an empty list.
 std::optional<std::size_t> record_formlink_list_size(
     const Plugin& plugin,
     const FormKey& record_key,
@@ -103,15 +100,20 @@ FormLinkListMutationStatus insert_record_formlink_list_element(
     std::size_t index,
     const FormKey& target);
 
+// Inserts a zero FormID placeholder only for schema-declared nullable lists.
+// Non-null lists throw rather than manufacturing an invalid temporary record.
+FormLinkListMutationStatus insert_record_formlink_list_null_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    std::size_t index);
+
 FormLinkListMutationStatus remove_record_formlink_list_element(
     Plugin& plugin,
     const FormKey& record_key,
     const FormLinkListDescriptor& descriptor,
     std::size_t index);
 
-// Reorders only the logical list values while leaving the surrounding
-// subrecord layout intact. This is safer than physically moving subrecords
-// through unrelated record data.
 FormLinkListMutationStatus move_record_formlink_list_element(
     Plugin& plugin,
     const FormKey& record_key,
@@ -155,6 +157,13 @@ FormLinkListMutationStatus insert_record_nested_formlink_list_element(
     std::size_t container_index,
     std::size_t index,
     const FormKey& target);
+
+FormLinkListMutationStatus insert_record_nested_formlink_list_null_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const NestedFormLinkListDescriptor& descriptor,
+    std::size_t container_index,
+    std::size_t index);
 
 FormLinkListMutationStatus remove_record_nested_formlink_list_element(
     Plugin& plugin,
