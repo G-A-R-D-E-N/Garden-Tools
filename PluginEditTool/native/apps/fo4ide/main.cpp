@@ -31,6 +31,7 @@
 #include <fo4ide/logging/Logger.hpp>
 #include <fo4ide/material/MaterialService.hpp>
 #include <fo4ide/mcp/McpServer.hpp>
+#include <fo4ide/mo2/Mo2Profile.hpp>
 #include <fo4ide/platform/NativeWindow.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -76,6 +77,23 @@ std::filesystem::path webRootFromArgs(int argc, char** argv) {
     return {};
 }
 
+std::vector<std::filesystem::path> textureRootsForSettings(
+    const fo4ide::settings::Settings& settings) {
+    if (!settings.mo2InstancePath.empty()) {
+        auto profile = fo4ide::mo2::readProfile(
+            settings.mo2InstancePath, {}, settings.dataFolder);
+        if (profile) {
+            return std::vector<std::filesystem::path>(
+                profile->assetRootsLowToHigh.rbegin(),
+                profile->assetRootsLowToHigh.rend());
+        }
+    }
+
+    std::vector<std::filesystem::path> roots;
+    if (!settings.dataFolder.empty()) roots.push_back(settings.dataFolder);
+    return roots;
+}
+
 class AppTarget final : public fo4ide::rpc::Target {
 public:
     AppTarget(fo4ide::plugin::IPluginBackend& plugins,
@@ -107,6 +125,55 @@ private:
     fo4ide::plugin::IPluginBackend& plugins_;
     fo4ide::archive::ArchiveService& archives_;
     std::filesystem::path nifTool_;
+};
+
+class RefreshingSettingsTarget final : public fo4ide::rpc::Target {
+public:
+    RefreshingSettingsTarget(fo4ide::settings::Store& store,
+                             fo4ide::settings::Settings& settings,
+                             fo4ide::platform::Services& platform,
+                             fo4ide::process::Runner& runner,
+                             fo4ide::assets::TextureResolver& textures)
+        : inner_(store, settings, platform, runner),
+          settings_(settings),
+          textures_(textures) {}
+
+    fo4ide::Result<nlohmann::json> invoke(std::string_view method,
+                                          const nlohmann::json& args) override {
+        auto result = inner_.invoke(method, args);
+        if (method == "SaveSettings" && result && result->is_string() &&
+            result->get<std::string>() == "Settings saved.") {
+            textures_.setSessionRoots(textureRootsForSettings(settings_));
+        }
+        return result;
+    }
+
+private:
+    fo4ide::app::SettingsTarget inner_;
+    fo4ide::settings::Settings& settings_;
+    fo4ide::assets::TextureResolver& textures_;
+};
+
+class RefreshingAppInteropTarget final : public fo4ide::rpc::Target {
+public:
+    RefreshingAppInteropTarget(std::shared_ptr<fo4ide::app::AppInteropTarget> inner,
+                               fo4ide::settings::Settings& settings,
+                               fo4ide::assets::TextureResolver& textures)
+        : inner_(std::move(inner)), settings_(settings), textures_(textures) {}
+
+    fo4ide::Result<nlohmann::json> invoke(std::string_view method,
+                                          const nlohmann::json& args) override {
+        auto result = inner_->invoke(method, args);
+        if (method == "ReloadMo2Profile" && result) {
+            textures_.setSessionRoots(textureRootsForSettings(settings_));
+        }
+        return result;
+    }
+
+private:
+    std::shared_ptr<fo4ide::app::AppInteropTarget> inner_;
+    fo4ide::settings::Settings& settings_;
+    fo4ide::assets::TextureResolver& textures_;
 };
 
 bool registerTarget(fo4ide::rpc::Dispatcher& rpc,
@@ -387,32 +454,22 @@ int main(int argc, char** argv) {
     fo4ide::material::MaterialService materialService;
     fo4ide::archive::RadicleArchiveBackend archiveBackend;
     fo4ide::archive::ArchiveService archiveService(processRunner, toolLocator, archiveBackend);
-    // Texture resolution mirrors the C# TextureService: data roots come from
-    // the configured game folder and MO2 instance (mods), so loose files and
-    // BA2 archives are searched in that order, matching the C# GlobalRoots.
     fo4ide::assets::TextureResolver textureResolver;
-    {
-        std::vector<std::filesystem::path> roots;
-        if (!currentSettings.dataFolder.empty()) roots.push_back(currentSettings.dataFolder);
-        if (!currentSettings.mo2InstancePath.empty()) {
-            roots.push_back(currentSettings.mo2InstancePath / "mods");
-        }
-        textureResolver.setSessionRoots(std::move(roots));
-    }
+    textureResolver.setSessionRoots(textureRootsForSettings(currentSettings));
     fo4ide::events::EventBus events;
     fo4ide::plugin::RadiclePluginBackend plugins;
-    // Path-based game-Data protection: plugins physically inside the game's
-    // Data directory are read-only even if their reported source is missing.
     if (const auto falloutRoot = toolLocator.fallout4Root(); !falloutRoot.empty()) {
         plugins.setDataDirectory(falloutRoot / "Data");
     }
     fo4ide::rpc::Dispatcher rpc;
     auto appInteropTarget = std::make_shared<fo4ide::app::AppInteropTarget>(
         settingsStore, currentSettings, platformServices, plugins);
+    auto refreshingAppInteropTarget = std::make_shared<RefreshingAppInteropTarget>(
+        appInteropTarget, currentSettings, textureResolver);
 
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
-        !registerTarget(rpc, "appInterop", appInteropTarget, log) ||
-        !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
+        !registerTarget(rpc, "appInterop", refreshingAppInteropTarget, log) ||
+        !registerTarget(rpc, "settings", std::make_shared<RefreshingSettingsTarget>(settingsStore, currentSettings, platformServices, processRunner, textureResolver), log) ||
         !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, textureResolver, platformServices), log) ||
         !registerTarget(rpc, "papyrus", std::make_shared<fo4ide::app::PapyrusTarget>(processRunner, toolLocator, platformServices), log) ||
         !registerTarget(rpc, "audio", std::make_shared<fo4ide::app::AudioTarget>(audioService, platformServices), log) ||

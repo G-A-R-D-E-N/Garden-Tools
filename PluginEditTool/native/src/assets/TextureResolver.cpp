@@ -64,14 +64,7 @@ std::string trimmedQuotes(std::string_view value) {
     return out;
 }
 
-// The C# oracle relies on Windows' case-insensitive filesystem when probing
-// loose-file candidates ("Textures\\x.dds" finds "TEXTURES\\X.DDS"). On a
-// case-sensitive host the exact probe fails, so resolve the candidate against
-// the on-disk spelling by walking the path components and matching each
-// directory case-insensitively. Returns an empty path when nothing matches.
 std::filesystem::path caseInsensitivePath(std::filesystem::path path) {
-    // On POSIX, '\\' is a legal filename character rather than a separator;
-    // normalize it to '/' so candidate paths split into components.
     auto text = path.generic_string();
     for (auto& ch : text) {
         if (ch == '\\') ch = '/';
@@ -118,8 +111,6 @@ std::vector<std::byte> readBytes(const std::filesystem::path& path) {
     return bytes;
 }
 
-// Write via a sibling temp file and an atomic rename so a crashed writer can
-// never leave a partially written file that later passes the existence check.
 void writeTempThenRename(const std::filesystem::path& destination,
                          std::span<const std::byte> bytes) {
     const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -141,7 +132,6 @@ void writeTempThenRename(const std::filesystem::path& destination,
     }
 }
 
-// SHA-1 (FIPS 180-1), used only for cache keys, mirroring the C# Hash helper.
 std::array<std::uint32_t, 5> sha1(std::span<const std::uint8_t> input) {
     std::vector<std::uint8_t> message(input.begin(), input.end());
     const auto bitLength = static_cast<std::uint64_t>(message.size()) * 8u;
@@ -219,6 +209,9 @@ void TextureResolver::setSessionRoots(std::vector<std::filesystem::path> roots) 
     sessionRoots_ = std::move(roots);
     globalRootsCache_.clear();
     globalRootsLoaded_ = false;
+    index_.clear();
+    scannedArchives_.clear();
+    scannedRoots_.clear();
 }
 
 std::mutex& TextureResolver::lockFor(const std::string& key) {
@@ -290,11 +283,11 @@ std::vector<std::string> TextureResolver::lookupKeys(std::string_view rel,
 }
 
 std::vector<std::filesystem::path> TextureResolver::globalRoots() const {
-    if (globalRootsLoaded_) return globalRootsCache_;
     std::lock_guard<std::mutex> guard(indexMutex_);
-    if (globalRootsLoaded_) return globalRootsCache_;
-    globalRootsCache_ = sessionRoots_;
-    globalRootsLoaded_ = true;
+    if (!globalRootsLoaded_) {
+        globalRootsCache_ = sessionRoots_;
+        globalRootsLoaded_ = true;
+    }
     return globalRootsCache_;
 }
 
@@ -319,6 +312,10 @@ void TextureResolver::ensureRootScanned(const std::filesystem::path& root) {
         return;
     }
 
+    std::sort(archives.begin(), archives.end(), [](const auto& a, const auto& b) {
+        return lower(a.generic_string()) < lower(b.generic_string());
+    });
+
     for (const auto& archive : archives) {
         const auto archiveKey = lower(archive.string());
         if (!scannedArchives_.insert(archiveKey).second) continue;
@@ -335,7 +332,6 @@ void TextureResolver::ensureRootScanned(const std::filesystem::path& root) {
                 index_.try_emplace(key, archive.string());
             }
         } catch (const std::exception&) {
-            // A broken or malformed archive must not abort the whole scan.
         }
     }
 }
@@ -432,8 +428,6 @@ std::optional<std::filesystem::path> TextureResolver::resolveDds(
         nifDir = full.parent_path().string();
     }
 
-    // Filesystem paths on this host use '/' as the separator; convert the
-    // backslash-style FO4 relative path before appending it to a root.
     const auto fsRel = [](std::string_view value) {
         std::string out(value);
         for (auto& ch : out) {
@@ -470,6 +464,20 @@ std::optional<std::filesystem::path> TextureResolver::resolveDds(
         const auto resolved = caseInsensitivePath(candidate);
         if (!resolved.empty()) return resolved;
     }
+
+    for (const auto& root : globalRoots()) {
+        if (root.empty()) continue;
+        const auto direct = caseInsensitivePath(root / fsRel);
+        if (!direct.empty()) return direct;
+        if (startsWithInsensitive(normalized, "textures\\")) {
+            const auto stripped = caseInsensitivePath(root / fsRel.substr(9));
+            if (!stripped.empty()) return stripped;
+        } else {
+            const auto prefixed = caseInsensitivePath(root / "Textures" / fsRel);
+            if (!prefixed.empty()) return prefixed;
+        }
+    }
+
     return resolveFromArchives(normalized, nifDir, textureRoot, "textures");
 }
 
@@ -519,6 +527,20 @@ std::optional<std::filesystem::path> TextureResolver::resolveMaterialFile(
         const auto resolved = caseInsensitivePath(candidate);
         if (!resolved.empty()) return resolved;
     }
+
+    for (const auto& root : globalRoots()) {
+        if (root.empty()) continue;
+        const auto direct = caseInsensitivePath(root / fsRel);
+        if (!direct.empty()) return direct;
+        if (startsWithInsensitive(normalized, "materials\\")) {
+            const auto stripped = caseInsensitivePath(root / fsRel.substr(11));
+            if (!stripped.empty()) return stripped;
+        } else {
+            const auto prefixed = caseInsensitivePath(root / "Materials" / fsRel);
+            if (!prefixed.empty()) return prefixed;
+        }
+    }
+
     return resolveFromArchives(normalized, nifDir, textureRoot, "materials");
 }
 
@@ -553,6 +575,8 @@ std::optional<std::filesystem::path> TextureResolver::resolveFromArchives(
     std::string_view topFolder) {
     const auto keys = lookupKeys(rel, topFolder);
 
+    if (auto hit = scanAndLookup(globalRoots(), keys)) return hit;
+
     std::vector<std::filesystem::path> cheap;
     if (!nifDir.empty()) {
         auto roots = addDataRoots(nifDir);
@@ -562,8 +586,7 @@ std::optional<std::filesystem::path> TextureResolver::resolveFromArchives(
         auto roots = addDataRoots(textureRoot);
         cheap.insert(cheap.end(), roots.begin(), roots.end());
     }
-    if (auto hit = scanAndLookup(cheap, keys)) return hit;
-    return scanAndLookup(globalRoots(), keys);
+    return scanAndLookup(cheap, keys);
 }
 
 std::optional<std::filesystem::path> TextureResolver::getTexturePngPath(
