@@ -46,6 +46,25 @@ std::string trim(std::string_view value) {
     return std::string(value.substr(begin, end - begin));
 }
 
+std::string normalizeTargetPluginName(std::string name) {
+    const auto lowered = lower(name);
+    if (!lowered.ends_with(".esp") && !lowered.ends_with(".esm") &&
+        !lowered.ends_with(".esl")) {
+        name += ".esp";
+    }
+    return name;
+}
+
+nlohmann::json withTargetName(const nlohmann::json& args,
+                              std::size_t index,
+                              std::string_view targetName) {
+    auto normalized = args;
+    if (normalized.is_array() && index < normalized.size()) {
+        normalized[index] = targetName;
+    }
+    return normalized;
+}
+
 struct EnsuredWriteTarget {
     std::string name;
     bool created{false};
@@ -54,7 +73,7 @@ struct EnsuredWriteTarget {
 Result<EnsuredWriteTarget> ensureWriteTarget(plugin::IPluginBackend& backend,
                                               const nlohmann::json& args,
                                               std::size_t index) {
-    const auto targetName = stringArgument(args, index);
+    auto targetName = normalizeTargetPluginName(stringArgument(args, index));
     if (targetName.empty()) {
         return std::unexpected(Error{
             "TargetPluginMissing",
@@ -63,9 +82,9 @@ Result<EnsuredWriteTarget> ensureWriteTarget(plugin::IPluginBackend& backend,
     }
 
     auto created = backend.createPlugin(nlohmann::json::array({targetName}));
-    if (created) return EnsuredWriteTarget{targetName, true};
+    if (created) return EnsuredWriteTarget{std::move(targetName), true};
     if (created.error().type == "PluginAlreadyLoaded") {
-        return EnsuredWriteTarget{targetName, false};
+        return EnsuredWriteTarget{std::move(targetName), false};
     }
     return std::unexpected(created.error());
 }
@@ -310,6 +329,17 @@ Result<nlohmann::json> legacySearchRecordType(plugin::IPluginBackend& backend,
     return nlohmann::json(hits->dump());
 }
 
+Result<void> requireRootConditionsPath(const nlohmann::json& args,
+                                       std::size_t index) {
+    const auto path = trim(stringArgument(args, index));
+    if (path.empty() || lower(path) == "conditions") return {};
+    return std::unexpected(Error{
+        "ConditionPathUnsupported",
+        "Native condition editing currently supports the record's root Conditions list only; nested Mutagen reflection path '" +
+            path + "' is not represented by the native schema yet"
+    });
+}
+
 }
 
 PluginBackendTarget::PluginBackendTarget(plugin::IPluginBackend& backend, std::string targetNamespace)
@@ -333,7 +363,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                 nlohmann::json::array({
                     stringArgument(args, 1),
                     stringArgument(args, 0),
-                    stringArgument(args, 2),
+                    ensured->name,
                     false
                 }));
             return finishAutoCreatedTarget(
@@ -342,19 +372,39 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CopyAsOverride") {
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
+            auto normalizedArgs = withTargetName(args, 2, ensured->name);
             return finishAutoCreatedTarget(
-                backend_, *ensured, backend_.invokeLegacyBackend(method, args),
+                backend_, *ensured, backend_.invokeLegacyBackend(method, normalizedArgs),
                 "Copied ", "Replaced ");
         }
         if (method == "CopyAsNewRecord") {
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
+            auto normalizedArgs = withTargetName(args, 2, ensured->name);
             return finishAutoCreatedTarget(
-                backend_, *ensured, backend_.invokeLegacyBackend(method, args), "Copied ");
+                backend_, *ensured, backend_.invokeLegacyBackend(method, normalizedArgs), "Copied ");
         }
         if (method == "ResolveFormKeyLabels") return resolveFormKeyLabels(backend_, args);
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
         if (method == "GetConditionFunctionParams") return backend_.conditionFunctionParams();
+        if (method == "GetConditionsAt") {
+            auto supported = requireRootConditionsPath(args, 2);
+            if (!supported) return std::unexpected(supported.error());
+            return backend_.invokeBackend(
+                "GetConditions",
+                nlohmann::json::array({stringArgument(args, 0), stringArgument(args, 1)}));
+        }
+        if (method == "SetConditionsAt") {
+            auto supported = requireRootConditionsPath(args, 2);
+            if (!supported) return std::unexpected(supported.error());
+            return backend_.invokeBackend(
+                "SetConditions",
+                nlohmann::json::array({
+                    stringArgument(args, 0),
+                    stringArgument(args, 1),
+                    stringArgument(args, 3)
+                }));
+        }
         if (method == "DescribeElement") return backend_.describeElement(args);
         if (method == "AddElement") return backend_.addElement(args);
         if (method == "RemoveElement") return backend_.removeElement(args);
@@ -363,18 +413,24 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
         if (method == "DeepCopyAsOverride") {
-            if (!boolArgument(args, 3)) return backend_.deepCopyAsOverride(args);
-            auto ensured = ensureWriteTarget(backend_, args, 2);
+            const auto normalizedName = normalizeTargetPluginName(stringArgument(args, 2));
+            auto normalizedArgs = withTargetName(args, 2, normalizedName);
+            if (!boolArgument(args, 3)) return backend_.deepCopyAsOverride(normalizedArgs);
+            auto ensured = ensureWriteTarget(backend_, normalizedArgs, 2);
             if (!ensured) return std::unexpected(ensured.error());
+            normalizedArgs = withTargetName(normalizedArgs, 2, ensured->name);
             return finishAutoCreatedTarget(
-                backend_, *ensured, backend_.deepCopyAsOverride(args), "Deep-copied ");
+                backend_, *ensured, backend_.deepCopyAsOverride(normalizedArgs), "Deep-copied ");
         }
         if (method == "ChangeReferencingRecords") {
-            if (!boolArgument(args, 3)) return backend_.changeReferencingRecords(args);
-            auto ensured = ensureWriteTarget(backend_, args, 2);
+            const auto normalizedName = normalizeTargetPluginName(stringArgument(args, 2));
+            auto normalizedArgs = withTargetName(args, 2, normalizedName);
+            if (!boolArgument(args, 3)) return backend_.changeReferencingRecords(normalizedArgs);
+            auto ensured = ensureWriteTarget(backend_, normalizedArgs, 2);
             if (!ensured) return std::unexpected(ensured.error());
+            normalizedArgs = withTargetName(normalizedArgs, 2, ensured->name);
             return finishAutoCreatedTarget(
-                backend_, *ensured, backend_.changeReferencingRecords(args), "Repointed ");
+                backend_, *ensured, backend_.changeReferencingRecords(normalizedArgs), "Repointed ");
         }
         if (method == "CheckCircularLeveledLists") return backend_.checkCircularLeveledLists(args);
         if (method == "CreateSeqFile") return backend_.createSeqFile(args);
