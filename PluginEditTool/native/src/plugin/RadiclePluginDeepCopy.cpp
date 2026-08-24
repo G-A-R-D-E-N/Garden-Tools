@@ -117,7 +117,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
 
     std::scoped_lock lock(mutex_);
     auto* target = findPlugin(targetName);
-    if (target == nullptr) {
+    if (apply && target == nullptr) {
         return std::unexpected(Error{
             "TargetPluginNotLoaded",
             "Target plugin is not loaded yet: " + targetName
@@ -219,21 +219,19 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             if (capped) break;
         }
 
-        // Missing nested containment must fail before the dry-run claims the
-        // operation is executable. Replacing an already-present nested target
-        // is safe because copy_record_as_override preserves its destination
-        // group, but inserting a new nested record is deliberately unsupported.
         for (const auto& key : toCopy) {
             if (deepTopLevelRecord(source->plugin, key) != nullptr) continue;
-            if (fo4::find_record(target->plugin, key) != nullptr) continue;
+            if (target != nullptr && fo4::find_record(target->plugin, key) != nullptr) continue;
             return nlohmann::json(
                 "Deep copy is blocked by nested record " + key.to_string() +
                 ": native containment-aware insertion is not available for this record yet.");
         }
 
         std::vector<fo4::FormKey> existing;
-        for (const auto& key : toCopy) {
-            if (fo4::find_record(target->plugin, key) != nullptr) existing.push_back(key);
+        if (target != nullptr) {
+            for (const auto& key : toCopy) {
+                if (fo4::find_record(target->plugin, key) != nullptr) existing.push_back(key);
+            }
         }
 
         if (!apply) {
@@ -253,6 +251,12 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             return nlohmann::json(std::move(preview));
         }
 
+        if (target == nullptr) {
+            return std::unexpected(Error{
+                "TargetPluginNotLoaded",
+                "Target plugin disappeared before deep-copy apply: " + targetName
+            });
+        }
         if (const auto guard = writeGuard(*target)) return std::unexpected(*guard);
 
         if (!existing.empty() && !overwrite) {
