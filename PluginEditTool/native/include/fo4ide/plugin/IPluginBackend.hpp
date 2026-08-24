@@ -66,6 +66,13 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "CircularLeveledListCheckUnavailable",
+            "Native circular leveled-list checking is unavailable for this backend"
+        });
+    }
+
     // Compatibility metadata used by the legacy condition editor. Keeping it
     // on the backend interface avoids teaching the app/RPC layer about a
     // concrete Fallout 4 implementation.
