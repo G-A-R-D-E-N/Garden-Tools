@@ -20,6 +20,11 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
+int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) return fallback;
+    return args[index].get<int>();
+}
+
 std::string lower(std::string_view value) {
     std::string out(value);
     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
@@ -214,6 +219,31 @@ Result<nlohmann::json> legacyRecordTree(plugin::IPluginBackend& backend,
     return nlohmann::json(nodes.dump());
 }
 
+Result<nlohmann::json> legacySearchRecordType(plugin::IPluginBackend& backend,
+                                               const nlohmann::json& args,
+                                               std::string_view signature,
+                                               int defaultLimit) {
+    const auto query = stringArgument(args, 0);
+    const auto requestedLimit = intArgument(args, 1, defaultLimit);
+    const auto limit = requestedLimit <= 0 ? defaultLimit : requestedLimit;
+    auto hits = parseStringResult(
+        backend.invokeBackend(
+            "SearchRecords",
+            nlohmann::json::array({query, std::string(signature)})),
+        "SearchRecords");
+    if (!hits) return std::unexpected(hits.error());
+    if (!hits->is_array()) {
+        return std::unexpected(Error{
+            "BackendContractMismatch",
+            "SearchRecords did not return an array"
+        });
+    }
+    if (hits->size() > static_cast<std::size_t>(limit)) {
+        hits->erase(hits->begin() + limit, hits->end());
+    }
+    return nlohmann::json(hits->dump());
+}
+
 }
 
 PluginBackendTarget::PluginBackendTarget(plugin::IPluginBackend& backend, std::string targetNamespace)
@@ -242,6 +272,13 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
         if (method == "GetConditionFunctionParams") return backend_.conditionFunctionParams();
         return backend_.invokeBackend(method, args);
+    }
+    if (targetNamespace_ == "cell") {
+        if (method == "SearchCells") return legacySearchRecordType(backend_, args, "CELL", 25);
+        if (method == "SearchWorldspaces") return legacySearchRecordType(backend_, args, "WRLD", 100);
+        if (method == "GetPlugins") {
+            return backend_.invoke("appInterop.GetPlugins", nlohmann::json::array());
+        }
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
 }
