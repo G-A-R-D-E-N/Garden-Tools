@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,6 +16,8 @@ public:
     std::string invokedBackendMethod;
     nlohmann::json invokedBackendArguments;
     std::vector<std::string> backendMethods;
+    std::vector<std::string> createAttempts;
+    std::vector<std::string> loadedPlugins{"Patch.esp"};
 
     fo4ide::plugin::Capabilities capabilities() const noexcept override {
         return {.available = true};
@@ -80,6 +83,36 @@ public:
             }.dump());
         }
         return nlohmann::json("backend");
+    }
+
+    fo4ide::Result<nlohmann::json> createPlugin(
+        const nlohmann::json& args) override {
+        std::string name;
+        if (args.is_array() && !args.empty() && args[0].is_string()) {
+            name = args[0].get<std::string>();
+        }
+        createAttempts.push_back(name);
+        if (std::find(loadedPlugins.begin(), loadedPlugins.end(), name) != loadedPlugins.end()) {
+            return std::unexpected(fo4ide::Error{"PluginAlreadyLoaded", "already loaded"});
+        }
+        loadedPlugins.push_back(name);
+        return nlohmann::json("created");
+    }
+
+    fo4ide::Result<nlohmann::json> deepCopyAsOverride(
+        const nlohmann::json& args) override {
+        invokedBackendMethod = "DeepCopyAsOverride";
+        invokedBackendArguments = args;
+        backendMethods.emplace_back(invokedBackendMethod);
+        return nlohmann::json("deep");
+    }
+
+    fo4ide::Result<nlohmann::json> changeReferencingRecords(
+        const nlohmann::json& args) override {
+        invokedBackendMethod = "ChangeReferencingRecords";
+        invokedBackendArguments = args;
+        backendMethods.emplace_back(invokedBackendMethod);
+        return nlohmann::json("remap");
     }
 
     fo4ide::Result<nlohmann::json> conditionFunctionParams() const override {
@@ -153,12 +186,68 @@ TEST_CASE("Legacy ResolveConflict maps to copy-as-override without forced overwr
         "ResolveConflict",
         nlohmann::json::array({"000800:Base.esp", "Winner.esp", "Patch.esp"}));
     REQUIRE(result.has_value());
+    REQUIRE(backend.createAttempts.size() == 1);
+    CHECK(backend.createAttempts[0] == "Patch.esp");
     CHECK(backend.invokedBackendMethod == "CopyAsOverride");
     REQUIRE(backend.invokedBackendArguments.size() == 4);
     CHECK(backend.invokedBackendArguments[0] == "Winner.esp");
     CHECK(backend.invokedBackendArguments[1] == "000800:Base.esp");
     CHECK(backend.invokedBackendArguments[2] == "Patch.esp");
     CHECK(backend.invokedBackendArguments[3] == false);
+}
+
+TEST_CASE("Native copy workflows create a missing target before mutation") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    auto result = target.invoke(
+        "CopyAsOverride",
+        nlohmann::json::array({"Winner.esp", "000800:Base.esp", "NewPatch.esp", false}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.createAttempts.size() == 1);
+    CHECK(backend.createAttempts[0] == "NewPatch.esp");
+    CHECK(backend.invokedBackendMethod == "CopyAsOverride");
+
+    result = target.invoke(
+        "CopyAsNewRecord",
+        nlohmann::json::array({"Winner.esp", "000800:Base.esp", "DuplicatePatch.esp", "NewRecord"}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.createAttempts.size() == 2);
+    CHECK(backend.createAttempts[1] == "DuplicatePatch.esp");
+    CHECK(backend.invokedBackendMethod == "CopyAsNewRecord");
+}
+
+TEST_CASE("Deep copy and reference remap create targets only on apply") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    auto result = target.invoke(
+        "DeepCopyAsOverride",
+        nlohmann::json::array({"Winner.esp", "000800:Base.esp", "DeepPatch.esp", false, false, 200}));
+    REQUIRE(result.has_value());
+    CHECK(backend.createAttempts.empty());
+    CHECK(backend.invokedBackendMethod == "DeepCopyAsOverride");
+
+    result = target.invoke(
+        "DeepCopyAsOverride",
+        nlohmann::json::array({"Winner.esp", "000800:Base.esp", "DeepPatch.esp", true, false, 200}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.createAttempts.size() == 1);
+    CHECK(backend.createAttempts[0] == "DeepPatch.esp");
+
+    result = target.invoke(
+        "ChangeReferencingRecords",
+        nlohmann::json::array({"000800:Base.esp", "000801:Base.esp", "ReferencePatch.esp", false, 300}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.createAttempts.size() == 1);
+    CHECK(backend.invokedBackendMethod == "ChangeReferencingRecords");
+
+    result = target.invoke(
+        "ChangeReferencingRecords",
+        nlohmann::json::array({"000800:Base.esp", "000801:Base.esp", "ReferencePatch.esp", true, 300}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.createAttempts.size() == 2);
+    CHECK(backend.createAttempts[1] == "ReferencePatch.esp");
 }
 
 TEST_CASE("Legacy FormKey label resolution uses native record details") {
