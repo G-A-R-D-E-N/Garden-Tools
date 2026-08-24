@@ -245,6 +245,20 @@ TEST_CASE("Native copy workflows create a missing target before mutation") {
     CHECK(backend.discardAttempts.empty());
 }
 
+TEST_CASE("Native write targets normalize a missing plugin extension") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto result = target.invoke(
+        "CopyAsOverride",
+        nlohmann::json::array({"Winner.esp", "000800:Base.esp", "ExtensionlessPatch", false}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.createAttempts.size() == 1);
+    CHECK(backend.createAttempts[0] == "ExtensionlessPatch.esp");
+    REQUIRE(backend.invokedBackendArguments.size() >= 3);
+    CHECK(backend.invokedBackendArguments[2] == "ExtensionlessPatch.esp");
+}
+
 TEST_CASE("Deep copy and reference remap create targets only on apply") {
     RoutingBackend backend;
     fo4ide::app::PluginBackendTarget target(backend, "backend");
@@ -379,6 +393,42 @@ TEST_CASE("Legacy condition editor gets parameter metadata from the backend capa
     const auto params = parsed(target.invoke("GetConditionFunctionParams", nlohmann::json::array()));
     REQUIRE(params.contains("GetDistance"));
     CHECK(params.at("GetDistance")[0].at("kind") == "record");
+}
+
+TEST_CASE("Legacy root condition paths route to native CTDA operations") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    auto result = target.invoke(
+        "GetConditionsAt",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Conditions"}));
+    REQUIRE(result.has_value());
+    CHECK(backend.invokedBackendMethod == "GetConditions");
+    REQUIRE(backend.invokedBackendArguments.size() == 2);
+    CHECK(backend.invokedBackendArguments[0] == "Patch.esp");
+    CHECK(backend.invokedBackendArguments[1] == "000800:Patch.esp");
+
+    result = target.invoke(
+        "SetConditionsAt",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "", "[]"}));
+    REQUIRE(result.has_value());
+    CHECK(backend.invokedBackendMethod == "SetConditions");
+    REQUIRE(backend.invokedBackendArguments.size() == 3);
+    CHECK(backend.invokedBackendArguments[0] == "Patch.esp");
+    CHECK(backend.invokedBackendArguments[1] == "000800:Patch.esp");
+    CHECK(backend.invokedBackendArguments[2] == "[]");
+}
+
+TEST_CASE("Nested legacy condition paths fail explicitly until native schema support exists") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto result = target.invoke(
+        "GetConditionsAt",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Perks[0].Conditions"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ConditionPathUnsupported");
+    CHECK(backend.invokedBackendMethod.empty());
 }
 
 TEST_CASE("Cell search routes through the native record index and honors its limit") {
