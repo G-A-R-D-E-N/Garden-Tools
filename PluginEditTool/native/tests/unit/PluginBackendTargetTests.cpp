@@ -24,6 +24,9 @@ public:
         std::string_view operation,
         const nlohmann::json&) override {
         invokedOperation = operation;
+        if (operation == "appInterop.GetPlugins") {
+            return nlohmann::json(R"([{"Key":"Patch.esp"}])");
+        }
         return nlohmann::json("invoke");
     }
 
@@ -35,6 +38,14 @@ public:
         backendMethods.emplace_back(method);
 
         if (method == "SearchRecords") {
+            const auto type = args.is_array() && args.size() > 1 && args[1].is_string()
+                ? args[1].get<std::string>() : std::string{};
+            if (type == "CELL") {
+                return nlohmann::json(R"([{"FormKey":"000801:Patch.esp","EditorID":"CellOne","Type":"CELL","Plugin":"Patch.esp"},{"FormKey":"000802:Patch.esp","EditorID":"CellTwo","Type":"CELL","Plugin":"Patch.esp"}])");
+            }
+            if (type == "WRLD") {
+                return nlohmann::json(R"([{"FormKey":"000900:Patch.esp","EditorID":"WorldOne","Type":"WRLD","Plugin":"Patch.esp"}])");
+            }
             return nlohmann::json(nlohmann::json::array({
                 {
                     {"FormKey", "000800:Patch.esp"},
@@ -182,4 +193,30 @@ TEST_CASE("Legacy condition editor gets parameter metadata from the backend capa
     const auto params = parsed(target.invoke("GetConditionFunctionParams", nlohmann::json::array()));
     REQUIRE(params.contains("GetDistance"));
     CHECK(params.at("GetDistance")[0].at("kind") == "record");
+}
+
+TEST_CASE("Cell search routes through the native record index and honors its limit") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "cell");
+
+    const auto cells = parsed(target.invoke("SearchCells", nlohmann::json::array({"cell", 1})));
+    REQUIRE(cells.size() == 1);
+    CHECK(cells[0].at("Type") == "CELL");
+    CHECK(backend.invokedBackendMethod == "SearchRecords");
+    CHECK(backend.invokedBackendArguments[1] == "CELL");
+
+    const auto worlds = parsed(target.invoke("SearchWorldspaces", nlohmann::json::array({"world", 100})));
+    REQUIRE(worlds.size() == 1);
+    CHECK(worlds[0].at("Type") == "WRLD");
+    CHECK(backend.invokedBackendArguments[1] == "WRLD");
+}
+
+TEST_CASE("Cell GetPlugins reuses the native environment plugin list") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "cell");
+
+    const auto plugins = parsed(target.invoke("GetPlugins", nlohmann::json::array()));
+    REQUIRE(plugins.size() == 1);
+    CHECK(plugins[0].at("Key") == "Patch.esp");
+    CHECK(backend.invokedOperation == "appInterop.GetPlugins");
 }
