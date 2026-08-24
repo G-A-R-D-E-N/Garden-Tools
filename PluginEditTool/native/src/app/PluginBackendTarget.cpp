@@ -257,6 +257,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
             return backend_.invokeBackend(
                 "SavePlugin", nlohmann::json::array({pluginName, std::string{}}));
         }
+        if (method == "CreatePlugin") return backend_.createPlugin(args);
         if (method == "RenumberFormId") return legacyRenumberFormId(backend_, args);
         if (method == "ResolveConflict") {
             return backend_.invokeBackend(
