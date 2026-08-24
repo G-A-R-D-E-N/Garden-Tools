@@ -271,6 +271,11 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "ResolveFormKeyLabels") return resolveFormKeyLabels(backend_, args);
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
         if (method == "GetConditionFunctionParams") return backend_.conditionFunctionParams();
+        if (method == "DescribeElement") return backend_.describeElement(args);
+        if (method == "AddElement") return backend_.addElement(args);
+        if (method == "RemoveElement") return backend_.removeElement(args);
+        if (method == "MoveElement") return backend_.moveElement(args);
+        if (method == "ClearElement") return backend_.clearElement(args);
         return backend_.invokeBackend(method, args);
     }
     if (targetNamespace_ == "cell") {
