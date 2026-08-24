@@ -141,6 +141,11 @@ fo4::Plugin makeEmptyPlugin(std::string_view fileName,
     return plugin;
 }
 
+bool emptyCreatedPlugin(const fo4::Plugin& plugin) {
+    return plugin.groups.empty() && plugin.header.masters.empty() &&
+           plugin.header.next_form_id == 0x800u;
+}
+
 }  // namespace
 
 Result<void> RadiclePluginBackend::setTrustedNewPluginRoot(
@@ -308,6 +313,93 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
     return nlohmann::json(
         "Created new plugin '" + (*created)->name + "' in MO2 overwrite. "
         "Add records or overrides, then save_plugin to persist further changes.");
+}
+
+Result<void> RadiclePluginBackend::discardCreatedPlugin(std::string_view name) {
+    std::scoped_lock lock(mutex_);
+    const auto normalized = normalizedPluginFilename(std::string(name));
+    auto it = std::find_if(plugins_.begin(), plugins_.end(), [&](const LoadedPlugin& loaded) {
+        return createLower(loaded.name) == createLower(normalized);
+    });
+    if (it == plugins_.end()) {
+        return std::unexpected(Error{
+            "CreatedPluginNotLoaded",
+            "Auto-created plugin is no longer loaded: " + normalized
+        });
+    }
+    if (it->source != "MO2 overwrite" || trustedNewPluginRoot_.empty()) {
+        return std::unexpected(Error{
+            "CreatedPluginRollbackRefused",
+            "Refusing to discard a plugin that was not created in the trusted MO2 overwrite root"
+        });
+    }
+    if (!fileUnchangedSinceLoad(*it)) {
+        return std::unexpected(Error{
+            "CreatedPluginChangedOnDisk",
+            "Refusing to discard an auto-created plugin that changed on disk: " + it->path.string()
+        });
+    }
+    if (!emptyCreatedPlugin(it->plugin)) {
+        return std::unexpected(Error{
+            "CreatedPluginNotEmpty",
+            "Refusing to discard an auto-created plugin after it gained records or masters"
+        });
+    }
+
+    std::error_code pathEc;
+    const auto canonicalPath = std::filesystem::weakly_canonical(it->path, pathEc);
+    if (pathEc || canonicalPath.empty() ||
+        canonicalPath.parent_path() != trustedNewPluginRoot_ ||
+        !pathWithin(trustedNewPluginRoot_, canonicalPath)) {
+        return std::unexpected(Error{
+            "CreatedPluginRollbackPathInvalid",
+            "Auto-created plugin no longer resolves inside the trusted MO2 overwrite root"
+        });
+    }
+
+    try {
+        const auto disk = fo4::read_plugin_file(canonicalPath);
+        if (!emptyCreatedPlugin(disk)) {
+            return std::unexpected(Error{
+                "CreatedPluginNotEmpty",
+                "Refusing to discard an auto-created plugin whose on-disk contents are no longer empty"
+            });
+        }
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{
+            "CreatedPluginRollbackReadFailed",
+            "Could not verify auto-created plugin before rollback: " + std::string(error.what())
+        });
+    }
+
+    const auto index = static_cast<std::size_t>(std::distance(plugins_.begin(), it));
+    auto removed = std::move(*it);
+    plugins_.erase(plugins_.begin() + static_cast<std::ptrdiff_t>(index));
+    try {
+        rebuildGraphLocked();
+    } catch (const std::exception& error) {
+        plugins_.insert(plugins_.begin() + static_cast<std::ptrdiff_t>(index), std::move(removed));
+        try {
+            rebuildGraphLocked();
+        } catch (...) {
+        }
+        return std::unexpected(Error{"CreatedPluginRollbackGraphFailed", error.what()});
+    }
+
+    std::error_code removeEc;
+    const bool removedFile = std::filesystem::remove(canonicalPath, removeEc);
+    if (removeEc || !removedFile) {
+        plugins_.insert(plugins_.begin() + static_cast<std::ptrdiff_t>(index), std::move(removed));
+        try {
+            rebuildGraphLocked();
+        } catch (...) {
+        }
+        return std::unexpected(Error{
+            "CreatedPluginRollbackDeleteFailed",
+            "Could not delete empty auto-created plugin: " + canonicalPath.string()
+        });
+    }
+    return {};
 }
 
 }  // namespace fo4ide::plugin
