@@ -28,6 +28,7 @@ public:
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
     }
