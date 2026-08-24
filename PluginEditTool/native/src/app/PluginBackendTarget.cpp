@@ -279,6 +279,9 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "GetPlugins") {
             return backend_.invoke("appInterop.GetPlugins", nlohmann::json::array());
         }
+        if (method == "GetPlacedReferences") return backend_.getPlacedReferences(args);
+        if (method == "GetPlacedReferencesAtGrid") return backend_.getPlacedReferencesAtGrid(args);
+        if (method == "SetPlacedReferenceTransform") return backend_.setPlacedReferenceTransform(args);
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
 }
