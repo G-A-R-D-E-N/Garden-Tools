@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ClipboardCopy, MessageSquare, Terminal, Check } from 'lucide-react';
 import './ChatPanel.css';
+import './NativeMcpPanel.css';
 
 const MCP_COMMAND = 'fo4ide --mcp';
 
