@@ -81,7 +81,7 @@ TEST_CASE("Native CreatePlugin writes validates registers and immediately suppor
     const auto duplicate = backend.createPlugin(
         nlohmann::json::array({"FreshPatch.esp"}));
     REQUIRE_FALSE(duplicate.has_value());
-    CHECK(duplicate.error().code == "PluginAlreadyLoaded");
+    CHECK(duplicate.error().type == "PluginAlreadyLoaded");
 }
 
 TEST_CASE("Native CreatePlugin sets ESL flags and rejects unsafe or protected names") {
@@ -103,18 +103,18 @@ TEST_CASE("Native CreatePlugin sets ESL flags and rejects unsafe or protected na
     const auto traversal = backend.createPlugin(
         nlohmann::json::array({"../escape.esp"}));
     REQUIRE_FALSE(traversal.has_value());
-    CHECK(traversal.error().code == "InvalidPluginName");
+    CHECK(traversal.error().type == "InvalidPluginName");
     CHECK_FALSE(std::filesystem::exists(root / "escape.esp"));
 
     const auto device = backend.createPlugin(
         nlohmann::json::array({"NUL.esp"}));
     REQUIRE_FALSE(device.has_value());
-    CHECK(device.error().code == "InvalidPluginName");
+    CHECK(device.error().type == "InvalidPluginName");
 
     const auto protectedGame = backend.createPlugin(
         nlohmann::json::array({"Fallout4.esm"}));
     REQUIRE_FALSE(protectedGame.has_value());
-    CHECK(protectedGame.error().code == "PluginProtected");
+    CHECK(protectedGame.error().type == "PluginProtected");
 }
 
 TEST_CASE("Native CreatePlugin requires an explicitly trusted output root") {
@@ -122,5 +122,5 @@ TEST_CASE("Native CreatePlugin requires an explicitly trusted output root") {
     const auto created = backend.createPlugin(
         nlohmann::json::array({"NoRoot.esp"}));
     REQUIRE_FALSE(created.has_value());
-    CHECK(created.error().code == "NewPluginRootUnavailable");
+    CHECK(created.error().type == "NewPluginRootUnavailable");
 }
