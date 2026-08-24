@@ -94,6 +94,7 @@ add_executable(
     unit/RadiclePluginDeepCopyTests.cpp
     unit/RadiclePluginRenumberTests.cpp
     unit/RadiclePluginLeveledTests.cpp
+    unit/RadiclePluginSeqTests.cpp
     unit/RadiclePluginExteriorCellTests.cpp
     unit/RadiclePluginCellTests.cpp
     unit/RadiclePluginEyesTests.cpp
