@@ -25,6 +25,7 @@ public:
         std::string_view method,
         const nlohmann::json& arguments) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
     }
