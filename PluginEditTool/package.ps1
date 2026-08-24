@@ -1,4 +1,3 @@
-
 [CmdletBinding()]
 param(
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
@@ -11,12 +10,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$Root      = $PSScriptRoot
-$Csproj    = Join-Path $Root 'FO4RecordEditor\FO4RecordEditor.csproj'
-$WebDir    = Join-Path $Root 'web'
-$PublishIn = Join-Path $Root 'FO4RecordEditor\bin\Release\net9.0-windows\win-x64\publish'
-$Staging   = Join-Path $Root "dist\FO4RecordEditor-$Version"
-$ZipPath   = Join-Path $Root "dist\FO4RecordEditor-$Version.zip"
+$Root        = $PSScriptRoot
+$NativeDir   = Join-Path $Root 'native'
+$NativeBuild = Join-Path $NativeDir 'build\package-win-x64'
+$WebDir      = Join-Path $Root 'web'
+$Staging     = Join-Path $Root "dist\FO4RecordEditor-$Version"
+$ZipPath     = Join-Path $Root "dist\FO4RecordEditor-$Version.zip"
 
 $Niftool   = Join-Path $Root '..\tools\niftool\build\windows\x64\release\niftool.exe'
 $Texconv   = Join-Path $Root 'TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconvx64.exe'
@@ -41,35 +40,60 @@ if (-not $SkipWeb) {
         if ($LASTEXITCODE -ne 0) { throw 'npm run build failed.' }
     } finally { Pop-Location }
 } else {
-    Warn 'Skipping the web build (-SkipWeb). web\dist\ had better be current.'
+    Warn 'Skipping the web build (-SkipWeb). web\dist\ must already be current.'
 }
 
-if (-not (Test-Path (Join-Path $WebDir 'dist'))) {
-    throw "web\dist\ does not exist. Run without -SkipWeb — the exe will not render its UI without it."
+$WebDist = Join-Path $WebDir 'dist'
+if (-not (Test-Path $WebDist)) {
+    throw "web\dist\ does not exist. Run without -SkipWeb; the native window will not render without it."
 }
 
-Step 'Publishing (framework-dependent, x64)'
-dotnet publish $Csproj -c Release -r win-x64 --self-contained false `
-    -p:PublishSingleFile=false -p:DebugType=none
-if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed. Scroll up for the error.' }
+Step 'Configuring the native C++ host'
+$Generator = if ($env:FO4IDE_CMAKE_GENERATOR) { $env:FO4IDE_CMAKE_GENERATOR } else { 'Visual Studio 17 2022' }
+$Configure = @(
+    '-S', $NativeDir,
+    '-B', $NativeBuild,
+    '-G', $Generator,
+    '-DFO4IDE_BUILD_TESTS=OFF',
+    '-DFO4IDE_BUILD_HTTP=ON',
+    # Force the pinned static fallback so release packages never depend on an
+    # arbitrary developer-machine zlib DLL.
+    '-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON'
+)
+if ($Generator -match 'Visual Studio') {
+    $Configure += @('-A', 'x64')
+}
+& cmake @Configure
+if ($LASTEXITCODE -ne 0) { throw 'Native CMake configure failed.' }
+
+Step 'Building FO4RecordEditor.exe (Release)'
+cmake --build $NativeBuild --config Release --target fo4ide
+if ($LASTEXITCODE -ne 0) { throw 'Native C++ build failed. Scroll up for the compiler error.' }
+
+$NativeExe = Get-ChildItem $NativeBuild -Filter 'FO4RecordEditor.exe' -Recurse -File |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if ($null -eq $NativeExe) {
+    throw "Native build completed but FO4RecordEditor.exe was not found under $NativeBuild"
+}
 
 Step 'Staging the package'
 if (Test-Path $Staging) { Remove-Item $Staging -Recurse -Force }
 New-Item -ItemType Directory -Path $Staging -Force | Out-Null
+Copy-Item $NativeExe.FullName (Join-Path $Staging 'FO4RecordEditor.exe') -Force
 
-Copy-Item "$PublishIn\*" $Staging -Recurse -Force
+$WebStage = Join-Path $Staging 'web\dist'
+New-Item -ItemType Directory -Path $WebStage -Force | Out-Null
+Copy-Item (Join-Path $WebDist '*') $WebStage -Recurse -Force
 
-Get-ChildItem $Staging -Include '*.pdb', '*.startup.log', 'settings.json' -Recurse -File |
-    Remove-Item -Force -ErrorAction SilentlyContinue
-
-Step 'Bundling external tools'
+Step 'Bundling optional external tools'
 if (Test-Path $Niftool) {
     $dest = Join-Path $Staging 'tools\niftool'
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
     Copy-Item $Niftool $dest -Force
     Write-Host '    niftool.exe'
 } else {
-    Warn "niftool.exe not found at $Niftool — the nif_* tools will be dead in this package."
+    Warn "niftool.exe not found at $Niftool; the nif_* external-tool operations will be unavailable."
 }
 
 if (Test-Path $Texconv) {
@@ -78,7 +102,7 @@ if (Test-Path $Texconv) {
     Copy-Item $Texconv $dest -Force
     Write-Host '    Texconvx64.exe'
 } else {
-    Warn "Texconvx64.exe not found — texture previews will not render."
+    Warn 'Texconvx64.exe not found; native DDS support still works, but texconv-only fallbacks will be unavailable.'
 }
 
 if (-not $SkipCkWiki) {
@@ -89,10 +113,10 @@ if (-not $SkipCkWiki) {
         $count = (Get-ChildItem $dest -Filter '*.html' -Recurse -File).Count
         Write-Host "    CK Wiki mirror ($count pages)"
     } else {
-        Warn "CK wiki mirror not found at $CkWiki — papyrus_function_lookup/papyrus_script_info will be dead in this package unless the recipient sets CkWikiPath themselves."
+        Warn "CK wiki mirror not found at $CkWiki; offline wiki lookups require CK_WIKI_PATH on the target machine."
     }
 } else {
-    Warn 'Skipping the CK Wiki mirror (-SkipCkWiki). Fine for a local iteration build, not for one you hand to someone.'
+    Warn 'Skipping the CK Wiki mirror (-SkipCkWiki).'
 }
 
 if (-not $SkipAudioTools) {
@@ -104,13 +128,16 @@ if (-not $SkipAudioTools) {
             $src = Join-Path $AudioToolsDir $exe
             if (Test-Path $src) { Copy-Item $src $dest -Force } else { $missing += $exe }
         }
-        if ($missing.Count -eq 0) { Write-Host '    ffmpeg.exe, xWMAEncode.exe, BmlFuzEncode.exe, BmlFuzDecode.exe' }
-        else { Warn "Missing from ${AudioToolsDir}: $($missing -join ', ') — the audio_* tools will be partially dead in this package." }
+        if ($missing.Count -eq 0) {
+            Write-Host '    ffmpeg.exe, xWMAEncode.exe, BmlFuzEncode.exe, BmlFuzDecode.exe'
+        } else {
+            Warn "Missing from ${AudioToolsDir}: $($missing -join ', ')"
+        }
     } else {
-        Warn "Audio tools folder not found at $AudioToolsDir — the audio_* tools will be dead in this package unless the recipient sets FfmpegPath/XwmaEncodePath themselves."
+        Warn "Audio tools folder not found at $AudioToolsDir; configure FFMPEG_PATH/XWMAENCODE_PATH if needed."
     }
 } else {
-    Warn 'Skipping the audio tools (-SkipAudioTools). Fine for a local iteration build, not for one you hand to someone.'
+    Warn 'Skipping the audio tools (-SkipAudioTools).'
 }
 
 if ($IncludeBaseScripts) {
@@ -118,7 +145,7 @@ if ($IncludeBaseScripts) {
         $dest = Join-Path $Staging 'tools\papyrus\Base'
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
         Copy-Item "$BaseScripts\*" $dest -Recurse -Force
-        Warn 'Bundled the vanilla Papyrus base scripts. These are Bethesda''s — do not redistribute this build.'
+        Warn 'Bundled vanilla Papyrus base scripts. These are Bethesda assets; do not redistribute this build.'
     } else {
         Warn "-IncludeBaseScripts was set but $BaseScripts does not exist."
     }
@@ -157,5 +184,7 @@ $sizeMb = [math]::Round((Get-Item $ZipPath).Length / 1MB, 1)
 Write-Host "`n============================================================" -ForegroundColor Green
 Write-Host " Packaged: $ZipPath" -ForegroundColor Green
 Write-Host " Size:     $sizeMb MB"
-Write-Host " Needs:    .NET 9 Desktop Runtime (x64) on the target machine"
+Write-Host ' Runtime:  native C++23; no .NET runtime required'
+Write-Host ' Needs:    Microsoft Edge WebView2 Runtime (x64)'
+Write-Host '           Microsoft Visual C++ 2015-2022 Redistributable (x64)'
 Write-Host "============================================================`n" -ForegroundColor Green
