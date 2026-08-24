@@ -47,6 +47,7 @@ std::string trim(std::string_view value) {
 }
 
 std::string normalizeTargetPluginName(std::string name) {
+    if (name.empty()) return name;
     const auto lowered = lower(name);
     if (!lowered.ends_with(".esp") && !lowered.ends_with(".esm") &&
         !lowered.ends_with(".esl")) {
