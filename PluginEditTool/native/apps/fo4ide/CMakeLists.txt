@@ -29,4 +29,6 @@ target_compile_definitions(
 fo4ide_enable_warnings(fo4ide)
 fo4ide_enable_sanitizers(fo4ide)
 
-set_target_properties(fo4ide PROPERTIES OUTPUT_NAME "FO4IDE-native")
+# Preserve the historical executable name so existing MO2 launch entries and
+# MCP configurations continue to work after the C++ cutover.
+set_target_properties(fo4ide PROPERTIES OUTPUT_NAME "FO4RecordEditor")
