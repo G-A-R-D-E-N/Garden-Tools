@@ -21,6 +21,7 @@ add_library(
     plugin/RadiclePluginRenumber.cpp
     plugin/RadiclePluginDeepCopy.cpp
     plugin/RadiclePluginLeveled.cpp
+    plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginBatchMutation.cpp
     plugin/RadiclePluginMasterMutation.cpp
     plugin/RadiclePluginReadApi.cpp
