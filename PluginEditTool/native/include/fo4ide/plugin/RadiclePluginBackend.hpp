@@ -48,6 +48,9 @@ private:
         fo4::Plugin plugin;
     };
 
+    Result<LoadedPlugin*> createPluginLocked(std::string fileName);
+    Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
+
     Result<nlohmann::json> loadEnvironment(const nlohmann::json& arguments);
     Result<nlohmann::json> getPlugins() const;
     Result<nlohmann::json> getChildren(const nlohmann::json& arguments) const;
