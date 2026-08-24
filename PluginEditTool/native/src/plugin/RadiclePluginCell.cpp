@@ -25,7 +25,9 @@ namespace {
 constexpr auto k_cell = fo4::Signature::from_string("CELL");
 constexpr auto k_wrld = fo4::Signature::from_string("WRLD");
 constexpr auto k_scol = fo4::Signature::from_string("SCOL");
+constexpr auto k_txst = fo4::Signature::from_string("TXST");
 constexpr auto k_modl = fo4::Signature::from_string("MODL");
+constexpr auto k_tx00 = fo4::Signature::from_string("TX00");
 constexpr auto k_full = fo4::Signature::from_string("FULL");
 
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
@@ -73,6 +75,7 @@ std::string friendlyBaseType(fo4::Signature signature) {
     if (value == "NPC_") return "Npc";
     if (value == "DOOR") return "Door";
     if (value == "MSTT") return "MovableStatic";
+    if (value == "TXST") return "TextureSet";
     return value;
 }
 
@@ -208,6 +211,7 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
         std::string baseEditorId;
         std::string baseType;
         std::string modelPath;
+        nlohmann::json decalDiffuse = nullptr;
         nlohmann::json scolParts = nullptr;
         if (ref.base.has_value()) {
             for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
@@ -218,6 +222,9 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
                 modelPath = zstring(*baseRecord, k_modl);
                 if (baseRecord->header.signature == k_scol) {
                     scolParts = staticCollectionPartsJson(plugins, it->plugin, *baseRecord);
+                } else if (baseRecord->header.signature == k_txst) {
+                    const auto diffuse = zstring(*baseRecord, k_tx00);
+                    if (!diffuse.empty()) decalDiffuse = diffuse;
                 }
                 break;
             }
@@ -233,7 +240,7 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
             {"baseFormKey", ref.base.has_value() ? ref.base->to_string() : std::string{}},
             {"baseEditorId", baseEditorId},
             {"modelPath", modelPath},
-            {"decalDiffuse", nullptr},
+            {"decalDiffuse", std::move(decalDiffuse)},
             {"decalWidth", nullptr},
             {"decalHeight", nullptr},
             {"scolParts", std::move(scolParts)},
