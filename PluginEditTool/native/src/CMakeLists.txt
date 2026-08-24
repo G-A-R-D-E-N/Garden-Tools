@@ -12,6 +12,7 @@ add_library(
     plugin/RadiclePluginMasters.cpp
     plugin/RadiclePluginMutation.cpp
     plugin/RadiclePluginLifecycle.cpp
+    plugin/RadiclePluginCreate.cpp
     plugin/RadiclePluginScalar.cpp
     plugin/RadiclePluginArmor.cpp
     plugin/RadiclePluginFormLinkList.cpp
