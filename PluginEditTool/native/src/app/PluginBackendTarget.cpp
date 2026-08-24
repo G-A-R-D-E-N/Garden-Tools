@@ -279,6 +279,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
         if (method == "DeepCopyAsOverride") return backend_.deepCopyAsOverride(args);
+        if (method == "ChangeReferencingRecords") return backend_.changeReferencingRecords(args);
         if (method == "CheckCircularLeveledLists") return backend_.checkCircularLeveledLists(args);
         if (method == "CreateSeqFile") return backend_.createSeqFile(args);
         return backend_.invokeLegacyBackend(method, args);
