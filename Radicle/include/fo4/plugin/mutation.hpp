@@ -2,6 +2,8 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/schema/ctda.hpp"
 #include "fo4/schema/scalar.hpp"
 
@@ -84,11 +86,34 @@ ScalarMutationStatus set_record_scalar(Plugin& plugin,
 
 // Replaces the record's CTDA condition list with freshly serialized
 // conditions (see write_ctda_conditions for the subrecord-level contract).
-// Returns false when the record has no CTDA subrecords; on success the
-// record's and plugin's original bytes are invalidated for rewriting.
-bool set_record_conditions(Plugin& plugin,
-                           const FormKey& record_key,
-                           std::span<const CtdaCondition> conditions);
+// Returns false when the record is missing. When the record exists, an
+// unchanged/empty CTDA list remains a successful no-op. Any mutation clears
+// the current Radicle original-range caches so the writer serializes the new
+// subrecords instead of reusing stale bytes.
+inline bool set_record_conditions(Plugin& plugin,
+                                  const FormKey& record_key,
+                                  std::span<const CtdaCondition> conditions) {
+  assign_record_form_keys(plugin);
+  bool found = false;
+  bool changed = false;
+
+  visit_records(plugin, [&](Record& record) {
+    if (found || record.header.signature == sig_tes4 || record.form_key != record_key) {
+      return;
+    }
+    found = true;
+    if (!write_ctda_conditions(record, conditions)) return;
+    record.original_range.clear();
+    record.decompressed_payload.clear();
+    record.header.data_size = 0;
+    record.uncompressed_size = 0;
+    changed = true;
+  });
+
+  if (!found) return false;
+  if (changed) plugin.original_range.clear();
+  return true;
+}
 
 RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
