@@ -89,6 +89,7 @@ add_library(fo4
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
   src/forms/placed_reference.cpp
+  src/forms/placed_reference_copy.cpp
   src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
