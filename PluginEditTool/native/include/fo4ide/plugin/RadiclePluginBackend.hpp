@@ -26,6 +26,7 @@ public:
         const nlohmann::json& arguments) override;
     Result<void> setTrustedNewPluginRoot(const std::filesystem::path& root) override;
     Result<nlohmann::json> createPlugin(const nlohmann::json& arguments) override;
+    Result<void> discardCreatedPlugin(std::string_view name) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
