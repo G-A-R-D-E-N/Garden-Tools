@@ -31,6 +31,15 @@ std::string createLower(std::string_view value) {
     return out;
 }
 
+std::string normalizedPluginFilename(std::string fileName) {
+    const auto lower = createLower(fileName);
+    if (!lower.ends_with(".esp") && !lower.ends_with(".esm") &&
+        !lower.ends_with(".esl")) {
+        fileName += ".esp";
+    }
+    return fileName;
+}
+
 bool pathWithin(const std::filesystem::path& root,
                 const std::filesystem::path& path) {
     auto rootIt = root.begin();
@@ -180,20 +189,9 @@ Result<void> RadiclePluginBackend::setTrustedNewPluginRoot(
     return {};
 }
 
-Result<nlohmann::json> RadiclePluginBackend::createPlugin(
-    const nlohmann::json& arguments) {
-    auto fileName = createStringArgument(arguments, 0);
-    if (fileName.empty()) {
-        return std::unexpected(Error{
-            "PluginNameMissing",
-            "Provide a plugin name, for example 'ConflictPatch.esp'"
-        });
-    }
-    const auto lowerInput = createLower(fileName);
-    if (!lowerInput.ends_with(".esp") && !lowerInput.ends_with(".esm") &&
-        !lowerInput.ends_with(".esl")) {
-        fileName += ".esp";
-    }
+Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::createPluginLocked(
+    std::string fileName) {
+    fileName = normalizedPluginFilename(std::move(fileName));
     if (const auto error = validatePluginFilename(fileName)) return std::unexpected(*error);
     if (protectedPluginName(fileName)) {
         return std::unexpected(Error{
@@ -202,8 +200,7 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
         });
     }
 
-    std::scoped_lock lock(mutex_);
-    for (const auto& loaded : plugins_) {
+    for (auto& loaded : plugins_) {
         if (createLower(loaded.name) == createLower(fileName)) {
             return std::unexpected(Error{
                 "PluginAlreadyLoaded",
@@ -218,10 +215,12 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
         });
     }
 
+    std::filesystem::path target;
+    bool createdOnDisk = false;
     try {
         const auto requested = trustedNewPluginRoot_ / std::filesystem::path(fileName);
         std::error_code targetEc;
-        const auto target = std::filesystem::weakly_canonical(requested, targetEc);
+        target = std::filesystem::weakly_canonical(requested, targetEc);
         if (targetEc || target.empty() || !pathWithin(trustedNewPluginRoot_, target) ||
             target.parent_path() != trustedNewPluginRoot_) {
             return std::unexpected(Error{
@@ -238,13 +237,13 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
 
         auto fresh = makeEmptyPlugin(fileName, target);
         fo4::write_plugin_file(fresh, target);
+        createdOnDisk = true;
 
-        // Register only a file the Radicle reader accepts. This also normalizes
-        // all header fields from the bytes that were actually persisted.
         auto verified = fo4::read_plugin_file(target);
         if (createLower(verified.key.filename()) != createLower(fileName)) {
             std::error_code cleanupEc;
             std::filesystem::remove(target, cleanupEc);
+            createdOnDisk = false;
             return std::unexpected(Error{
                 "CreatedPluginIdentityMismatch",
                 "New plugin read-back identity did not match the requested filename"
@@ -255,6 +254,7 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
         if (timeEc) {
             std::error_code cleanupEc;
             std::filesystem::remove(target, cleanupEc);
+            createdOnDisk = false;
             return std::unexpected(Error{
                 "CreatedPluginTimestampFailed",
                 "Could not read the new plugin timestamp after creation"
@@ -269,13 +269,45 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
             .trusted = true,
             .plugin = std::move(verified),
         });
-        rebuildGraphLocked();
-        return nlohmann::json(
-            "Created new plugin '" + fileName + "' in MO2 overwrite. "
-            "Add records or overrides, then save_plugin to persist further changes.");
+        try {
+            rebuildGraphLocked();
+        } catch (...) {
+            plugins_.pop_back();
+            throw;
+        }
+        return &plugins_.back();
     } catch (const std::exception& error) {
+        if (createdOnDisk && !target.empty()) {
+            std::error_code cleanupEc;
+            std::filesystem::remove(target, cleanupEc);
+        }
         return std::unexpected(Error{"CreatePluginFailed", error.what()});
     }
+}
+
+Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::ensureTargetPluginLocked(
+    std::string_view requestedName) {
+    auto fileName = normalizedPluginFilename(std::string(requestedName));
+    if (auto* loaded = findPlugin(fileName)) return loaded;
+    return createPluginLocked(std::move(fileName));
+}
+
+Result<nlohmann::json> RadiclePluginBackend::createPlugin(
+    const nlohmann::json& arguments) {
+    auto fileName = createStringArgument(arguments, 0);
+    if (fileName.empty()) {
+        return std::unexpected(Error{
+            "PluginNameMissing",
+            "Provide a plugin name, for example 'ConflictPatch.esp'"
+        });
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto created = createPluginLocked(std::move(fileName));
+    if (!created) return std::unexpected(created.error());
+    return nlohmann::json(
+        "Created new plugin '" + (*created)->name + "' in MO2 overwrite. "
+        "Add records or overrides, then save_plugin to persist further changes.");
 }
 
 }  // namespace fo4ide::plugin
