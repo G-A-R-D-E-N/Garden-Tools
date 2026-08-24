@@ -58,6 +58,16 @@ private:
     Result<nlohmann::json> setFormLinkListField(const nlohmann::json& arguments);
     Result<nlohmann::json> insertFormLinkListElement(const nlohmann::json& arguments);
     Result<nlohmann::json> removeFormLinkListElement(const nlohmann::json& arguments);
+
+    // Generic ElementService compatibility. These methods deliberately expose
+    // only schema-proven list structures. Reflection-only C# shapes remain
+    // fail-closed until their binary contracts are represented in Radicle.
+    Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> addElement(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeElement(const nlohmann::json& arguments);
+    Result<nlohmann::json> moveElement(const nlohmann::json& arguments);
+    Result<nlohmann::json> clearElement(const nlohmann::json& arguments);
+
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
     Result<nlohmann::json> addMasters(const nlohmann::json& arguments);
