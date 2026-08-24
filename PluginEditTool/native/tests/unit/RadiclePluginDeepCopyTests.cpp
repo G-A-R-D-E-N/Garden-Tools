@@ -167,3 +167,30 @@ TEST_CASE("Native DeepCopyAsOverride previews copies dependencies and prompts on
     CHECK(collision->get<std::string>().starts_with("EXISTS:"));
     CHECK(collision->get<std::string>().find("2 of the 2 record(s)") != std::string::npos);
 }
+
+TEST_CASE("Native DeepCopyAsOverride previews a brand-new target without creating it") {
+    const auto root = deepTempRoot();
+    DeepCleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    deepWriteBytes(sourcePath, deepSourceBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const auto loaded = backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{
+            "plugins",
+            nlohmann::json::array({deepPluginEntry("Base.esm", sourcePath)})
+        }});
+    REQUIRE(loaded.has_value());
+
+    const auto missingPath = root / "NewPatch.esp";
+    REQUIRE_FALSE(std::filesystem::exists(missingPath));
+    const auto preview = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "NewPatch.esp", false, false, 200
+    }));
+    REQUIRE(preview.has_value());
+    REQUIRE(preview->is_string());
+    CHECK(preview->get<std::string>().starts_with("DRY RUN:"));
+    CHECK(preview->get<std::string>().find("2 record(s)") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(missingPath));
+}
