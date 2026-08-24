@@ -53,7 +53,7 @@ std::vector<StaticCollectionPartView> decode_static_collection_parts(
   std::vector<StaticCollectionPartView> parts;
   std::optional<StaticCollectionPartView> current;
 
-  const auto flush = [&]() mutable {
+  auto flush = [&]() {
     if (!current.has_value()) return;
     if (!current->static_record.owner().empty() || current->static_record.local().value() != 0) {
       parts.push_back(std::move(*current));
