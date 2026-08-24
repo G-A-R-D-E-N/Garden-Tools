@@ -25,6 +25,11 @@ int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
     return args[index].get<int>();
 }
 
+bool boolArgument(const nlohmann::json& args, std::size_t index, bool fallback = false) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return fallback;
+    return args[index].get<bool>();
+}
+
 std::string lower(std::string_view value) {
     std::string out(value);
     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
@@ -39,6 +44,23 @@ std::string trim(std::string_view value) {
     std::size_t end = value.size();
     while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) --end;
     return std::string(value.substr(begin, end - begin));
+}
+
+Result<void> ensureWriteTarget(plugin::IPluginBackend& backend,
+                               const nlohmann::json& args,
+                               std::size_t index) {
+    const auto targetName = stringArgument(args, index);
+    if (targetName.empty()) {
+        return std::unexpected(Error{
+            "TargetPluginMissing",
+            "Target plugin name is empty"
+        });
+    }
+
+    auto created = backend.createPlugin(nlohmann::json::array({targetName}));
+    if (created) return {};
+    if (created.error().type == "PluginAlreadyLoaded") return {};
+    return std::unexpected(created.error());
 }
 
 Result<nlohmann::json> parseStringResult(Result<nlohmann::json> result,
@@ -260,6 +282,8 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CreatePlugin") return backend_.createPlugin(args);
         if (method == "RenumberFormId") return legacyRenumberFormId(backend_, args);
         if (method == "ResolveConflict") {
+            auto ensured = ensureWriteTarget(backend_, args, 2);
+            if (!ensured) return std::unexpected(ensured.error());
             return backend_.invokeBackend(
                 "CopyAsOverride",
                 nlohmann::json::array({
@@ -268,6 +292,16 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                     stringArgument(args, 2),
                     false
                 }));
+        }
+        if (method == "CopyAsOverride") {
+            auto ensured = ensureWriteTarget(backend_, args, 2);
+            if (!ensured) return std::unexpected(ensured.error());
+            return backend_.invokeLegacyBackend(method, args);
+        }
+        if (method == "CopyAsNewRecord") {
+            auto ensured = ensureWriteTarget(backend_, args, 2);
+            if (!ensured) return std::unexpected(ensured.error());
+            return backend_.invokeLegacyBackend(method, args);
         }
         if (method == "ResolveFormKeyLabels") return resolveFormKeyLabels(backend_, args);
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
@@ -279,8 +313,20 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "ClearElement") return backend_.clearElement(args);
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
-        if (method == "DeepCopyAsOverride") return backend_.deepCopyAsOverride(args);
-        if (method == "ChangeReferencingRecords") return backend_.changeReferencingRecords(args);
+        if (method == "DeepCopyAsOverride") {
+            if (boolArgument(args, 3)) {
+                auto ensured = ensureWriteTarget(backend_, args, 2);
+                if (!ensured) return std::unexpected(ensured.error());
+            }
+            return backend_.deepCopyAsOverride(args);
+        }
+        if (method == "ChangeReferencingRecords") {
+            if (boolArgument(args, 3)) {
+                auto ensured = ensureWriteTarget(backend_, args, 2);
+                if (!ensured) return std::unexpected(ensured.error());
+            }
+            return backend_.changeReferencingRecords(args);
+        }
         if (method == "CheckCircularLeveledLists") return backend_.checkCircularLeveledLists(args);
         if (method == "CreateSeqFile") return backend_.createSeqFile(args);
         return backend_.invokeLegacyBackend(method, args);
