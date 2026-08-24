@@ -81,6 +81,7 @@ add_executable(
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
     unit/RadiclePluginLifecycleTests.cpp
+    unit/RadiclePluginCreateTests.cpp
     unit/RadiclePluginMasterOverrideTests.cpp
     unit/RadiclePluginScalarTests.cpp
     unit/RadiclePluginSchemaGridTests.cpp
