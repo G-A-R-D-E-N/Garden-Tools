@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <fo4/archive/ba2.hpp>
+#include <fo4/archive/ba2_texture.hpp>
 #include <fo4ide/assets/TextureResolver.hpp>
 
 namespace {
@@ -60,6 +61,25 @@ void writeArchive(const std::filesystem::path& path,
     fo4::archive::write_ba2_general_file(archive, path);
 }
 
+void writeRawTextureArchive(const std::filesystem::path& path) {
+    fo4::archive::Ba2TextureArchive archive;
+    archive.version = 8;
+    fo4::archive::Ba2TextureEntry entry;
+    entry.path = "Textures\\Raw.dds";
+    entry.texture = {4, 4, 1, 28, 0, 8};
+    std::vector<std::byte> rgba(4u * 4u * 4u);
+    for (std::size_t i = 0; i < rgba.size(); i += 4) {
+        rgba[i] = std::byte{0x20};
+        rgba[i + 1] = std::byte{0x40};
+        rgba[i + 2] = std::byte{0x80};
+        rgba[i + 3] = std::byte{0xFF};
+    }
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(rgba));
+    archive.entries.push_back(std::move(entry));
+    std::filesystem::create_directories(path.parent_path());
+    fo4::archive::write_ba2_texture_file(archive, path);
+}
+
 }  // namespace
 
 TEST_CASE("Texture resolver uses the first configured root as the highest loose-file priority") {
@@ -97,4 +117,17 @@ TEST_CASE("Texture resolver honors archive root priority and clears stale index 
     const auto lowResult = resolver.resolveNif("Meshes\\Shared.nif");
     REQUIRE(lowResult.has_value());
     CHECK(readText(*lowResult) == "low-archive");
+}
+
+TEST_CASE("Texture resolver rebuilds a DDS header for raw DX10 BA2 mip payloads") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "data";
+    writeRawTextureArchive(data / "textures.ba2");
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    resolver.setSessionRoots({data});
+
+    const auto url = resolver.getTexturePngDataUrl("", "Textures\\Raw.dds", "");
+    CHECK(url.starts_with("data:image/png;base64,"));
 }
