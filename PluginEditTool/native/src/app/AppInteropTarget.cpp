@@ -82,6 +82,8 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
     if (!saved) return std::unexpected(saved.error());
 
     if (plugins_.capabilities().available) {
+        auto outputRoot = plugins_.setTrustedNewPluginRoot(loaded->instance.overwriteFolder);
+        if (!outputRoot) return std::unexpected(outputRoot.error());
         auto backendLoad = plugins_.invoke("environment.LoadMo2", backendEnvironment(*loaded));
         if (!backendLoad) return std::unexpected(backendLoad.error());
     }
