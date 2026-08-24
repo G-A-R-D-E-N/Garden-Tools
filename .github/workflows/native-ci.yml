@@ -180,9 +180,7 @@ jobs:
       - name: Build FO4RecordEditor.exe
         run: cmake --build build/fo4ide-win --target fo4ide
 
-      - name: Verify and upload native Windows executable
-        if: always()
-        continue-on-error: true
+      - name: Verify native Windows executable
         run: test -f build/fo4ide-win/bin/FO4RecordEditor.exe
 
       - name: Upload native Windows executable
