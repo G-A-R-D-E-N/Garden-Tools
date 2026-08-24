@@ -174,3 +174,39 @@ TEST_CASE("Native ChangeReferencingRecords copies winners adds target master and
     });
     CHECK(found != links.end());
 }
+
+TEST_CASE("Native ChangeReferencingRecords previews a brand-new target without creating it") {
+    const auto root = remapTempRoot();
+    RemapCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto otherPath = root / "Other.esm";
+    const auto modPath = root / "Mod.esp";
+    remapWriteBytes(basePath, colorPluginBytes("FromColor"));
+    remapWriteBytes(otherPath, colorPluginBytes("ToColor"));
+    remapWriteBytes(modPath, referencingPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const auto loaded = backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{
+            "plugins",
+            nlohmann::json::array({
+                remapPluginEntry("Base.esm", basePath),
+                remapPluginEntry("Other.esm", otherPath),
+                remapPluginEntry("Mod.esp", modPath)
+            })
+        }});
+    REQUIRE(loaded.has_value());
+
+    const auto missingPath = root / "NewPatch.esp";
+    REQUIRE_FALSE(std::filesystem::exists(missingPath));
+    const auto preview = backend.changeReferencingRecords(
+        nlohmann::json::array({
+            "000800:Base.esm", "000800:Other.esm", "NewPatch.esp", false, 300
+        }));
+    REQUIRE(preview.has_value());
+    REQUIRE(preview->is_string());
+    CHECK(preview->get<std::string>().starts_with("DRY RUN: 1 record(s) reference"));
+    CHECK(preview->get<std::string>().find("UsesFrom") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(missingPath));
+}
