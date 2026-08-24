@@ -276,7 +276,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveElement") return backend_.removeElement(args);
         if (method == "MoveElement") return backend_.moveElement(args);
         if (method == "ClearElement") return backend_.clearElement(args);
-        return backend_.invokeBackend(method, args);
+        return backend_.invokeLegacyBackend(method, args);
     }
     if (targetNamespace_ == "cell") {
         if (method == "SearchCells") return legacySearchRecordType(backend_, args, "CELL", 25);
