@@ -116,6 +116,7 @@ add_library(fo4
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
   src/schema/nested_formlink_lists.cpp
+  src/schema/nested_formlink_list_null.cpp
   src/schema/preflight.cpp
   src/schema/scalar.cpp
   src/schema/vmad.cpp
