@@ -276,6 +276,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveElement") return backend_.removeElement(args);
         if (method == "MoveElement") return backend_.moveElement(args);
         if (method == "ClearElement") return backend_.clearElement(args);
+        if (method == "CompactToEsl") return backend_.compactToEsl(args);
         return backend_.invokeLegacyBackend(method, args);
     }
     if (targetNamespace_ == "cell") {
