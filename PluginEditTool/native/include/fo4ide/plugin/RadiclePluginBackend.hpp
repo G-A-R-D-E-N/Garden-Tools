@@ -86,6 +86,11 @@ private:
     Result<nlohmann::json> setLight(const nlohmann::json& arguments);
     Result<nlohmann::json> saveMastersPlugin(const nlohmann::json& arguments);
 
+    // CELL/worldspace compatibility surface used by the native 3D cell viewer.
+    Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments);
+
     // Condition-editing surface, mirroring WriteService.Conditions.cs and
     // WriteService.SetConditions. getConditions serializes the record's CTDA
     // list with the DescribeCondition JSON contract; setConditions replaces it
