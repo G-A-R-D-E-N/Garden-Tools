@@ -44,6 +44,13 @@ public:
         return invokeLegacyBackend("CreatePlugin", arguments);
     }
 
+    virtual Result<void> discardCreatedPlugin(std::string_view) {
+        return std::unexpected(Error{
+            "DiscardCreatedPluginUnavailable",
+            "This backend cannot roll back an auto-created plugin"
+        });
+    }
+
     virtual Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) {
         return invokeBackend("SetField", arguments);
     }
