@@ -52,6 +52,13 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "DeepCopyUnavailable",
+            "Native deep-copy-as-override is unavailable for this backend"
+        });
+    }
+
     // Compatibility metadata used by the legacy condition editor. Keeping it
     // on the backend interface avoids teaching the app/RPC layer about a
     // concrete Fallout 4 implementation.
