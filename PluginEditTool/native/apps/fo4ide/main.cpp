@@ -164,7 +164,10 @@ public:
     fo4ide::Result<nlohmann::json> invoke(std::string_view method,
                                           const nlohmann::json& args) override {
         auto result = inner_->invoke(method, args);
-        if (method == "ReloadMo2Profile" && result) {
+        const bool profileChanged = method == "OpenMo2Profile" ||
+                                    method == "LoadEnvironment" ||
+                                    method == "ReloadMo2Profile";
+        if (profileChanged && result) {
             textures_.setSessionRoots(textureRootsForSettings(settings_));
         }
         return result;
