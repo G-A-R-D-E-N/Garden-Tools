@@ -229,6 +229,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_rekey_formlinks.cpp
     tests/test_formlink_lists.cpp
     tests/test_nested_formlink_lists.cpp
+    tests/test_formlink_list_management.cpp
     tests/test_sraf_formlinks.cpp
     tests/test_exterior_cell_grid.cpp
     tests/test_exterior_cell_grid_real.cpp
