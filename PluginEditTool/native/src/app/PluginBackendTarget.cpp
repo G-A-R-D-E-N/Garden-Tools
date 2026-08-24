@@ -240,6 +240,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         }
         if (method == "ResolveFormKeyLabels") return resolveFormKeyLabels(backend_, args);
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
+        if (method == "GetConditionFunctionParams") return backend_.conditionFunctionParams();
         return backend_.invokeBackend(method, args);
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
