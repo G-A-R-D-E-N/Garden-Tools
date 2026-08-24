@@ -310,16 +310,50 @@ Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
         });
     }
     if (auto guard = writeGuard(*patch); guard.has_value()) return std::unexpected(*guard);
-    if (fo4::find_record(patch->plugin, key) == nullptr) {
-        return std::unexpected(Error{
-            "NestedOverrideRequired",
-            "Placed reference " + formKeyText + " is not already present in " + patchName +
-                "; native CELL-child copy-as-override must be completed before this transform can be written safely"
-        });
-    }
 
     try {
         auto mutated = patch->plugin;
+        std::string copiedFrom;
+        if (fo4::find_record(mutated, key) == nullptr) {
+            const LoadedPlugin* source = nullptr;
+            const fo4::Record* winning = nullptr;
+            for (auto it = plugins_.rbegin(); it != plugins_.rend(); ++it) {
+                const auto* candidate = fo4::find_record(it->plugin, key);
+                if (candidate == nullptr) continue;
+                source = &*it;
+                winning = candidate;
+                break;
+            }
+            if (source == nullptr || winning == nullptr) {
+                return std::unexpected(Error{
+                    "PlacedReferenceNotFound",
+                    "Placed reference is not present in the loaded environment: " + formKeyText
+                });
+            }
+            if (winning->header.flags.is_deleted()) {
+                return std::unexpected(Error{
+                    "PlacedReferenceDeleted",
+                    "The winning version of " + formKeyText + " is deleted in " + source->name
+                });
+            }
+
+            const auto copyStatus = fo4::forms::copy_placed_reference_as_override(
+                mutated, source->plugin, key, false);
+            switch (copyStatus) {
+                case fo4::forms::PlacedReferenceCopyStatus::inserted:
+                case fo4::forms::PlacedReferenceCopyStatus::replaced:
+                    copiedFrom = source->name;
+                    break;
+                case fo4::forms::PlacedReferenceCopyStatus::already_exists:
+                    break;
+                case fo4::forms::PlacedReferenceCopyStatus::source_missing:
+                    return std::unexpected(Error{
+                        "PlacedReferenceNotFound",
+                        "Winning source no longer contains placed reference " + formKeyText
+                    });
+            }
+        }
+
         const bool changed = fo4::forms::set_placed_reference_transform(
             mutated,
             key,
@@ -337,7 +371,12 @@ Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
             patch->loadedTime = std::filesystem::last_write_time(patch->path, ec);
         }
         rebuildGraphLocked();
-        return nlohmann::json("Moved " + formKeyText + " in " + patchName + ".");
+
+        auto message = "Moved " + formKeyText + " in " + patchName + ".";
+        if (!copiedFrom.empty()) {
+            message += " Created the nested override from " + copiedFrom + ".";
+        }
+        return nlohmann::json(std::move(message));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PlacedTransformWriteFailed", error.what()});
     }
