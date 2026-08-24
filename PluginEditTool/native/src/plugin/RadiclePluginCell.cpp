@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 #include <fo4/forms/cell.hpp>
@@ -85,8 +86,9 @@ bool cellInterior(const fo4::Record& record) {
     return false;
 }
 
+template <class Plugins>
 std::optional<fo4::FormKey> resolveRecordKey(
-    const std::vector<RadiclePluginBackend::LoadedPlugin>& plugins,
+    const Plugins& plugins,
     std::string_view id,
     fo4::Signature requiredSignature) {
     if (id.empty()) return std::nullopt;
@@ -123,24 +125,25 @@ struct MergedReference {
     float scale{1.0f};
 };
 
-const fo4::Record* winningRecord(
-    const std::vector<RadiclePluginBackend::LoadedPlugin>& plugins,
-    const fo4::FormKey& key,
-    const RadiclePluginBackend::LoadedPlugin** owner = nullptr) {
+template <class Plugins>
+const fo4::Record* winningRecord(const Plugins& plugins, const fo4::FormKey& key) {
     for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
-        if (const auto* record = fo4::find_record(it->plugin, key); record != nullptr) {
-            if (owner != nullptr) *owner = &*it;
-            return record;
-        }
+        if (const auto* record = fo4::find_record(it->plugin, key); record != nullptr) return record;
     }
     return nullptr;
 }
 
-nlohmann::json placedReferencesJson(
-    const std::vector<RadiclePluginBackend::LoadedPlugin>& plugins,
-    const fo4::FormKey& cellKey) {
-    const RadiclePluginBackend::LoadedPlugin* cellOwner = nullptr;
-    const auto* winningCell = winningRecord(plugins, cellKey, &cellOwner);
+template <class Plugins>
+nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& cellKey) {
+    const fo4::Record* winningCell = nullptr;
+    bool winningCellLocalized = false;
+    for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
+        const auto* record = fo4::find_record(it->plugin, cellKey);
+        if (record == nullptr) continue;
+        winningCell = record;
+        winningCellLocalized = it->plugin.header.tes4_flags.is_localized();
+        break;
+    }
     if (winningCell == nullptr || winningCell->header.signature != k_cell) {
         return {{"error", "Cell not found: " + cellKey.to_string()}};
     }
@@ -204,10 +207,7 @@ nlohmann::json placedReferencesJson(
         });
     }
 
-    std::string cellName;
-    if (cellOwner != nullptr && !cellOwner->plugin.header.tes4_flags.is_localized()) {
-        cellName = zstring(*winningCell, k_full);
-    }
+    const auto cellName = winningCellLocalized ? std::string{} : zstring(*winningCell, k_full);
     return {
         {"cellFormKey", cellKey.to_string()},
         {"cellEditorId", zstring(*winningCell, fo4::sig_edid)},
