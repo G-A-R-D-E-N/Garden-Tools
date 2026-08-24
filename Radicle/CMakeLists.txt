@@ -90,6 +90,7 @@ add_library(fo4
   src/forms/cell.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
+  src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
@@ -234,6 +235,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_creation.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
+    tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_real.cpp
     tests/test_quest_stages_real.cpp
