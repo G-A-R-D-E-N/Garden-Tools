@@ -233,6 +233,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_grid_real.cpp
     tests/test_exterior_cell_creation.cpp
     tests/test_placed_reference.cpp
+    tests/test_placed_reference_copy.cpp
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_real.cpp
     tests/test_quest_stages_real.cpp
