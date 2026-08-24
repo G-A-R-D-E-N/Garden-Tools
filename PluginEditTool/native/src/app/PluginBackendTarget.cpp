@@ -46,9 +46,14 @@ std::string trim(std::string_view value) {
     return std::string(value.substr(begin, end - begin));
 }
 
-Result<void> ensureWriteTarget(plugin::IPluginBackend& backend,
-                               const nlohmann::json& args,
-                               std::size_t index) {
+struct EnsuredWriteTarget {
+    std::string name;
+    bool created{false};
+};
+
+Result<EnsuredWriteTarget> ensureWriteTarget(plugin::IPluginBackend& backend,
+                                              const nlohmann::json& args,
+                                              std::size_t index) {
     const auto targetName = stringArgument(args, index);
     if (targetName.empty()) {
         return std::unexpected(Error{
@@ -58,9 +63,48 @@ Result<void> ensureWriteTarget(plugin::IPluginBackend& backend,
     }
 
     auto created = backend.createPlugin(nlohmann::json::array({targetName}));
-    if (created) return {};
-    if (created.error().type == "PluginAlreadyLoaded") return {};
+    if (created) return EnsuredWriteTarget{targetName, true};
+    if (created.error().type == "PluginAlreadyLoaded") {
+        return EnsuredWriteTarget{targetName, false};
+    }
     return std::unexpected(created.error());
+}
+
+bool resultStartsWith(const Result<nlohmann::json>& result,
+                      std::string_view first,
+                      std::string_view second = {}) {
+    if (!result || !result->is_string()) return false;
+    const auto& text = result->get_ref<const std::string&>();
+    return text.starts_with(first) || (!second.empty() && text.starts_with(second));
+}
+
+Result<nlohmann::json> finishAutoCreatedTarget(
+    plugin::IPluginBackend& backend,
+    const EnsuredWriteTarget& target,
+    Result<nlohmann::json> operation,
+    std::string_view successPrefix,
+    std::string_view alternateSuccessPrefix = {}) {
+    if (!target.created ||
+        resultStartsWith(operation, successPrefix, alternateSuccessPrefix)) {
+        return operation;
+    }
+
+    auto rolledBack = backend.discardCreatedPlugin(target.name);
+    if (rolledBack) return operation;
+
+    std::string original;
+    if (!operation) {
+        original = operation.error().type + ": " + operation.error().message;
+    } else if (operation->is_string()) {
+        original = operation->get<std::string>();
+    } else {
+        original = "operation returned without a recognized mutation-success result";
+    }
+    return std::unexpected(Error{
+        "TargetRollbackFailed",
+        "Operation did not complete (" + original + ") and empty auto-created target '" +
+            target.name + "' could not be removed: " + rolledBack.error().message
+    });
 }
 
 Result<nlohmann::json> parseStringResult(Result<nlohmann::json> result,
@@ -284,7 +328,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "ResolveConflict") {
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
-            return backend_.invokeBackend(
+            auto operation = backend_.invokeBackend(
                 "CopyAsOverride",
                 nlohmann::json::array({
                     stringArgument(args, 1),
@@ -292,16 +336,21 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                     stringArgument(args, 2),
                     false
                 }));
+            return finishAutoCreatedTarget(
+                backend_, *ensured, std::move(operation), "Copied ", "Replaced ");
         }
         if (method == "CopyAsOverride") {
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
-            return backend_.invokeLegacyBackend(method, args);
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.invokeLegacyBackend(method, args),
+                "Copied ", "Replaced ");
         }
         if (method == "CopyAsNewRecord") {
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
-            return backend_.invokeLegacyBackend(method, args);
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.invokeLegacyBackend(method, args), "Copied ");
         }
         if (method == "ResolveFormKeyLabels") return resolveFormKeyLabels(backend_, args);
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
@@ -314,18 +363,18 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
         if (method == "DeepCopyAsOverride") {
-            if (boolArgument(args, 3)) {
-                auto ensured = ensureWriteTarget(backend_, args, 2);
-                if (!ensured) return std::unexpected(ensured.error());
-            }
-            return backend_.deepCopyAsOverride(args);
+            if (!boolArgument(args, 3)) return backend_.deepCopyAsOverride(args);
+            auto ensured = ensureWriteTarget(backend_, args, 2);
+            if (!ensured) return std::unexpected(ensured.error());
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.deepCopyAsOverride(args), "Deep-copied ");
         }
         if (method == "ChangeReferencingRecords") {
-            if (boolArgument(args, 3)) {
-                auto ensured = ensureWriteTarget(backend_, args, 2);
-                if (!ensured) return std::unexpected(ensured.error());
-            }
-            return backend_.changeReferencingRecords(args);
+            if (!boolArgument(args, 3)) return backend_.changeReferencingRecords(args);
+            auto ensured = ensureWriteTarget(backend_, args, 2);
+            if (!ensured) return std::unexpected(ensured.error());
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.changeReferencingRecords(args), "Repointed ");
         }
         if (method == "CheckCircularLeveledLists") return backend_.checkCircularLeveledLists(args);
         if (method == "CreateSeqFile") return backend_.createSeqFile(args);
