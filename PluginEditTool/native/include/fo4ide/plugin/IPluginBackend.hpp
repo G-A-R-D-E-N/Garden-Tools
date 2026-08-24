@@ -29,6 +29,15 @@ public:
         return invoke("backend." + std::string(method), arguments);
     }
 
+    // Compatibility dispatch for legacy backend methods that are being moved
+    // into native modules incrementally. Backends without extra compatibility
+    // behavior retain the normal backend namespace dispatch.
+    virtual Result<nlohmann::json> invokeLegacyBackend(
+        std::string_view method,
+        const nlohmann::json& arguments) {
+        return invokeBackend(method, arguments);
+    }
+
     // Dedicated seam for schema-driven field writes. Existing backends retain
     // their current SetField behavior; Radicle overrides this to intercept
     // registered scalar fields before delegating to its typed record writers.
