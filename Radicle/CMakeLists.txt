@@ -18,6 +18,7 @@ option(FO4_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_BUILD_TESTS "Build Radicle tests" ${PROJECT_IS_TOP_LEVEL})
+option(RADICLE_INSTALL "Generate Radicle install/export rules" ${PROJECT_IS_TOP_LEVEL})
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_custom_target(radicle_schema_check ALL
@@ -157,35 +158,37 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 
-include(GNUInstallDirs)
-install(TARGETS fo4 radicle_c
-  EXPORT radicle-targets
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-install(DIRECTORY include/fo4 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(EXPORT radicle-targets
-  NAMESPACE radicle::
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
-)
+if(RADICLE_INSTALL)
+  include(GNUInstallDirs)
+  install(TARGETS fo4 radicle_c
+    EXPORT radicle-targets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  )
+  install(DIRECTORY include/fo4 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(EXPORT radicle-targets
+    NAMESPACE radicle::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
+  )
 
-include(CMakePackageConfigHelpers)
-configure_package_config_file(
-  cmake/radicleConfig.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
-  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
-)
-write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
-  VERSION ${PROJECT_VERSION}
-  COMPATIBILITY SameMajorVersion
-)
-install(FILES
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
-)
+  include(CMakePackageConfigHelpers)
+  configure_package_config_file(
+    cmake/radicleConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
+  )
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+  )
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
+  )
+endif()
 
 if(RADICLE_BUILD_TOOLS)
   add_executable(fo4inspect tools/inspect/main.cpp)
