@@ -52,6 +52,13 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "RenumberPluginUnavailable",
+            "Native plugin-wide FormID renumbering is unavailable for this backend"
+        });
+    }
+
     virtual Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json&) {
         return std::unexpected(Error{
             "DeepCopyUnavailable",
