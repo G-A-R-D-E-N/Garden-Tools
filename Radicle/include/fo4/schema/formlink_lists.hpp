@@ -81,15 +81,13 @@ std::span<const Signature> formlink_list_targets(
 bool formlink_list_target_allowed(const FormLinkListDescriptor& descriptor,
                                   Signature signature) noexcept;
 
-std::optional<ScopedNestedFormLinkListPath> scoped_nested_formlink_list_path(
-    std::string_view path) noexcept;
-std::optional<IndexedNestedFormLinkListPath> indexed_nested_formlink_list_path(
-    std::string_view path) noexcept;
-std::span<const Signature> nested_formlink_list_targets(
-    const NestedFormLinkListDescriptor& descriptor) noexcept;
-bool nested_formlink_list_target_allowed(
-    const NestedFormLinkListDescriptor& descriptor,
-    Signature signature) noexcept;
+// Returns the number of schema-declared list elements, or nullopt when the
+// record does not exist. Record-type mismatches and malformed element storage
+// throw FormLinkListError instead of being treated as an empty list.
+std::optional<std::size_t> record_formlink_list_size(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor);
 
 FormLinkListMutationStatus set_record_formlink_list_element(
     Plugin& plugin,
@@ -110,6 +108,37 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
     const FormKey& record_key,
     const FormLinkListDescriptor& descriptor,
     std::size_t index);
+
+// Reorders only the logical list values while leaving the surrounding
+// subrecord layout intact. This is safer than physically moving subrecords
+// through unrelated record data.
+FormLinkListMutationStatus move_record_formlink_list_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    std::size_t from,
+    std::size_t to);
+
+FormLinkListMutationStatus clear_record_formlink_list(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor);
+
+std::optional<ScopedNestedFormLinkListPath> scoped_nested_formlink_list_path(
+    std::string_view path) noexcept;
+std::optional<IndexedNestedFormLinkListPath> indexed_nested_formlink_list_path(
+    std::string_view path) noexcept;
+std::span<const Signature> nested_formlink_list_targets(
+    const NestedFormLinkListDescriptor& descriptor) noexcept;
+bool nested_formlink_list_target_allowed(
+    const NestedFormLinkListDescriptor& descriptor,
+    Signature signature) noexcept;
+
+std::optional<std::size_t> record_nested_formlink_list_size(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const NestedFormLinkListDescriptor& descriptor,
+    std::size_t container_index);
 
 FormLinkListMutationStatus set_record_nested_formlink_list_element(
     Plugin& plugin,
@@ -133,5 +162,19 @@ FormLinkListMutationStatus remove_record_nested_formlink_list_element(
     const NestedFormLinkListDescriptor& descriptor,
     std::size_t container_index,
     std::size_t index);
+
+FormLinkListMutationStatus move_record_nested_formlink_list_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const NestedFormLinkListDescriptor& descriptor,
+    std::size_t container_index,
+    std::size_t from,
+    std::size_t to);
+
+FormLinkListMutationStatus clear_record_nested_formlink_list(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const NestedFormLinkListDescriptor& descriptor,
+    std::size_t container_index);
 
 }  // namespace fo4::schema
