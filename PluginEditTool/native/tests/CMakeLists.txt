@@ -45,7 +45,11 @@ fo4ide_add_test(fo4ide_test_logging unit/LoggerTests.cpp fo4ide_logging)
 fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
 fo4ide_add_test(fo4ide_test_material unit/MaterialServiceTests.cpp fo4ide_material)
 
-add_executable(fo4ide_test_texture_resolver unit/TextureResolverTests.cpp)
+add_executable(
+    fo4ide_test_texture_resolver
+    unit/TextureResolverTests.cpp
+    unit/TextureResolverPriorityTests.cpp
+)
 target_link_libraries(
     fo4ide_test_texture_resolver
     PRIVATE fo4ide_assets fo4 Catch2::Catch2WithMain
@@ -61,6 +65,7 @@ fo4ide_add_test(fo4ide_test_papyrus_type_checker unit/PapyrusTypeCheckerTests.cp
 fo4ide_add_test(fo4ide_test_papyrus_pex unit/PapyrusPexTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_codegen unit/PapyrusCodeGenTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_decompiler unit/PapyrusDecompilerTests.cpp fo4ide_papyrus)
+fo4ide_add_test(fo4ide_test_papyrus_security unit/PapyrusSecurityTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_symbols unit/PapyrusSymbolsTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_analysis unit/PapyrusAnalysisServiceTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
