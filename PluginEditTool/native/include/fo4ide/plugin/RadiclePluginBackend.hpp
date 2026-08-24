@@ -34,11 +34,15 @@ public:
     Result<nlohmann::json> changeReferencingRecords(const nlohmann::json& arguments) override;
     Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> createSeqFile(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
     }
 
     void setDataDirectory(std::filesystem::path dataDirectory);
+
 private:
     struct LoadedPlugin {
         std::string name;
@@ -100,10 +104,6 @@ private:
     Result<nlohmann::json> reorderMasters(const nlohmann::json& arguments);
     Result<nlohmann::json> setLight(const nlohmann::json& arguments);
     Result<nlohmann::json> saveMastersPlugin(const nlohmann::json& arguments);
-
-    Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
-    Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
-    Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
 
     Result<nlohmann::json> getConditions(const nlohmann::json& arguments) const;
     Result<nlohmann::json> setConditions(const nlohmann::json& arguments);
