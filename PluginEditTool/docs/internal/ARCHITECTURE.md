@@ -1,141 +1,259 @@
-# FO4IDE: Architecture & Contributor Facts
+# FO4IDE: Native Architecture and Contributor Facts
 
-How the editor is put together: the components, the data flow, and the invariants the code
-depends on. Contributor-facing; user documentation lives in the [README](README.md) and
-[MCP_SETUP](../MCP_SETUP.md).
+This document describes the shipping C++ architecture. User documentation lives in the root
+[README](../../README.md) and [MCP setup guide](../MCP_SETUP.md).
 
----
+## Runtime layout
 
-## Repository facts (read before touching the code)
+FO4IDE is now one native C++23 process plus a React bundle:
 
-- **The app repo is self-contained.** `FO4RecordEditor/` is its own git root; commits there do
-  not touch any surrounding workspace repo.
-- **The app is a WebView2 shell, not WPF.** `MainWindow.xaml` is a WPF-UI `FluentWindow` hosting a
-  single `WebView2`. The window title is `FO4IDE`. The real UI is React under `web/src/`
-  (`MainShell.tsx`, `RecordView.tsx`, `ChatPanel.tsx`).
-- **The IPC contract.** React calls
-  `window.chrome.webview.hostObjects.backend.<Method>()` → `Services/BackendInterop.cs`. Every
-  `BackendInterop` method wraps its body in `DebugLog.Guard(name, () => ...)` (sync) or
-  `DebugLog.GuardAsync` (async) and **returns a `string`**.
-- **Tests run serially, deliberately.** `[assembly: CollectionBehavior(DisableTestParallelization=true)]`
- , `WriteService`/`MutagenLoader` use process-global registries.
-- **The test project must share the `net9.0-windows` TFM** (+ `UseWPF`) or the project reference fails
-  to resolve.
-- **React is not unit-tested.** UI changes are manual-verify only.
-- **Do not run `publish.bat` / `package.ps1` while the editor or an MCP server is open**: the exe and
-  its DLLs are locked. See the MSB3021 note in [KNOWLEDGE.md](https://github.com/G-A-R-D-E-N/FO4-IDE/blob/main/docs/internal/KNOWLEDGE.md).
-
-### Dead code you will trip over
-
-~15 WPF `Views/*.xaml` panels (`ExplorerPanel`, `ChatPanel`, `ErrorsPanel`, `ComparePanel`,
-`RecordEditorView`) are **constructed by nothing**, orphaned when the UI moved to React. Only
-`CommandPalette` and `SettingsDialog` are still referenced from `MainWindow.xaml.cs`. Likewise
-`RecordMatrixView` and `ShellWindow` were specified but never built; the editable
-matrix shipped as React `RecordView.tsx` instead. Do not treat any of these as live architecture.
-
----
-
-## Design decisions worth keeping
-
-**The knowledge graph is the differentiator over xEdit.**
-> Index every FormKey, EditorID, and reference once, then answer "what breaks if I delete this?" in
-> O(1) instead of rescanning.
-
-**Generic over every record type, always.** xEdit reads all records via its element-def system; we
-read them all via Mutagen's typed records plus a reflection walker. Readability fixes must therefore
-be *generic with per-type enhancements*, never hardcoded to a handful of record types.
-
-**AI-augmented parity.** Manual buttons do the xEdit operation; the agent can do the same thing via
-MCP tools *and explain the impact*. That pairing is the product, not the buttons alone.
-
-**Incremental shell-first was chosen over a big-bang rewrite** (unverifiable in slices) and over a
-theme-only veneer (delivers neither inline editing nor the chrome). The app stays runnable and
-visually testable after every phase.
-
-**Rejected: drag-and-drop copy-as-override.** Redundant with the context-menu "Copy as Override into"
-and the batch flow, and HTML5 DnD in WebView2 is not worth the complexity.
-
-**Standing non-goals.** No change to environment/MO2 loading (`Open ESP` / `Load Env` / `Open MO2`
-behave as they do today). Worldspace/cell navigation redesign is out of scope.
-
----
-
-## Invariants
-
-### Adding an MCP tool touches FOUR sites
-
-Miss one and the tool half-exists, the classic symptom is a tool that lists but never dispatches.
-In `Services/Ai/PluginToolExecutor.cs`:
-
-1. a `ToolSpec[] _specs` entry,
-2. a `switch (toolName)` dispatch case in `ExecuteInner`,
-3. membership in the `IsWrite` set (if it mutates),
-4. a case in the summary `switch`.
-
-Then `BackendInterop.cs` + `web/src/backend.ts` if the GUI should expose it too.
-
-### Rendering
-
-- **Keep raw keys on the nodes; only the *displayed* label is friendly.** Edits and paths resolve
-  against the raw keys, `FriendlyNames.LabelPath` relabels only the final path segment when it is a
-  plain property name, and leaves dotted paths and indices structurally intact.
-- **Byte-blob collapse is checked on the collection *before* `WalkObject` expands it**, not per
-  element. This ordering is load-bearing.
-- **A renderer returning `true` means "show this text and do not recurse."** Unknown types fall back
-  to the generic tree, so nothing is ever hidden by accident; a renderer that *throws* also falls back
-  rather than blanking the row.
-- **The FormLink/Condition formatters are injected once at startup** (`App.xaml.cs` →
-  `ElementRenderer.Init(...)`) because they need the link cache, and inverting that would be a
-  circular dependency.
-
-### Records and conflicts
-
-- FormKey wire format is `001234:Fallout4.esm`: regex `^[0-9A-Fa-f]{6}:.+\.(esp|esm|esl)$`.
-- When two plugins define the same FormKey, **the last indexed wins** (load order). Losing overrides
-  are tracked so the Compare/Errors tabs can surface them.
-- Conflict status is not binary. The model mirrors xEdit's: no-conflict, benign override, critical
-  conflict, identical-to-master.
-- A `KnownMasters` allowlist (Fallout4.esm + the 7 DLC esms) exists to stop false-positive broken refs.
-- **Renumbering does not rewrite references in *other* plugins**: that needs a patch. The tool
-  reports how many exist so the caller or the AI can act on it.
-- The Mutagen re-key pattern is `mod.RemapLinks(Dictionary<FormKey,FormKey>)` +
-  `DuplicateInAsNewUntypedRecord(IMajorRecord, FormKey)` + `Remove(FormKey)`. `CompactToEsl` has the
-  exact reflection pattern over `IGroup` properties.
-- Inline edits that fail validation surface an inline message and leave the patch unchanged.
-
-### Anthropic provider
-
-System messages are hoisted to the top-level `system` field, the API accepts only `user`/`assistant`
-in `messages`.
-
----
-
-## Palette
-
-**Source of truth is `web/src/index.css`**, CSS custom properties (`--conflict-green`,
-`--conflict-yellow`, `--conflict-orange`, `--conflict-purple`, `--conflict-red`, `--conflict-empty`,
-`--text-identical`), with a `[data-theme="light"]` block overriding them. Do not copy the hex values
-into docs; every doc that did has already drifted.
-
-What is durable is the *intent*: VSCode Dark+ as the base, and **xEdit's exact semantic color
-meanings preserved**, identical/override/winner/master/loser, because that mapping is what modders
-already have in their heads. Retune the values freely; do not remap the meanings.
-
-The WPF `Views/ConflictStatusToBrush.cs` and `ConflictCellBrush.cs` still exist but are part of the
-orphaned WPF layer above, they do not color the shipping UI.
-
----
-
-## Inner loop
-
-```powershell
-cd FO4RecordEditor
-dotnet test FO4RecordEditor.Tests\FO4RecordEditor.Tests.csproj --filter FullyQualifiedName~<Name>
-dotnet test                                   # full suite
-cd web && npm run build                       # the csproj copies web\dist on Release build
-dotnet build FO4RecordEditor\FO4RecordEditor.csproj -c Release
+```text
+React / WebView2 or WebKitGTK
+        |
+        | JSON RPC / host-object calls
+        v
+fo4ide::rpc::RpcDispatcher
+        |
+        +-- app / appInterop / settings
+        +-- backend / masters / cell
+        +-- papyrus / graph
+        +-- archive / material / audio / nif
+        |
+        v
+Radicle + native service libraries
 ```
 
-Then the user runs **`/mcp reconnect`**, a rebuilt exe does not reach a running server. If the build
-fails MSB3021 "being used by another process", that is a **file lock, not a code error**: stop every
-`FO4RecordEditor.exe --mcp` instance, or prove the code with `dotnet build -t:Compile`.
+The executable target is `fo4ide`, shipped as `FO4RecordEditor.exe` on Windows for compatibility
+with existing MO2 launch entries and MCP configurations. `native/apps/fo4ide/main.cpp` owns process
+startup, target registration, the desktop window, HTTP mode, and stdio MCP mode.
+
+The React application lives under `web/src/`. Windows embeds it in WebView2; Linux uses the native
+window implementation backed by WebKitGTK. Packaged builds place `web/dist` beside the executable.
+
+The old `FO4RecordEditor*` C# projects and vendored Mutagen tree are historical implementation/oracle
+material during the rewrite. They are not the backend used by the native host and must not be used as
+a reason to add a new runtime dependency on .NET.
+
+## IPC contract
+
+React uses `window.chrome.webview.hostObjects.<target>.<method>(...)`. The native window forwards
+those calls into `RpcDispatcher`, which invokes a registered `fo4ide::rpc::Target`.
+
+Important targets:
+
+- `backend`: plugin reads, writes, conflict data, compatibility adapters
+- `masters`: master listing/reorder/light flag/save
+- `cell`: CELL/WRLD search, placed references, transform edits
+- `papyrus`: parser/compiler/decompiler/analysis operations
+- `graph`: visual Papyrus graph operations
+- `archive`, `material`, `audio`, `nif`: asset services
+- `appInterop`: MO2 profile/environment lifecycle
+
+`PluginBackendTarget.cpp` is the compatibility boundary for legacy React method names. Keep
+compatibility naming there rather than polluting Radicle with UI-era names.
+
+Most legacy GUI methods return strings, and several read APIs return JSON serialized inside those
+strings. Preserve the existing React wire contract until the frontend is deliberately migrated to a
+cleaner protocol.
+
+## Plugin engine
+
+Radicle is the native Fallout 4 plugin SDK. The runtime path does not use Mutagen.
+
+Core responsibilities include:
+
+- TES4/master parsing and serialization
+- FormID encoding/decoding for full and light plugins
+- FormLink discovery and remapping
+- record mutation and safe copy-as-override operations
+- nested CELL/WRLD/placed-reference containment
+- schema-driven scalar and list editing
+- CTDA condition encoding
+- conflict/load-order graph construction
+- BA2 handling
+
+### Generic first
+
+The editor must remain generic over Fallout 4 records. Prefer schema declarations and reusable
+binary primitives over UI-specific record special cases.
+
+Typed form helpers are appropriate where a structure has a verified binary contract, for example
+CELL hierarchy, REFR/ACHR transforms, RACE lists, SCOL placements, or QUST structures. Unknown or
+unverified structures must fail closed rather than guessing offsets.
+
+## Write safety invariants
+
+These rules are load-bearing.
+
+### Transactional mutation
+
+Mutations normally operate on a copy of the loaded `fo4::Plugin`. The in-memory live plugin is
+replaced only after validation and a successful atomic write. A failed operation must not leave a
+partially mutated live graph.
+
+### Atomic files
+
+Plugin and generated sidecar writes use `fo4::io::write_file_atomic` / the Radicle writer. Do not
+replace this with direct truncating writes.
+
+### External modification guard
+
+Every loaded writable plugin records its disk modification time. `writeGuard()` refuses writes if
+the file changed after load. This prevents FO4IDE from silently overwriting edits made by another
+tool.
+
+### Protected game files
+
+Game Data files and official Bethesda/Creation Club plugin names are read-only. `isEditable()` and
+new-plugin filename checks enforce this at the backend, not only in the UI.
+
+### New patch authority
+
+Automatically-created plugins may only be written into the trusted MO2 overwrite directory supplied
+by the active profile. JavaScript cannot choose an arbitrary filesystem path.
+
+If a write workflow auto-creates a target and the requested mutation fails or becomes a semantic
+no-op, the bridge asks the backend to roll that empty target back. Rollback is allowed only when the
+file is unchanged, still inside the trusted overwrite root, parses successfully, and remains
+TES4-only with no masters or records.
+
+### Master remapping
+
+Changing the master table must remap all schema-proven FormLinks, record header FormIDs, and
+FormID-bearing GRUP labels. CELL, WRLD, DIAL, and placed-reference containment depends on those GRUP
+labels being re-encoded through the new master context.
+
+### Nested records
+
+Do not generalize top-level record operations to nested records by copying bytes into a random GRUP.
+Use a containment-aware primitive. REFR/ACHR currently have a verified CELL-aware copy path. Other
+nested families stay fail-closed until their hierarchy is proven.
+
+### FormID wire format
+
+The user-facing FormKey format is:
+
+```text
+001234:Fallout4.esm
+```
+
+Local IDs are six hexadecimal digits followed by the owner plugin. Light-plugin allocation is
+bounded by the engine's 12-bit object-ID behavior.
+
+## Load order and conflicts
+
+`fo4::ConflictGraph` is rebuilt from the loaded plugin vector. Later plugins win. Read APIs should
+use the winning version when the user asks about the effective load order and preserve explicit
+plugin-version selection when the UI asks for a particular column.
+
+Reference impact analysis must use the schema-proven FormLink graph. Do not infer references from
+arbitrary 4-byte values.
+
+Renumbering a plugin fixes references inside that plugin. It cannot rewrite other plugins in place;
+`ChangeReferencingRecords` creates/copies overrides into a selected patch for that purpose.
+
+## Generic element editing
+
+The legacy C# editor used reflection over Mutagen object graphs. Native generic editing instead uses
+Radicle schema descriptors.
+
+`DescribeElement`, `AddElement`, `RemoveElement`, `MoveElement`, and `ClearElement` expose only
+schema-proven list structures. Unsupported reflection-only paths return a capability error rather
+than inventing binary layouts.
+
+The same rule currently applies to conditions: root CTDA `Conditions` is native. Historical nested
+Mutagen reflection paths fail with `ConditionPathUnsupported` until an equivalent native schema is
+implemented.
+
+## CELL and worldspace editing
+
+The Cell viewer is native. Verified support includes:
+
+- CELL and WRLD search
+- interior/exterior CELL resolution
+- REFR and ACHR enumeration
+- persistent/temporary child groups
+- placed-reference transforms
+- nested override creation with CELL/WRLD containment
+- SCOL child placements
+- TXST diffuse texture lookup
+
+Do not add another placed-record family until its binary layout is verified against xEdit/Mutagen
+oracle material and covered by round-trip tests.
+
+## AI integration
+
+The native desktop host does not embed Anthropic/OpenAI/provider session code. AI clients connect to
+FO4IDE through the native stdio MCP server:
+
+```text
+FO4RecordEditor.exe --mcp
+```
+
+The right-side React panel is only an MCP handoff surface. `fo4:ask-ai` events place generated prompts
+there for copying into an MCP-connected client. Do not restore `hostObjects.chat` or a managed
+provider stack as part of backend work.
+
+## MCP
+
+`native/apps/fo4ide/main.cpp` creates the MCP registry and registers native tools backed by the same
+service targets used by the GUI. `fo4ide::mcp::StdioServer` owns the stdio protocol loop.
+
+When adding a tool:
+
+1. identify the native target/method that owns the behavior,
+2. register the tool schema in the MCP registry,
+3. dispatch to the same tested native service rather than duplicating logic,
+4. mark/desribe mutation semantics accurately in the tool schema,
+5. add a native test for the underlying operation and, where useful, the MCP dispatcher.
+
+The GUI and MCP should converge on one backend operation, not maintain separate implementations.
+
+## Testing
+
+Native tests use Catch2/CTest under `native/tests/`; Radicle has its own test suite under
+`Radicle/tests/`.
+
+Typical Linux inner loop:
+
+```bash
+cmake -S PluginEditTool/native -B build/fo4ide -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON
+cmake --build build/fo4ide
+ctest --test-dir build/fo4ide --output-on-failure
+```
+
+Radicle standalone:
+
+```bash
+cmake -S Radicle -B build/radicle -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug -DRADICLE_BUILD_TESTS=ON
+cmake --build build/radicle
+ctest --test-dir build/radicle --output-on-failure
+```
+
+Build the React bundle with:
+
+```bash
+cd PluginEditTool/web
+npm ci
+npm run build
+```
+
+CI is `.github/workflows/native-ci.yml`. It builds/tests Radicle on Linux, cross-builds Radicle for
+Windows, and builds/tests the PluginEditTool native host on Linux.
+
+## Release paths
+
+- `package.ps1`: Windows C++ release zip
+- `publish.bat`: Windows local build/deploy loop for MO2 testing
+- `packaging/linux/build-deb.sh`: Linux C++ `.deb`
+
+None of these release paths should invoke `dotnet` after the native cutover.
+
+## UI color semantics
+
+`web/src/index.css` is the source of truth for conflict colors. Preserve xEdit-style semantic
+meaning such as winner/loser/override/critical conflict even if actual colors are retuned.
+
+Do not use orphaned WPF views or old managed brushes as UI sources of truth.
