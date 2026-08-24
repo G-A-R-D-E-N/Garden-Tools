@@ -56,7 +56,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: PRISMA User Interface Framework <noreply@users.noreply.github.com>
 Installed-Size: ${INSTALLED_KB}
-Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6,
+Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6, zlib1g,
          libwebkit2gtk-4.1-0, libgtk-3-0
 Recommends: zenity, wine
 Homepage: https://github.com/PRISMA-USER-INTERFACE-FRAMEWORK/PluginEditTool
