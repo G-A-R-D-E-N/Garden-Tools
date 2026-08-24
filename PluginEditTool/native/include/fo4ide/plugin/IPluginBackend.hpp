@@ -45,6 +45,13 @@ public:
         return invokeBackend("SetField", arguments);
     }
 
+    virtual Result<nlohmann::json> compactToEsl(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "CompactToEslUnavailable",
+            "Native compact-to-ESL is unavailable for this backend"
+        });
+    }
+
     // Compatibility metadata used by the legacy condition editor. Keeping it
     // on the backend interface avoids teaching the app/RPC layer about a
     // concrete Fallout 4 implementation.
