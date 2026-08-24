@@ -1,5 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
+#include <utility>
+
 #include <fo4ide/papyrus/Decompiler.hpp>
 #include <fo4ide/papyrus/Pex.hpp>
 
