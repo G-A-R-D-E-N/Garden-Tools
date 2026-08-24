@@ -154,8 +154,43 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # PluginEditTool's native backend is Windows/WebView2. The WebView2 SDK is NOT
-  # part of xwin, so a clang-cl/xwin cross build will only work once WebView2's
-  # headers/import libs are staged on the host (or vendored). Left out until that
-  # dependency is sorted; the Linux native job above still exercises the shared
-  # non-Windows code.
+  plugineditool-native-windows-cross:
+    name: PluginEditTool native (Windows cross, clang-cl/xwin)
+    runs-on: [self-hosted, Linux, X64, garden]
+    # The native host now fetches the pinned WebView2 SDK itself. This lane also
+    # forces the pinned zlib fallback used by package.ps1, so the build matches
+    # a clean Windows release machine rather than depending on host packages.
+    # Tests are build-only because the self-hosted runner is Linux and Wine is
+    # intentionally retired.
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Configure native Windows host
+        run: >
+          cmake -S PluginEditTool/native -B build/fo4ide-win -G Ninja
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
+          -DCMAKE_BUILD_TYPE=Release
+          -DFO4IDE_BUILD_TESTS=OFF
+          -DFO4IDE_BUILD_HTTP=ON
+          -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
+
+      - name: Build FO4RecordEditor.exe
+        run: cmake --build build/fo4ide-win --target fo4ide
+
+      - name: Verify and upload native Windows executable
+        if: always()
+        continue-on-error: true
+        run: test -f build/fo4ide-win/bin/FO4RecordEditor.exe
+
+      - name: Upload native Windows executable
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: fo4recordeditor-windows-x64
+          path: build/fo4ide-win/bin/FO4RecordEditor.exe
+          if-no-files-found: warn
+          retention-days: 14
