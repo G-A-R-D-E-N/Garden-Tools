@@ -35,6 +35,16 @@ public:
     virtual Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) {
         return invokeBackend("SetField", arguments);
     }
+
+    // Compatibility metadata used by the legacy condition editor. Keeping it
+    // on the backend interface avoids teaching the app/RPC layer about a
+    // concrete Fallout 4 implementation.
+    virtual Result<nlohmann::json> conditionFunctionParams() const {
+        return std::unexpected(Error{
+            "ConditionMetadataUnavailable",
+            "Condition parameter metadata is not provided by this backend"
+        });
+    }
 };
 
 class NullPluginBackend final : public IPluginBackend {
