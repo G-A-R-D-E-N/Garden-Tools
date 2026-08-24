@@ -20,6 +20,7 @@ add_library(
     plugin/RadiclePluginCompact.cpp
     plugin/RadiclePluginRenumber.cpp
     plugin/RadiclePluginDeepCopy.cpp
+    plugin/RadiclePluginReferenceRemap.cpp
     plugin/RadiclePluginLeveled.cpp
     plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginBatchMutation.cpp
