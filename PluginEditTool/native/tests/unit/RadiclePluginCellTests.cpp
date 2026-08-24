@@ -82,6 +82,45 @@ void endGroupRaw(fo4::test::ByteWriter& out, std::size_t offset) {
     out.patch_u32(offset + 4, static_cast<std::uint32_t>(out.size() - offset));
 }
 
+std::vector<std::byte> basePlugin() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, {});
+
+    const auto statTop = fo4::test::begin_group(out, "STAT", 0);
+    const auto firstStat = fo4::test::begin_record(out, "STAT", 0, 0x00000810u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"PartA\0", 6});
+    fo4::test::write_subrecord(out, "MODL", std::string_view{"Meshes\\PartA.nif\0", 17});
+    fo4::test::end_record(out, firstStat);
+    const auto secondStat = fo4::test::begin_record(out, "STAT", 0, 0x00000811u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"PartB\0", 6});
+    fo4::test::write_subrecord(out, "MODL", std::string_view{"Meshes\\PartB.nif\0", 17});
+    fo4::test::end_record(out, secondStat);
+    fo4::test::end_group(out, statTop);
+
+    const auto scolTop = fo4::test::begin_group(out, "SCOL", 0);
+    const auto scol = fo4::test::begin_record(out, "SCOL", 0, 0x00000802u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Collection\0", 11});
+    fo4::test::ByteWriter partA;
+    partA.u32(0x00000810u);
+    fo4::test::write_subrecord(out, "ONAM", partA.bytes);
+    fo4::test::ByteWriter placementsA;
+    for (int field = 0; field < 7; ++field) {
+        placementsA.f32(1.0f + static_cast<float>(field));
+    }
+    fo4::test::write_subrecord(out, "DATA", placementsA.bytes);
+    fo4::test::ByteWriter partB;
+    partB.u32(0x00000811u);
+    fo4::test::write_subrecord(out, "ONAM", partB.bytes);
+    fo4::test::ByteWriter placementsB;
+    for (int field = 0; field < 7; ++field) {
+        placementsB.f32(10.0f + static_cast<float>(field));
+    }
+    fo4::test::write_subrecord(out, "DATA", placementsB.bytes);
+    fo4::test::end_record(out, scol);
+    fo4::test::end_group(out, scolTop);
+    return out.bytes;
+}
+
 std::vector<std::byte> sourcePlugin() {
     fo4::test::ByteWriter out;
     writeHeader(out, {"Base.esm"});
@@ -142,21 +181,37 @@ nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& result) {
 TEST_CASE("Native cell transform creates a nested override before moving the reference") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
     const auto sourcePath = root / "Source.esp";
     const auto patchPath = root / "Patch.esp";
+    writeBytes(basePath, basePlugin());
     writeBytes(sourcePath, sourcePlugin());
     writeBytes(patchPath, patchPlugin());
 
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
         {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", basePath),
             pluginEntry("Source.esp", sourcePath),
             pluginEntry("Patch.esp", patchPath)
         })}
     };
     auto loaded = backend.invoke("environment.LoadMo2", environment);
     REQUIRE(loaded.has_value());
-    CHECK(loaded->at("loadedPlugins") == 2);
+    CHECK(loaded->at("loadedPlugins") == 3);
+
+    const auto beforeMove = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000800:Base.esm"})));
+    REQUIRE(beforeMove.at("references").size() == 1);
+    const auto& renderRef = beforeMove.at("references")[0];
+    CHECK(renderRef.at("baseType") == "StaticCollection");
+    REQUIRE(renderRef.at("scolParts").is_array());
+    REQUIRE(renderRef.at("scolParts").size() == 2);
+    CHECK(renderRef.at("scolParts")[0].at("modelPath") == "Meshes\\PartA.nif");
+    CHECK(renderRef.at("scolParts")[0].at("placements")[0].at("x") == 1.0f);
+    CHECK(renderRef.at("scolParts")[0].at("placements")[0].at("scale") == 7.0f);
+    CHECK(renderRef.at("scolParts")[1].at("modelPath") == "Meshes\\PartB.nif");
+    CHECK(renderRef.at("scolParts")[1].at("placements")[0].at("x") == 10.0f);
 
     const auto moved = backend.setPlacedReferenceTransform(nlohmann::json::array({
         "000801:Base.esm", "Patch.esp",
