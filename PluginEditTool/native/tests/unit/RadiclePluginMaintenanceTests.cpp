@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -113,6 +114,26 @@ std::vector<std::byte> copySourceBytes() {
     fo4::test::write_subrecord(out, "EDID", std::string_view{"SourceRace\0", 11});
     fo4::test::ByteWriter link;
     link.u32(0x00000800u);
+    fo4::test::write_subrecord(out, "AHCM", link.bytes);
+    fo4::test::end_record(out, race);
+    fo4::test::end_group(out, races);
+    return out.bytes;
+}
+
+std::vector<std::byte> compactSourceBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x1001);
+
+    const auto colors = fo4::test::begin_group(out, "CLFM", 0);
+    const auto color = fo4::test::begin_record(out, "CLFM", 0, 0x00001000u, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"HighColor\0", 10});
+    fo4::test::end_record(out, color);
+    fo4::test::end_group(out, colors);
+
+    const auto races = fo4::test::begin_group(out, "RACE", 0);
+    const auto race = fo4::test::begin_record(out, "RACE", 0, 0x00000800u, 131);
+    fo4::test::ByteWriter link;
+    link.u32(0x00001000u);
     fo4::test::write_subrecord(out, "AHCM", link.bytes);
     fo4::test::end_record(out, race);
     fo4::test::end_group(out, races);
@@ -261,4 +282,32 @@ TEST_CASE("Native CopyAsNewRecord allocates a local record and remaps source For
     CHECK(duplicate->header.signature == fo4::Signature::from_string("RACE"));
     CHECK(editorId(*duplicate) == "SourceRaceDUP");
     CHECK(rawSubrecord(*duplicate, "AHCM") == 0x00000800u);
+}
+
+TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin references") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, compactSourceBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({pluginEntry("Patch.esp", path)}));
+
+    const auto result = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().find("remapped 1 record") != std::string::npos);
+
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(fo4::find_record(
+        disk, fo4::FormKey::parse("001000:Patch.esp")) == nullptr);
+    const auto* color = fo4::find_record(
+        disk, fo4::FormKey::parse("000801:Patch.esp"));
+    REQUIRE(color != nullptr);
+    CHECK(editorId(*color) == "HighColor");
+
+    const auto* race = fo4::find_record(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(race != nullptr);
+    CHECK(rawSubrecord(*race, "AHCM") == 0x00000801u);
 }
