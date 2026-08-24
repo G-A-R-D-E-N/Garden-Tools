@@ -46,6 +46,25 @@ public:
         });
     }
 
+    // Generic ElementService compatibility lives on the backend seam so the
+    // RPC layer never needs to know Radicle schema types. Implementations may
+    // expose only schema-proven element families and fail closed for the rest.
+    virtual Result<nlohmann::json> describeElement(const nlohmann::json&) const {
+        return std::unexpected(Error{"ElementBackendUnavailable", "Generic element queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> addElement(const nlohmann::json&) {
+        return std::unexpected(Error{"ElementBackendUnavailable", "Generic element insertion is unavailable"});
+    }
+    virtual Result<nlohmann::json> removeElement(const nlohmann::json&) {
+        return std::unexpected(Error{"ElementBackendUnavailable", "Generic element removal is unavailable"});
+    }
+    virtual Result<nlohmann::json> moveElement(const nlohmann::json&) {
+        return std::unexpected(Error{"ElementBackendUnavailable", "Generic element movement is unavailable"});
+    }
+    virtual Result<nlohmann::json> clearElement(const nlohmann::json&) {
+        return std::unexpected(Error{"ElementBackendUnavailable", "Generic element clearing is unavailable"});
+    }
+
     // Cell-viewer seams stay on the abstract plugin backend because they are
     // load-order queries/mutations, not UI concerns. Non-FO4 backends can
     // decline them without the app layer knowing any Radicle types.
