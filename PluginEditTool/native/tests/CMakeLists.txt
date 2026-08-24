@@ -90,6 +90,7 @@ add_executable(
     unit/RadiclePluginFormLinkListTests.cpp
     unit/RadiclePluginNestedFormLinkListTests.cpp
     unit/RadiclePluginElementTests.cpp
+    unit/RadiclePluginMaintenanceTests.cpp
     unit/RadiclePluginExteriorCellTests.cpp
     unit/RadiclePluginCellTests.cpp
     unit/RadiclePluginEyesTests.cpp
@@ -126,7 +127,7 @@ target_link_libraries(
     PRIVATE fo4ide_archive fo4 Catch2::Catch2WithMain
 )
 fo4ide_enable_warnings(fo4ide_test_archive_backend)
-fo4ide_enable_sanitizers(fo4ide_test_archive_backend)
+fo4ide_enable_sanitizers(fo4ide_archive)
 catch_discover_tests(fo4ide_test_archive_backend PROPERTIES TIMEOUT 10)
 
 add_executable(fo4ide_fake_process helpers/fake_process.cpp)
