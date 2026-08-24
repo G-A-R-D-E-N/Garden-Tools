@@ -9,6 +9,7 @@
 #include <cctype>
 #include <fstream>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -24,6 +25,9 @@ constexpr std::uint16_t k_texture_chunk_header_size = 0x18u;
 constexpr std::size_t k_header_size = 24;
 constexpr std::size_t k_entry_size = 24;
 constexpr std::size_t k_chunk_record_size = 24;
+constexpr std::uint32_t k_dds_magic = 0x20534444u;     // "DDS "
+constexpr std::uint32_t k_dds_dx10_fourcc = 0x30315844u;
+constexpr std::size_t k_dds_dx10_header_size = 148;
 
 // Upper bound on a single entry's decompressed size, matching the GNRL path.
 constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
@@ -59,6 +63,107 @@ void append_bytes(std::vector<std::byte>& out, std::span<const std::byte> data) 
 
 std::string normalized_path(std::string_view path) {
   return normalize_ba2_path(path);
+}
+
+bool is_dds_path(std::string_view path) {
+  if (path.size() < 4) return false;
+  const auto suffix = path.substr(path.size() - 4);
+  return suffix[0] == '.' &&
+         std::tolower(static_cast<unsigned char>(suffix[1])) == 'd' &&
+         std::tolower(static_cast<unsigned char>(suffix[2])) == 'd' &&
+         std::tolower(static_cast<unsigned char>(suffix[3])) == 's';
+}
+
+struct DdsLayout {
+  bool block_compressed{false};
+  std::uint32_t bytes_per_unit{0};
+};
+
+std::optional<DdsLayout> dds_layout(std::uint8_t dxgi) {
+  switch (dxgi) {
+    case 70: case 71: case 72:
+    case 79: case 80: case 81:
+      return DdsLayout{true, 8};
+    case 73: case 74: case 75:
+    case 76: case 77: case 78:
+    case 82: case 83: case 84:
+    case 94: case 95: case 96:
+    case 97: case 98: case 99:
+      return DdsLayout{true, 16};
+    case 2:  return DdsLayout{false, 16};
+    case 10: return DdsLayout{false, 8};
+    case 24: case 28: case 29: case 34: case 41:
+    case 87: case 88: case 91: case 93:
+      return DdsLayout{false, 4};
+    case 49: case 54: case 56: case 85: case 86: case 115:
+      return DdsLayout{false, 2};
+    case 61: case 65:
+      return DdsLayout{false, 1};
+    default:
+      return std::nullopt;
+  }
+}
+
+std::pair<std::uint32_t, std::uint32_t> dds_pitch_and_flag(const Ba2TextureInfo& info) {
+  const auto layout = dds_layout(info.dxgi_format);
+  if (!layout) return {0u, 0u};
+  const std::uint64_t width = std::max<std::uint32_t>(1u, info.width);
+  const std::uint64_t height = std::max<std::uint32_t>(1u, info.height);
+  std::uint64_t value = 0;
+  std::uint32_t flag = 0;
+  if (layout->block_compressed) {
+    value = ((width + 3u) / 4u) * ((height + 3u) / 4u) * layout->bytes_per_unit;
+    flag = 0x80000u;  // DDSD_LINEARSIZE
+  } else {
+    value = width * layout->bytes_per_unit;
+    flag = 0x8u;      // DDSD_PITCH
+  }
+  if (value > std::numeric_limits<std::uint32_t>::max()) return {0u, 0u};
+  return {static_cast<std::uint32_t>(value), flag};
+}
+
+std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
+  if (entry.texture.width == 0 || entry.texture.height == 0) {
+    throw Ba2Error("DX10 BA2 texture has zero width or height");
+  }
+
+  const auto [pitch_or_linear, size_flag] = dds_pitch_and_flag(entry.texture);
+  const auto mip_count = std::max<std::uint32_t>(1u, entry.texture.mip_count);
+  const bool cube = entry.texture.flags != 0;
+
+  std::vector<std::byte> out;
+  out.reserve(k_dds_dx10_header_size);
+  append_u32(out, k_dds_magic);
+  append_u32(out, 124u);
+  append_u32(out, 0x1u | 0x2u | 0x4u | 0x1000u | 0x20000u | size_flag);
+  append_u32(out, entry.texture.height);
+  append_u32(out, entry.texture.width);
+  append_u32(out, pitch_or_linear);
+  append_u32(out, 1u);
+  append_u32(out, mip_count);
+  for (int i = 0; i < 11; ++i) append_u32(out, 0u);
+  append_u32(out, 32u);
+  append_u32(out, 0x4u);  // DDPF_FOURCC
+  append_u32(out, k_dds_dx10_fourcc);
+  append_u32(out, 0u);
+  append_u32(out, 0u);
+  append_u32(out, 0u);
+  append_u32(out, 0u);
+  append_u32(out, 0u);
+  append_u32(out, 0x1000u | (mip_count > 1 ? 0x400008u : 0u));
+  append_u32(out, cube ? (0x200u | 0xFC00u) : 0u);
+  append_u32(out, 0u);
+  append_u32(out, 0u);
+  append_u32(out, 0u);
+  append_u32(out, entry.texture.dxgi_format);
+  append_u32(out, 3u);  // D3D10_RESOURCE_DIMENSION_TEXTURE2D
+  append_u32(out, cube ? 0x4u : 0u);
+  append_u32(out, 1u);
+  append_u32(out, 0u);
+  if (out.size() != k_dds_dx10_header_size) {
+    throw Ba2Error("internal DDS header size mismatch");
+  }
+  return out;
 }
 
 std::size_t checked_size(std::uint64_t value, std::string_view what) {
@@ -115,9 +220,6 @@ Ba2TextureArchive read_ba2_texture_impl(std::span<const std::byte> data) {
   const auto string_table_offset_raw = read_u64(cursor);
   archive.has_string_table = string_table_offset_raw != 0;
 
-  // Every DX10 file entry consumes at least its fixed 24-byte header before
-  // any chunk records. Prove that minimum table can physically fit before
-  // reserving attacker-controlled file_count entries.
   if (static_cast<std::size_t>(file_count) > cursor.remaining() / k_entry_size) {
     throw Ba2Error("BA2 file count exceeds the minimum entry table that fits in the archive");
   }
@@ -253,14 +355,14 @@ std::vector<std::byte> extract_ba2_texture_entry(const Ba2TextureEntry& entry) {
                    "-byte extraction limit");
   }
 
-  std::vector<std::byte> output;
-  output.reserve(total);
+  std::vector<std::byte> payload;
+  payload.reserve(total);
   for (const auto& chunk : entry.chunks) {
     if (!chunk.compressed) {
       if (chunk.data.size() != chunk.decompressed_size) {
         throw Ba2Error("stored BA2 chunk size does not match header");
       }
-      append_bytes(output, chunk.data);
+      append_bytes(payload, chunk.data);
       continue;
     }
 
@@ -273,15 +375,25 @@ std::vector<std::byte> extract_ba2_texture_entry(const Ba2TextureEntry& entry) {
     if (result != Z_OK || out_size != unpacked.size()) {
       throw Ba2Error("zlib failed to decompress BA2 chunk");
     }
-    append_bytes(output, unpacked);
+    append_bytes(payload, unpacked);
   }
+
+  if (!is_dds_path(entry.path)) return payload;
+  if (payload.size() >= 4 &&
+      std::to_integer<std::uint8_t>(payload[0]) == 'D' &&
+      std::to_integer<std::uint8_t>(payload[1]) == 'D' &&
+      std::to_integer<std::uint8_t>(payload[2]) == 'S' &&
+      std::to_integer<std::uint8_t>(payload[3]) == ' ') {
+    return payload;
+  }
+  auto output = dds_header_for(entry);
+  output.reserve(output.size() + payload.size());
+  append_bytes(output, payload);
   return output;
 }
 
 const Ba2TextureEntry* find_ba2_texture_entry(const Ba2TextureArchive& archive,
                                               std::string_view path) {
-  // Not noexcept: normalized_path allocates, and an allocation failure must
-  // propagate as bad_alloc instead of terminating via an escaping exception.
   const auto wanted = normalized_path(path);
   for (const auto& entry : archive.entries) {
     if (normalized_path(entry.path) == wanted) {
