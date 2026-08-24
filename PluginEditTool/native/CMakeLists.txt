@@ -18,10 +18,27 @@ include(Dependencies)
 include(CompilerWarnings)
 include(Sanitizers)
 
-# Radicle and the native backend tests both consume zlib. Resolve it in the
-# top-level directory so the imported ZLIB::ZLIB target is visible to sibling
-# native test directories as well as Radicle's subdirectory.
-find_package(ZLIB REQUIRED)
+# Prefer a system zlib, but make the native app buildable on a clean Windows
+# machine without vcpkg or another package manager. This is the same pinned
+# revision used by the Windows cross-compile CI lane.
+find_package(ZLIB QUIET)
+if(NOT TARGET ZLIB::ZLIB)
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        fo4ide_zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+        GIT_SHALLOW FALSE
+    )
+    FetchContent_MakeAvailable(fo4ide_zlib)
+    if(TARGET zlibstatic)
+        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    elseif(TARGET zlib)
+        add_library(ZLIB::ZLIB ALIAS zlib)
+    else()
+        message(FATAL_ERROR "Fetched zlib did not define zlibstatic or zlib")
+    endif()
+endif()
 
 set(RADICLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Radicle")
 if(NOT EXISTS "${RADICLE_DIR}/CMakeLists.txt")
