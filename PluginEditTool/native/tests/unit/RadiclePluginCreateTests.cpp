@@ -124,3 +124,44 @@ TEST_CASE("Native CreatePlugin requires an explicitly trusted output root") {
     REQUIRE_FALSE(created.has_value());
     CHECK(created.error().type == "NewPluginRootUnavailable");
 }
+
+TEST_CASE("Native created-plugin rollback deletes only unchanged empty plugins") {
+    const auto root = createTempRoot();
+    CreateCleanup cleanup{root};
+    const auto overwrite = root / "overwrite";
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.setTrustedNewPluginRoot(overwrite).has_value());
+
+    REQUIRE(backend.createPlugin(nlohmann::json::array({"EmptyRollback.esp"})).has_value());
+    const auto emptyPath = overwrite / "EmptyRollback.esp";
+    REQUIRE(std::filesystem::exists(emptyPath));
+    const auto discarded = backend.discardCreatedPlugin("EmptyRollback.esp");
+    REQUIRE(discarded.has_value());
+    CHECK_FALSE(std::filesystem::exists(emptyPath));
+
+    REQUIRE(backend.createPlugin(nlohmann::json::array({"NonEmptyRollback.esp"})).has_value());
+    const auto nonEmptyPath = overwrite / "NonEmptyRollback.esp";
+    const auto record = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "NonEmptyRollback.esp",
+            "EYES",
+            nlohmann::json{
+                {"editorId", "KeepMe"},
+                {"fullText", "Keep Me"},
+                {"icon", "Textures\\Interface\\KeepMe.dds"},
+                {"dataFlags", 0},
+                {"recordFlags", 0}
+            }
+        }));
+    REQUIRE(record.has_value());
+
+    const auto refused = backend.discardCreatedPlugin("NonEmptyRollback.esp");
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "CreatedPluginNotEmpty");
+    CHECK(std::filesystem::exists(nonEmptyPath));
+    const auto disk = fo4::read_plugin_file(nonEmptyPath);
+    CHECK(fo4::find_record(
+        disk, fo4::FormKey::parse("000800:NonEmptyRollback.esp")) != nullptr);
+}
