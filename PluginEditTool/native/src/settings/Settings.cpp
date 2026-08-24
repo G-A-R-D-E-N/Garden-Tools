@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <string>
 #include <unordered_map>
 #include <utility>
 
@@ -19,8 +20,23 @@ std::string readString(const nlohmann::json& json, const char* key) {
     return it != json.end() && it->is_string() ? it->get<std::string>() : std::string{};
 }
 
+std::string environmentValue(const char* name) {
+#if defined(_WIN32)
+    char* raw = nullptr;
+    std::size_t size = 0;
+    if (_dupenv_s(&raw, &size, name) != 0 || raw == nullptr) return {};
+    std::string value(raw);
+    std::free(raw);
+    return value;
+#else
+    const char* raw = std::getenv(name);
+    return raw ? std::string(raw) : std::string{};
+#endif
+}
+
 void applyEnv(std::filesystem::path& value, const char* name) {
-    if (const char* env = std::getenv(name); env && *env) value = env;
+    const auto env = environmentValue(name);
+    if (!env.empty()) value = env;
 }
 
 std::string migrateModel(std::string value) {
