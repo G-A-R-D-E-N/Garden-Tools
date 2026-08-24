@@ -21,6 +21,9 @@ public:
                                   const nlohmann::json& arguments) override;
     Result<nlohmann::json> invokeBackend(std::string_view method,
                                           const nlohmann::json& arguments) override;
+    Result<nlohmann::json> invokeLegacyBackend(
+        std::string_view method,
+        const nlohmann::json& arguments) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
@@ -62,11 +65,11 @@ private:
     // Generic ElementService compatibility. These methods deliberately expose
     // only schema-proven list structures. Reflection-only C# shapes remain
     // fail-closed until their binary contracts are represented in Radicle.
-    Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const;
-    Result<nlohmann::json> addElement(const nlohmann::json& arguments);
-    Result<nlohmann::json> removeElement(const nlohmann::json& arguments);
-    Result<nlohmann::json> moveElement(const nlohmann::json& arguments);
-    Result<nlohmann::json> clearElement(const nlohmann::json& arguments);
+    Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> addElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> moveElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> clearElement(const nlohmann::json& arguments) override;
 
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
@@ -97,9 +100,9 @@ private:
     Result<nlohmann::json> saveMastersPlugin(const nlohmann::json& arguments);
 
     // CELL/worldspace compatibility surface used by the native 3D cell viewer.
-    Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const;
-    Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const;
-    Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments);
+    Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
 
     // Condition-editing surface, mirroring WriteService.Conditions.cs and
     // WriteService.SetConditions. getConditions serializes the record's CTDA
