@@ -1,6 +1,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -98,6 +99,32 @@ std::vector<std::byte> identicalOverrideBytes() {
     return out.bytes;
 }
 
+std::vector<std::byte> copySourceBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x802);
+
+    const auto colors = fo4::test::begin_group(out, "CLFM", 0);
+    const auto color = fo4::test::begin_record(out, "CLFM", 0, 0x00000800u, 131);
+    fo4::test::end_record(out, color);
+    fo4::test::end_group(out, colors);
+
+    const auto races = fo4::test::begin_group(out, "RACE", 0);
+    const auto race = fo4::test::begin_record(out, "RACE", 0, 0x00000801u, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"SourceRace\0", 11});
+    fo4::test::ByteWriter link;
+    link.u32(0x00000800u);
+    fo4::test::write_subrecord(out, "AHCM", link.bytes);
+    fo4::test::end_record(out, race);
+    fo4::test::end_group(out, races);
+    return out.bytes;
+}
+
+std::vector<std::byte> emptyPatchBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x800);
+    return out.bytes;
+}
+
 nlohmann::json pluginEntry(std::string name, const std::filesystem::path& path) {
     return {
         {"name", std::move(name)},
@@ -111,6 +138,30 @@ void load(fo4ide::plugin::RadiclePluginBackend& backend,
           const nlohmann::json& plugins) {
     const auto result = backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", plugins}});
     REQUIRE(result.has_value());
+}
+
+std::uint32_t rawSubrecord(const fo4::Record& record, std::string_view signature) {
+    const auto wanted = fo4::Signature::from_string(signature);
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != wanted) continue;
+        REQUIRE(subrecord.data.size() == 4);
+        std::uint32_t value = 0;
+        std::memcpy(&value, subrecord.data.data(), sizeof(value));
+        return value;
+    }
+    FAIL("missing requested FormLink subrecord");
+    return 0;
+}
+
+std::string editorId(const fo4::Record& record) {
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != fo4::sig_edid) continue;
+        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
+        const auto* end = begin + subrecord.data.size();
+        const auto* nul = std::find(begin, end, '\0');
+        return std::string(begin, nul);
+    }
+    return {};
 }
 
 }  // namespace
@@ -174,4 +225,40 @@ TEST_CASE("Native RemoveIdenticalToMaster previews and removes top-level ITM ove
     const auto base = fo4::read_plugin_file(basePath);
     CHECK(fo4::find_record(
         base, fo4::FormKey::parse("000800:Base.esm")) != nullptr);
+}
+
+TEST_CASE("Native CopyAsNewRecord allocates a local record and remaps source FormLinks") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(sourcePath, copySourceBytes());
+    writeBytes(patchPath, emptyPatchBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({
+        pluginEntry("Base.esm", sourcePath),
+        pluginEntry("Patch.esp", patchPath)
+    }));
+
+    const auto result = backend.invokeLegacyBackend(
+        "CopyAsNewRecord",
+        nlohmann::json::array({
+            "Base.esm", "000801:Base.esm", "Patch.esp", ""
+        }));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().find("as NEW record 000800:Patch.esp") != std::string::npos);
+
+    const auto patch = fo4::read_plugin_file(patchPath);
+    REQUIRE(patch.header.masters.size() == 1);
+    CHECK(patch.header.masters[0].key.filename() == "Base.esm");
+    CHECK(patch.header.next_form_id == 0x801u);
+
+    const auto* duplicate = fo4::find_record(
+        patch, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(duplicate != nullptr);
+    CHECK(duplicate->header.signature == fo4::Signature::from_string("RACE"));
+    CHECK(editorId(*duplicate) == "SourceRaceDUP");
+    CHECK(rawSubrecord(*duplicate, "AHCM") == 0x00000800u);
 }
