@@ -1,8 +1,11 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
+#include <set>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -13,6 +16,7 @@
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/visit.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/form_links.hpp>
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
@@ -40,6 +44,14 @@ std::size_t maintenanceLimitArgument(const nlohmann::json& args,
     return value > 0 ? static_cast<std::size_t>(value) : fallback;
 }
 
+std::string maintenanceLower(std::string_view value) {
+    std::string out(value);
+    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return out;
+}
+
 std::string recordEditorId(const fo4::Record& record) {
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
@@ -60,6 +72,16 @@ const fo4::Record* topLevelRecord(const fo4::Plugin& plugin, const fo4::FormKey&
         }
     }
     return nullptr;
+}
+
+fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
+    fo4::Record* found = nullptr;
+    fo4::visit_records(plugin, [&](fo4::Record& record) {
+        if (found == nullptr && record.header.signature != fo4::sig_tes4 && record.form_key == key) {
+            found = &record;
+        }
+    });
+    return found;
 }
 
 bool eraseTopLevelRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
@@ -108,11 +130,190 @@ bool previousVersionNormalizesEqual(const fo4::Plugin& current,
     return previousNormalized != nullptr && sameSemanticRecord(*currentRecord, *previousNormalized);
 }
 
+fo4::PluginKind maintenanceOwnerKind(const fo4::Plugin& source,
+                                     const fo4::PluginKey& owner) {
+    if (owner == source.key) {
+        return source.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
+                                                       : fo4::PluginKind::full;
+    }
+    for (const auto& master : source.header.masters) {
+        if (master.key == owner) return master.kind;
+    }
+    return owner.looks_light() ? fo4::PluginKind::light : fo4::PluginKind::full;
+}
+
+bool maintenanceHasMaster(const fo4::Plugin& plugin, const fo4::PluginKey& owner) {
+    return std::any_of(plugin.header.masters.begin(), plugin.header.masters.end(),
+                       [&](const auto& master) { return master.key == owner; });
+}
+
 }  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
     std::string_view method,
     const nlohmann::json& arguments) {
+    if (method == "CopyAsNewRecord") {
+        const auto sourcePluginName = maintenanceStringArgument(arguments, 0);
+        const auto recordId = maintenanceStringArgument(arguments, 1);
+        const auto targetPluginName = maintenanceStringArgument(arguments, 2);
+        const auto requestedEditorId = maintenanceStringArgument(arguments, 3);
+        if (recordId.empty() || targetPluginName.empty()) {
+            return std::unexpected(Error{
+                "CopyAsNewArgumentsMissing",
+                "CopyAsNewRecord requires source record and target plugin"
+            });
+        }
+
+        std::scoped_lock lock(mutex_);
+        auto* target = findPlugin(targetPluginName);
+        if (target == nullptr) {
+            return std::unexpected(Error{
+                "TargetPluginNotLoaded",
+                "Target plugin is not loaded yet: " + targetPluginName
+            });
+        }
+        if (const auto guard = writeGuard(*target)) return std::unexpected(*guard);
+
+        const LoadedPlugin* source = nullptr;
+        fo4::FormKey sourceKey;
+        bool keyResolved = false;
+        if (recordId.find(':') != std::string::npos) {
+            try {
+                sourceKey = fo4::FormKey::parse(recordId);
+                keyResolved = true;
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{"InvalidFormKey", error.what()});
+            }
+        }
+
+        if (!sourcePluginName.empty()) {
+            source = findPlugin(sourcePluginName);
+            if (source == nullptr) {
+                return std::unexpected(Error{
+                    "SourcePluginNotLoaded",
+                    "Source plugin is not loaded: " + sourcePluginName
+                });
+            }
+            if (!keyResolved) {
+                const auto wanted = maintenanceLower(recordId);
+                fo4::visit_records(source->plugin, [&](const fo4::Record& record) {
+                    if (!keyResolved && maintenanceLower(recordEditorId(record)) == wanted) {
+                        sourceKey = record.form_key;
+                        keyResolved = true;
+                    }
+                });
+            }
+        } else {
+            if (keyResolved) {
+                for (auto it = plugins_.rbegin(); it != plugins_.rend(); ++it) {
+                    if (fo4::find_record(it->plugin, sourceKey) == nullptr) continue;
+                    source = &*it;
+                    break;
+                }
+            } else {
+                const auto wanted = maintenanceLower(recordId);
+                for (auto it = plugins_.rbegin(); it != plugins_.rend() && source == nullptr; ++it) {
+                    fo4::visit_records(it->plugin, [&](const fo4::Record& record) {
+                        if (source == nullptr && maintenanceLower(recordEditorId(record)) == wanted) {
+                            source = &*it;
+                            sourceKey = record.form_key;
+                            keyResolved = true;
+                        }
+                    });
+                }
+            }
+        }
+
+        if (!keyResolved || source == nullptr) {
+            return std::unexpected(Error{
+                "SourceRecordNotFound",
+                "Could not find source record '" + recordId + "'"
+            });
+        }
+        const auto* sourceRecord = topLevelRecord(source->plugin, sourceKey);
+        if (sourceRecord == nullptr) {
+            if (fo4::find_record(source->plugin, sourceKey) != nullptr) {
+                return std::unexpected(Error{
+                    "SourceContainmentUnsupported",
+                    "CopyAsNewRecord currently supports top-level records only; nested CELL/DIAL/world records require containment-aware duplication"
+                });
+            }
+            return std::unexpected(Error{
+                "SourceRecordNotFound",
+                "Could not find " + sourceKey.to_string() + " in " + source->name
+            });
+        }
+
+        try {
+            auto mutated = target->plugin;
+            std::set<fo4::PluginKey> requiredOwners;
+            for (const auto& link : fo4::collect_form_links(source->plugin)) {
+                if (link.record != sourceKey || link.key.owner().empty()) continue;
+                requiredOwners.insert(link.key.owner());
+            }
+
+            std::vector<fo4::MasterDescriptor> masters;
+            masters.reserve(mutated.header.masters.size() + requiredOwners.size());
+            for (const auto& master : mutated.header.masters) {
+                masters.push_back({master.key, master.kind});
+            }
+            bool addedMaster = false;
+            for (const auto& owner : requiredOwners) {
+                if (owner == mutated.key || maintenanceHasMaster(mutated, owner)) continue;
+                masters.push_back({owner, maintenanceOwnerKind(source->plugin, owner)});
+                addedMaster = true;
+            }
+            if (addedMaster) {
+                mutated = fo4::remap_plugin_masters(std::move(mutated), std::move(masters));
+            }
+
+            const auto newKey = fo4::create_local_record(mutated, sourceRecord->header.signature);
+            auto copied = *sourceRecord;
+            const auto sourceContext = fo4::plugin_form_id_context(source->plugin);
+            const auto destinationContext = fo4::plugin_form_id_context(mutated);
+            copied.form_key = newKey;
+            copied.header.form_id = fo4::encode_plugin_form_id(newKey, destinationContext);
+            fo4::remap_record_form_links(copied, sourceContext, destinationContext);
+            copied.original_range.clear();
+            copied.decompressed_payload.clear();
+            copied.header.data_size = 0;
+            copied.uncompressed_size = 0;
+
+            auto* allocated = mutableRecord(mutated, newKey);
+            if (allocated == nullptr) {
+                return std::unexpected(Error{
+                    "CopyAsNewAllocationFailed",
+                    "Allocated record disappeared before duplication"
+                });
+            }
+            *allocated = std::move(copied);
+
+            const auto originalEditorId = recordEditorId(*allocated);
+            const auto newEditorId = !requestedEditorId.empty()
+                ? requestedEditorId
+                : (originalEditorId.empty() ? std::string{} : originalEditorId + "DUP");
+            if (!newEditorId.empty() &&
+                !fo4::set_record_editor_id(mutated, newKey, newEditorId)) {
+                return std::unexpected(Error{
+                    "CopyAsNewEditorIdFailed",
+                    "Could not set EditorID on the duplicated record"
+                });
+            }
+
+            fo4::write_plugin_file(mutated, target->path);
+            target->plugin = std::move(mutated);
+            std::error_code ec;
+            target->loadedTime = std::filesystem::last_write_time(target->path, ec);
+            rebuildGraphLocked();
+            return nlohmann::json(
+                "Copied " + sourceKey.to_string() + " into " + targetPluginName +
+                " as NEW record " + newKey.to_string() +
+                (newEditorId.empty() ? std::string{} : " ('" + newEditorId + "')."));
+        } catch (const std::exception& error) {
+            return std::unexpected(Error{"CopyAsNewFailed", error.what()});
+        }
+    }
+
     if (method == "CleanPlugin") {
         const auto pluginName = maintenanceStringArgument(arguments, 0);
         if (pluginName.empty()) {
