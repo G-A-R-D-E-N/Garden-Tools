@@ -125,23 +125,24 @@ Result<nlohmann::json> RadiclePluginBackend::changeReferencingRecords(
     }
 
     auto* patch = findPlugin(patchName);
-    if (patch == nullptr) {
+    if (apply && patch == nullptr) {
         return std::unexpected(Error{
             "TargetPluginNotLoaded",
-            "Patch plugin is not loaded yet: " + patchName +
-            ". Native CreatePlugin support is required before this operation can create it automatically."
+            "Patch plugin is not loaded yet: " + patchName
         });
     }
 
     std::size_t patchIndex = plugins_.size();
-    for (std::size_t index = 0; index < plugins_.size(); ++index) {
-        if (&plugins_[index] == patch) {
-            patchIndex = index;
-            break;
+    if (patch != nullptr) {
+        for (std::size_t index = 0; index < plugins_.size(); ++index) {
+            if (&plugins_[index] == patch) {
+                patchIndex = index;
+                break;
+            }
         }
-    }
-    if (patchIndex == plugins_.size()) {
-        return std::unexpected(Error{"PluginStateInvalid", "Patch load-order index could not be resolved"});
+        if (patchIndex == plugins_.size()) {
+            return std::unexpected(Error{"PluginStateInvalid", "Patch load-order index could not be resolved"});
+        }
     }
 
     struct ReferenceWork {
@@ -213,6 +214,12 @@ Result<nlohmann::json> RadiclePluginBackend::changeReferencingRecords(
         return nlohmann::json(std::move(preview));
     }
 
+    if (patch == nullptr) {
+        return std::unexpected(Error{
+            "TargetPluginNotLoaded",
+            "Patch plugin disappeared before reference-remap apply: " + patchName
+        });
+    }
     if (const auto guard = writeGuard(*patch)) return std::unexpected(*guard);
     for (const auto& item : work) {
         if (item.sourceIndex > patchIndex) {
