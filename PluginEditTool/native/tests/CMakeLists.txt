@@ -91,6 +91,7 @@ add_executable(
     unit/RadiclePluginNestedFormLinkListTests.cpp
     unit/RadiclePluginElementTests.cpp
     unit/RadiclePluginMaintenanceTests.cpp
+    unit/RadiclePluginDeepCopyTests.cpp
     unit/RadiclePluginExteriorCellTests.cpp
     unit/RadiclePluginCellTests.cpp
     unit/RadiclePluginEyesTests.cpp
