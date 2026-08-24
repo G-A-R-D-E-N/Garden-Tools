@@ -20,6 +20,13 @@ enum class PlacedReferenceKind {
   npc,
 };
 
+enum class PlacedReferenceCopyStatus {
+  inserted,
+  replaced,
+  already_exists,
+  source_missing,
+};
+
 struct PositionRotation {
   float x{0.0f};
   float y{0.0f};
@@ -55,6 +62,17 @@ std::optional<PlacedReferenceView> decode_placed_reference(
 std::vector<PlacedReferenceView> placed_references_for_cell(
     const Plugin& plugin,
     const FormKey& cell);
+
+// Copies a REFR/ACHR as an override while preserving its CELL containment.
+// Missing CELL/group hierarchy is recreated from the source path. Group labels
+// that store parent FormIDs are re-encoded through the destination master table;
+// grid/block labels are preserved byte-for-byte. The operation is transactional
+// and fails closed on malformed or ambiguous containment.
+PlacedReferenceCopyStatus copy_placed_reference_as_override(
+    Plugin& destination,
+    const Plugin& source,
+    const FormKey& reference,
+    bool overwrite = false);
 
 // Replaces only the 24-byte DATA position/rotation payload on an existing
 // REFR/ACHR. Missing, duplicate or malformed DATA is rejected transactionally.
