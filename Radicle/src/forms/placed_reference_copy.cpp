@@ -19,6 +19,7 @@ namespace fo4::forms {
 namespace {
 
 constexpr auto k_cell = Signature::from_string("CELL");
+constexpr auto k_wrld = Signature::from_string("WRLD");
 constexpr auto k_refr = Signature::from_string("REFR");
 constexpr auto k_achr = Signature::from_string("ACHR");
 
@@ -268,25 +269,30 @@ bool replace_record(Plugin& plugin, const FormKey& key, Record replacement) {
   return replaced;
 }
 
-void validate_destination_cell_path(
+void validate_destination_record_path(
     const Plugin& destination,
-    const FormKey& cell,
+    const FormKey& key,
+    Signature signature,
     const std::vector<const Group*>& source_path,
     const PluginFormIdContext& source_context,
-    const PluginFormIdContext& destination_context) {
-  const auto located = locate_record(destination, cell);
+    const PluginFormIdContext& destination_context,
+    std::string_view label) {
+  const auto located = locate_record(destination, key);
   if (located.record == nullptr) return;
-  if (located.record->header.signature != k_cell) {
-    throw PlacedReferenceError("destination cell FormKey collides with a non-CELL record");
+  if (located.record->header.signature != signature) {
+    throw PlacedReferenceError(
+        "destination " + std::string(label) + " FormKey collides with another record type");
   }
   if (located.path.size() != source_path.size()) {
-    throw PlacedReferenceError("destination CELL containment differs from source containment");
+    throw PlacedReferenceError(
+        "destination " + std::string(label) + " containment differs from source containment");
   }
   for (std::size_t index = 0; index < source_path.size(); ++index) {
     const auto expected = remap_group_header(
         source_path[index]->header, source_context, destination_context);
     if (!same_group_identity(located.path[index]->header, expected)) {
-      throw PlacedReferenceError("destination CELL containment differs from source containment");
+      throw PlacedReferenceError(
+          "destination " + std::string(label) + " containment differs from source containment");
     }
   }
 }
@@ -344,6 +350,35 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
     }
   }
 
+  std::optional<FormKey> world;
+  std::optional<RecordLocation> source_world;
+  for (std::size_t index = 0; index < source_cell.path.size(); ++index) {
+    const auto* group = source_cell.path[index];
+    if (group->header.group_type != static_cast<std::int32_t>(GroupType::world_children)) {
+      continue;
+    }
+    if (world.has_value()) {
+      throw PlacedReferenceError("CELL containment has multiple WRLD children GRUPs");
+    }
+    const RawFormId world_raw{group->header.label_as_u32()};
+    if (world_raw.is_null()) {
+      throw PlacedReferenceError("WRLD children GRUP has a null worldspace FormID label");
+    }
+    world = resolve_plugin_form_id(world_raw, source_context);
+    source_world = locate_record(source, *world);
+    if (source_world->record == nullptr || source_world->record->header.signature != k_wrld) {
+      throw PlacedReferenceError("exterior CELL parent WRLD record is missing from the source plugin");
+    }
+    if (source_world->path.size() != index) {
+      throw PlacedReferenceError("WRLD record and exterior CELL do not share the same containment root");
+    }
+    for (std::size_t prefix = 0; prefix < source_world->path.size(); ++prefix) {
+      if (source_world->path[prefix] != source_cell.path[prefix]) {
+        throw PlacedReferenceError("WRLD record and exterior CELL do not share the same containment root");
+      }
+    }
+  }
+
   auto next = destination;
   assign_record_form_keys(next);
   const bool target_exists = find_record(next, reference) != nullptr;
@@ -354,13 +389,16 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
   std::set<PluginKey> required_owners;
   if (!reference.owner().empty()) required_owners.insert(reference.owner());
   if (!cell.owner().empty()) required_owners.insert(cell.owner());
+  if (world.has_value() && !world->owner().empty()) required_owners.insert(world->owner());
   for (const auto* group : source_reference.path) {
     collect_group_label_owner(*group, source_context, required_owners);
   }
   const auto links = collect_form_links_detailed(source);
   for (const auto& link : links.links) {
-    if (link.record != reference && link.record != cell) continue;
-    if (!link.key.owner().empty()) required_owners.insert(link.key.owner());
+    const bool relevant = link.record == reference || link.record == cell ||
+                          (world.has_value() && link.record == *world);
+    if (!relevant || link.key.owner().empty()) continue;
+    required_owners.insert(link.key.owner());
   }
 
   std::vector<MasterDescriptor> masters;
@@ -379,9 +417,22 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
   }
 
   const auto destination_context = plugin_form_id_context(next);
-  validate_destination_cell_path(
-      next, cell, source_cell.path, source_context, destination_context);
 
+  if (world.has_value() && source_world.has_value()) {
+    validate_destination_record_path(
+        next, *world, k_wrld, source_world->path,
+        source_context, destination_context, "WRLD");
+    auto* world_parent = ensure_group_path(
+        next, source_world->path, source_context, destination_context);
+    if (find_record(next, *world) == nullptr) {
+      world_parent->children.emplace_back(copy_record_for_destination(
+          *source_world->record, *world, source_context, destination_context));
+    }
+  }
+
+  validate_destination_record_path(
+      next, cell, k_cell, source_cell.path,
+      source_context, destination_context, "CELL");
   auto* cell_parent = ensure_group_path(
       next, source_cell.path, source_context, destination_context);
   if (find_record(next, cell) == nullptr) {
