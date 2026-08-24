@@ -13,6 +13,7 @@
 
 #include <fo4/forms/cell.hpp>
 #include <fo4/forms/placed_reference.hpp>
+#include <fo4/forms/static_collection.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/visit.hpp>
 #include <fo4/plugin/writer.hpp>
@@ -23,6 +24,7 @@ namespace {
 
 constexpr auto k_cell = fo4::Signature::from_string("CELL");
 constexpr auto k_wrld = fo4::Signature::from_string("WRLD");
+constexpr auto k_scol = fo4::Signature::from_string("SCOL");
 constexpr auto k_modl = fo4::Signature::from_string("MODL");
 constexpr auto k_full = fo4::Signature::from_string("FULL");
 
@@ -134,6 +136,35 @@ const fo4::Record* winningRecord(const Plugins& plugins, const fo4::FormKey& key
 }
 
 template <class Plugins>
+nlohmann::json staticCollectionPartsJson(
+    const Plugins& plugins,
+    const fo4::Plugin& owner,
+    const fo4::Record& collection) {
+    const auto decoded = fo4::forms::decode_static_collection_parts(owner, collection);
+    nlohmann::json parts = nlohmann::json::array();
+    for (const auto& part : decoded) {
+        const auto* staticRecord = winningRecord(plugins, part.static_record);
+        if (staticRecord == nullptr) continue;
+        const auto modelPath = zstring(*staticRecord, k_modl);
+        if (modelPath.empty() || part.placements.empty()) continue;
+
+        nlohmann::json placements = nlohmann::json::array();
+        for (const auto& placement : part.placements) {
+            placements.push_back({
+                {"x", placement.x}, {"y", placement.y}, {"z", placement.z},
+                {"rx", placement.rx}, {"ry", placement.ry}, {"rz", placement.rz},
+                {"scale", placement.scale}
+            });
+        }
+        parts.push_back({
+            {"modelPath", modelPath},
+            {"placements", std::move(placements)}
+        });
+    }
+    return parts.empty() ? nlohmann::json(nullptr) : std::move(parts);
+}
+
+template <class Plugins>
 nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& cellKey) {
     const fo4::Record* winningCell = nullptr;
     bool winningCellLocalized = false;
@@ -177,11 +208,18 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
         std::string baseEditorId;
         std::string baseType;
         std::string modelPath;
+        nlohmann::json scolParts = nullptr;
         if (ref.base.has_value()) {
-            if (const auto* baseRecord = winningRecord(plugins, *ref.base); baseRecord != nullptr) {
+            for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
+                const auto* baseRecord = fo4::find_record(it->plugin, *ref.base);
+                if (baseRecord == nullptr) continue;
                 baseEditorId = zstring(*baseRecord, fo4::sig_edid);
                 baseType = friendlyBaseType(baseRecord->header.signature);
                 modelPath = zstring(*baseRecord, k_modl);
+                if (baseRecord->header.signature == k_scol) {
+                    scolParts = staticCollectionPartsJson(plugins, it->plugin, *baseRecord);
+                }
+                break;
             }
         }
         if (!modelPath.empty()) ++withModel;
@@ -195,10 +233,10 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
             {"baseFormKey", ref.base.has_value() ? ref.base->to_string() : std::string{}},
             {"baseEditorId", baseEditorId},
             {"modelPath", modelPath},
-            {"decalDiffuse", ""},
-            {"decalWidth", 0.0},
-            {"decalHeight", 0.0},
-            {"scolParts", nlohmann::json::array()},
+            {"decalDiffuse", nullptr},
+            {"decalWidth", nullptr},
+            {"decalHeight", nullptr},
+            {"scolParts", std::move(scolParts)},
             {"position", {
                 {"x", ref.transform.x}, {"y", ref.transform.y}, {"z", ref.transform.z}}},
             {"rotation", {
