@@ -45,6 +45,19 @@ public:
             "Condition parameter metadata is not provided by this backend"
         });
     }
+
+    // Cell-viewer seams stay on the abstract plugin backend because they are
+    // load-order queries/mutations, not UI concerns. Non-FO4 backends can
+    // decline them without the app layer knowing any Radicle types.
+    virtual Result<nlohmann::json> getPlacedReferences(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Exterior-cell queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
 };
 
 class NullPluginBackend final : public IPluginBackend {
