@@ -263,6 +263,37 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
   tes4.original_range.clear();
 }
 
+bool group_label_is_form_id(std::int32_t type) {
+  return type == static_cast<std::int32_t>(GroupType::world_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_children) ||
+         type == static_cast<std::int32_t>(GroupType::topic_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_persistent_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_temporary_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_visible_distant_children);
+}
+
+void set_group_label_u32(GroupHeader& header, std::uint32_t value) {
+  header.label[0] = std::byte{static_cast<std::uint8_t>(value)};
+  header.label[1] = std::byte{static_cast<std::uint8_t>(value >> 8)};
+  header.label[2] = std::byte{static_cast<std::uint8_t>(value >> 16)};
+  header.label[3] = std::byte{static_cast<std::uint8_t>(value >> 24)};
+}
+
+void remap_group_form_id_labels(Plugin& plugin,
+                                const PluginFormIdContext& old_context,
+                                const PluginFormIdContext& new_context) {
+  visit_groups(plugin, [&](Group& group) {
+    if (!group_label_is_form_id(group.header.group_type)) return;
+    const RawFormId raw{group.header.label_as_u32()};
+    if (raw.is_null()) {
+      throw FormIdError("FormID-bearing GRUP has a null label during master remap");
+    }
+    const auto key = resolve_plugin_form_id(raw, old_context);
+    const auto encoded = encode_plugin_form_id(key, new_context);
+    set_group_label_u32(group.header, encoded.value());
+  });
+}
+
 void clear_original_bytes(Plugin& plugin) {
   plugin.original_range.clear();
   visit_records(plugin, [](Record& record) { record.original_range.clear(); });
@@ -340,6 +371,7 @@ Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_mas
     record.header.form_id = encode_plugin_form_id(record.form_key, new_context);
   });
 
+  remap_group_form_id_labels(plugin, old_context, new_context);
   remap_form_links(plugin, old_context, new_context);
   const auto kinds = [&] {
     std::vector<PluginKind> stored;
