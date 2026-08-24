@@ -48,6 +48,7 @@ if(NOT EXISTS "${RADICLE_DIR}/CMakeLists.txt")
 endif()
 set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(RADICLE_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${RADICLE_DIR}" "${CMAKE_BINARY_DIR}/radicle")
 
 # Radicle's radicle_c target is versioned (VERSION/SOVERSION), which makes
