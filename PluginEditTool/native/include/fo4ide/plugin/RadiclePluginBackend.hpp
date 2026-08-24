@@ -9,6 +9,7 @@
 
 #include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/container.hpp>
+#include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 namespace fo4ide::plugin {
@@ -21,6 +22,9 @@ public:
     Result<nlohmann::json> invokeBackend(std::string_view method,
                                           const nlohmann::json& arguments) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> conditionFunctionParams() const override {
+        return nlohmann::json(ConditionFunctions::asJson());
+    }
 
     // Registers the game's Data directory. Any plugin whose file resolves
     // beneath it is treated as read-only regardless of its reported MO2
