@@ -70,6 +70,10 @@ public:
         }
         return nlohmann::json("backend");
     }
+
+    fo4ide::Result<nlohmann::json> conditionFunctionParams() const override {
+        return nlohmann::json(R"({"GetDistance":[{"label":"Reference","kind":"record","types":"PlacedObject,PlacedNpc"}]})");
+    }
 };
 
 nlohmann::json parsed(const fo4ide::Result<nlohmann::json>& result) {
@@ -169,4 +173,13 @@ TEST_CASE("Legacy GetRecordTree projects the native conflict matrix into field n
     CHECK(tree[0].at("value") == "MyRecord");
     CHECK(tree[0].at("editKind") == "Text");
     CHECK(tree[0].at("hasChildren") == false);
+}
+
+TEST_CASE("Legacy condition editor gets parameter metadata from the backend capability") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto params = parsed(target.invoke("GetConditionFunctionParams", nlohmann::json::array()));
+    REQUIRE(params.contains("GetDistance"));
+    CHECK(params.at("GetDistance")[0].at("kind") == "record");
 }
