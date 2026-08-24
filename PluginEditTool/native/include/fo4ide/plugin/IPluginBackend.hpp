@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <string_view>
 
@@ -29,18 +30,20 @@ public:
         return invoke("backend." + std::string(method), arguments);
     }
 
-    // Compatibility dispatch for legacy backend methods that are being moved
-    // into native modules incrementally. Backends without extra compatibility
-    // behavior retain the normal backend namespace dispatch.
     virtual Result<nlohmann::json> invokeLegacyBackend(
         std::string_view method,
         const nlohmann::json& arguments) {
         return invokeBackend(method, arguments);
     }
 
-    // Dedicated seam for schema-driven field writes. Existing backends retain
-    // their current SetField behavior; Radicle overrides this to intercept
-    // registered scalar fields before delegating to its typed record writers.
+    virtual Result<void> setTrustedNewPluginRoot(const std::filesystem::path&) {
+        return {};
+    }
+
+    virtual Result<nlohmann::json> createPlugin(const nlohmann::json& arguments) {
+        return invokeLegacyBackend("CreatePlugin", arguments);
+    }
+
     virtual Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) {
         return invokeBackend("SetField", arguments);
     }
@@ -87,9 +90,6 @@ public:
         });
     }
 
-    // Compatibility metadata used by the legacy condition editor. Keeping it
-    // on the backend interface avoids teaching the app/RPC layer about a
-    // concrete Fallout 4 implementation.
     virtual Result<nlohmann::json> conditionFunctionParams() const {
         return std::unexpected(Error{
             "ConditionMetadataUnavailable",
@@ -97,9 +97,6 @@ public:
         });
     }
 
-    // Generic ElementService compatibility lives on the backend seam so the
-    // RPC layer never needs to know Radicle schema types. Implementations may
-    // expose only schema-proven element families and fail closed for the rest.
     virtual Result<nlohmann::json> describeElement(const nlohmann::json&) const {
         return std::unexpected(Error{"ElementBackendUnavailable", "Generic element queries are unavailable"});
     }
@@ -116,9 +113,6 @@ public:
         return std::unexpected(Error{"ElementBackendUnavailable", "Generic element clearing is unavailable"});
     }
 
-    // Cell-viewer seams stay on the abstract plugin backend because they are
-    // load-order queries/mutations, not UI concerns. Non-FO4 backends can
-    // decline them without the app layer knowing any Radicle types.
     virtual Result<nlohmann::json> getPlacedReferences(const nlohmann::json&) const {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference queries are unavailable"});
     }
