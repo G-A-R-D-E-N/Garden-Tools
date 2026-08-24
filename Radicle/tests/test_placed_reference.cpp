@@ -3,8 +3,10 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/signature.hpp"
 
+#include <array>
 #include <bit>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -35,6 +37,14 @@ std::vector<std::byte> transform_bytes(float base) {
   return out;
 }
 
+std::vector<std::byte> zstring(std::string_view value) {
+  std::vector<std::byte> out;
+  out.reserve(value.size() + 1);
+  for (const unsigned char ch : value) out.push_back(static_cast<std::byte>(ch));
+  out.push_back(std::byte{0});
+  return out;
+}
+
 std::array<std::byte, 4> group_label(std::uint32_t value) {
   const auto bytes = u32_bytes(value);
   return {bytes[0], bytes[1], bytes[2], bytes[3]};
@@ -61,18 +71,11 @@ fo4::Record placed_record(fo4::Signature signature,
   if (deleted) record.header.flags = fo4::RecordFlags{fo4::RecordFlags::deleted};
 
   record.subrecords.push_back({
-      fo4::Signature::from_string("NAME"),
+      fo4::sig_name,
       u32_bytes(fo4::encode_plugin_form_id(base, fo4::plugin_form_id_context(plugin)).value()),
       false});
-  record.subrecords.push_back({
-      fo4::sig_edid,
-      {std::byte{'P'}, std::byte{'l'}, std::byte{'a'}, std::byte{'c'}, std::byte{'e'},
-       std::byte{'d'}, std::byte{0}},
-      false});
-  record.subrecords.push_back({
-      fo4::sig_data,
-      transform_bytes(transformBase),
-      false});
+  record.subrecords.push_back({fo4::sig_edid, zstring("Placed"), false});
+  record.subrecords.push_back({fo4::sig_data, transform_bytes(transformBase), false});
   record.subrecords.push_back({
       fo4::Signature::from_string("XSCL"),
       f32_bytes(scale),
