@@ -5,6 +5,7 @@
 #include <functional>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -42,6 +43,23 @@ std::string join(const std::vector<std::string>& parts, std::string_view sep) {
     return out;
 }
 
+bool safeScriptObjectName(std::string_view name) {
+    if (name.empty()) return false;
+    std::size_t begin = 0;
+    while (begin <= name.size()) {
+        const auto end = name.find(':', begin);
+        const auto length = end == std::string_view::npos ? name.size() - begin : end - begin;
+        const auto part = name.substr(begin, length);
+        if (part.empty() || part == "." || part == "..") return false;
+        for (const unsigned char ch : part) {
+            if (ch < 0x20 || ch == '/' || ch == '\\' || ch == 0x7F) return false;
+        }
+        if (end == std::string_view::npos) break;
+        begin = end + 1;
+    }
+    return true;
+}
+
 }  // namespace
 
 std::string Decompiler::toSource(const PexFile& pex) {
@@ -70,6 +88,10 @@ std::string Decompiler::toSource(const PexFile& pex) {
     };
 
     for (const auto& obj : pex.objects) {
+        if (!safeScriptObjectName(obj.name)) {
+            throw std::runtime_error(
+                "PEX object name contains an unsafe filesystem component: " + obj.name);
+        }
         sb << "ScriptName " << obj.name;
         if (!obj.parentClassName.empty()) sb << " extends " << obj.parentClassName;
         if (obj.isConst) sb << " Const";
@@ -344,8 +366,6 @@ std::string Decompiler::decompileBody(const PexObject& obj, const PexFunction& f
         }
         return arrayType;
     };
-    // The native Pex model flattens fixed + varargs into one args vector;
-    // varargs are everything from fixedArgCount on (the C# joins only VarArgs).
     const auto args = [&](const PexInstruction& ins) {
         std::vector<std::string> varargs;
         for (std::size_t a = static_cast<std::size_t>(ins.fixedArgCount); a < ins.args.size(); ++a) {
@@ -498,7 +518,6 @@ std::string Decompiler::decompileBody(const PexObject& obj, const PexFunction& f
         }
     }
 
-    // Fold `if (c1) goto L; L: if (c2) goto M;` chains when the gap is empty.
     for (bool folding = true; folding;) {
         folding = false;
         for (std::size_t i = 0; i < instrs.size(); ++i) {
@@ -522,7 +541,6 @@ std::string Decompiler::decompileBody(const PexObject& obj, const PexFunction& f
         }
     }
 
-    // Keep call instructions whose result temp was never read as statements.
     for (const auto& [idx, expression] : s.tempExpression) {
         if (std::find(s.tempWasRead.begin(), s.tempWasRead.end(), idx) != s.tempWasRead.end()) {
             continue;
