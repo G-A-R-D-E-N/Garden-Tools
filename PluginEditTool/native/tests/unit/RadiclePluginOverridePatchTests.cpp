@@ -169,6 +169,41 @@ TEST_CASE("CreateMergedPatch forwards the winning version into the patch") {
     CHECK(readEdid(*record) == "WidgetB");  // highest selected plugin in load order wins
 }
 
+TEST_CASE("CreateMergedPatch refuses to overwrite an existing patch override") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto basePath = root / "mods" / "Base" / "Base.esm";
+    const auto modAPath = root / "mods" / "ModA" / "ModA.esp";
+    const auto modBPath = root / "mods" / "ModB" / "ModB.esp";
+    const auto patchPath = root / "mods" / "Patch" / "Patch.esp";
+    writeBytes(basePath, miscMaster("WidgetBase"));
+    writeBytes(modAPath, miscOverride("WidgetA"));
+    writeBytes(modBPath, miscOverride("WidgetB"));
+    writeBytes(patchPath, miscOverride("WidgetPatch"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", basePath, "Base"),
+            pluginEntry("ModA.esp", modAPath, "ModA"),
+            pluginEntry("ModB.esp", modBPath, "ModB"),
+            pluginEntry("Patch.esp", patchPath, "Patch")
+        })}}).has_value());
+
+    const auto result = backend.createMergedPatch(
+        nlohmann::json::array({"ModA.esp,ModB.esp", "Patch.esp", true}));
+    REQUIRE(result.has_value());
+    const auto text = result->get<std::string>();
+    CHECK(text.find("forwarded 0 of 1") != std::string::npos);
+    CHECK(text.find("already present in the patch") != std::string::npos);
+
+    const auto disk = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));
+    REQUIRE(record != nullptr);
+    CHECK(readEdid(*record) == "WidgetPatch");  // preserved, not clobbered with WidgetB
+}
+
 TEST_CASE("CreateMergedPatch requires at least two source plugins") {
     OverrideFixture fixture;
     const auto result = fixture.backend.createMergedPatch(

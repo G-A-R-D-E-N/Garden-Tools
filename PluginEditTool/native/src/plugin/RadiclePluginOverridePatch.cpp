@@ -226,7 +226,7 @@ Result<nlohmann::json> RadiclePluginBackend::createMergedPatch(const nlohmann::j
                 continue;
             }
             const auto status =
-                fo4::copy_record_as_override(mutated, winner->plugin, contest.key, /*overwrite=*/true);
+                fo4::copy_record_as_override(mutated, winner->plugin, contest.key, /*overwrite=*/false);
             if (status == fo4::RecordCopyStatus::inserted ||
                 status == fo4::RecordCopyStatus::replaced) {
                 ++forwarded;
