@@ -721,7 +721,7 @@ Result<nlohmann::json> RadiclePluginBackend::removeListItem(
         return nlohmann::json(
             "Removed " + std::to_string(removed) + " entr(y/ies) matching " + value +
             " from " + field + " (now " + std::to_string(newSize) + ") on " +
-            recordText + ". save_plugin to persist.");
+            recordText + ". Written to disk.");
     } catch (const fo4::schema::FormLinkListError& error) {
         return std::unexpected(Error{"FormLinkListWriteFailed", error.what()});
     } catch (const fo4::FormIdError& error) {

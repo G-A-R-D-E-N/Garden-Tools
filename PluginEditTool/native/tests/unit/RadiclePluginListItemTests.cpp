@@ -261,7 +261,7 @@ TEST_CASE("PluginEditTool remove_list_item matches the field name case-insensiti
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>() ==
           "Removed 1 entr(y/ies) matching 000800:Patch.esp from ITEMS (now 0) on "
-          "000811:Patch.esp. save_plugin to persist.");
+          "000811:Patch.esp. Written to disk.");
 
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
@@ -284,7 +284,7 @@ TEST_CASE("PluginEditTool remove_list_item drops the matching FormLink") {
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>() ==
           "Removed 1 entr(y/ies) matching 000800:Patch.esp from Items (now 0) on "
-          "000811:Patch.esp. save_plugin to persist.");
+          "000811:Patch.esp. Written to disk.");
 
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
