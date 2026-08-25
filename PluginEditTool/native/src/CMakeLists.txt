@@ -254,6 +254,7 @@ target_link_libraries(
         fo4ide_papyrus
         fo4ide_graph
         fo4ide_plugin_api
+        Threads::Threads
 )
 fo4ide_enable_warnings(fo4ide_app)
 fo4ide_enable_sanitizers(fo4ide_app)

@@ -22,6 +22,11 @@ include(Dependencies)
 include(CompilerWarnings)
 include(Sanitizers)
 
+# The cell geometry batch runs niftool over many meshes on a bounded worker
+# pool, so the app library uses std::thread (needs pthreads on POSIX).
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 # Prefer a system zlib, but make the native app buildable on a clean Windows
 # machine without vcpkg or another package manager. This is the same pinned
 # revision used by the Windows cross-compile CI lane.
