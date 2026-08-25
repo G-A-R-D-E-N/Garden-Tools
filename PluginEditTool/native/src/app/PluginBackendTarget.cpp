@@ -435,6 +435,24 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         }
         if (method == "CheckCircularLeveledLists") return backend_.checkCircularLeveledLists(args);
         if (method == "CreateSeqFile") return backend_.createSeqFile(args);
+        if (method == "RevertOverrides") {
+            // args: [badPlugin, patchPlugin, signature, containsComponent, apply, limit]
+            if (!boolArgument(args, 4)) return backend_.revertOverrides(args);
+            auto ensured = ensureWriteTarget(backend_, args, 1);
+            if (!ensured) return std::unexpected(ensured.error());
+            auto normalizedArgs = withTargetName(args, 1, ensured->name);
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.revertOverrides(normalizedArgs), "Reverted ");
+        }
+        if (method == "CreateMergedPatch") {
+            // args: [plugins, patchPlugin, apply]
+            if (!boolArgument(args, 2)) return backend_.createMergedPatch(args);
+            auto ensured = ensureWriteTarget(backend_, args, 1);
+            if (!ensured) return std::unexpected(ensured.error());
+            auto normalizedArgs = withTargetName(args, 1, ensured->name);
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.createMergedPatch(normalizedArgs), "Merged patch ");
+        }
         return backend_.invokeLegacyBackend(method, args);
     }
     if (targetNamespace_ == "cell") {

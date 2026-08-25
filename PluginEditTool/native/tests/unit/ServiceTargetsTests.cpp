@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -16,6 +17,7 @@
 #include <fo4ide/papyrus/AnalysisService.hpp>
 #include <fo4ide/papyrus/Decompiler.hpp>
 #include <fo4ide/papyrus/Pex.hpp>
+#include <fo4ide/plugin/IPluginBackend.hpp>
 
 #include "../helpers/GraphBuilder.hpp"
 
@@ -48,6 +50,13 @@ public:
     fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request& request) override {
         last = request;
         return output;
+    }
+};
+
+class ThrowingRunner final : public fo4ide::process::Runner {
+public:
+    fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request&) override {
+        throw std::runtime_error("niftool blew up");
     }
 };
 
@@ -207,6 +216,175 @@ TEST_CASE("NifTarget stages browser dropped bytes without the CSharp host") {
     CHECK(contents == "hello");
     std::error_code ec;
     std::filesystem::remove_all(path.parent_path(), ec);
+}
+
+namespace {
+
+// Minimal backend that records the operation it was asked to run, so the
+// CellTarget record-delegation path can be observed without a Radicle backend.
+class CapturingCellBackend final : public fo4ide::plugin::IPluginBackend {
+public:
+    std::string lastOperation;
+
+    fo4ide::plugin::Capabilities capabilities() const noexcept override {
+        return {.available = true};
+    }
+
+    fo4ide::Result<nlohmann::json> invoke(std::string_view operation,
+                                          const nlohmann::json&) override {
+        lastOperation = operation;
+        return nlohmann::json("delegated");
+    }
+};
+
+}  // namespace
+
+TEST_CASE("CellTarget geometry batch reports not-found meshes and dedupes case-insensitively") {
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::TextureResolver textures;  // no roots -> nothing resolves
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetGeometryBatch",
+        nlohmann::json::array({R"(["a/b.nif","A/B.NIF","c/d.nif"])"}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("count") == 2);  // "A/B.NIF" deduped against "a/b.nif"
+    const auto& geometry = parsed.at("geometry");
+    REQUIRE(geometry.size() == 2);
+    CHECK(geometry.at("a/b.nif").at("error") == "Not found (loose or in any indexed archive).");
+    CHECK(geometry.at("c/d.nif").contains("error"));
+
+    const auto progress = nlohmann::json::parse(
+        target.invoke("GetGeometryBatchProgress", nlohmann::json::array())->get<std::string>());
+    CHECK(progress.at("done") == 2);
+    CHECK(progress.at("total") == 2);
+}
+
+TEST_CASE("CellTarget geometry batch embeds the niftool geo JSON for a resolved mesh") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto tool = root / "niftool";
+    const auto mesh = root / "meshes" / "clutter" / "thing.nif";
+    touch(tool);
+    touch(mesh);
+
+    FakeRunner runner;
+    runner.output = {true, false, 0, R"({"vertices":3})", {}};
+    fo4ide::assets::NifService service(runner, tool);
+    fo4ide::assets::TextureResolver textures;
+    textures.setSessionRoots({root});
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetGeometryBatch",
+        nlohmann::json::array({R"(["meshes/clutter/thing.nif"])"}));
+    REQUIRE(result.has_value());
+
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("count") == 1);
+    CHECK(parsed.at("geometry").at("meshes/clutter/thing.nif").at("vertices") == 3);
+    REQUIRE_FALSE(runner.last.arguments.empty());
+    CHECK(runner.last.arguments.front() == "geo");  // resolved mesh handed to `niftool geo`
+}
+
+TEST_CASE("CellTarget geometry batch records a worker exception instead of terminating") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto tool = root / "niftool";
+    const auto first = root / "meshes" / "a.nif";
+    const auto second = root / "meshes" / "b.nif";
+    touch(tool);
+    touch(first);
+    touch(second);
+
+    ThrowingRunner runner;
+    fo4ide::assets::NifService service(runner, tool);
+    fo4ide::assets::TextureResolver textures;
+    textures.setSessionRoots({root});
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetGeometryBatch",
+        nlohmann::json::array({R"(["meshes/a.nif","meshes/b.nif"])"}));
+    REQUIRE(result.has_value());
+
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("count") == 2);
+    for (const auto& rel : {"meshes/a.nif", "meshes/b.nif"}) {
+        const auto& entry = parsed.at("geometry").at(rel);
+        REQUIRE(entry.contains("error"));
+        CHECK(entry.at("error").get<std::string>().find("niftool blew up") != std::string::npos);
+    }
+}
+
+TEST_CASE("CellTarget GetTexture returns empty when the model cannot be resolved") {
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetTexture", nlohmann::json::array({"meshes/x.nif", "textures/x_d.dds"}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().empty());
+}
+
+TEST_CASE("CellTarget GetTexture stays empty when a resolved model has no usable texture") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto mesh = root / "meshes" / "thing.nif";
+    touch(mesh);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::TextureResolver textures;
+    textures.setSessionRoots({root});
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetTexture", nlohmann::json::array({"meshes/thing.nif", "textures/missing.dds"}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().empty());
+}
+
+TEST_CASE("CellTarget GetGeometryBatch rejects a valid non-array payload") {
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    for (const auto* payload : {"{}", "5", "\"meshes/a.nif\""}) {
+        auto result = target.invoke("GetGeometryBatch", nlohmann::json::array({payload}));
+        REQUIRE(result.has_value());
+        const auto parsed = nlohmann::json::parse(result->get<std::string>());
+        REQUIRE(parsed.contains("error"));
+        CHECK(parsed.find("count") == parsed.end());
+    }
+}
+
+TEST_CASE("CellTarget delegates record queries to the plugin backend facet") {
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::TextureResolver textures;
+    CapturingCellBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    // GetPlugins on the "cell" facet forwards to appInterop.GetPlugins.
+    auto result = target.invoke("GetPlugins", nlohmann::json::array());
+    REQUIRE(result.has_value());
+    CHECK(backend.lastOperation == "appInterop.GetPlugins");
 }
 
 namespace {

@@ -22,6 +22,7 @@ add_library(
     plugin/RadiclePluginRenumber.cpp
     plugin/RadiclePluginDeepCopy.cpp
     plugin/RadiclePluginReferenceRemap.cpp
+    plugin/RadiclePluginOverridePatch.cpp
     plugin/RadiclePluginLeveled.cpp
     plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginBatchMutation.cpp
@@ -254,6 +255,7 @@ target_link_libraries(
         fo4ide_papyrus
         fo4ide_graph
         fo4ide_plugin_api
+        Threads::Threads
 )
 fo4ide_enable_warnings(fo4ide_app)
 fo4ide_enable_sanitizers(fo4ide_app)

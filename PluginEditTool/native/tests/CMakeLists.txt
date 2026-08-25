@@ -97,6 +97,7 @@ add_executable(
     unit/RadiclePluginLeveledTests.cpp
     unit/RadiclePluginSeqTests.cpp
     unit/RadiclePluginReferenceRemapTests.cpp
+    unit/RadiclePluginOverridePatchTests.cpp
     unit/RadiclePluginExteriorCellTests.cpp
     unit/RadiclePluginCellTests.cpp
     unit/RadiclePluginEyesTests.cpp
