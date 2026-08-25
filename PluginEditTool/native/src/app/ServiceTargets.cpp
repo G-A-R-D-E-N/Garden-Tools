@@ -597,10 +597,13 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
         std::vector<std::string> paths;
         try {
             const auto parsed = nlohmann::json::parse(stringArgument(args, 0));
-            if (parsed.is_array()) {
-                for (const auto& entry : parsed) {
-                    if (entry.is_string()) paths.push_back(entry.get<std::string>());
-                }
+            if (!parsed.is_array()) {
+                return nlohmann::json(nlohmann::json{
+                    {"error", "Error: GetGeometryBatch expects a JSON array of model paths."}}
+                                          .dump());
+            }
+            for (const auto& entry : parsed) {
+                if (entry.is_string()) paths.push_back(entry.get<std::string>());
             }
         } catch (const std::exception& ex) {
             return nlohmann::json(
@@ -616,10 +619,16 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
     // Mirrors CellInterop.GetTexture: resolve the model to a NIF, then hand the
     // resolved path to the texture resolver; an unresolved model yields "".
     if (method == "GetTexture") {
-        const auto resolved = textures_.resolveNif(stringArgument(args, 0));
-        if (!resolved) return nlohmann::json(std::string{});
-        return nlohmann::json(
-            textures_.getTexturePngDataUrl(resolved->string(), stringArgument(args, 1), ""));
+        try {
+            const auto resolved = textures_.resolveNif(stringArgument(args, 0));
+            if (!resolved) return nlohmann::json(std::string{});
+            return nlohmann::json(
+                textures_.getTexturePngDataUrl(resolved->string(), stringArgument(args, 1), ""));
+        } catch (const std::exception&) {
+            return nlohmann::json(std::string{});
+        } catch (...) {
+            return nlohmann::json(std::string{});
+        }
     }
     return records_.invoke(method, args);
 }
