@@ -10,7 +10,10 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
+#include <fo4/formid.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/formlink_lists.hpp>
@@ -497,6 +500,31 @@ std::optional<fo4::FormKey> RadiclePluginBackend::resolveListValue(
     return std::nullopt;
 }
 
+void RadiclePluginBackend::ensureOwnerMaster(fo4::Plugin& plugin,
+                                             const fo4::PluginKey& owner) const {
+    if (owner.empty() || owner == plugin.key) return;
+    for (const auto& master : plugin.header.masters) {
+        if (master.key == owner) return;
+    }
+    fo4::PluginKind kind =
+        owner.looks_light() ? fo4::PluginKind::light : fo4::PluginKind::full;
+    for (const auto& candidate : plugins_) {
+        if (candidate.plugin.key == owner) {
+            kind = candidate.plugin.header.tes4_flags.is_small_file()
+                       ? fo4::PluginKind::light
+                       : fo4::PluginKind::full;
+            break;
+        }
+    }
+    std::vector<fo4::MasterDescriptor> masters;
+    masters.reserve(plugin.header.masters.size() + 1);
+    for (const auto& master : plugin.header.masters) {
+        masters.push_back({master.key, master.kind});
+    }
+    masters.push_back({owner, kind});
+    plugin = fo4::remap_plugin_masters(std::move(plugin), std::move(masters));
+}
+
 Result<nlohmann::json> RadiclePluginBackend::addListItem(
     const nlohmann::json& arguments) {
     const auto pluginName = listStringArgument(arguments, 0);
@@ -557,6 +585,7 @@ Result<nlohmann::json> RadiclePluginBackend::addListItem(
                 "Record '" + recordText + "' not found in " + pluginName + "."});
         }
         auto mutated = loaded->plugin;
+        ensureOwnerMaster(mutated, targetKey->owner());
         const auto status = fo4::schema::insert_record_formlink_list_element(
             mutated, recordKey, *descriptor, *currentSize, *targetKey);
         switch (status) {
@@ -653,6 +682,19 @@ Result<nlohmann::json> RadiclePluginBackend::removeListItem(
     }
 
     try {
+        const auto owner = targetKey->owner();
+        const bool encodable = owner.empty() || owner == loaded->plugin.key ||
+            std::any_of(loaded->plugin.header.masters.begin(),
+                        loaded->plugin.header.masters.end(),
+                        [&](const auto& master) { return master.key == owner; });
+        if (!encodable) {
+            const auto size = fo4::schema::record_formlink_list_size(
+                loaded->plugin, recordKey, *descriptor).value_or(0);
+            return std::unexpected(Error{
+                "ListItemNotFound",
+                "No entry matching " + value + " found in " + field + " (" +
+                    std::to_string(size) + " item(s))."});
+        }
         auto mutated = loaded->plugin;
         const auto removed = fo4::schema::remove_record_formlink_list_elements_matching(
             mutated, recordKey, *descriptor, *targetKey);

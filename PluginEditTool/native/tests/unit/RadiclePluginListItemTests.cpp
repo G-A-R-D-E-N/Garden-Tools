@@ -68,6 +68,42 @@ std::vector<std::byte> pluginBytes() {
     return out.bytes;
 }
 
+std::vector<std::byte> otherModBytes() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto kywdGroup = fo4::test::begin_group(out, "KYWD", 0);
+    const auto kywd = fo4::test::begin_record(out, "KYWD", 0, 0x00000800, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view("ExternalKwd"));
+    fo4::test::end_record(out, kywd);
+    fo4::test::end_group(out, kywdGroup);
+    return out.bytes;
+}
+
+std::vector<std::byte> patchWithEmptyFlst() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x810);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto flstGroup = fo4::test::begin_group(out, "FLST", 0);
+    auto flst = fo4::test::begin_record(out, "FLST", 0, 0x00000810, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view("PatchList"));
+    fo4::test::end_record(out, flst);
+    fo4::test::end_group(out, flstGroup);
+    return out.bytes;
+}
+
 void writeBytes(const std::filesystem::path& path,
                 const std::vector<std::byte>& bytes) {
     std::filesystem::create_directories(path.parent_path());
@@ -286,4 +322,42 @@ TEST_CASE("PluginEditTool add_list_item rejects an unsupported field") {
             "Patch.esp", "000811:Patch.esp", "Nonsense", "000800:Patch.esp"}));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "ListFieldUnsupported");
+}
+
+TEST_CASE("PluginEditTool add_list_item declares an external target's owner master") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto otherPath = root / "OtherMod.esp";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(otherPath, otherModBytes());
+    writeBytes(patchPath, patchWithEmptyFlst());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            {{"name", "OtherMod.esp"}, {"path", otherPath.string()},
+             {"source", "Other"}, {"resolved", true}},
+            {{"name", "Patch.esp"}, {"path", patchPath.string()},
+             {"source", "ListItemTest"}, {"resolved", true}}
+        })}}).has_value());
+
+    const auto result = backend.invokeBackend(
+        "AddListItem",
+        nlohmann::json::array({
+            "Patch.esp", "000810:Patch.esp", "Items", "000800:OtherMod.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Added 000800:OtherMod.esp to Items on 000810:Patch.esp in Patch.esp (now 1 item(s)).");
+
+    const auto disk = fo4::read_plugin_file(patchPath);
+    bool declaresOtherMod = false;
+    for (const auto& master : disk.header.masters) {
+        if (master.key.filename() == "OtherMod.esp") declaresOtherMod = true;
+    }
+    CHECK(declaresOtherMod);
+    const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000810:Patch.esp"));
+    REQUIRE(flst != nullptr);
+    REQUIRE(countSubrecords(*flst, "LNAM") == 1u);
+    CHECK(nthRaw(*flst, "LNAM", 0) == 0x00000800u);
 }
