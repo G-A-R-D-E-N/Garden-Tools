@@ -594,7 +594,6 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
     // JSON string (the cell panel JSON.parses the result). Everything else is
     // a record query delegated to the Radicle "cell" backend facet unchanged.
     if (method == "GetGeometryBatch") {
-        std::vector<std::string> paths;
         try {
             const auto parsed = nlohmann::json::parse(stringArgument(args, 0));
             if (!parsed.is_array()) {
@@ -602,14 +601,15 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
                     {"error", "Error: GetGeometryBatch expects a JSON array of model paths."}}
                                           .dump());
             }
+            std::vector<std::string> paths;
             for (const auto& entry : parsed) {
                 if (entry.is_string()) paths.push_back(entry.get<std::string>());
             }
+            return nlohmann::json(geometryBatch(paths));
         } catch (const std::exception& ex) {
             return nlohmann::json(
                 nlohmann::json{{"error", "Error: " + std::string(ex.what())}}.dump());
         }
-        return nlohmann::json(geometryBatch(paths));
     }
     if (method == "GetGeometryBatchProgress") {
         return nlohmann::json(nlohmann::json{
