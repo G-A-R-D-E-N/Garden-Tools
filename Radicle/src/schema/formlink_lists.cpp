@@ -181,6 +181,252 @@ FormLinkListMutationStatus insert_encoded_element(
   return FormLinkListMutationStatus::updated;
 }
 
+Subrecord* find_subrecord(Record& record, Signature signature) {
+  for (auto& subrecord : record.subrecords) {
+    if (subrecord.signature == signature) return &subrecord;
+  }
+  return nullptr;
+}
+
+std::optional<std::size_t> subrecord_index(const Record& record, Signature signature) {
+  for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
+    if (record.subrecords[index].signature == signature) return index;
+  }
+  return std::nullopt;
+}
+
+std::size_t packed_element_count(const Record& record,
+                                 const FormLinkListDescriptor& descriptor) {
+  const auto index = subrecord_index(record, descriptor.subrecord);
+  if (!index.has_value()) return 0;
+  const auto& data = record.subrecords[*index].data;
+  if (data.size() % 4 != 0) {
+    throw FormLinkListError(
+        descriptor.record.to_string() + " " + std::string(descriptor.path) +
+        " packed array length must be a multiple of four bytes");
+  }
+  return data.size() / 4;
+}
+
+std::uint32_t packed_read(const std::vector<std::byte>& data, std::size_t element) {
+  std::uint32_t value = 0;
+  std::memcpy(&value, data.data() + element * 4, sizeof(value));
+  return value;
+}
+
+void packed_write(std::vector<std::byte>& data, std::size_t element,
+                  std::uint32_t value) {
+  std::memcpy(data.data() + element * 4, &value, sizeof(value));
+}
+
+void reconcile_counter(Record& record, const FormLinkListDescriptor& descriptor,
+                       std::uint32_t count) {
+  const auto counter_index = subrecord_index(record, descriptor.counter);
+  if (count == 0) {
+    if (counter_index.has_value()) {
+      record.subrecords.erase(
+          record.subrecords.begin() + static_cast<std::ptrdiff_t>(*counter_index));
+    }
+    return;
+  }
+  if (counter_index.has_value()) {
+    auto& data = record.subrecords[*counter_index].data;
+    data.resize(4);
+    write_u32(data, count);
+    return;
+  }
+  Subrecord counter;
+  counter.signature = descriptor.counter;
+  counter.data.resize(4);
+  write_u32(counter.data, count);
+  const auto array_index = subrecord_index(record, descriptor.subrecord);
+  const std::size_t insertion =
+      array_index.value_or(record.subrecords.size());
+  record.subrecords.insert(
+      record.subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
+      std::move(counter));
+}
+
+FormLinkListMutationStatus set_packed_element(
+    Plugin& plugin, const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor, std::size_t index,
+    RawFormId encoded) {
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(plugin, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+  Subrecord* array = find_subrecord(*record, descriptor.subrecord);
+  const std::size_t count = array != nullptr ? packed_element_count(*record, descriptor) : 0;
+  if (index >= count) return FormLinkListMutationStatus::index_out_of_range;
+  if (packed_read(array->data, index) == encoded.value()) {
+    return FormLinkListMutationStatus::unchanged;
+  }
+  packed_write(array->data, index, encoded.value());
+  mark_modified(plugin, *record);
+  return FormLinkListMutationStatus::updated;
+}
+
+FormLinkListMutationStatus insert_packed_element(
+    Plugin& plugin, const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor, std::size_t index,
+    RawFormId encoded) {
+  if (!descriptor.can_insert) {
+    return FormLinkListMutationStatus::insertion_boundary_unavailable;
+  }
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(plugin, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
+  const auto array_index = subrecord_index(*record, descriptor.subrecord);
+  const std::size_t count =
+      array_index.has_value() ? packed_element_count(*record, descriptor) : 0;
+  if (index > count) return FormLinkListMutationStatus::index_out_of_range;
+
+  if (!array_index.has_value()) {
+    std::size_t insertion = 0;
+    const auto counter_index = subrecord_index(*record, descriptor.counter);
+    if (counter_index.has_value()) {
+      insertion = *counter_index + 1;
+    } else {
+      const auto anchored = empty_list_insertion_point(*record, descriptor);
+      if (!anchored.has_value()) {
+        return FormLinkListMutationStatus::insertion_boundary_unavailable;
+      }
+      insertion = *anchored;
+    }
+    Subrecord created;
+    created.signature = descriptor.subrecord;
+    created.data.resize(4);
+    write_u32(created.data, encoded.value());
+    record->subrecords.insert(
+        record->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
+        std::move(created));
+  } else {
+    auto& data = record->subrecords[*array_index].data;
+    std::byte bytes[4];
+    const std::uint32_t raw = encoded.value();
+    std::memcpy(bytes, &raw, sizeof(raw));
+    data.insert(data.begin() + static_cast<std::ptrdiff_t>(index * 4),
+                bytes, bytes + 4);
+  }
+  reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(count + 1));
+  mark_modified(plugin, *record);
+  return FormLinkListMutationStatus::updated;
+}
+
+FormLinkListMutationStatus remove_packed_element(
+    Plugin& plugin, const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor, std::size_t index) {
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(plugin, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+  const auto array_index = subrecord_index(*record, descriptor.subrecord);
+  const std::size_t count =
+      array_index.has_value() ? packed_element_count(*record, descriptor) : 0;
+  if (index >= count) return FormLinkListMutationStatus::index_out_of_range;
+
+  auto& data = record->subrecords[*array_index].data;
+  data.erase(data.begin() + static_cast<std::ptrdiff_t>(index * 4),
+             data.begin() + static_cast<std::ptrdiff_t>(index * 4 + 4));
+  if (data.empty()) {
+    record->subrecords.erase(
+        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*array_index));
+    reconcile_counter(*record, descriptor, 0);
+  } else {
+    reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(count - 1));
+  }
+  mark_modified(plugin, *record);
+  return FormLinkListMutationStatus::updated;
+}
+
+std::size_t remove_packed_elements_matching(
+    Plugin& plugin, const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor, std::uint32_t encoded) {
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(plugin, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return 0;
+  const auto array_index = subrecord_index(*record, descriptor.subrecord);
+  if (!array_index.has_value()) return 0;
+  const std::size_t count = packed_element_count(*record, descriptor);
+
+  std::vector<std::byte> kept;
+  std::size_t removed = 0;
+  auto& data = record->subrecords[*array_index].data;
+  for (std::size_t element = 0; element < count; ++element) {
+    if (packed_read(data, element) == encoded) {
+      ++removed;
+      continue;
+    }
+    kept.insert(kept.end(), data.begin() + static_cast<std::ptrdiff_t>(element * 4),
+                data.begin() + static_cast<std::ptrdiff_t>(element * 4 + 4));
+  }
+  if (removed == 0) return 0;
+  if (kept.empty()) {
+    record->subrecords.erase(
+        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*array_index));
+    reconcile_counter(*record, descriptor, 0);
+  } else {
+    data = std::move(kept);
+    reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(count - removed));
+  }
+  mark_modified(plugin, *record);
+  return removed;
+}
+
+FormLinkListMutationStatus move_packed_element(
+    Plugin& plugin, const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor, std::size_t from, std::size_t to) {
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(plugin, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+  const auto array_index = subrecord_index(*record, descriptor.subrecord);
+  const std::size_t count =
+      array_index.has_value() ? packed_element_count(*record, descriptor) : 0;
+  if (from >= count || to >= count) {
+    return FormLinkListMutationStatus::index_out_of_range;
+  }
+  if (from == to) return FormLinkListMutationStatus::unchanged;
+  auto& data = record->subrecords[*array_index].data;
+  const std::uint32_t moving = packed_read(data, from);
+  if (from < to) {
+    for (std::size_t element = from; element < to; ++element) {
+      packed_write(data, element, packed_read(data, element + 1));
+    }
+  } else {
+    for (std::size_t element = from; element > to; --element) {
+      packed_write(data, element, packed_read(data, element - 1));
+    }
+  }
+  packed_write(data, to, moving);
+  mark_modified(plugin, *record);
+  return FormLinkListMutationStatus::updated;
+}
+
+FormLinkListMutationStatus clear_packed(
+    Plugin& plugin, const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor) {
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(plugin, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+  const auto array_index = subrecord_index(*record, descriptor.subrecord);
+  const auto counter_index = subrecord_index(*record, descriptor.counter);
+  if (!array_index.has_value() && !counter_index.has_value()) {
+    return FormLinkListMutationStatus::unchanged;
+  }
+  if (array_index.has_value()) {
+    record->subrecords.erase(
+        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*array_index));
+  }
+  reconcile_counter(*record, descriptor, 0);
+  mark_modified(plugin, *record);
+  return FormLinkListMutationStatus::updated;
+}
+
 }  // namespace
 
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
@@ -256,6 +502,9 @@ std::optional<std::size_t> record_formlink_list_size(
         std::string(descriptor.path) + " does not apply to " +
         record->header.signature.to_string() + " records");
   }
+  if (descriptor.storage == FormLinkListStorage::packed_array) {
+    return packed_element_count(*record, descriptor);
+  }
   return matching_positions(*record, descriptor).size();
 }
 
@@ -270,6 +519,13 @@ FormLinkListMutationStatus set_record_formlink_list_element(
   const auto validation =
       validate_record_and_target(next, record_key, descriptor, &target, record);
   if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
+  if (descriptor.storage == FormLinkListStorage::packed_array) {
+    const auto encoded = encode_plugin_form_id(target, plugin_form_id_context(next));
+    const auto status = set_packed_element(next, record_key, descriptor, index, encoded);
+    if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
+    return status;
+  }
 
   const auto positions = matching_positions(*record, descriptor);
   if (index >= positions.size()) {
@@ -300,7 +556,9 @@ FormLinkListMutationStatus insert_record_formlink_list_element(
       validate_record_and_target(next, record_key, descriptor, &target, record);
   if (validation != FormLinkListMutationStatus::unchanged) return validation;
   const auto encoded = encode_plugin_form_id(target, plugin_form_id_context(next));
-  const auto status = insert_encoded_element(next, record_key, descriptor, index, encoded);
+  const auto status = descriptor.storage == FormLinkListStorage::packed_array
+      ? insert_packed_element(next, record_key, descriptor, index, encoded)
+      : insert_encoded_element(next, record_key, descriptor, index, encoded);
   if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
   return status;
 }
@@ -327,6 +585,11 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
     const FormLinkListDescriptor& descriptor,
     std::size_t index) {
   auto next = plugin;
+  if (descriptor.storage == FormLinkListStorage::packed_array) {
+    const auto status = remove_packed_element(next, record_key, descriptor, index);
+    if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
+    return status;
+  }
   Record* record = nullptr;
   const auto validation =
       validate_record_and_target(next, record_key, descriptor, nullptr, record);
@@ -350,6 +613,13 @@ std::size_t remove_record_formlink_list_elements_matching(
     const FormLinkListDescriptor& descriptor,
     const FormKey& target) {
   auto next = plugin;
+  if (descriptor.storage == FormLinkListStorage::packed_array) {
+    const auto encoded = encode_plugin_form_id(target, plugin_form_id_context(next));
+    const auto removed =
+        remove_packed_elements_matching(next, record_key, descriptor, encoded.value());
+    if (removed > 0) plugin = std::move(next);
+    return removed;
+  }
   Record* record = nullptr;
   const auto validation =
       validate_record_and_target(next, record_key, descriptor, nullptr, record);
@@ -381,6 +651,11 @@ FormLinkListMutationStatus move_record_formlink_list_element(
     std::size_t from,
     std::size_t to) {
   auto next = plugin;
+  if (descriptor.storage == FormLinkListStorage::packed_array) {
+    const auto status = move_packed_element(next, record_key, descriptor, from, to);
+    if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
+    return status;
+  }
   Record* record = nullptr;
   const auto validation =
       validate_record_and_target(next, record_key, descriptor, nullptr, record);
@@ -415,6 +690,11 @@ FormLinkListMutationStatus clear_record_formlink_list(
     const FormKey& record_key,
     const FormLinkListDescriptor& descriptor) {
   auto next = plugin;
+  if (descriptor.storage == FormLinkListStorage::packed_array) {
+    const auto status = clear_packed(next, record_key, descriptor);
+    if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
+    return status;
+  }
   Record* record = nullptr;
   const auto validation =
       validate_record_and_target(next, record_key, descriptor, nullptr, record);

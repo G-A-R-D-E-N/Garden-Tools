@@ -1064,5 +1064,33 @@
       "fields": [],
       "localized_subrecords": []
     }
+  ],
+  "keyword_records": [
+    { "record": "ACTI", "predecessors": ["DSTF", "MODF", "FULL", "STCP", "PTRN", "OBND"], "successors": ["PRPS", "NTRM", "FTYP", "PNAM"] },
+    { "record": "ALCH", "predecessors": ["FULL", "PTRN", "OBND"], "successors": ["MODL", "ICON", "YNAM", "ZNAM"] },
+    { "record": "AMMO", "predecessors": ["DESC", "ZNAM", "YNAM", "DSTF", "MODF", "FULL"], "successors": ["DATA", "DNAM", "ONAM", "NAM1"] },
+    { "record": "ARMO", "predecessors": ["RNAM", "BAMT", "BIDS", "ETYP", "ZNAM", "YNAM"], "successors": ["DESC", "INRD", "INDX", "DATA"] },
+    { "record": "ARTO", "predecessors": ["PTRN", "OBND"], "successors": ["MODL", "DNAM"] },
+    { "record": "BOOK", "predecessors": ["ZNAM", "YNAM", "DSTF", "DESC", "MICO", "MODF"], "successors": ["FIMD", "DATA", "DNAM", "CNAM"] },
+    { "record": "CONT", "predecessors": ["DATA", "DSTF", "COED", "MODF", "FULL", "PTRN"], "successors": ["FTYP", "PRPS", "NTRM", "SNAM"] },
+    { "record": "DOOR", "predecessors": ["DSTF", "MODF", "FULL", "PTRN", "OBND", "VMAD"], "successors": ["NTRM", "SNAM", "ANAM", "BNAM"] },
+    { "record": "FLOR", "predecessors": ["DSTF", "MODF", "FULL", "PTRN", "OBND", "VMAD"], "successors": ["PRPS", "PNAM", "ATTX", "FNAM"] },
+    { "record": "FURN", "predecessors": ["DSTF", "MODF", "FULL", "PTRN", "OBND", "VMAD"], "successors": ["PRPS", "NTRM", "FTYP", "PNAM"] },
+    { "record": "IDLM", "predecessors": ["OBND"], "successors": ["IDLF", "IDLC", "IDLT", "IDLA"] },
+    { "record": "INGR", "predecessors": ["FULL", "OBND", "VMAD"], "successors": ["MODL", "ICON", "DEST", "ETYP"] },
+    { "record": "INNR", "predecessors": ["WNAM"], "successors": ["XNAM", "YNAM"] },
+    { "record": "KEYM", "predecessors": ["ZNAM", "YNAM", "DSTF", "MICO", "MODF", "FULL"], "successors": ["DATA"] },
+    { "record": "LCTN", "predecessors": ["FULL", "LCEP", "ACEP", "LCID", "ACID", "RCEC"], "successors": ["PNAM", "NAM1", "FNAM", "MNAM"] },
+    { "record": "LIGH", "predecessors": ["MODF", "PTRN", "OBND", "VMAD"], "successors": ["DEST", "PRPS", "FULL", "ICON"] },
+    { "record": "MGEF", "predecessors": ["MDOB", "FULL", "VMAD"], "successors": ["DATA", "ESCE", "SNDD", "DNAM"] },
+    { "record": "MISC", "predecessors": ["ZNAM", "YNAM", "DSTF", "MICO", "MODF", "FULL"], "successors": ["FIMD", "DATA", "CVPA", "CDIX"] },
+    { "record": "MSTT", "predecessors": ["DSTF", "MODF", "FULL", "PTRN", "OBND", "VMAD"], "successors": ["PRPS", "DATA", "SNAM"] },
+    { "record": "NPC_", "predecessors": ["PKID", "AIDT", "COED", "NTRM", "FTYP", "PRPS"], "successors": ["APPR", "OBTE", "CNAM", "FULL"] },
+    { "record": "RACE", "predecessors": ["BOD2", "WNAM", "SPLO", "DESC", "FULL", "STCP"], "successors": ["PRPS", "APPR", "DATA", "MNAM"] },
+    { "record": "SCEN", "predecessors": ["CRIS", "ACTV", "CNAM", "VNAM", "INAM", "PNAM"], "successors": ["CTDA", "SCQS", "NNAM", "TNAM"] },
+    { "record": "SPEL", "predecessors": ["FULL", "OBND"], "successors": ["ETYP", "DESC", "SPIT", "EFID"] },
+    { "record": "TACT", "predecessors": ["DSTF", "MODF", "FULL", "OBND", "VMAD"], "successors": ["PNAM", "SNAM", "FNAM", "VNAM"] },
+    { "record": "TERM", "predecessors": ["MODF", "FULL", "WNAM", "NAM0", "PTRN", "OBND"], "successors": ["PRPS", "PNAM", "FNAM", "COCT"] },
+    { "record": "WEAP", "predecessors": ["ZNAM", "YNAM", "BAMT", "BIDS", "ETYP", "DSTF"], "successors": ["DESC", "INRD", "APPR", "OBTE"] }
   ]
 }

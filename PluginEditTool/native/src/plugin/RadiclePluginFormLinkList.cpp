@@ -575,7 +575,20 @@ Result<nlohmann::json> RadiclePluginBackend::addListItem(
             "'" + value + "' is not a FormKey and no loaded record has that EditorID."});
     }
 
-    // Target validation is left to the mutation primitive (see code-notes).
+    if (!descriptor->wildcard_target) {
+        const auto* winner = graph_.winner(*targetKey);
+        if (winner == nullptr) {
+            return std::unexpected(Error{
+                "FormLinkTargetMissing",
+                "FormLink target does not resolve in the loaded environment: " + value});
+        }
+        if (!fo4::schema::formlink_list_target_allowed(*descriptor, winner->signature)) {
+            return std::unexpected(Error{
+                "FormLinkTargetTypeMismatch",
+                field + " does not accept " + winner->signature.to_string() + " targets"});
+        }
+    }
+
     try {
         const auto currentSize =
             fo4::schema::record_formlink_list_size(loaded->plugin, recordKey, *descriptor);
