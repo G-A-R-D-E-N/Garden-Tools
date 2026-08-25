@@ -378,9 +378,9 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
             const auto* prior = findPlugin(revert.prior);
             if (prior == nullptr) continue;
             const auto status =
-                fo4::copy_record_as_override(mutated, prior->plugin, revert.key, /*overwrite=*/true);
+                fo4::copy_record_as_override(mutated, prior->plugin, revert.key, /*overwrite=*/false);
             if (status == fo4::RecordCopyStatus::inserted ||
-                status == fo4::RecordCopyStatus::replaced) {
+                status == fo4::RecordCopyStatus::already_exists) {
                 ++reverted;
             }
         }

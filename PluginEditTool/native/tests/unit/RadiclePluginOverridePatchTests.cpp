@@ -236,6 +236,39 @@ TEST_CASE("RevertOverrides restores the prior version into the patch") {
     CHECK(readEdid(*record) == "WidgetA");  // ModB's override reverted to ModA's version
 }
 
+TEST_CASE("RevertOverrides preserves an existing patch override instead of replacing it") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto basePath = root / "mods" / "Base" / "Base.esm";
+    const auto modAPath = root / "mods" / "ModA" / "ModA.esp";
+    const auto modBPath = root / "mods" / "ModB" / "ModB.esp";
+    const auto patchPath = root / "mods" / "Patch" / "Patch.esp";
+    writeBytes(basePath, miscMaster("WidgetBase"));
+    writeBytes(modAPath, miscOverride("WidgetA"));
+    writeBytes(modBPath, miscOverride("WidgetB"));
+    writeBytes(patchPath, miscOverride("WidgetPatch"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", basePath, "Base"),
+            pluginEntry("Patch.esp", patchPath, "Patch"),
+            pluginEntry("ModA.esp", modAPath, "ModA"),
+            pluginEntry("ModB.esp", modBPath, "ModB")
+        })}}).has_value());
+
+    const auto result = backend.revertOverrides(
+        nlohmann::json::array({"ModB.esp", "Patch.esp", "", "", true, 50}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().starts_with("Reverted 1 record(s)"));
+
+    const auto disk = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));
+    REQUIRE(record != nullptr);
+    CHECK(readEdid(*record) == "WidgetPatch");  // existing override kept, not clobbered with WidgetA
+}
+
 TEST_CASE("RevertOverrides reports nothing to do for a non-overriding plugin") {
     OverrideFixture fixture;
     const auto result = fixture.backend.revertOverrides(
