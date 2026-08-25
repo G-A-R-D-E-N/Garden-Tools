@@ -98,6 +98,22 @@ std::vector<std::byte> emptyPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> nestedRefrPlugin(std::uint32_t flags, std::string_view master,
+                                        std::string_view editorId) {
+    fo4::test::ByteWriter out;
+    header(out, flags, master);
+    const auto top = fo4::test::begin_group(out, "CELL", 0);
+    const auto children = fo4::test::begin_group(out, "CELL", 6);
+    const auto temporary = fo4::test::begin_group(out, "CELL", 9);
+    const auto refr = fo4::test::begin_record(out, "REFR", 0, 0x00000800);
+    writeEdid(out, editorId);
+    fo4::test::end_record(out, refr);
+    fo4::test::end_group(out, temporary);
+    fo4::test::end_group(out, children);
+    fo4::test::end_group(out, top);
+    return out.bytes;
+}
+
 nlohmann::json pluginEntry(std::string name, const std::filesystem::path& path, std::string source) {
     return {{"name", std::move(name)}, {"path", path.string()}, {"source", std::move(source)}, {"resolved", true}};
 }
@@ -267,6 +283,36 @@ TEST_CASE("RevertOverrides preserves an existing patch override instead of repla
     const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));
     REQUIRE(record != nullptr);
     CHECK(readEdid(*record) == "WidgetPatch");  // existing override kept, not clobbered with WidgetA
+}
+
+TEST_CASE("RevertOverrides counts an un-copyable revert as skipped, not lost") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto basePath = root / "mods" / "Base" / "Base.esm";
+    const auto modAPath = root / "mods" / "ModA" / "ModA.esp";
+    const auto modBPath = root / "mods" / "ModB" / "ModB.esp";
+    const auto patchPath = root / "mods" / "Patch" / "Patch.esp";
+    writeBytes(basePath, nestedRefrPlugin(fo4::RecordFlags::master, {}, "NestedBase"));
+    writeBytes(modAPath, nestedRefrPlugin(0, "Base.esm", "NestedA"));
+    writeBytes(modBPath, nestedRefrPlugin(0, "Base.esm", "NestedB"));
+    writeBytes(patchPath, emptyPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", basePath, "Base"),
+            pluginEntry("ModA.esp", modAPath, "ModA"),
+            pluginEntry("ModB.esp", modBPath, "ModB"),
+            pluginEntry("Patch.esp", patchPath, "Patch")
+        })}}).has_value());
+
+    const auto result = backend.revertOverrides(
+        nlohmann::json::array({"ModB.esp", "Patch.esp", "", "", true, 50}));
+    REQUIRE(result.has_value());
+    const auto text = result->get<std::string>();
+    CHECK(text.starts_with("Reverted 0 record(s)"));
+    CHECK(text.find("1 skipped") != std::string::npos);
 }
 
 TEST_CASE("RevertOverrides reports nothing to do for a non-overriding plugin") {
