@@ -515,16 +515,17 @@ FormLinkListMutationStatus set_record_formlink_list_element(
     std::size_t index,
     const FormKey& target) {
   auto next = plugin;
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(next, record_key, descriptor, &target, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
   if (descriptor.storage == FormLinkListStorage::packed_array) {
     const auto encoded = encode_plugin_form_id(target, plugin_form_id_context(next));
     const auto status = set_packed_element(next, record_key, descriptor, index, encoded);
     if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
     return status;
   }
-  Record* record = nullptr;
-  const auto validation =
-      validate_record_and_target(next, record_key, descriptor, &target, record);
-  if (validation != FormLinkListMutationStatus::unchanged) return validation;
 
   const auto positions = matching_positions(*record, descriptor);
   if (index >= positions.size()) {

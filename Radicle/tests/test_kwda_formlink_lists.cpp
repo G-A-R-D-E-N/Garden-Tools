@@ -253,3 +253,83 @@ TEST(KwdaFormLinkList, RejectsNonKeywordLocalTarget) {
                 plugin, key, descriptor, 2, misc),
             fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
 }
+
+TEST(KwdaFormLinkList, OverwritesElementInPlace) {
+  auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  const auto key = fo4::FormKey::parse("000900:Guns.esp");
+  const auto descriptor = keywords_descriptor();
+
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(
+                plugin, key, descriptor, 0, fo4::FormKey::parse("000803:Guns.esp")),
+            fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Guns.esp");
+  const auto* weap = fo4::find_record(reread, key);
+  ASSERT_NE(weap, nullptr);
+  EXPECT_EQ(ksiz_value(*weap), 2u);
+  const auto values = kwda_values(*weap);
+  ASSERT_EQ(values.size(), 2u);
+  EXPECT_EQ(values[0], 0x00000803u);
+  EXPECT_EQ(values[1], 0x00000802u);
+}
+
+TEST(KwdaFormLinkList, SetRejectsNonKeywordLocalTarget) {
+  auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  const auto key = fo4::FormKey::parse("000900:Guns.esp");
+  const auto descriptor = keywords_descriptor();
+
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(
+                plugin, key, descriptor, 0, fo4::FormKey::parse("000800:Guns.esp")),
+            fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
+}
+
+TEST(KwdaFormLinkList, RemovesElementByIndex) {
+  auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  const auto key = fo4::FormKey::parse("000900:Guns.esp");
+  const auto descriptor = keywords_descriptor();
+
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, key, descriptor, 0),
+            fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Guns.esp");
+  const auto* weap = fo4::find_record(reread, key);
+  ASSERT_NE(weap, nullptr);
+  EXPECT_EQ(ksiz_value(*weap), 1u);
+  const auto values = kwda_values(*weap);
+  ASSERT_EQ(values.size(), 1u);
+  EXPECT_EQ(values[0], 0x00000802u);
+}
+
+TEST(KwdaFormLinkList, MovesElementWithinArray) {
+  auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  const auto key = fo4::FormKey::parse("000900:Guns.esp");
+  const auto descriptor = keywords_descriptor();
+
+  EXPECT_EQ(fo4::schema::move_record_formlink_list_element(plugin, key, descriptor, 0, 1),
+            fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Guns.esp");
+  const auto* weap = fo4::find_record(reread, key);
+  ASSERT_NE(weap, nullptr);
+  EXPECT_EQ(ksiz_value(*weap), 2u);
+  const auto values = kwda_values(*weap);
+  ASSERT_EQ(values.size(), 2u);
+  EXPECT_EQ(values[0], 0x00000802u);
+  EXPECT_EQ(values[1], 0x00000801u);
+}
+
+TEST(KwdaFormLinkList, ClearsAllKeywords) {
+  auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  const auto key = fo4::FormKey::parse("000900:Guns.esp");
+  const auto descriptor = keywords_descriptor();
+
+  EXPECT_EQ(fo4::schema::clear_record_formlink_list(plugin, key, descriptor),
+            fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Guns.esp");
+  const auto* weap = fo4::find_record(reread, key);
+  ASSERT_NE(weap, nullptr);
+  EXPECT_EQ(find(*weap, "KWDA"), nullptr);
+  EXPECT_EQ(find(*weap, "KSIZ"), nullptr);
+  EXPECT_EQ(fo4::schema::record_formlink_list_size(reread, key, descriptor), 0u);
+}
