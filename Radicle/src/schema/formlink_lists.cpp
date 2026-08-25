@@ -4,6 +4,7 @@
 #include "fo4/plugin/visit.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,17 @@
 
 namespace fo4::schema {
 namespace {
+
+bool iequals_ascii(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(a[i])) !=
+        std::tolower(static_cast<unsigned char>(b[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
 
 Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
   Record* found = nullptr;
@@ -187,7 +199,8 @@ std::optional<FormLinkListDescriptor> formlink_list_descriptor_by_field(
     std::string_view field_alias) noexcept {
   if (field_alias.empty()) return std::nullopt;
   for (const auto& descriptor : k_generated_formlink_lists) {
-    if (descriptor.record == record && descriptor.field_alias == field_alias) {
+    if (descriptor.record == record &&
+        iequals_ascii(descriptor.field_alias, field_alias)) {
       return descriptor;
     }
   }

@@ -188,6 +188,51 @@ TEST_CASE("PluginEditTool add_list_item resolves an EditorID value") {
     CHECK(nthRaw(*flst, "LNAM", 0) == 0x00000801u);
 }
 
+TEST_CASE("PluginEditTool add_list_item matches the field name case-insensitively") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "AddListItem",
+        nlohmann::json::array({
+            "Patch.esp", "000810:Patch.esp", "items", "000800:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Added 000800:Patch.esp to items on 000810:Patch.esp in Patch.esp (now 1 item(s)).");
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000810:Patch.esp"));
+    REQUIRE(flst != nullptr);
+    CHECK(countSubrecords(*flst, "LNAM") == 1u);
+}
+
+TEST_CASE("PluginEditTool remove_list_item matches the field name case-insensitively") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "RemoveListItem",
+        nlohmann::json::array({
+            "Patch.esp", "000811:Patch.esp", "ITEMS", "000800:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Removed 1 entr(y/ies) matching 000800:Patch.esp from ITEMS (now 0) on "
+          "000811:Patch.esp. save_plugin to persist.");
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
+    REQUIRE(flst != nullptr);
+    CHECK(countSubrecords(*flst, "LNAM") == 0u);
+}
+
 TEST_CASE("PluginEditTool remove_list_item drops the matching FormLink") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

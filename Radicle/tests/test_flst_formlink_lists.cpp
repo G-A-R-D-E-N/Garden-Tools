@@ -116,6 +116,15 @@ TEST(FlstFormLinkList, ResolvesItemsListByFieldAlias) {
   EXPECT_FALSE(descriptor->nullable);
 }
 
+TEST(FlstFormLinkList, FieldAliasIsCaseInsensitive) {
+  for (const auto* alias : {"items", "ITEMS", "iTeMs", "Items"}) {
+    const auto descriptor = fo4::schema::formlink_list_descriptor_by_field(
+        fo4::Signature::from_string("FLST"), alias);
+    ASSERT_TRUE(descriptor.has_value()) << alias;
+    EXPECT_EQ(descriptor->subrecord, fo4::Signature::from_string("LNAM")) << alias;
+  }
+}
+
 TEST(FlstFormLinkList, EmptyAliasAndUnknownFieldDoNotResolve) {
   EXPECT_FALSE(fo4::schema::formlink_list_descriptor_by_field(
       fo4::Signature::from_string("FLST"), "").has_value());
