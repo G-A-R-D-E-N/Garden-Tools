@@ -1,13 +1,17 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/assets/NifService.hpp>
 #include <fo4ide/assets/TextureResolver.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
+#include <fo4ide/plugin/IPluginBackend.hpp>
 #include <fo4ide/process/ProcessRunner.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
@@ -61,6 +65,36 @@ private:
     assets::NifService& service_;
     assets::TextureResolver& textures_;
     platform::Services& platform_;
+};
+
+// Port of CellInterop: the cell 3D-viewport RPC surface. Record queries
+// (SearchCells / SearchWorldspaces / GetPlugins / GetPlacedReferences[AtGrid] /
+// SetPlacedReferenceTransform) are delegated unchanged to the Radicle plugin
+// backend's "cell" facet; the asset ops (GetGeometryBatch /
+// GetGeometryBatchProgress / GetTexture) are served here over the shared NIF
+// and texture services, which the bare PluginBackendTarget had no handle to.
+// Each asset op returns a serialized JSON string, matching the C# CellInterop.
+class CellTarget final : public rpc::Target {
+public:
+    CellTarget(plugin::IPluginBackend& backend,
+               assets::NifService& nif,
+               assets::TextureResolver& textures);
+
+    Result<nlohmann::json> invoke(std::string_view method,
+                                  const nlohmann::json& args) override;
+
+private:
+    // Resolve + `niftool geo` each unique relative model path (bounded
+    // parallelism), returning the serialized { count, geometry } payload.
+    std::string geometryBatch(const std::vector<std::string>& relModelPaths);
+
+    PluginBackendTarget records_;
+    assets::NifService& nif_;
+    assets::TextureResolver& textures_;
+    // {done, total} of the in-flight geometryBatch, polled via
+    // GetGeometryBatchProgress while GetGeometryBatch runs.
+    std::atomic<int> geoBatchDone_{0};
+    std::atomic<int> geoBatchTotal_{0};
 };
 
 // Port of the C# PapyrusInterop + PapyrusService surface: compile (built-in

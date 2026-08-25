@@ -2,8 +2,10 @@
 #include <fo4ide/app/WikiService.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <functional>
@@ -579,6 +581,127 @@ Result<nlohmann::json> NifTarget::stageDroppedFile(const nlohmann::json& args) c
     } catch (const std::exception& ex) {
         return nlohmann::json("ERR:" + std::string(ex.what()));
     }
+}
+
+CellTarget::CellTarget(plugin::IPluginBackend& backend,
+                       assets::NifService& nif,
+                       assets::TextureResolver& textures)
+    : records_(backend, "cell"), nif_(nif), textures_(textures) {}
+
+Result<nlohmann::json> CellTarget::invoke(std::string_view method,
+                                          const nlohmann::json& args) {
+    // The three asset ops mirror the C# CellInterop: each returns a serialized
+    // JSON string (the cell panel JSON.parses the result). Everything else is
+    // a record query delegated to the Radicle "cell" backend facet unchanged.
+    if (method == "GetGeometryBatch") {
+        std::vector<std::string> paths;
+        try {
+            const auto parsed = nlohmann::json::parse(stringArgument(args, 0));
+            if (parsed.is_array()) {
+                for (const auto& entry : parsed) {
+                    if (entry.is_string()) paths.push_back(entry.get<std::string>());
+                }
+            }
+        } catch (const std::exception& ex) {
+            return nlohmann::json(
+                nlohmann::json{{"error", "Error: " + std::string(ex.what())}}.dump());
+        }
+        return nlohmann::json(geometryBatch(paths));
+    }
+    if (method == "GetGeometryBatchProgress") {
+        return nlohmann::json(nlohmann::json{
+            {"done", geoBatchDone_.load(std::memory_order_relaxed)},
+            {"total", geoBatchTotal_.load(std::memory_order_relaxed)}}.dump());
+    }
+    // Mirrors CellInterop.GetTexture: resolve the model to a NIF, then hand the
+    // resolved path to the texture resolver; an unresolved model yields "".
+    if (method == "GetTexture") {
+        const auto resolved = textures_.resolveNif(stringArgument(args, 0));
+        if (!resolved) return nlohmann::json(std::string{});
+        return nlohmann::json(
+            textures_.getTexturePngDataUrl(resolved->string(), stringArgument(args, 1), ""));
+    }
+    return records_.invoke(method, args);
+}
+
+// Faithful port of C# NifService.GeoBatch: case-insensitive dedupe, bounded
+// parallelism (min(cores, 8)), each mesh resolved then run through `niftool
+// geo`, its JSON object embedded as-is or replaced with an { error } entry.
+std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPaths) {
+    std::vector<std::string> unique;
+    {
+        std::set<std::string> seen;
+        for (const auto& raw : relModelPaths) {
+            auto path = trim(raw);
+            if (path.empty()) continue;
+            if (seen.insert(toLower(path)).second) unique.push_back(std::move(path));
+        }
+    }
+
+    const int total = static_cast<int>(unique.size());
+    geoBatchTotal_.store(total, std::memory_order_relaxed);
+    geoBatchDone_.store(0, std::memory_order_relaxed);
+
+    // One result slot per unique path: each worker writes only its own slot, so
+    // the vector needs no lock; only the work index and progress counters are
+    // shared, and those are atomic.
+    std::vector<nlohmann::json> results(unique.size());
+
+    const auto processOne = [&](std::size_t i) {
+        const auto resolved = textures_.resolveNif(unique[i]);
+        if (!resolved) {
+            results[i] = nlohmann::json{{"error", "Not found (loose or in any indexed archive)."}};
+            geoBatchDone_.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+        const auto geo = nif_.geometry(*resolved);
+        const std::string raw = geo ? *geo : ("Error: " + geo.error().message);
+        // Embed the niftool geo JSON object as-is when the output is a JSON
+        // object (mirrors the C# JRaw path); otherwise surface it as an error
+        // entry. Unlike the C#, the parse is validated so a malformed but
+        // '{'-leading output cannot corrupt the whole batch payload.
+        const auto trimmed = trim(raw);
+        nlohmann::json entry;
+        bool ok = !trimmed.empty() && trimmed.front() == '{';
+        if (ok) {
+            entry = nlohmann::json::parse(raw, nullptr, false);
+            ok = !entry.is_discarded();
+        }
+        results[i] = ok ? std::move(entry) : nlohmann::json{{"error", raw}};
+        geoBatchDone_.fetch_add(1, std::memory_order_relaxed);
+    };
+
+    unsigned int hardware = std::thread::hardware_concurrency();
+    if (hardware == 0) hardware = 1;
+    const unsigned int degree = std::min<unsigned int>(
+        {hardware, 8u, static_cast<unsigned int>(std::max<std::size_t>(unique.size(), 1))});
+
+    if (degree <= 1) {
+        for (std::size_t i = 0; i < unique.size(); ++i) processOne(i);
+    } else {
+        std::atomic<std::size_t> next{0};
+        std::vector<std::thread> workers;
+        workers.reserve(degree);
+        for (unsigned int w = 0; w < degree; ++w) {
+            workers.emplace_back([&] {
+                for (;;) {
+                    const std::size_t i = next.fetch_add(1, std::memory_order_relaxed);
+                    if (i >= unique.size()) break;
+                    processOne(i);
+                }
+            });
+        }
+        for (auto& worker : workers) worker.join();
+    }
+
+    nlohmann::json geometryMap = nlohmann::json::object();
+    for (std::size_t i = 0; i < unique.size(); ++i) {
+        geometryMap[unique[i]] = std::move(results[i]);
+    }
+    nlohmann::json payload;
+    payload["count"] = total;
+    payload["geometry"] = std::move(geometryMap);
+    return payload.dump();
 }
 
 PapyrusTarget::PapyrusTarget(process::Runner& runner,
