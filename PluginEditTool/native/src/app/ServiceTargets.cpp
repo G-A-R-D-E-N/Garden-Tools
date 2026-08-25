@@ -682,18 +682,23 @@ std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPa
         for (std::size_t i = 0; i < unique.size(); ++i) processOne(i);
     } else {
         std::atomic<std::size_t> next{0};
-        std::vector<std::thread> workers;
+        std::vector<std::jthread> workers;
         workers.reserve(degree);
-        for (unsigned int w = 0; w < degree; ++w) {
-            workers.emplace_back([&] {
-                for (;;) {
-                    const std::size_t i = next.fetch_add(1, std::memory_order_relaxed);
-                    if (i >= unique.size()) break;
-                    processOne(i);
-                }
-            });
+        try {
+            for (unsigned int w = 0; w < degree; ++w) {
+                workers.emplace_back([&] {
+                    for (;;) {
+                        const std::size_t i = next.fetch_add(1, std::memory_order_relaxed);
+                        if (i >= unique.size()) break;
+                        processOne(i);
+                    }
+                });
+            }
+        } catch (const std::system_error&) {
         }
-        for (auto& worker : workers) worker.join();
+    }
+    for (std::size_t i = 0; i < unique.size(); ++i) {
+        if (results[i].is_null()) processOne(i);
     }
 
     nlohmann::json geometryMap = nlohmann::json::object();
