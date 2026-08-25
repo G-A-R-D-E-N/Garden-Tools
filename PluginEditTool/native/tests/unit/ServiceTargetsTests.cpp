@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -5,6 +6,8 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <thread>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -696,4 +699,40 @@ TEST_CASE("GraphTarget CompileToPex errors instead of reporting a write that fai
     const auto text = result->get<std::string>();
     CHECK(text.rfind("Error:", 0) == 0);
     CHECK(text.find("\"written\"") == std::string::npos);
+}
+
+TEST_CASE("GraphTarget serializes concurrent RPC access to its compiler cache") {
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+
+    std::atomic<bool> threw{false};
+    {
+        std::vector<std::jthread> workers;
+        for (int t = 0; t < 4; ++t) {
+            workers.emplace_back([&, t] {
+                for (int i = 0; i < 40; ++i) {
+                    try {
+                        switch ((t + i) % 4) {
+                            case 0:
+                                target.invoke("GetCorePalette", nlohmann::json::array());
+                                break;
+                            case 1:
+                                target.invoke("SearchPalette",
+                                              nlohmann::json::array({"any", "debug", "", 10}));
+                                break;
+                            case 2:
+                                target.invoke("ValidateGraph", nlohmann::json::array({"{}"}));
+                                break;
+                            default:
+                                target.invoke("Refresh", nlohmann::json::array());
+                                break;
+                        }
+                    } catch (...) {
+                        threw = true;
+                    }
+                }
+            });
+        }
+    }
+    CHECK_FALSE(threw.load());
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -105,6 +106,7 @@ private:
     graph::GraphCompiler& compiler();
 
     platform::Services& platform_;
+    std::mutex mutex_;
     std::unique_ptr<papyrus::ScriptIndex> index_;
     std::unique_ptr<graph::GraphCompiler> compiler_;
     std::string rootsKey_;

@@ -1146,7 +1146,7 @@ GraphTarget::~GraphTarget() = default;
 
 graph::GraphCompiler& GraphTarget::compiler() {
     std::string key;
-    for (const auto& root : papyrus::papyrusBaseImports()) {
+    for (const auto& root : graphScriptRoots()) {
         key += root.string();
         key.push_back('|');
     }
@@ -1159,6 +1159,9 @@ graph::GraphCompiler& GraphTarget::compiler() {
 }
 
 Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohmann::json& args) {
+    // Serialize the whole target: the RPC dispatcher runs invoke() concurrently,
+    // and compiler()/Refresh mutate index_/compiler_/rootsKey_.
+    std::scoped_lock lock(mutex_);
     try {
         if (method == "Refresh") {
             compiler_.reset();
