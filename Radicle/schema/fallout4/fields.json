@@ -1047,6 +1047,22 @@
         }
       ],
       "localized_subrecords": []
+    },
+    {
+      "signature": "FLST",
+      "formlink_lists": [
+        {
+          "path": "FLST\\Items",
+          "label": "Items",
+          "field_alias": "Items",
+          "subrecord": "LNAM",
+          "targets": "*",
+          "nullable": false,
+          "mutation": "appendable"
+        }
+      ],
+      "fields": [],
+      "localized_subrecords": []
     }
   ]
 }
