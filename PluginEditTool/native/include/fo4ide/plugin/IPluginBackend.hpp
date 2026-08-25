@@ -83,6 +83,20 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> revertOverrides(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "RevertOverridesUnavailable",
+            "Native override reverting is unavailable for this backend"
+        });
+    }
+
+    virtual Result<nlohmann::json> createMergedPatch(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "MergedPatchUnavailable",
+            "Native merged-patch creation is unavailable for this backend"
+        });
+    }
+
     virtual Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json&) const {
         return std::unexpected(Error{
             "CircularLeveledListCheckUnavailable",

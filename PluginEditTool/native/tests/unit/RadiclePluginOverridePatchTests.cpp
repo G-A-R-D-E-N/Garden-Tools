@@ -1,0 +1,218 @@
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <span>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <vector>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <fo4/flags.hpp>
+#include <fo4/plugin/reader.hpp>
+#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+
+#include "plugin_bytes.hpp"
+
+namespace {
+
+std::filesystem::path tempRoot() {
+    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    return std::filesystem::temp_directory_path() / ("fo4ide_override_patch_" + std::to_string(id));
+}
+
+struct Cleanup {
+    std::filesystem::path root;
+    ~Cleanup() {
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+};
+
+void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    REQUIRE(stream.good());
+    stream.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    REQUIRE(stream.good());
+}
+
+void header(fo4::test::ByteWriter& out, std::uint32_t flags, std::string_view master = {}) {
+    const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(0);
+    hedr.u32(0x900);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    if (!master.empty()) {
+        std::vector<std::byte> name;
+        for (const char ch : master) name.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+        name.push_back(std::byte{0});
+        fo4::test::write_subrecord(out, "MAST", name);
+        fo4::test::ByteWriter data;
+        data.u32(0);
+        data.u32(0);
+        fo4::test::write_subrecord(out, "DATA", data.bytes);
+    }
+    fo4::test::end_record(out, tes4);
+}
+
+void writeEdid(fo4::test::ByteWriter& out, std::string_view text) {
+    std::vector<std::byte> data;
+    for (const char ch : text) data.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+    data.push_back(std::byte{0});
+    fo4::test::write_subrecord(out, "EDID", std::span<const std::byte>(data));
+}
+
+// A plugin owning MISC 000800 in its own name (used as the origin master).
+std::vector<std::byte> miscMaster(std::string_view editorId) {
+    fo4::test::ByteWriter out;
+    header(out, fo4::RecordFlags::master);
+    const auto group = fo4::test::begin_group(out, "MISC", 0);
+    const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000800);
+    writeEdid(out, editorId);
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
+// A plugin overriding Base.esm's MISC 000800.
+std::vector<std::byte> miscOverride(std::string_view editorId) {
+    fo4::test::ByteWriter out;
+    header(out, 0, "Base.esm");
+    const auto group = fo4::test::begin_group(out, "MISC", 0);
+    const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000800);
+    writeEdid(out, editorId);
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
+std::vector<std::byte> emptyPlugin() {
+    fo4::test::ByteWriter out;
+    header(out, 0);
+    return out.bytes;
+}
+
+nlohmann::json pluginEntry(std::string name, const std::filesystem::path& path, std::string source) {
+    return {{"name", std::move(name)}, {"path", path.string()}, {"source", std::move(source)}, {"resolved", true}};
+}
+
+std::string readEdid(const fo4::Record& record) {
+    for (const auto& sub : record.subrecords) {
+        if (sub.signature != fo4::sig_edid || sub.data.empty()) continue;
+        std::string out;
+        for (const auto byte : sub.data) {
+            const auto ch = static_cast<char>(std::to_integer<std::uint8_t>(byte));
+            if (ch == '\0') break;
+            out.push_back(ch);
+        }
+        return out;
+    }
+    return {};
+}
+
+// Loads Base.esm (origin) + ModA/ModB (overrides) + an empty editable Patch.
+struct OverrideFixture {
+    std::filesystem::path root{tempRoot()};
+    Cleanup cleanup{root};
+    std::filesystem::path patchPath{root / "mods" / "Patch" / "Patch.esp"};
+    fo4ide::plugin::RadiclePluginBackend backend;
+
+    OverrideFixture() {
+        const auto basePath = root / "mods" / "Base" / "Base.esm";
+        const auto modAPath = root / "mods" / "ModA" / "ModA.esp";
+        const auto modBPath = root / "mods" / "ModB" / "ModB.esp";
+        writeBytes(basePath, miscMaster("WidgetBase"));
+        writeBytes(modAPath, miscOverride("WidgetA"));
+        writeBytes(modBPath, miscOverride("WidgetB"));
+        writeBytes(patchPath, emptyPlugin());
+        REQUIRE(backend.invoke(
+            "environment.LoadMo2",
+            nlohmann::json{{"plugins", nlohmann::json::array({
+                pluginEntry("Base.esm", basePath, "Base"),
+                pluginEntry("ModA.esp", modAPath, "ModA"),
+                pluginEntry("ModB.esp", modBPath, "ModB"),
+                pluginEntry("Patch.esp", patchPath, "Patch")
+            })}}).has_value());
+    }
+};
+
+}  // namespace
+
+TEST_CASE("CreateMergedPatch dry-run lists the contested winners") {
+    OverrideFixture fixture;
+    const auto result = fixture.backend.createMergedPatch(
+        nlohmann::json::array({"ModA.esp,ModB.esp", "Patch.esp", false}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    const auto text = result->get<std::string>();
+    CHECK(text.find("DRY RUN") != std::string::npos);
+    CHECK(text.find("ModB.esp: 1 record(s) win") != std::string::npos);
+}
+
+TEST_CASE("CreateMergedPatch forwards the winning version into the patch") {
+    OverrideFixture fixture;
+    const auto result = fixture.backend.createMergedPatch(
+        nlohmann::json::array({"ModA.esp,ModB.esp", "Patch.esp", true}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().starts_with("Merged patch Patch.esp: forwarded 1 of 1"));
+
+    const auto disk = fo4::read_plugin_file(fixture.patchPath);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));
+    REQUIRE(record != nullptr);
+    CHECK(readEdid(*record) == "WidgetB");  // highest selected plugin in load order wins
+}
+
+TEST_CASE("CreateMergedPatch requires at least two source plugins") {
+    OverrideFixture fixture;
+    const auto result = fixture.backend.createMergedPatch(
+        nlohmann::json::array({"ModA.esp", "Patch.esp", true}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "MergedPatchNeedsSources");
+}
+
+TEST_CASE("RevertOverrides dry-run reports the winner and its prior version") {
+    OverrideFixture fixture;
+    const auto result = fixture.backend.revertOverrides(
+        nlohmann::json::array({"ModB.esp", "Patch.esp", "", "", false, 50}));
+    REQUIRE(result.has_value());
+    const auto text = result->get<std::string>();
+    CHECK(text.find("DRY RUN -- 1 record(s) where ModB.esp is the winner") != std::string::npos);
+    CHECK(text.find("restore ModA.esp's version") != std::string::npos);
+}
+
+TEST_CASE("RevertOverrides restores the prior version into the patch") {
+    OverrideFixture fixture;
+    const auto result = fixture.backend.revertOverrides(
+        nlohmann::json::array({"ModB.esp", "Patch.esp", "", "", true, 50}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().starts_with(
+        "Reverted 1 record(s) that ModB.esp was overriding, into Patch.esp."));
+
+    const auto disk = fo4::read_plugin_file(fixture.patchPath);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));
+    REQUIRE(record != nullptr);
+    CHECK(readEdid(*record) == "WidgetA");  // ModB's override reverted to ModA's version
+}
+
+TEST_CASE("RevertOverrides reports nothing to do for a non-overriding plugin") {
+    OverrideFixture fixture;
+    const auto result = fixture.backend.revertOverrides(
+        nlohmann::json::array({"Base.esm", "Patch.esp", "", "", false, 50}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find("carries no override records") != std::string::npos);
+}
+
+TEST_CASE("RevertOverrides refuses the unsupported component filter") {
+    OverrideFixture fixture;
+    const auto result = fixture.backend.revertOverrides(
+        nlohmann::json::array({"ModB.esp", "Patch.esp", "", "000F00:Base.esm", false, 50}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ComponentFilterUnsupported");
+}

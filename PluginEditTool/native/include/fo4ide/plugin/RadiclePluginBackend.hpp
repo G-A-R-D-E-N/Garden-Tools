@@ -32,6 +32,8 @@ public:
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
     Result<nlohmann::json> changeReferencingRecords(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> revertOverrides(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> createMergedPatch(const nlohmann::json& arguments) override;
     Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> createSeqFile(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
