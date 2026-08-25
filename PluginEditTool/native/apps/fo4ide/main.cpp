@@ -481,7 +481,7 @@ int main(int argc, char** argv) {
         !registerTarget(rpc, "backend", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "backend"), log) ||
         !registerTarget(rpc, "masters", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "masters"), log) ||
         !registerTarget(rpc, "cell", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "cell"), log) ||
-        !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "graph"), log)) {
+        !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::GraphTarget>(platformServices), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }

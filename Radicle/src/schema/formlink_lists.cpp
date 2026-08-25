@@ -93,6 +93,42 @@ Subrecord encoded_element(const FormLinkListDescriptor& descriptor,
   return subrecord;
 }
 
+std::span<const Signature> anchor_predecessors(
+    const FormLinkListDescriptor& descriptor) {
+  return {k_generated_formlink_list_anchors + descriptor.first_anchor,
+          descriptor.predecessor_count};
+}
+
+std::span<const Signature> anchor_successors(
+    const FormLinkListDescriptor& descriptor) {
+  return {k_generated_formlink_list_anchors + descriptor.first_anchor +
+              descriptor.predecessor_count,
+          descriptor.successor_count};
+}
+
+// Positions the first element of an otherwise-empty flat FormLink list. With no
+// existing element of its own to anchor against, fall back to the schema's
+// declared sibling order: insert immediately after the nearest preceding sibling
+// list that is present, or immediately before the nearest following one. When no
+// sibling list is present the record offers no anchor and insertion fails closed.
+std::optional<std::size_t> empty_list_insertion_point(
+    const Record& record,
+    const FormLinkListDescriptor& descriptor) {
+  for (const auto predecessor : anchor_predecessors(descriptor)) {
+    std::optional<std::size_t> last;
+    for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
+      if (record.subrecords[index].signature == predecessor) last = index;
+    }
+    if (last.has_value()) return *last + 1;
+  }
+  for (const auto successor : anchor_successors(descriptor)) {
+    for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
+      if (record.subrecords[index].signature == successor) return index;
+    }
+  }
+  return std::nullopt;
+}
+
 FormLinkListMutationStatus insert_encoded_element(
     Plugin& plugin,
     const FormKey& record_key,
@@ -111,11 +147,18 @@ FormLinkListMutationStatus insert_encoded_element(
   if (index > positions.size()) {
     return FormLinkListMutationStatus::index_out_of_range;
   }
+
+  std::size_t insertion = 0;
   if (positions.empty()) {
-    return FormLinkListMutationStatus::insertion_boundary_unavailable;
+    const auto anchored = empty_list_insertion_point(*record, descriptor);
+    if (!anchored.has_value()) {
+      return FormLinkListMutationStatus::insertion_boundary_unavailable;
+    }
+    insertion = *anchored;
+  } else {
+    insertion = index < positions.size() ? positions[index] : positions.back() + 1;
   }
-  const auto insertion =
-      index < positions.size() ? positions[index] : positions.back() + 1;
+
   record->subrecords.insert(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
       encoded_element(descriptor, encoded));

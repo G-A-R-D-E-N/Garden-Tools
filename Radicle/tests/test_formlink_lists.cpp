@@ -81,6 +81,50 @@ std::size_t count_subrecords(const fo4::Record& record,
   return count;
 }
 
+std::size_t index_of(const fo4::Record& record, std::string_view signature) {
+  const auto sig = fo4::Signature::from_string(signature);
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    if (record.subrecords[i].signature == sig) return i;
+  }
+  ADD_FAILURE() << "missing requested subrecord";
+  return record.subrecords.size();
+}
+
+// A RACE whose only FormLink-list subrecord is one sibling of MaleHairColors,
+// so an empty MaleHairColors list has a schema sibling to anchor against.
+std::vector<std::byte> plugin_with_race_sibling(std::string_view sibling_signature,
+                                                std::uint32_t sibling_value) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(4);
+  hedr.u32(0x804);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto color_group = fo4::test::begin_group(out, "CLFM", 0);
+  auto color = fo4::test::begin_record(out, "CLFM", 0, 0x00000800, 131);
+  fo4::test::end_record(out, color);
+  color = fo4::test::begin_record(out, "CLFM", 0, 0x00000801, 131);
+  fo4::test::end_record(out, color);
+  fo4::test::end_group(out, color_group);
+
+  const auto npc_group = fo4::test::begin_group(out, "NPC_", 0);
+  const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x00000802, 131);
+  fo4::test::end_record(out, npc);
+  fo4::test::end_group(out, npc_group);
+
+  const auto race_group = fo4::test::begin_group(out, "RACE", 0);
+  const auto race = fo4::test::begin_record(out, "RACE", 0, 0x00000803, 131);
+  fo4::test::ByteWriter link;
+  link.u32(sibling_value);
+  fo4::test::write_subrecord(out, sibling_signature, link.bytes);
+  fo4::test::end_record(out, race);
+  fo4::test::end_group(out, race_group);
+  return out.bytes;
+}
+
 }
 
 TEST(FormLinkListSchema, ParsesGeneratedIndexedRaceHeadPath) {
@@ -193,6 +237,10 @@ TEST(FormLinkListMutation, RemovesOnlyRequestedElement) {
 }
 
 TEST(FormLinkListMutation, EmptyListInsertionFailsClosedWithoutSchemaAnchor) {
+  // This RACE carries no sibling FormLink list, so once MaleHairColors is empty
+  // there is nothing in the record to anchor the first element against and the
+  // insert must fail closed. When a sibling is present the list can grow from
+  // empty -- see the two anchoring tests below.
   auto plugin = fo4::read_plugin(
       plugin_with_race_hair_colors(), "HeadLists.esp");
   const auto race_key = fo4::FormKey::parse("000803:HeadLists.esp");
@@ -213,6 +261,56 @@ TEST(FormLinkListMutation, EmptyListInsertionFailsClosedWithoutSchemaAnchor) {
       fo4::schema::insert_record_formlink_list_element(
           plugin, race_key, *descriptor, 0, color),
       fo4::schema::FormLinkListMutationStatus::insertion_boundary_unavailable);
+}
+
+TEST(FormLinkListMutation, InsertsFirstEmptyElementAfterPrecedingSibling) {
+  // MalePresets (RPRM) precedes MaleHairColors (AHCM) in the RACE template, so
+  // the first element of an empty MaleHairColors list anchors right after it.
+  auto plugin = fo4::read_plugin(
+      plugin_with_race_sibling("RPRM", 0x00000802), "HeadLists.esp");
+  const auto race_key = fo4::FormKey::parse("000803:HeadLists.esp");
+  const auto color = fo4::FormKey::parse("000800:HeadLists.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("RACE"), "RACE\\MaleHairColors");
+  ASSERT_TRUE(descriptor.has_value());
+
+  EXPECT_EQ(
+      fo4::schema::insert_record_formlink_list_element(
+          plugin, race_key, *descriptor, 0, color),
+      fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread =
+      fo4::read_plugin(fo4::write_plugin(plugin), "HeadLists.esp");
+  const auto* race = fo4::find_record(reread, race_key);
+  ASSERT_NE(race, nullptr);
+  ASSERT_EQ(count_subrecords(*race, "AHCM"), 1u);
+  EXPECT_EQ(nth_raw(*race, "AHCM", 0), 0x00000800u);
+  EXPECT_EQ(index_of(*race, "AHCM"), index_of(*race, "RPRM") + 1);
+}
+
+TEST(FormLinkListMutation, InsertsFirstEmptyElementBeforeFollowingSibling) {
+  // With no preceding sibling present, MaleHairColors (AHCM) anchors right
+  // before its nearest following sibling, MaleFaceDetails (FTSM).
+  auto plugin = fo4::read_plugin(
+      plugin_with_race_sibling("FTSM", 0x00000801), "HeadLists.esp");
+  const auto race_key = fo4::FormKey::parse("000803:HeadLists.esp");
+  const auto color = fo4::FormKey::parse("000800:HeadLists.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("RACE"), "RACE\\MaleHairColors");
+  ASSERT_TRUE(descriptor.has_value());
+
+  EXPECT_EQ(
+      fo4::schema::insert_record_formlink_list_element(
+          plugin, race_key, *descriptor, 0, color),
+      fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread =
+      fo4::read_plugin(fo4::write_plugin(plugin), "HeadLists.esp");
+  const auto* race = fo4::find_record(reread, race_key);
+  ASSERT_NE(race, nullptr);
+  ASSERT_EQ(count_subrecords(*race, "AHCM"), 1u);
+  EXPECT_EQ(nth_raw(*race, "AHCM", 0), 0x00000800u);
+  EXPECT_EQ(index_of(*race, "AHCM") + 1, index_of(*race, "FTSM"));
 }
 
 TEST(FormLinkListMutation, RejectsWrongLocalTargetType) {

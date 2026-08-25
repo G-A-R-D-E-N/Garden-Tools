@@ -11,13 +11,46 @@ inline constexpr Signature k_generated_formlink_list_targets[] = {
   Signature::from_string("KYWD"),
 };
 
+inline constexpr Signature k_generated_formlink_list_anchors[] = {
+  Signature::from_string("AHCF"),
+  Signature::from_string("RPRF"),
+  Signature::from_string("FTSM"),
+  Signature::from_string("AHCM"),
+  Signature::from_string("RPRM"),
+  Signature::from_string("RPRF"),
+  Signature::from_string("FTSM"),
+  Signature::from_string("AHCM"),
+  Signature::from_string("RPRM"),
+  Signature::from_string("FTSF"),
+  Signature::from_string("FTSM"),
+  Signature::from_string("AHCM"),
+  Signature::from_string("RPRM"),
+  Signature::from_string("AHCF"),
+  Signature::from_string("FTSF"),
+  Signature::from_string("AHCM"),
+  Signature::from_string("RPRM"),
+  Signature::from_string("RPRF"),
+  Signature::from_string("AHCF"),
+  Signature::from_string("FTSF"),
+  Signature::from_string("RPRM"),
+  Signature::from_string("FTSM"),
+  Signature::from_string("RPRF"),
+  Signature::from_string("AHCF"),
+  Signature::from_string("FTSF"),
+  Signature::from_string("AHCM"),
+  Signature::from_string("FTSM"),
+  Signature::from_string("RPRF"),
+  Signature::from_string("AHCF"),
+  Signature::from_string("FTSF"),
+};
+
 inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {
-  {Signature::from_string("RACE"), "RACE\\FemaleFaceDetails", "Female Face Details", Signature::from_string("FTSF"), true, true, 0, 1},
-  {Signature::from_string("RACE"), "RACE\\FemaleHairColors", "Female Hair Colors", Signature::from_string("AHCF"), true, true, 1, 1},
-  {Signature::from_string("RACE"), "RACE\\FemalePresets", "Female Race Presets", Signature::from_string("RPRF"), true, true, 2, 1},
-  {Signature::from_string("RACE"), "RACE\\MaleFaceDetails", "Male Face Details", Signature::from_string("FTSM"), true, true, 3, 1},
-  {Signature::from_string("RACE"), "RACE\\MaleHairColors", "Male Hair Colors", Signature::from_string("AHCM"), true, true, 4, 1},
-  {Signature::from_string("RACE"), "RACE\\MalePresets", "Male Race Presets", Signature::from_string("RPRM"), true, true, 5, 1},
+  {Signature::from_string("RACE"), "RACE\\FemaleFaceDetails", "Female Face Details", Signature::from_string("FTSF"), true, true, 0, 1, 0, 5, 0},
+  {Signature::from_string("RACE"), "RACE\\FemaleHairColors", "Female Hair Colors", Signature::from_string("AHCF"), true, true, 1, 1, 5, 4, 1},
+  {Signature::from_string("RACE"), "RACE\\FemalePresets", "Female Race Presets", Signature::from_string("RPRF"), true, true, 2, 1, 10, 3, 2},
+  {Signature::from_string("RACE"), "RACE\\MaleFaceDetails", "Male Face Details", Signature::from_string("FTSM"), true, true, 3, 1, 15, 2, 3},
+  {Signature::from_string("RACE"), "RACE\\MaleHairColors", "Male Hair Colors", Signature::from_string("AHCM"), true, true, 4, 1, 20, 1, 4},
+  {Signature::from_string("RACE"), "RACE\\MalePresets", "Male Race Presets", Signature::from_string("RPRM"), true, true, 5, 1, 25, 0, 5},
 };
 
 inline constexpr NestedFormLinkListDescriptor k_generated_nested_formlink_lists[] = {
