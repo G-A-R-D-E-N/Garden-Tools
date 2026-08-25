@@ -4,8 +4,16 @@ import argparse
 import json
 from pathlib import Path
 
-MUTATIONS = {"existing_only", "existing_neighbors"}
+MUTATIONS = {"existing_only", "existing_neighbors", "appendable"}
 NESTED_MUTATIONS = {"terminated_group"}
+
+
+def parse_targets_or_wildcard(targets, path: str):
+    # A wildcard list (FLST\Items accepts any major record) declares its targets
+    # as "*"; it emits no target signatures and admits every record type.
+    if targets == "*" or targets == ["*"]:
+        return [], True
+    return parse_targets(targets, path), False
 
 
 def valid_signature(value: str) -> bool:
@@ -41,6 +49,7 @@ def load_lists(schema_path: Path):
     nested_lists = []
     seen_paths = set()
     seen_record_subrecords = set()
+    seen_field_aliases = set()
     seen_nested_paths = set()
     for record in records:
         if not isinstance(record, dict):
@@ -57,6 +66,7 @@ def load_lists(schema_path: Path):
                 raise ValueError(f"formlink list entries must be objects: {record_signature}")
             path = row.get("path", "")
             label = row.get("label", "")
+            field_alias = row.get("field_alias", "")
             subrecord = row.get("subrecord", "")
             nullable = row.get("nullable")
             mutation = row.get("mutation")
@@ -72,12 +82,20 @@ def load_lists(schema_path: Path):
                 raise ValueError(f"FormLink list label is invalid: {label!r}")
             if not isinstance(subrecord, str) or not valid_signature(subrecord):
                 raise ValueError(f"FormLink list subrecord is invalid: {subrecord!r}")
+            if not isinstance(field_alias, str) or any(ord(ch) < 0x20 for ch in field_alias):
+                raise ValueError(f"FormLink list field_alias is invalid: {field_alias!r}")
+            if field_alias:
+                alias_key = (record_signature, field_alias)
+                if alias_key in seen_field_aliases:
+                    raise ValueError(
+                        f"duplicate FormLink list field_alias for {record_signature}.{field_alias}")
+                seen_field_aliases.add(alias_key)
             key = (record_signature, subrecord)
             if key in seen_record_subrecords:
                 raise ValueError(
                     f"duplicate FormLink list subrecord mapping for {record_signature}.{subrecord}")
             seen_record_subrecords.add(key)
-            parsed_targets = parse_targets(row.get("targets"), path)
+            parsed_targets, wildcard_target = parse_targets_or_wildcard(row.get("targets"), path)
             if not isinstance(nullable, bool):
                 raise ValueError(f"FormLink list nullable must be boolean: {path!r}")
             if mutation not in MUTATIONS:
@@ -87,10 +105,13 @@ def load_lists(schema_path: Path):
                 "record": record_signature,
                 "path": path,
                 "label": label,
+                "field_alias": field_alias,
                 "subrecord": subrecord,
                 "targets": parsed_targets,
                 "nullable": nullable,
-                "can_insert": mutation == "existing_neighbors",
+                "can_insert": mutation in ("existing_neighbors", "appendable"),
+                "wildcard_target": wildcard_target,
+                "append_when_empty": mutation == "appendable",
             })
 
         nested_rows = record.get("nested_formlink_lists", [])
@@ -222,9 +243,12 @@ def render(lists, nested_lists) -> str:
             "  {" +
             f"Signature::from_string({cpp_string(row['record'])}), " +
             f"{cpp_string(row['path'])}, {cpp_string(row['label'])}, " +
+            f"{cpp_string(row['field_alias'])}, " +
             f"Signature::from_string({cpp_string(row['subrecord'])}), " +
             ("true" if row["nullable"] else "false") + ", " +
             ("true" if row["can_insert"] else "false") + ", " +
+            ("true" if row["wildcard_target"] else "false") + ", " +
+            ("true" if row["append_when_empty"] else "false") + ", " +
             f"{first_target}, {target_count}, " +
             f"{first_anchor}, {predecessor_count}, {successor_count}" +
             "},"

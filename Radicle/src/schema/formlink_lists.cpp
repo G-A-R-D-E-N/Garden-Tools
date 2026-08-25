@@ -4,6 +4,7 @@
 #include "fo4/plugin/visit.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,17 @@
 
 namespace fo4::schema {
 namespace {
+
+bool iequals_ascii(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(a[i])) !=
+        std::tolower(static_cast<unsigned char>(b[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
 
 Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
   Record* found = nullptr;
@@ -126,6 +138,9 @@ std::optional<std::size_t> empty_list_insertion_point(
       if (record.subrecords[index].signature == successor) return index;
     }
   }
+  // A list with no sibling to anchor against (FLST\Items holds only EDID before
+  // its LNAM entries) appends its first element at the end of the record.
+  if (descriptor.append_when_empty) return record.subrecords.size();
   return std::nullopt;
 }
 
@@ -179,6 +194,19 @@ std::optional<FormLinkListDescriptor> formlink_list_descriptor(
   return std::nullopt;
 }
 
+std::optional<FormLinkListDescriptor> formlink_list_descriptor_by_field(
+    Signature record,
+    std::string_view field_alias) noexcept {
+  if (field_alias.empty()) return std::nullopt;
+  for (const auto& descriptor : k_generated_formlink_lists) {
+    if (descriptor.record == record &&
+        iequals_ascii(descriptor.field_alias, field_alias)) {
+      return descriptor;
+    }
+  }
+  return std::nullopt;
+}
+
 std::optional<IndexedFormLinkListPath> indexed_formlink_list_path(
     std::string_view path) noexcept {
   if (path.empty() || path.back() != ']') return std::nullopt;
@@ -212,6 +240,7 @@ std::span<const Signature> formlink_list_targets(
 
 bool formlink_list_target_allowed(const FormLinkListDescriptor& descriptor,
                                   Signature signature) noexcept {
+  if (descriptor.wildcard_target) return true;
   const auto targets = formlink_list_targets(descriptor);
   return std::find(targets.begin(), targets.end(), signature) != targets.end();
 }
@@ -313,6 +342,36 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
   mark_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
+}
+
+std::size_t remove_record_formlink_list_elements_matching(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    const FormKey& target) {
+  auto next = plugin;
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(next, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return 0;
+
+  const auto encoded = encode_plugin_form_id(target, plugin_form_id_context(next));
+  const auto positions = matching_positions(*record, descriptor);
+  std::vector<std::size_t> victims;
+  for (const auto position : positions) {
+    if (read_u32(record->subrecords[position].data) == encoded.value()) {
+      victims.push_back(position);
+    }
+  }
+  if (victims.empty()) return 0;
+
+  for (auto it = victims.rbegin(); it != victims.rend(); ++it) {
+    record->subrecords.erase(
+        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
+  }
+  mark_modified(next, *record);
+  plugin = std::move(next);
+  return victims.size();
 }
 
 FormLinkListMutationStatus move_record_formlink_list_element(

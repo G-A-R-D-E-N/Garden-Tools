@@ -1,16 +1,23 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
+#include <fo4/formid.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/formlink_lists.hpp>
+#include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -39,6 +46,49 @@ bool listIndexArgument(const nlohmann::json& args,
     }
     value = static_cast<std::size_t>(parsed);
     return true;
+}
+
+std::string listEditorId(const fo4::Record& record) {
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
+        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
+        const auto* end = begin + subrecord.data.size();
+        const auto* nul = std::find(begin, end, '\0');
+        return std::string(begin, nul);
+    }
+    return {};
+}
+
+std::string listLower(std::string_view value) {
+    std::string out(value);
+    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return out;
+}
+
+// Mirrors WriteService.FindMutableRecord: resolve the target record by FormKey
+// (contains ':') or, failing that, a case-insensitive EditorID match inside the
+// same plugin.
+const fo4::Record* resolveRecordInPlugin(const fo4::Plugin& plugin,
+                                         std::string_view recordText,
+                                         fo4::FormKey& outKey) {
+    if (recordText.find(':') != std::string_view::npos) {
+        try {
+            outKey = fo4::FormKey::parse(recordText);
+        } catch (const std::exception&) {
+            return nullptr;
+        }
+        return fo4::find_record(plugin, outKey);
+    }
+    const auto wanted = listLower(recordText);
+    for (const auto* record : fo4::collect_records(plugin)) {
+        if (listLower(listEditorId(*record)) == wanted) {
+            outKey = record->form_key;
+            return record;
+        }
+    }
+    return nullptr;
 }
 
 }
@@ -425,6 +475,257 @@ Result<nlohmann::json> RadiclePluginBackend::removeFormLinkListElement(
             "Removed element from " + basePath + " in " + pluginName + ".");
     } catch (const fo4::schema::FormLinkListError& error) {
         return std::unexpected(Error{"FormLinkListWriteFailed", error.what()});
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"FieldWriteFailed", error.what()});
+    }
+}
+
+std::optional<fo4::FormKey> RadiclePluginBackend::resolveListValue(
+    std::string_view value) const {
+    if (value.find(':') != std::string_view::npos) {
+        try {
+            return fo4::FormKey::parse(value);
+        } catch (const std::exception&) {
+            return std::nullopt;
+        }
+    }
+    const auto wanted = listLower(value);
+    for (const auto& candidate : plugins_) {
+        for (const auto* record : fo4::collect_records(candidate.plugin)) {
+            if (listLower(listEditorId(*record)) == wanted) {
+                return record->form_key;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+void RadiclePluginBackend::ensureOwnerMaster(fo4::Plugin& plugin,
+                                             const fo4::PluginKey& owner) const {
+    if (owner.empty() || owner == plugin.key) return;
+    for (const auto& master : plugin.header.masters) {
+        if (master.key == owner) return;
+    }
+    fo4::PluginKind kind =
+        owner.looks_light() ? fo4::PluginKind::light : fo4::PluginKind::full;
+    for (const auto& candidate : plugins_) {
+        if (candidate.plugin.key == owner) {
+            kind = candidate.plugin.header.tes4_flags.is_small_file()
+                       ? fo4::PluginKind::light
+                       : fo4::PluginKind::full;
+            break;
+        }
+    }
+    std::vector<fo4::MasterDescriptor> masters;
+    masters.reserve(plugin.header.masters.size() + 1);
+    for (const auto& master : plugin.header.masters) {
+        masters.push_back({master.key, master.kind});
+    }
+    masters.push_back({owner, kind});
+    plugin = fo4::remap_plugin_masters(std::move(plugin), std::move(masters));
+}
+
+Result<nlohmann::json> RadiclePluginBackend::addListItem(
+    const nlohmann::json& arguments) {
+    const auto pluginName = listStringArgument(arguments, 0);
+    const auto recordText = listStringArgument(arguments, 1);
+    const auto field = listStringArgument(arguments, 2);
+    const auto value = listStringArgument(arguments, 3);
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
+    if (recordText.empty()) {
+        return std::unexpected(Error{"RecordMissing", "Record is empty"});
+    }
+    if (field.empty()) {
+        return std::unexpected(Error{"ListFieldMissing", "List field is empty"});
+    }
+    if (value.empty()) {
+        return std::unexpected(Error{"ListValueMissing", "List value is empty"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
+
+    fo4::FormKey recordKey;
+    const auto* record = resolveRecordInPlugin(loaded->plugin, recordText, recordKey);
+    if (record == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound", "Record '" + recordText + "' not found in " + pluginName + "."});
+    }
+
+    const auto descriptor = fo4::schema::formlink_list_descriptor_by_field(
+        record->header.signature, field);
+    if (!descriptor.has_value()) {
+        return std::unexpected(Error{
+            "ListFieldUnsupported",
+            "Field '" + field + "' is not a FormLink list on " +
+                record->header.signature.to_string() +
+                " records; add_list_item supports FormLink lists (e.g. Keywords, FormList Items)."});
+    }
+
+    const auto targetKey = resolveListValue(value);
+    if (!targetKey.has_value()) {
+        return std::unexpected(Error{
+            "ListValueUnresolved",
+            "'" + value + "' is not a FormKey and no loaded record has that EditorID."});
+    }
+
+    // Target validation is left to the mutation primitive (see code-notes).
+    try {
+        const auto currentSize =
+            fo4::schema::record_formlink_list_size(loaded->plugin, recordKey, *descriptor);
+        if (!currentSize.has_value()) {
+            return std::unexpected(Error{
+                "RecordNotFound",
+                "Record '" + recordText + "' not found in " + pluginName + "."});
+        }
+        auto mutated = loaded->plugin;
+        ensureOwnerMaster(mutated, targetKey->owner());
+        const auto status = fo4::schema::insert_record_formlink_list_element(
+            mutated, recordKey, *descriptor, *currentSize, *targetKey);
+        switch (status) {
+            case fo4::schema::FormLinkListMutationStatus::updated:
+                break;
+            case fo4::schema::FormLinkListMutationStatus::record_missing:
+                return std::unexpected(Error{
+                    "RecordNotFound", "Record '" + recordText + "' not found in " + pluginName + "."});
+            case fo4::schema::FormLinkListMutationStatus::record_mismatch:
+                return std::unexpected(Error{
+                    "FormLinkListRecordMismatch", "Record type does not match " + field});
+            case fo4::schema::FormLinkListMutationStatus::target_type_mismatch:
+                return std::unexpected(Error{
+                    "FormLinkTargetTypeMismatch", "Target type is not valid for " + field});
+            case fo4::schema::FormLinkListMutationStatus::insertion_boundary_unavailable:
+                return std::unexpected(Error{
+                    "FormLinkListInsertionBoundaryUnavailable",
+                    "Cannot determine a safe insertion boundary for " + field});
+            case fo4::schema::FormLinkListMutationStatus::container_index_out_of_range:
+            case fo4::schema::FormLinkListMutationStatus::index_out_of_range:
+                return std::unexpected(Error{
+                    "FormLinkListIndexOutOfRange", "Append index is outside " + field});
+            case fo4::schema::FormLinkListMutationStatus::unchanged:
+                return nlohmann::json("No change for " + field + " in " + pluginName + ".");
+        }
+
+        fo4::write_plugin_file(mutated, loaded->path);
+        loaded->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
+        rebuildGraphLocked();
+        const auto count = *currentSize + 1;
+        return nlohmann::json(
+            "Added " + value + " to " + field + " on " + recordText + " in " +
+            pluginName + " (now " + std::to_string(count) + " item(s)).");
+    } catch (const fo4::schema::FormLinkListError& error) {
+        return std::unexpected(Error{"FormLinkListWriteFailed", error.what()});
+    } catch (const fo4::FormIdError& error) {
+        return std::unexpected(Error{"FormLinkEncodingFailed", error.what()});
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"FieldWriteFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::removeListItem(
+    const nlohmann::json& arguments) {
+    const auto pluginName = listStringArgument(arguments, 0);
+    const auto recordText = listStringArgument(arguments, 1);
+    const auto field = listStringArgument(arguments, 2);
+    const auto value = listStringArgument(arguments, 3);
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
+    if (recordText.empty()) {
+        return std::unexpected(Error{"RecordMissing", "Record is empty"});
+    }
+    if (field.empty()) {
+        return std::unexpected(Error{"ListFieldMissing", "List field is empty"});
+    }
+    if (value.empty()) {
+        return std::unexpected(Error{"ListValueMissing", "List value is empty"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
+
+    fo4::FormKey recordKey;
+    const auto* record = resolveRecordInPlugin(loaded->plugin, recordText, recordKey);
+    if (record == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound", "Record '" + recordText + "' not found in " + pluginName + "."});
+    }
+
+    const auto descriptor = fo4::schema::formlink_list_descriptor_by_field(
+        record->header.signature, field);
+    if (!descriptor.has_value()) {
+        return std::unexpected(Error{
+            "ListFieldUnsupported",
+            "Field '" + field + "' is not a FormLink list on " +
+                record->header.signature.to_string() + " records."});
+    }
+
+    const auto targetKey = resolveListValue(value);
+    if (!targetKey.has_value()) {
+        return std::unexpected(Error{
+            "ListValueUnresolved",
+            "'" + value + "' is not a FormKey and no loaded record has that EditorID."});
+    }
+
+    try {
+        const auto owner = targetKey->owner();
+        const bool encodable = owner.empty() || owner == loaded->plugin.key ||
+            std::any_of(loaded->plugin.header.masters.begin(),
+                        loaded->plugin.header.masters.end(),
+                        [&](const auto& master) { return master.key == owner; });
+        if (!encodable) {
+            const auto size = fo4::schema::record_formlink_list_size(
+                loaded->plugin, recordKey, *descriptor).value_or(0);
+            return std::unexpected(Error{
+                "ListItemNotFound",
+                "No entry matching " + value + " found in " + field + " (" +
+                    std::to_string(size) + " item(s))."});
+        }
+        auto mutated = loaded->plugin;
+        const auto removed = fo4::schema::remove_record_formlink_list_elements_matching(
+            mutated, recordKey, *descriptor, *targetKey);
+        if (removed == 0) {
+            const auto size =
+                fo4::schema::record_formlink_list_size(loaded->plugin, recordKey, *descriptor)
+                    .value_or(0);
+            return std::unexpected(Error{
+                "ListItemNotFound",
+                "No entry matching " + value + " found in " + field + " (" +
+                    std::to_string(size) + " item(s))."});
+        }
+
+        fo4::write_plugin_file(mutated, loaded->path);
+        loaded->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
+        rebuildGraphLocked();
+        const auto newSize =
+            fo4::schema::record_formlink_list_size(loaded->plugin, recordKey, *descriptor)
+                .value_or(0);
+        return nlohmann::json(
+            "Removed " + std::to_string(removed) + " entr(y/ies) matching " + value +
+            " from " + field + " (now " + std::to_string(newSize) + ") on " +
+            recordText + ". Written to disk.");
+    } catch (const fo4::schema::FormLinkListError& error) {
+        return std::unexpected(Error{"FormLinkListWriteFailed", error.what()});
+    } catch (const fo4::FormIdError& error) {
+        return std::unexpected(Error{"FormLinkEncodingFailed", error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"FieldWriteFailed", error.what()});
     }

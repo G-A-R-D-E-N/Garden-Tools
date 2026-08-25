@@ -16,9 +16,18 @@ struct FormLinkListDescriptor {
   Signature record{};
   std::string_view path;
   std::string_view label;
+  // Mutagen property name the AI/list tools address this list by (e.g. "Items",
+  // "Keywords"); empty when the list is only reachable through its indexed path.
+  std::string_view field_alias;
   Signature subrecord{};
   bool nullable{false};
   bool can_insert{false};
+  // Accepts any major-record target (FLST\Items). When set, target-type
+  // validation admits every loaded record signature and no target list is emitted.
+  bool wildcard_target{false};
+  // Empty-list insertion appends at the end of the record rather than anchoring
+  // against a sibling list (FLST holds only EDID before its LNAM entries).
+  bool append_when_empty{false};
   std::size_t first_target{0};
   std::size_t target_count{0};
   // Sibling lists used to anchor the first element of an otherwise-empty list,
@@ -80,6 +89,12 @@ public:
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
     Signature record,
     std::string_view base_path) noexcept;
+// Resolves a list by the Mutagen property name the AI list tools address it by
+// (record signature + field alias, e.g. FLST + "Items"), matched ASCII
+// case-insensitively to mirror C# BindingFlags.IgnoreCase. Empty alias never matches.
+std::optional<FormLinkListDescriptor> formlink_list_descriptor_by_field(
+    Signature record,
+    std::string_view field_alias) noexcept;
 std::optional<IndexedFormLinkListPath> indexed_formlink_list_path(
     std::string_view path) noexcept;
 std::span<const Signature> formlink_list_targets(
@@ -119,6 +134,15 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
     const FormKey& record_key,
     const FormLinkListDescriptor& descriptor,
     std::size_t index);
+
+// Removes every element whose FormLink resolves to `target` and returns how many
+// were removed (0 leaves the plugin untouched). Mirrors the value-based removal
+// of WriteService.RemoveListItem, which drops all entries matching the value.
+std::size_t remove_record_formlink_list_elements_matching(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    const FormKey& target);
 
 FormLinkListMutationStatus move_record_formlink_list_element(
     Plugin& plugin,

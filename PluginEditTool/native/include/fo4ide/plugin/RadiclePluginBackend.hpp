@@ -72,6 +72,12 @@ private:
     Result<nlohmann::json> setFormLinkListField(const nlohmann::json& arguments);
     Result<nlohmann::json> insertFormLinkListElement(const nlohmann::json& arguments);
     Result<nlohmann::json> removeFormLinkListElement(const nlohmann::json& arguments);
+    Result<nlohmann::json> addListItem(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeListItem(const nlohmann::json& arguments);
+    // Resolves a list value (FormKey text or EditorID) to a FormKey against the
+    // loaded plugins, mirroring WriteService.ResolveFk.
+    std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;
+    void ensureOwnerMaster(fo4::Plugin& plugin, const fo4::PluginKey& owner) const;
 
     Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addElement(const nlohmann::json& arguments) override;
