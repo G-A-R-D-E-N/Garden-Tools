@@ -244,7 +244,7 @@ Result<nlohmann::json> RadiclePluginBackend::createMergedPatch(const nlohmann::j
         std::string result = "Merged patch " + patchName + ": forwarded " +
                              std::to_string(forwarded) + " of " + std::to_string(work.size()) +
                              " conflicting record(s). Ensure " + patchName +
-                             " loads last, then save_plugin to persist.";
+                             " loads last. Written to disk.";
         if (!failures.empty()) {
             result += " " + std::to_string(failures.size()) + " failed: ";
             for (std::size_t i = 0; i < failures.size() && i < std::size_t{5}; ++i) {
