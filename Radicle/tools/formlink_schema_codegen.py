@@ -148,6 +148,23 @@ def load_lists(schema_path: Path):
                 "can_insert": mutation == "terminated_group",
             })
 
+    # A flat list has no in-record terminator to anchor an insertion against, so
+    # the first element of an otherwise-empty list is positioned relative to its
+    # sibling lists using their declared (physical) order. Capture each list's
+    # preceding and following siblings, nearest first, before the output sort
+    # below discards that declaration order.
+    record_groups = {}
+    for item in lists:
+        record_groups.setdefault(item["record"], []).append(item)
+    for group in record_groups.values():
+        for position, item in enumerate(group):
+            item["anchor_predecessors"] = [
+                group[j]["subrecord"] for j in range(position - 1, -1, -1)
+            ]
+            item["anchor_successors"] = [
+                group[j]["subrecord"] for j in range(position + 1, len(group))
+            ]
+
     lists.sort(key=lambda item: (item["record"], item["path"]))
     nested_lists.sort(key=lambda item: (item["record"], item["container_path"], item["member"]))
     return lists, nested_lists
@@ -175,8 +192,32 @@ def render(lists, nested_lists) -> str:
 
     lines.append("};")
     lines.append("")
+
+    # Sibling anchors used to position the first element of an otherwise-empty
+    # flat list: each descriptor's preceding siblings (nearest first) followed by
+    # its following siblings (nearest first).
+    lines.append("inline constexpr Signature k_generated_formlink_list_anchors[] = {")
+    anchor_start = 0
+    anchor_meta = []
+    for row, _first_target, _target_count in descriptors:
+        predecessors = row.get("anchor_predecessors", [])
+        successors = row.get("anchor_successors", [])
+        for signature in predecessors:
+            lines.append(f"  Signature::from_string({cpp_string(signature)}),")
+        for signature in successors:
+            lines.append(f"  Signature::from_string({cpp_string(signature)}),")
+        anchor_meta.append((anchor_start, len(predecessors), len(successors)))
+        anchor_start += len(predecessors) + len(successors)
+    if anchor_start == 0:
+        # A zero-length constexpr array is ill-formed under -Wpedantic -Werror;
+        # keep a never-indexed placeholder when no list declares a sibling.
+        lines.append("  Signature{},")
+    lines.append("};")
+    lines.append("")
+
     lines.append("inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {")
-    for row, first_target, target_count in descriptors:
+    for (row, first_target, target_count), (first_anchor, predecessor_count, successor_count) in zip(
+            descriptors, anchor_meta):
         lines.append(
             "  {" +
             f"Signature::from_string({cpp_string(row['record'])}), " +
@@ -184,7 +225,8 @@ def render(lists, nested_lists) -> str:
             f"Signature::from_string({cpp_string(row['subrecord'])}), " +
             ("true" if row["nullable"] else "false") + ", " +
             ("true" if row["can_insert"] else "false") + ", " +
-            f"{first_target}, {target_count}" +
+            f"{first_target}, {target_count}, " +
+            f"{first_anchor}, {predecessor_count}, {successor_count}" +
             "},"
         )
     lines.append("};")

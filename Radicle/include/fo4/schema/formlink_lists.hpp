@@ -21,6 +21,12 @@ struct FormLinkListDescriptor {
   bool can_insert{false};
   std::size_t first_target{0};
   std::size_t target_count{0};
+  // Sibling lists used to anchor the first element of an otherwise-empty list,
+  // indexing k_generated_formlink_list_anchors: predecessors (nearest first)
+  // then successors (nearest first).
+  std::size_t first_anchor{0};
+  std::size_t predecessor_count{0};
+  std::size_t successor_count{0};
 };
 
 struct NestedFormLinkListDescriptor {
