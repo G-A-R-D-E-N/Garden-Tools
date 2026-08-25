@@ -52,6 +52,10 @@ public static class Program
     {
         if (args.Contains("--version")) { Console.WriteLine(Version()); return 0; }
         if (args.Contains("--probe-havok")) return ProbeHavok(args);
+        if (args.Contains("--scan-archives")) return ModlistScan.Run(args);
+        if (args.Contains("--scan-modlist")) return ModlistScan.ScanModlist(args);
+        if (args.Contains("--scan-clips")) return ModlistScan.ScanClips(args);
+        if (args.Contains("--extract")) return ModlistScan.Extract(args);
         if (args.Contains("--headless")) return Headless.Run(args);
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
