@@ -558,3 +558,98 @@ TEST_CASE("PapyrusTarget StageDroppedFile mirrors the NIF staging contract") {
     std::error_code ec;
     std::filesystem::remove_all(path.parent_path(), ec);
 }
+
+TEST_CASE("GraphTarget serves the core palette with builtins") {
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+
+    auto result = target.invoke("GetCorePalette", nlohmann::json::array());
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    const auto json = nlohmann::json::parse(result->get<std::string>());
+
+    CHECK(json.at("version").get<int>() == 1);
+    REQUIRE(json.at("builtins").is_array());
+    REQUIRE_FALSE(json.at("builtins").empty());
+    CHECK(json.at("wiki").contains("available"));
+    CHECK(json.at("scripts").is_array());
+
+    const auto& first = json.at("builtins").at(0);
+    CHECK(first.contains("type"));
+    CHECK(first.contains("kind"));
+    CHECK(first.at("pins").is_array());
+}
+
+TEST_CASE("GraphTarget describes a known builtin and rejects an unknown one") {
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+
+    auto palette = target.invoke("GetCorePalette", nlohmann::json::array());
+    REQUIRE(palette.has_value());
+    const auto paletteJson = nlohmann::json::parse(palette->get<std::string>());
+    const auto nodeType = paletteJson.at("builtins").at(0).at("type").get<std::string>();
+
+    auto known = target.invoke("GetNodeSignature", nlohmann::json::array({nodeType}));
+    REQUIRE(known.has_value());
+    const auto knownText = known->get<std::string>();
+    CHECK(knownText.rfind("Error:", 0) != 0);
+    CHECK(nlohmann::json::parse(knownText).at("type").get<std::string>() == nodeType);
+
+    auto unknown =
+        target.invoke("GetNodeSignature", nlohmann::json::array({"no.such.node.type"}));
+    REQUIRE(unknown.has_value());
+    CHECK(unknown->get<std::string>() ==
+          "Error: no node type 'no.such.node.type' on this palette");
+}
+
+TEST_CASE("GraphTarget searches the palette and reports a total") {
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+
+    auto result =
+        target.invoke("SearchPalette", nlohmann::json::array({"any", "", "", 0}));
+    REQUIRE(result.has_value());
+    const auto json = nlohmann::json::parse(result->get<std::string>());
+    REQUIRE(json.at("entries").is_array());
+    CHECK(json.at("total").get<int>() >= static_cast<int>(json.at("entries").size()));
+}
+
+TEST_CASE("GraphTarget validates documents and reports malformed input") {
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+
+    auto malformed =
+        target.invoke("ValidateGraph", nlohmann::json::array({"this is not a document"}));
+    REQUIRE(malformed.has_value());
+    const auto malformedJson = nlohmann::json::parse(malformed->get<std::string>());
+    CHECK(malformedJson.at("ok").get<bool>() == false);
+    CHECK_FALSE(malformedJson.at("diagnostics").empty());
+
+    auto valid =
+        target.invoke("ValidateGraph", nlohmann::json::array({R"({ "schema": 1 })"}));
+    REQUIRE(valid.has_value());
+    const auto validJson = nlohmann::json::parse(valid->get<std::string>());
+    CHECK(validJson.contains("ok"));
+    CHECK(validJson.at("diagnostics").is_array());
+}
+
+TEST_CASE("GraphTarget rejects an unknown method") {
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+
+    auto result = target.invoke("Nonexistent", nlohmann::json::array());
+    CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("GraphTarget SaveGraph reports malformed documents") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+
+    const auto path = (root / "broken.fograph").string();
+    auto result =
+        target.invoke("SaveGraph", nlohmann::json::array({path, "not a document"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().rfind("Error:", 0) == 0);
+}

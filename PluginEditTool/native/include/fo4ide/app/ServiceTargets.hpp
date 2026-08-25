@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+#include <string>
 #include <string_view>
 
 #include <fo4ide/assets/NifService.hpp>
@@ -9,6 +11,14 @@
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
 #include <fo4ide/tools/ToolLocator.hpp>
+
+namespace fo4ide::papyrus {
+class ScriptIndex;
+}
+
+namespace fo4ide::graph {
+class GraphCompiler;
+}
 
 namespace fo4ide::app {
 
@@ -75,6 +85,29 @@ private:
     process::Runner& runner_;
     tools::Locator& locator_;
     platform::Services& platform_;
+};
+
+// Port of GraphInterop: the Blueprint / visual-scripting RPC surface. Wraps the
+// graph compiler (core palette, palette search, node signatures, validate,
+// compile to source / PEX) and graph/script file IO, all over the Papyrus
+// base-import roots. The compiler is cached and rebuilt when the roots change
+// or Refresh is called, mirroring the C# GraphInterop.Compiler() cache. Every
+// method returns a JSON string (or an "Error: ..." string), never throwing.
+class GraphTarget final : public rpc::Target {
+public:
+    explicit GraphTarget(platform::Services& platform);
+    ~GraphTarget() override;
+
+    Result<nlohmann::json> invoke(std::string_view method,
+                                  const nlohmann::json& args) override;
+
+private:
+    graph::GraphCompiler& compiler();
+
+    platform::Services& platform_;
+    std::unique_ptr<papyrus::ScriptIndex> index_;
+    std::unique_ptr<graph::GraphCompiler> compiler_;
+    std::string rootsKey_;
 };
 
 }
