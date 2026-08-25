@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -8,9 +9,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4ide/app/ServiceTargets.hpp>
+#include <fo4ide/graph/GraphDocument.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 #include <fo4ide/papyrus/Decompiler.hpp>
 #include <fo4ide/papyrus/Pex.hpp>
+
+#include "../helpers/GraphBuilder.hpp"
 
 namespace {
 
@@ -652,4 +656,44 @@ TEST_CASE("GraphTarget SaveGraph reports malformed documents") {
         target.invoke("SaveGraph", nlohmann::json::array({path, "not a document"}));
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>().rfind("Error:", 0) == 0);
+}
+
+TEST_CASE("GraphTarget CompileToPex errors instead of reporting a write that failed") {
+    using namespace fo4ide::graph;
+    using namespace fo4ide::graph::test;
+
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    std::filesystem::create_directories(root / "Fixture.pex");
+
+    const auto stubs = baseStubs().string();
+#ifdef _WIN32
+    _putenv_s("PAPYRUS_BASE_IMPORTS", stubs.c_str());
+#else
+    setenv("PAPYRUS_BASE_IMPORTS", stubs.c_str(), 1);
+#endif
+
+    Env env;
+    GraphBuilder graph("Fixture", "ObjectReference");
+    const auto entry = graph.node(env.palette, "event:ObjectReference.OnActivate");
+    const auto notify = graph.node(env.palette, "global:Debug.Notification");
+    graph.value(notify, "arg:asNotificationText", "string", "\"opened\"");
+    graph.wire(entry, pinIds::kExec, notify, pinIds::kExec);
+    const auto document = documentJson::serialize(graph.document);
+
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform);
+    const auto result =
+        target.invoke("CompileToPex", nlohmann::json::array({document, root.string()}));
+
+#ifdef _WIN32
+    _putenv_s("PAPYRUS_BASE_IMPORTS", "");
+#else
+    unsetenv("PAPYRUS_BASE_IMPORTS");
+#endif
+
+    REQUIRE(result.has_value());
+    const auto text = result->get<std::string>();
+    CHECK(text.rfind("Error:", 0) == 0);
+    CHECK(text.find("\"written\"") == std::string::npos);
 }

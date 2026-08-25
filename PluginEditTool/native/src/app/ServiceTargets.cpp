@@ -1059,8 +1059,10 @@ bool graphIEquals(std::string_view a, std::string_view b) {
 
 void writeFileBytes(const std::filesystem::path& path, const std::vector<std::uint8_t>& bytes) {
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    if (!stream) throw std::runtime_error("Could not open '" + path.string() + "' for writing.");
     stream.write(reinterpret_cast<const char*>(bytes.data()),
                  static_cast<std::streamsize>(bytes.size()));
+    if (!stream) throw std::runtime_error("Could not write '" + path.string() + "'.");
 }
 
 // Port of GraphInterop.Roots(): the Papyrus base-import directories that exist.
