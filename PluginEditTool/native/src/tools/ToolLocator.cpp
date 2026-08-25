@@ -24,6 +24,20 @@ std::string trim(std::string value) {
     return value;
 }
 
+std::string environmentValue(const char* name) {
+#if defined(_WIN32)
+    char* raw = nullptr;
+    std::size_t size = 0;
+    if (_dupenv_s(&raw, &size, name) != 0 || raw == nullptr) return {};
+    std::string value(raw);
+    std::free(raw);
+    return value;
+#else
+    const char* raw = std::getenv(name);
+    return raw ? std::string(raw) : std::string{};
+#endif
+}
+
 #if defined(_WIN32)
 std::string lowerAscii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
@@ -77,8 +91,8 @@ Locator::Locator(const settings::Settings& settings, std::filesystem::path execu
 }
 
 std::filesystem::path Locator::environmentPath(const char* name) const {
-    const char* raw = std::getenv(name);
-    if (!raw || !*raw) return {};
+    const auto raw = environmentValue(name);
+    if (raw.empty()) return {};
     return std::filesystem::path(trim(raw));
 }
 
@@ -105,9 +119,8 @@ std::filesystem::path Locator::firstDirectory(std::initializer_list<std::filesys
 }
 
 std::filesystem::path Locator::onPath(std::initializer_list<std::string_view> names) const {
-    const char* raw = std::getenv("PATH");
-    if (!raw || !*raw) return {};
-    const std::string value(raw);
+    const auto value = environmentValue("PATH");
+    if (value.empty()) return {};
 #if defined(_WIN32)
     constexpr char separator = ';';
 #else
@@ -244,7 +257,7 @@ std::vector<std::filesystem::path> Locator::papyrusBaseImports() const {
         }
     };
 
-    if (const char* raw = std::getenv("PAPYRUS_BASE_IMPORTS"); raw && *raw) addDelimited(raw);
+    if (const auto raw = environmentValue("PAPYRUS_BASE_IMPORTS"); !raw.empty()) addDelimited(raw);
     if (!settings_.papyrusBaseImports.empty()) addDelimited(settings_.papyrusBaseImports.string());
     add(appPath({"tools", "papyrus", "F4SE"}));
     add(appPath({"tools", "papyrus", "Base"}));

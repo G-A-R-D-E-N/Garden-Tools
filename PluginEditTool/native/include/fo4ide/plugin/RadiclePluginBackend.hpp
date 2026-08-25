@@ -9,6 +9,7 @@
 
 #include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/container.hpp>
+#include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 namespace fo4ide::plugin {
@@ -20,25 +21,40 @@ public:
                                   const nlohmann::json& arguments) override;
     Result<nlohmann::json> invokeBackend(std::string_view method,
                                           const nlohmann::json& arguments) override;
+    Result<nlohmann::json> invokeLegacyBackend(
+        std::string_view method,
+        const nlohmann::json& arguments) override;
+    Result<void> setTrustedNewPluginRoot(const std::filesystem::path& root) override;
+    Result<nlohmann::json> createPlugin(const nlohmann::json& arguments) override;
+    Result<void> discardCreatedPlugin(std::string_view name) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> changeReferencingRecords(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> createSeqFile(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> conditionFunctionParams() const override {
+        return nlohmann::json(ConditionFunctions::asJson());
+    }
 
-    // Registers the game's Data directory. Any plugin whose file resolves
-    // beneath it is treated as read-only regardless of its reported MO2
-    // source. Call once during setup, before the backend serves requests.
     void setDataDirectory(std::filesystem::path dataDirectory);
+
 private:
     struct LoadedPlugin {
         std::string name;
         std::filesystem::path path;
         std::string source;
         std::filesystem::file_time_type loadedTime{};
-        // True only for plugins that arrived through the trusted
-        // environment.LoadMo2 snapshot. Plugins loaded ad hoc via
-        // backend.OpenPlugin are never trusted: their directories do not
-        // become Save-As roots.
         bool trusted{false};
         fo4::Plugin plugin;
     };
+
+    Result<LoadedPlugin*> createPluginLocked(std::string fileName);
+    Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
 
     Result<nlohmann::json> loadEnvironment(const nlohmann::json& arguments);
     Result<nlohmann::json> getPlugins() const;
@@ -54,6 +70,13 @@ private:
     Result<nlohmann::json> setFormLinkListField(const nlohmann::json& arguments);
     Result<nlohmann::json> insertFormLinkListElement(const nlohmann::json& arguments);
     Result<nlohmann::json> removeFormLinkListElement(const nlohmann::json& arguments);
+
+    Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> addElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> moveElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> clearElement(const nlohmann::json& arguments) override;
+
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
     Result<nlohmann::json> addMasters(const nlohmann::json& arguments);
@@ -82,20 +105,16 @@ private:
     Result<nlohmann::json> setLight(const nlohmann::json& arguments);
     Result<nlohmann::json> saveMastersPlugin(const nlohmann::json& arguments);
 
+    Result<nlohmann::json> getConditions(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> setConditions(const nlohmann::json& arguments);
+    Result<nlohmann::json> getConditionFunctions() const;
+    Result<nlohmann::json> getConditionRunOnTypes() const;
+
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
     bool isEditable(const LoadedPlugin& plugin) const;
-
-    // True when the plugin's file on disk still carries the modification time
-    // observed when it was loaded into the cache. Callers must refuse to save
-    // when this returns false so external edits are not clobbered.
     bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
-    // Returns an error when `plugin` must not be written: read-only source,
-    // or modified on disk since it was cached. Caller holds mutex_.
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
-    // Returns the canonical target when `path` resolves inside an authorized
-    // Save-As root, otherwise nullopt. The writer must use this exact path so
-    // its destination is the one that was containment-checked.
     std::optional<std::filesystem::path> allowedSavePath(
         const std::filesystem::path& path) const;
     void rebuildGraphLocked();
@@ -103,12 +122,8 @@ private:
     mutable std::mutex mutex_;
     std::vector<LoadedPlugin> plugins_;
     fo4::ConflictGraph graph_;
-    // Written once during setup via setDataDirectory, read-only afterwards.
     std::filesystem::path dataDirectory_;
-    // Immutable snapshot of the writable Save-As roots, captured from the
-    // environment.LoadMo2 plugin list only. Never derived from mutable
-    // LoadedPlugin.path: an ad hoc OpenPlugin must not be able to retarget
-    // a trusted entry's path and thereby relocate a save root.
+    std::filesystem::path trustedNewPluginRoot_;
     std::vector<std::filesystem::path> trustedSaveRoots_;
 };
 

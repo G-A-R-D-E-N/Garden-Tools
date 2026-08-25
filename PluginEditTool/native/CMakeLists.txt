@@ -9,6 +9,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
+if(WIN32)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 option(FO4IDE_BUILD_TESTS "Build native tests" ON)
 option(FO4IDE_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(FO4IDE_BUILD_HTTP "Build the native HTTP transport" ON)
@@ -18,10 +22,27 @@ include(Dependencies)
 include(CompilerWarnings)
 include(Sanitizers)
 
-# Radicle and the native backend tests both consume zlib. Resolve it in the
-# top-level directory so the imported ZLIB::ZLIB target is visible to sibling
-# native test directories as well as Radicle's subdirectory.
-find_package(ZLIB REQUIRED)
+# Prefer a system zlib, but make the native app buildable on a clean Windows
+# machine without vcpkg or another package manager. This is the same pinned
+# revision used by the Windows cross-compile CI lane.
+find_package(ZLIB QUIET)
+if(NOT TARGET ZLIB::ZLIB)
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        fo4ide_zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+        GIT_SHALLOW FALSE
+    )
+    FetchContent_MakeAvailable(fo4ide_zlib)
+    if(TARGET zlibstatic)
+        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    elseif(TARGET zlib)
+        add_library(ZLIB::ZLIB ALIAS zlib)
+    else()
+        message(FATAL_ERROR "Fetched zlib did not define zlibstatic or zlib")
+    endif()
+endif()
 
 set(RADICLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Radicle")
 if(NOT EXISTS "${RADICLE_DIR}/CMakeLists.txt")
@@ -31,7 +52,18 @@ if(NOT EXISTS "${RADICLE_DIR}/CMakeLists.txt")
 endif()
 set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(RADICLE_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${RADICLE_DIR}" "${CMAKE_BINARY_DIR}/radicle")
+
+# Radicle's radicle_c target is versioned (VERSION/SOVERSION), which makes
+# CMake emit a `cmake_symlink_library` step to create libradicle.so.0 and
+# libradicle.so. The build volume for this checkout is an ntfs3 mount that
+# cannot create symbolic links, so that step fails on every configure. Unset
+# the version properties here so only plain libradicle.so is produced; every
+# consumer in this tree links via -lradicle, so the unversioned name is all
+# that is needed.
+set_property(TARGET radicle_c PROPERTY VERSION)
+set_property(TARGET radicle_c PROPERTY SOVERSION)
 
 add_subdirectory(src)
 add_subdirectory(apps/fo4ide)

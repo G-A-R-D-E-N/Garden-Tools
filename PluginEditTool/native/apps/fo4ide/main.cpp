@@ -22,6 +22,7 @@
 #include <fo4ide/archive/ArchiveService.hpp>
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
 #include <fo4ide/assets/NifService.hpp>
+#include <fo4ide/assets/TextureResolver.hpp>
 #include <fo4ide/audio/AudioService.hpp>
 #include <fo4ide/events/EventBus.hpp>
 #if defined(FO4IDE_HAS_HTTP)
@@ -30,6 +31,7 @@
 #include <fo4ide/logging/Logger.hpp>
 #include <fo4ide/material/MaterialService.hpp>
 #include <fo4ide/mcp/McpServer.hpp>
+#include <fo4ide/mo2/Mo2Profile.hpp>
 #include <fo4ide/platform/NativeWindow.hpp>
 #include <fo4ide/platform/PlatformServices.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -75,6 +77,23 @@ std::filesystem::path webRootFromArgs(int argc, char** argv) {
     return {};
 }
 
+std::vector<std::filesystem::path> textureRootsForSettings(
+    const fo4ide::settings::Settings& settings) {
+    if (!settings.mo2InstancePath.empty()) {
+        auto profile = fo4ide::mo2::readProfile(
+            settings.mo2InstancePath, {}, settings.dataFolder);
+        if (profile) {
+            return std::vector<std::filesystem::path>(
+                profile->assetRootsLowToHigh.rbegin(),
+                profile->assetRootsLowToHigh.rend());
+        }
+    }
+
+    std::vector<std::filesystem::path> roots;
+    if (!settings.dataFolder.empty()) roots.push_back(settings.dataFolder);
+    return roots;
+}
+
 class AppTarget final : public fo4ide::rpc::Target {
 public:
     AppTarget(fo4ide::plugin::IPluginBackend& plugins,
@@ -106,6 +125,58 @@ private:
     fo4ide::plugin::IPluginBackend& plugins_;
     fo4ide::archive::ArchiveService& archives_;
     std::filesystem::path nifTool_;
+};
+
+class RefreshingSettingsTarget final : public fo4ide::rpc::Target {
+public:
+    RefreshingSettingsTarget(fo4ide::settings::Store& store,
+                             fo4ide::settings::Settings& settings,
+                             fo4ide::platform::Services& platform,
+                             fo4ide::process::Runner& runner,
+                             fo4ide::assets::TextureResolver& textures)
+        : inner_(store, settings, platform, runner),
+          settings_(settings),
+          textures_(textures) {}
+
+    fo4ide::Result<nlohmann::json> invoke(std::string_view method,
+                                          const nlohmann::json& args) override {
+        auto result = inner_.invoke(method, args);
+        if (method == "SaveSettings" && result && result->is_string() &&
+            result->get<std::string>() == "Settings saved.") {
+            textures_.setSessionRoots(textureRootsForSettings(settings_));
+        }
+        return result;
+    }
+
+private:
+    fo4ide::app::SettingsTarget inner_;
+    fo4ide::settings::Settings& settings_;
+    fo4ide::assets::TextureResolver& textures_;
+};
+
+class RefreshingAppInteropTarget final : public fo4ide::rpc::Target {
+public:
+    RefreshingAppInteropTarget(std::shared_ptr<fo4ide::app::AppInteropTarget> inner,
+                               fo4ide::settings::Settings& settings,
+                               fo4ide::assets::TextureResolver& textures)
+        : inner_(std::move(inner)), settings_(settings), textures_(textures) {}
+
+    fo4ide::Result<nlohmann::json> invoke(std::string_view method,
+                                          const nlohmann::json& args) override {
+        auto result = inner_->invoke(method, args);
+        const bool profileChanged = method == "OpenMo2Profile" ||
+                                    method == "LoadEnvironment" ||
+                                    method == "ReloadMo2Profile";
+        if (profileChanged && result) {
+            textures_.setSessionRoots(textureRootsForSettings(settings_));
+        }
+        return result;
+    }
+
+private:
+    std::shared_ptr<fo4ide::app::AppInteropTarget> inner_;
+    fo4ide::settings::Settings& settings_;
+    fo4ide::assets::TextureResolver& textures_;
 };
 
 bool registerTarget(fo4ide::rpc::Dispatcher& rpc,
@@ -172,6 +243,71 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
              "appInterop", "ReloadMo2Profile")) return false;
     if (!add({"get_settings", "Return the current FO4IDE settings", emptySchema},
              "settings", "GetSettings")) return false;
+
+    const auto papyrusCompileSchema = objectSchema(
+        {
+            {"source", {{"type", "string"},
+                        {"description", "A .psc file path, or a folder of scripts (with all=true)."}}},
+            {"output", {{"type", "string"}, {"description", "Output dir for .pex (default: the source folder)."}}},
+            {"imports", {{"type", "string"}, {"description", "Extra import roots, semicolon-separated."}}},
+            {"flags", {{"type", "string"}, {"description", "Flags file (default Institute_Papyrus_Flags.flg)."}}},
+            {"all", {{"type", "boolean"}, {"description", "Compile every .psc in the source folder."}}},
+            {"optimize", {{"type", "boolean"}, {"description", "Optimize (-op). Creation Kit engine only."}}},
+            {"release", {{"type", "boolean"}, {"description", "Release build: strips DebugOnly/BetaOnly calls."}}},
+            {"engine", {{"type", "string"},
+                        {"description", "'auto' (default), 'builtin', or 'creationkit'."}}},
+            {"debug_info", {{"type", "boolean"}, {"description", "Emit line numbers and property groups (default true)."}}},
+            {"compiler_path", {{"type", "string"}, {"description", "Override path to PapyrusCompiler.exe."}}}
+        },
+        nlohmann::json::array({"source"}));
+    if (!add({
+            "compile_papyrus",
+            "Compile Papyrus source .psc -> .pex with the built-in engine (auto-detects a single file "
+            "or a folder; 'creationkit' shells out to PapyrusCompiler.exe). Returns a 'RESULT: X "
+            "succeeded, Y failed' summary.",
+            papyrusCompileSchema},
+            "papyrus", "Compile",
+            {"source", "output", "imports", "flags", "all", "optimize", "release",
+             "compiler_path", "engine", "debug_info"})) return false;
+    if (!add({
+            "decompile_papyrus",
+            "Decompile compiled Papyrus .pex -> source .psc with the built-in decompiler (single file "
+            "or folder; assembly=true emits a bytecode listing). Namespaced scripts are written into "
+            "namespace subfolders so they recompile as-is.",
+            objectSchema({
+                {"source", {{"type", "string"}, {"description", "A .pex file, or a folder of .pex files."}}},
+                {"output", {{"type", "string"}, {"description", "Output dir when writing."}}},
+                {"assembly", {{"type", "boolean"}, {"description", "Emit bytecode disassembly instead of source."}}},
+                {"write", {{"type", "boolean"}, {"description", "Write .psc/.pas files instead of returning text inline."}}}
+            }, nlohmann::json::array({"source"}))},
+            "papyrus", "Decompile", {"source", "output", "assembly", "write"})) return false;
+    if (!add({
+            "papyrus_check",
+            "Check Papyrus SOURCE (.psc) with the built-in front end (no Creation Kit): syntax, then "
+            "name resolution and type checking. Reports 'file(line,col): error CODE: message' per "
+            "problem; files whose parent/import/type is not on the roots are counted separately.",
+            objectSchema({
+                {"source", {{"type", "string"}, {"description", "A .psc file path, or a folder of scripts."}}},
+                {"semantic", {{"type", "boolean"}, {"description", "Resolve names and check types too (default true)."}}},
+                {"imports", {{"type", "string"}, {"description", "Extra source roots, semicolon-separated."}}}
+            }, nlohmann::json::array({"source"}))},
+            "papyrus", "Check", {"source", "semantic", "imports"})) return false;
+    if (!add({
+            "papyrus_function_lookup",
+            "Look up a Papyrus function in the offline Creation Kit Wiki mirror.",
+            objectSchema({
+                {"function", {{"type", "string"}, {"description", "Function name, e.g. 'GetBaseObject'."}}},
+                {"script", {{"type", "string"}, {"description", "Owning script (optional but disambiguates)."}}}
+            }, nlohmann::json::array({"function"}))},
+            "papyrus", "LookupFunction", {"script", "function"})) return false;
+    if (!add({
+            "papyrus_script_info",
+            "Get a Papyrus script's overview (Extends, Global/Member Functions, Events) from the "
+            "offline Creation Kit Wiki mirror.",
+            objectSchema({{"script", {{"type", "string"},
+                                         {"description", "Script name, e.g. 'ObjectReference' or 'Actor'."}}}},
+                         nlohmann::json::array({"script"}))},
+            "papyrus", "LookupScriptInfo", {"script"})) return false;
 
     const auto nifPathSchema = objectSchema(
         {{"path", {{"type", "string"}, {"description", "Path to the NIF file"}}}},
@@ -321,21 +457,24 @@ int main(int argc, char** argv) {
     fo4ide::material::MaterialService materialService;
     fo4ide::archive::RadicleArchiveBackend archiveBackend;
     fo4ide::archive::ArchiveService archiveService(processRunner, toolLocator, archiveBackend);
+    fo4ide::assets::TextureResolver textureResolver;
+    textureResolver.setSessionRoots(textureRootsForSettings(currentSettings));
     fo4ide::events::EventBus events;
     fo4ide::plugin::RadiclePluginBackend plugins;
-    // Path-based game-Data protection: plugins physically inside the game's
-    // Data directory are read-only even if their reported source is missing.
     if (const auto falloutRoot = toolLocator.fallout4Root(); !falloutRoot.empty()) {
         plugins.setDataDirectory(falloutRoot / "Data");
     }
     fo4ide::rpc::Dispatcher rpc;
     auto appInteropTarget = std::make_shared<fo4ide::app::AppInteropTarget>(
         settingsStore, currentSettings, platformServices, plugins);
+    auto refreshingAppInteropTarget = std::make_shared<RefreshingAppInteropTarget>(
+        appInteropTarget, currentSettings, textureResolver);
 
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
-        !registerTarget(rpc, "appInterop", appInteropTarget, log) ||
-        !registerTarget(rpc, "settings", std::make_shared<fo4ide::app::SettingsTarget>(settingsStore, currentSettings, platformServices, processRunner), log) ||
-        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, platformServices), log) ||
+        !registerTarget(rpc, "appInterop", refreshingAppInteropTarget, log) ||
+        !registerTarget(rpc, "settings", std::make_shared<RefreshingSettingsTarget>(settingsStore, currentSettings, platformServices, processRunner, textureResolver), log) ||
+        !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, textureResolver, platformServices), log) ||
+        !registerTarget(rpc, "papyrus", std::make_shared<fo4ide::app::PapyrusTarget>(processRunner, toolLocator, platformServices), log) ||
         !registerTarget(rpc, "audio", std::make_shared<fo4ide::app::AudioTarget>(audioService, platformServices), log) ||
         !registerTarget(rpc, "material", std::make_shared<fo4ide::app::MaterialTarget>(materialService, platformServices), log) ||
         !registerTarget(rpc, "archive", std::make_shared<fo4ide::app::ArchiveTarget>(archiveService, platformServices), log) ||

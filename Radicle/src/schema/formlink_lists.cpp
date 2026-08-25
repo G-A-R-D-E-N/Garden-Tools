@@ -93,6 +93,36 @@ Subrecord encoded_element(const FormLinkListDescriptor& descriptor,
   return subrecord;
 }
 
+FormLinkListMutationStatus insert_encoded_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    std::size_t index,
+    RawFormId encoded) {
+  if (!descriptor.can_insert) {
+    return FormLinkListMutationStatus::insertion_boundary_unavailable;
+  }
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(plugin, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
+  const auto positions = matching_positions(*record, descriptor);
+  if (index > positions.size()) {
+    return FormLinkListMutationStatus::index_out_of_range;
+  }
+  if (positions.empty()) {
+    return FormLinkListMutationStatus::insertion_boundary_unavailable;
+  }
+  const auto insertion =
+      index < positions.size() ? positions[index] : positions.back() + 1;
+  record->subrecords.insert(
+      record->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
+      encoded_element(descriptor, encoded));
+  mark_modified(plugin, *record);
+  return FormLinkListMutationStatus::updated;
+}
+
 }  // namespace
 
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
@@ -143,6 +173,20 @@ bool formlink_list_target_allowed(const FormLinkListDescriptor& descriptor,
   return std::find(targets.begin(), targets.end(), signature) != targets.end();
 }
 
+std::optional<std::size_t> record_formlink_list_size(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor) {
+  const auto* record = find_record(plugin, record_key);
+  if (record == nullptr) return std::nullopt;
+  if (record->header.signature != descriptor.record) {
+    throw FormLinkListError(
+        std::string(descriptor.path) + " does not apply to " +
+        record->header.signature.to_string() + " records");
+  }
+  return matching_positions(*record, descriptor).size();
+}
+
 FormLinkListMutationStatus set_record_formlink_list_element(
     Plugin& plugin,
     const FormKey& record_key,
@@ -178,34 +222,31 @@ FormLinkListMutationStatus insert_record_formlink_list_element(
     const FormLinkListDescriptor& descriptor,
     std::size_t index,
     const FormKey& target) {
-  if (!descriptor.can_insert) {
-    return FormLinkListMutationStatus::insertion_boundary_unavailable;
-  }
-
   auto next = plugin;
   Record* record = nullptr;
   const auto validation =
       validate_record_and_target(next, record_key, descriptor, &target, record);
   if (validation != FormLinkListMutationStatus::unchanged) return validation;
+  const auto encoded = encode_plugin_form_id(target, plugin_form_id_context(next));
+  const auto status = insert_encoded_element(next, record_key, descriptor, index, encoded);
+  if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
+  return status;
+}
 
-  const auto positions = matching_positions(*record, descriptor);
-  if (index > positions.size()) {
-    return FormLinkListMutationStatus::index_out_of_range;
+FormLinkListMutationStatus insert_record_formlink_list_null_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    std::size_t index) {
+  if (!descriptor.nullable) {
+    throw FormLinkListError(
+        std::string(descriptor.path) + " does not allow null FormLink elements");
   }
-  if (positions.empty()) {
-    return FormLinkListMutationStatus::insertion_boundary_unavailable;
-  }
-
-  const auto context = plugin_form_id_context(next);
-  const auto encoded = encode_plugin_form_id(target, context);
-  const auto insertion =
-      index < positions.size() ? positions[index] : positions.back() + 1;
-  record->subrecords.insert(
-      record->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
-      encoded_element(descriptor, encoded));
-  mark_modified(next, *record);
-  plugin = std::move(next);
-  return FormLinkListMutationStatus::updated;
+  auto next = plugin;
+  const auto status = insert_encoded_element(
+      next, record_key, descriptor, index, RawFormId{0});
+  if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
+  return status;
 }
 
 FormLinkListMutationStatus remove_record_formlink_list_element(
@@ -226,6 +267,63 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
 
   record->subrecords.erase(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(positions[index]));
+  mark_modified(next, *record);
+  plugin = std::move(next);
+  return FormLinkListMutationStatus::updated;
+}
+
+FormLinkListMutationStatus move_record_formlink_list_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor,
+    std::size_t from,
+    std::size_t to) {
+  auto next = plugin;
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(next, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
+  const auto positions = matching_positions(*record, descriptor);
+  if (from >= positions.size() || to >= positions.size()) {
+    return FormLinkListMutationStatus::index_out_of_range;
+  }
+  if (from == to) return FormLinkListMutationStatus::unchanged;
+
+  auto moving = record->subrecords[positions[from]].data;
+  if (from < to) {
+    for (std::size_t index = from; index < to; ++index) {
+      record->subrecords[positions[index]].data =
+          record->subrecords[positions[index + 1]].data;
+    }
+  } else {
+    for (std::size_t index = from; index > to; --index) {
+      record->subrecords[positions[index]].data =
+          record->subrecords[positions[index - 1]].data;
+    }
+  }
+  record->subrecords[positions[to]].data = std::move(moving);
+  mark_modified(next, *record);
+  plugin = std::move(next);
+  return FormLinkListMutationStatus::updated;
+}
+
+FormLinkListMutationStatus clear_record_formlink_list(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor) {
+  auto next = plugin;
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(next, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
+  const auto positions = matching_positions(*record, descriptor);
+  if (positions.empty()) return FormLinkListMutationStatus::unchanged;
+  for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
+    record->subrecords.erase(
+        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
+  }
   mark_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;

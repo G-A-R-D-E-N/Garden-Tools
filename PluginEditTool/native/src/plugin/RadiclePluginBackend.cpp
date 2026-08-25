@@ -18,8 +18,11 @@
 #include <utility>
 #include <vector>
 
+#include <fo4ide/plugin/ConditionCodec.hpp>
+#include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/ctda.hpp>
 #include <fo4/schema/form_links.hpp>
 
 namespace fo4ide::plugin {
@@ -367,6 +370,10 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "masters.Reorder") return reorderMasters(arguments);
     if (operation == "masters.SetLight") return setLight(arguments);
     if (operation == "masters.SavePlugin") return saveMastersPlugin(arguments);
+    if (operation == "backend.GetConditions") return getConditions(arguments);
+    if (operation == "backend.SetConditions") return setConditions(arguments);
+    if (operation == "backend.GetConditionFunctions") return getConditionFunctions();
+    if (operation == "backend.GetConditionRunOnTypes") return getConditionRunOnTypes();
 
     return std::unexpected(Error{
         "RadicleOperationNotImplemented",
@@ -996,6 +1003,78 @@ void RadiclePluginBackend::rebuildGraphLocked() {
     loadOrder.reserve(plugins_.size());
     for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
     graph_ = fo4::ConflictGraph::build(loadOrder);
+}
+
+
+Result<nlohmann::json> RadiclePluginBackend::getConditions(
+    const nlohmann::json& arguments) const {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto recordId = stringArgument(arguments, 1);
+    if (recordId.empty()) {
+        return std::unexpected(Error{"RecordMissing", "Record ID is empty"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    const LoadedPlugin* loaded = nullptr;
+    if (!pluginName.empty()) {
+        loaded = findPlugin(pluginName);
+        if (loaded == nullptr) {
+            return std::unexpected(Error{
+                "PluginNotLoaded",
+                "Plugin is not loaded: " + pluginName
+            });
+        }
+    }
+
+    // Resolve the record: FormKey text first, then editor ID over the loaded
+    // set, mirroring WriteService.GetConditionsJsonCore / ResolveFk.
+    const auto resolveRecord = [&](const LoadedPlugin& candidate)
+        -> const fo4::Record* {
+        const auto& plugin = candidate.plugin;
+        try {
+            if (const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(recordId))) {
+                return record;
+            }
+        } catch (const std::exception&) {
+            // not a FormKey text; fall through to the editor-ID scan
+        }
+        for (const auto* record : fo4::collect_records(plugin)) {
+            if (editorId(*record) == recordId) return record;
+        }
+        return nullptr;
+    };
+
+    const fo4::Record* record = nullptr;
+    if (loaded != nullptr) {
+        record = resolveRecord(*loaded);
+    } else {
+        for (const auto& candidate : plugins_) {
+            record = resolveRecord(candidate);
+            if (record != nullptr) break;
+        }
+    }
+    if (record == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record '" + recordId + "' not found."
+        });
+    }
+
+    const auto conditions = fo4::read_ctda_conditions(*record);
+    const auto* owner = loaded != nullptr ? loaded : &plugins_.front();
+    nlohmann::json outp = nlohmann::json::array();
+    for (const auto& condition : conditions) {
+        outp.push_back(describeCondition(condition, owner->plugin));
+    }
+    return nlohmann::json(outp.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getConditionFunctions() const {
+    return nlohmann::json(fo4ide::plugin::ConditionFunctions::asJson());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getConditionRunOnTypes() const {
+    return nlohmann::json(fo4ide::plugin::conditionRunOnNames());
 }
 
 }

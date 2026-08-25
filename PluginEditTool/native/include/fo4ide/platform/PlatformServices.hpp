@@ -36,7 +36,9 @@ public:
     Result<void> openFolder(const std::filesystem::path& path) override;
 
 private:
+#if !defined(_WIN32)
     process::Runner& runner_;
+#endif
 };
 
 }

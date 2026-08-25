@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <fo4/archive/ba2.hpp>
+#include <fo4/archive/ba2_texture.hpp>
 
 namespace {
 
@@ -87,6 +88,80 @@ nlohmann::json listArguments(const std::filesystem::path& path,
         {"limit", 2000},
         {"filterMode", std::move(mode)}
     };
+}
+
+void appendU32(std::vector<std::byte>& out, std::uint32_t value) {
+    out.push_back(static_cast<std::byte>(value & 0xFFu));
+    out.push_back(static_cast<std::byte>((value >> 8u) & 0xFFu));
+    out.push_back(static_cast<std::byte>((value >> 16u) & 0xFFu));
+    out.push_back(static_cast<std::byte>((value >> 24u) & 0xFFu));
+}
+
+// A 4x4 R8G8B8A8_UNORM (DXGI 28) DDS with a DX10 header, laid out exactly as
+// the C# DdsCodec writer emits it (see the TextureCodecTests fixture).
+std::vector<std::byte> rgba8Dds() {
+    std::vector<std::byte> dds;
+    for (const unsigned char ch : {'D', 'D', 'S', ' '}) {
+        dds.push_back(static_cast<std::byte>(ch));
+    }
+    appendU32(dds, 124);                                 // dwSize
+    appendU32(dds, 0x1 | 0x2 | 0x4 | 0x1000 | 0x20000 | 0x80000);  // flags
+    appendU32(dds, 4);                                   // height
+    appendU32(dds, 4);                                   // width
+    appendU32(dds, 64);                                  // pitchOrLinearSize
+    appendU32(dds, 1);                                   // depth
+    appendU32(dds, 1);                                   // mipMapCount
+    for (int i = 0; i < 11; ++i) appendU32(dds, 0);      // reserved[11]
+    appendU32(dds, 32);                                  // DDS_PIXELFORMAT size
+    appendU32(dds, 0x4);                                 // DDPF_FOURCC
+    appendU32(dds, 0x30315844u);                         // 'DX10'
+    appendU32(dds, 0);                                   // rgbBitCount
+    appendU32(dds, 0);                                   // rMask
+    appendU32(dds, 0);                                   // gMask
+    appendU32(dds, 0);                                   // bMask
+    appendU32(dds, 0);                                   // aMask
+    appendU32(dds, 0x1000);                              // caps
+    appendU32(dds, 0);                                   // caps2
+    appendU32(dds, 0);                                   // caps3
+    appendU32(dds, 0);                                   // caps4
+    appendU32(dds, 0);                                   // reserved2
+    appendU32(dds, 28);                                  // DXGI R8G8B8A8_UNORM
+    appendU32(dds, 3);                                   // TEXTURE2D
+    appendU32(dds, 0);                                   // miscFlag
+    appendU32(dds, 1);                                   // arraySize
+    appendU32(dds, 0);                                   // miscFlags2
+    for (int i = 0; i < 16; ++i) {
+        dds.push_back(static_cast<std::byte>(i));
+        dds.push_back(static_cast<std::byte>(i + 16));
+        dds.push_back(static_cast<std::byte>(i + 32));
+        dds.push_back(static_cast<std::byte>(i + 48));
+    }
+    return dds;
+}
+
+fo4::archive::Ba2TextureEntry textureEntry(std::string path, std::vector<std::byte> payload,
+                                           bool compress = false) {
+    fo4::archive::Ba2TextureEntry entry;
+    entry.name_hash = 0x11111111u;
+    entry.extension_hash = 0x00736464u;
+    entry.directory_hash = 0x22222222u;
+    entry.path = std::move(path);
+    entry.texture = {4, 4, 1, 28, 0, 8};
+    entry.chunks.push_back(compress ? fo4::archive::make_compressed_ba2_texture_chunk(payload)
+                                    : fo4::archive::make_stored_ba2_texture_chunk(payload));
+    return entry;
+}
+
+std::filesystem::path writeTextureArchive(
+    const std::filesystem::path& root,
+    std::string_view name,
+    std::vector<fo4::archive::Ba2TextureEntry> entries) {
+    fo4::archive::Ba2TextureArchive archive;
+    archive.version = 8;
+    archive.entries = std::move(entries);
+    const auto path = root / std::string(name);
+    fo4::archive::write_ba2_texture_file(archive, path);
+    return path;
 }
 
 }
@@ -234,4 +309,101 @@ TEST_CASE("Radicle archive backend compares content rather than only names and s
     CHECK(result->at("added") == nlohmann::json::array({"Added.txt"}));
     CHECK(result->at("removed") == nlohmann::json::array({"Removed.txt"}));
     CHECK(result->at("changed") == nlohmann::json::array({"Changed.txt"}));
+}
+
+TEST_CASE("Radicle archive backend lists DX10 texture entries using the existing UI contract") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = writeTextureArchive(root, "textures.ba2", {
+        textureEntry("Textures\\Armor\\Preview.dds", bytes("dds-payload")),
+        textureEntry("Textures\\Armor\\Iron.dds", bytes("iron-payload"), true)
+    });
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const auto result = backend.invoke("list", listArguments(path, "iron"));
+    REQUIRE(result.has_value());
+    CHECK(result->at("archiveName") == "textures.ba2");
+    CHECK(result->at("totalCount") == 2);
+    CHECK(result->at("shownCount") == 1);
+    REQUIRE(result->at("entries").size() == 1);
+    CHECK(result->at("entries")[0].at("path") == "Textures\\Armor\\Iron.dds");
+    CHECK(result->at("entries")[0].at("size") == 12);
+}
+
+TEST_CASE("Radicle archive backend extracts a compressed DX10 texture entry") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const std::string payload(4096, 'Q');
+    const auto path = writeTextureArchive(root, "extract.ba2", {
+        textureEntry("Textures\\Armor\\Iron.dds", bytes(payload), true)
+    });
+    const auto output = root / "Iron.dds";
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const auto result = backend.invoke("extractFile", {
+        {"archivePath", path.string()},
+        {"innerPath", "textures/armor/IRON.dds"},
+        {"outputPath", output.string()}
+    });
+    REQUIRE(result.has_value());
+    const auto extracted = readBytes(output);
+    REQUIRE(extracted.size() == 148 + payload.size());
+    CHECK(extracted[0] == std::byte{'D'});
+    CHECK(extracted[1] == std::byte{'D'});
+    CHECK(extracted[2] == std::byte{'S'});
+    CHECK(extracted[3] == std::byte{' '});
+    CHECK(std::vector<std::byte>(extracted.begin() + 148, extracted.end()) == bytes(payload));
+}
+
+TEST_CASE("Radicle archive backend previews a DDS entry as a PNG data URL") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = writeTextureArchive(root, "preview.ba2", {
+        textureEntry("Textures\\Preview.dds", rgba8Dds())
+    });
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const auto result = backend.invoke("previewTexture", {
+        {"archivePath", path.string()},
+        {"innerPath", "Textures\\Preview.dds"}
+    });
+    REQUIRE(result.has_value());
+    const auto url = result->at("dataUrl").get<std::string>();
+    CHECK(url.starts_with("data:image/png;base64,"));
+    CHECK(result->at("bytes").get<std::size_t>() > 0);
+}
+
+TEST_CASE("Radicle archive backend rejects previewing a non-DDS entry") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = writeArchive(root, "nope.ba2", {entry("A.txt", "not a texture")});
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const auto result = backend.invoke("previewTexture", {
+        {"archivePath", path.string()},
+        {"innerPath", "A.txt"}
+    });
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ArchiveRequestInvalid");
+}
+
+TEST_CASE("Radicle archive backend compares GNRL and DX10 archives by content") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto general = writeArchive(root, "general.ba2", {
+        entry("Shared.txt", "same payload")
+    });
+    const auto texture = writeTextureArchive(root, "texture.ba2", {
+        textureEntry("Shared.dds", bytes("same payload"))
+    });
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const auto result = backend.invoke("compare", {
+        {"archiveA", general.string()},
+        {"archiveB", texture.string()}
+    });
+    REQUIRE(result.has_value());
+    CHECK(result->at("identicalCount") == 0);
+    CHECK(result->at("removed") == nlohmann::json::array({"Shared.txt"}));
+    CHECK(result->at("added") == nlohmann::json::array({"Shared.dds"}));
 }

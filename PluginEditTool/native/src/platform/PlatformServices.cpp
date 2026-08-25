@@ -16,15 +16,12 @@
 namespace fo4ide::platform {
 namespace {
 
+#if !defined(_WIN32)
 std::filesystem::path findProgram(std::string_view name) {
     const char* raw = std::getenv("PATH");
     if (!raw || !*raw) return {};
     const std::string value(raw);
-#if defined(_WIN32)
-    constexpr char separator = ';';
-#else
     constexpr char separator = ':';
-#endif
     std::size_t begin = 0;
     while (begin <= value.size()) {
         const auto end = value.find(separator, begin);
@@ -52,6 +49,7 @@ std::pair<std::string, std::string> firstFilter(std::string_view filter) {
     const auto pattern = std::string(filter.substr(first + 1, second == std::string_view::npos ? std::string_view::npos : second - first - 1));
     return {name, pattern};
 }
+#endif
 
 #if defined(_WIN32)
 
@@ -163,7 +161,7 @@ Result<std::filesystem::path> showDialog(const FileDialogOptions& options, bool 
     return result;
 }
 
-#endif
+#else
 
 Result<std::filesystem::path> runPortableDialog(process::Runner& runner,
                                                 const FileDialogOptions& options,
@@ -231,9 +229,18 @@ Result<std::filesystem::path> runPortableDialog(process::Runner& runner,
 #endif
 }
 
+#endif
+
 }
 
-NativeServices::NativeServices(process::Runner& runner) : runner_(runner) {}
+NativeServices::NativeServices(process::Runner& runner)
+#if defined(_WIN32)
+{
+    static_cast<void>(runner);
+}
+#else
+    : runner_(runner) {}
+#endif
 
 Result<std::filesystem::path> NativeServices::pickFile(const FileDialogOptions& options) {
 #if defined(_WIN32)

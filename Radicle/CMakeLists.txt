@@ -10,12 +10,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(ZLIB REQUIRED)
+if(NOT TARGET ZLIB::ZLIB)
+  find_package(ZLIB REQUIRED)
+endif()
 
 option(FO4_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_BUILD_TESTS "Build Radicle tests" ${PROJECT_IS_TOP_LEVEL})
+option(RADICLE_INSTALL "Generate Radicle install/export rules" ${PROJECT_IS_TOP_LEVEL})
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_custom_target(radicle_schema_check ALL
@@ -82,10 +85,15 @@ add_library(fo4
   src/plugin_key.cpp
   src/formid.cpp
   src/archive/ba2.cpp
+  src/archive/ba2_hash.cpp
+  src/archive/ba2_texture.cpp
   src/binary/cursor.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
+  src/forms/placed_reference.cpp
+  src/forms/placed_reference_copy.cpp
+  src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
@@ -106,10 +114,12 @@ add_library(fo4
   src/plugin/mutation.cpp
   src/plugin/onam.cpp
   src/plugin/writer.cpp
+  src/schema/ctda.cpp
   src/schema/form_links.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
   src/schema/nested_formlink_lists.cpp
+  src/schema/nested_formlink_list_null.cpp
   src/schema/preflight.cpp
   src/schema/scalar.cpp
   src/schema/vmad.cpp
@@ -148,35 +158,37 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 
-include(GNUInstallDirs)
-install(TARGETS fo4 radicle_c
-  EXPORT radicle-targets
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-install(DIRECTORY include/fo4 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(EXPORT radicle-targets
-  NAMESPACE radicle::
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
-)
+if(RADICLE_INSTALL)
+  include(GNUInstallDirs)
+  install(TARGETS fo4 radicle_c
+    EXPORT radicle-targets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  )
+  install(DIRECTORY include/fo4 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(EXPORT radicle-targets
+    NAMESPACE radicle::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
+  )
 
-include(CMakePackageConfigHelpers)
-configure_package_config_file(
-  cmake/radicleConfig.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
-  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
-)
-write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
-  VERSION ${PROJECT_VERSION}
-  COMPATIBILITY SameMajorVersion
-)
-install(FILES
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
-)
+  include(CMakePackageConfigHelpers)
+  configure_package_config_file(
+    cmake/radicleConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
+  )
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+  )
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/radicleConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/radicle
+  )
+endif()
 
 if(RADICLE_BUILD_TOOLS)
   add_executable(fo4inspect tools/inspect/main.cpp)
@@ -223,10 +235,14 @@ if(RADICLE_BUILD_TESTS)
     tests/test_rekey_formlinks.cpp
     tests/test_formlink_lists.cpp
     tests/test_nested_formlink_lists.cpp
+    tests/test_formlink_list_management.cpp
     tests/test_sraf_formlinks.cpp
     tests/test_exterior_cell_grid.cpp
     tests/test_exterior_cell_grid_real.cpp
     tests/test_exterior_cell_creation.cpp
+    tests/test_placed_reference.cpp
+    tests/test_placed_reference_copy.cpp
+    tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_real.cpp
     tests/test_quest_stages_real.cpp
@@ -254,6 +270,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
+    tests/test_ctda_model.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_navmesh_formlinks.cpp
@@ -271,6 +288,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_conflict_graph.cpp
     tests/test_ba2.cpp
     tests/test_ba2_hardening.cpp
+    tests/test_ba2_texture.cpp
     tests/test_localized_strings.cpp
     tests/test_c_api.cpp
     tests/test_original_storage.cpp

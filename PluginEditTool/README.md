@@ -1,16 +1,19 @@
 # FO4IDE
 
-FO4IDE is a Fallout 4 plugin IDE that reads and writes real `.esp`/`.esm`/`.esl` files. Two things
-live in one executable:
+FO4IDE is a native C++23 Fallout 4 plugin IDE that reads and writes real `.esp`/`.esm`/`.esl`
+files. Two things live in one executable:
 
 - a **desktop editor** for browsing records across your load order, diffing and editing them,
-  scanning conflicts, compiling and decompiling Papyrus, and inspecting NIFs
-- an **MCP server** that gives an AI assistant the same operations: you describe the edit, the
-  assistant makes it, and the plugin is written by
-  [Mutagen](https://github.com/Mutagen-Modding/Mutagen) rather than by hand
+  scanning conflicts, compiling and decompiling Papyrus, inspecting NIFs, and viewing cells
+- a **native MCP server** that exposes the same plugin, Papyrus, archive, material, audio, NIF,
+  and analysis operations to external AI clients over stdio
 
-It's built on a patched Mutagen, so it doesn't go through xEdit and doesn't need xEdit installed.
-One codebase runs natively on Windows and Linux.
+Plugin parsing, mutation, FormID/master remapping, conflict analysis, and archive handling are backed
+by **Radicle**, the C++ Fallout 4 plugin SDK in this repository. The shipped application does not
+require Mutagen, xEdit, or the .NET runtime.
+
+The historical C# implementation is retained in the source tree only while native parity and
+regression coverage are completed. It is not the runtime backend used by the native host.
 
 ## Screenshots
 
@@ -19,45 +22,58 @@ full-size version.
 
 | | | |
 |---|---|---|
-| [<img src="images/editor.png" alt="The record editor, with the Claude assistant panel on the right" width="300">](images/editor.png)<br>Record editor | [<img src="images/blueprint.png" alt="The blueprint editor: a Papyrus script as a node graph" width="300">](images/blueprint.png)<br>Blueprint editor | [<img src="images/audio-panel.png" alt="The audio panel: convert to XWM, and make or extract FUZ files" width="300">](images/audio-panel.png)<br>Audio panel |
+| [<img src="images/editor.png" alt="The record editor" width="300">](images/editor.png)<br>Record editor | [<img src="images/blueprint.png" alt="The blueprint editor: a Papyrus script as a node graph" width="300">](images/blueprint.png)<br>Blueprint editor | [<img src="images/audio-panel.png" alt="The audio panel: convert to XWM, and make or extract FUZ files" width="300">](images/audio-panel.png)<br>Audio panel |
 | [<img src="images/archive-panel.png" alt="The archive panel: list, compare, and pack BA2/BSA archives" width="300">](images/archive-panel.png)<br>Archive panel | [<img src="images/nif-viewer.png" alt="The NIF viewer: view, edit, and verify meshes in a live 3D viewport" width="300">](images/nif-viewer.png)<br>NIF viewer | [<img src="images/papyrus-decompile.png" alt="The Papyrus panel: decompile .pex back to source, or compile .psc" width="300">](images/papyrus-decompile.png)<br>Papyrus panel |
 | [<img src="images/cell-viewer.png" alt="The cell viewer: inspect placed references in a 3D viewport" width="300">](images/cell-viewer.png)<br>Cell viewer | | |
 
-## Install (Windows)
+## Install on Windows
 
-1. Install the **.NET 9 Desktop Runtime (x64)**. That's the only prerequisite.
-2. Unzip the package anywhere, keeping the folder together (the exe loads `web\dist\` and `tools\`
-   from beside itself).
-3. Run `FO4RecordEditor.exe`.
+1. Ensure the **Microsoft Edge WebView2 Runtime (x64)** is installed. It is already present on most
+   current Windows 10/11 systems.
+2. Install the **Microsoft Visual C++ 2015-2022 Redistributable (x64)** if it is not already present.
+3. Unzip the package anywhere, keeping the folder together. The executable loads `web\dist\` and
+   optional helper tools from beside itself.
+4. Run `FO4RecordEditor.exe`.
 
-FO4IDE retains the `FO4RecordEditor.exe` executable and configuration paths for compatibility with
-existing installs and MCP client settings.
+`FO4RecordEditor.exe` is now the native C++ host. The historical executable name is intentionally
+preserved so existing MO2 launch entries and MCP client configurations do not need to change.
 
-If you're editing a plugin that overrides mods, launch it **through Mod Organizer 2**
-(Settings → Executables → Add from file). That's what lets it see your modlist's virtual Data
-folder instead of the vanilla one.
+If you are editing a plugin that overrides mods, launch FO4IDE through **Mod Organizer 2**
+(Settings -> Executables -> Add from file). The native MO2 profile loader reads the active profile,
+resolves the real mod paths in priority order, and uses MO2's overwrite directory as the only
+trusted location for automatically-created patch plugins.
 
-Why no self-contained exe: MO2's virtual file system (usvfs) hooks file access, and a
-self-contained .NET host can't load its bundled runtime through those hooks: the process dies
-before any managed code runs. A framework-dependent build loads the shared runtime, which usvfs
-handles fine.
+No .NET runtime is required.
 
 ## Linux
 
-A native build exists: install the `.deb` (`packaging/linux/out/fo4recordeditor_1.0.0_amd64.deb`)
-or build it with `packaging/linux/build-deb.sh`. Same code as Windows; the UI runs in a WebKitGTK
-window instead of WebView2.
+Build the native `.deb` with:
 
-A few helper tools (niftool, texconv, Archive2, PapyrusCompiler, xWMAEncode) exist only as Windows
-binaries, so installing Wine lets the panels that drive them work. Everything else is native:
-Papyrus compiling has its own engine and doesn't need `PapyrusCompiler.exe`.
+```bash
+PluginEditTool/packaging/linux/build-deb.sh 1.0.0
+```
 
-## Point an AI at it (MCP)
+or install a package produced by that script. The Linux desktop uses WebKitGTK and the same C++
+backend as Windows.
 
-The editor speaks [MCP](https://modelcontextprotocol.io) over stdio. The full picture, covering
-every tool and the rules that keep an assistant from corrupting plugins, is in
-**[docs/MCP_SETUP.md](docs/MCP_SETUP.md)**. The short version: drop a `.mcp.json` in your project
-folder (a sample sits next to the exe as `mcp.sample.json`):
+A few optional helper tools such as texconv, Archive2, PapyrusCompiler, or xWMAEncode may still be
+Windows-only. Wine can be useful for panels that invoke those external programs. Plugin editing,
+load-order analysis, Radicle archive support, the built-in Papyrus engine, and MCP do not require
+Wine.
+
+## AI integration through MCP
+
+The native host does not embed a model-provider/session backend. AI inference and conversation
+storage belong to the external client. FO4IDE exposes its native tool surface over MCP instead.
+
+Start the stdio server with:
+
+```text
+FO4RecordEditor.exe --mcp
+```
+
+The full setup guide is in **[docs/MCP_SETUP.md](docs/MCP_SETUP.md)**. A minimal client config looks
+like this:
 
 ```jsonc
 {
@@ -71,54 +87,78 @@ folder (a sample sits next to the exe as `mcp.sample.json`):
 }
 ```
 
-- `--mcp` runs it headless as a server; the GUI never opens.
-- `--mo2 <instance>` points it at an MO2 instance, so it reads the active profile's `plugins.txt`
-  and reconstructs that exact load order.
-- `--data <folder>` is the alternative: a plain `Data` folder, for a vanilla setup.
+- `--mcp` runs the C++ host headless as a stdio MCP server.
+- `--mo2 <instance>` points it at an MO2 instance and active profile.
+- `--data <folder>` can be used instead for a plain Data-folder setup.
 
-Use one or the other, then restart your AI client (or `/mcp reconnect` in Claude Code).
+The editor's AI panel is a handoff panel for this native MCP workflow. Actions such as
+`Ask AI: what breaks?` place their generated prompt there for copying into an MCP-connected client.
 
 ## Visual scripting
 
-Papyrus scripts edit as node graphs: events, branches, calls and variables wired together instead
-of text. Scripts open from compiled `.pex` files and compile back to them.
+Papyrus scripts can be edited as node graphs: events, branches, calls, variables, and execution
+flow wired together instead of edited only as text. The native Papyrus engine handles parsing,
+analysis, PEX generation/decompilation, and graph integration.
 
 ## Configuration
 
-Settings live in `%APPDATA%\FO4RecordEditor\settings.json` and are all optional: every path is
-auto-detected when blank. The GUI's settings panel covers them all, and each also honors an
-environment variable that wins over the file: `NIFTOOL_PATH`, `TEXCONV_PATH`,
-`PAPYRUS_COMPILER_PATH`, `PAPYRUS_BASE_IMPORTS`, `CK_WIKI_PATH`, `FFMPEG_PATH`,
-`XWMAENCODE_PATH`, `ARCHIVE2_PATH`.
+Settings live in `%APPDATA%\FO4RecordEditor\settings.json` on Windows and the normal XDG config
+location on Linux. Paths are optional and can be configured from the UI. Tool-specific environment
+variables include `NIFTOOL_PATH`, `TEXCONV_PATH`, `PAPYRUS_COMPILER_PATH`,
+`PAPYRUS_BASE_IMPORTS`, `CK_WIKI_PATH`, `FFMPEG_PATH`, `XWMAENCODE_PATH`, and `ARCHIVE2_PATH`.
 
-One caveat about Papyrus: `compile_papyrus` defaults to the Creation Kit's `PapyrusCompiler.exe`
-when one is installed (it's not redistributable, so it never ships here) and falls back to a
-built-in compiler otherwise. The built-in engine still needs the vanilla base script sources on its
-import path. Those are plain `.psc` text; point `PAPYRUS_BASE_IMPORTS` at them. The
-`papyrus_check` / `papyrus_outline` / `papyrus_definition` tools need nothing installed at all.
+The built-in Papyrus compiler does not require `PapyrusCompiler.exe`, but compiling scripts that
+import vanilla game scripts still requires those `.psc` sources on the import path.
 
-## What's in the box
+## Package layout
 
-```
-FO4RecordEditor.exe     the editor + MCP server
-web\dist\               the UI (WebView2 on Windows, WebKitGTK on Linux)
-tools\niftool\          NIF authoring/repair CLI
-tools\texconv\          DDS conversion fallback
-tools\ckwiki\           offline Creation Kit Wiki mirror
-tools\audio\            ffmpeg, xWMAEncode, BmlFuz (the audio_* tools)
-mcp.sample.json         copy-paste MCP config
-docs\MCP_SETUP.md       the MCP wiring and tool surface
+Windows release packages use this layout:
+
+```text
+FO4RecordEditor.exe     native C++ editor + MCP server
+web\dist\               React UI loaded by WebView2
+tools\                  optional external helper programs
+mcp.sample.json         sample MCP client configuration
+docs\MCP_SETUP.md       MCP setup and tool-surface documentation
 ```
 
-## Building it
+The executable looks for `web\dist\` beside itself first, which keeps packaged builds independent
+of the source checkout.
 
-Working on the tool rather than with it? Start at
-[docs/internal/README.md](docs/internal/README.md) and read
-[docs/internal/KNOWLEDGE.md](docs/internal/KNOWLEDGE.md) before touching plugin or script logic.
-Nothing under `docs\internal\` ships in a release; `package.ps1` copies an explicit allowlist.
+## Building from source
+
+### Windows
+
+Build prerequisites:
+
+- Visual Studio 2022 with the Desktop development with C++ workload
+- CMake 3.25+
+- Python 3
+- Node.js/npm
+- Git and internet access for pinned CMake FetchContent dependencies
+
+Build the UI and native host with `publish.bat`, or create a release zip with `package.ps1`.
+Both scripts build C++ with CMake and do not invoke `dotnet`.
+
+A direct native build is also available:
+
+```powershell
+cmake -S native -B native/build/release -G "Visual Studio 17 2022" -A x64 `
+  -DFO4IDE_BUILD_TESTS=OFF
+cmake --build native/build/release --config Release --target fo4ide
+```
+
+### Linux
+
+Install a C++23 toolchain, CMake/Ninja, Python 3, Node/npm, and WebKitGTK development packages,
+then run `packaging/linux/build-deb.sh` or configure `native/` directly with CMake.
+
+For architecture and plugin-format work, start at
+[docs/internal/README.md](docs/internal/README.md) and
+[docs/internal/KNOWLEDGE.md](docs/internal/KNOWLEDGE.md).
 
 ## License
 
-GPL-3.0, because it's built directly against Mutagen and embeds nifly, both GPL-3.0. See
-[LICENSE](LICENSE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the component list.
-The package contains no Bethesda assets; it reads the game files you already own.
+GPL-3.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the
+component list. The package contains no Bethesda game assets; it reads the files from the user's
+installed game and mod setup.

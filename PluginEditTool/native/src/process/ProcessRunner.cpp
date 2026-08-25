@@ -12,6 +12,7 @@
 namespace fo4ide::process {
 namespace {
 
+#if !defined(_WIN32)
 bool endsWithExe(const std::filesystem::path& path) {
     auto extension = path.extension().string();
     std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
@@ -19,6 +20,7 @@ bool endsWithExe(const std::filesystem::path& path) {
     });
     return extension == ".exe";
 }
+#endif
 
 }
 

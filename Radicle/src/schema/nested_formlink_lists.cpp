@@ -196,6 +196,23 @@ bool nested_formlink_list_target_allowed(
   return std::find(targets.begin(), targets.end(), signature) != targets.end();
 }
 
+std::optional<std::size_t> record_nested_formlink_list_size(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const NestedFormLinkListDescriptor& descriptor,
+    std::size_t container_index) {
+  const auto* record = find_record(plugin, record_key);
+  if (record == nullptr) return std::nullopt;
+  if (record->header.signature != descriptor.record) {
+    throw FormLinkListError(
+        std::string(descriptor.container_path) + " does not apply to " +
+        record->header.signature.to_string() + " records");
+  }
+  const auto range = terminated_group_range(*record, descriptor, container_index);
+  if (!range.has_value()) return std::nullopt;
+  return matching_positions(*record, descriptor, *range).size();
+}
+
 FormLinkListMutationStatus set_record_nested_formlink_list_element(
     Plugin& plugin,
     const FormKey& record_key,
@@ -295,6 +312,73 @@ FormLinkListMutationStatus remove_record_nested_formlink_list_element(
 
   record->subrecords.erase(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(positions[index]));
+  mark_modified(next, *record);
+  plugin = std::move(next);
+  return FormLinkListMutationStatus::updated;
+}
+
+FormLinkListMutationStatus move_record_nested_formlink_list_element(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const NestedFormLinkListDescriptor& descriptor,
+    std::size_t container_index,
+    std::size_t from,
+    std::size_t to) {
+  auto next = plugin;
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(next, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
+  const auto range = terminated_group_range(*record, descriptor, container_index);
+  if (!range.has_value()) {
+    return FormLinkListMutationStatus::container_index_out_of_range;
+  }
+  const auto positions = matching_positions(*record, descriptor, *range);
+  if (from >= positions.size() || to >= positions.size()) {
+    return FormLinkListMutationStatus::index_out_of_range;
+  }
+  if (from == to) return FormLinkListMutationStatus::unchanged;
+
+  auto moving = record->subrecords[positions[from]].data;
+  if (from < to) {
+    for (std::size_t index = from; index < to; ++index) {
+      record->subrecords[positions[index]].data =
+          record->subrecords[positions[index + 1]].data;
+    }
+  } else {
+    for (std::size_t index = from; index > to; --index) {
+      record->subrecords[positions[index]].data =
+          record->subrecords[positions[index - 1]].data;
+    }
+  }
+  record->subrecords[positions[to]].data = std::move(moving);
+  mark_modified(next, *record);
+  plugin = std::move(next);
+  return FormLinkListMutationStatus::updated;
+}
+
+FormLinkListMutationStatus clear_record_nested_formlink_list(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const NestedFormLinkListDescriptor& descriptor,
+    std::size_t container_index) {
+  auto next = plugin;
+  Record* record = nullptr;
+  const auto validation =
+      validate_record_and_target(next, record_key, descriptor, nullptr, record);
+  if (validation != FormLinkListMutationStatus::unchanged) return validation;
+
+  const auto range = terminated_group_range(*record, descriptor, container_index);
+  if (!range.has_value()) {
+    return FormLinkListMutationStatus::container_index_out_of_range;
+  }
+  const auto positions = matching_positions(*record, descriptor, *range);
+  if (positions.empty()) return FormLinkListMutationStatus::unchanged;
+  for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
+    record->subrecords.erase(
+        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
+  }
   mark_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
