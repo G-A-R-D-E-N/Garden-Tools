@@ -107,6 +107,8 @@ def load_lists(schema_path: Path):
                 "label": label,
                 "field_alias": field_alias,
                 "subrecord": subrecord,
+                "storage": "per_subrecord",
+                "counter": "",
                 "targets": parsed_targets,
                 "nullable": nullable,
                 "can_insert": mutation in ("existing_neighbors", "appendable"),
@@ -186,6 +188,57 @@ def load_lists(schema_path: Path):
                 group[j]["subrecord"] for j in range(position + 1, len(group))
             ]
 
+    keyword_records = document.get("keyword_records", [])
+    if not isinstance(keyword_records, list):
+        raise ValueError("keyword_records must be an array")
+    seen_keyword_records = set()
+    for entry in keyword_records:
+        if not isinstance(entry, dict):
+            raise ValueError("keyword_records entries must be objects")
+        rec = entry.get("record", "")
+        if not isinstance(rec, str) or not valid_signature(rec):
+            raise ValueError(f"keyword record signature must be four printable ASCII characters: {rec!r}")
+        if rec in seen_keyword_records:
+            raise ValueError(f"duplicate keyword record: {rec}")
+        seen_keyword_records.add(rec)
+        path = rec + "\\Keywords"
+        if path in seen_paths or path in seen_nested_paths:
+            raise ValueError(f"keyword list path collides with an existing list: {path!r}")
+        seen_paths.add(path)
+        alias_key = (rec, "Keywords")
+        if alias_key in seen_field_aliases:
+            raise ValueError(f"keyword field_alias collides for {rec}.Keywords")
+        seen_field_aliases.add(alias_key)
+        subrecord_key = (rec, "KWDA")
+        if subrecord_key in seen_record_subrecords:
+            raise ValueError(f"keyword subrecord mapping collides for {rec}.KWDA")
+        seen_record_subrecords.add(subrecord_key)
+        anchors = {}
+        for side in ("predecessors", "successors"):
+            values = entry.get(side, [])
+            if not isinstance(values, list):
+                raise ValueError(f"keyword {side} must be an array: {rec}")
+            for signature in values:
+                if not isinstance(signature, str) or not valid_signature(signature):
+                    raise ValueError(f"invalid keyword {side} signature for {rec}: {signature!r}")
+            anchors[side] = list(values)
+        lists.append({
+            "record": rec,
+            "path": path,
+            "label": "Keywords",
+            "field_alias": "Keywords",
+            "subrecord": "KWDA",
+            "storage": "packed_array",
+            "counter": "KSIZ",
+            "targets": ["KYWD"],
+            "nullable": False,
+            "can_insert": True,
+            "wildcard_target": False,
+            "append_when_empty": True,
+            "anchor_predecessors": anchors["predecessors"],
+            "anchor_successors": anchors["successors"],
+        })
+
     lists.sort(key=lambda item: (item["record"], item["path"]))
     nested_lists.sort(key=lambda item: (item["record"], item["container_path"], item["member"]))
     return lists, nested_lists
@@ -245,6 +298,9 @@ def render(lists, nested_lists) -> str:
             f"{cpp_string(row['path'])}, {cpp_string(row['label'])}, " +
             f"{cpp_string(row['field_alias'])}, " +
             f"Signature::from_string({cpp_string(row['subrecord'])}), " +
+            f"FormLinkListStorage::{row['storage']}, " +
+            (f"Signature::from_string({cpp_string(row['counter'])}), "
+                if row["counter"] else "Signature{}, ") +
             ("true" if row["nullable"] else "false") + ", " +
             ("true" if row["can_insert"] else "false") + ", " +
             ("true" if row["wildcard_target"] else "false") + ", " +

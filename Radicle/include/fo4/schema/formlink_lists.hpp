@@ -12,6 +12,11 @@
 
 namespace fo4::schema {
 
+enum class FormLinkListStorage {
+  per_subrecord,
+  packed_array,
+};
+
 struct FormLinkListDescriptor {
   Signature record{};
   std::string_view path;
@@ -20,6 +25,8 @@ struct FormLinkListDescriptor {
   // "Keywords"); empty when the list is only reachable through its indexed path.
   std::string_view field_alias;
   Signature subrecord{};
+  FormLinkListStorage storage{FormLinkListStorage::per_subrecord};
+  Signature counter{};
   bool nullable{false};
   bool can_insert{false};
   // Accepts any major-record target (FLST\Items). When set, target-type

@@ -104,6 +104,52 @@ std::vector<std::byte> patchWithEmptyFlst() {
     return out.bytes;
 }
 
+std::vector<std::byte> keywordPluginBytes() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(5);
+    hedr.u32(0x902);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto miscGroup = fo4::test::begin_group(out, "MISC", 0);
+    const auto misc = fo4::test::begin_record(out, "MISC", 0, 0x00000800, 131);
+    fo4::test::end_record(out, misc);
+    fo4::test::end_group(out, miscGroup);
+
+    const auto kywdGroup = fo4::test::begin_group(out, "KYWD", 0);
+    for (const std::uint32_t id : {0x00000801u, 0x00000802u}) {
+        const auto kywd = fo4::test::begin_record(out, "KYWD", 0, id, 131);
+        fo4::test::end_record(out, kywd);
+    }
+    fo4::test::end_group(out, kywdGroup);
+
+    const auto weapGroup = fo4::test::begin_group(out, "WEAP", 0);
+    auto full = fo4::test::begin_record(out, "WEAP", 0, 0x00000900, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view("KeyedGun"));
+    fo4::test::ByteWriter znam;
+    znam.u32(0);
+    fo4::test::write_subrecord(out, "ZNAM", znam.bytes);
+    fo4::test::ByteWriter ksiz;
+    ksiz.u32(1);
+    fo4::test::write_subrecord(out, "KSIZ", ksiz.bytes);
+    fo4::test::ByteWriter kwda;
+    kwda.u32(0x00000801);
+    fo4::test::write_subrecord(out, "KWDA", kwda.bytes);
+    fo4::test::end_record(out, full);
+
+    auto empty = fo4::test::begin_record(out, "WEAP", 0, 0x00000901, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view("BareGun"));
+    fo4::test::ByteWriter znam2;
+    znam2.u32(0);
+    fo4::test::write_subrecord(out, "ZNAM", znam2.bytes);
+    fo4::test::end_record(out, empty);
+    fo4::test::end_group(out, weapGroup);
+    return out.bytes;
+}
+
 void writeBytes(const std::filesystem::path& path,
                 const std::vector<std::byte>& bytes) {
     std::filesystem::create_directories(path.parent_path());
@@ -151,6 +197,33 @@ std::uint32_t nthRaw(const fo4::Record& record,
     }
     FAIL("missing requested subrecord ordinal");
     return 0;
+}
+
+std::uint32_t ksizValue(const fo4::Record& record) {
+    const auto sig = fo4::Signature::from_string("KSIZ");
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != sig) continue;
+        REQUIRE(subrecord.data.size() == 4u);
+        std::uint32_t value = 0;
+        std::memcpy(&value, subrecord.data.data(), sizeof(value));
+        return value;
+    }
+    FAIL("no KSIZ subrecord");
+    return 0;
+}
+
+std::vector<std::uint32_t> kwdaEntries(const fo4::Record& record) {
+    const auto sig = fo4::Signature::from_string("KWDA");
+    std::vector<std::uint32_t> out;
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != sig) continue;
+        for (std::size_t offset = 0; offset + 4 <= subrecord.data.size(); offset += 4) {
+            std::uint32_t value = 0;
+            std::memcpy(&value, subrecord.data.data() + offset, sizeof(value));
+            out.push_back(value);
+        }
+    }
+    return out;
 }
 
 }  // namespace
@@ -360,4 +433,96 @@ TEST_CASE("PluginEditTool add_list_item declares an external target's owner mast
     REQUIRE(flst != nullptr);
     REQUIRE(countSubrecords(*flst, "LNAM") == 1u);
     CHECK(nthRaw(*flst, "LNAM", 0) == 0x00000800u);
+}
+
+TEST_CASE("PluginEditTool add_list_item appends a keyword into a packed KWDA array") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, keywordPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "AddListItem",
+        nlohmann::json::array({
+            "Patch.esp", "000900:Patch.esp", "Keywords", "000802:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Added 000802:Patch.esp to Keywords on 000900:Patch.esp in Patch.esp (now 2 item(s)).");
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* weap = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(weap != nullptr);
+    CHECK(countSubrecords(*weap, "KWDA") == 1u);
+    CHECK(ksizValue(*weap) == 2u);
+    const auto entries = kwdaEntries(*weap);
+    REQUIRE(entries.size() == 2u);
+    CHECK(entries[0] == 0x00000801u);
+    CHECK(entries[1] == 0x00000802u);
+}
+
+TEST_CASE("PluginEditTool add_list_item creates the KSIZ/KWDA block when a record has no keywords") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, keywordPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "AddListItem",
+        nlohmann::json::array({
+            "Patch.esp", "000901:Patch.esp", "Keywords", "000801:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Added 000801:Patch.esp to Keywords on 000901:Patch.esp in Patch.esp (now 1 item(s)).");
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* weap = fo4::find_record(disk, fo4::FormKey::parse("000901:Patch.esp"));
+    REQUIRE(weap != nullptr);
+    CHECK(ksizValue(*weap) == 1u);
+    const auto entries = kwdaEntries(*weap);
+    REQUIRE(entries.size() == 1u);
+    CHECK(entries[0] == 0x00000801u);
+}
+
+TEST_CASE("PluginEditTool remove_list_item drops the last keyword and its KSIZ/KWDA block") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, keywordPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "RemoveListItem",
+        nlohmann::json::array({
+            "Patch.esp", "000900:Patch.esp", "Keywords", "000801:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Removed 1 entr(y/ies) matching 000801:Patch.esp from Keywords (now 0) on "
+          "000900:Patch.esp. Written to disk.");
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* weap = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(weap != nullptr);
+    CHECK(countSubrecords(*weap, "KWDA") == 0u);
+    CHECK(countSubrecords(*weap, "KSIZ") == 0u);
+}
+
+TEST_CASE("PluginEditTool add_list_item rejects a non-keyword target for Keywords") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, keywordPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "AddListItem",
+        nlohmann::json::array({
+            "Patch.esp", "000900:Patch.esp", "Keywords", "000800:Patch.esp"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "FormLinkTargetTypeMismatch");
 }
