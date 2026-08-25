@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -49,6 +50,13 @@ public:
     fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request& request) override {
         last = request;
         return output;
+    }
+};
+
+class ThrowingRunner final : public fo4ide::process::Runner {
+public:
+    fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request&) override {
+        throw std::runtime_error("niftool blew up");
     }
 };
 
@@ -283,6 +291,37 @@ TEST_CASE("CellTarget geometry batch embeds the niftool geo JSON for a resolved 
     CHECK(parsed.at("geometry").at("meshes/clutter/thing.nif").at("vertices") == 3);
     REQUIRE_FALSE(runner.last.arguments.empty());
     CHECK(runner.last.arguments.front() == "geo");  // resolved mesh handed to `niftool geo`
+}
+
+TEST_CASE("CellTarget geometry batch records a worker exception instead of terminating") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto tool = root / "niftool";
+    const auto first = root / "meshes" / "a.nif";
+    const auto second = root / "meshes" / "b.nif";
+    touch(tool);
+    touch(first);
+    touch(second);
+
+    ThrowingRunner runner;
+    fo4ide::assets::NifService service(runner, tool);
+    fo4ide::assets::TextureResolver textures;
+    textures.setSessionRoots({root});
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetGeometryBatch",
+        nlohmann::json::array({R"(["meshes/a.nif","meshes/b.nif"])"}));
+    REQUIRE(result.has_value());
+
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("count") == 2);
+    for (const auto& rel : {"meshes/a.nif", "meshes/b.nif"}) {
+        const auto& entry = parsed.at("geometry").at(rel);
+        REQUIRE(entry.contains("error"));
+        CHECK(entry.at("error").get<std::string>().find("niftool blew up") != std::string::npos);
+    }
 }
 
 TEST_CASE("CellTarget GetTexture returns empty when the model cannot be resolved") {

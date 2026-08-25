@@ -648,26 +648,28 @@ std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPa
     std::vector<nlohmann::json> results(unique.size());
 
     const auto processOne = [&](std::size_t i) {
-        const auto resolved = textures_.resolveNif(unique[i]);
-        if (!resolved) {
-            results[i] = nlohmann::json{{"error", "Not found (loose or in any indexed archive)."}};
-            geoBatchDone_.fetch_add(1, std::memory_order_relaxed);
-            return;
+        // A worker-thread exception escaping this lambda calls std::terminate.
+        try {
+            const auto resolved = textures_.resolveNif(unique[i]);
+            if (!resolved) {
+                results[i] = nlohmann::json{{"error", "Not found (loose or in any indexed archive)."}};
+            } else {
+                const auto geo = nif_.geometry(*resolved);
+                const std::string raw = geo ? *geo : ("Error: " + geo.error().message);
+                const auto trimmed = trim(raw);
+                nlohmann::json entry;
+                bool ok = !trimmed.empty() && trimmed.front() == '{';
+                if (ok) {
+                    entry = nlohmann::json::parse(raw, nullptr, false);
+                    ok = !entry.is_discarded();
+                }
+                results[i] = ok ? std::move(entry) : nlohmann::json{{"error", raw}};
+            }
+        } catch (const std::exception& ex) {
+            results[i] = nlohmann::json{{"error", std::string("Error: ") + ex.what()}};
+        } catch (...) {
+            results[i] = nlohmann::json{{"error", "Error: unknown failure resolving geometry"}};
         }
-        const auto geo = nif_.geometry(*resolved);
-        const std::string raw = geo ? *geo : ("Error: " + geo.error().message);
-        // Embed the niftool geo JSON object as-is when the output is a JSON
-        // object (mirrors the C# JRaw path); otherwise surface it as an error
-        // entry. Unlike the C#, the parse is validated so a malformed but
-        // '{'-leading output cannot corrupt the whole batch payload.
-        const auto trimmed = trim(raw);
-        nlohmann::json entry;
-        bool ok = !trimmed.empty() && trimmed.front() == '{';
-        if (ok) {
-            entry = nlohmann::json::parse(raw, nullptr, false);
-            ok = !entry.is_discarded();
-        }
-        results[i] = ok ? std::move(entry) : nlohmann::json{{"error", raw}};
         geoBatchDone_.fetch_add(1, std::memory_order_relaxed);
     };
 
