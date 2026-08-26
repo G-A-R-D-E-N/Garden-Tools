@@ -35,8 +35,8 @@ std::vector<std::byte> componentPluginBytes() {
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
     fo4::test::ByteWriter hedr;
     hedr.f32(1.0f);
-    hedr.u32(5);
-    hedr.u32(0xC00);
+    hedr.u32(6);
+    hedr.u32(0xD00);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
     fo4::test::end_record(out, tes4);
 
@@ -71,6 +71,12 @@ std::vector<std::byte> componentPluginBytes() {
     fo4::test::write_subrecord(out, "EDID", std::string_view("Gun"));
     fo4::test::end_record(out, weap);
     fo4::test::end_group(out, weapGroup);
+
+    const auto qustGroup = fo4::test::begin_group(out, "QUST", 0);
+    auto qust = fo4::test::begin_record(out, "QUST", 0, 0x00000C00, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view("Quest"));
+    fo4::test::end_record(out, qust);
+    fo4::test::end_group(out, qustGroup);
     return out.bytes;
 }
 
@@ -227,4 +233,68 @@ TEST_CASE("PluginEditTool set_components rejects a record that has no components
             R"([{"component":"000801:Patch.esp","count":1}])"}));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "ComponentsUnsupported");
+}
+
+TEST_CASE("PluginEditTool set_components accepts broad item types on a COBJ") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, componentPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetComponents",
+        nlohmann::json::array({
+            "Patch.esp", "000A00:Patch.esp",
+            R"([{"component":"000B00:Patch.esp","count":1},{"component":"000900:Patch.esp","count":2}])"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Set 2 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk.");
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* cobj = fo4::find_record(disk, fo4::FormKey::parse("000A00:Patch.esp"));
+    REQUIRE(cobj != nullptr);
+    const auto* fvpa = findSub(*cobj, "FVPA");
+    REQUIRE(fvpa != nullptr);
+    CHECK(fvpa->data.size() == 16u);
+}
+
+TEST_CASE("PluginEditTool set_components skips a non-item component on a COBJ") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, componentPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetComponents",
+        nlohmann::json::array({
+            "Patch.esp", "000A00:Patch.esp",
+            R"([{"component":"000B00:Patch.esp","count":1},{"component":"000C00:Patch.esp","count":1}])"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Set 1 component(s) on 000A00:Patch.esp in Patch.esp. "
+          "Skipped 1: 000C00:Patch.esp: QUST is not a valid recipe item. Written to disk.");
+}
+
+TEST_CASE("PluginEditTool set_components skips negative and oversized counts") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, componentPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetComponents",
+        nlohmann::json::array({
+            "Patch.esp", "000900:Patch.esp",
+            R"([{"component":"000801:Patch.esp","count":-1},{"component":"000802:Patch.esp","count":4294967296}])"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Set 0 component(s) on 000900:Patch.esp in Patch.esp. "
+          "Skipped 2: 000801:Patch.esp: count must be 1..4294967295; "
+          "000802:Patch.esp: count must be 1..4294967295. Written to disk.");
 }

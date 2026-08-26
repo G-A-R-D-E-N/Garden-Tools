@@ -36,7 +36,7 @@ std::vector<std::byte> plugin_with_components() {
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
-  hedr.u32(4);
+  hedr.u32(6);
   hedr.u32(0xB00);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
@@ -72,6 +72,18 @@ std::vector<std::byte> plugin_with_components() {
   znam.u32(0);
   fo4::test::write_subrecord(out, "ZNAM", znam.bytes);
   fo4::test::end_record(out, cobj);
+
+  auto sparse = fo4::test::begin_record(out, "COBJ", 0, 0x00000A01, 131);
+  fo4::test::ByteWriter cnam;
+  cnam.u32(0);
+  fo4::test::write_subrecord(out, "CNAM", cnam.bytes);
+  fo4::test::end_record(out, sparse);
+
+  auto anchorless = fo4::test::begin_record(out, "COBJ", 0, 0x00000A02, 131);
+  fo4::test::ByteWriter obnd;
+  obnd.u32(0);
+  fo4::test::write_subrecord(out, "OBND", obnd.bytes);
+  fo4::test::end_record(out, anchorless);
   fo4::test::end_group(out, cobj_group);
   return out.bytes;
 }
@@ -178,4 +190,32 @@ TEST(Components, CreatesCvpaAfterDataWhenAbsent) {
   const auto cdix = index_of(*misc, "CDIX");
   EXPECT_EQ(cvpa, data + 1);
   EXPECT_EQ(cdix, cvpa + 1);
+}
+
+TEST(Components, SparseCobjPlacesFvpaBeforeItsSuccessor) {
+  auto plugin = fo4::read_plugin(plugin_with_components(), "Comp.esp");
+  const auto key = fo4::FormKey::parse("000A01:Comp.esp");
+  const fo4::forms::ComponentEntry desired[] = {
+      {fo4::FormKey::parse("000801:Comp.esp"), 1},
+  };
+  EXPECT_EQ(fo4::forms::set_record_components(plugin, key, desired), 1u);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Comp.esp");
+  const auto* cobj = fo4::find_record(reread, key);
+  ASSERT_NE(cobj, nullptr);
+  const auto fvpa = index_of(*cobj, "FVPA");
+  const auto cnam = index_of(*cobj, "CNAM");
+  ASSERT_NE(find(*cobj, "FVPA"), nullptr);
+  EXPECT_LT(fvpa, cnam);
+  EXPECT_EQ(find(*cobj, "CDIX"), nullptr);
+}
+
+TEST(Components, AnchorlessCobjFailsClosed) {
+  auto plugin = fo4::read_plugin(plugin_with_components(), "Comp.esp");
+  const auto key = fo4::FormKey::parse("000A02:Comp.esp");
+  const fo4::forms::ComponentEntry desired[] = {
+      {fo4::FormKey::parse("000801:Comp.esp"), 1},
+  };
+  EXPECT_THROW(fo4::forms::set_record_components(plugin, key, desired),
+               fo4::forms::ComponentError);
 }

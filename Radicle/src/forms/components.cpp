@@ -18,17 +18,6 @@ constexpr auto k_cvpa = Signature::from_string("CVPA");
 constexpr auto k_fvpa = Signature::from_string("FVPA");
 constexpr auto k_cdix = Signature::from_string("CDIX");
 
-struct ComponentLayout {
-  Signature array{};
-  bool has_display_indices{false};
-};
-
-std::optional<ComponentLayout> layout_for(Signature record) {
-  if (record == k_misc) return ComponentLayout{k_cvpa, true};
-  if (record == k_cobj) return ComponentLayout{k_fvpa, false};
-  return std::nullopt;
-}
-
 constexpr Signature k_misc_predecessors[] = {
     Signature::from_string("DATA"), Signature::from_string("FIMD"),
     Signature::from_string("KWDA"), Signature::from_string("KSIZ"),
@@ -38,10 +27,31 @@ constexpr Signature k_cobj_predecessors[] = {
     Signature::from_string("ZNAM"), Signature::from_string("YNAM"),
     Signature::from_string("EDID"),
 };
+constexpr Signature k_cobj_successors[] = {
+    Signature::from_string("DESC"), Signature::from_string("CTDA"),
+    Signature::from_string("CNAM"), Signature::from_string("BNAM"),
+    Signature::from_string("NAM1"), Signature::from_string("NAM2"),
+    Signature::from_string("NAM3"), Signature::from_string("ANAM"),
+    Signature::from_string("FNAM"), Signature::from_string("INTV"),
+};
 
-std::span<const Signature> array_predecessors(Signature record) {
-  if (record == k_misc) return k_misc_predecessors;
-  return k_cobj_predecessors;
+struct ComponentLayout {
+  Signature array{};
+  bool has_display_indices{false};
+  std::span<const Signature> predecessors{};
+  std::span<const Signature> successors{};
+  bool append_when_empty{false};
+};
+
+std::optional<ComponentLayout> layout_for(Signature record) {
+  if (record == k_misc) {
+    return ComponentLayout{k_cvpa, true, k_misc_predecessors, {}, true};
+  }
+  if (record == k_cobj) {
+    return ComponentLayout{k_fvpa, false, k_cobj_predecessors,
+                           k_cobj_successors, false};
+  }
+  return std::nullopt;
 }
 
 std::uint32_t read_u32(const std::vector<std::byte>& data, std::size_t offset) {
@@ -69,16 +79,22 @@ void mark_modified(Plugin& plugin, Record& record) {
   plugin.original_range.clear();
 }
 
-std::size_t canonical_insert_index(const std::vector<Subrecord>& subrecords,
-                                   Signature record) {
-  for (const auto predecessor : array_predecessors(record)) {
+std::optional<std::size_t> canonical_insert_index(
+    const std::vector<Subrecord>& subrecords, const ComponentLayout& layout) {
+  for (const auto predecessor : layout.predecessors) {
     std::optional<std::size_t> last;
     for (std::size_t index = 0; index < subrecords.size(); ++index) {
       if (subrecords[index].signature == predecessor) last = index;
     }
     if (last.has_value()) return *last + 1;
   }
-  return subrecords.size();
+  for (const auto successor : layout.successors) {
+    for (std::size_t index = 0; index < subrecords.size(); ++index) {
+      if (subrecords[index].signature == successor) return index;
+    }
+  }
+  if (layout.append_when_empty) return subrecords.size();
+  return std::nullopt;
 }
 
 }  // namespace
@@ -179,8 +195,18 @@ std::size_t set_record_components(Plugin& plugin,
     Subrecord array_subrecord;
     array_subrecord.signature = layout->array;
     array_subrecord.data = std::move(array_bytes);
-    std::size_t at =
-        array_pos.value_or(canonical_insert_index(next, record->header.signature));
+    std::size_t at = 0;
+    if (array_pos.has_value()) {
+      at = *array_pos;
+    } else {
+      const auto anchored = canonical_insert_index(next, *layout);
+      if (!anchored.has_value()) {
+        throw ComponentError("cannot determine the canonical position for " +
+                             layout->array.to_string() + " on a " +
+                             record->header.signature.to_string() + " with no anchor field");
+      }
+      at = *anchored;
+    }
     if (at > next.size()) at = next.size();
     next.insert(next.begin() + static_cast<std::ptrdiff_t>(at),
                 std::move(array_subrecord));

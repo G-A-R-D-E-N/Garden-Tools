@@ -64,15 +64,40 @@ const fo4::Record* resolveComponentRecord(const fo4::Plugin& plugin,
     return nullptr;
 }
 
-std::uint32_t componentCount(const nlohmann::json& element) {
-    if (!element.contains("count")) return 1;
+bool parseComponentCount(const nlohmann::json& element, std::uint32_t& out) {
+    if (!element.contains("count")) {
+        out = 1;
+        return true;
+    }
     const auto& count = element["count"];
-    if (count.is_number_unsigned()) return count.get<std::uint32_t>();
+    if (count.is_number_unsigned()) {
+        const auto value = count.get<std::uint64_t>();
+        if (value < 1 || value > 0xFFFFFFFFull) return false;
+        out = static_cast<std::uint32_t>(value);
+        return true;
+    }
     if (count.is_number_integer()) {
         const auto value = count.get<std::int64_t>();
-        return value > 0 ? static_cast<std::uint32_t>(value) : 0u;
+        if (value < 1 || value > 0xFFFFFFFFll) return false;
+        out = static_cast<std::uint32_t>(value);
+        return true;
     }
-    return 1;
+    return false;
+}
+
+bool isItemSignature(fo4::Signature signature) {
+    static const fo4::Signature kItems[] = {
+        fo4::Signature::from_string("AMMO"), fo4::Signature::from_string("ARMO"),
+        fo4::Signature::from_string("BOOK"), fo4::Signature::from_string("CMPO"),
+        fo4::Signature::from_string("NOTE"), fo4::Signature::from_string("ALCH"),
+        fo4::Signature::from_string("INGR"), fo4::Signature::from_string("KEYM"),
+        fo4::Signature::from_string("LVLI"), fo4::Signature::from_string("LIGH"),
+        fo4::Signature::from_string("MISC"), fo4::Signature::from_string("WEAP"),
+    };
+    for (const auto item : kItems) {
+        if (item == signature) return true;
+    }
+    return false;
 }
 
 }  // namespace
@@ -151,12 +176,23 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
             failures.push_back(component + ": unresolved");
             continue;
         }
-        if (isMisc && winner->signature != cmpo) {
+        if (isMisc) {
+            if (winner->signature != cmpo) {
+                failures.push_back(component + ": " + winner->signature.to_string() +
+                                   " is not a CMPO component");
+                continue;
+            }
+        } else if (!isItemSignature(winner->signature)) {
             failures.push_back(component + ": " + winner->signature.to_string() +
-                               " is not a CMPO component");
+                               " is not a valid recipe item");
             continue;
         }
-        entries.push_back(fo4::forms::ComponentEntry{*resolved, componentCount(element)});
+        std::uint32_t count = 1;
+        if (!parseComponentCount(element, count)) {
+            failures.push_back(component + ": count must be 1..4294967295");
+            continue;
+        }
+        entries.push_back(fo4::forms::ComponentEntry{*resolved, count});
     }
 
     try {
