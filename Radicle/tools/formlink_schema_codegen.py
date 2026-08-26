@@ -234,7 +234,7 @@ def load_lists(schema_path: Path):
             "nullable": False,
             "can_insert": True,
             "wildcard_target": False,
-            "append_when_empty": True,
+            "append_when_empty": False,
             "anchor_predecessors": anchors["predecessors"],
             "anchor_successors": anchors["successors"],
         })

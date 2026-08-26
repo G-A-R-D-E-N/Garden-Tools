@@ -112,6 +112,36 @@ fo4::schema::FormLinkListDescriptor keywords_descriptor() {
   return descriptor.value_or(fo4::schema::FormLinkListDescriptor{});
 }
 
+std::vector<std::byte> plugin_with_bare_record(
+    std::string_view record_sig,
+    const std::vector<std::string_view>& extra_subrecords) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x200);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto kywd_group = fo4::test::begin_group(out, "KYWD", 0);
+  const auto kywd = fo4::test::begin_record(out, "KYWD", 0, 0x00000001, 131);
+  fo4::test::end_record(out, kywd);
+  fo4::test::end_group(out, kywd_group);
+
+  const auto group = fo4::test::begin_group(out, record_sig, 0);
+  auto rec = fo4::test::begin_record(out, record_sig, 0, 0x00000100, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view("BareRec"));
+  for (const auto sub : extra_subrecords) {
+    fo4::test::ByteWriter payload;
+    payload.u32(0);
+    fo4::test::write_subrecord(out, sub, payload.bytes);
+  }
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 }  // namespace
 
 TEST(KwdaFormLinkList, ResolvesKeywordsByFieldAlias) {
@@ -332,4 +362,71 @@ TEST(KwdaFormLinkList, ClearsAllKeywords) {
   EXPECT_EQ(find(*weap, "KWDA"), nullptr);
   EXPECT_EQ(find(*weap, "KSIZ"), nullptr);
   EXPECT_EQ(fo4::schema::record_formlink_list_size(reread, key, descriptor), 0u);
+}
+
+TEST(KwdaFormLinkList, SparseWeapPlacesKeywordsCanonicallyNotAtEnd) {
+  auto plugin = fo4::read_plugin(
+      plugin_with_bare_record("WEAP", {"OBND", "DNAM"}), "Guns.esp");
+  const auto key = fo4::FormKey::parse("000100:Guns.esp");
+  const auto target = fo4::FormKey::parse("000001:Guns.esp");
+  const auto descriptor = keywords_descriptor();
+
+  ASSERT_EQ(fo4::schema::record_formlink_list_size(plugin, key, descriptor), 0u);
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, key, descriptor, 0, target),
+            fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Guns.esp");
+  const auto* weap = fo4::find_record(reread, key);
+  ASSERT_NE(weap, nullptr);
+  const auto obnd = index_of(*weap, "OBND");
+  const auto ksiz = index_of(*weap, "KSIZ");
+  const auto kwda = index_of(*weap, "KWDA");
+  const auto dnam = index_of(*weap, "DNAM");
+  EXPECT_EQ(ksiz, obnd + 1);
+  EXPECT_EQ(kwda, ksiz + 1);
+  EXPECT_LT(kwda, dnam);
+}
+
+TEST(KwdaFormLinkList, EveryKeywordRecordAnchorsBeforeItsSuccessor) {
+  struct Case {
+    std::string_view record;
+    std::string_view successor;
+  };
+  static constexpr Case kCases[] = {
+    {"ACTI", "PRPS"}, {"ALCH", "MODL"}, {"AMMO", "DATA"}, {"ARMO", "DESC"},
+    {"ARTO", "MODL"}, {"BOOK", "FIMD"}, {"CONT", "FTYP"}, {"DOOR", "NTRM"},
+    {"FLOR", "PRPS"}, {"FURN", "PRPS"}, {"IDLM", "IDLF"}, {"INGR", "MODL"},
+    {"INNR", "XNAM"}, {"KEYM", "DATA"}, {"LCTN", "PNAM"}, {"LIGH", "DEST"},
+    {"MGEF", "DATA"}, {"MISC", "FIMD"}, {"MSTT", "PRPS"}, {"NPC_", "APPR"},
+    {"RACE", "PRPS"}, {"SCEN", "NNAM"}, {"SPEL", "ETYP"}, {"TACT", "PNAM"},
+    {"TERM", "PRPS"}, {"WEAP", "DESC"},
+  };
+
+  for (const auto& test_case : kCases) {
+    SCOPED_TRACE(std::string(test_case.record));
+    const auto descriptor = fo4::schema::formlink_list_descriptor_by_field(
+        fo4::Signature::from_string(test_case.record), "Keywords");
+    ASSERT_TRUE(descriptor.has_value());
+
+    auto plugin = fo4::read_plugin(
+        plugin_with_bare_record(test_case.record, {test_case.successor}), "Kw.esp");
+    const auto key = fo4::FormKey::parse("000100:Kw.esp");
+    const auto target = fo4::FormKey::parse("000001:Kw.esp");
+
+    ASSERT_EQ(fo4::schema::insert_record_formlink_list_element(
+                  plugin, key, *descriptor, 0, target),
+              fo4::schema::FormLinkListMutationStatus::updated);
+
+    const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Kw.esp");
+    const auto* record = fo4::find_record(reread, key);
+    ASSERT_NE(record, nullptr);
+    const auto edid = index_of(*record, "EDID");
+    const auto ksiz = index_of(*record, "KSIZ");
+    const auto kwda = index_of(*record, "KWDA");
+    const auto succ = index_of(*record, test_case.successor);
+    EXPECT_EQ(ksiz, edid + 1);
+    EXPECT_EQ(kwda, ksiz + 1);
+    EXPECT_LT(kwda, succ);
+  }
 }
