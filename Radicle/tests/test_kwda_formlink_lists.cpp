@@ -114,7 +114,7 @@ fo4::schema::FormLinkListDescriptor keywords_descriptor() {
 
 std::vector<std::byte> plugin_with_bare_record(
     std::string_view record_sig,
-    const std::vector<std::string_view>& extra_subrecords) {
+    const std::vector<std::string_view>& subrecords) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
   fo4::test::ByteWriter hedr;
@@ -131,8 +131,7 @@ std::vector<std::byte> plugin_with_bare_record(
 
   const auto group = fo4::test::begin_group(out, record_sig, 0);
   auto rec = fo4::test::begin_record(out, record_sig, 0, 0x00000100, 131);
-  fo4::test::write_subrecord(out, "EDID", std::string_view("BareRec"));
-  for (const auto sub : extra_subrecords) {
+  for (const auto sub : subrecords) {
     fo4::test::ByteWriter payload;
     payload.u32(0);
     fo4::test::write_subrecord(out, sub, payload.bytes);
@@ -397,11 +396,12 @@ TEST(KwdaFormLinkList, EveryKeywordRecordAnchorsBeforeItsSuccessor) {
     {"ACTI", "PRPS"}, {"ALCH", "MODL"}, {"AMMO", "DATA"}, {"ARMO", "DESC"},
     {"ARTO", "MODL"}, {"BOOK", "FIMD"}, {"CONT", "FTYP"}, {"DOOR", "NTRM"},
     {"FLOR", "PRPS"}, {"FURN", "PRPS"}, {"IDLM", "IDLF"}, {"INGR", "MODL"},
-    {"INNR", "XNAM"}, {"KEYM", "DATA"}, {"LCTN", "PNAM"}, {"LIGH", "DEST"},
-    {"MGEF", "DATA"}, {"MISC", "FIMD"}, {"MSTT", "PRPS"}, {"NPC_", "APPR"},
-    {"RACE", "PRPS"}, {"SCEN", "NNAM"}, {"SPEL", "ETYP"}, {"TACT", "PNAM"},
-    {"TERM", "PRPS"}, {"WEAP", "DESC"},
+    {"KEYM", "DATA"}, {"LCTN", "PNAM"}, {"LIGH", "DEST"}, {"MGEF", "DATA"},
+    {"MISC", "FIMD"}, {"MSTT", "PRPS"}, {"NPC_", "APPR"}, {"RACE", "PRPS"},
+    {"SCEN", "NNAM"}, {"SPEL", "ETYP"}, {"TACT", "PNAM"}, {"TERM", "PRPS"},
+    {"WEAP", "DESC"},
   };
+  ASSERT_EQ(std::size(kCases), 25u);
 
   for (const auto& test_case : kCases) {
     SCOPED_TRACE(std::string(test_case.record));
@@ -421,12 +421,38 @@ TEST(KwdaFormLinkList, EveryKeywordRecordAnchorsBeforeItsSuccessor) {
     const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Kw.esp");
     const auto* record = fo4::find_record(reread, key);
     ASSERT_NE(record, nullptr);
-    const auto edid = index_of(*record, "EDID");
     const auto ksiz = index_of(*record, "KSIZ");
     const auto kwda = index_of(*record, "KWDA");
     const auto succ = index_of(*record, test_case.successor);
-    EXPECT_EQ(ksiz, edid + 1);
     EXPECT_EQ(kwda, ksiz + 1);
     EXPECT_LT(kwda, succ);
   }
+}
+
+TEST(KwdaFormLinkList, AnchorsAfterEditorIdWhenItIsTheOnlyField) {
+  auto plugin = fo4::read_plugin(
+      plugin_with_bare_record("WEAP", {"EDID"}), "Kw.esp");
+  const auto key = fo4::FormKey::parse("000100:Kw.esp");
+  const auto target = fo4::FormKey::parse("000001:Kw.esp");
+  const auto descriptor = keywords_descriptor();
+
+  ASSERT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, key, descriptor, 0, target),
+            fo4::schema::FormLinkListMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Kw.esp");
+  const auto* weap = fo4::find_record(reread, key);
+  ASSERT_NE(weap, nullptr);
+  const auto edid = index_of(*weap, "EDID");
+  const auto ksiz = index_of(*weap, "KSIZ");
+  const auto kwda = index_of(*weap, "KWDA");
+  EXPECT_EQ(ksiz, edid + 1);
+  EXPECT_EQ(kwda, ksiz + 1);
+}
+
+TEST(KwdaFormLinkList, InnrIsNotAFlatKeywordRecord) {
+  EXPECT_FALSE(fo4::schema::formlink_list_descriptor_by_field(
+      fo4::Signature::from_string("INNR"), "Keywords").has_value());
+  EXPECT_FALSE(fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("INNR"), "INNR\\Keywords").has_value());
 }
