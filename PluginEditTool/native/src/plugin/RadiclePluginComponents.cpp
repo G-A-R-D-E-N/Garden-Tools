@@ -89,10 +89,11 @@ bool isItemSignature(fo4::Signature signature) {
     static const fo4::Signature kItems[] = {
         fo4::Signature::from_string("AMMO"), fo4::Signature::from_string("ARMO"),
         fo4::Signature::from_string("BOOK"), fo4::Signature::from_string("CMPO"),
-        fo4::Signature::from_string("NOTE"), fo4::Signature::from_string("ALCH"),
-        fo4::Signature::from_string("INGR"), fo4::Signature::from_string("KEYM"),
-        fo4::Signature::from_string("LVLI"), fo4::Signature::from_string("LIGH"),
-        fo4::Signature::from_string("MISC"), fo4::Signature::from_string("WEAP"),
+        fo4::Signature::from_string("COBJ"), fo4::Signature::from_string("NOTE"),
+        fo4::Signature::from_string("ALCH"), fo4::Signature::from_string("INGR"),
+        fo4::Signature::from_string("KEYM"), fo4::Signature::from_string("LVLI"),
+        fo4::Signature::from_string("LIGH"), fo4::Signature::from_string("MISC"),
+        fo4::Signature::from_string("WEAP"),
     };
     for (const auto item : kItems) {
         if (item == signature) return true;

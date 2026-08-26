@@ -35,8 +35,8 @@ std::vector<std::byte> componentPluginBytes() {
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
     fo4::test::ByteWriter hedr;
     hedr.f32(1.0f);
-    hedr.u32(6);
-    hedr.u32(0xD00);
+    hedr.u32(7);
+    hedr.u32(0xF00);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
     fo4::test::end_record(out, tes4);
 
@@ -64,6 +64,10 @@ std::vector<std::byte> componentPluginBytes() {
     znam.u32(0);
     fo4::test::write_subrecord(out, "ZNAM", znam.bytes);
     fo4::test::end_record(out, cobj);
+
+    auto cobj2 = fo4::test::begin_record(out, "COBJ", 0, 0x00000E00, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view("SubRecipe"));
+    fo4::test::end_record(out, cobj2);
     fo4::test::end_group(out, cobjGroup);
 
     const auto weapGroup = fo4::test::begin_group(out, "WEAP", 0);
@@ -297,4 +301,27 @@ TEST_CASE("PluginEditTool set_components skips negative and oversized counts") {
           "Set 0 component(s) on 000900:Patch.esp in Patch.esp. "
           "Skipped 2: 000801:Patch.esp: count must be 1..4294967295; "
           "000802:Patch.esp: count must be 1..4294967295. Written to disk.");
+}
+
+TEST_CASE("PluginEditTool set_components accepts a COBJ as a recipe component") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, componentPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetComponents",
+        nlohmann::json::array({
+            "Patch.esp", "000A00:Patch.esp",
+            R"([{"component":"000E00:Patch.esp","count":1}])"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>() ==
+          "Set 1 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk.");
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* cobj = fo4::find_record(disk, fo4::FormKey::parse("000A00:Patch.esp"));
+    REQUIRE(cobj != nullptr);
+    CHECK(findSub(*cobj, "FVPA") != nullptr);
 }
