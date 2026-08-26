@@ -168,6 +168,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "RemoveFormLinkListElement") return removeFormLinkListElement(arguments);
     if (method == "AddListItem") return addListItem(arguments);
     if (method == "RemoveListItem") return removeListItem(arguments);
+    if (method == "SetComponents") return setComponents(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "AddMasters") return addMasters(arguments);
