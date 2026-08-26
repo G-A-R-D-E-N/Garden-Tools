@@ -91,6 +91,7 @@ add_library(fo4
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
+  src/forms/components.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/static_collection.cpp
@@ -236,6 +237,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_formlink_lists.cpp
     tests/test_flst_formlink_lists.cpp
     tests/test_kwda_formlink_lists.cpp
+    tests/test_components.cpp
     tests/test_nested_formlink_lists.cpp
     tests/test_formlink_list_management.cpp
     tests/test_sraf_formlinks.cpp

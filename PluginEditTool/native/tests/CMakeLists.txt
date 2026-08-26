@@ -90,6 +90,7 @@ add_executable(
     unit/RadiclePluginRaceCreationTests.cpp
     unit/RadiclePluginFormLinkListTests.cpp
     unit/RadiclePluginListItemTests.cpp
+    unit/RadiclePluginComponentsTests.cpp
     unit/RadiclePluginNestedFormLinkListTests.cpp
     unit/RadiclePluginElementTests.cpp
     unit/RadiclePluginMaintenanceTests.cpp
