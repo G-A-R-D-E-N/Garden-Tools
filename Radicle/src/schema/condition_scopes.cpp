@@ -18,6 +18,12 @@ constexpr Signature sig_efid = Signature::from_string("EFID");
 constexpr Signature sig_efit = Signature::from_string("EFIT");
 constexpr Signature sig_cis1 = Signature::from_string("CIS1");
 constexpr Signature sig_cis2 = Signature::from_string("CIS2");
+constexpr Signature sig_anam = Signature::from_string("ANAM");
+constexpr Signature sig_alst = Signature::from_string("ALST");
+constexpr Signature sig_alls = Signature::from_string("ALLS");
+constexpr Signature sig_alcs = Signature::from_string("ALCS");
+constexpr Signature sig_aled = Signature::from_string("ALED");
+constexpr Signature sig_almi = Signature::from_string("ALMI");
 
 char ascii_lower(char ch) {
   return (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
@@ -66,6 +72,7 @@ std::optional<ScopedConditionPath> parse_scoped_path(
 struct ScopeRange {
   std::size_t begin{0};
   std::size_t end{0};
+  bool conditioned{true};
 };
 
 int effect_stage(Signature signature) {
@@ -108,6 +115,43 @@ std::vector<ScopeRange> effect_element_ranges(const Record& record) {
   return ranges;
 }
 
+bool is_alias_start(Signature signature) {
+  return signature == sig_alst || signature == sig_alls || signature == sig_alcs;
+}
+
+std::vector<ScopeRange> alias_element_ranges(const Record& record) {
+  std::vector<ScopeRange> ranges;
+  const auto& subs = record.subrecords;
+  std::size_t anam = subs.size();
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == sig_anam) {
+      anam = i;
+      break;
+    }
+  }
+  if (anam == subs.size()) return ranges;
+
+  std::size_t i = anam + 1;
+  while (i < subs.size() && is_alias_start(subs[i].signature)) {
+    const std::size_t start = i;
+    if (subs[start].signature == sig_alcs) {
+      std::size_t end = start + 1;
+      if (end < subs.size() && subs[end].signature == sig_almi) ++end;
+      ranges.push_back(ScopeRange{start, end, false});
+      i = end;
+      continue;
+    }
+    std::size_t j = start + 1;
+    while (j < subs.size() && subs[j].signature != sig_aled &&
+           !is_alias_start(subs[j].signature)) {
+      ++j;
+    }
+    ranges.push_back(ScopeRange{start, j, true});
+    i = (j < subs.size() && subs[j].signature == sig_aled) ? j + 1 : j;
+  }
+  return ranges;
+}
+
 std::optional<ScopeRange> scope_range(const Record& record,
                                       const ConditionScopeDescriptor& descriptor,
                                       std::size_t container_index) {
@@ -115,6 +159,9 @@ std::optional<ScopeRange> scope_range(const Record& record,
   switch (descriptor.kind) {
     case ConditionScopeKind::effect:
       ranges = effect_element_ranges(record);
+      break;
+    case ConditionScopeKind::alias:
+      ranges = alias_element_ranges(record);
       break;
   }
   if (container_index >= ranges.size()) return std::nullopt;
@@ -145,6 +192,7 @@ std::optional<std::vector<CtdaCondition>> read_scoped_conditions(
     std::size_t container_index) {
   const auto range = scope_range(record, descriptor, container_index);
   if (!range.has_value()) return std::nullopt;
+  if (!range->conditioned) return std::vector<CtdaCondition>{};
   return read_ctda_conditions_in(record, range->begin, range->end);
 }
 
@@ -163,6 +211,10 @@ ScopedConditionStatus set_record_scoped_conditions(
   const auto range = scope_range(*record, descriptor, container_index);
   if (!range.has_value()) {
     return ScopedConditionStatus::container_index_out_of_range;
+  }
+  if (!range->conditioned) {
+    return conditions.empty() ? ScopedConditionStatus::unchanged
+                              : ScopedConditionStatus::element_not_conditioned;
   }
   const auto result = write_ctda_conditions_in(*record, range->begin, range->end,
                                                conditions, range->end);

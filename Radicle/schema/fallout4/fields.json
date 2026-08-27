@@ -1096,6 +1096,7 @@
     { "record": "ALCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "ENCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "INGR", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "QUST", "container": "Aliases", "member": "Conditions", "scope": "alias" },
     { "record": "SPEL", "container": "Effects", "member": "Conditions", "scope": "effect" }
   ]
 }

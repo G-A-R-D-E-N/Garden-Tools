@@ -92,6 +92,72 @@ fo4::schema::ConditionScopeDescriptor spel_descriptor() {
   return path->descriptor;
 }
 
+fo4::schema::ConditionScopeDescriptor qust_descriptor() {
+  const auto path = fo4::schema::scoped_condition_path(
+      fo4::Signature::from_string("QUST"), "Aliases[0].Conditions");
+  return path->descriptor;
+}
+
+enum class AliasKind { reference, location, collection };
+
+struct AliasSpec {
+  AliasKind kind;
+  std::uint32_t id;
+  std::vector<std::uint16_t> condition_functions;
+  bool with_almi = false;
+};
+
+void write_u32_subrecord(fo4::test::ByteWriter& out, std::string_view signature,
+                         std::uint32_t value) {
+  fo4::test::ByteWriter data;
+  data.u32(value);
+  fo4::test::write_subrecord(out, signature, data.bytes);
+}
+
+// dialog_functions become record-level DialogConditions CTDA (before ANAM), which
+// the alias scanner must never touch.
+fo4::Plugin make_quest(const std::vector<std::uint16_t>& dialog_functions,
+                       const std::vector<AliasSpec>& aliases) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto record = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"CondQuest\0", 10});
+  for (const auto function : dialog_functions) {
+    fo4::test::write_subrecord(out, "CTDA", make_ctda(function, 0).bytes);
+  }
+  write_u32_subrecord(out, "ANAM", static_cast<std::uint32_t>(aliases.size()));
+  for (const auto& alias : aliases) {
+    if (alias.kind == AliasKind::collection) {
+      write_u32_subrecord(out, "ALCS", alias.id);
+      if (alias.with_almi) write_u32_subrecord(out, "ALMI", 0);
+      continue;
+    }
+    write_u32_subrecord(out, alias.kind == AliasKind::reference ? "ALST" : "ALLS",
+                        alias.id);
+    fo4::test::write_subrecord(out, "ALID", std::string_view{"A\0", 2});
+    for (const auto function : alias.condition_functions) {
+      fo4::test::write_subrecord(out, "CTDA", make_ctda(function, 0).bytes);
+    }
+    fo4::test::write_subrecord(out, "ALED", std::span<const std::byte>{});
+  }
+  fo4::test::write_subrecord(out, "NNAM", std::string_view{"\0", 1});
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, "Cond.esp");
+}
+
+const fo4::Record* quest_record(const fo4::Plugin& plugin) {
+  return fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
+}
+
 }  // namespace
 
 TEST(ConditionScopes, ResolvesEffectPathForKnownRecords) {
@@ -287,3 +353,123 @@ TEST(ConditionScopes, SegmentsCtdaOnlyLeadingEffect) {
   EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 1)->at(0).function, 5u);
 }
 
+
+TEST(ConditionScopes, AliasScannerSegmentsInterleavedAliasesWithIndexParity) {
+  auto plugin = make_quest(
+      {100},
+      {
+          {AliasKind::reference, 0, {1}},
+          {AliasKind::location, 1, {2, 3}},
+          {AliasKind::collection, 2, {}, true},
+          {AliasKind::reference, 3, {}},
+      });
+  const auto descriptor = qust_descriptor();
+  const auto* record = quest_record(plugin);
+  ASSERT_NE(record, nullptr);
+
+  const auto first = fo4::schema::read_scoped_conditions(*record, descriptor, 0);
+  ASSERT_TRUE(first.has_value());
+  ASSERT_EQ(first->size(), 1u);
+  EXPECT_EQ((*first)[0].function, 1u);
+
+  const auto second = fo4::schema::read_scoped_conditions(*record, descriptor, 1);
+  ASSERT_TRUE(second.has_value());
+  ASSERT_EQ(second->size(), 2u);
+  EXPECT_EQ((*second)[0].function, 2u);
+  EXPECT_EQ((*second)[1].function, 3u);
+
+  const auto collection = fo4::schema::read_scoped_conditions(*record, descriptor, 2);
+  ASSERT_TRUE(collection.has_value());
+  EXPECT_TRUE(collection->empty());
+
+  const auto empty_ref = fo4::schema::read_scoped_conditions(*record, descriptor, 3);
+  ASSERT_TRUE(empty_ref.has_value());
+  EXPECT_TRUE(empty_ref->empty());
+
+  EXPECT_FALSE(fo4::schema::read_scoped_conditions(*record, descriptor, 4).has_value());
+}
+
+TEST(ConditionScopes, SetAliasConditionsLeavesSiblingsAndDialogConditionsIntact) {
+  auto plugin = make_quest(
+      {100},
+      {
+          {AliasKind::reference, 0, {1}},
+          {AliasKind::location, 1, {2, 3}},
+          {AliasKind::collection, 2, {}},
+          {AliasKind::reference, 3, {8}},
+      });
+  const auto descriptor = qust_descriptor();
+  const auto key = fo4::FormKey::parse("000800:Cond.esp");
+
+  fo4::CtdaCondition replacement;
+  replacement.function = 55;
+  const std::vector<fo4::CtdaCondition> conditions{replacement};
+  const auto status = fo4::schema::set_record_scoped_conditions(
+      plugin, key, descriptor, 1, conditions);
+  EXPECT_EQ(status, fo4::schema::ScopedConditionStatus::updated);
+
+  const auto bytes = fo4::write_plugin(plugin);
+  const auto reread = fo4::read_plugin(bytes, "Cond.esp");
+  const auto* record = quest_record(reread);
+  ASSERT_NE(record, nullptr);
+
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 0)->at(0).function, 1u);
+  const auto middle = fo4::schema::read_scoped_conditions(*record, descriptor, 1);
+  ASSERT_EQ(middle->size(), 1u);
+  EXPECT_EQ(middle->at(0).function, 55u);
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 3)->at(0).function, 8u);
+
+  bool dialog_condition_present = false;
+  for (const auto& condition : fo4::read_ctda_conditions(*record)) {
+    if (condition.function == 100u) dialog_condition_present = true;
+  }
+  EXPECT_TRUE(dialog_condition_present);
+}
+
+TEST(ConditionScopes, SetConditionsIntoConditionlessAliasInserts) {
+  auto plugin = make_quest(
+      {},
+      {
+          {AliasKind::reference, 0, {1}},
+          {AliasKind::reference, 1, {}},
+      });
+  const auto descriptor = qust_descriptor();
+  const auto key = fo4::FormKey::parse("000800:Cond.esp");
+
+  fo4::CtdaCondition added;
+  added.function = 7;
+  const std::vector<fo4::CtdaCondition> conditions{added};
+  const auto status = fo4::schema::set_record_scoped_conditions(
+      plugin, key, descriptor, 1, conditions);
+  EXPECT_EQ(status, fo4::schema::ScopedConditionStatus::updated);
+
+  const auto bytes = fo4::write_plugin(plugin);
+  const auto reread = fo4::read_plugin(bytes, "Cond.esp");
+  const auto* record = quest_record(reread);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 0)->at(0).function, 1u);
+  const auto second = fo4::schema::read_scoped_conditions(*record, descriptor, 1);
+  ASSERT_EQ(second->size(), 1u);
+  EXPECT_EQ(second->at(0).function, 7u);
+}
+
+TEST(ConditionScopes, CollectionAliasRejectsConditionWrite) {
+  auto plugin = make_quest(
+      {},
+      {
+          {AliasKind::reference, 0, {1}},
+          {AliasKind::collection, 1, {}},
+      });
+  const auto descriptor = qust_descriptor();
+  const auto key = fo4::FormKey::parse("000800:Cond.esp");
+
+  fo4::CtdaCondition added;
+  added.function = 9;
+  const std::vector<fo4::CtdaCondition> conditions{added};
+  EXPECT_EQ(fo4::schema::set_record_scoped_conditions(plugin, key, descriptor, 1, conditions),
+            fo4::schema::ScopedConditionStatus::element_not_conditioned);
+
+  const std::vector<fo4::CtdaCondition> empty;
+  EXPECT_EQ(fo4::schema::set_record_scoped_conditions(plugin, key, descriptor, 1, empty),
+            fo4::schema::ScopedConditionStatus::unchanged);
+}

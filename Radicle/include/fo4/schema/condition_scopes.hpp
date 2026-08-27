@@ -15,6 +15,7 @@ namespace fo4::schema {
 
 enum class ConditionScopeKind {
   effect,
+  alias,
 };
 
 struct ConditionScopeDescriptor {
@@ -37,6 +38,7 @@ enum class ScopedConditionStatus {
   record_missing,
   record_mismatch,
   container_index_out_of_range,
+  element_not_conditioned,
 };
 
 // Resolves "<container>[i].<member>" for a record signature (e.g. SPEL +

@@ -619,3 +619,115 @@ TEST_CASE("condition backend: effect boundaries handle a null-BaseEffect (no EFI
     CHECK(lastScope.size() == 1);
     CHECK(lastScope[0].at("function") == "GetAngle");
 }
+
+namespace {
+
+void writeU32Subrecord(fo4::test::ByteWriter& out, std::string_view signature,
+                       std::uint32_t value) {
+    fo4::test::ByteWriter data;
+    data.u32(value);
+    fo4::test::write_subrecord(out, signature, data.bytes);
+}
+
+std::vector<std::byte> makeQuestWithAliases() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x800);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "QUST", 0);
+    const auto record = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", makeZString("CondQuest"));
+    writeU32Subrecord(out, "ANAM", 3);
+
+    writeU32Subrecord(out, "ALST", 0);
+    fo4::test::write_subrecord(out, "ALID", makeZString("RefAlias"));
+    fo4::test::write_subrecord(
+        out, "CTDA", makeCtda(0x40, 0x3F800000u, 8, 0, 1, 0, 0, 0, -1));
+    fo4::test::write_subrecord(out, "ALED", std::span<const std::byte>{});
+
+    writeU32Subrecord(out, "ALCS", 1);
+
+    writeU32Subrecord(out, "ALLS", 2);
+    fo4::test::write_subrecord(out, "ALID", makeZString("LocAlias"));
+    fo4::test::write_subrecord(out, "ALED", std::span<const std::byte>{});
+
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
+}  // namespace
+
+TEST_CASE("condition backend: Get/SetConditionsAt address QUST aliases and reject collection aliases") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "QuestEdit.esp";
+    writeBytes(pluginPath, makeQuestWithAliases());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2",
+                           nlohmann::json{{"plugins", nlohmann::json::array(
+                                                          {pluginEntry("QuestEdit.esp", pluginPath, "Override")})}})
+                .has_value());
+
+    const auto refAlias = parseStringResult(
+        backend.invoke("backend.GetConditionsAtPath",
+                       nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                              "Aliases[0].Conditions"})));
+    REQUIRE(refAlias.is_array());
+    REQUIRE(refAlias.size() == 1);
+    CHECK(refAlias[0].at("function") == "GetAngle");
+
+    const auto collection = parseStringResult(
+        backend.invoke("backend.GetConditionsAtPath",
+                       nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                              "Aliases[1].Conditions"})));
+    REQUIRE(collection.is_array());
+    CHECK(collection.empty());
+
+    const auto locAlias = parseStringResult(
+        backend.invoke("backend.GetConditionsAtPath",
+                       nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                              "Aliases[2].Conditions"})));
+    REQUIRE(locAlias.is_array());
+    CHECK(locAlias.empty());
+
+    const auto oob = backend.invoke("backend.GetConditionsAtPath",
+                                    nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                                           "Aliases[3].Conditions"}));
+    REQUIRE_FALSE(oob.has_value());
+    CHECK(oob.error().type == "ConditionScopeOutOfRange");
+
+    const nlohmann::json replacement = nlohmann::json::array({
+        {
+            {"function", "GetStage"},
+            {"operator", ">="},
+            {"value", 5},
+            {"param1", 2},
+            {"runOn", "Subject"},
+        },
+    });
+    const auto message = backend.invoke("backend.SetConditionsAtPath",
+                                        nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                                               "Aliases[0].Conditions", replacement.dump()}));
+    REQUIRE(message.has_value());
+    CHECK(message->get<std::string>().find("Set 1 condition(s) at Aliases[0].Conditions") == 0);
+
+    const auto refAfter = parseStringResult(
+        backend.invoke("backend.GetConditionsAtPath",
+                       nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                              "Aliases[0].Conditions"})));
+    REQUIRE(refAfter.size() == 1);
+    CHECK(refAfter[0].at("function") == "GetStage");
+
+    const auto rejected = backend.invoke("backend.SetConditionsAtPath",
+                                         nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                                                "Aliases[1].Conditions", replacement.dump()}));
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().type == "ConditionScopeNotConditioned");
+}
