@@ -148,6 +148,70 @@ std::vector<std::byte> target_with_interior_cell() {
   return out.bytes;
 }
 
+void write_actor(fo4::test::ByteWriter& out, std::uint32_t raw, std::uint32_t base_raw,
+                 float transform_base) {
+  const auto achr = fo4::test::begin_record(out, "ACHR", 0, raw);
+  fo4::test::ByteWriter name;
+  name.u32(base_raw);
+  fo4::test::write_subrecord(out, "NAME", name.bytes);
+  fo4::test::ByteWriter data;
+  write_transform(data, transform_base);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::ByteWriter scale;
+  scale.f32(1.25f);
+  fo4::test::write_subrecord(out, "XSCL", scale.bytes);
+  fo4::test::end_record(out, achr);
+}
+
+std::vector<std::byte> exterior_actor_source() {
+  fo4::test::ByteWriter out;
+  write_header(out, {"Base.esm"});
+  const auto top = fo4::test::begin_group(out, "WRLD", 0);
+  const auto wrld = fo4::test::begin_record(out, "WRLD", 0, 0x00000900u);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"BaseWorld\0", 10});
+  fo4::test::end_record(out, wrld);
+  const auto world_children = begin_group_raw(out, 0x00000900u, fo4::GroupType::world_children);
+  const auto block = begin_group_raw(out, 0, fo4::GroupType::exterior_cell_block);
+  const auto subblock = begin_group_raw(out, 0, fo4::GroupType::exterior_cell_subblock);
+  write_cell(out, 0x00000800u);
+  const auto children = begin_group_raw(out, 0x00000800u, fo4::GroupType::cell_children);
+  const auto persistent = begin_group_raw(out, 0x00000800u, fo4::GroupType::cell_persistent_children);
+  write_actor(out, 0x00000801u, 0x00000802u, 20.0f);
+  end_group_raw(out, persistent);
+  end_group_raw(out, children);
+  end_group_raw(out, subblock);
+  end_group_raw(out, block);
+  end_group_raw(out, world_children);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+std::vector<std::byte> target_with_exterior_cell() {
+  fo4::test::ByteWriter out;
+  write_header(out, {"Base.esm"});
+  const auto top = fo4::test::begin_group(out, "WRLD", 0);
+  const auto wrld = fo4::test::begin_record(out, "WRLD", 0, 0x00000900u);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"BaseWorld\0", 10});
+  fo4::test::end_record(out, wrld);
+  const auto world_children = begin_group_raw(out, 0x00000900u, fo4::GroupType::world_children);
+  const auto block = begin_group_raw(out, 0, fo4::GroupType::exterior_cell_block);
+  const auto subblock = begin_group_raw(out, 0, fo4::GroupType::exterior_cell_subblock);
+  write_cell(out, 0x00000800u);
+  end_group_raw(out, subblock);
+  end_group_raw(out, block);
+  end_group_raw(out, world_children);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+std::size_t count_records(const fo4::Plugin& plugin, const fo4::FormKey& key) {
+  std::size_t count = 0;
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->form_key == key) ++count;
+  }
+  return count;
+}
+
 const fo4::Group* find_group(const fo4::Plugin& plugin,
                              fo4::GroupType type,
                              std::uint32_t label) {
@@ -328,4 +392,38 @@ TEST(PlacedReferenceCopyNew, RejectsUnsupportedSignature) {
   const auto result = fo4::forms::copy_placed_reference_as_new(
       target, source, fo4::FormKey::parse("000800:Base.esm"));
   EXPECT_EQ(result.status, fo4::forms::PlacedReferenceCopyNewStatus::unsupported_signature);
+}
+
+TEST(PlacedReferenceCopyNew, CreatesExteriorPersistentActorUnderExistingCell) {
+  const auto source = fo4::read_plugin(exterior_actor_source(), "Source.esp");
+  auto target = fo4::read_plugin(target_with_exterior_cell(), "Patch.esp");
+  const auto world = fo4::FormKey::parse("000900:Base.esm");
+  const auto cell = fo4::FormKey::parse("000800:Base.esm");
+  const auto reference = fo4::FormKey::parse("000801:Base.esm");
+
+  const auto result = fo4::forms::copy_placed_reference_as_new(target, source, reference);
+  EXPECT_EQ(result.status, fo4::forms::PlacedReferenceCopyNewStatus::created);
+  EXPECT_EQ(result.new_reference.owner().filename(), "Patch.esp");
+  EXPECT_NE(result.new_reference, reference);
+
+  EXPECT_EQ(count_records(target, world), 1u);
+  EXPECT_EQ(count_records(target, cell), 1u);
+  EXPECT_EQ(count_records(target, result.new_reference), 1u);
+  EXPECT_NE(find_group(target, fo4::GroupType::cell_persistent_children, 0x00000800u), nullptr);
+
+  const auto refs = fo4::forms::placed_references_for_cell(target, cell);
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_EQ(refs[0].record->form_key, result.new_reference);
+  EXPECT_EQ(refs[0].record->header.signature, fo4::Signature::from_string("ACHR"));
+  EXPECT_TRUE(refs[0].persistent);
+  ASSERT_TRUE(refs[0].base.has_value());
+  EXPECT_EQ(refs[0].base->to_string(), "000802:Base.esm");
+
+  auto reread = fo4::read_plugin(fo4::write_plugin(target), "Patch.esp");
+  EXPECT_EQ(count_records(reread, world), 1u);
+  EXPECT_EQ(count_records(reread, cell), 1u);
+  const auto reread_refs = fo4::forms::placed_references_for_cell(reread, cell);
+  ASSERT_EQ(reread_refs.size(), 1u);
+  EXPECT_EQ(reread_refs[0].record->header.signature, fo4::Signature::from_string("ACHR"));
+  EXPECT_EQ(reread_refs[0].record->form_key, result.new_reference);
 }

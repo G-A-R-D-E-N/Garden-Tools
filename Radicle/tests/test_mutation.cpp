@@ -348,3 +348,23 @@ TEST(Mutation, LightPluginExhaustsAtTwelveBits) {
       fo4::FormIdError);
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
+
+TEST(Mutation, ReserveLocalFormKeyAdvancesHedrWithoutCreatingRecord) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x900), "Lifecycle.esp");
+  const auto before = fo4::collect_records(plugin).size();
+
+  const auto key = fo4::reserve_local_form_key(plugin);
+  EXPECT_EQ(key, fo4::FormKey::parse("000900:Lifecycle.esp"));
+  EXPECT_EQ(fo4::find_record(plugin, key), nullptr);
+  EXPECT_EQ(fo4::collect_records(plugin).size(), before);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Lifecycle.esp");
+  EXPECT_EQ(reread.header.next_form_id, 0x901u);
+  EXPECT_EQ(fo4::collect_records(reread).size(), before);
+}
+
+TEST(Mutation, ReserveLocalFormKeySkipsOccupiedCandidate) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x800), "Lifecycle.esp");
+  const auto key = fo4::reserve_local_form_key(plugin);
+  EXPECT_EQ(key, fo4::FormKey::parse("000801:Lifecycle.esp"));
+}

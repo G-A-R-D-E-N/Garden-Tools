@@ -58,6 +58,7 @@ enum class RecordRenumberStatus {
 // will never report the violation. See docs/ESL_FORMIDS.md and issue #26.
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 
+// Advances HEDR nextFormID and returns the reserved local key; creates no record.
 FormKey reserve_local_form_key(Plugin& plugin);
 
 FormKey create_local_record(Plugin& plugin, Signature signature);

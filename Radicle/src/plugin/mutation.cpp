@@ -171,6 +171,7 @@ FormKey reserve_local_form_key(Plugin& plugin) {
 
   const FormKey key{plugin.key, LocalFormId{candidate}};
   set_hedr_next_form_id(plugin, candidate + 1u);
+  plugin.original_range.clear();
   return key;
 }
 
