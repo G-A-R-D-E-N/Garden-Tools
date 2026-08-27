@@ -9,6 +9,7 @@
 #include <optional>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace fo4::schema {
@@ -24,6 +25,26 @@ constexpr Signature sig_alls = Signature::from_string("ALLS");
 constexpr Signature sig_alcs = Signature::from_string("ALCS");
 constexpr Signature sig_aled = Signature::from_string("ALED");
 constexpr Signature sig_almi = Signature::from_string("ALMI");
+constexpr Signature sig_alcc = Signature::from_string("ALCC");
+
+constexpr Signature k_reference_condition_successors[] = {
+    Signature::from_string("KSIZ"), Signature::from_string("KWDA"),
+    Signature::from_string("COCT"), Signature::from_string("CNTO"),
+    Signature::from_string("COED"), Signature::from_string("SPOR"),
+    Signature::from_string("OCOR"), Signature::from_string("GWOR"),
+    Signature::from_string("ECOR"), Signature::from_string("ALLA"),
+    Signature::from_string("ALDN"), Signature::from_string("ALFV"),
+    Signature::from_string("ALDI"), Signature::from_string("ALSP"),
+    Signature::from_string("ALFC"), Signature::from_string("ALPC"),
+    Signature::from_string("VTCK"),
+};
+
+bool is_reference_condition_successor(Signature signature) {
+  for (const auto successor : k_reference_condition_successors) {
+    if (signature == successor) return true;
+  }
+  return false;
+}
 
 char ascii_lower(char ch) {
   return (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
@@ -72,6 +93,7 @@ std::optional<ScopedConditionPath> parse_scoped_path(
 struct ScopeRange {
   std::size_t begin{0};
   std::size_t end{0};
+  std::size_t insert_anchor{0};
   bool conditioned{true};
 };
 
@@ -110,7 +132,7 @@ std::vector<ScopeRange> effect_element_ranges(const Record& record) {
   for (std::size_t k = 0; k < starts.size(); ++k) {
     const std::size_t begin = starts[k];
     const std::size_t end = (k + 1 < starts.size()) ? starts[k + 1] : region_end;
-    ranges.push_back(ScopeRange{begin, end});
+    ranges.push_back(ScopeRange{begin, end, end, true});
   }
   return ranges;
 }
@@ -119,53 +141,98 @@ bool is_alias_start(Signature signature) {
   return signature == sig_alst || signature == sig_alls || signature == sig_alcs;
 }
 
-std::vector<ScopeRange> alias_element_ranges(const Record& record) {
-  std::vector<ScopeRange> ranges;
-  const auto& subs = record.subrecords;
-  std::size_t anam = subs.size();
-  for (std::size_t i = 0; i < subs.size(); ++i) {
-    if (subs[i].signature == sig_anam) {
-      anam = i;
-      break;
-    }
+std::size_t alias_condition_insert_anchor(const std::vector<Subrecord>& subs,
+                                          std::size_t start, std::size_t aled,
+                                          bool location) {
+  for (std::size_t i = start + 1; i < aled; ++i) {
+    const auto signature = subs[i].signature;
+    const bool successor =
+        location ? signature == sig_alcc : is_reference_condition_successor(signature);
+    if (successor) return i;
   }
-  if (anam == subs.size()) return ranges;
+  return aled;
+}
 
-  std::size_t i = anam + 1;
+std::optional<std::vector<ScopeRange>> alias_element_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::optional<std::size_t> anam;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature != sig_anam) continue;
+    if (anam.has_value()) return std::nullopt;
+    if (subs[i].data.size() != 4) return std::nullopt;
+    anam = i;
+  }
+
+  std::vector<ScopeRange> ranges;
+  if (!anam.has_value()) {
+    for (const auto& subrecord : subs) {
+      if (is_alias_start(subrecord.signature)) return std::nullopt;
+    }
+    return ranges;
+  }
+
+  std::size_t i = *anam + 1;
   while (i < subs.size() && is_alias_start(subs[i].signature)) {
     const std::size_t start = i;
     if (subs[start].signature == sig_alcs) {
-      std::size_t end = start + 1;
-      if (end < subs.size() && subs[end].signature == sig_almi) ++end;
-      ranges.push_back(ScopeRange{start, end, false});
-      i = end;
+      std::size_t j = start;
+      while (j < subs.size() && subs[j].signature == sig_alcs) {
+        ++j;
+        if (j < subs.size() && subs[j].signature == sig_almi) {
+          if (subs[j].data.size() != 1) return std::nullopt;
+          ++j;
+        }
+      }
+      ranges.push_back(ScopeRange{start, j, j, false});
+      i = j;
       continue;
     }
+    const bool location = subs[start].signature == sig_alls;
     std::size_t j = start + 1;
     while (j < subs.size() && subs[j].signature != sig_aled &&
            !is_alias_start(subs[j].signature)) {
       ++j;
     }
-    ranges.push_back(ScopeRange{start, j, true});
-    i = (j < subs.size() && subs[j].signature == sig_aled) ? j + 1 : j;
+    if (j >= subs.size() || subs[j].signature != sig_aled) return std::nullopt;
+    const std::size_t anchor = alias_condition_insert_anchor(subs, start, j, location);
+    ranges.push_back(ScopeRange{start, j, anchor, true});
+    i = j + 1;
   }
   return ranges;
 }
 
-std::optional<ScopeRange> scope_range(const Record& record,
-                                      const ConditionScopeDescriptor& descriptor,
-                                      std::size_t container_index) {
+enum class ScopeStatus { ok, out_of_range, not_conditioned, structure_invalid };
+
+struct ScopeResolution {
+  ScopeStatus status{ScopeStatus::out_of_range};
+  ScopeRange range{};
+};
+
+ScopeResolution resolve_scope(const Record& record,
+                              const ConditionScopeDescriptor& descriptor,
+                              std::size_t container_index) {
   std::vector<ScopeRange> ranges;
   switch (descriptor.kind) {
     case ConditionScopeKind::effect:
       ranges = effect_element_ranges(record);
       break;
-    case ConditionScopeKind::alias:
-      ranges = alias_element_ranges(record);
+    case ConditionScopeKind::alias: {
+      auto alias_ranges = alias_element_ranges(record);
+      if (!alias_ranges.has_value()) {
+        return ScopeResolution{ScopeStatus::structure_invalid, {}};
+      }
+      ranges = std::move(*alias_ranges);
       break;
+    }
   }
-  if (container_index >= ranges.size()) return std::nullopt;
-  return ranges[container_index];
+  if (container_index >= ranges.size()) {
+    return ScopeResolution{ScopeStatus::out_of_range, {}};
+  }
+  const auto& range = ranges[container_index];
+  if (!range.conditioned) {
+    return ScopeResolution{ScopeStatus::not_conditioned, range};
+  }
+  return ScopeResolution{ScopeStatus::ok, range};
 }
 
 Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
@@ -186,14 +253,25 @@ std::optional<ScopedConditionPath> scoped_condition_path(
   return parse_scoped_path(record, path);
 }
 
-std::optional<std::vector<CtdaCondition>> read_scoped_conditions(
+ScopedConditionsRead read_scoped_conditions(
     const Record& record,
     const ConditionScopeDescriptor& descriptor,
     std::size_t container_index) {
-  const auto range = scope_range(record, descriptor, container_index);
-  if (!range.has_value()) return std::nullopt;
-  if (!range->conditioned) return std::vector<CtdaCondition>{};
-  return read_ctda_conditions_in(record, range->begin, range->end);
+  const auto resolution = resolve_scope(record, descriptor, container_index);
+  switch (resolution.status) {
+    case ScopeStatus::ok:
+      return ScopedConditionsRead{
+          true, ScopedConditionStatus::updated,
+          read_ctda_conditions_in(record, resolution.range.begin, resolution.range.end)};
+    case ScopeStatus::out_of_range:
+      return ScopedConditionsRead{false,
+                                  ScopedConditionStatus::container_index_out_of_range, {}};
+    case ScopeStatus::not_conditioned:
+      return ScopedConditionsRead{false, ScopedConditionStatus::element_not_conditioned, {}};
+    case ScopeStatus::structure_invalid:
+      return ScopedConditionsRead{false, ScopedConditionStatus::alias_structure_invalid, {}};
+  }
+  return ScopedConditionsRead{false, ScopedConditionStatus::container_index_out_of_range, {}};
 }
 
 ScopedConditionStatus set_record_scoped_conditions(
@@ -208,16 +286,21 @@ ScopedConditionStatus set_record_scoped_conditions(
   if (record->header.signature != descriptor.record) {
     return ScopedConditionStatus::record_mismatch;
   }
-  const auto range = scope_range(*record, descriptor, container_index);
-  if (!range.has_value()) {
-    return ScopedConditionStatus::container_index_out_of_range;
+  const auto resolution = resolve_scope(*record, descriptor, container_index);
+  switch (resolution.status) {
+    case ScopeStatus::out_of_range:
+      return ScopedConditionStatus::container_index_out_of_range;
+    case ScopeStatus::structure_invalid:
+      return ScopedConditionStatus::alias_structure_invalid;
+    case ScopeStatus::not_conditioned:
+      return conditions.empty() ? ScopedConditionStatus::unchanged
+                                : ScopedConditionStatus::element_not_conditioned;
+    case ScopeStatus::ok:
+      break;
   }
-  if (!range->conditioned) {
-    return conditions.empty() ? ScopedConditionStatus::unchanged
-                              : ScopedConditionStatus::element_not_conditioned;
-  }
-  const auto result = write_ctda_conditions_in(*record, range->begin, range->end,
-                                               conditions, range->end);
+  const auto& range = resolution.range;
+  const auto result = write_ctda_conditions_in(*record, range.begin, range.end,
+                                               conditions, range.insert_anchor);
   if (result == CtdaScopeWrite::replaced || result == CtdaScopeWrite::inserted) {
     record->original_range.clear();
     record->decompressed_payload.clear();

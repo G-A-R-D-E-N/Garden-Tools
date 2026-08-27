@@ -473,6 +473,12 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
                     recordId + "'"
             });
         }
+        if (status == fo4::schema::ScopedConditionStatus::alias_structure_invalid) {
+            return std::unexpected(Error{
+                "ConditionAliasMalformed",
+                "Record '" + recordId + "' has a malformed alias array for path '" + path + "'"
+            });
+        }
         fo4::write_plugin_file(mutated, loaded->path);
         loaded->plugin = std::move(mutated);
         {

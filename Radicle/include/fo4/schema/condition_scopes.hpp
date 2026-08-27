@@ -39,6 +39,13 @@ enum class ScopedConditionStatus {
   record_mismatch,
   container_index_out_of_range,
   element_not_conditioned,
+  alias_structure_invalid,
+};
+
+struct ScopedConditionsRead {
+  bool ok{false};
+  ScopedConditionStatus error{ScopedConditionStatus::container_index_out_of_range};
+  std::vector<CtdaCondition> conditions;
 };
 
 // Resolves "<container>[i].<member>" for a record signature (e.g. SPEL +
@@ -46,7 +53,7 @@ enum class ScopedConditionStatus {
 std::optional<ScopedConditionPath> scoped_condition_path(
     Signature record, std::string_view path) noexcept;
 
-std::optional<std::vector<CtdaCondition>> read_scoped_conditions(
+ScopedConditionsRead read_scoped_conditions(
     const Record& record,
     const ConditionScopeDescriptor& descriptor,
     std::size_t container_index);

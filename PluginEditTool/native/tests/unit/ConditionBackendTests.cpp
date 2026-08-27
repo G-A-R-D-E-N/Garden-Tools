@@ -683,12 +683,11 @@ TEST_CASE("condition backend: Get/SetConditionsAt address QUST aliases and rejec
     REQUIRE(refAlias.size() == 1);
     CHECK(refAlias[0].at("function") == "GetAngle");
 
-    const auto collection = parseStringResult(
-        backend.invoke("backend.GetConditionsAtPath",
-                       nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
-                                              "Aliases[1].Conditions"})));
-    REQUIRE(collection.is_array());
-    CHECK(collection.empty());
+    const auto collection = backend.invoke("backend.GetConditionsAtPath",
+                                           nlohmann::json::array({"QuestEdit.esp", "000800:QuestEdit.esp",
+                                                                  "Aliases[1].Conditions"}));
+    REQUIRE_FALSE(collection.has_value());
+    CHECK(collection.error().type == "ConditionScopeNotConditioned");
 
     const auto locAlias = parseStringResult(
         backend.invoke("backend.GetConditionsAtPath",
