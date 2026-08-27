@@ -44,6 +44,8 @@ fo4::test::ByteWriter make_efit() {
 struct EffectSpec {
   std::uint32_t effect_form_id;
   std::vector<std::uint16_t> condition_functions;
+  bool has_efid = true;
+  bool has_efit = true;
 };
 
 fo4::Plugin make_spell(const std::vector<EffectSpec>& effects) {
@@ -63,10 +65,14 @@ fo4::Plugin make_spell(const std::vector<EffectSpec>& effects) {
   for (int i = 0; i < 15; ++i) spit.u32(0);
   fo4::test::write_subrecord(out, "SPIT", spit.bytes);
   for (const auto& effect : effects) {
-    fo4::test::ByteWriter efid;
-    efid.u32(effect.effect_form_id);
-    fo4::test::write_subrecord(out, "EFID", efid.bytes);
-    fo4::test::write_subrecord(out, "EFIT", make_efit().bytes);
+    if (effect.has_efid) {
+      fo4::test::ByteWriter efid;
+      efid.u32(effect.effect_form_id);
+      fo4::test::write_subrecord(out, "EFID", efid.bytes);
+    }
+    if (effect.has_efit) {
+      fo4::test::write_subrecord(out, "EFIT", make_efit().bytes);
+    }
     for (const auto function : effect.condition_functions) {
       fo4::test::write_subrecord(out, "CTDA", make_ctda(function, 0).bytes);
     }
@@ -100,6 +106,11 @@ TEST(ConditionScopes, ResolvesEffectPathForKnownRecords) {
                     fo4::Signature::from_string(record), "Effects[0].Conditions")
                     .has_value());
   }
+
+  const auto lower = fo4::schema::scoped_condition_path(
+      fo4::Signature::from_string("SPEL"), "effects[1].conditions");
+  ASSERT_TRUE(lower.has_value());
+  EXPECT_EQ(lower->container_index, 1u);
 }
 
 TEST(ConditionScopes, RejectsUnknownRecordsAndMalformedPaths) {
@@ -224,5 +235,55 @@ TEST(ConditionScopes, ReportsIndexAndRecordFailures) {
   EXPECT_EQ(fo4::schema::set_record_scoped_conditions(
                 plugin, fo4::FormKey::parse("00099A:Cond.esp"), descriptor, 0, empty),
             fo4::schema::ScopedConditionStatus::record_missing);
+}
+
+TEST(ConditionScopes, SegmentsEffectsWithoutLeadingEfid) {
+  // Effect 1 has a null BaseEffect, so it emits no EFID (Mutagen WriteNullable).
+  auto plugin = make_spell({
+      {0x00000801, {1}, true, true},
+      {0x00000000, {2}, false, true},
+      {0x00000803, {3}, true, true},
+  });
+  const auto descriptor = spel_descriptor();
+  const auto* record = spell_record(plugin);
+  ASSERT_NE(record, nullptr);
+
+  ASSERT_TRUE(fo4::schema::read_scoped_conditions(*record, descriptor, 2).has_value());
+  EXPECT_FALSE(fo4::schema::read_scoped_conditions(*record, descriptor, 3).has_value());
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 0)->at(0).function, 1u);
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 1)->at(0).function, 2u);
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 2)->at(0).function, 3u);
+
+  fo4::CtdaCondition replacement;
+  replacement.function = 55;
+  const std::vector<fo4::CtdaCondition> conditions{replacement};
+  const auto status = fo4::schema::set_record_scoped_conditions(
+      plugin, fo4::FormKey::parse("000800:Cond.esp"), descriptor, 1, conditions);
+  EXPECT_EQ(status, fo4::schema::ScopedConditionStatus::updated);
+
+  const auto bytes = fo4::write_plugin(plugin);
+  const auto reread = fo4::read_plugin(bytes, "Cond.esp");
+  const auto* rewritten = spell_record(reread);
+  ASSERT_NE(rewritten, nullptr);
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*rewritten, descriptor, 0)->at(0).function, 1u);
+  const auto middle = fo4::schema::read_scoped_conditions(*rewritten, descriptor, 1);
+  ASSERT_EQ(middle->size(), 1u);
+  EXPECT_EQ(middle->at(0).function, 55u);
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*rewritten, descriptor, 2)->at(0).function, 3u);
+}
+
+TEST(ConditionScopes, SegmentsCtdaOnlyLeadingEffect) {
+  auto plugin = make_spell({
+      {0x00000000, {9}, false, false},
+      {0x00000802, {5}, true, true},
+  });
+  const auto descriptor = spel_descriptor();
+  const auto* record = spell_record(plugin);
+  ASSERT_NE(record, nullptr);
+
+  ASSERT_TRUE(fo4::schema::read_scoped_conditions(*record, descriptor, 1).has_value());
+  EXPECT_FALSE(fo4::schema::read_scoped_conditions(*record, descriptor, 2).has_value());
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 0)->at(0).function, 9u);
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, descriptor, 1)->at(0).function, 5u);
 }
 

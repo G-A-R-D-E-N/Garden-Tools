@@ -13,11 +13,15 @@
 
 namespace fo4::schema {
 
+enum class ConditionScopeKind {
+  effect,
+};
+
 struct ConditionScopeDescriptor {
   Signature record{};
   std::string_view container;
   std::string_view member;
-  Signature marker{};
+  ConditionScopeKind kind{ConditionScopeKind::effect};
 };
 
 #include "fo4/schema/generated_condition_scopes.inc"

@@ -13,6 +13,9 @@ def cpp_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
+SCOPE_KINDS = {"effect"}
+
+
 def valid_token(value: str) -> bool:
     return (
         isinstance(value, str)
@@ -42,15 +45,15 @@ def load_scopes(schema_path: Path):
         record = entry.get("record", "")
         container = entry.get("container", "")
         member = entry.get("member", "")
-        marker = entry.get("marker", "")
+        scope = entry.get("scope", "")
         if not isinstance(record, str) or not valid_signature(record):
             raise ValueError(f"condition scope record signature must be four printable ASCII characters: {record!r}")
         if not valid_token(container):
             raise ValueError(f"condition scope container is invalid: {container!r}")
         if not valid_token(member):
             raise ValueError(f"condition scope member is invalid: {member!r}")
-        if not isinstance(marker, str) or not valid_signature(marker):
-            raise ValueError(f"condition scope marker is invalid: {marker!r}")
+        if scope not in SCOPE_KINDS:
+            raise ValueError(f"unsupported condition scope kind: {scope!r}")
         key = (record, container, member)
         if key in seen:
             raise ValueError(f"duplicate condition scope: {record}\\{container}\\{member}")
@@ -59,7 +62,7 @@ def load_scopes(schema_path: Path):
             "record": record,
             "container": container,
             "member": member,
-            "marker": marker,
+            "scope": scope,
         })
 
     parsed.sort(key=lambda item: (item["record"], item["container"], item["member"]))
@@ -77,11 +80,11 @@ def render(scopes) -> str:
             "  {" +
             f"Signature::from_string({cpp_string(row['record'])}), " +
             f"{cpp_string(row['container'])}, {cpp_string(row['member'])}, " +
-            f"Signature::from_string({cpp_string(row['marker'])})" +
+            f"ConditionScopeKind::{row['scope']}" +
             "},"
         )
     if not scopes:
-        lines.append("  {Signature{}, \"\", \"\", Signature{}},")
+        lines.append("  {Signature{}, \"\", \"\", ConditionScopeKind::effect},")
     lines.append("};")
     return "\n".join(lines) + "\n"
 
