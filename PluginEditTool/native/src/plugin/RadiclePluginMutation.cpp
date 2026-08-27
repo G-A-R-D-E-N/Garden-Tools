@@ -19,6 +19,7 @@
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/condition_scopes.hpp>
 #include <fo4/schema/ctda.hpp>
 
 namespace fo4ide::plugin {
@@ -325,6 +326,169 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
         }
         message += ".";
     }
+    return nlohmann::json(std::move(message));
+}
+
+Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
+    const nlohmann::json& arguments) {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto recordId = stringArgument(arguments, 1);
+    const auto path = stringArgument(arguments, 2);
+    const auto conditionsJson = stringArgument(arguments, 3);
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
+    if (recordId.empty()) {
+        return std::unexpected(Error{"RecordMissing", "Record FormKey is empty"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{
+            "PluginNotLoaded",
+            "Plugin is not loaded: " + pluginName
+        });
+    }
+    if (!isEditable(*loaded)) {
+        return std::unexpected(Error{
+            "PluginReadOnly",
+            "Refusing to edit protected or game-Data plugin: " + loaded->name
+        });
+    }
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
+        });
+    }
+
+    const auto resolveEditorId = [&](std::string_view text)
+        -> std::optional<fo4::RawFormId> {
+        for (const auto& candidate : plugins_) {
+            for (const auto* record : fo4::collect_records(candidate.plugin)) {
+                const auto id = editorId(*record);
+                if (id.empty()) continue;
+                std::string lowerId = id;
+                std::string lowerText(text);
+                std::transform(lowerId.begin(), lowerId.end(), lowerId.begin(),
+                               [](unsigned char ch) {
+                                   return static_cast<char>(std::tolower(ch));
+                               });
+                std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(),
+                               [](unsigned char ch) {
+                                   return static_cast<char>(std::tolower(ch));
+                               });
+                if (lowerId == lowerText) {
+                    try {
+                        const auto raw = fo4::encode_plugin_form_id(
+                            record->form_key, fo4::plugin_form_id_context(candidate.plugin));
+                        return fo4::RawFormId{raw.value()};
+                    } catch (const std::exception&) {
+                        return std::nullopt;
+                    }
+                }
+            }
+        }
+        return std::nullopt;
+    };
+
+    std::vector<fo4::CtdaCondition> built;
+    std::vector<std::string> failures;
+    try {
+        nlohmann::json document = nlohmann::json::parse(
+            conditionsJson.empty() ? "[]" : conditionsJson);
+        if (!document.is_array()) {
+            return std::unexpected(Error{
+                "InvalidConditionsJson",
+                "Could not parse conditions JSON: expected an array."
+            });
+        }
+        std::size_t index = 0;
+        for (const auto& element : document) {
+            index++;
+            std::string failure;
+            auto condition = buildCondition(element, loaded->plugin, resolveEditorId, failure);
+            if (!condition.has_value()) {
+                failures.push_back("#" + std::to_string(index) + ": " + failure);
+                continue;
+            }
+            built.push_back(std::move(*condition));
+        }
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{
+            "InvalidConditionsJson",
+            "Could not parse conditions JSON: " + std::string(error.what())
+        });
+    }
+
+    fo4::FormKey key;
+    try {
+        key = fo4::FormKey::parse(recordId);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+
+    try {
+        auto mutated = loaded->plugin;
+        fo4::assign_record_form_keys(mutated);
+        const auto* record = fo4::find_record(mutated, key);
+        if (record == nullptr) {
+            return std::unexpected(Error{
+                "RecordNotFound",
+                "Record '" + recordId + "' not found in " + pluginName + "."
+            });
+        }
+        const auto scoped =
+            fo4::schema::scoped_condition_path(record->header.signature, path);
+        if (!scoped.has_value()) {
+            return std::unexpected(Error{
+                "ConditionPathUnsupported",
+                "Native condition editing does not represent path '" + path +
+                    "' on " + record->header.signature.to_string() + " records"
+            });
+        }
+        const auto status = fo4::schema::set_record_scoped_conditions(
+            mutated, key, scoped->descriptor, scoped->container_index,
+            std::span<const fo4::CtdaCondition>{built});
+        if (status == fo4::schema::ScopedConditionStatus::container_index_out_of_range) {
+            return std::unexpected(Error{
+                "ConditionScopeOutOfRange",
+                "Container index for '" + path + "' is out of range on record '" +
+                    recordId + "'"
+            });
+        }
+        if (status == fo4::schema::ScopedConditionStatus::record_missing ||
+            status == fo4::schema::ScopedConditionStatus::record_mismatch) {
+            return std::unexpected(Error{
+                "RecordNotFound",
+                "Record '" + recordId + "' not found in " + pluginName + "."
+            });
+        }
+        fo4::write_plugin_file(mutated, loaded->path);
+        loaded->plugin = std::move(mutated);
+        {
+            std::error_code ec;
+            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+        }
+        rebuildGraphLocked();
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"SetConditionsFailed", error.what()});
+    }
+
+    auto message = "Set " + std::to_string(built.size()) +
+                   " condition(s) at " + path + " on " + recordId + " in " +
+                   pluginName + ".";
+    if (!failures.empty()) {
+        message += " Skipped " + std::to_string(failures.size()) + ": ";
+        for (std::size_t i = 0; i < failures.size(); ++i) {
+            if (i > 0) message += "; ";
+            message += failures[i];
+        }
+        message += ".";
+    }
+    message += " Written to disk.";
     return nlohmann::json(std::move(message));
 }
 

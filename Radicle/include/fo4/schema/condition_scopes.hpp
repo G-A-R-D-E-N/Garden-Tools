@@ -1,0 +1,55 @@
+#pragma once
+
+#include "fo4/formid.hpp"
+#include "fo4/plugin/container.hpp"
+#include "fo4/schema/ctda.hpp"
+#include "fo4/signature.hpp"
+
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <vector>
+
+namespace fo4::schema {
+
+struct ConditionScopeDescriptor {
+  Signature record{};
+  std::string_view container;
+  std::string_view member;
+  Signature marker{};
+};
+
+#include "fo4/schema/generated_condition_scopes.inc"
+
+struct ScopedConditionPath {
+  ConditionScopeDescriptor descriptor;
+  std::size_t container_index{0};
+};
+
+enum class ScopedConditionStatus {
+  updated,
+  unchanged,
+  record_missing,
+  record_mismatch,
+  container_index_out_of_range,
+};
+
+// Resolves "<container>[i].<member>" for a record signature (e.g. SPEL +
+// "Effects[2].Conditions"). Empty result: no descriptor for this record matches.
+std::optional<ScopedConditionPath> scoped_condition_path(
+    Signature record, std::string_view path) noexcept;
+
+std::optional<std::vector<CtdaCondition>> read_scoped_conditions(
+    const Record& record,
+    const ConditionScopeDescriptor& descriptor,
+    std::size_t container_index);
+
+ScopedConditionStatus set_record_scoped_conditions(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const ConditionScopeDescriptor& descriptor,
+    std::size_t container_index,
+    std::span<const CtdaCondition> conditions);
+
+}  // namespace fo4::schema

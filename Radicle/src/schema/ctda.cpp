@@ -140,55 +140,10 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) 
   return out;
 }
 
-std::vector<CtdaCondition> read_ctda_conditions(const Record& record) {
-  std::vector<CtdaCondition> conditions;
-  for (const auto& subrecord : record.subrecords) {
-    if (subrecord.signature == sig_ctda) {
-      conditions.push_back(parse_ctda_condition(subrecord.data));
-    } else if (!conditions.empty() &&
-               (subrecord.signature == sig_cis1 || subrecord.signature == sig_cis2)) {
-      // Mutagen reads string parameters from the CIS1/CIS2 subrecords that
-      // follow the CTDA they belong to.
-      auto& last = conditions.back();
-      if (subrecord.signature == sig_cis1) {
-        last.parameter1_string = zstring_of(subrecord.data);
-      } else {
-        last.parameter2_string = zstring_of(subrecord.data);
-      }
-    }
-  }
-  return conditions;
-}
+namespace {
 
-bool write_ctda_conditions(Record& record, std::span<const CtdaCondition> conditions) {
-  // Locate the CTDA run: the first CTDA subrecord, the last CTDA subrecord
-  // (extended through the CIS1/CIS2 strings that trail it), and a CITC
-  // immediately before the run.
-  std::size_t first = record.subrecords.size();
-  std::size_t last = record.subrecords.size();
-  std::size_t citc = record.subrecords.size();
-  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
-    const auto& sub = record.subrecords[i];
-    if (sub.signature == sig_ctda) {
-      if (first == record.subrecords.size()) {
-        first = i;
-        // A CITC immediately before the run is the count subrecord.
-        if (i > 0 && record.subrecords[i - 1].signature == sig_citc &&
-            record.subrecords[i - 1].data.size() == 4) {
-          citc = i - 1;
-        }
-      }
-      last = i;
-    } else if (last != record.subrecords.size() &&
-               (sub.signature == sig_cis1 || sub.signature == sig_cis2)) {
-      // CIS1/CIS2 after the last CTDA belong to the run (Mutagen reads the
-      // string parameters from the subrecords following the CTDA).
-      last = i;
-    }
-  }
-  if (first == record.subrecords.size()) return false;
-
-  // Build the replacement subrecords.
+std::vector<Subrecord> build_condition_subrecords(
+    std::span<const CtdaCondition> conditions) {
   std::vector<Subrecord> replacement;
   replacement.reserve(conditions.size() * 2 + 1);
   for (const auto& condition : conditions) {
@@ -209,9 +164,76 @@ bool write_ctda_conditions(Record& record, std::span<const CtdaCondition> condit
       replacement.push_back(std::move(cis2));
     }
   }
+  return replacement;
+}
 
-  // The run spans first..last inclusive; a CITC immediately before the first
-  // CTDA is the count subrecord and stays in place.
+}  // namespace
+
+std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
+                                                   std::size_t begin,
+                                                   std::size_t end) {
+  std::vector<CtdaCondition> conditions;
+  end = std::min(end, record.subrecords.size());
+  for (std::size_t i = begin; i < end; ++i) {
+    const auto& subrecord = record.subrecords[i];
+    if (subrecord.signature == sig_ctda) {
+      conditions.push_back(parse_ctda_condition(subrecord.data));
+    } else if (!conditions.empty() &&
+               (subrecord.signature == sig_cis1 || subrecord.signature == sig_cis2)) {
+      auto& last = conditions.back();
+      if (subrecord.signature == sig_cis1) {
+        last.parameter1_string = zstring_of(subrecord.data);
+      } else {
+        last.parameter2_string = zstring_of(subrecord.data);
+      }
+    }
+  }
+  return conditions;
+}
+
+std::vector<CtdaCondition> read_ctda_conditions(const Record& record) {
+  return read_ctda_conditions_in(record, 0, record.subrecords.size());
+}
+
+CtdaScopeWrite write_ctda_conditions_in(Record& record,
+                                        std::size_t begin,
+                                        std::size_t end,
+                                        std::span<const CtdaCondition> conditions,
+                                        std::optional<std::size_t> insert_anchor) {
+  end = std::min(end, record.subrecords.size());
+  std::size_t first = end;
+  std::size_t last = end;
+  std::size_t citc = end;
+  for (std::size_t i = begin; i < end; ++i) {
+    const auto& sub = record.subrecords[i];
+    if (sub.signature == sig_ctda) {
+      if (first == end) {
+        first = i;
+        if (i > begin && record.subrecords[i - 1].signature == sig_citc &&
+            record.subrecords[i - 1].data.size() == 4) {
+          citc = i - 1;
+        }
+      }
+      last = i;
+    } else if (last != end &&
+               (sub.signature == sig_cis1 || sub.signature == sig_cis2)) {
+      last = i;
+    }
+  }
+
+  auto replacement = build_condition_subrecords(conditions);
+
+  if (first == end) {
+    if (conditions.empty()) return CtdaScopeWrite::no_op;
+    if (!insert_anchor.has_value()) return CtdaScopeWrite::no_list;
+    const std::size_t anchor = std::min(*insert_anchor, record.subrecords.size());
+    record.subrecords.insert(
+        record.subrecords.begin() + static_cast<std::ptrdiff_t>(anchor),
+        std::make_move_iterator(replacement.begin()),
+        std::make_move_iterator(replacement.end()));
+    return CtdaScopeWrite::inserted;
+  }
+
   const bool has_citc = citc < first;
   record.subrecords.erase(
       record.subrecords.begin() + static_cast<std::ptrdiff_t>(first),
@@ -223,11 +245,15 @@ bool write_ctda_conditions(Record& record, std::span<const CtdaCondition> condit
       std::make_move_iterator(replacement.end()));
 
   if (has_citc) {
-    // The CITC still sits immediately before the run; refresh its count.
     std::uint32_t count = static_cast<std::uint32_t>(conditions.size());
     std::memcpy(record.subrecords[first - 1].data.data(), &count, sizeof(count));
   }
-  return true;
+  return CtdaScopeWrite::replaced;
+}
+
+bool write_ctda_conditions(Record& record, std::span<const CtdaCondition> conditions) {
+  return write_ctda_conditions_in(record, 0, record.subrecords.size(), conditions,
+                                  std::nullopt) == CtdaScopeWrite::replaced;
 }
 
 }  // namespace fo4

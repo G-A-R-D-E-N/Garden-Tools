@@ -116,6 +116,8 @@ private:
 
     Result<nlohmann::json> getConditions(const nlohmann::json& arguments) const;
     Result<nlohmann::json> setConditions(const nlohmann::json& arguments);
+    Result<nlohmann::json> getConditionsAtPath(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> setConditionsAtPath(const nlohmann::json& arguments);
     Result<nlohmann::json> getConditionFunctions() const;
     Result<nlohmann::json> getConditionRunOnTypes() const;
 

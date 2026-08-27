@@ -419,16 +419,30 @@ TEST_CASE("Legacy root condition paths route to native CTDA operations") {
     CHECK(backend.invokedBackendArguments[2] == "[]");
 }
 
-TEST_CASE("Nested legacy condition paths fail explicitly until native schema support exists") {
+TEST_CASE("Nested condition paths route to the native scoped condition operations") {
     RoutingBackend backend;
     fo4ide::app::PluginBackendTarget target(backend, "backend");
 
-    const auto result = target.invoke(
+    auto result = target.invoke(
         "GetConditionsAt",
-        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Perks[0].Conditions"}));
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "ConditionPathUnsupported");
-    CHECK(backend.invokedBackendMethod.empty());
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Effects[2].Conditions"}));
+    REQUIRE(result.has_value());
+    CHECK(backend.invokedBackendMethod == "GetConditionsAtPath");
+    REQUIRE(backend.invokedBackendArguments.size() == 3);
+    CHECK(backend.invokedBackendArguments[0] == "Patch.esp");
+    CHECK(backend.invokedBackendArguments[1] == "000800:Patch.esp");
+    CHECK(backend.invokedBackendArguments[2] == "Effects[2].Conditions");
+
+    result = target.invoke(
+        "SetConditionsAt",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Effects[1].Conditions", "[]"}));
+    REQUIRE(result.has_value());
+    CHECK(backend.invokedBackendMethod == "SetConditionsAtPath");
+    REQUIRE(backend.invokedBackendArguments.size() == 4);
+    CHECK(backend.invokedBackendArguments[0] == "Patch.esp");
+    CHECK(backend.invokedBackendArguments[1] == "000800:Patch.esp");
+    CHECK(backend.invokedBackendArguments[2] == "Effects[1].Conditions");
+    CHECK(backend.invokedBackendArguments[3] == "[]");
 }
 
 TEST_CASE("Cell search routes through the native record index and honors its limit") {
