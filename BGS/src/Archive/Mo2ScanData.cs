@@ -92,7 +92,7 @@ internal sealed class Mo2ScanData : IDisposable
         }
     }
 
-    public IReadOnlyList<string> ModHkxPaths(string folderName)
+    public IReadOnlyList<string> ModHkxPaths(string folderName, Action<string>? onArchive = null)
     {
         string needle = "/" + folderName.Trim('/', '\\') + "/";
         var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -111,28 +111,20 @@ internal sealed class Mo2ScanData : IDisposable
             foreach (string archivePath in EnumerateFilesSafe(root, "*.ba2", recursive: false)
                          .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
             {
-                Ba2 archive;
-                try { archive = Ba2.Open(archivePath); }
-                catch (InvalidDataException e) when (e.Message.Contains("DX10", StringComparison.OrdinalIgnoreCase))
+                onArchive?.Invoke(Path.GetFileName(archivePath));
+                if (!Data.TryArchiveEntries(archivePath, out var entries, out string? warning))
                 {
-                    continue; // normal texture archive; cannot contain HKX
-                }
-                catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-                {
-                    _archiveWarnings.Add($"{Path.GetFileName(archivePath)}: {First(e.Message)}");
+                    if (warning != null) _archiveWarnings.Add(warning);
                     continue;
                 }
 
-                using (archive)
+                foreach (var entry in entries)
                 {
-                    foreach (var entry in archive.Entries)
-                    {
-                        if (!entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) continue;
-                        string rel = entry.Name.Replace('\\', '/');
-                        if (!HasFolder(rel, needle)) continue;
-                        string key = GameData.Normalize(rel);
-                        if (!found.ContainsKey(key)) found[key] = rel;
-                    }
+                    if (!entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) continue;
+                    string rel = entry.Name.Replace('\\', '/');
+                    if (!HasFolder(rel, needle)) continue;
+                    string key = GameData.Normalize(rel);
+                    if (!found.ContainsKey(key)) found[key] = rel;
                 }
             }
         }

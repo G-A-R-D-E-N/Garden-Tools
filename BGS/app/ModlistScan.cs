@@ -57,16 +57,22 @@ public static class ModlistScan
         using (scan!)
         {
             PrintLayout(scan!, json);
-            var characters = scan.ModHkxPaths("characters");
+            Progress("indexing mod archives for characters...");
+            int archivesSeen = 0;
+            var characters = scan!.ModHkxPaths("characters",
+                _ => { if (++archivesSeen % 25 == 0) Progress($"  processed {archivesSeen} archive(s)..."); });
+            Progress($"processed {archivesSeen} archive(s); found {characters.Count} character file(s) to check");
             var findings = new List<ScanFinding>();
             CollectArchiveWarnings(scan, json, findings);
 
             string temp = TempDirectory("bgs-modlist");
             int parsed = 0, broken = 0, missing = 0, unreadable = 0, serial = 0;
+            int processed = 0, total = characters.Count;
             try
             {
                 foreach (string dataRel in characters)
                 {
+                    if (StepDue(++processed, total)) Progress($"  scanned {processed}/{total} character(s)...");
                     var read = scan.ReadDataRelative(dataRel);
                     if (read == null)
                     {
@@ -178,7 +184,11 @@ public static class ModlistScan
         using (scan!)
         {
             PrintLayout(scan!, json);
-            var behaviours = scan.ModHkxPaths("behaviors");
+            Progress("indexing mod archives for behaviours...");
+            int archivesSeen = 0;
+            var behaviours = scan!.ModHkxPaths("behaviors",
+                _ => { if (++archivesSeen % 25 == 0) Progress($"  processed {archivesSeen} archive(s)..."); });
+            Progress($"processed {archivesSeen} archive(s); found {behaviours.Count} behaviour file(s) to check");
             var findings = new List<ScanFinding>();
             CollectArchiveWarnings(scan, json, findings);
 
@@ -212,10 +222,12 @@ public static class ModlistScan
 
             string temp = TempDirectory("bgs-clips");
             int checkedBehaviours = 0, broken = 0, missingClips = 0, unreadable = 0, serial = 0;
+            int processed = 0, total = behaviours.Count;
             try
             {
                 foreach (string dataRel in behaviours)
                 {
+                    if (StepDue(++processed, total)) Progress($"  scanned {processed}/{total} behaviour(s)...");
                     var read = scan.ReadDataRelative(dataRel);
                     if (read == null)
                     {
@@ -333,8 +345,10 @@ public static class ModlistScan
                 .ToList();
             Info(json, $"scanning {ba2s.Count} .ba2 archive(s) under {root}");
 
+            int ba2ix = 0;
             foreach (string ba2path in ba2s)
             {
+                if (StepDue(++ba2ix, ba2s.Count)) Progress($"  opened {ba2ix}/{ba2s.Count} archive(s)...");
                 Ba2 archive;
                 try { archive = Ba2.Open(ba2path); }
                 catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
@@ -384,8 +398,10 @@ public static class ModlistScan
                 .ToList();
             Info(json, $"scanning {loose.Count} loose behaviour/character .hkx");
 
+            int looseIx = 0;
             foreach (string path in loose)
             {
+                if (StepDue(++looseIx, loose.Count)) Progress($"  checked {looseIx}/{loose.Count} loose file(s)...");
                 scanned++;
                 var errors = CheckBehaviour(path);
                 if (errors.Count == 0) continue;
@@ -449,6 +465,11 @@ public static class ModlistScan
         if (json) Console.Error.WriteLine(line);
         else Console.WriteLine(line);
     }
+
+    private static void Progress(string line) => Console.Error.WriteLine(line);
+
+    private static bool StepDue(int done, int total) =>
+        total > 0 && (done == total || done % Math.Max(1, total / 20) == 0);
 
     private static int Fail(bool json, string mode, string target, string kind, string message)
     {

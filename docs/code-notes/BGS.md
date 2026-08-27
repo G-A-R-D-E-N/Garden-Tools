@@ -53,3 +53,44 @@ modes, emitted as one JSON document under `--json`.
   resolve by stripping the authoring root and swapping the extension to `.hkx` — is verified FO4
   reverse-engineering of the animation load path; `GameData.Normalize` and `ProjectChain.ResolvePath`
   implement the extension-agnostic match that the scan's existence checks rely on.
+
+## Headless scan progress + performance (issue #193)
+
+### `src/Archive/GameData.cs` — `ResolveSource` (existence without decompression)
+
+`ContainsAnimation` / `ResolveAnimation` used to route through `ReadAnimation`, which reads and
+**decompresses** the target file's bytes just to report where it resolves. In the scan hot loop that
+meant every per-clip / per-animation existence check (`ModlistScan.ScanClips.Resolves` →
+`Mo2ScanData.ExistsDataRelative` → `GameData.ContainsAnimation`) decompressed the matched animation —
+the dominant cost on large load orders. `GameData.ResolveSource` now determines the source
+(`"loose"` / archive file name / `null`) using only the already-cached indices (`ModLooseIndex`,
+`CaseInsensitivePath`, and `FindEntry` over the cached `Names`/`Entries`) with **no byte read**.
+`ReadAnimation` still reads bytes and is used where the caller needs the file contents (reading a
+character/behaviour file to parse it).
+
+Policy: `ResolveSource` / `ContainsAnimation` validate **virtual-path resolution only** — whether the
+declared animation resolves to a loose file or an archive entry. Whether that entry's payload can
+actually be read/decompressed (corruption, unsupported compression) is a **separate validation
+concern**, deliberately out of scope here — do not "fix" this back into decompression. Corrupt /
+unloadable animation crash coverage belongs to #201.
+
+### `src/Archive/GameData.cs` — `TryArchiveEntries` (archive index parsed once per run)
+
+`Mo2ScanData.ModHkxPaths` used to `Ba2.Open()` each mod archive itself (parsing its index/name table),
+enumerate, and dispose it — then `GameData` parsed the *same* archive a second time for existence/read
+resolution. `GameData.TryArchiveEntries` exposes the shared, cached `Open` (`GameData._opened`) with the
+same DX10-texture / unreadable-GNRL handling, and `ModHkxPaths` now consumes entries through it. So each
+archive's index is parsed **once per run** and reused by both discovery and resolution — the actual
+#193 "parsed once" goal, not just relying on a cache that discovery bypassed. Regression:
+`tools/tests/ScanCliTests.cs` (`ArchiveIsParsedOnceAcrossDiscoveryAndResolution`) counts
+`Ba2.OpenCountForTest` and asserts a single parse across `ModHkxPaths` + `ExistsDataRelative`.
+
+### `app/ModlistScan.cs` — progress to stderr
+
+- `ModlistScan.Progress` writes to **stderr in every mode** (progress is transient diagnostic; stdout
+  stays a single clean JSON document under `--json`, and the report under human mode).
+- `ModlistScan.StepDue` throttles per-file progress to ~20 updates regardless of load-order size.
+- `Mo2ScanData.ModHkxPaths` takes an optional `onArchive` callback so the archive-indexing phase
+  (which opens every enabled mod's `.ba2`) reports progress too.
+- Progress strings use ASCII `...`, not `…` (U+2026), to avoid mojibake under the Windows console
+  codepage.

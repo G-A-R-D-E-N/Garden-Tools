@@ -118,6 +118,86 @@ public sealed class ScanCliTests
         Assert.Equal(2, ParseSingle(stdout).GetProperty("exitCode").GetInt32());
     }
 
+    [Fact]
+    public void ScanArchivesEmitsProgressToStderrNotStdoutInJson()
+    {
+        using var dir = new TempDir("bgs-scan-progress");
+        string behaviors = Path.Combine(dir.Path, "meshes", "actors", "x", "behaviors");
+        Directory.CreateDirectory(behaviors);
+        File.WriteAllBytes(Path.Combine(behaviors, "a.hkx"), new byte[] { 0, 1, 2, 3 });
+        File.WriteAllBytes(Path.Combine(behaviors, "b.hkx"), new byte[] { 4, 5, 6, 7 });
+
+        var (exit, stdout, stderr) = Capture(() =>
+            ModlistScan.Run(new[] { "--scan-archives", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        ParseSingle(stdout);
+        Assert.DoesNotContain("checked", stdout);
+        Assert.Contains("checked", stderr);
+    }
+
+    [Fact]
+    public void ScanClipsPassesWhenTheClipAnimationIsPresent()
+    {
+        using var mo2 = new Mo2Instance();
+        byte[] behaviour = BatchAnimationBuilder.Build(
+            Source("hkbStateMachine"),
+            NativeGraphModel.FirstId,
+            new[] { new BatchAnimationBuilder.Entry("Idle", "Animations\\Idle.hkx") }).Bytes;
+        mo2.AddModFile("Meshes/Actors/Test/Behaviors/test.hkx", behaviour);
+        mo2.AddModFile("Meshes/Actors/Test/Animations/Idle.hkx", new byte[] { 1, 2, 3 });
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanClips(new[] { "--scan-clips", mo2.Instance, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(0, json.GetProperty("exitCode").GetInt32());
+        Assert.Empty(json.GetProperty("findings").EnumerateArray());
+    }
+
+    [Fact]
+    public void ArchiveIsParsedOnceAcrossDiscoveryAndResolution()
+    {
+        using var mo2 = new Mo2Instance();
+        mo2.AddModArchive("Meshes/Actors/Test/Behaviors/main.hkx", new byte[] { 1, 2, 3 });
+
+        Assert.True(Mo2ScanData.TryOpen(mo2.Instance, out var scan, out string error), error);
+        using (scan!)
+        {
+            Ba2.OpenCountForTest = 0;
+            var found = scan.ModHkxPaths("behaviors");
+            Assert.Contains(found, p => p.Replace('\\', '/').EndsWith("behaviors/main.hkx", StringComparison.OrdinalIgnoreCase));
+            Assert.True(scan.ExistsDataRelative("Meshes/Actors/Test/Behaviors/main.hkx"));
+            Assert.Equal(1, Ba2.OpenCountForTest);
+        }
+    }
+
+    private static void WriteSingleEntryArchive(string path, string entryName, byte[] payload)
+    {
+        using var stream = File.Create(path);
+        using var writer = new BinaryWriter(stream);
+        long headerEnd = 24 + 36;
+        long nameTableAt = headerEnd + payload.Length;
+
+        writer.Write(new[] { 'B', 'T', 'D', 'X' });
+        writer.Write(1u);
+        writer.Write(new[] { 'G', 'N', 'R', 'L' });
+        writer.Write(1u);
+        writer.Write((ulong)nameTableAt);
+
+        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+        writer.Write((ulong)headerEnd);
+        writer.Write(0u);
+        writer.Write((uint)payload.Length);
+        writer.Write(0u);
+
+        writer.Write(payload);
+        var bytes = Encoding.UTF8.GetBytes(entryName.Replace('/', '\\'));
+        writer.Write((ushort)bytes.Length);
+        writer.Write(bytes);
+    }
+
     private static (int Exit, string Stdout, string Stderr) Capture(Func<int> action)
     {
         var outWriter = new StringWriter();
@@ -208,6 +288,9 @@ public sealed class ScanCliTests
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, bytes);
         }
+
+        public void AddModArchive(string entryName, byte[] payload) =>
+            WriteSingleEntryArchive(Path.Combine(Mod, "Test - Main.ba2"), entryName, payload);
 
         public void Dispose() => _root.Dispose();
     }
