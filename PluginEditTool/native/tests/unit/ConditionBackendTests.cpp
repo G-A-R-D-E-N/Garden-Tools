@@ -396,7 +396,7 @@ TEST_CASE("condition backend: GetConditionsAt reads a nested effect scope") {
                 .has_value());
 
     const auto first = parseStringResult(
-        backend.invoke("backend.GetConditionsAt",
+        backend.invoke("backend.GetConditionsAtPath",
                        nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                               "Effects[0].Conditions"})));
     REQUIRE(first.is_array());
@@ -404,19 +404,19 @@ TEST_CASE("condition backend: GetConditionsAt reads a nested effect scope") {
     CHECK(first[0].at("function") == "GetAngle");
 
     const auto second = parseStringResult(
-        backend.invoke("backend.GetConditionsAt",
+        backend.invoke("backend.GetConditionsAtPath",
                        nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                               "Effects[1].Conditions"})));
     REQUIRE(second.is_array());
     CHECK(second.size() == 2);
 
-    const auto oob = backend.invoke("backend.GetConditionsAt",
+    const auto oob = backend.invoke("backend.GetConditionsAtPath",
                                     nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                                            "Effects[2].Conditions"}));
     REQUIRE_FALSE(oob.has_value());
     CHECK(oob.error().type == "ConditionScopeOutOfRange");
 
-    const auto unsupported = backend.invoke("backend.GetConditionsAt",
+    const auto unsupported = backend.invoke("backend.GetConditionsAtPath",
                                             nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                                                    "Perks[0].Conditions"}));
     REQUIRE_FALSE(unsupported.has_value());
@@ -451,7 +451,7 @@ TEST_CASE("condition backend: SetConditionsAt replaces one effect scope and roun
         },
     });
 
-    const auto message = backend.invoke("backend.SetConditionsAt",
+    const auto message = backend.invoke("backend.SetConditionsAtPath",
                                         nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                                                "Effects[0].Conditions", replacement.dump()}));
     REQUIRE(message.has_value());
@@ -460,7 +460,7 @@ TEST_CASE("condition backend: SetConditionsAt replaces one effect scope and roun
     CHECK(text.find("Written to disk.") != std::string::npos);
 
     const auto first = parseStringResult(
-        backend.invoke("backend.GetConditionsAt",
+        backend.invoke("backend.GetConditionsAtPath",
                        nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                               "Effects[0].Conditions"})));
     REQUIRE(first.size() == 2);
@@ -468,7 +468,7 @@ TEST_CASE("condition backend: SetConditionsAt replaces one effect scope and roun
     CHECK(first[1].at("function") == "GetIsID");
 
     const auto second = parseStringResult(
-        backend.invoke("backend.GetConditionsAt",
+        backend.invoke("backend.GetConditionsAtPath",
                        nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                               "Effects[1].Conditions"})));
     REQUIRE(second.size() == 2);
@@ -486,26 +486,26 @@ TEST_CASE("condition backend: SetConditionsAt clears one effect scope without to
                                                           {pluginEntry("SpellEdit.esp", pluginPath, "Override")})}})
                 .has_value());
 
-    const auto message = backend.invoke("backend.SetConditionsAt",
+    const auto message = backend.invoke("backend.SetConditionsAtPath",
                                         nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                                                "Effects[1].Conditions", "[]"}));
     REQUIRE(message.has_value());
     CHECK(message->get<std::string>().find("Set 0 condition(s) at Effects[1].Conditions") == 0);
 
     const auto first = parseStringResult(
-        backend.invoke("backend.GetConditionsAt",
+        backend.invoke("backend.GetConditionsAtPath",
                        nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                               "Effects[0].Conditions"})));
     REQUIRE(first.size() == 1);
 
     const auto second = parseStringResult(
-        backend.invoke("backend.GetConditionsAt",
+        backend.invoke("backend.GetConditionsAtPath",
                        nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                               "Effects[1].Conditions"})));
     REQUIRE(second.is_array());
     CHECK(second.empty());
 
-    const auto oob = backend.invoke("backend.SetConditionsAt",
+    const auto oob = backend.invoke("backend.SetConditionsAtPath",
                                     nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                                            "Effects[9].Conditions", "[]"}));
     REQUIRE_FALSE(oob.has_value());
