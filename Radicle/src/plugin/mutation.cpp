@@ -145,35 +145,44 @@ std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin
   return {k_first_full_local_id, k_full_local_mask};
 }
 
-FormKey create_local_record(Plugin& plugin, Signature signature) {
-  if (signature.packed() == 0 || signature == sig_tes4 || signature == sig_grup) {
-    throw FormIdError("invalid major-record signature for local record creation");
-  }
+FormKey reserve_local_form_key(Plugin& plugin) {
   if (plugin.key.empty()) {
-    throw FormIdError("plugin has no identity for local record creation");
+    throw FormIdError("plugin has no identity for local FormID reservation");
   }
 
-  auto next = plugin;
-  assign_record_form_keys(next);
+  assign_record_form_keys(plugin);
 
-  const auto [lowest, highest] = local_form_id_range(next);
+  const auto [lowest, highest] = local_form_id_range(plugin);
   // A light plugin's HEDR nextFormID may legitimately sit below the full-plugin
   // floor, so clamp up to this plugin's own floor rather than rejecting it.
-  auto candidate = std::max(next.header.next_form_id, lowest);
+  auto candidate = std::max(plugin.header.next_form_id, lowest);
   if (candidate > highest) {
     throw FormIdError("HEDR nextFormID is outside this plugin's local FormID range");
   }
 
   while (candidate <= highest) {
-    const FormKey probe{next.key, LocalFormId{candidate}};
-    if (find_record(next, probe) == nullptr) break;
+    const FormKey probe{plugin.key, LocalFormId{candidate}};
+    if (find_record(plugin, probe) == nullptr) break;
     ++candidate;
   }
   if (candidate > highest) {
     throw FormIdError("no local FormID remains at or above HEDR nextFormID");
   }
 
-  const FormKey key{next.key, LocalFormId{candidate}};
+  const FormKey key{plugin.key, LocalFormId{candidate}};
+  set_hedr_next_form_id(plugin, candidate + 1u);
+  plugin.original_range.clear();
+  return key;
+}
+
+FormKey create_local_record(Plugin& plugin, Signature signature) {
+  if (signature.packed() == 0 || signature == sig_tes4 || signature == sig_grup) {
+    throw FormIdError("invalid major-record signature for local record creation");
+  }
+
+  auto next = plugin;
+  const auto key = reserve_local_form_key(next);
+
   Record record;
   record.header.signature = signature;
   record.header.form_id = encode_plugin_form_id(key, plugin_form_id_context(next));
@@ -183,7 +192,6 @@ FormKey create_local_record(Plugin& plugin, Signature signature) {
   auto* group = find_or_create_top_group(next, signature);
   group->children.emplace_back(std::move(record));
 
-  set_hedr_next_form_id(next, candidate + 1u);
   next.original_range.clear();
   plugin = std::move(next);
   return key;
