@@ -577,7 +577,7 @@ TEST(ConditionScopes, CollectionAliasRejectsConditionAccess) {
 
   const std::vector<fo4::CtdaCondition> empty;
   EXPECT_EQ(fo4::schema::set_record_scoped_conditions(plugin, key, descriptor, 1, empty),
-            fo4::schema::ScopedConditionStatus::unchanged);
+            fo4::schema::ScopedConditionStatus::element_not_conditioned);
 }
 
 TEST(ConditionScopes, MalformedAliasStructureFailsClosed) {
@@ -591,6 +591,12 @@ TEST(ConditionScopes, MalformedAliasStructureFailsClosed) {
       {{"ANAM", u32_bytes(1)}, {"ALCS", u32_bytes(0)}, {"ALMI", {std::byte{0}, std::byte{0}}}},
       {{"ANAM", u32_bytes(1)}, {"ANAM", u32_bytes(2)}},
       {{"ALST", u32_bytes(0)}, {"ALID", {std::byte{'A'}, std::byte{0}}}, {"ALED", {}}},
+      {{"ANAM", u32_bytes(1)}, {"ALST", {std::byte{0}, std::byte{0}}},
+       {"ALID", {std::byte{'A'}, std::byte{0}}}, {"ALED", {}}},
+      {{"ANAM", u32_bytes(1)}, {"ALCS", {std::byte{0}, std::byte{0}}}},
+      {{"ANAM", u32_bytes(1)}, {"ALST", u32_bytes(0)}, {"ALID", {std::byte{'A'}, std::byte{0}}},
+       {"ALED", {}}, {"NNAM", {std::byte{0}}}, {"ALST", u32_bytes(0)},
+       {"ALID", {std::byte{'A'}, std::byte{0}}}, {"ALED", {}}},
   };
 
   for (const auto& body : malformed) {

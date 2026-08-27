@@ -177,6 +177,7 @@ std::optional<std::vector<ScopeRange>> alias_element_ranges(const Record& record
     if (subs[start].signature == sig_alcs) {
       std::size_t j = start;
       while (j < subs.size() && subs[j].signature == sig_alcs) {
+        if (subs[j].data.size() != 4) return std::nullopt;
         ++j;
         if (j < subs.size() && subs[j].signature == sig_almi) {
           if (subs[j].data.size() != 1) return std::nullopt;
@@ -187,6 +188,7 @@ std::optional<std::vector<ScopeRange>> alias_element_ranges(const Record& record
       i = j;
       continue;
     }
+    if (subs[start].data.size() != 4) return std::nullopt;
     const bool location = subs[start].signature == sig_alls;
     std::size_t j = start + 1;
     while (j < subs.size() && subs[j].signature != sig_aled &&
@@ -197,6 +199,13 @@ std::optional<std::vector<ScopeRange>> alias_element_ranges(const Record& record
     const std::size_t anchor = alias_condition_insert_anchor(subs, start, j, location);
     ranges.push_back(ScopeRange{start, j, anchor, true});
     i = j + 1;
+  }
+
+  for (; i < subs.size(); ++i) {
+    const auto signature = subs[i].signature;
+    if (is_alias_start(signature) || signature == sig_aled || signature == sig_almi) {
+      return std::nullopt;
+    }
   }
   return ranges;
 }
@@ -293,8 +302,7 @@ ScopedConditionStatus set_record_scoped_conditions(
     case ScopeStatus::structure_invalid:
       return ScopedConditionStatus::alias_structure_invalid;
     case ScopeStatus::not_conditioned:
-      return conditions.empty() ? ScopedConditionStatus::unchanged
-                                : ScopedConditionStatus::element_not_conditioned;
+      return ScopedConditionStatus::element_not_conditioned;
     case ScopeStatus::ok:
       break;
   }
