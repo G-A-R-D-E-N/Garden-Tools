@@ -1140,7 +1140,20 @@ Result<nlohmann::json> RadiclePluginBackend::getConditionsAtPath(
 
     const auto conditions = fo4::schema::read_scoped_conditions(
         *record, scoped->descriptor, scoped->container_index);
-    if (!conditions.has_value()) {
+    if (!conditions.ok) {
+        if (conditions.error == fo4::schema::ScopedConditionStatus::element_not_conditioned) {
+            return std::unexpected(Error{
+                "ConditionScopeNotConditioned",
+                "'" + path + "' addresses an element that carries no conditions on record '" +
+                    recordId + "'"
+            });
+        }
+        if (conditions.error == fo4::schema::ScopedConditionStatus::alias_structure_invalid) {
+            return std::unexpected(Error{
+                "ConditionAliasMalformed",
+                "Record '" + recordId + "' has a malformed alias array for path '" + path + "'"
+            });
+        }
         return std::unexpected(Error{
             "ConditionScopeOutOfRange",
             "Container index for '" + path + "' is out of range on record '" +
@@ -1150,7 +1163,7 @@ Result<nlohmann::json> RadiclePluginBackend::getConditionsAtPath(
 
     const auto* context = owner != nullptr ? owner : &plugins_.front();
     nlohmann::json outp = nlohmann::json::array();
-    for (const auto& condition : *conditions) {
+    for (const auto& condition : conditions.conditions) {
         outp.push_back(describeCondition(condition, context->plugin));
     }
     return nlohmann::json(outp.dump());
