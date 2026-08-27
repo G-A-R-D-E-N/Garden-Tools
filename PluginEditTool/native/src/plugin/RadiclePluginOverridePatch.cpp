@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/forms/components.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
@@ -273,15 +274,6 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
         return std::unexpected(Error{
             "BadPluginMissing", "Provide the plugin whose overrides to revert."});
     }
-    // Component filtering needs the component (CVPA/FVPA) surface Radicle does
-    // not model yet; fail closed rather than silently ignore the filter.
-    if (!containsComponent.empty()) {
-        return std::unexpected(Error{
-            "ComponentFilterUnsupported",
-            "Filtering reverts by component is not supported by the native backend yet; "
-            "omit containsComponent."});
-    }
-
     const auto badLower = asciiLower(badPlugin);
     const auto signatureLower = asciiLower(signature);
     const auto patchName = normalizePluginName(patchArg);
@@ -291,6 +283,16 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
     const auto* bad = findPlugin(badPlugin);
     if (bad == nullptr) {
         return std::unexpected(Error{"BadPluginNotLoaded", "'" + badPlugin + "' is not loaded."});
+    }
+
+    std::optional<fo4::FormKey> componentFk;
+    if (!containsComponent.empty()) {
+        componentFk = resolveListValue(containsComponent);
+        if (!componentFk) {
+            return std::unexpected(Error{
+                "ComponentNotResolved",
+                "'" + containsComponent + "' is not a FormKey/EditorID of a loaded record."});
+        }
     }
 
     // Each override of badPlugin that also wins (is the top context) is a
@@ -326,6 +328,19 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
             ++skipped;
             continue;
         }
+        if (componentFk) {
+            bool uses = false;
+            if (fo4::forms::record_supports_components(versions[*badIndex].signature)) {
+                try {
+                    for (const auto& entry : fo4::forms::decode_components(bad->plugin, key)) {
+                        if (entry.component == *componentFk) { uses = true; break; }
+                    }
+                } catch (const std::exception&) {
+                    uses = false;
+                }
+            }
+            if (!uses) { ++skipped; continue; }
+        }
         const auto& prior = versions[versions.size() - 2];
         std::string editor;
         if (const auto* record = fo4::find_record(bad->plugin, key)) editor = editorId(*record);
@@ -342,7 +357,10 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
     if (!apply) {
         std::string message = "DRY RUN -- " + std::to_string(reverts.size()) +
                              " record(s) where " + badPlugin +
-                             " is the winner would be reverted to the prior version.\n";
+                             " is the winner would be reverted to the prior version" +
+                             (componentFk ? (" (filtered to ones using " + containsComponent + ")")
+                                          : std::string{}) +
+                             ".\n";
         if (skipped > 0) {
             message += "(" + std::to_string(skipped) + " of " + badPlugin +
                        "'s overrides skipped -- a later plugin already wins, or filtered out.)\n";

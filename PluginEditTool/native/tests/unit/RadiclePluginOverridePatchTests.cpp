@@ -98,6 +98,49 @@ std::vector<std::byte> emptyPlugin() {
     return out.bytes;
 }
 
+void writeFvpaSteel(fo4::test::ByteWriter& out) {
+    fo4::test::ByteWriter fvpa;
+    fvpa.u32(0x00000F00);
+    fvpa.u32(1);
+    fo4::test::write_subrecord(out, "FVPA", fvpa.bytes);
+}
+
+// Base.esm master: CMPO 000F00 "SteelComp", CMPO 000F01 "OtherComp", and COBJ
+// 000800 whose FVPA uses only 000F00.
+std::vector<std::byte> cobjMaster() {
+    fo4::test::ByteWriter out;
+    header(out, fo4::RecordFlags::master);
+    const auto cmpoGroup = fo4::test::begin_group(out, "CMPO", 0);
+    const auto steel = fo4::test::begin_record(out, "CMPO", 0, 0x00000F00);
+    writeEdid(out, "SteelComp");
+    fo4::test::end_record(out, steel);
+    const auto other = fo4::test::begin_record(out, "CMPO", 0, 0x00000F01);
+    writeEdid(out, "OtherComp");
+    fo4::test::end_record(out, other);
+    fo4::test::end_group(out, cmpoGroup);
+
+    const auto cobjGroup = fo4::test::begin_group(out, "COBJ", 0);
+    const auto cobj = fo4::test::begin_record(out, "COBJ", 0, 0x00000800);
+    writeEdid(out, "RecipeBase");
+    writeFvpaSteel(out);
+    fo4::test::end_record(out, cobj);
+    fo4::test::end_group(out, cobjGroup);
+    return out.bytes;
+}
+
+// A plugin overriding Base.esm's COBJ 000800, keeping the 000F00 FVPA component.
+std::vector<std::byte> cobjOverride(std::string_view editorId) {
+    fo4::test::ByteWriter out;
+    header(out, 0, "Base.esm");
+    const auto group = fo4::test::begin_group(out, "COBJ", 0);
+    const auto cobj = fo4::test::begin_record(out, "COBJ", 0, 0x00000800);
+    writeEdid(out, editorId);
+    writeFvpaSteel(out);
+    fo4::test::end_record(out, cobj);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 std::vector<std::byte> nestedRefrPlugin(std::uint32_t flags, std::string_view master,
                                         std::string_view editorId) {
     fo4::test::ByteWriter out;
@@ -146,6 +189,32 @@ struct OverrideFixture {
         writeBytes(basePath, miscMaster("WidgetBase"));
         writeBytes(modAPath, miscOverride("WidgetA"));
         writeBytes(modBPath, miscOverride("WidgetB"));
+        writeBytes(patchPath, emptyPlugin());
+        REQUIRE(backend.invoke(
+            "environment.LoadMo2",
+            nlohmann::json{{"plugins", nlohmann::json::array({
+                pluginEntry("Base.esm", basePath, "Base"),
+                pluginEntry("ModA.esp", modAPath, "ModA"),
+                pluginEntry("ModB.esp", modBPath, "ModB"),
+                pluginEntry("Patch.esp", patchPath, "Patch")
+            })}}).has_value());
+    }
+};
+
+// Base.esm COBJ 000800 (FVPA uses CMPO 000F00), overridden by ModA then ModB.
+struct ComponentOverrideFixture {
+    std::filesystem::path root{tempRoot()};
+    Cleanup cleanup{root};
+    std::filesystem::path patchPath{root / "mods" / "Patch" / "Patch.esp"};
+    fo4ide::plugin::RadiclePluginBackend backend;
+
+    ComponentOverrideFixture() {
+        const auto basePath = root / "mods" / "Base" / "Base.esm";
+        const auto modAPath = root / "mods" / "ModA" / "ModA.esp";
+        const auto modBPath = root / "mods" / "ModB" / "ModB.esp";
+        writeBytes(basePath, cobjMaster());
+        writeBytes(modAPath, cobjOverride("RecipeA"));
+        writeBytes(modBPath, cobjOverride("RecipeB"));
         writeBytes(patchPath, emptyPlugin());
         REQUIRE(backend.invoke(
             "environment.LoadMo2",
@@ -323,10 +392,28 @@ TEST_CASE("RevertOverrides reports nothing to do for a non-overriding plugin") {
     CHECK(result->get<std::string>().find("carries no override records") != std::string::npos);
 }
 
-TEST_CASE("RevertOverrides refuses the unsupported component filter") {
-    OverrideFixture fixture;
+TEST_CASE("RevertOverrides component filter keeps a record that uses the component") {
+    ComponentOverrideFixture fixture;
     const auto result = fixture.backend.revertOverrides(
         nlohmann::json::array({"ModB.esp", "Patch.esp", "", "000F00:Base.esm", false, 50}));
+    REQUIRE(result.has_value());
+    const auto text = result->get<std::string>();
+    CHECK(text.find("DRY RUN -- 1 record(s)") != std::string::npos);
+    CHECK(text.find("filtered to ones using 000F00:Base.esm") != std::string::npos);
+}
+
+TEST_CASE("RevertOverrides component filter skips a record that lacks the component") {
+    ComponentOverrideFixture fixture;
+    const auto result = fixture.backend.revertOverrides(
+        nlohmann::json::array({"ModB.esp", "Patch.esp", "", "OtherComp", false, 50}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find("DRY RUN -- 0 record(s)") != std::string::npos);
+}
+
+TEST_CASE("RevertOverrides component filter rejects an unresolvable component") {
+    ComponentOverrideFixture fixture;
+    const auto result = fixture.backend.revertOverrides(
+        nlohmann::json::array({"ModB.esp", "Patch.esp", "", "NoSuchThing", false, 50}));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "ComponentFilterUnsupported");
+    CHECK(result.error().type == "ComponentNotResolved");
 }
