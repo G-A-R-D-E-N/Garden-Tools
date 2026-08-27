@@ -115,7 +115,7 @@ struct AliasSpec {
   std::uint32_t id;
   std::vector<std::uint16_t> condition_functions;
   bool with_almi = false;
-  std::vector<std::string> post_condition_fields;
+  std::vector<std::string> post_condition_fields = {};
 };
 
 void write_u32_subrecord(fo4::test::ByteWriter& out, std::string_view signature,
