@@ -135,6 +135,19 @@ std::vector<std::byte> target_with_other_master() {
   return out.bytes;
 }
 
+std::vector<std::byte> target_with_interior_cell() {
+  fo4::test::ByteWriter out;
+  write_header(out, {"Base.esm"});
+  const auto top = fo4::test::begin_group(out, "CELL", 0);
+  const auto block = begin_group_raw(out, 0, fo4::GroupType::interior_cell_block);
+  const auto subblock = begin_group_raw(out, 0, fo4::GroupType::interior_cell_subblock);
+  write_cell(out, 0x00000800u);
+  end_group_raw(out, subblock);
+  end_group_raw(out, block);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
 const fo4::Group* find_group(const fo4::Plugin& plugin,
                              fo4::GroupType type,
                              std::uint32_t label) {
@@ -239,4 +252,80 @@ TEST(PlacedReferenceCopy, ExistingOverrideIsNoOpUnlessOverwriteIsRequested) {
       fo4::forms::copy_placed_reference_as_override(target, source, reference, true),
       fo4::forms::PlacedReferenceCopyStatus::replaced);
   EXPECT_NE(fo4::find_record(target, reference), nullptr);
+}
+
+TEST(PlacedReferenceCopyNew, CreatesBucketAndNewRecordInExistingInteriorCell) {
+  const auto source = fo4::read_plugin(interior_source(), "Source.esp");
+  auto target = fo4::read_plugin(target_with_interior_cell(), "Patch.esp");
+  const auto cell = fo4::FormKey::parse("000800:Base.esm");
+  const auto reference = fo4::FormKey::parse("000801:Base.esm");
+
+  const auto result = fo4::forms::copy_placed_reference_as_new(target, source, reference);
+  EXPECT_EQ(result.status, fo4::forms::PlacedReferenceCopyNewStatus::created);
+  EXPECT_EQ(result.new_reference.owner().filename(), "Patch.esp");
+  EXPECT_NE(result.new_reference, reference);
+  EXPECT_NE(fo4::find_record(target, result.new_reference), nullptr);
+  EXPECT_NE(find_group(target, fo4::GroupType::cell_temporary_children, 0x00000800u), nullptr);
+
+  const auto refs = fo4::forms::placed_references_for_cell(target, cell);
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_EQ(refs[0].record->form_key, result.new_reference);
+  ASSERT_TRUE(refs[0].base.has_value());
+  EXPECT_EQ(refs[0].base->to_string(), "000802:Base.esm");
+  EXPECT_FLOAT_EQ(refs[0].scale, 1.25f);
+
+  auto reread = fo4::read_plugin(fo4::write_plugin(target), "Patch.esp");
+  const auto reread_refs = fo4::forms::placed_references_for_cell(reread, cell);
+  ASSERT_EQ(reread_refs.size(), 1u);
+  EXPECT_EQ(reread_refs[0].record->form_key, result.new_reference);
+}
+
+TEST(PlacedReferenceCopyNew, FailsClosedWhenParentCellMissing) {
+  const auto source = fo4::read_plugin(interior_source(), "Source.esp");
+  auto target = fo4::read_plugin(target_with_other_master(), "Patch.esp");
+  const auto reference = fo4::FormKey::parse("000801:Base.esm");
+
+  const auto result = fo4::forms::copy_placed_reference_as_new(target, source, reference);
+  EXPECT_EQ(result.status, fo4::forms::PlacedReferenceCopyNewStatus::parent_cell_missing);
+  EXPECT_EQ(fo4::find_record(target, fo4::FormKey::parse("000800:Base.esm")), nullptr);
+}
+
+TEST(PlacedReferenceCopyNew, PreservesExistingBucketReferences) {
+  const auto source = fo4::read_plugin(interior_source(), "Source.esp");
+  auto target = fo4::read_plugin(target_with_other_master(), "Patch.esp");
+  const auto cell = fo4::FormKey::parse("000800:Base.esm");
+  const auto reference = fo4::FormKey::parse("000801:Base.esm");
+  ASSERT_EQ(fo4::forms::copy_placed_reference_as_override(target, source, reference),
+            fo4::forms::PlacedReferenceCopyStatus::inserted);
+
+  const auto result = fo4::forms::copy_placed_reference_as_new(target, source, reference);
+  EXPECT_EQ(result.status, fo4::forms::PlacedReferenceCopyNewStatus::created);
+  EXPECT_NE(result.new_reference, reference);
+
+  const auto refs = fo4::forms::placed_references_for_cell(target, cell);
+  ASSERT_EQ(refs.size(), 2u);
+  bool has_override = false;
+  bool has_new = false;
+  for (const auto& r : refs) {
+    if (r.record->form_key == reference) has_override = true;
+    if (r.record->form_key == result.new_reference) has_new = true;
+  }
+  EXPECT_TRUE(has_override);
+  EXPECT_TRUE(has_new);
+}
+
+TEST(PlacedReferenceCopyNew, ReportsMissingSource) {
+  const auto source = fo4::read_plugin(interior_source(), "Source.esp");
+  auto target = fo4::read_plugin(target_with_interior_cell(), "Patch.esp");
+  const auto result = fo4::forms::copy_placed_reference_as_new(
+      target, source, fo4::FormKey::parse("0009AA:Base.esm"));
+  EXPECT_EQ(result.status, fo4::forms::PlacedReferenceCopyNewStatus::source_missing);
+}
+
+TEST(PlacedReferenceCopyNew, RejectsUnsupportedSignature) {
+  const auto source = fo4::read_plugin(interior_source(), "Source.esp");
+  auto target = fo4::read_plugin(target_with_interior_cell(), "Patch.esp");
+  const auto result = fo4::forms::copy_placed_reference_as_new(
+      target, source, fo4::FormKey::parse("000800:Base.esm"));
+  EXPECT_EQ(result.status, fo4::forms::PlacedReferenceCopyNewStatus::unsupported_signature);
 }

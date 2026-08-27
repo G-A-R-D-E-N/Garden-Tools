@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/forms/placed_reference.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/visit.hpp>
@@ -232,16 +233,61 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
         }
         const auto* sourceRecord = topLevelRecord(source->plugin, sourceKey);
         if (sourceRecord == nullptr) {
-            if (fo4::find_record(source->plugin, sourceKey) != nullptr) {
+            if (fo4::find_record(source->plugin, sourceKey) == nullptr) {
                 return std::unexpected(Error{
-                    "SourceContainmentUnsupported",
-                    "CopyAsNewRecord currently supports top-level records only; nested CELL/DIAL/world records require containment-aware duplication"
+                    "SourceRecordNotFound",
+                    "Could not find " + sourceKey.to_string() + " in " + source->name
                 });
             }
-            return std::unexpected(Error{
-                "SourceRecordNotFound",
-                "Could not find " + sourceKey.to_string() + " in " + source->name
-            });
+            try {
+                auto mutated = target->plugin;
+                const auto result = fo4::forms::copy_placed_reference_as_new(
+                    mutated, source->plugin, sourceKey);
+                switch (result.status) {
+                    case fo4::forms::PlacedReferenceCopyNewStatus::source_missing:
+                        return std::unexpected(Error{
+                            "SourceRecordNotFound",
+                            "Could not find " + sourceKey.to_string() + " in " + source->name});
+                    case fo4::forms::PlacedReferenceCopyNewStatus::unsupported_signature:
+                        return std::unexpected(Error{
+                            "SourceContainmentUnsupported",
+                            "CopyAsNewRecord supports contained REFR/ACHR placed references in a CELL only; "
+                            "other contained records (INFO/DIAL, unproven placed families) are not duplicated"});
+                    case fo4::forms::PlacedReferenceCopyNewStatus::parent_cell_missing:
+                        return std::unexpected(Error{
+                            "TargetParentCellMissing",
+                            "The placed reference's parent CELL is not present in " + targetPluginName +
+                            "; copy or override the parent CELL into the target first"});
+                    case fo4::forms::PlacedReferenceCopyNewStatus::created:
+                        break;
+                }
+
+                const auto newKey = result.new_reference;
+                auto* allocated = mutableRecord(mutated, newKey);
+                const auto originalEditorId =
+                    allocated != nullptr ? recordEditorId(*allocated) : std::string{};
+                const auto newEditorId = !requestedEditorId.empty()
+                    ? requestedEditorId
+                    : (originalEditorId.empty() ? std::string{} : originalEditorId + "DUP");
+                if (!newEditorId.empty() &&
+                    !fo4::set_record_editor_id(mutated, newKey, newEditorId)) {
+                    return std::unexpected(Error{
+                        "CopyAsNewEditorIdFailed",
+                        "Could not set EditorID on the duplicated record"});
+                }
+
+                fo4::write_plugin_file(mutated, target->path);
+                target->plugin = std::move(mutated);
+                std::error_code ec;
+                target->loadedTime = std::filesystem::last_write_time(target->path, ec);
+                rebuildGraphLocked();
+                return nlohmann::json(
+                    "Copied " + sourceKey.to_string() + " into " + targetPluginName +
+                    " as NEW record " + newKey.to_string() +
+                    (newEditorId.empty() ? std::string{} : " ('" + newEditorId + "')."));
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{"CopyAsNewFailed", error.what()});
+            }
         }
 
         try {

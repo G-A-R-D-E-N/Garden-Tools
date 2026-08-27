@@ -74,6 +74,23 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
     const FormKey& reference,
     bool overwrite = false);
 
+enum class PlacedReferenceCopyNewStatus {
+  created,
+  source_missing,
+  unsupported_signature,
+  parent_cell_missing,
+};
+
+struct PlacedReferenceCopyNewResult {
+  PlacedReferenceCopyNewStatus status{PlacedReferenceCopyNewStatus::source_missing};
+  FormKey new_reference{};
+};
+
+PlacedReferenceCopyNewResult copy_placed_reference_as_new(
+    Plugin& destination,
+    const Plugin& source,
+    const FormKey& reference);
+
 // Replaces only the 24-byte DATA position/rotation payload on an existing
 // REFR/ACHR. Missing, duplicate or malformed DATA is rejected transactionally.
 bool set_placed_reference_transform(

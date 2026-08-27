@@ -1,5 +1,6 @@
 #include "fo4/forms/placed_reference.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
@@ -269,6 +270,88 @@ bool replace_record(Plugin& plugin, const FormKey& key, Record replacement) {
   return replaced;
 }
 
+struct PlacedContainment {
+  RecordLocation reference;
+  std::size_t cell_children_index{0};
+  FormKey cell;
+  RecordLocation source_cell;
+  std::optional<FormKey> world;
+  std::optional<RecordLocation> source_world;
+};
+
+PlacedContainment resolve_placed_containment(
+    const Plugin& source,
+    RecordLocation source_reference,
+    const PluginFormIdContext& source_context) {
+  PlacedContainment out;
+  out.reference = std::move(source_reference);
+
+  std::optional<std::size_t> cell_children_index;
+  for (std::size_t index = 0; index < out.reference.path.size(); ++index) {
+    if (out.reference.path[index]->header.group_type !=
+        static_cast<std::int32_t>(GroupType::cell_children)) {
+      continue;
+    }
+    if (cell_children_index.has_value()) {
+      throw PlacedReferenceError("placed-reference containment has multiple CELL children GRUPs");
+    }
+    cell_children_index = index;
+  }
+  if (!cell_children_index.has_value() ||
+      *cell_children_index + 2 != out.reference.path.size()) {
+    throw PlacedReferenceError(
+        "placed-reference containment must end in CELL children plus persistent/temporary GRUP");
+  }
+  out.cell_children_index = *cell_children_index;
+
+  const auto* cell_children = out.reference.path[*cell_children_index];
+  const RawFormId cell_raw{cell_children->header.label_as_u32()};
+  if (cell_raw.is_null()) {
+    throw PlacedReferenceError("CELL children GRUP has a null cell FormID label");
+  }
+  out.cell = resolve_plugin_form_id(cell_raw, source_context);
+  out.source_cell = locate_record(source, out.cell);
+  if (out.source_cell.record == nullptr || out.source_cell.record->header.signature != k_cell) {
+    throw PlacedReferenceError("placed-reference parent CELL record is missing from the source plugin");
+  }
+  if (out.source_cell.path.size() != *cell_children_index) {
+    throw PlacedReferenceError("parent CELL and placed reference do not share the same containment root");
+  }
+  for (std::size_t index = 0; index < out.source_cell.path.size(); ++index) {
+    if (out.source_cell.path[index] != out.reference.path[index]) {
+      throw PlacedReferenceError("parent CELL and placed reference do not share the same containment root");
+    }
+  }
+
+  for (std::size_t index = 0; index < out.source_cell.path.size(); ++index) {
+    const auto* group = out.source_cell.path[index];
+    if (group->header.group_type != static_cast<std::int32_t>(GroupType::world_children)) {
+      continue;
+    }
+    if (out.world.has_value()) {
+      throw PlacedReferenceError("CELL containment has multiple WRLD children GRUPs");
+    }
+    const RawFormId world_raw{group->header.label_as_u32()};
+    if (world_raw.is_null()) {
+      throw PlacedReferenceError("WRLD children GRUP has a null worldspace FormID label");
+    }
+    out.world = resolve_plugin_form_id(world_raw, source_context);
+    out.source_world = locate_record(source, *out.world);
+    if (out.source_world->record == nullptr || out.source_world->record->header.signature != k_wrld) {
+      throw PlacedReferenceError("exterior CELL parent WRLD record is missing from the source plugin");
+    }
+    if (out.source_world->path.size() != index) {
+      throw PlacedReferenceError("WRLD record and exterior CELL do not share the same containment root");
+    }
+    for (std::size_t prefix = 0; prefix < out.source_world->path.size(); ++prefix) {
+      if (out.source_world->path[prefix] != out.source_cell.path[prefix]) {
+        throw PlacedReferenceError("WRLD record and exterior CELL do not share the same containment root");
+      }
+    }
+  }
+  return out;
+}
+
 void validate_destination_record_path(
     const Plugin& destination,
     const FormKey& key,
@@ -304,80 +387,23 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
     const Plugin& source,
     const FormKey& reference,
     bool overwrite) {
-  const auto source_reference = locate_record(source, reference);
-  if (source_reference.record == nullptr) {
+  const auto located = locate_record(source, reference);
+  if (located.record == nullptr) {
     return PlacedReferenceCopyStatus::source_missing;
   }
-  if (source_reference.record->header.signature != k_refr &&
-      source_reference.record->header.signature != k_achr) {
+  if (located.record->header.signature != k_refr &&
+      located.record->header.signature != k_achr) {
     throw PlacedReferenceError("placed-reference override requires a REFR or ACHR source record");
   }
 
-  std::optional<std::size_t> cell_children_index;
-  for (std::size_t index = 0; index < source_reference.path.size(); ++index) {
-    if (source_reference.path[index]->header.group_type !=
-        static_cast<std::int32_t>(GroupType::cell_children)) {
-      continue;
-    }
-    if (cell_children_index.has_value()) {
-      throw PlacedReferenceError("placed-reference containment has multiple CELL children GRUPs");
-    }
-    cell_children_index = index;
-  }
-  if (!cell_children_index.has_value() ||
-      *cell_children_index + 2 != source_reference.path.size()) {
-    throw PlacedReferenceError(
-        "placed-reference containment must end in CELL children plus persistent/temporary GRUP");
-  }
-
   const auto source_context = plugin_form_id_context(source);
-  const auto cell_children = source_reference.path[*cell_children_index];
-  const RawFormId cell_raw{cell_children->header.label_as_u32()};
-  if (cell_raw.is_null()) {
-    throw PlacedReferenceError("CELL children GRUP has a null cell FormID label");
-  }
-  const auto cell = resolve_plugin_form_id(cell_raw, source_context);
-  const auto source_cell = locate_record(source, cell);
-  if (source_cell.record == nullptr || source_cell.record->header.signature != k_cell) {
-    throw PlacedReferenceError("placed-reference parent CELL record is missing from the source plugin");
-  }
-  if (source_cell.path.size() != *cell_children_index) {
-    throw PlacedReferenceError("parent CELL and placed reference do not share the same containment root");
-  }
-  for (std::size_t index = 0; index < source_cell.path.size(); ++index) {
-    if (source_cell.path[index] != source_reference.path[index]) {
-      throw PlacedReferenceError("parent CELL and placed reference do not share the same containment root");
-    }
-  }
-
-  std::optional<FormKey> world;
-  std::optional<RecordLocation> source_world;
-  for (std::size_t index = 0; index < source_cell.path.size(); ++index) {
-    const auto* group = source_cell.path[index];
-    if (group->header.group_type != static_cast<std::int32_t>(GroupType::world_children)) {
-      continue;
-    }
-    if (world.has_value()) {
-      throw PlacedReferenceError("CELL containment has multiple WRLD children GRUPs");
-    }
-    const RawFormId world_raw{group->header.label_as_u32()};
-    if (world_raw.is_null()) {
-      throw PlacedReferenceError("WRLD children GRUP has a null worldspace FormID label");
-    }
-    world = resolve_plugin_form_id(world_raw, source_context);
-    source_world = locate_record(source, *world);
-    if (source_world->record == nullptr || source_world->record->header.signature != k_wrld) {
-      throw PlacedReferenceError("exterior CELL parent WRLD record is missing from the source plugin");
-    }
-    if (source_world->path.size() != index) {
-      throw PlacedReferenceError("WRLD record and exterior CELL do not share the same containment root");
-    }
-    for (std::size_t prefix = 0; prefix < source_world->path.size(); ++prefix) {
-      if (source_world->path[prefix] != source_cell.path[prefix]) {
-        throw PlacedReferenceError("WRLD record and exterior CELL do not share the same containment root");
-      }
-    }
-  }
+  const auto containment = resolve_placed_containment(source, located, source_context);
+  const auto& source_reference = containment.reference;
+  const auto cell_children_index = containment.cell_children_index;
+  const auto& cell = containment.cell;
+  const auto& source_cell = containment.source_cell;
+  const auto& world = containment.world;
+  const auto& source_world = containment.source_world;
 
   auto next = destination;
   assign_record_form_keys(next);
@@ -442,7 +468,7 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
 
   auto* destination_cell_children = ensure_cell_children_group(
       *cell_parent,
-      source_reference.path[*cell_children_index]->header,
+      source_reference.path[cell_children_index]->header,
       cell,
       source_context,
       destination_context);
@@ -466,6 +492,95 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
   destination = std::move(next);
   return target_exists ? PlacedReferenceCopyStatus::replaced
                        : PlacedReferenceCopyStatus::inserted;
+}
+
+PlacedReferenceCopyNewResult copy_placed_reference_as_new(
+    Plugin& destination,
+    const Plugin& source,
+    const FormKey& reference) {
+  const auto located = locate_record(source, reference);
+  if (located.record == nullptr) {
+    return {PlacedReferenceCopyNewStatus::source_missing, {}};
+  }
+  const auto signature = located.record->header.signature;
+  if (signature != k_refr && signature != k_achr) {
+    return {PlacedReferenceCopyNewStatus::unsupported_signature, {}};
+  }
+
+  const auto source_context = plugin_form_id_context(source);
+  const auto containment = resolve_placed_containment(source, located, source_context);
+  const auto& cell = containment.cell;
+  const auto& source_cell = containment.source_cell;
+  const auto& world = containment.world;
+  const auto& source_world = containment.source_world;
+
+  auto next = destination;
+  assign_record_form_keys(next);
+  if (find_record(next, cell) == nullptr) {
+    return {PlacedReferenceCopyNewStatus::parent_cell_missing, {}};
+  }
+  if (world.has_value() && find_record(next, *world) == nullptr) {
+    return {PlacedReferenceCopyNewStatus::parent_cell_missing, {}};
+  }
+
+  std::set<PluginKey> required_owners;
+  if (!cell.owner().empty()) required_owners.insert(cell.owner());
+  if (world.has_value() && !world->owner().empty()) required_owners.insert(world->owner());
+  for (const auto* group : containment.reference.path) {
+    collect_group_label_owner(*group, source_context, required_owners);
+  }
+  const auto links = collect_form_links_detailed(source);
+  for (const auto& link : links.links) {
+    if (link.record != reference || link.key.owner().empty()) continue;
+    required_owners.insert(link.key.owner());
+  }
+
+  std::vector<MasterDescriptor> masters;
+  masters.reserve(next.header.masters.size() + required_owners.size());
+  for (const auto& master : next.header.masters) {
+    masters.push_back({master.key, master.kind});
+  }
+  bool added_master = false;
+  for (const auto& owner : required_owners) {
+    if (owner == next.key || has_master(next, owner)) continue;
+    masters.push_back({owner, owner_kind(source, owner)});
+    added_master = true;
+  }
+  if (added_master) {
+    next = remap_plugin_masters(std::move(next), std::move(masters));
+  }
+
+  const auto destination_context = plugin_form_id_context(next);
+
+  if (world.has_value() && source_world.has_value()) {
+    validate_destination_record_path(
+        next, *world, k_wrld, source_world->path,
+        source_context, destination_context, "WRLD");
+  }
+  validate_destination_record_path(
+      next, cell, k_cell, source_cell.path,
+      source_context, destination_context, "CELL");
+  auto* cell_parent = ensure_group_path(
+      next, source_cell.path, source_context, destination_context);
+
+  auto* destination_cell_children = ensure_cell_children_group(
+      *cell_parent,
+      containment.reference.path[containment.cell_children_index]->header,
+      cell, source_context, destination_context);
+  auto* bucket = ensure_reference_bucket(
+      *destination_cell_children,
+      containment.reference.path.back()->header,
+      source_context, destination_context);
+
+  const auto new_key = reserve_local_form_key(next);
+  auto copied = copy_record_for_destination(
+      *containment.reference.record, new_key, source_context, destination_context);
+  copied.form_key = new_key;
+  bucket->children.emplace_back(std::move(copied));
+
+  next.original_range.clear();
+  destination = std::move(next);
+  return {PlacedReferenceCopyNewStatus::created, new_key};
 }
 
 }  // namespace fo4::forms

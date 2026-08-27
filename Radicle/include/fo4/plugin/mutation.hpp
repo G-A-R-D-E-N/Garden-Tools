@@ -58,6 +58,8 @@ enum class RecordRenumberStatus {
 // will never report the violation. See docs/ESL_FORMIDS.md and issue #26.
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 
+FormKey reserve_local_form_key(Plugin& plugin);
+
 FormKey create_local_record(Plugin& plugin, Signature signature);
 
 // Refuses deletion when any schema-proven in-plugin FormLink still targets the

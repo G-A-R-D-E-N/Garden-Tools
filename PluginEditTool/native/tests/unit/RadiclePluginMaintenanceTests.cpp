@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/flags.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
@@ -62,6 +63,73 @@ void writeHeader(fo4::test::ByteWriter& out,
         fo4::test::write_subrecord(out, "DATA", data.bytes);
     }
     fo4::test::end_record(out, tes4);
+}
+
+std::size_t beginGroupRaw(fo4::test::ByteWriter& out, std::uint32_t label,
+                          fo4::GroupType type) {
+    const auto offset = out.size();
+    out.sig("GRUP");
+    out.u32(0);
+    out.u32(label);
+    out.i32(static_cast<std::int32_t>(type));
+    out.u16(0);
+    out.u16(0);
+    out.u16(0);
+    out.u16(0);
+    return offset;
+}
+
+void endGroupRaw(fo4::test::ByteWriter& out, std::size_t offset) {
+    out.patch_u32(offset + 4, static_cast<std::uint32_t>(out.size() - offset));
+}
+
+void writeCellRecord(fo4::test::ByteWriter& out, std::uint32_t raw) {
+    const auto cell = fo4::test::begin_record(out, "CELL", 0, raw, 131);
+    const std::vector<std::byte> data{std::byte{1}, std::byte{0}};
+    fo4::test::write_subrecord(out, "DATA", data);
+    fo4::test::end_record(out, cell);
+}
+
+std::vector<std::byte> cellRefrSourceBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x802);
+    const auto top = fo4::test::begin_group(out, "CELL", 0);
+    const auto block = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_block);
+    const auto sub = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_subblock);
+    writeCellRecord(out, 0x00000800u);
+    const auto children = beginGroupRaw(out, 0x00000800u, fo4::GroupType::cell_children);
+    const auto temp = beginGroupRaw(out, 0x00000800u, fo4::GroupType::cell_temporary_children);
+    const auto refr = fo4::test::begin_record(out, "REFR", 0, 0x00000801u, 131);
+    fo4::test::ByteWriter name;
+    name.u32(0x00000800u);
+    fo4::test::write_subrecord(out, "NAME", name.bytes);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"SourceRef\0", 10});
+    fo4::test::end_record(out, refr);
+    endGroupRaw(out, temp);
+    endGroupRaw(out, children);
+    endGroupRaw(out, sub);
+    endGroupRaw(out, block);
+    fo4::test::end_group(out, top);
+    return out.bytes;
+}
+
+std::vector<std::byte> cellTargetBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x900, {"Base.esm"});
+    const auto top = fo4::test::begin_group(out, "CELL", 0);
+    const auto block = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_block);
+    const auto sub = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_subblock);
+    writeCellRecord(out, 0x00000800u);
+    endGroupRaw(out, sub);
+    endGroupRaw(out, block);
+    fo4::test::end_group(out, top);
+    return out.bytes;
+}
+
+std::vector<std::byte> noCellTargetBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x900, {"Base.esm"});
+    return out.bytes;
 }
 
 std::vector<std::byte> deletedPluginBytes() {
@@ -310,4 +378,56 @@ TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin refe
         disk, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(race != nullptr);
     CHECK(rawSubrecord(*race, "AHCM") == 0x00000801u);
+}
+
+TEST_CASE("Native CopyAsNewRecord duplicates a contained REFR into an existing target CELL") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(sourcePath, cellRefrSourceBytes());
+    writeBytes(patchPath, cellTargetBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({
+        pluginEntry("Base.esm", sourcePath),
+        pluginEntry("Patch.esp", patchPath)
+    }));
+
+    const auto result = backend.invokeLegacyBackend(
+        "CopyAsNewRecord",
+        nlohmann::json::array({"Base.esm", "000801:Base.esm", "Patch.esp", ""}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().find("as NEW record 000900:Patch.esp") != std::string::npos);
+
+    const auto patch = fo4::read_plugin_file(patchPath);
+    const auto* duplicate = fo4::find_record(patch, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(duplicate != nullptr);
+    CHECK(duplicate->header.signature == fo4::Signature::from_string("REFR"));
+    CHECK(editorId(*duplicate) == "SourceRefDUP");
+    const auto* sourceCell = fo4::find_record(patch, fo4::FormKey::parse("000800:Base.esm"));
+    REQUIRE(sourceCell != nullptr);
+    CHECK(sourceCell->header.signature == fo4::Signature::from_string("CELL"));
+}
+
+TEST_CASE("Native CopyAsNewRecord fails closed when the target lacks the parent CELL") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(sourcePath, cellRefrSourceBytes());
+    writeBytes(patchPath, noCellTargetBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({
+        pluginEntry("Base.esm", sourcePath),
+        pluginEntry("Patch.esp", patchPath)
+    }));
+
+    const auto result = backend.invokeLegacyBackend(
+        "CopyAsNewRecord",
+        nlohmann::json::array({"Base.esm", "000801:Base.esm", "Patch.esp", ""}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "TargetParentCellMissing");
 }
