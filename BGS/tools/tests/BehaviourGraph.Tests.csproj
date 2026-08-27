@@ -7,6 +7,7 @@
     <RootNamespace>BehaviourStudio.Tests</RootNamespace>
     <AssemblyName>BehaviourGraph.Tests</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="*.cs" />
@@ -18,5 +19,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../symrm/symrm.csproj" />
+    <ProjectReference Include="../../app/BehaviourStudio.csproj" />
   </ItemGroup>
 </Project>

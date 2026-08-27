@@ -46,24 +46,20 @@ public static class ModlistScan
 
     public static int ScanModlist(string[] args)
     {
+        bool json = args.Contains("--json");
         string? instance = After(args, "--scan-modlist");
         if (instance == null)
-        {
-            Console.Error.WriteLine("--scan-modlist needs an MO2 instance directory");
-            return 2;
-        }
+            return Fail(json, "scan-modlist", "", "usage", "--scan-modlist needs an MO2 instance directory");
 
         if (!Mo2ScanData.TryOpen(instance, out var scan, out string error))
-        {
-            Console.Error.WriteLine(error);
-            return 2;
-        }
+            return Fail(json, "scan-modlist", instance, "config", error);
 
         using (scan!)
         {
-            PrintLayout(scan);
+            PrintLayout(scan!, json);
             var characters = scan.ModHkxPaths("characters");
-            PrintArchiveWarnings(scan);
+            var findings = new List<ScanFinding>();
+            CollectArchiveWarnings(scan, json, findings);
 
             string temp = TempDirectory("bgs-modlist");
             int parsed = 0, broken = 0, missing = 0, unreadable = 0, serial = 0;
@@ -75,7 +71,8 @@ public static class ModlistScan
                     if (read == null)
                     {
                         unreadable++;
-                        Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}  (winning copy could not be read)");
+                        if (!json) Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}  (winning copy could not be read)");
+                        findings.Add(new ScanFinding("unreadable-character", dataRel, null, new[] { "winning copy could not be read" }));
                         continue;
                     }
 
@@ -88,7 +85,8 @@ public static class ModlistScan
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                     {
                         unreadable++;
-                        Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}: {First(e.Message)}");
+                        if (!json) Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}: {First(e.Message)}");
+                        findings.Add(new ScanFinding("unreadable-character", dataRel, null, new[] { First(e.Message) }));
                         continue;
                     }
 
@@ -99,7 +97,8 @@ public static class ModlistScan
                         if (xml.Length == 0)
                         {
                             unreadable++;
-                            Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}: unsupported HKX class layout");
+                            if (!json) Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}: unsupported HKX class layout");
+                            findings.Add(new ScanFinding("unreadable-character", dataRel, null, new[] { "unsupported HKX class layout" }));
                             continue;
                         }
 
@@ -111,7 +110,8 @@ public static class ModlistScan
                     catch (Exception e)
                     {
                         unreadable++;
-                        Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}: {First(e.Message)}");
+                        if (!json) Console.WriteLine($"UNREADABLE CHARACTER  {dataRel}: {First(e.Message)}");
+                        findings.Add(new ScanFinding("unreadable-character", dataRel, null, new[] { First(e.Message) }));
                         continue;
                     }
                     finally
@@ -130,11 +130,16 @@ public static class ModlistScan
                     broken++;
                     missing += gone.Count;
 
-                    Console.WriteLine(
-                        $"MISSING ANIMATIONS  {dataRel}  [{scan.DescribeSource(dataRel, read)}]  " +
-                        $"({gone.Count} of {declared.Count})");
-                    foreach (string animation in gone.Take(40)) Console.WriteLine("    " + animation);
-                    if (gone.Count > 40) Console.WriteLine($"    ... and {gone.Count - 40} more");
+                    string source = scan.DescribeSource(dataRel, read);
+                    if (!json)
+                    {
+                        Console.WriteLine(
+                            $"MISSING ANIMATIONS  {dataRel}  [{source}]  " +
+                            $"({gone.Count} of {declared.Count})");
+                        foreach (string animation in gone.Take(40)) Console.WriteLine("    " + animation);
+                        if (gone.Count > 40) Console.WriteLine($"    ... and {gone.Count - 40} more");
+                    }
+                    findings.Add(new ScanFinding("missing-animations", dataRel, source, gone));
                 }
             }
             finally
@@ -142,33 +147,40 @@ public static class ModlistScan
                 TryDeleteDirectory(temp);
             }
 
-            Console.WriteLine(
-                $"done  {parsed} winning character file(s) checked, {broken} with missing animations, " +
-                $"{missing} missing reference(s), {unreadable} unreadable");
-            return missing == 0 && unreadable == 0 ? 0 : 1;
+            int exit = missing == 0 && unreadable == 0 ? 0 : 1;
+            var summary = new Dictionary<string, int>
+            {
+                ["checked"] = parsed,
+                ["broken"] = broken,
+                ["missing"] = missing,
+                ["unreadable"] = unreadable,
+            };
+            if (json)
+                Console.WriteLine(new ScanReport("scan-modlist", ScanContextFor(scan, instance), summary, findings, exit).ToJson());
+            else
+                Console.WriteLine(
+                    $"done  {parsed} winning character file(s) checked, {broken} with missing animations, " +
+                    $"{missing} missing reference(s), {unreadable} unreadable");
+            return exit;
         }
     }
 
     public static int ScanClips(string[] args)
     {
+        bool json = args.Contains("--json");
         string? instance = After(args, "--scan-clips");
         if (instance == null)
-        {
-            Console.Error.WriteLine("--scan-clips needs an MO2 instance directory");
-            return 2;
-        }
+            return Fail(json, "scan-clips", "", "usage", "--scan-clips needs an MO2 instance directory");
 
         if (!Mo2ScanData.TryOpen(instance, out var scan, out string error))
-        {
-            Console.Error.WriteLine(error);
-            return 2;
-        }
+            return Fail(json, "scan-clips", instance, "config", error);
 
         using (scan!)
         {
-            PrintLayout(scan);
+            PrintLayout(scan!, json);
             var behaviours = scan.ModHkxPaths("behaviors");
-            PrintArchiveWarnings(scan);
+            var findings = new List<ScanFinding>();
+            CollectArchiveWarnings(scan, json, findings);
 
             bool Resolves(string projectRel, string animation)
             {
@@ -208,7 +220,8 @@ public static class ModlistScan
                     if (read == null)
                     {
                         unreadable++;
-                        Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}  (winning copy could not be read)");
+                        if (!json) Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}  (winning copy could not be read)");
+                        findings.Add(new ScanFinding("unreadable-behaviour", dataRel, null, new[] { "winning copy could not be read" }));
                         continue;
                     }
 
@@ -221,7 +234,8 @@ public static class ModlistScan
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                     {
                         unreadable++;
-                        Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}: {First(e.Message)}");
+                        if (!json) Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}: {First(e.Message)}");
+                        findings.Add(new ScanFinding("unreadable-behaviour", dataRel, null, new[] { First(e.Message) }));
                         continue;
                     }
 
@@ -232,7 +246,8 @@ public static class ModlistScan
                         if (xml.Length == 0)
                         {
                             unreadable++;
-                            Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}: unsupported HKX class layout");
+                            if (!json) Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}: unsupported HKX class layout");
+                            findings.Add(new ScanFinding("unreadable-behaviour", dataRel, null, new[] { "unsupported HKX class layout" }));
                             continue;
                         }
 
@@ -246,7 +261,8 @@ public static class ModlistScan
                     catch (Exception e)
                     {
                         unreadable++;
-                        Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}: {First(e.Message)}");
+                        if (!json) Console.WriteLine($"UNREADABLE BEHAVIOUR  {dataRel}: {First(e.Message)}");
+                        findings.Add(new ScanFinding("unreadable-behaviour", dataRel, null, new[] { First(e.Message) }));
                         continue;
                     }
                     finally
@@ -262,12 +278,17 @@ public static class ModlistScan
 
                     broken++;
                     missingClips += gone.Count;
-                    Console.WriteLine(
-                        $"MISSING CLIP ANIMATIONS  {dataRel}  [{scan.DescribeSource(dataRel, read)}]  " +
-                        $"({gone.Count} clip(s))");
-                    foreach (var clip in gone.Take(20))
-                        Console.WriteLine($"    clip '{clip.Clip}' plays '{clip.Anim}' - resolves nowhere");
-                    if (gone.Count > 20) Console.WriteLine($"    ... and {gone.Count - 20} more");
+                    string source = scan.DescribeSource(dataRel, read);
+                    var details = gone.Select(c => $"clip '{c.Clip}' plays '{c.Anim}' - resolves nowhere").ToList();
+                    if (!json)
+                    {
+                        Console.WriteLine(
+                            $"MISSING CLIP ANIMATIONS  {dataRel}  [{source}]  " +
+                            $"({gone.Count} clip(s))");
+                        foreach (string line in details.Take(20)) Console.WriteLine("    " + line);
+                        if (gone.Count > 20) Console.WriteLine($"    ... and {gone.Count - 20} more");
+                    }
+                    findings.Add(new ScanFinding("missing-clip-animations", dataRel, source, details));
                 }
             }
             finally
@@ -275,32 +296,42 @@ public static class ModlistScan
                 TryDeleteDirectory(temp);
             }
 
-            Console.WriteLine(
-                $"done  {checkedBehaviours} winning behaviour file(s) checked, " +
-                $"{broken} with unresolved clip animations, {missingClips} clip(s), {unreadable} unreadable");
-            return missingClips == 0 && unreadable == 0 ? 0 : 1;
+            int exit = missingClips == 0 && unreadable == 0 ? 0 : 1;
+            var summary = new Dictionary<string, int>
+            {
+                ["checked"] = checkedBehaviours,
+                ["broken"] = broken,
+                ["missingClips"] = missingClips,
+                ["unreadable"] = unreadable,
+            };
+            if (json)
+                Console.WriteLine(new ScanReport("scan-clips", ScanContextFor(scan, instance), summary, findings, exit).ToJson());
+            else
+                Console.WriteLine(
+                    $"done  {checkedBehaviours} winning behaviour file(s) checked, " +
+                    $"{broken} with unresolved clip animations, {missingClips} clip(s), {unreadable} unreadable");
+            return exit;
         }
     }
 
     public static int Run(string[] args)
     {
+        bool json = args.Contains("--json");
         string? root = After(args, "--scan-archives");
         if (root == null || !Directory.Exists(root))
-        {
-            Console.Error.WriteLine("--scan-archives needs an existing directory");
-            return 2;
-        }
+            return Fail(json, "scan-archives", root ?? "", "usage", "--scan-archives needs an existing directory");
 
         bool errorsOnly = args.Contains("--errors-only");
         string temp = TempDirectory("bgs-scan");
         int archives = 0, scanned = 0, corrupt = 0, serial = 0;
+        var findings = new List<ScanFinding>();
 
         try
         {
             var ba2s = Mo2ScanData.EnumerateFilesSafe(root, "*.ba2", recursive: true)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            Console.WriteLine($"scanning {ba2s.Count} .ba2 archive(s) under {root}");
+            Info(json, $"scanning {ba2s.Count} .ba2 archive(s) under {root}");
 
             foreach (string ba2path in ba2s)
             {
@@ -308,7 +339,8 @@ public static class ModlistScan
                 try { archive = Ba2.Open(ba2path); }
                 catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
                 {
-                    if (!errorsOnly) Console.WriteLine($"skip     {Rel(root, ba2path)}: {First(e.Message)}");
+                    if (!errorsOnly && !json) Console.WriteLine($"skip     {Rel(root, ba2path)}: {First(e.Message)}");
+                    findings.Add(new ScanFinding("skip", Rel(root, ba2path), null, new[] { First(e.Message) }));
                     continue;
                 }
 
@@ -326,8 +358,8 @@ public static class ModlistScan
                         catch (Exception e)
                         {
                             corrupt++;
-                            Console.WriteLine(
-                                $"UNREADABLE  {Rel(root, ba2path)} :: {entry.Name}: {First(e.Message)}");
+                            if (!json) Console.WriteLine($"UNREADABLE  {Rel(root, ba2path)} :: {entry.Name}: {First(e.Message)}");
+                            findings.Add(new ScanFinding("unreadable", entry.Name, Rel(root, ba2path), new[] { First(e.Message) }));
                             continue;
                         }
 
@@ -336,8 +368,12 @@ public static class ModlistScan
                         if (errors.Count == 0) continue;
 
                         corrupt++;
-                        Console.WriteLine($"CORRUPT  {Rel(root, ba2path)} :: {entry.Name}");
-                        foreach (string finding in errors) Console.WriteLine("    " + finding);
+                        if (!json)
+                        {
+                            Console.WriteLine($"CORRUPT  {Rel(root, ba2path)} :: {entry.Name}");
+                            foreach (string finding in errors) Console.WriteLine("    " + finding);
+                        }
+                        findings.Add(new ScanFinding("corrupt", entry.Name, Rel(root, ba2path), errors));
                     }
                 }
             }
@@ -346,7 +382,7 @@ public static class ModlistScan
                 .Where(p => IsBehaviourPath(p.Replace('\\', '/')))
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            Console.WriteLine($"scanning {loose.Count} loose behaviour/character .hkx");
+            Info(json, $"scanning {loose.Count} loose behaviour/character .hkx");
 
             foreach (string path in loose)
             {
@@ -354,8 +390,12 @@ public static class ModlistScan
                 var errors = CheckBehaviour(path);
                 if (errors.Count == 0) continue;
                 corrupt++;
-                Console.WriteLine($"CORRUPT  {Rel(root, path)}  (loose)");
-                foreach (string finding in errors) Console.WriteLine("    " + finding);
+                if (!json)
+                {
+                    Console.WriteLine($"CORRUPT  {Rel(root, path)}  (loose)");
+                    foreach (string finding in errors) Console.WriteLine("    " + finding);
+                }
+                findings.Add(new ScanFinding("corrupt", Rel(root, path), "loose", errors));
             }
         }
         finally
@@ -363,26 +403,66 @@ public static class ModlistScan
             TryDeleteDirectory(temp);
         }
 
-        Console.WriteLine(
-            $"done  {scanned} behaviour/character hkx scanned across {archives} archive(s) + loose, " +
-            $"{corrupt} with errors");
-        return corrupt == 0 ? 0 : 1;
+        int exit = corrupt == 0 ? 0 : 1;
+        var summary = new Dictionary<string, int>
+        {
+            ["archives"] = archives,
+            ["scanned"] = scanned,
+            ["corrupt"] = corrupt,
+        };
+        if (json)
+            Console.WriteLine(new ScanReport("scan-archives", new ScanContext(root, null, null, 0), summary, findings, exit).ToJson());
+        else
+            Console.WriteLine(
+                $"done  {scanned} behaviour/character hkx scanned across {archives} archive(s) + loose, " +
+                $"{corrupt} with errors");
+        return exit;
     }
 
-    private static void PrintLayout(Mo2ScanData scan)
+    private static void PrintLayout(Mo2ScanData scan, bool json)
     {
         string profile = scan.Info.Profile ?? "(root modlist)";
-        Console.WriteLine(
+        Info(json,
             $"profile {profile}; {scan.ModRootsHighToLow.Count} active mod root(s); " +
             $"Data {scan.Info.GameDataFolder}");
         if (Directory.Exists(scan.Info.OverwriteFolder))
-            Console.WriteLine($"overwrite {scan.Info.OverwriteFolder}");
+            Info(json, $"overwrite {scan.Info.OverwriteFolder}");
     }
 
-    private static void PrintArchiveWarnings(Mo2ScanData scan)
+    private static void CollectArchiveWarnings(Mo2ScanData scan, bool json, List<ScanFinding> findings)
     {
         foreach (string warning in scan.DrainArchiveWarnings())
-            Console.WriteLine("ARCHIVE WARNING  " + warning);
+        {
+            if (!json) Console.WriteLine("ARCHIVE WARNING  " + warning);
+            int sep = warning.IndexOf(": ", StringComparison.Ordinal);
+            string where = sep > 0 ? warning[..sep] : warning;
+            string message = sep > 0 ? warning[(sep + 2)..] : warning;
+            findings.Add(new ScanFinding("archive-warning", where, null, new[] { message }));
+        }
+    }
+
+    private static ScanContext ScanContextFor(Mo2ScanData scan, string target) =>
+        new(target, scan.Info.Profile, scan.Info.GameDataFolder, scan.ModRootsHighToLow.Count);
+
+    private static void Info(bool json, string line)
+    {
+        if (json) Console.Error.WriteLine(line);
+        else Console.WriteLine(line);
+    }
+
+    private static int Fail(bool json, string mode, string target, string kind, string message)
+    {
+        if (json)
+        {
+            var report = new ScanReport(mode, new ScanContext(target, null, null, 0),
+                new Dictionary<string, int>(), new[] { new ScanFinding(kind, target, null, new[] { message }) }, 2);
+            Console.WriteLine(report.ToJson());
+        }
+        else
+        {
+            Console.Error.WriteLine(message);
+        }
+        return 2;
     }
 
     private static string CombineData(string projectRel, string declared)
