@@ -90,6 +90,23 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition);
 // yield an empty vector.
 std::vector<CtdaCondition> read_ctda_conditions(const Record& record);
 
+std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
+                                                   std::size_t begin,
+                                                   std::size_t end);
+
+enum class CtdaScopeWrite {
+  replaced,
+  inserted,
+  no_op,
+  no_list,
+};
+
+CtdaScopeWrite write_ctda_conditions_in(Record& record,
+                                        std::size_t begin,
+                                        std::size_t end,
+                                        std::span<const CtdaCondition> conditions,
+                                        std::optional<std::size_t> insert_anchor);
+
 // Replaces the record's CTDA run (contiguous CTDA/CIS1/CIS2 subrecords, with
 // an optional leading CITC count) in place with freshly serialized conditions.
 // Returns false when the record has no CTDA subrecords. When a CITC count

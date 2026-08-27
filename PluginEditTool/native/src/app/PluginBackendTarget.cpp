@@ -330,15 +330,9 @@ Result<nlohmann::json> legacySearchRecordType(plugin::IPluginBackend& backend,
     return nlohmann::json(hits->dump());
 }
 
-Result<void> requireRootConditionsPath(const nlohmann::json& args,
-                                       std::size_t index) {
+bool isRootConditionsPath(const nlohmann::json& args, std::size_t index) {
     const auto path = trim(stringArgument(args, index));
-    if (path.empty() || lower(path) == "conditions") return {};
-    return std::unexpected(Error{
-        "ConditionPathUnsupported",
-        "Native condition editing currently supports the record's root Conditions list only; nested Mutagen reflection path '" +
-            path + "' is not represented by the native schema yet"
-    });
+    return path.empty() || lower(path) == "conditions";
 }
 
 }
@@ -389,20 +383,35 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
         if (method == "GetConditionFunctionParams") return backend_.conditionFunctionParams();
         if (method == "GetConditionsAt") {
-            auto supported = requireRootConditionsPath(args, 2);
-            if (!supported) return std::unexpected(supported.error());
+            if (isRootConditionsPath(args, 2)) {
+                return backend_.invokeBackend(
+                    "GetConditions",
+                    nlohmann::json::array({stringArgument(args, 0), stringArgument(args, 1)}));
+            }
             return backend_.invokeBackend(
-                "GetConditions",
-                nlohmann::json::array({stringArgument(args, 0), stringArgument(args, 1)}));
-        }
-        if (method == "SetConditionsAt") {
-            auto supported = requireRootConditionsPath(args, 2);
-            if (!supported) return std::unexpected(supported.error());
-            return backend_.invokeBackend(
-                "SetConditions",
+                "GetConditionsAtPath",
                 nlohmann::json::array({
                     stringArgument(args, 0),
                     stringArgument(args, 1),
+                    stringArgument(args, 2)
+                }));
+        }
+        if (method == "SetConditionsAt") {
+            if (isRootConditionsPath(args, 2)) {
+                return backend_.invokeBackend(
+                    "SetConditions",
+                    nlohmann::json::array({
+                        stringArgument(args, 0),
+                        stringArgument(args, 1),
+                        stringArgument(args, 3)
+                    }));
+            }
+            return backend_.invokeBackend(
+                "SetConditionsAtPath",
+                nlohmann::json::array({
+                    stringArgument(args, 0),
+                    stringArgument(args, 1),
+                    stringArgument(args, 2),
                     stringArgument(args, 3)
                 }));
         }

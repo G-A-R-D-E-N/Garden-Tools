@@ -1091,5 +1091,11 @@
     { "record": "TACT", "predecessors": ["DSTF","DMDS","DMDT","DMDC","DMDL","DSTA","DSTD","DAMC","DEST","MODF","MODS","MODT","MODC","MODL","FULL","OBND","VMAD","EDID"], "successors": ["PNAM","SNAM","FNAM","VNAM"] },
     { "record": "TERM", "predecessors": ["MODF","MODS","MODT","MODC","MODL","FULL","WNAM","NAM0","PTRN","OBND","VMAD","EDID"], "successors": ["PRPS","PNAM","FNAM","COCT","CNTO","MNAM","WBDT","XMRK","SNAM","BSIZ","BTXT","CTDA","ISIZ","ITXT","RNAM","ANAM","ITID","UNAM","VNAM","TNAM"] },
     { "record": "WEAP", "predecessors": ["ZNAM","YNAM","BAMT","BIDS","ETYP","DSTF","DMDS","DMDT","DMDC","DMDL","DSTA","DSTD","DAMC","DEST","EAMT","EITM","MICO","ICON","MODF","MODS","MODT","MODC","MODL","STCP","PTRN","OBND","VMAD","EDID"], "successors": ["DESC","INRD","APPR","OBTE","OBTF","OBTS","STOP","NNAM","MOD4","MO4C","MO4T","MO4S","MO4F","DNAM","FNAM","CRDT","INAM","LNAM","WAMD","WZMD","CNAM","DAMA","FLTR","MASE"] }
+  ],
+  "condition_scopes": [
+    { "record": "ALCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "ENCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "INGR", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "SPEL", "container": "Effects", "member": "Conditions", "scope": "effect" }
   ]
 }

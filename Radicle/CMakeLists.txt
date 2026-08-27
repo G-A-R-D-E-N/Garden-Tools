@@ -61,6 +61,16 @@ add_custom_target(radicle_formlink_schema_check ALL
   COMMENT "Checking generated Fallout 4 FormLink list schema"
   VERBATIM
 )
+add_custom_target(radicle_condition_scope_schema_check ALL
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/condition_scope_codegen.py"
+    --schema "${CMAKE_CURRENT_SOURCE_DIR}/schema/fallout4/fields.json"
+    --output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/generated_condition_scopes.inc"
+    --check
+  COMMENT "Checking generated Fallout 4 condition scope schema"
+  VERBATIM
+)
 
 function(fo4_apply_warnings target)
   if(MSVC)
@@ -115,6 +125,7 @@ add_library(fo4
   src/plugin/mutation.cpp
   src/plugin/onam.cpp
   src/plugin/writer.cpp
+  src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
   src/schema/localized_fields.cpp
@@ -135,6 +146,9 @@ if(TARGET radicle_record_schema_check)
 endif()
 if(TARGET radicle_formlink_schema_check)
   add_dependencies(fo4 radicle_formlink_schema_check)
+endif()
+if(TARGET radicle_condition_scope_schema_check)
+  add_dependencies(fo4 radicle_condition_scope_schema_check)
 endif()
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -275,6 +289,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
     tests/test_ctda_model.cpp
+    tests/test_condition_scopes.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_navmesh_formlinks.cpp
