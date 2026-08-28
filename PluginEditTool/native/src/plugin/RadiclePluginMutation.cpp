@@ -170,6 +170,8 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "AddListItem") return addListItem(arguments);
     if (method == "RemoveListItem") return removeListItem(arguments);
     if (method == "SetComponents") return setComponents(arguments);
+    if (method == "SetQuestAliases") return setQuestAliases(arguments);
+    if (method == "SetQuestStages") return setQuestStages(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "AddMasters") return addMasters(arguments);

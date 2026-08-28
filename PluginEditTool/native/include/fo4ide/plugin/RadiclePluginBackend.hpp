@@ -75,6 +75,8 @@ private:
     Result<nlohmann::json> addListItem(const nlohmann::json& arguments);
     Result<nlohmann::json> removeListItem(const nlohmann::json& arguments);
     Result<nlohmann::json> setComponents(const nlohmann::json& arguments);
+    Result<nlohmann::json> setQuestAliases(const nlohmann::json& arguments);
+    Result<nlohmann::json> setQuestStages(const nlohmann::json& arguments);
     // Resolves a list value (FormKey text or EditorID) to a FormKey against the
     // loaded plugins, mirroring WriteService.ResolveFk.
     std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;

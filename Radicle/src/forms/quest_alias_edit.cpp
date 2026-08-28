@@ -9,6 +9,7 @@
 #include <cstring>
 #include <limits>
 #include <set>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -189,6 +190,51 @@ void grow_next_alias_id(Record& record,
 }
 
 }  // namespace
+
+void write_quest_aliases(Plugin& plugin,
+                         const FormKey& quest,
+                         std::span<const QuestAliasCreation> creations) {
+  auto next = plugin;
+  assign_record_form_keys(next);
+  validate_quest_record(next, quest);
+  auto* record = find_mutable_record(next, quest);
+  if (record == nullptr) throw QuestError("QUST record not found: " + quest.to_string());
+
+  std::vector<Subrecord> encoded;
+  std::set<std::uint32_t> ids;
+  std::uint32_t max_ref_id = 0;
+  bool have_ref_id = false;
+  for (const auto& creation : creations) {
+    const auto alias = encode_quest_alias(next, creation);
+    if (creation.kind != QuestAliasKind::collection) {
+      if (!ids.insert(creation.id).second) {
+        throw QuestError("QUST Alias ID already exists: " + std::to_string(creation.id));
+      }
+      if (!have_ref_id || creation.id > max_ref_id) max_ref_id = creation.id;
+      have_ref_id = true;
+    }
+    encoded.insert(encoded.end(), alias.subrecords.begin(), alias.subrecords.end());
+  }
+
+  const auto section = inspect_alias_section(*record);
+  auto begin = record->subrecords.begin() +
+               static_cast<std::ptrdiff_t>(section.anam_index + 1);
+  auto end = record->subrecords.begin() +
+             static_cast<std::ptrdiff_t>(section.insertion_index);
+  auto insertion = record->subrecords.erase(begin, end);
+  record->subrecords.insert(insertion, encoded.begin(), encoded.end());
+
+  std::uint32_t next_id = 0;
+  if (have_ref_id) {
+    if (max_ref_id == std::numeric_limits<std::uint32_t>::max()) {
+      throw QuestError("QUST Alias ID UINT32_MAX cannot advance ANAM Next Alias ID");
+    }
+    next_id = max_ref_id + 1;
+  }
+  write_u32(record->subrecords[section.anam_index].data, next_id);
+  mark_modified(next, *record);
+  plugin = std::move(next);
+}
 
 void add_quest_alias(Plugin& plugin,
                      const FormKey& quest,

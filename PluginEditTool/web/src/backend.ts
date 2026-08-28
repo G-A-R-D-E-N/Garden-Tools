@@ -17,6 +17,8 @@ export interface Backend {
   CreatePlugin(name: string): Promise<string>;
   SetField(plugin: string, record: string, field: string, value: string): Promise<string>;
   SetComponents(plugin: string, record: string, componentsJson: string): Promise<string>;
+  SetQuestAliases(plugin: string, record: string, aliasesJson: string): Promise<string>;
+  SetQuestStages(plugin: string, record: string, stagesJson: string): Promise<string>;
   SetConditions(plugin: string, record: string, conditionsJson: string): Promise<string>;
   AddListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
   RemoveListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
