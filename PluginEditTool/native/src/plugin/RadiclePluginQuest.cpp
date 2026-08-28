@@ -1,8 +1,10 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <charconv>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <set>
@@ -12,6 +14,7 @@
 #include <vector>
 
 #include <fo4/forms/quest.hpp>
+#include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/localized_fields.hpp>
@@ -42,6 +45,25 @@ const nlohmann::json* questArrayArg(const nlohmann::json& args, std::size_t inde
     return nullptr;
 }
 
+bool parseEntireUnsigned32(std::string_view text, std::uint32_t& value) {
+    if (text.empty()) return false;
+    if (text.front() == '+' || text.front() == '-') return false;
+    int base = 10;
+    auto view = text;
+    if (view.size() >= 2 && view[0] == '0' && (view[1] == 'x' || view[1] == 'X')) {
+        base = 16;
+        view.remove_prefix(2);
+        if (view.empty()) return false;
+    }
+    std::uint64_t parsed = 0;
+    const auto [ptr, error] = std::from_chars(
+        view.data(), view.data() + view.size(), parsed, base);
+    if (error != std::errc{} || ptr != view.data() + view.size()) return false;
+    if (parsed > std::numeric_limits<std::uint32_t>::max()) return false;
+    value = static_cast<std::uint32_t>(parsed);
+    return true;
+}
+
 bool questUnsigned(const nlohmann::json& object,
                    const char* key,
                    std::uint32_t defaultValue,
@@ -59,17 +81,15 @@ bool questUnsigned(const nlohmann::json& object,
     }
     if (found->is_number_integer()) {
         const auto parsed = found->get<std::int64_t>();
-        if (parsed < 0 || parsed > std::numeric_limits<std::uint32_t>::max()) return false;
+        if (parsed < 0 ||
+            parsed > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+            return false;
+        }
         value = static_cast<std::uint32_t>(parsed);
         return true;
     }
     if (found->is_string()) {
-        try {
-            value = static_cast<std::uint32_t>(std::stoul(found->get<std::string>(), nullptr, 0));
-            return true;
-        } catch (const std::exception&) {
-            return false;
-        }
+        return parseEntireUnsigned32(found->get<std::string>(), value);
     }
     return false;
 }
@@ -131,6 +151,67 @@ bool knownAliasKey(std::string_view key) {
            key == "forceIntoAlias" || key == "closestToAlias" ||
            key == "maxInitialFillCount" || key == "forcedReference" ||
            key == "uniqueActor" || key == "specificLocation";
+}
+
+bool knownStageKey(std::string_view key) {
+    return key == "index" || key == "flags" || key == "logEntry" ||
+           key == "logEntries" || key == "complete" || key == "fail";
+}
+
+bool knownLogEntryKey(std::string_view key) {
+    return key == "flags" || key == "note" || key == "logText";
+}
+
+bool isPlacedSignature(fo4::Signature signature) {
+    const auto text = signature.to_string();
+    return text == "REFR" || text == "ACHR" || text == "PGRE" || text == "PHZD" ||
+           text == "PMIS" || text == "PARW" || text == "PBAR" || text == "PBEA" ||
+           text == "PCON" || text == "PFLA";
+}
+
+std::optional<Error> requireLoadedFill(
+    const fo4::ConflictGraph& graph,
+    const fo4::FormKey& key,
+    std::initializer_list<std::string_view> accepted,
+    bool placedTargets,
+    std::string_view slotName) {
+    const auto* winner = graph.winner(key);
+    if (winner == nullptr) {
+        return Error{
+            "InvalidTypedFormKey",
+            std::string(slotName) + " must resolve to a loaded record: " + key.to_string()
+        };
+    }
+    const auto signature = winner->signature.to_string();
+    if (placedTargets && isPlacedSignature(winner->signature)) return std::nullopt;
+    for (const auto name : accepted) {
+        if (signature == name) return std::nullopt;
+    }
+    std::string expected;
+    if (placedTargets) expected = "placed reference";
+    for (const auto name : accepted) {
+        if (!expected.empty()) expected += " or ";
+        expected += std::string(name);
+    }
+    return Error{
+        "InvalidTypedFormKey",
+        std::string(slotName) + " " + key.to_string() + " is a " + signature +
+            ", but this slot holds a " + expected
+    };
+}
+
+std::optional<Error> rejectUnknownKeys(const nlohmann::json& object,
+                                       bool (*known)(std::string_view),
+                                       std::string_view label) {
+    for (auto it = object.begin(); it != object.end(); ++it) {
+        if (!known(it.key())) {
+            return Error{
+                "InvalidQuestStagePayload",
+                "Unsupported " + std::string(label) + " field '" + it.key() + "'"
+            };
+        }
+    }
+    return std::nullopt;
 }
 
 std::optional<Error> parseFillFormKey(const nlohmann::json& object,
@@ -235,7 +316,17 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
         }
 
         fo4::forms::QuestAliasCreation creation;
-        const auto kindText = element.value("kind", std::string{"reference"});
+        std::string kindText{"reference"};
+        const auto kindField = element.find("kind");
+        if (kindField != element.end() && !kindField->is_null()) {
+            if (!kindField->is_string()) {
+                return std::unexpected(Error{
+                    "InvalidQuestAliasPayload",
+                    "kind must be a string"
+                });
+            }
+            kindText = kindField->get<std::string>();
+        }
         if (kindText == "reference") creation.kind = fo4::forms::QuestAliasKind::reference;
         else if (kindText == "location") creation.kind = fo4::forms::QuestAliasKind::location;
         else if (kindText == "collection") creation.kind = fo4::forms::QuestAliasKind::collection;
@@ -317,12 +408,24 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             });
         }
         if (forced.has_value()) {
+            if (const auto error = requireLoadedFill(
+                    graph_, *forced, {}, true, "forcedReference")) {
+                return std::unexpected(*error);
+            }
             creation.fill = fo4::forms::QuestSpecificReferenceFill{forced};
             fillKeys.push_back(*forced);
         } else if (actor.has_value()) {
+            if (const auto error = requireLoadedFill(
+                    graph_, *actor, {"NPC_"}, false, "uniqueActor")) {
+                return std::unexpected(*error);
+            }
             creation.fill = fo4::forms::QuestUniqueActorFill{*actor};
             fillKeys.push_back(*actor);
         } else if (location.has_value()) {
+            if (const auto error = requireLoadedFill(
+                    graph_, *location, {"LCTN"}, false, "specificLocation")) {
+                return std::unexpected(*error);
+            }
             creation.fill = fo4::forms::QuestSpecificLocationFill{*location};
             fillKeys.push_back(*location);
         }
@@ -405,6 +508,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 "Every quest stage must be an object"
             });
         }
+        if (const auto error = rejectUnknownKeys(element, knownStageKey, "quest stage")) {
+            return std::unexpected(*error);
+        }
         fo4::forms::QuestStage stage;
         std::uint32_t index = 0;
         std::uint32_t flags = 0;
@@ -430,8 +536,56 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             });
         }
 
+        const auto completeField = element.find("complete");
+        const auto failField = element.find("fail");
+        if (completeField != element.end() && !completeField->is_null() &&
+            !completeField->is_boolean()) {
+            return std::unexpected(Error{
+                "InvalidQuestStagePayload",
+                "complete must be a boolean"
+            });
+        }
+        if (failField != element.end() && !failField->is_null() &&
+            !failField->is_boolean()) {
+            return std::unexpected(Error{
+                "InvalidQuestStagePayload",
+                "fail must be a boolean"
+            });
+        }
+        const bool hasComplete = completeField != element.end() &&
+                                 completeField->is_boolean();
+        const bool hasFail = failField != element.end() && failField->is_boolean();
+        const bool hasLogEntries =
+            element.contains("logEntries") && !element["logEntries"].is_null();
+        const bool hasLogEntry =
+            element.contains("logEntry") && !element["logEntry"].is_null();
+        if (hasLogEntry && !element["logEntry"].is_string()) {
+            return std::unexpected(Error{
+                "InvalidQuestStagePayload",
+                "logEntry must be a string"
+            });
+        }
+        if (hasLogEntries && hasLogEntry) {
+            return std::unexpected(Error{
+                "InvalidQuestStagePayload",
+                "a stage may set logEntry or logEntries, not both"
+            });
+        }
+        if (hasLogEntries && (hasComplete || hasFail)) {
+            return std::unexpected(Error{
+                "InvalidQuestStagePayload",
+                "complete/fail apply only to the logEntry sugar path"
+            });
+        }
+        if ((hasComplete || hasFail) && !hasLogEntry) {
+            return std::unexpected(Error{
+                "InvalidQuestStagePayload",
+                "complete/fail require a logEntry string"
+            });
+        }
+
         nlohmann::json entries = nlohmann::json::array();
-        if (element.contains("logEntries") && !element["logEntries"].is_null()) {
+        if (hasLogEntries) {
             if (!element["logEntries"].is_array()) {
                 return std::unexpected(Error{
                     "InvalidQuestStagePayload",
@@ -439,17 +593,13 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 });
             }
             entries = element["logEntries"];
-        } else if (element.contains("logEntry") && element["logEntry"].is_string()) {
+        } else if (hasLogEntry) {
             nlohmann::json one = nlohmann::json::object();
             one["logText"] = element["logEntry"];
-            if (element.contains("complete") && element["complete"].is_boolean() &&
-                element["complete"].get<bool>()) {
-                one["flags"] = 1;
-            }
-            if (element.contains("fail") && element["fail"].is_boolean() &&
-                element["fail"].get<bool>()) {
-                one["flags"] = 2;
-            }
+            std::uint32_t sugarFlags = 0;
+            if (hasComplete && completeField->get<bool>()) sugarFlags |= 1u;
+            if (hasFail && failField->get<bool>()) sugarFlags |= 2u;
+            if (sugarFlags != 0) one["flags"] = sugarFlags;
             entries.push_back(std::move(one));
         }
 
@@ -459,6 +609,10 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     "InvalidQuestStagePayload",
                     "every log entry must be an object"
                 });
+            }
+            if (const auto error =
+                    rejectUnknownKeys(entryJson, knownLogEntryKey, "log entry")) {
+                return std::unexpected(*error);
             }
             fo4::forms::QuestLogEntry entry;
             std::uint32_t entryFlags = 0;

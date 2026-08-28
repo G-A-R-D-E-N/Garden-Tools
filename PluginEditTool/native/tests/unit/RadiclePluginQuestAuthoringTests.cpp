@@ -214,3 +214,134 @@ TEST_CASE("Native SetQuestStages writes multiple log entries with note and log t
         disk, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE_FALSE(aliases.aliases.empty());
 }
+
+TEST_CASE("Native SetQuestStages rejects unsupported fields and wrong types without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto conditions = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"index", 10}, {"conditions", nlohmann::json::array()}}
+            })
+        }));
+    REQUIRE_FALSE(conditions.has_value());
+    CHECK(conditions.error().type == "InvalidQuestStagePayload");
+    CHECK(conditions.error().message.find("conditions") != std::string::npos);
+
+    const auto logEntryType = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", 12}}})
+        }));
+    REQUIRE_FALSE(logEntryType.has_value());
+    CHECK(logEntryType.error().type == "InvalidQuestStagePayload");
+
+    const auto completeType = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"index", 10}, {"logEntry", "text"}, {"complete", 1}}
+            })
+        }));
+    REQUIRE_FALSE(completeType.has_value());
+    CHECK(completeType.error().type == "InvalidQuestStagePayload");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases validates Fill Type targets and numeric strings") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto unresolved = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"},
+                 {"id", 1},
+                 {"flags", 0},
+                 {"uniqueActor", "000FFF:Patch.esp"}}
+            })
+        }));
+    REQUIRE_FALSE(unresolved.has_value());
+    CHECK(unresolved.error().type == "InvalidTypedFormKey");
+
+    const auto mistyped = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"},
+                 {"id", 1},
+                 {"flags", 0},
+                 {"uniqueActor", "000800:Patch.esp"}}
+            })
+        }));
+    REQUIRE_FALSE(mistyped.has_value());
+    CHECK(mistyped.error().type == "InvalidTypedFormKey");
+
+    const auto junk = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"kind", "reference"}, {"id", "12junk"}, {"flags", 0}}})
+        }));
+    REQUIRE_FALSE(junk.has_value());
+    CHECK(junk.error().type == "InvalidQuestAliasPayload");
+
+    const auto negative = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"kind", "reference"}, {"id", "-1"}, {"flags", 0}}})
+        }));
+    REQUIRE_FALSE(negative.has_value());
+    CHECK(negative.error().type == "InvalidQuestAliasPayload");
+
+    const auto tooWide = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", "4294967296"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE_FALSE(tooWide.has_value());
+    CHECK(tooWide.error().type == "InvalidQuestAliasPayload");
+
+    const auto kindType = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"kind", 1}, {"id", 1}, {"flags", 0}}})
+        }));
+    REQUIRE_FALSE(kindType.has_value());
+    CHECK(kindType.error().type == "InvalidQuestAliasPayload");
+    CHECK(readBytes(path) == before);
+}
