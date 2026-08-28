@@ -1,5 +1,6 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/vmad.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -244,6 +245,68 @@ TEST(Vmad, QuestAliasObjectRemaps) {
   const auto* sub = find_vmad(reread, fo4::FormKey::parse("000810:Patch.esp"));
   ASSERT_NE(sub, nullptr);
   EXPECT_EQ(read_u32(sub->data, 2 + 2 + 2 + 1 + 2 + 2 + 2 + 4), 0x0100009Au);
+}
+
+TEST(Vmad, QuestBindingsDetectStageFragmentsAndAliasObjects) {
+  fo4::test::ByteWriter fragments;
+  fragments.u16(6);
+  fragments.u16(2);
+  fragments.u16(0);
+  fragments.u8(3);
+  fragments.u16(1);
+  fragments.u16(0);
+  fragments.u16(10);
+  fragments.u16(0);
+  fragments.u32(0);
+  fragments.u8(0);
+  wstring(fragments, "QF_Test");
+  wstring(fragments, "Fragment_10");
+  fragments.u16(0);
+  const auto fragment_bindings = fo4::quest_vmad_bindings(fragments.bytes);
+  EXPECT_FALSE(fragment_bindings.unparseable);
+  EXPECT_TRUE(fragment_bindings.binds_stages);
+  EXPECT_FALSE(fragment_bindings.binds_aliases);
+
+  fo4::test::ByteWriter aliases;
+  aliases.u16(6);
+  aliases.u16(2);
+  aliases.u16(0);
+  aliases.u8(3);
+  aliases.u16(0);
+  aliases.u16(0);
+  aliases.u16(1);
+  object_v2(aliases, 0x00000014);
+  aliases.u16(6);
+  aliases.u16(2);
+  aliases.u16(0);
+  const auto alias_bindings = fo4::quest_vmad_bindings(aliases.bytes);
+  EXPECT_FALSE(alias_bindings.unparseable);
+  EXPECT_FALSE(alias_bindings.binds_stages);
+  EXPECT_TRUE(alias_bindings.binds_aliases);
+
+  fo4::test::ByteWriter empty_extras;
+  empty_extras.u16(6);
+  empty_extras.u16(2);
+  empty_extras.u16(0);
+  empty_extras.u8(3);
+  empty_extras.u16(0);
+  empty_extras.u16(0);
+  empty_extras.u16(0);
+  const auto empty_bindings = fo4::quest_vmad_bindings(empty_extras.bytes);
+  EXPECT_FALSE(empty_bindings.unparseable);
+  EXPECT_FALSE(empty_bindings.binds_stages);
+  EXPECT_FALSE(empty_bindings.binds_aliases);
+
+  fo4::test::ByteWriter truncated;
+  truncated.u16(6);
+  truncated.u16(2);
+  truncated.u16(1);
+  truncated.u16(20);
+  truncated.raw(std::string_view{"x"});
+  const auto truncated_bindings = fo4::quest_vmad_bindings(truncated.bytes);
+  EXPECT_TRUE(truncated_bindings.unparseable);
+  EXPECT_FALSE(truncated_bindings.binds_stages);
+  EXPECT_FALSE(truncated_bindings.binds_aliases);
 }
 
 TEST(Vmad, TruncatedPayloadDoesNotThrow) {

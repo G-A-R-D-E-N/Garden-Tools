@@ -95,7 +95,7 @@ implemented and tested:
 - Remaining reference/location alias fields after the Fill Type union:
   conditions, keyword arrays, inventory/items, packages, spells, factions,
   voice type, linked aliases, and other xEdit-modeled members.
-- Alias VMAD interactions beyond the existing global VMAD safety contract.
+- Alias VMAD interactions beyond the existing global VMAD safety contract. PluginEditTool `SetQuestAliases` / `SetQuestStages` fail closed when QUST VMAD extras bind alias IDs or stage fragments (`fo4::quest_vmad_bindings`). Whole-array replace still does not rewrite VMAD.
 
 Unknown members inside an existing reference/location alias are preserved in
 original order. Semantic replacement intentionally emits only the fields that
