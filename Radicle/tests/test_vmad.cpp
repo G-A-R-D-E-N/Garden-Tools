@@ -307,6 +307,12 @@ TEST(Vmad, QuestBindingsDetectStageFragmentsAndAliasObjects) {
   EXPECT_TRUE(truncated_bindings.unparseable);
   EXPECT_FALSE(truncated_bindings.binds_stages);
   EXPECT_FALSE(truncated_bindings.binds_aliases);
+
+  empty_extras.u8(0);
+  const auto trailing_bindings = fo4::quest_vmad_bindings(empty_extras.bytes);
+  EXPECT_TRUE(trailing_bindings.unparseable);
+  EXPECT_FALSE(trailing_bindings.binds_stages);
+  EXPECT_FALSE(trailing_bindings.binds_aliases);
 }
 
 TEST(Vmad, TruncatedPayloadDoesNotThrow) {

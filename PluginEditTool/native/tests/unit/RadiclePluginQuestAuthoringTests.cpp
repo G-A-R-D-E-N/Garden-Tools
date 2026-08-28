@@ -837,6 +837,31 @@ TEST_CASE("Native QUST authoring refuses unrepresentable existing data without w
             },
             "cannot be inspected"
         },
+        {
+            "empty first VMAD plus binding second VMAD",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    fo4::test::write_subrecord(out, "VMAD", vmadEmptyExtras());
+                    fo4::test::write_subrecord(out, "VMAD", vmadAliasObjects());
+                    writeSimpleAlias(out);
+                });
+            },
+            "more than one VMAD"
+        },
+        {
+            "valid empty QUST extras with trailing byte",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    auto vmad = vmadEmptyExtras();
+                    vmad.push_back(std::byte{0});
+                    fo4::test::write_subrecord(out, "VMAD", vmad);
+                    writeSimpleAlias(out);
+                });
+            },
+            "cannot be inspected"
+        },
     };
 
     for (const auto& test : cases) {

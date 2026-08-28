@@ -66,6 +66,8 @@ struct VmadScan {
   std::vector<std::size_t> offsets;
   bool unsupported{false};
   bool failed{false};
+  bool fully_consumed{false};
+  bool trailing_data{false};
   std::uint16_t quest_fragment_count{0};
   std::uint16_t quest_alias_count{0};
 };
@@ -284,18 +286,19 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
     slice.i16();  // version
     const auto object_format = slice.i16();
     walk_scripts(slice, object_format, slice.u16(), result.offsets);
-    if (slice.at_end()) {
-      return result;
+    if (!slice.at_end()) {
+      if (record_signature == sig_qust) {
+        walk_quest_extra(slice, object_format, result);
+      } else if (record_signature == sig_perk) {
+        walk_perk_extra(slice, object_format, result.offsets);
+      } else if (record_signature == sig_pack || record_signature == sig_info) {
+        walk_flagged_fragments(slice, object_format, result.offsets, false);
+      } else if (record_signature == sig_scen) {
+        walk_flagged_fragments(slice, object_format, result.offsets, true);
+      }
     }
-    if (record_signature == sig_qust) {
-      walk_quest_extra(slice, object_format, result);
-    } else if (record_signature == sig_perk) {
-      walk_perk_extra(slice, object_format, result.offsets);
-    } else if (record_signature == sig_pack || record_signature == sig_info) {
-      walk_flagged_fragments(slice, object_format, result.offsets, false);
-    } else if (record_signature == sig_scen) {
-      walk_flagged_fragments(slice, object_format, result.offsets, true);
-    }
+    result.fully_consumed = slice.at_end();
+    result.trailing_data = !slice.at_end();
   } catch (const UnsupportedVmadProperty&) {
     result.offsets.clear();
     result.unsupported = true;
@@ -340,7 +343,7 @@ QuestVmadBindings quest_vmad_bindings(std::span<const std::byte> data) {
     return bindings;
   }
   const auto scan = scan_vmad(data, sig_qust);
-  if (scan.unsupported || scan.failed) {
+  if (scan.unsupported || scan.failed || scan.trailing_data || !scan.fully_consumed) {
     bindings.unparseable = true;
     return bindings;
   }

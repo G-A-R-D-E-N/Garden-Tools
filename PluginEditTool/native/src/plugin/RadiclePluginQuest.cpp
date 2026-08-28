@@ -265,13 +265,19 @@ std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
                                                       bool aliases,
                                                       bool stages) {
     const fo4::Subrecord* vmad = nullptr;
+    std::size_t vmadCount = 0;
     for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature == fo4::sig_vmad) {
-            vmad = &subrecord;
-            break;
-        }
+        if (subrecord.signature != fo4::sig_vmad) continue;
+        ++vmadCount;
+        if (vmad == nullptr) vmad = &subrecord;
     }
-    if (vmad == nullptr) return std::nullopt;
+    if (vmadCount == 0) return std::nullopt;
+    if (vmadCount > 1) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST has more than one VMAD subrecord"
+        };
+    }
     const auto bindings = fo4::quest_vmad_bindings(vmad->data);
     if (bindings.unparseable) {
         return Error{
