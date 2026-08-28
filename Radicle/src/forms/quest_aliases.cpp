@@ -544,7 +544,6 @@ QuestAlias encode_base_alias(const QuestAliasCreation& creation) {
           k_almi,
           std::vector<std::byte>{std::byte{*creation.max_initial_fill_count}}));
     }
-    decode_alias_semantics(alias, nullptr);
     return alias;
   }
 
