@@ -63,7 +63,8 @@ dotnet run --project tools/symrm/symrm.csproj \
 
 `symrm` also contains diagnostic commands used during reverse engineering and fixture work. These
 commands are developer tools; do not turn an exploratory diagnostic into a save path without adding
-normal validation and tests.
+normal validation and tests. See the [symrm CLI reference](guide/cli/symrm.md) for the complete
+command list; `symrm <command> --help` is the canonical usage/flags/example source.
 
 ### Headless UI smoke
 
@@ -162,6 +163,7 @@ but only an actual stored artifact proves the downloadable-artifact path.
 - Core Havok/model code: `src/`
 - xUnit tests: `tools/tests/`
 - Native/diagnostic CLI: `tools/symrm/`
+- CLI command reference: `guide/cli/symrm.md`
 - Headless UI regression harness: `tools/uismoke/`
 - Active GitHub Actions lane: `../.github/workflows/bgs-ci.yml`
 - Headless load-order scan guide: `guide/scan/README.md`
