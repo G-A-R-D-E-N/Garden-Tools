@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -281,6 +282,9 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
 // Mutates only the xEdit-proven contiguous Alias array immediately following
 // ANAM. Add/replace encode through the destination plugin's master table.
 // ANAM Next Alias ID grows monotonically when an inserted ID reaches/exceeds it.
+void write_quest_aliases(Plugin& plugin,
+                         const FormKey& quest,
+                         std::span<const QuestAliasCreation> creations);
 void add_quest_alias(Plugin& plugin,
                      const FormKey& quest,
                      const QuestAliasCreation& creation);

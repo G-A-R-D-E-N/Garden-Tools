@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -243,4 +244,55 @@ TEST(QuestAliasMutation, RejectsAliasIdThatCannotAdvanceAnam) {
           plugin, quest, reference(std::numeric_limits<std::uint32_t>::max())),
       fo4::forms::QuestError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(QuestAliasMutation, WriteReplacesWholeArrayIncludingCollectionsAndPreservesTail) {
+  auto plugin = fo4::read_plugin(quest_with_tail(), "Quest.esp");
+  const auto quest = fo4::FormKey::parse("000800:Quest.esp");
+  const auto* before_record = fo4::find_record(plugin, quest);
+  ASSERT_NE(before_record, nullptr);
+  const auto* before_nnam = unique_subrecord(*before_record, "NNAM");
+  ASSERT_NE(before_nnam, nullptr);
+  const auto tail_bytes = before_nnam->data;
+
+  const fo4::forms::QuestAliasCreation location{
+      .kind = fo4::forms::QuestAliasKind::location,
+      .id = 4,
+      .name = std::nullopt,
+      .flags = 0x40u,
+      .force_into_alias = std::nullopt,
+      .max_initial_fill_count = std::nullopt,
+      .closest_to_alias = std::nullopt,
+      .fill = std::monostate{},
+  };
+  const std::array<fo4::forms::QuestAliasCreation, 2> creations{
+      location,
+      collection(9, 2),
+  };
+  fo4::forms::write_quest_aliases(plugin, quest, creations);
+
+  const auto aliases = fo4::forms::decode_quest_aliases(plugin, quest);
+  ASSERT_EQ(aliases.aliases.size(), 2u);
+  EXPECT_EQ(aliases.aliases[0].kind, fo4::forms::QuestAliasKind::location);
+  EXPECT_EQ(aliases.aliases[0].id, 4u);
+  EXPECT_EQ(aliases.aliases[1].kind, fo4::forms::QuestAliasKind::collection);
+  EXPECT_EQ(aliases.next_alias_id, 5u);
+
+  const auto* record = fo4::find_record(plugin, quest);
+  ASSERT_NE(record, nullptr);
+  const auto* nnam = unique_subrecord(*record, "NNAM");
+  ASSERT_NE(nnam, nullptr);
+  EXPECT_EQ(nnam->data, tail_bytes);
+  EXPECT_LT(signature_index(*record, "ALED"), signature_index(*record, "NNAM"));
+}
+
+TEST(QuestAliasMutation, WriteEmptyArrayClearsAliasesAndResetsAnam) {
+  auto plugin = fo4::read_plugin(quest_with_tail(), "Quest.esp");
+  const auto quest = fo4::FormKey::parse("000800:Quest.esp");
+  fo4::forms::write_quest_aliases(plugin, quest, {});
+
+  const auto aliases = fo4::forms::decode_quest_aliases(plugin, quest);
+  EXPECT_TRUE(aliases.aliases.empty());
+  EXPECT_EQ(aliases.next_alias_id, 0u);
+  EXPECT_NE(unique_subrecord(*fo4::find_record(plugin, quest), "NNAM"), nullptr);
 }
