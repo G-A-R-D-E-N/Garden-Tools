@@ -35,6 +35,7 @@ public static class Program
             case "pose": return Pose(argv);
             case "channels": return Channels(argv);
             case "packfile": return Packfile(argv);
+            case "nullsave": return NullSave(argv);
             case "layout": return Layout(argv);
             case "relayout": return Relayout(argv);
             case "ground": return Ground(argv);
@@ -6660,6 +6661,93 @@ public static class Program
                     CollectSites(types, objects, layout, array.At + e * stride, member.CType, sites, depth + 1);
             }
         }
+    }
+
+    // The no-op save fidelity check: open each file, save it with an empty edit plan
+    // (the exact serialization the app writes on an unchanged document), and compare
+    // bytes.
+    //
+    // Companion diagnostic to SaveFidelityCorpusTests: a no-op save (an empty edit plan,
+    // the exact serialization the app writes for an unchanged document) and a byte compare.
+    //
+    // This is a raw diagnostic, not a contract evaluator. It reports every byte drift and
+    // any refusal, and exits non-zero if either occurs -- including for files the corpus
+    // test classifies as a legal re-layout (a differ-in-bytes, XML-identical skeleton) or
+    // as a clean refusal (an hcl* cloth file the save path rejects). The authoritative
+    // pass/fail per the per-file fidelity manifest is the xUnit SaveFidelityCorpusTests
+    // suite in tools/tests; this command is for investigating and extending the corpus.
+    private static int NullSave(string[] argv)
+    {
+        if (argv.Length < 2) { Usage(); return 1; }
+
+        string target = Path.GetFullPath(argv[1]);
+        var files = Directory.Exists(target)
+            ? Directory.GetFiles(target, "*.hkx", SearchOption.AllDirectories)
+                       .OrderBy(f => f, StringComparer.Ordinal).ToArray()
+            : new[] { target };
+
+        int same = 0, differed = 0, refused = 0;
+        var notes = new List<string>();
+
+        foreach (string file in files)
+        {
+            byte[] original;
+            try { original = InputFilePolicy.ReadHkx(file); }
+            catch (Exception e)
+            {
+                refused++;
+                if (notes.Count < 10) notes.Add($"{Path.GetFileName(file)}: {e.Message}");
+                continue;
+            }
+
+            byte[]? after = null;
+            Exception? refusal = null;
+            try
+            {
+                after = NativeSave.Apply(original, new NativeSave.Plan(new List<NativeSave.Change>(), null));
+            }
+            catch (Exception e)
+            {
+                refusal = e;
+                // Note the refusal class so the diagnostic reads the same way the corpus test
+                // does: a catalogued InvalidOperationException/InvalidDataException refusal is
+                // expected for files the build does not support; anything else is a bug in the
+                // save path itself and should be flagged as such.
+                var refusalClass = refusal is InvalidOperationException or InvalidDataException
+                    ? "clean refusal" : refusal.GetType().Name;
+                if (notes.Count < 10)
+                    notes.Add($"{Path.GetFileName(file)}: refused ({refusalClass}), {refusal.Message}");
+                refused++;
+                continue;
+            }
+
+            int firstDifference = FirstDifference(original, after!);
+            if (firstDifference < 0) { same++; continue; }
+
+            // A legal rebuild may re-lay out pointers (e.g. FixupOrder strips 0xFF filler
+            // from fixup tables) while preserving the object graph. Distinguish that from a
+            // corrupting save by comparing the canonical XML renderings.
+            string structural = "";
+            try
+            {
+                structural = NativeXml.From(original) == NativeXml.From(after)
+                    ? ", XML structurally identical"
+                    : ", XML DIFFERS";
+            }
+            catch (Exception) { structural = ", structural check unavailable"; }
+
+            differed++;
+            if (notes.Count < 10)
+                notes.Add($"{Path.GetFileName(file)}: {original.Length} bytes in, {after.Length} out, " +
+                          $"first difference at 0x{firstDifference:x}{structural}" +
+                          Around(original, after, firstDifference));
+        }
+
+        foreach (string note in notes) Console.WriteLine("  " + note);
+
+        Console.WriteLine($"\n{files.Length} file(s): {same} saved byte-identically, " +
+                          $"{differed} differed, {refused} refused");
+        return differed == 0 && refused == 0 ? 0 : 1;
     }
 
     private static int Relayout(string[] argv)
