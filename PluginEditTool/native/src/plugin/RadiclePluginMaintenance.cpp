@@ -277,7 +277,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                             return std::unexpected(Error{
                                 "SourceContainmentUnsupported",
                                 "CopyAsNewRecord supports contained REFR/ACHR placed references in a CELL only; "
-                                "other contained records (INFO/DIAL, unproven placed families) are not duplicated"});
+                                "other contained records (DIAL and other unproven contained families) are not duplicated"});
                         case fo4::forms::PlacedReferenceCopyNewStatus::parent_cell_missing:
                             return std::unexpected(Error{
                                 "TargetParentCellMissing",
