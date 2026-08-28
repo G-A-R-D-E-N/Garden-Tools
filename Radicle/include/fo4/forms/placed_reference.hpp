@@ -91,6 +91,28 @@ PlacedReferenceCopyNewResult copy_placed_reference_as_new(
     const Plugin& source,
     const FormKey& reference);
 
+class InfoCopyError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+enum class InfoCopyNewStatus {
+  created,
+  source_missing,
+  unsupported_signature,
+  parent_dial_missing,
+};
+
+struct InfoCopyNewResult {
+  InfoCopyNewStatus status{InfoCopyNewStatus::source_missing};
+  FormKey new_info{};
+};
+
+InfoCopyNewResult copy_info_as_new(
+    Plugin& destination,
+    const Plugin& source,
+    const FormKey& info);
+
 // Replaces only the 24-byte DATA position/rotation payload on an existing
 // REFR/ACHR. Missing, duplicate or malformed DATA is rejected transactionally.
 bool set_placed_reference_transform(

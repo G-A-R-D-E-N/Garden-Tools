@@ -127,8 +127,49 @@ std::vector<std::byte> cellTargetBytes() {
 }
 
 std::vector<std::byte> noCellTargetBytes() {
+  fo4::test::ByteWriter out;
+  writeHeader(out, 0x900, {"Base.esm"});
+  return out.bytes;
+}
+
+std::vector<std::byte> infoCopySourceBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x803);
+    const auto questTop = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800u, 131);
+    fo4::test::end_record(out, quest);
+    const auto questChildren = beginGroupRaw(
+        out, 0x00000800u, fo4::GroupType::cell_visible_distant_children);
+    const auto dialTop = fo4::test::begin_group(out, "DIAL", 0);
+    const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x00000801u, 131);
+    fo4::test::end_record(out, dial);
+    const auto topic = beginGroupRaw(out, 0x00000801u, fo4::GroupType::topic_children);
+    const auto info = fo4::test::begin_record(out, "INFO", 0, 0x00000802u, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"BackendInfo\0", 12});
+    fo4::test::end_record(out, info);
+    endGroupRaw(out, topic);
+    fo4::test::end_group(out, dialTop);
+    endGroupRaw(out, questChildren);
+    fo4::test::end_group(out, questTop);
+    return out.bytes;
+}
+
+std::vector<std::byte> infoCopyTargetBytes() {
     fo4::test::ByteWriter out;
     writeHeader(out, 0x900, {"Base.esm"});
+    const auto questTop = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800u, 131);
+    fo4::test::end_record(out, quest);
+    const auto questChildren = beginGroupRaw(
+        out, 0x00000800u, fo4::GroupType::cell_visible_distant_children);
+    const auto dialTop = fo4::test::begin_group(out, "DIAL", 0);
+    const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x00000801u, 131);
+    fo4::test::end_record(out, dial);
+    const auto topic = beginGroupRaw(out, 0x00000801u, fo4::GroupType::topic_children);
+    endGroupRaw(out, topic);
+    fo4::test::end_group(out, dialTop);
+    endGroupRaw(out, questChildren);
+    fo4::test::end_group(out, questTop);
     return out.bytes;
 }
 
@@ -430,4 +471,33 @@ TEST_CASE("Native CopyAsNewRecord fails closed when the target lacks the parent 
         nlohmann::json::array({"Base.esm", "000801:Base.esm", "Patch.esp", ""}));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "TargetParentCellMissing");
+}
+
+TEST_CASE("Native CopyAsNewRecord dispatches a contained INFO to the dialogue primitive") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(sourcePath, infoCopySourceBytes());
+    writeBytes(patchPath, infoCopyTargetBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({
+        pluginEntry("Base.esm", sourcePath),
+        pluginEntry("Patch.esp", patchPath)
+    }));
+
+    const auto result = backend.invokeLegacyBackend(
+        "CopyAsNewRecord",
+        nlohmann::json::array({"Base.esm", "000802:Base.esm", "Patch.esp", ""}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().find("as NEW record 000900:Patch.esp") != std::string::npos);
+
+    const auto patch = fo4::read_plugin_file(patchPath);
+    const auto* duplicate = fo4::find_record(
+        patch, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(duplicate != nullptr);
+    CHECK(duplicate->header.signature == fo4::Signature::from_string("INFO"));
+    CHECK(editorId(*duplicate) == "BackendInfoDUP");
 }

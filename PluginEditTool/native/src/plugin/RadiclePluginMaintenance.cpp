@@ -241,28 +241,54 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             }
             try {
                 auto mutated = target->plugin;
-                const auto result = fo4::forms::copy_placed_reference_as_new(
-                    mutated, source->plugin, sourceKey);
-                switch (result.status) {
-                    case fo4::forms::PlacedReferenceCopyNewStatus::source_missing:
-                        return std::unexpected(Error{
-                            "SourceRecordNotFound",
-                            "Could not find " + sourceKey.to_string() + " in " + source->name});
-                    case fo4::forms::PlacedReferenceCopyNewStatus::unsupported_signature:
-                        return std::unexpected(Error{
-                            "SourceContainmentUnsupported",
-                            "CopyAsNewRecord supports contained REFR/ACHR placed references in a CELL only; "
-                            "other contained records (INFO/DIAL, unproven placed families) are not duplicated"});
-                    case fo4::forms::PlacedReferenceCopyNewStatus::parent_cell_missing:
-                        return std::unexpected(Error{
-                            "TargetParentCellMissing",
-                            "The placed reference's parent CELL is not present in " + targetPluginName +
-                            "; copy or override the parent CELL into the target first"});
-                    case fo4::forms::PlacedReferenceCopyNewStatus::created:
-                        break;
+                const auto* nestedSourceRecord = fo4::find_record(source->plugin, sourceKey);
+                fo4::FormKey newKey;
+                if (nestedSourceRecord != nullptr &&
+                    nestedSourceRecord->header.signature == fo4::Signature::from_string("INFO")) {
+                    const auto result = fo4::forms::copy_info_as_new(
+                        mutated, source->plugin, sourceKey);
+                    switch (result.status) {
+                        case fo4::forms::InfoCopyNewStatus::source_missing:
+                            return std::unexpected(Error{
+                                "SourceRecordNotFound",
+                                "Could not find " + sourceKey.to_string() + " in " + source->name});
+                        case fo4::forms::InfoCopyNewStatus::unsupported_signature:
+                            return std::unexpected(Error{
+                                "SourceContainmentUnsupported",
+                                "CopyAsNewRecord does not support this nested INFO source"});
+                        case fo4::forms::InfoCopyNewStatus::parent_dial_missing:
+                            return std::unexpected(Error{
+                                "TargetParentDialMissing",
+                                "The INFO's parent QUST/DIAL hierarchy is not present in " +
+                                    targetPluginName});
+                        case fo4::forms::InfoCopyNewStatus::created:
+                            newKey = result.new_info;
+                            break;
+                    }
+                } else {
+                    const auto result = fo4::forms::copy_placed_reference_as_new(
+                        mutated, source->plugin, sourceKey);
+                    switch (result.status) {
+                        case fo4::forms::PlacedReferenceCopyNewStatus::source_missing:
+                            return std::unexpected(Error{
+                                "SourceRecordNotFound",
+                                "Could not find " + sourceKey.to_string() + " in " + source->name});
+                        case fo4::forms::PlacedReferenceCopyNewStatus::unsupported_signature:
+                            return std::unexpected(Error{
+                                "SourceContainmentUnsupported",
+                                "CopyAsNewRecord supports contained REFR/ACHR placed references in a CELL only; "
+                                "other contained records (INFO/DIAL, unproven placed families) are not duplicated"});
+                        case fo4::forms::PlacedReferenceCopyNewStatus::parent_cell_missing:
+                            return std::unexpected(Error{
+                                "TargetParentCellMissing",
+                                "The placed reference's parent CELL is not present in " + targetPluginName +
+                                "; copy or override the parent CELL into the target first"});
+                        case fo4::forms::PlacedReferenceCopyNewStatus::created:
+                            newKey = result.new_reference;
+                            break;
+                    }
                 }
 
-                const auto newKey = result.new_reference;
                 auto* allocated = mutableRecord(mutated, newKey);
                 const auto originalEditorId =
                     allocated != nullptr ? recordEditorId(*allocated) : std::string{};
