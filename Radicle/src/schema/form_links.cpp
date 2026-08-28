@@ -64,6 +64,8 @@ constexpr auto k_expl = Signature::from_string("EXPL");
 constexpr auto k_hazd = Signature::from_string("HAZD");
 constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_race = Signature::from_string("RACE");
+constexpr auto k_info = Signature::from_string("INFO");
+constexpr auto k_edid = Signature::from_string("EDID");
 constexpr auto k_obts = Signature::from_string("OBTS");
 constexpr auto k_sraf = Signature::from_string("SRAF");
 constexpr auto k_alco = Signature::from_string("ALCO");
@@ -75,6 +77,32 @@ constexpr auto k_fnam = Signature::from_string("FNAM");
 constexpr auto k_nam2 = Signature::from_string("NAM2");
 constexpr auto k_nnam = Signature::from_string("NNAM");
 constexpr auto k_snam = Signature::from_string("SNAM");
+constexpr auto k_tpic = Signature::from_string("TPIC");
+constexpr auto k_pnam = Signature::from_string("PNAM");
+constexpr auto k_gnam = Signature::from_string("GNAM");
+constexpr auto k_trda = Signature::from_string("TRDA");
+constexpr auto k_lnam = Signature::from_string("LNAM");
+constexpr auto k_tsce = Signature::from_string("TSCE");
+constexpr auto k_onam = Signature::from_string("ONAM");
+constexpr auto k_modq = Signature::from_string("MODQ");
+constexpr auto k_enam = Signature::from_string("ENAM");
+constexpr auto k_iovr = Signature::from_string("IOVR");
+constexpr auto k_nam0 = Signature::from_string("NAM0");
+constexpr auto k_nam1 = Signature::from_string("NAM1");
+constexpr auto k_nam3 = Signature::from_string("NAM3");
+constexpr auto k_nam4 = Signature::from_string("NAM4");
+constexpr auto k_nam9 = Signature::from_string("NAM9");
+constexpr auto k_tnam = Signature::from_string("TNAM");
+constexpr auto k_inam = Signature::from_string("INAM");
+constexpr auto k_rnam = Signature::from_string("RNAM");
+constexpr auto k_intv = Signature::from_string("INTV");
+constexpr auto k_alfa = Signature::from_string("ALFA");
+constexpr auto k_gree = Signature::from_string("GREE");
+constexpr auto k_tiqs = Signature::from_string("TIQS");
+constexpr auto k_incc = Signature::from_string("INCC");
+constexpr auto k_wzmd = Signature::from_string("WZMD");
+constexpr auto k_cis1 = Signature::from_string("CIS1");
+constexpr auto k_cis2 = Signature::from_string("CIS2");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -86,6 +114,75 @@ std::uint32_t read_u32(std::span<const std::byte> data, std::size_t offset) {
   std::uint32_t value = 0;
   std::memcpy(&value, data.data() + offset, 4);
   return value;
+}
+
+bool info_known_non_formid_signature(Signature signature) {
+  return signature == k_edid || signature == k_enam || signature == k_iovr ||
+         signature == k_nam0 ||
+         signature == k_nam1 || signature == k_nam2 || signature == k_nam3 ||
+         signature == k_nam4 || signature == k_nam9 || signature == k_tnam ||
+         signature == k_inam || signature == k_rnam ||
+         signature == k_intv || signature == k_alfa || signature == k_gree ||
+         signature == k_tiqs || signature == k_incc || signature == k_wzmd ||
+         signature == k_cis1 || signature == k_cis2;
+}
+
+bool info_known_link_signature(Signature signature) {
+  return signature == k_tpic || signature == k_pnam || signature == k_dnam ||
+         signature == k_gnam || signature == k_snam || signature == k_lnam ||
+         signature == k_sraf || signature == k_anam || signature == k_tsce ||
+         signature == k_onam || signature == k_modq;
+}
+
+void visit_info_link_offsets(const Subrecord& sub, bool strict_remap, auto&& fn) {
+  if (info_known_non_formid_signature(sub.signature)) return;
+
+  if (info_known_link_signature(sub.signature)) {
+    if (sub.data.size() != 4) {
+      if (strict_remap) {
+        throw FormIdError(
+            "cannot safely remap malformed INFO FormLink subrecord " +
+            sub.signature.to_string());
+      }
+      return;
+    }
+    fn(0);
+    return;
+  }
+
+  if (sub.signature == k_trda) {
+    if (sub.data.size() != 20) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed INFO TRDA payload");
+      }
+      return;
+    }
+    if (read_u32(sub.data, 0) != 0xFFFFFFFFu) fn(0);
+    fn(5);
+    return;
+  }
+
+  if (sub.signature == sig_vmad || sub.signature == sig_ctda) return;
+  if (strict_remap) {
+    throw FormIdError(
+        "cannot safely remap unknown INFO subrecord " + sub.signature.to_string());
+  }
+}
+
+bool same_form_id_context(const PluginFormIdContext& left,
+                          const PluginFormIdContext& right) {
+  if (left.current_plugin != right.current_plugin ||
+      left.current_kind != right.current_kind ||
+      left.masters.size() != right.masters.size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < left.masters.size(); ++index) {
+    if (left.masters[index].key != right.masters[index].key ||
+        left.masters[index].kind != right.masters[index].kind) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void write_u32(std::span<std::byte> data, std::size_t offset, std::uint32_t value) {
@@ -467,7 +564,23 @@ std::optional<std::vector<std::size_t>> obts_formid_offsets(const Subrecord& sub
 
 void visit_link_offsets(const Record& record, const Subrecord& sub,
                         bool strict_remap, auto&& fn) {
-  if (sub.signature == sig_xxxx || sub.data.empty()) {
+  if (sub.signature == sig_xxxx) {
+    return;
+  }
+  if (record.header.signature == k_info) {
+    if (sub.signature != sig_vmad && sub.signature != sig_ctda &&
+        !info_known_non_formid_signature(sub.signature) &&
+        !info_known_link_signature(sub.signature) && sub.signature != k_trda) {
+      visit_info_link_offsets(sub, strict_remap, fn);
+      return;
+    }
+    if (sub.signature == k_trda || info_known_link_signature(sub.signature) ||
+        info_known_non_formid_signature(sub.signature)) {
+      visit_info_link_offsets(sub, strict_remap, fn);
+      return;
+    }
+  }
+  if (sub.data.empty()) {
     return;
   }
   // xEdit FO4 uses SRAF in two incompatible ways: INFO response Camera Path
@@ -624,6 +737,10 @@ void remap_raw(std::span<std::byte> data, std::size_t offset,
 void remap_record_form_links(Record& record,
                              const PluginFormIdContext& old_context,
                              const PluginFormIdContext& new_context) {
+  if (record.header.signature == k_info &&
+      same_form_id_context(old_context, new_context)) {
+    return;
+  }
   for (auto& sub : record.subrecords) {
     auto bytes = std::span<std::byte>(sub.data);
     visit_link_offsets(record, sub, true, [&](std::size_t offset) {

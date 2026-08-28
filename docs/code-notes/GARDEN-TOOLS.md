@@ -1,5 +1,9 @@
 # GARDEN-TOOLS code notes
 
+## Radicle/src/schema/form_links.cpp:visit_link_offsets
+
+Implementation details for the current INFO copy work are recorded in `docs/code-notes/info-copy.md`.
+
 Explanation and rationale that would otherwise clutter source comments, anchored to `file:symbol`.
 
 ## PluginEditTool/native/src/app/ServiceTargets.cpp:CellTarget::geometryBatch — processOne
@@ -113,9 +117,9 @@ Extracted the FormID-allocation half of `create_local_record` into `reserve_loca
 
 Duplicates a **REFR/ACHR** placed reference as a NEW destination-local record inside its source CELL containment — the CopyAsNewRecord analogue of `copy_placed_reference_as_override`. The two share `resolve_placed_containment` (extracted from the override's inline derivation): it locates the reference, requires the containment to end in `cell_children` + a persistent/temporary bucket, reads the parent CELL FormKey from the `cell_children` group label, validates the source CELL (and, for exterior cells, the WRLD) share the reference's containment root, and returns all of it. Scope is deliberately **REFR/ACHR only** — Radicle proves no other placed family's on-disk/FormLink contract (`placed_reference.hpp` documents this), so other signatures return `unsupported_signature` (this also fails-closed a contained INFO, whose signature is not REFR/ACHR). Divergences from the override, per issue #179's decisions: (1) the parent CELL FormKey **must already exist in the destination** — it is never synthesized; absent → `parent_cell_missing`. (2) A fresh key is allocated with `reserve_local_form_key` and the copy is inserted into the source's matching bucket (only the missing `cell_children`/bucket GRUPs are created, anchored on the destination CELL's actual path via `ensure_group_path`/`ensure_cell_children_group`/`ensure_reference_bucket`). (3) The new record's `form_key` is stamped to the allocated key. EditorID assignment and the response string stay in native. Master handling mirrors the override (parent CELL/WRLD owners + the reference's own FormLink owners). Malformed containment still throws `PlacedReferenceError` (native catches → `CopyAsNewFailed`).
 
-## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:CopyAsNewRecord — contained-record routing
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RadiclePluginBackend::invokeLegacyBackend — contained-record routing
 
-When the source record is not top-level but is present, CopyAsNewRecord no longer fails closed with `SourceContainmentUnsupported` unconditionally; it routes to `copy_placed_reference_as_new` on a copy of the target plugin and maps the result: `created` → set EditorID (requested, else source EDID + `DUP`), write through, and return the existing `Copied … as NEW record {newKey} ('{edid}').` string; `unsupported_signature` → `SourceContainmentUnsupported` (INFO/DIAL and unproven placed families); `parent_cell_missing` → `TargetParentCellMissing` (guides the user to bring the parent CELL into the target first); `source_missing` → `SourceRecordNotFound`. Malformed containment throws and is caught as `CopyAsNewFailed`. The top-level path is unchanged. INFO/DIAL containment-aware duplication remains out of scope (tracked separately) — #179 stays open for it.
+When the source record is not top-level but is present, CopyAsNewRecord routes supported contained records through their containment-aware primitive on a copy of the target plugin and maps the result: `created` → set EditorID (requested, else source EDID + `DUP`), write through, and return the existing `Copied … as NEW record {newKey} ('{edid}').` string; REFR/ACHR use `copy_placed_reference_as_new`, while INFO uses `copy_info_as_new` and requires the existing QUST/DIAL ancestry, creating only a missing type-7 Topic Children group. Unsupported signatures remain `SourceContainmentUnsupported`; missing target CELL or DIAL parents use their dedicated errors; `source_missing` → `SourceRecordNotFound`. Malformed containment throws and is caught as `CopyAsNewFailed`. The top-level path is unchanged.
 
 ## Radicle/src/forms/quest_aliases.cpp:decode_quest_aliases — QUST collection alias ALCS grouping (#203)
 

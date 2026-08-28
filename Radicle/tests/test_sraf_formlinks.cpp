@@ -119,3 +119,24 @@ TEST(SrafFormLinks, InfoCameraPathRemainsAFormLink) {
   }
   EXPECT_EQ(camera_hits, 1u);
 }
+
+TEST(InfoFormLinks, UnknownFieldsFailOnlyWhenContextsDiffer) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("INFO");
+  record.subrecords.push_back({
+      fo4::Signature::from_string("ZZZZ"),
+      {std::byte{0x10}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00}},
+      false});
+  fo4::PluginFormIdContext context;
+  context.current_plugin = fo4::PluginKey::from_filename("Same.esp");
+  const auto other = fo4::PluginKey::from_filename("Other.esp");
+  auto changed = context;
+  changed.current_plugin = other;
+
+  const auto before = record.subrecords[0].data;
+  fo4::remap_record_form_links(record, context, context);
+  EXPECT_EQ(record.subrecords[0].data, before);
+  EXPECT_THROW(
+      fo4::remap_record_form_links(record, context, changed),
+      fo4::FormIdError);
+}
