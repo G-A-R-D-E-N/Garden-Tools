@@ -16,7 +16,11 @@
     <PublishTrimmed>false</PublishTrimmed>
     <DebugType>embedded</DebugType>
     <Version>1.1.0</Version>
+    <BuildCommit Condition="'$(BuildCommit)' == ''">local</BuildCommit>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildCommit" Value="$(BuildCommit)" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="*.cs" />
   </ItemGroup>
