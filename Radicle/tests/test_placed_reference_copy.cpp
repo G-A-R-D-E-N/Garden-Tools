@@ -269,7 +269,8 @@ std::vector<std::byte> nested_info_source(bool external_pnam = false,
                                            bool explicit_null_pnam = false,
                                            bool duplicate_topic = false,
                                            bool null_topic_label = false,
-                                           bool wrong_dial_signature = false) {
+                                           bool wrong_dial_signature = false,
+                                           bool with_external_predecessor = false) {
   fo4::test::ByteWriter out;
   write_header(out, {"Base.esm", "Sound.esm"});
 
@@ -287,6 +288,11 @@ std::vector<std::byte> nested_info_source(bool external_pnam = false,
   fo4::test::end_record(out, dial);
   const auto topic = begin_group_raw(
       out, null_topic_label ? 0u : 0x00000801u, fo4::GroupType::topic_children);
+  if (with_external_predecessor) {
+    const auto previous = fo4::test::begin_record(out, "INFO", 0, 0x00000803u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterInfo\0", 11});
+    fo4::test::end_record(out, previous);
+  }
   write_info_record(out, 0x02000802u, external_pnam, explicit_null_pnam);
   end_group_raw(out, topic);
   if (duplicate_topic) {
@@ -303,7 +309,9 @@ std::vector<std::byte> nested_info_source(bool external_pnam = false,
 std::vector<std::byte> nested_info_target(bool with_topic,
                                            bool with_existing_info,
                                            bool with_quest = true,
-                                           bool with_dial = true) {
+                                           bool with_dial = true,
+                                           bool with_external_predecessor = false,
+                                           bool external_predecessor_wrong_topic = false) {
   fo4::test::ByteWriter out;
   write_header(out, {"Other.esm", "Base.esm"});
   if (!with_quest) return out.bytes;
@@ -327,6 +335,11 @@ std::vector<std::byte> nested_info_target(bool with_topic,
   if (with_topic) {
     const auto topic = begin_group_raw(
         out, 0x01000801u, fo4::GroupType::topic_children);
+    if (with_external_predecessor) {
+      const auto previous = fo4::test::begin_record(out, "INFO", 0, 0x01000803u);
+      fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterInfo\0", 11});
+      fo4::test::end_record(out, previous);
+    }
     if (with_existing_info) {
       const auto info = fo4::test::begin_record(out, "INFO", 0, 0x02000820u);
       fo4::test::write_subrecord(out, "EDID", std::string_view{"ExistingInfo\0", 13});
@@ -340,6 +353,18 @@ std::vector<std::byte> nested_info_target(bool with_topic,
   fo4::test::end_group(out, dial_top);
   end_group_raw(out, quest_children);
   fo4::test::end_group(out, quest_top);
+  if (external_predecessor_wrong_topic) {
+    const auto wrong_dial_top = fo4::test::begin_group(out, "DIAL", 0);
+    const auto wrong_dial = fo4::test::begin_record(out, "DIAL", 0, 0x01000806u);
+    fo4::test::end_record(out, wrong_dial);
+    const auto wrong_topic = begin_group_raw(
+        out, 0x01000806u, fo4::GroupType::topic_children);
+    const auto previous = fo4::test::begin_record(out, "INFO", 0, 0x01000803u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterInfo\0", 11});
+    fo4::test::end_record(out, previous);
+    end_group_raw(out, wrong_topic);
+    fo4::test::end_group(out, wrong_dial_top);
+  }
   return out.bytes;
 }
 
@@ -672,6 +697,46 @@ TEST(InfoCopyNew, ExternalPnamUsesMasterAndLocalTopicHead) {
   const auto* pnam = find_subrecord(*copied, "PNAM");
   ASSERT_NE(pnam, nullptr);
   EXPECT_EQ(read_u32(*pnam, 0), 0x01000803u);
+}
+
+TEST(InfoCopyNew, MasterOwnedPnamOverrideUsesPhysicalTopicPredecessor) {
+  const auto source = fo4::read_plugin(
+      nested_info_source(true, false, false, false, false, true), "Source.esp");
+  auto target = fo4::read_plugin(
+      nested_info_target(true, true, true, true, true), "Patch.esp");
+
+  const auto result = fo4::forms::copy_info_as_new(
+      target, source, fo4::FormKey::parse("000802:Source.esp"));
+  EXPECT_EQ(result.status, fo4::forms::InfoCopyNewStatus::created);
+
+  const auto keys = direct_info_keys(target, 0x01000801u);
+  ASSERT_EQ(keys.size(), 3u);
+  EXPECT_EQ(keys[0], fo4::FormKey::parse("000803:Base.esm"));
+  EXPECT_EQ(keys[1], result.new_info);
+  EXPECT_EQ(keys[2], fo4::FormKey::parse("000820:Patch.esp"));
+
+  const auto* copied = fo4::find_record(target, result.new_info);
+  ASSERT_NE(copied, nullptr);
+  const auto* pnam = find_subrecord(*copied, "PNAM");
+  ASSERT_NE(pnam, nullptr);
+  EXPECT_EQ(read_u32(*pnam, 0), 0x01000803u);
+  EXPECT_EQ(
+      fo4::resolve_plugin_form_id(
+          fo4::RawFormId{read_u32(*pnam, 0)}, fo4::plugin_form_id_context(target)),
+      fo4::FormKey::parse("000803:Base.esm"));
+}
+
+TEST(InfoCopyNew, FailsWhenMasterOwnedPnamOverrideIsInAnotherTopic) {
+  const auto source = fo4::read_plugin(nested_info_source(true), "Source.esp");
+  auto target = fo4::read_plugin(
+      nested_info_target(true, true, true, true, false, true), "Patch.esp");
+  const auto before = fo4::write_plugin(target);
+
+  EXPECT_THROW(
+      fo4::forms::copy_info_as_new(
+          target, source, fo4::FormKey::parse("000802:Source.esp")),
+      fo4::forms::InfoCopyError);
+  EXPECT_EQ(fo4::write_plugin(target), before);
 }
 
 TEST(InfoCopyNew, SamePluginDuplicateFollowsItsSource) {

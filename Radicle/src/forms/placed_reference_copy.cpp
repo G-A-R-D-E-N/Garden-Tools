@@ -607,12 +607,14 @@ InfoPnam read_info_pnam(const Plugin& source,
   InfoPnam result;
   result.state = InfoPnamState::linked;
   result.previous = resolve_plugin_form_id(raw, source_context);
-  if (result.previous.owner() == source.key) {
-    const auto previous = locate_record(source, result.previous);
-    if (previous.record == nullptr || previous.record->header.signature != k_info ||
+  const auto previous = locate_record(source, result.previous);
+  if (previous.record != nullptr) {
+    if (previous.record->header.signature != k_info || previous.path.empty() ||
         previous.path.back() != source_topic) {
-      throw InfoCopyError("INFO PNAM local predecessor is not in the source Topic Children group");
+      throw InfoCopyError("INFO PNAM predecessor is not in the source Topic Children group");
     }
+  } else if (result.previous.owner() == source.key) {
+    throw InfoCopyError("INFO PNAM local predecessor is missing from the source plugin");
   }
   return result;
 }
@@ -944,15 +946,17 @@ InfoCopyNewResult copy_info_as_new(
   } else if (pnam.state == InfoPnamState::explicit_null) {
     at_head = true;
   } else if (pnam.state == InfoPnamState::linked) {
-    if (pnam.previous.owner() == next.key) {
-      const auto destination_previous = locate_record(next, pnam.previous);
-      if (destination_previous.record == nullptr ||
-          destination_previous.record->header.signature != k_info ||
+    const auto destination_previous = locate_record(next, pnam.previous);
+    if (destination_previous.record != nullptr) {
+      if (destination_previous.record->header.signature != k_info ||
+          destination_previous.path.empty() ||
           destination_previous.path.back() != topic ||
           !direct_record_index(topic[0], pnam.previous).has_value()) {
-        throw InfoCopyError("destination local INFO PNAM predecessor is missing");
+        throw InfoCopyError("destination INFO PNAM predecessor is not in its Topic Children group");
       }
       after = pnam.previous;
+    } else if (pnam.previous.owner() == next.key) {
+      throw InfoCopyError("destination local INFO PNAM predecessor is missing");
     } else {
       encode_plugin_form_id(pnam.previous, destination_context);
       at_head = true;
