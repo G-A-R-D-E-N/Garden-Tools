@@ -107,6 +107,19 @@ fo4::forms::QuestAliasCreation collection(std::uint32_t id, std::uint8_t max_fil
   };
 }
 
+fo4::forms::QuestAliasCreation reference(std::uint32_t id) {
+  return {
+      .kind = fo4::forms::QuestAliasKind::reference,
+      .id = id,
+      .name = std::string_view{"Ref"},
+      .flags = 0x10u,
+      .force_into_alias = std::nullopt,
+      .max_initial_fill_count = std::nullopt,
+      .closest_to_alias = std::nullopt,
+      .fill = std::monostate{},
+  };
+}
+
 }
 
 TEST(QuestAliasMutation, AddsBeforeTailAndAdvancesNextAliasId) {
@@ -163,8 +176,9 @@ TEST(QuestAliasMutation, ReplacesAliasInPlaceWithoutTouchingTailOrAnam) {
   const auto aliases = fo4::forms::decode_quest_aliases(plugin, quest);
   ASSERT_EQ(aliases.aliases.size(), 1u);
   EXPECT_EQ(aliases.aliases[0].kind, fo4::forms::QuestAliasKind::collection);
-  EXPECT_EQ(aliases.aliases[0].id, 1u);
-  EXPECT_EQ(aliases.aliases[0].max_initial_fill_count,
+  ASSERT_EQ(aliases.aliases[0].collection_entries.size(), 1u);
+  EXPECT_EQ(aliases.aliases[0].collection_entries[0].id, 1u);
+  EXPECT_EQ(aliases.aliases[0].collection_entries[0].max_initial_fill_count,
             std::optional<std::uint8_t>{4});
   EXPECT_EQ(aliases.next_alias_id, 2u);
 
@@ -179,7 +193,7 @@ TEST(QuestAliasMutation, ReplacesAliasInPlaceWithoutTouchingTailOrAnam) {
 TEST(QuestAliasMutation, RemovesAliasWithoutRecyclingNextAliasId) {
   auto plugin = fo4::read_plugin(quest_with_tail(), "Quest.esp");
   const auto quest = fo4::FormKey::parse("000800:Quest.esp");
-  fo4::forms::add_quest_alias(plugin, quest, collection(5, 3));
+  fo4::forms::add_quest_alias(plugin, quest, reference(5));
   ASSERT_TRUE(fo4::forms::remove_quest_alias(plugin, quest, 1));
 
   const auto aliases = fo4::forms::decode_quest_aliases(plugin, quest);
@@ -198,7 +212,7 @@ TEST(QuestAliasMutation, RejectsDuplicateIdsAndIdChangingReplacementTransactiona
   const auto before = fo4::write_plugin(plugin);
 
   EXPECT_THROW(
-      fo4::forms::add_quest_alias(plugin, quest, collection(1, 2)),
+      fo4::forms::add_quest_alias(plugin, quest, reference(1)),
       fo4::forms::QuestError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 
@@ -226,7 +240,7 @@ TEST(QuestAliasMutation, RejectsAliasIdThatCannotAdvanceAnam) {
 
   EXPECT_THROW(
       fo4::forms::add_quest_alias(
-          plugin, quest, collection(std::numeric_limits<std::uint32_t>::max(), 1)),
+          plugin, quest, reference(std::numeric_limits<std::uint32_t>::max())),
       fo4::forms::QuestError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

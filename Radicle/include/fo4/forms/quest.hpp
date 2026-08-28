@@ -104,6 +104,11 @@ using QuestAliasFill = std::variant<
     QuestExternalAliasLocationFill,
     QuestFindMatchingLocationFill>;
 
+struct QuestCollectionEntry {
+  std::uint32_t id{0};
+  std::optional<std::uint8_t> max_initial_fill_count;
+};
+
 // One alias is kept as an ordered subrecord sequence because reference and
 // location aliases are repeatable tagged unions with conditions/arrays inside
 // them. Semantic members are added incrementally, but the raw ordered sequence
@@ -111,13 +116,14 @@ using QuestAliasFill = std::variant<
 // signature.
 struct QuestAlias {
   QuestAliasKind kind{QuestAliasKind::reference};
+  // Reference/location only; unset (0) for collections (see collection_entries).
   std::uint32_t id{0};
   std::optional<std::string> name;
   std::optional<std::uint32_t> flags;
   std::optional<std::int32_t> force_into_alias;
-  std::optional<std::uint8_t> max_initial_fill_count;
   std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
+  std::vector<QuestCollectionEntry> collection_entries;
   // Subrecord signatures in this alias whose FormID names a master index
   // outside the plugin's master table. Real mods ship these dangling links --
   // OWR.esp has 28 ALFR references to index 3 with a single master -- and

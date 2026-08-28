@@ -433,12 +433,23 @@ void decode_alias_semantics(QuestAlias& alias,
   } guard;
 
   if (alias.kind == QuestAliasKind::collection) {
-    if (const auto* max_fill = unique_member(alias, k_almi, "ALMI")) {
-      if (max_fill->data.size() != 1) {
-        throw QuestError("QUST collection alias ALMI must be exactly one byte");
+    for (std::size_t i = 0; i < alias.subrecords.size();) {
+      if (alias.subrecords[i].signature != k_alcs) {
+        ++i;
+        continue;
       }
-      alias.max_initial_fill_count =
-          std::to_integer<std::uint8_t>(max_fill->data.front());
+      QuestCollectionEntry entry;
+      entry.id = alias_id(alias.subrecords[i], "collection ALCS");
+      ++i;
+      if (i < alias.subrecords.size() && alias.subrecords[i].signature == k_almi) {
+        if (alias.subrecords[i].data.size() != 1) {
+          throw QuestError("QUST collection alias ALMI must be exactly one byte");
+        }
+        entry.max_initial_fill_count =
+            std::to_integer<std::uint8_t>(alias.subrecords[i].data.front());
+        ++i;
+      }
+      alias.collection_entries.push_back(entry);
     }
     return;
   }
@@ -517,7 +528,6 @@ void decode_alias_semantics(QuestAlias& alias,
 QuestAlias encode_base_alias(const QuestAliasCreation& creation) {
   QuestAlias alias;
   alias.kind = creation.kind;
-  alias.id = creation.id;
 
   if (creation.kind == QuestAliasKind::collection) {
     if (creation.name.has_value() || creation.flags.has_value() ||
@@ -538,6 +548,7 @@ QuestAlias encode_base_alias(const QuestAliasCreation& creation) {
     return alias;
   }
 
+  alias.id = creation.id;
   if (!creation.flags.has_value()) {
     throw QuestError("QUST reference/location alias creation requires FNAM Flags");
   }
@@ -766,28 +777,26 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
     const auto& start = record->subrecords[index];
     QuestAlias alias;
     alias.kind = alias_kind(start.signature);
-    alias.id = alias_id(start, alias_label(alias.kind));
-    // Uniqueness applies to reference/location aliases only. A collection
-    // marker deliberately carries the ID of the reference alias it prefixes:
-    // across the six shipped masters all 889 ALCS markers are immediately
-    // followed by an ALST with the same ID, and no quest has a duplicate ID
-    // among ALST/ALLS alone. Counting ALCS here rejected 332 shipped quests.
-    if (alias.kind != QuestAliasKind::collection &&
-        !alias_ids.insert(alias.id).second) {
-      throw QuestError("QUST contains duplicate Alias ID " + std::to_string(alias.id));
-    }
 
     if (alias.kind == QuestAliasKind::collection) {
-      alias.subrecords.push_back(start);
-      ++index;
-      if (index < record->subrecords.size() &&
-          record->subrecords[index].signature == k_almi) {
+      while (index < record->subrecords.size() &&
+             record->subrecords[index].signature == k_alcs) {
         alias.subrecords.push_back(record->subrecords[index]);
         ++index;
+        if (index < record->subrecords.size() &&
+            record->subrecords[index].signature == k_almi) {
+          alias.subrecords.push_back(record->subrecords[index]);
+          ++index;
+        }
       }
       decode_alias_semantics(alias, &context);
       result.aliases.push_back(std::move(alias));
       continue;
+    }
+
+    alias.id = alias_id(start, alias_label(alias.kind));
+    if (!alias_ids.insert(alias.id).second) {
+      throw QuestError("QUST contains duplicate Alias ID " + std::to_string(alias.id));
     }
 
     bool ended = false;

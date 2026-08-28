@@ -28,6 +28,7 @@ struct AliasRange {
   std::size_t begin{0};
   std::size_t end{0};
   std::uint32_t id{0};
+  bool collection{false};
 };
 
 struct AliasSection {
@@ -105,24 +106,28 @@ AliasSection inspect_alias_section(const Record& record) {
   while (cursor < record.subrecords.size() &&
          is_alias_start(record.subrecords[cursor].signature)) {
     const auto begin = cursor;
+
+    if (record.subrecords[cursor].signature == k_alcs) {
+      while (cursor < record.subrecords.size() &&
+             record.subrecords[cursor].signature == k_alcs) {
+        static_cast<void>(required_alias_id(record.subrecords[cursor]));
+        ++cursor;
+        if (cursor < record.subrecords.size() &&
+            record.subrecords[cursor].signature == k_almi) {
+          if (record.subrecords[cursor].data.size() != 1) {
+            throw QuestError("QUST collection alias ALMI must be exactly one byte");
+          }
+          ++cursor;
+        }
+      }
+      section.ranges.push_back({begin, cursor, 0, true});
+      continue;
+    }
+
     const auto id = required_alias_id(record.subrecords[cursor]);
     if (!ids.insert(id).second) {
       throw QuestError("QUST contains duplicate Alias ID " + std::to_string(id));
     }
-
-    if (record.subrecords[cursor].signature == k_alcs) {
-      ++cursor;
-      if (cursor < record.subrecords.size() &&
-          record.subrecords[cursor].signature == k_almi) {
-        if (record.subrecords[cursor].data.size() != 1) {
-          throw QuestError("QUST collection alias ALMI must be exactly one byte");
-        }
-        ++cursor;
-      }
-      section.ranges.push_back({begin, cursor, id});
-      continue;
-    }
-
     ++cursor;
     bool ended = false;
     while (cursor < record.subrecords.size()) {
@@ -141,7 +146,7 @@ AliasSection inspect_alias_section(const Record& record) {
     if (!ended) {
       throw QuestError("QUST reference/location alias is missing required ALED");
     }
-    section.ranges.push_back({begin, cursor, id});
+    section.ranges.push_back({begin, cursor, id, false});
   }
 
   section.insertion_index = cursor;
@@ -159,7 +164,7 @@ AliasSection inspect_alias_section(const Record& record) {
 
 const AliasRange* find_range(const AliasSection& section, std::uint32_t id) {
   for (const auto& range : section.ranges) {
-    if (range.id == id) return &range;
+    if (!range.collection && range.id == id) return &range;
   }
   return nullptr;
 }
@@ -194,12 +199,15 @@ void add_quest_alias(Plugin& plugin,
   auto* record = find_mutable_record(next, quest);
   if (record == nullptr) throw QuestError("QUST record not found: " + quest.to_string());
   const auto section = inspect_alias_section(*record);
-  if (find_range(section, creation.id) != nullptr) {
+  const bool is_collection = creation.kind == QuestAliasKind::collection;
+  if (!is_collection && find_range(section, creation.id) != nullptr) {
     throw QuestError("QUST Alias ID already exists: " + std::to_string(creation.id));
   }
 
   const auto alias = encode_quest_alias(next, creation);
-  grow_next_alias_id(*record, section, creation.id);
+  if (!is_collection) {
+    grow_next_alias_id(*record, section, creation.id);
+  }
   record->subrecords.insert(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(section.insertion_index),
       alias.subrecords.begin(), alias.subrecords.end());

@@ -103,7 +103,7 @@ TEST(QuestAliases, PreservesMixedAliasVariantsAndRepeatedBoundaries) {
   EXPECT_EQ(reference.name, std::optional<std::string>{"ReferenceOne"});
   EXPECT_EQ(reference.flags, std::optional<std::uint32_t>{0x12});
   EXPECT_EQ(reference.force_into_alias, std::optional<std::int32_t>{-1});
-  EXPECT_FALSE(reference.max_initial_fill_count.has_value());
+  EXPECT_TRUE(reference.collection_entries.empty());
   ASSERT_EQ(reference.subrecords.size(), 6u);
   EXPECT_EQ(reference.subrecords[0].signature.to_string(), "ALST");
   EXPECT_EQ(reference.subrecords[1].signature.to_string(), "ALID");
@@ -126,10 +126,13 @@ TEST(QuestAliases, PreservesMixedAliasVariantsAndRepeatedBoundaries) {
 
   const auto& collection = aliases.aliases[2];
   EXPECT_EQ(collection.kind, fo4::forms::QuestAliasKind::collection);
-  EXPECT_EQ(collection.id, 3u);
+  EXPECT_EQ(collection.id, 0u);
   EXPECT_FALSE(collection.name.has_value());
   EXPECT_FALSE(collection.flags.has_value());
-  EXPECT_EQ(collection.max_initial_fill_count, std::optional<std::uint8_t>{5});
+  ASSERT_EQ(collection.collection_entries.size(), 1u);
+  EXPECT_EQ(collection.collection_entries[0].id, 3u);
+  EXPECT_EQ(collection.collection_entries[0].max_initial_fill_count,
+            std::optional<std::uint8_t>{5});
   ASSERT_EQ(collection.subrecords.size(), 2u);
   EXPECT_EQ(collection.subrecords[0].signature.to_string(), "ALCS");
   EXPECT_EQ(raw_u32(collection.subrecords[0]), 3u);

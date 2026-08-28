@@ -25,12 +25,23 @@ constexpr auto k_qust = fo4::Signature::from_string("QUST");
 constexpr auto k_alst = fo4::Signature::from_string("ALST");
 constexpr auto k_alls = fo4::Signature::from_string("ALLS");
 constexpr auto k_alcs = fo4::Signature::from_string("ALCS");
+constexpr auto k_almi = fo4::Signature::from_string("ALMI");
 
 std::size_t marker_count(const fo4::Record& record) {
   std::size_t markers = 0;
-  for (const auto& sub : record.subrecords) {
-    if (sub.signature == k_alst || sub.signature == k_alls || sub.signature == k_alcs) {
+  const auto& subs = record.subrecords;
+  for (std::size_t i = 0; i < subs.size();) {
+    if (subs[i].signature == k_alst || subs[i].signature == k_alls) {
       ++markers;
+      ++i;
+    } else if (subs[i].signature == k_alcs) {
+      ++markers;
+      while (i < subs.size() && subs[i].signature == k_alcs) {
+        ++i;
+        if (i < subs.size() && subs[i].signature == k_almi) ++i;
+      }
+    } else {
+      ++i;
     }
   }
   return markers;
