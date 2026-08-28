@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <fo4/forms/armor.hpp>
@@ -22,6 +23,7 @@
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/form_links.hpp>
+#include <fo4/schema/scalar.hpp>
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
@@ -220,6 +222,86 @@ std::optional<Error> checkLoadedSlot(const fo4::ConflictGraph& graph,
         std::string(slotName) + " " + key.to_string() + " is a " + signature +
             ", but this slot holds a " + expected
     };
+}
+
+std::optional<Error> validateProvidedScalar(const nlohmann::json& object,
+                                            const char* jsonKey,
+                                            std::string_view path) {
+    const auto found = object.find(jsonKey);
+    if (found == object.end() || found->is_null()) return std::nullopt;
+    if (!found->is_number()) {
+        return Error{
+            "InvalidRecordCreationPayload",
+            std::string(jsonKey) + " must be a number"
+        };
+    }
+    const auto field = fo4::schema::scalar_field_descriptor(path);
+    if (!field.has_value()) {
+        return Error{
+            "InvalidRecordCreationPayload",
+            std::string(path) + " is not a generated scalar field"
+        };
+    }
+    try {
+        fo4::schema::encode_scalar(found->dump(), field->scalar);
+    } catch (const fo4::schema::ScalarError& error) {
+        return Error{
+            "InvalidRecordCreationPayload",
+            std::string(path) + ": " + error.what()
+        };
+    }
+    return std::nullopt;
+}
+
+std::optional<Error> validateProvidedScalars(
+    const nlohmann::json& object,
+    std::initializer_list<std::pair<const char*, const char*>> fields) {
+    for (const auto& [jsonKey, path] : fields) {
+        if (const auto error = validateProvidedScalar(object, jsonKey, path)) {
+            return error;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<Error> validateProvidedVec3(const nlohmann::json& object,
+                                          const char* jsonKey,
+                                          std::string_view pathX,
+                                          std::string_view pathY,
+                                          std::string_view pathZ) {
+    const auto found = object.find(jsonKey);
+    if (found == object.end() || found->is_null()) return std::nullopt;
+    if (!found->is_array() || found->size() != 3) {
+        return Error{
+            "InvalidRecordCreationPayload",
+            std::string(jsonKey) + " must be an array of three numbers"
+        };
+    }
+    const std::array<std::string_view, 3> paths{pathX, pathY, pathZ};
+    for (std::size_t i = 0; i < 3; ++i) {
+        if (!(*found)[i].is_number()) {
+            return Error{
+                "InvalidRecordCreationPayload",
+                std::string(jsonKey) + " must be an array of three numbers"
+            };
+        }
+        const auto field = fo4::schema::scalar_field_descriptor(paths[i]);
+        if (!field.has_value()) {
+            return Error{
+                "InvalidRecordCreationPayload",
+                std::string(paths[i]) + " is not a generated scalar field"
+            };
+        }
+        try {
+            fo4::schema::encode_scalar((*found)[i].dump(), field->scalar);
+        } catch (const fo4::schema::ScalarError& error) {
+            return Error{
+                "InvalidRecordCreationPayload",
+                std::string(paths[i]) + ": " + error.what()
+            };
+        }
+    }
+    return std::nullopt;
 }
 
 }  // namespace
@@ -589,6 +671,24 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "PROJ numeric fields must fit their measured DNAM storage"
                 });
             }
+            if (const auto error = validateProvidedScalars(*payload, {
+                    {"flags", "PROJ\\Flags"},
+                    {"gravity", "PROJ\\Gravity"},
+                    {"speed", "PROJ\\Speed"},
+                    {"range", "PROJ\\Range"},
+                    {"explosionProximity", "PROJ\\ExplosionProximity"},
+                    {"explosionTimer", "PROJ\\ExplosionTimer"},
+                    {"muzzleFlashDuration", "PROJ\\MuzzleFlashDuration"},
+                    {"fadeOutTime", "PROJ\\FadeOutTime"},
+                    {"force", "PROJ\\Force"},
+                    {"coneSpread", "PROJ\\ConeSpread"},
+                    {"collisionRadius", "PROJ\\CollisionRadius"},
+                    {"lifetime", "PROJ\\Lifetime"},
+                    {"relaunchInterval", "PROJ\\RelaunchInterval"},
+                    {"tracerFrequency", "PROJ\\TracerFrequency"},
+                    {"soundLevel", "PROJ\\SoundLevel"}})) {
+                return std::unexpected(*error);
+            }
             if (const auto error = parseFormKeyField(*payload, "light", creation.light)) {
                 return std::unexpected(*error);
             }
@@ -733,6 +833,29 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "EXPL numeric fields must fit their measured DATA storage"
                 });
             }
+            if (const auto error = validateProvidedScalars(*payload, {
+                    {"force", "EXPL\\Force"},
+                    {"damage", "EXPL\\Damage"},
+                    {"innerRadius", "EXPL\\InnerRadius"},
+                    {"outerRadius", "EXPL\\OuterRadius"},
+                    {"imageSpaceRadius", "EXPL\\ImageSpaceRadius"},
+                    {"verticalOffsetMult", "EXPL\\VerticalOffsetMult"},
+                    {"flags", "EXPL\\Flags"},
+                    {"soundLevel", "EXPL\\SoundLevel"},
+                    {"placedObjectFadeDelay", "EXPL\\PlacedObjectFadeDelay"},
+                    {"staggerMagnitude", "EXPL\\StaggerMagnitude"},
+                    {"projectileSpread", "EXPL\\ProjectileSpread"},
+                    {"projectileCount", "EXPL\\ProjectileCount"}})) {
+                return std::unexpected(*error);
+            }
+            if (const auto error = validateProvidedVec3(
+                    *payload,
+                    "spawnProjectileVector",
+                    "EXPL\\SpawnProjectileVectorX",
+                    "EXPL\\SpawnProjectileVectorY",
+                    "EXPL\\SpawnProjectileVectorZ")) {
+                return std::unexpected(*error);
+            }
             if (const auto error = parseFormKeyField(*payload, "light", creation.light)) {
                 return std::unexpected(*error);
             }
@@ -833,6 +956,18 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "InvalidRecordCreationPayload",
                     "HAZD numeric fields must fit their measured DNAM storage"
                 });
+            }
+            if (const auto error = validateProvidedScalars(*payload, {
+                    {"limit", "HAZD\\Limit"},
+                    {"radius", "HAZD\\Radius"},
+                    {"lifetime", "HAZD\\Lifetime"},
+                    {"imageSpaceRadius", "HAZD\\ImageSpaceRadius"},
+                    {"targetInterval", "HAZD\\TargetInterval"},
+                    {"flags", "HAZD\\Flags"},
+                    {"fullEffectRadius", "HAZD\\FullEffectRadius"},
+                    {"taperWeight", "HAZD\\TaperWeight"},
+                    {"taperCurve", "HAZD\\TaperCurve"}})) {
+                return std::unexpected(*error);
             }
             if (const auto error = parseFormKeyField(*payload, "spell", creation.spell)) {
                 return std::unexpected(*error);

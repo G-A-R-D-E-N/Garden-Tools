@@ -8,6 +8,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/flags.hpp>
 #include <fo4/forms/proj_expl_hazd.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -41,9 +42,10 @@ void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>&
 
 std::vector<std::byte> pluginWithRecord(std::string_view signature,
                                         std::uint32_t formId = 0x00000800,
-                                        std::uint32_t nextFormId = 0x801) {
+                                        std::uint32_t nextFormId = 0x801,
+                                        std::uint32_t tes4Flags = 0) {
     fo4::test::ByteWriter out;
-    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    const auto tes4 = fo4::test::begin_record(out, "TES4", tes4Flags, 0);
     fo4::test::ByteWriter hedr;
     hedr.f32(1.0f);
     hedr.u32(1);
@@ -272,6 +274,181 @@ TEST_CASE("Native PROJ creation refuses a loaded FormKey of the wrong type witho
             nlohmann::json{
                 {"editorId", "BadLight"},
                 {"light", "000800:Patch.esp"}
+            }
+        }));
+    REQUIRE_FALSE(created.has_value());
+    CHECK(created.error().type == "InvalidTypedFormKey");
+    CHECK(readBytes(path) == before);
+    CHECK(fo4::find_record(
+        fo4::read_plugin_file(path),
+        fo4::FormKey::parse("000801:Patch.esp")) == nullptr);
+}
+
+TEST_CASE("Native CreateRecord rejects payload scalars outside the generated schema") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginWithRecord("EXPL"));
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto soundLevel = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{{"editorId", "TooLoud"}, {"soundLevel", 5}}
+        }));
+    REQUIRE_FALSE(soundLevel.has_value());
+    CHECK(soundLevel.error().type == "InvalidRecordCreationPayload");
+    CHECK(soundLevel.error().message.find("PROJ\\SoundLevel") != std::string::npos);
+
+    const auto stagger = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "EXPL",
+            nlohmann::json{{"editorId", "TooStaggered"}, {"staggerMagnitude", 5}}
+        }));
+    REQUIRE_FALSE(stagger.has_value());
+    CHECK(stagger.error().type == "InvalidRecordCreationPayload");
+    CHECK(stagger.error().message.find("EXPL\\StaggerMagnitude") != std::string::npos);
+
+    const auto count = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "EXPL",
+            nlohmann::json{{"editorId", "TooMany"}, {"projectileCount", 65536}}
+        }));
+    REQUIRE_FALSE(count.has_value());
+    CHECK(count.error().type == "InvalidRecordCreationPayload");
+    CHECK(count.error().message.find("EXPL\\ProjectileCount") != std::string::npos);
+
+    const auto speed = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{{"editorId", "TooFast"}, {"speed", 2000000000.0}}
+        }));
+    REQUIRE_FALSE(speed.has_value());
+    CHECK(speed.error().type == "InvalidRecordCreationPayload");
+    CHECK(speed.error().message.find("PROJ\\Speed") != std::string::npos);
+    CHECK(readBytes(path) == before);
+
+    writeBytes(path, pluginWithRecord("SPEL"));
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({{
+            {"name", "Patch.esp"},
+            {"path", path.string()},
+            {"source", "ProjExplHazd"},
+            {"resolved", true}
+        }})}}).has_value());
+    const auto limit = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "HAZD",
+            nlohmann::json{
+                {"editorId", "TooManyHazards"},
+                {"model", "Effects\\FXFireMedSmokey01.nif"},
+                {"limit", 65536}
+            }
+        }));
+    REQUIRE_FALSE(limit.has_value());
+    CHECK(limit.error().type == "InvalidRecordCreationPayload");
+    CHECK(limit.error().message.find("HAZD\\Limit") != std::string::npos);
+    CHECK(readBytes(path) == pluginWithRecord("SPEL"));
+}
+
+TEST_CASE("Native CreateRecord adds a loaded master exactly once and remaps the slot") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(
+        masterPath,
+        pluginWithRecord("EXPL", 0x00000800, 0x801, fo4::RecordFlags::master));
+    writeBytes(patchPath, pluginWithRecord("MISC", 0x00000810, 0x811));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            {
+                {"name", "Master.esm"},
+                {"path", masterPath.string()},
+                {"source", "MasterMod"},
+                {"resolved", true}
+            },
+            {
+                {"name", "Patch.esp"},
+                {"path", patchPath.string()},
+                {"source", "PatchMod"},
+                {"resolved", true}
+            }
+        })}}).has_value());
+
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{
+                {"editorId", "FromMaster"},
+                {"explosionType", "000800:Master.esm"}
+            }
+        })));
+    REQUIRE(created.at("formKey") == "000811:Patch.esp");
+
+    const auto disk = fo4::read_plugin_file(patchPath);
+    REQUIRE(disk.header.masters.size() == 1u);
+    CHECK(disk.header.masters[0].key.filename() == "Master.esm");
+    const auto* local = fo4::find_record(disk, fo4::FormKey::parse("000810:Patch.esp"));
+    REQUIRE(local != nullptr);
+    CHECK(local->header.form_id == fo4::RawFormId{0x01000810});
+    const auto decoded = fo4::forms::decode_projectile(
+        disk, fo4::FormKey::parse("000811:Patch.esp"));
+    CHECK(decoded.explosion_type == fo4::FormKey::parse("000800:Master.esm"));
+
+    const auto second = parseResult(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{
+                {"editorId", "FromMasterAgain"},
+                {"explosionType", "000800:Master.esm"}
+            }
+        })));
+    CHECK(second.at("formKey") == "000812:Patch.esp");
+    const auto again = fo4::read_plugin_file(patchPath);
+    REQUIRE(again.header.masters.size() == 1u);
+    CHECK(again.header.masters[0].key.filename() == "Master.esm");
+}
+
+TEST_CASE("Native CreateRecord refuses an unloaded FormKey owner without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginWithRecord("MISC"));
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto created = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{
+                {"editorId", "MissingOwner"},
+                {"explosionType", "000800:Missing.esm"}
             }
         }));
     REQUIRE_FALSE(created.has_value());
