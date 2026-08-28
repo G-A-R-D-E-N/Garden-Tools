@@ -39,6 +39,21 @@ file unchanged.
 
 Files opened from a `.ba2` are read-only copies. Copy one to a folder you control before editing it.
 
+## Scan a load order from the command line
+
+Behaviour Graph Studio can also scan a whole load order without opening the window — to vet a mod or
+gate a build in CI:
+
+```bash
+BehaviourGraphStudio.exe --scan-archives "D:\Mods\MyAnimationMod"
+BehaviourGraphStudio.exe --scan-clips  "C:\MO2\Instances\Fallout 4"
+```
+
+`--scan-archives` finds corrupt behaviour files, `--scan-modlist` finds missing declared
+animations, and `--scan-clips` finds clips that play an animation missing from the load order (the
+animation load-time crash). Each mode returns an exit code (`0`/`1`/`2`) and takes `--json` for a
+machine-readable report. See the [Headless scanning guide](guide/scan/README.md).
+
 ## Requirements
 
 - Windows 64-bit or Linux x64.

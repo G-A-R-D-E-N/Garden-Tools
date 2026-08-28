@@ -4,6 +4,39 @@ Changes that affect Behaviour Graph Studio users are documented here.
 
 New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
 
+## 1.1.0
+
+August 27, 2026
+
+<details>
+<summary><strong>Headless Load-Order Scanning</strong></summary>
+<br>
+
+Behaviour Graph Studio can now scan a whole load order from the command line, without opening the
+window — for vetting a mod or gating a build in CI. See the
+[Headless scanning guide](guide/scan/README.md) for full details, the JSON schema, and MO2 setup.
+
+* `--scan-archives <folder>` walks every `.ba2` under a folder (plus loose files) and reports
+  behaviour/character `.hkx` files that are corrupt or unreadable. No game install or MO2 instance
+  required. See the [scan-archives guide](guide/scan/scan-archives.md).
+* `--scan-modlist <MO2 instance>` layers a modlist's enabled mods over the base game the way the
+  engine loads them, and reports character files whose declared animations no longer resolve. See
+  the [scan-modlist guide](guide/scan/scan-modlist.md).
+* `--scan-clips <MO2 instance>` checks, for every behaviour a mod actually loads, that each clip's
+  animation resolves somewhere in the merged load order — the direct cause of the animation
+  load-time crash, where the engine tries to bind a clip animation that is not present anywhere.
+  See the [scan-clips guide](guide/scan/scan-clips.md).
+* Every mode returns a clear exit code — `0` clean, `1` defects found, `2` usage/config error — so a
+  scan can gate a script or CI job directly.
+* Add `--json` to any mode for a single, versioned JSON report on stdout (progress goes to stderr,
+  so the redirected output is always one parseable document). The report's `exitCode` always matches
+  the process exit code.
+* Large load orders scan faster: each mod archive's index is parsed once per run, and existence
+  checks no longer decompress the file they are only confirming is present. Progress is streamed
+  while a scan runs.
+
+</details>
+
 ## 1.0.6
 
 August 17, 2026

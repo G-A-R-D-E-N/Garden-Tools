@@ -47,12 +47,17 @@ modes, emitted as one JSON document under `--json`.
   (`corrupt`). A consumer that must treat "could not inspect an archive" as a failure asserts the JSON
   has no `skip` finding rather than relying on the process status — see the exit-0 assertion in
   `tools/tests/ScanCliTests.cs`.
-- `missing-clip-animations` from `ModlistScan.ScanClips` is the `BoundAnimationData::Create`
-  load-crash class: a clip whose animation resolves nowhere across the merged load order. The
-  resolution rule these scans depend on — clip references are authoring-time `.hkt` tails that
-  resolve by stripping the authoring root and swapping the extension to `.hkx` — is verified FO4
-  reverse-engineering of the animation load path; `GameData.Normalize` and `ProjectChain.ResolvePath`
-  implement the extension-agnostic match that the scan's existence checks rely on.
+- `missing-clip-animations` from `ModlistScan.ScanClips` is the animation load-time crash class: a
+  clip whose animation resolves nowhere across the merged load order. It is NOT
+  `BoundAnimationData::Create` — that name was a mislabel (it was the CHANGELOG's original wording and
+  does not correspond to a real FO4 1.10.163 symbol). The real runtime fault path — the clip -> binding
+  resolver and the subgraph / animation-DB build — and its verified symbols and addresses are
+  catalogued in issue #201 (sourced from the `commonlib_NonVR/RE-Work` KB); the completeness proof is
+  blocked on the #207 Ghidra pass. The resolution rule these scans depend on — clip references are
+  authoring-time `.hkt` tails that resolve by stripping the authoring root and swapping the extension
+  to `.hkx` — is verified FO4 reverse-engineering of the animation load path; `GameData.Normalize` and
+  `ProjectChain.ResolvePath` implement the extension-agnostic match that the scan's existence checks
+  rely on.
 
 ## Headless scan progress + performance (issue #193)
 
