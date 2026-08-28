@@ -70,7 +70,11 @@ dotnet test tools/tests/BehaviourGraph.Tests.csproj
 dotnet publish app/BehaviourStudio.csproj -c Release -r linux-x64 -o out
 ```
 
+For the pinned SDK, locked restores, the full three-part test surface, CI-parity commands, and both
+Windows/Linux publish flows, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Help and feedback
 
 - Read the [public guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing or packaging BGS.
 - Report reproducible problems through [GitHub Issues](https://github.com/G-A-R-D-E-N/BGS/issues).
