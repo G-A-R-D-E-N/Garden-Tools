@@ -128,6 +128,23 @@ fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
 catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT 10)
 
 add_executable(
+    fo4ide_test_proj_expl_hazd
+    unit/RadiclePluginProjExplHazdTests.cpp
+    "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
+)
+target_include_directories(
+    fo4ide_test_proj_expl_hazd
+    PRIVATE "${PROJECT_SOURCE_DIR}/../../Radicle/tests"
+)
+target_link_libraries(
+    fo4ide_test_proj_expl_hazd
+    PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
+)
+fo4ide_enable_warnings(fo4ide_test_proj_expl_hazd)
+fo4ide_enable_sanitizers(fo4ide_test_proj_expl_hazd)
+catch_discover_tests(fo4ide_test_proj_expl_hazd PROPERTIES TIMEOUT 10)
+
+add_executable(
     fo4ide_test_archive_backend
     unit/RadicleArchiveBackendTests.cpp
 )
