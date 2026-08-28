@@ -67,7 +67,10 @@ TEST(QuestAliasEncoding, BuildsCompactCollectionAlias) {
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::collection);
-  EXPECT_EQ(alias.max_initial_fill_count, std::optional<std::uint8_t>{6});
+  ASSERT_EQ(alias.collection_entries.size(), 1u);
+  EXPECT_EQ(alias.collection_entries[0].id, 9u);
+  EXPECT_EQ(alias.collection_entries[0].max_initial_fill_count,
+            std::optional<std::uint8_t>{6});
   ASSERT_EQ(alias.subrecords.size(), 2u);
   EXPECT_EQ(alias.subrecords[0].signature.to_string(), "ALCS");
   EXPECT_EQ(alias.subrecords[1].signature.to_string(), "ALMI");
