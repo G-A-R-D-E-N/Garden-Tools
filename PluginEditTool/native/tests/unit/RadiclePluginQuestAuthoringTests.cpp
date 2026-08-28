@@ -486,3 +486,93 @@ TEST_CASE("Native logEntry sugar ORs complete and fail into QSDT flags") {
     REQUIRE(decoded.stages[0].log_entries.size() == 1u);
     CHECK(decoded.stages[0].log_entries[0].flags == 3u);
 }
+
+TEST_CASE("Native SetQuestStages refuses existing conditioned log entries without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    const auto group = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"CondQuest\0", 10});
+    fo4::test::ByteWriter indx;
+    indx.u16(10);
+    indx.bytes.push_back(std::byte{0});
+    indx.bytes.push_back(std::byte{0});
+    fo4::test::write_subrecord(out, "INDX", indx.bytes);
+    fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+    fo4::test::write_subrecord(out, "CTDA", std::vector<std::byte>(32, std::byte{0}));
+    fo4::test::write_subrecord(out, "CNAM", std::string_view{"HasCondition\0", 13});
+    writeU32(out, "ANAM", 0);
+    fo4::test::end_record(out, quest);
+    fo4::test::end_group(out, group);
+    writeBytes(path, out.bytes);
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(result.error().message.find("CTDA") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases refuses existing unsupported alias members without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    const auto group = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"RichAlias\0", 10});
+    writeU32(out, "ANAM", 2);
+    writeU32(out, "ALST", 1);
+    fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+    writeU32(out, "FNAM", 0x10);
+    writeU32(out, "KWDA", 0);
+    fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
+    fo4::test::end_record(out, quest);
+    fo4::test::end_group(out, group);
+    writeBytes(path, out.bytes);
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(result.error().message.find("KWDA") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}

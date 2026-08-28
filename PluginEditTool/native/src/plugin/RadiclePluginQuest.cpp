@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <variant>
 #include <vector>
 
 #include <fo4/forms/quest.hpp>
@@ -238,6 +239,120 @@ std::optional<Error> parseFillFormKey(const nlohmann::json& object,
     }
 }
 
+bool allowedAliasMember(fo4::forms::QuestAliasKind kind, std::string_view signature) {
+    if (kind == fo4::forms::QuestAliasKind::collection) {
+        return signature == "ALCS" || signature == "ALMI";
+    }
+    if (kind == fo4::forms::QuestAliasKind::location) {
+        return signature == "ALLS" || signature == "ALID" || signature == "FNAM" ||
+               signature == "ALFI" || signature == "ALFL" || signature == "ALCC" ||
+               signature == "ALED";
+    }
+    return signature == "ALST" || signature == "ALID" || signature == "FNAM" ||
+           signature == "ALFI" || signature == "ALFR" || signature == "ALUA" ||
+           signature == "ALED";
+}
+
+bool supportedAliasFill(const fo4::forms::QuestAliasFill& fill) {
+    return std::holds_alternative<std::monostate>(fill) ||
+           std::holds_alternative<fo4::forms::QuestSpecificReferenceFill>(fill) ||
+           std::holds_alternative<fo4::forms::QuestUniqueActorFill>(fill) ||
+           std::holds_alternative<fo4::forms::QuestSpecificLocationFill>(fill);
+}
+
+std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
+                                                   const fo4::FormKey& quest) {
+    const auto decoded = fo4::forms::decode_quest_stages(plugin, quest);
+    for (const auto& stage : decoded.stages) {
+        if (stage.unknown != 0) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST stage has a non-zero INDX unknown byte"
+            };
+        }
+        if (!stage.leading_members.empty()) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST stage has members before the first QSDT"
+            };
+        }
+        for (const auto& entry : stage.log_entries) {
+            if (entry.log_text.has_value() && entry.log_text->localized()) {
+                return Error{
+                    "QuestAuthoringCoverageIncomplete",
+                    "existing QUST log entry has a localized CNAM that this adapter cannot reconstruct"
+                };
+            }
+            bool sawNam2 = false;
+            bool sawCnam = false;
+            for (const auto& member : entry.members) {
+                const auto signature = member.signature.to_string();
+                if (signature == "NAM2") {
+                    if (sawNam2 || sawCnam) {
+                        return Error{
+                            "QuestAuthoringCoverageIncomplete",
+                            "existing QUST log entry NAM2/CNAM order cannot be reconstructed"
+                        };
+                    }
+                    sawNam2 = true;
+                    continue;
+                }
+                if (signature == "CNAM") {
+                    if (sawCnam) {
+                        return Error{
+                            "QuestAuthoringCoverageIncomplete",
+                            "existing QUST log entry has duplicate CNAM"
+                        };
+                    }
+                    sawCnam = true;
+                    continue;
+                }
+                return Error{
+                    "QuestAuthoringCoverageIncomplete",
+                    "existing QUST log entry has unsupported member " + signature
+                };
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<Error> existingAliasesUnrepresentable(const fo4::Plugin& plugin,
+                                                    const fo4::FormKey& quest) {
+    const auto decoded = fo4::forms::decode_quest_aliases(plugin, quest);
+    for (const auto& alias : decoded.aliases) {
+        if (!alias.unresolved_links.empty()) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST alias has an unresolved FormLink"
+            };
+        }
+        if (!supportedAliasFill(alias.fill)) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST alias uses a Fill Type this adapter cannot reconstruct"
+            };
+        }
+        if (alias.kind == fo4::forms::QuestAliasKind::collection &&
+            alias.collection_entries.size() > 1) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST collection alias has multiple ALCS entries"
+            };
+        }
+        for (const auto& member : alias.subrecords) {
+            const auto signature = member.signature.to_string();
+            if (!allowedAliasMember(alias.kind, signature)) {
+                return Error{
+                    "QuestAuthoringCoverageIncomplete",
+                    "existing QUST alias has unsupported member " + signature
+                };
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 std::vector<std::byte> zstringBytes(std::string_view value) {
     std::vector<std::byte> data;
     data.reserve(value.size() + 1);
@@ -290,6 +405,13 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             "RecordTypeMismatch",
             "SetQuestAliases requires a QUST record"
         });
+    }
+    try {
+        if (const auto error = existingAliasesUnrepresentable(loaded->plugin, questKey)) {
+            return std::unexpected(*error);
+        }
+    } catch (const fo4::forms::QuestError& error) {
+        return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
 
     std::vector<fo4::forms::QuestAliasCreation> creations;
@@ -495,6 +617,13 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             "RecordTypeMismatch",
             "SetQuestStages requires a QUST record"
         });
+    }
+    try {
+        if (const auto error = existingStagesUnrepresentable(loaded->plugin, questKey)) {
+            return std::unexpected(*error);
+        }
+    } catch (const fo4::forms::QuestError& error) {
+        return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
 
     const bool localized = loaded->plugin.header.tes4_flags.is_localized();
