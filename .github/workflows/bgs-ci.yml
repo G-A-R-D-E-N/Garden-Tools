@@ -50,10 +50,12 @@ jobs:
             rid: linux-x64
             shell: bash
             executable: ./publish-check/BehaviourGraphStudio
+            strip: find publish-check -name '*.pdb' -delete
           - runner: [self-hosted, Windows, X64, garden]
             rid: win-x64
             shell: cmd
             executable: .\publish-check\BehaviourGraphStudio.exe
+            strip: del /s /q publish-check\*.pdb
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -103,11 +105,68 @@ jobs:
       - name: Run UI smoke harness
         run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore
 
+      # Suppress symbol files for the whole build graph so referenced projects
+      # (BehaviourGraph.Core et al.) do not drop portable PDBs into the package.
+      # This override also disables the app's own embedded symbols (the csproj
+      # sets DebugType=embedded) -- a deliberate tradeoff: this is a run-the-exe
+      # release package, and shipping no debug symbols at all keeps it lean while
+      # the org is over its Actions storage quota.
       - name: Publish platform package
         run: >
           dotnet publish app/BehaviourStudio.csproj --configuration Release
           --runtime ${{ matrix.rid }} --self-contained true --no-restore
-          --output publish-check
+          --output publish-check -p:DebugType=none -p:DebugSymbols=false
+
+      # The publish flags above only suppress managed symbols. Avalonia's Skia /
+      # HarfBuzz NuGet packages ship native PDBs (libSkiaSharp.pdb is ~80 MB on
+      # Windows) that otherwise land in publish-check, so strip them per leg --
+      # this is a run-the-exe package; nobody needs debug files in it.
+      - name: Strip debug symbols from the package
+        run: ${{ matrix.strip }}
 
       - name: Verify published executable
         run: ${{ matrix.executable }} --version
+
+      # Read the version from the project rather than hard-coding it here, so
+      # the artifact name cannot drift from the shipped assembly / CHANGELOG.
+      # github-script runs in the runner's bundled Node with no shell, which
+      # sidesteps this host's broken bash stub and disabled PowerShell scripts.
+      - name: Resolve package version
+        id: version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('node:child_process');
+            const version = execSync(
+              'dotnet msbuild app/BehaviourStudio.csproj -getProperty:Version',
+              { cwd: 'BGS', encoding: 'utf8' }
+            ).trim();
+            if (!/^\d+\.\d+\.\d+$/.test(version)) {
+              core.setFailed(`Project version '${version}' is not a semantic version`);
+              return;
+            }
+            core.setOutput('version', version);
+
+      # Verification artifact for this build. Release creation on a tag is a
+      # separate concern and out of scope here. path is workspace-relative
+      # (working-directory does not apply to `uses:` steps); uploading the
+      # publish-check directory places BehaviourGraphStudio[.exe] at the
+      # artifact root with no extra nesting.
+      #
+      # Size controls: symbols are suppressed at publish time, the zip is
+      # max-compressed (compression-level 9), and retention is 3 days -- the
+      # org is over its Actions storage quota, so every artifact byte counts.
+      #
+      # Non-gating on pull_request on purpose: a quota-exhausted org can refuse
+      # artifact storage and must not turn an otherwise healthy build/test PR
+      # red. Uploads stay fatal on push/workflow_dispatch, so the main-line
+      # artifact remains a hard verification gate.
+      - name: Upload versioned package
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: BehaviourGraphStudio-${{ steps.version.outputs.version }}-${{ matrix.rid }}
+          path: BGS/publish-check
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 3
