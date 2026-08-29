@@ -89,6 +89,24 @@ std::vector<std::byte> questPlugin(std::uint32_t tes4Flags = 0) {
     return out.bytes;
 }
 
+std::vector<std::byte> placedMasterPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "REFR", 0);
+    const auto refr = fo4::test::begin_record(out, "REFR", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"PlacedRef\0", 10});
+    fo4::test::end_record(out, refr);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 std::vector<std::byte> npcMasterPlugin() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
@@ -977,9 +995,14 @@ TEST_CASE("Native SetQuestStages is allowed when VMAD only binds alias objects")
 
 std::vector<std::byte> makeCtdaPayload(std::uint16_t function,
                                        std::int32_t param1,
-                                       float value) {
+                                       float value,
+                                       std::uint8_t flagsByte = 0,
+                                       std::uint16_t unknown2 = 0,
+                                       std::int32_t unknown3 = -1,
+                                       std::uint32_t runOn = 0,
+                                       std::uint32_t reference = 0) {
     fo4::test::ByteWriter ctda;
-    ctda.u8(0);
+    ctda.u8(flagsByte);
     ctda.u8(0);
     ctda.u8(0);
     ctda.u8(0);
@@ -987,8 +1010,24 @@ std::vector<std::byte> makeCtdaPayload(std::uint16_t function,
     std::memcpy(&bits, &value, 4);
     ctda.u32(bits);
     ctda.u16(function);
-    ctda.u16(0);
+    ctda.u16(unknown2);
     ctda.u32(static_cast<std::uint32_t>(param1));
+    ctda.u32(0);
+    ctda.u32(runOn);
+    ctda.u32(reference);
+    ctda.u32(static_cast<std::uint32_t>(unknown3));
+    return ctda.bytes;
+}
+
+std::vector<std::byte> makeEventDataPayload() {
+    fo4::test::ByteWriter ctda;
+    ctda.u8(0);
+    ctda.u8(0);
+    ctda.u8(0);
+    ctda.u8(0);
+    ctda.u32(0);
+    ctda.u16(4672);
+    ctda.u16(0);
     ctda.u32(0);
     ctda.u32(0);
     ctda.u32(0);
@@ -1022,7 +1061,7 @@ TEST_CASE("Native SetQuestStages writes per-log-entry CTDA and CIS strings") {
                     {"note", "n1"},
                     {"conditions", nlohmann::json::array({
                         {
-                            {"function", "GetDistance"},
+                            {"function", "GetAngle"},
                             {"operator", "=="},
                             {"param1", 1},
                             {"value", 1.0},
@@ -1032,7 +1071,7 @@ TEST_CASE("Native SetQuestStages writes per-log-entry CTDA and CIS strings") {
                         {
                             {"function", "GetIsID"},
                             {"operator", "!="},
-                            {"param1", 0},
+                            {"param1", "000800:Patch.esp"},
                             {"value", 0.0}
                         }
                     })}
@@ -1063,7 +1102,7 @@ TEST_CASE("Native SetQuestStages writes per-log-entry CTDA and CIS strings") {
     REQUIRE(fo4::forms::lossless_quest_log_entry_conditions(
         decoded.stages[0].log_entries[0].members, conditions, consumed));
     REQUIRE(conditions.size() == 2u);
-    CHECK(conditions[0].function == 1u);
+    CHECK(conditions[0].function == 8u);
     CHECK(conditions[0].param1 == 1);
     REQUIRE(conditions[0].parameter1_string.has_value());
     CHECK(*conditions[0].parameter1_string == "KeywordOne");
@@ -1177,7 +1216,7 @@ TEST_CASE("Native SetQuestStages preserves objectives aliases and tail when writ
                         {
                             {"logText", "New"},
                             {"conditions", nlohmann::json::array({
-                                {{"function", "GetDistance"}, {"param1", 1}, {"value", 1.0}}
+                                {{"function", "GetAngle"}, {"param1", 1}, {"value", 1.0}}
                             })}
                         }
                     })}
@@ -1206,7 +1245,7 @@ TEST_CASE("Native SetQuestStages replaces a lossless existing CTDA run") {
     writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
         writeIndx(out, 10, 0, 0);
         fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
-        fo4::test::write_subrecord(out, "CTDA", makeCtdaPayload(1, 1, 1.0f));
+        fo4::test::write_subrecord(out, "CTDA", makeCtdaPayload(8, 1, 1.0f));
         fo4::test::write_subrecord(out, "CNAM", std::string_view{"HasCondition\0", 13});
         writeU32(out, "ANAM", 0);
     }));
@@ -1225,4 +1264,232 @@ TEST_CASE("Native SetQuestStages replaces a lossless existing CTDA run") {
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(decoded.stages.size() == 1u);
     CHECK(decoded.stages[0].index == 20u);
+}
+
+nlohmann::json oneConditionStage(const nlohmann::json& condition) {
+    return nlohmann::json::array({
+        {
+            {"index", 10},
+            {"logEntries", nlohmann::json::array({
+                {{"logText", "New"}, {"conditions", nlohmann::json::array({condition})}}
+            })}
+        }
+    });
+}
+
+TEST_CASE("Native SetQuestStages refuses GetEventData JSON without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            oneConditionStage({{"function", "GetEventData"}, {"value", 1.0}})
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestStagePayload");
+    CHECK(result.error().message.find("GetEventData") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages refuses existing EventData CTDA without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeIndx(out, 10, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CTDA", makeEventDataPayload());
+        writeU32(out, "ANAM", 0);
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(result.error().message.find("GetEventData") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages enforces condition parameter types") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto distanceInt = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            oneConditionStage({{"function", "GetDistance"}, {"param1", 1}, {"value", 1.0}})
+        }));
+    REQUIRE_FALSE(distanceInt.has_value());
+    CHECK(distanceInt.error().type == "InvalidQuestStagePayload");
+
+    const auto angleKey = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            oneConditionStage({
+                {"function", "GetAngle"},
+                {"param1", "000800:Patch.esp"},
+                {"value", 1.0}
+            })
+        }));
+    REQUIRE_FALSE(angleKey.has_value());
+    CHECK(angleKey.error().type == "InvalidQuestStagePayload");
+
+    const auto mistyped = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            oneConditionStage({
+                {"function", "GetDistance"},
+                {"param1", "000800:Patch.esp"},
+                {"value", 1.0}
+            })
+        }));
+    REQUIRE_FALSE(mistyped.has_value());
+    CHECK(mistyped.error().type == "InvalidTypedFormKey");
+
+    const auto subjectRef = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            oneConditionStage({
+                {"function", "GetAngle"},
+                {"param1", 1},
+                {"runOn", "Subject"},
+                {"reference", "000800:Patch.esp"},
+                {"value", 1.0}
+            })
+        }));
+    REQUIRE_FALSE(subjectRef.has_value());
+    CHECK(subjectRef.error().type == "InvalidQuestStagePayload");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages accepts alias-index GetDistance and RunOn Reference FormKeys") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, placedMasterPlugin());
+    writeBytes(patchPath, questPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            {
+                {"name", "Master.esm"},
+                {"path", masterPath.string()},
+                {"source", "MasterMod"},
+                {"resolved", true}
+            },
+            {
+                {"name", "Patch.esp"},
+                {"path", patchPath.string()},
+                {"source", "QuestTest"},
+                {"resolved", true}
+            }
+        })}}).has_value());
+
+    const auto aliasIndex = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            oneConditionStage({
+                {"function", "GetDistance"},
+                {"flags", "ParametersUseAliases"},
+                {"param1", 2},
+                {"value", 1.0}
+            })
+        }));
+    REQUIRE(aliasIndex.has_value());
+
+    const auto referenced = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            oneConditionStage({
+                {"function", "GetDistance"},
+                {"param1", "000800:Master.esm"},
+                {"runOn", "Reference"},
+                {"reference", "000800:Master.esm"},
+                {"value", 1.0}
+            })
+        }));
+    REQUIRE(referenced.has_value());
+    const auto disk = fo4::read_plugin_file(patchPath);
+    REQUIRE(disk.header.masters.size() == 1u);
+    CHECK(disk.header.masters[0].key.filename() == "Master.esm");
+    std::vector<fo4::CtdaCondition> conditions;
+    std::size_t consumed = 0;
+    REQUIRE(fo4::forms::lossless_quest_log_entry_conditions(
+        fo4::forms::decode_quest_stages(disk, fo4::FormKey::parse("000800:Patch.esp"))
+            .stages[0]
+            .log_entries[0]
+            .members,
+        conditions,
+        consumed));
+    REQUIRE(conditions.size() == 1u);
+    CHECK(conditions[0].run_on == 2u);
+    const auto raw = fo4::RawFormId{static_cast<std::uint32_t>(conditions[0].param1)};
+    CHECK(fo4::resolve_plugin_form_id(raw, fo4::plugin_form_id_context(disk)) ==
+          fo4::FormKey::parse("000800:Master.esm"));
+}
+
+TEST_CASE("Native SetQuestStages refuses existing unsupported operator and unknown CTDA fields") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    auto tryRefuse = [&](std::vector<std::byte> ctda, const char* needle) {
+        writeBytes(path, questPluginWith(0, [&](fo4::test::ByteWriter& out) {
+            writeIndx(out, 10, 0, 0);
+            fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+            fo4::test::write_subrecord(out, "CTDA", ctda);
+            writeU32(out, "ANAM", 0);
+        }));
+        const auto before = readBytes(path);
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        const auto result = backend.invokeBackend(
+            "SetQuestStages",
+            nlohmann::json::array({
+                "Patch.esp",
+                "000800:Patch.esp",
+                nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
+            }));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+        CHECK(result.error().message.find(needle) != std::string::npos);
+        CHECK(readBytes(path) == before);
+    };
+
+    tryRefuse(makeCtdaPayload(8, 1, 1.0f, static_cast<std::uint8_t>(6u << 5)), "operator");
+    tryRefuse(makeCtdaPayload(8, 1, 1.0f, 0, 1), "unknown fields");
 }

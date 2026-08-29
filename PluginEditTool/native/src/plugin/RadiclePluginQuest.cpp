@@ -53,6 +53,18 @@ const nlohmann::json* questArrayArg(const nlohmann::json& args, std::size_t inde
     return nullptr;
 }
 
+constexpr std::uint16_t kMutagenGetEventData = 576;
+constexpr std::uint32_t kRunOnReference = 2;
+
+std::string asciiLower(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (const auto ch : text) {
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    return out;
+}
+
 bool parseEntireInt32(std::string_view text, std::int32_t& value) {
     if (text.empty()) return false;
     if (text.front() == '+') return false;
@@ -268,6 +280,83 @@ std::optional<Error> requireLoadedRecord(
     return std::nullopt;
 }
 
+bool editorTokenMatches(fo4::Signature signature, std::string_view token) {
+    const auto name = signature.to_string();
+    const auto wanted = asciiLower(token);
+    if (wanted == "placedobject") return isPlacedSignature(signature);
+    if (wanted == "placednpc") return name == "ACHR";
+    if (wanted == "npc") return name == "NPC_";
+    if (wanted == "actorvalueinformation") return name == "AVIF";
+    if (wanted == "magiceffect") return name == "MGEF";
+    if (wanted == "ingestible") return name == "ALCH";
+    if (wanted == "objecteffect") return name == "ENCH";
+    if (wanted == "ingredient") return name == "INGR";
+    if (wanted == "spell") return name == "SPEL";
+    if (wanted == "associationtype") return name == "ASTP";
+    if (wanted == "damagetype") return name == "DMGT";
+    if (wanted == "encounterzone") return name == "ECZN";
+    if (wanted == "equiptype") return name == "EQUP";
+    if (wanted == "faction") return name == "FACT";
+    if (wanted == "formlist") return name == "FLST";
+    if (wanted == "furniture") return name == "FURN";
+    if (wanted == "global") return name == "GLOB";
+    if (wanted == "idleanimation") return name == "IDLE";
+    if (wanted == "keyword") return name == "KYWD";
+    if (wanted == "location") return name == "LCTN";
+    if (wanted == "locationreferencetype") return name == "LCRT";
+    if (wanted == "package") return name == "PACK";
+    if (wanted == "perk") return name == "PERK";
+    if (wanted == "quest") return name == "QUST";
+    if (wanted == "race") return name == "RACE";
+    if (wanted == "region") return name == "REGN";
+    if (wanted == "scene") return name == "SCEN";
+    if (wanted == "voicetype") return name == "VTYP";
+    if (wanted == "weather") return name == "WTHR";
+    if (wanted == "worldspace") return name == "WRLD";
+    if (wanted == "cell") return name == "CELL";
+    if (wanted == "class") return name == "CLAS";
+    return false;
+}
+
+std::optional<Error> requireConditionTarget(
+    const fo4::ConflictGraph& graph,
+    const fo4::FormKey& key,
+    std::string_view paramType,
+    std::string_view slotName) {
+    const auto* winner = graph.winner(key);
+    if (winner == nullptr) {
+        return Error{
+            "InvalidTypedFormKey",
+            std::string(slotName) + " must resolve to a loaded record: " + key.to_string()
+        };
+    }
+    const auto [kind, types] = ConditionFunctions::editorFor(paramType);
+    if (kind != "record") return std::nullopt;
+    if (types.empty()) return std::nullopt;
+    std::string token;
+    std::istringstream stream{std::string(types)};
+    while (std::getline(stream, token, ',')) {
+        if (editorTokenMatches(winner->signature, token)) return std::nullopt;
+    }
+    return Error{
+        "InvalidTypedFormKey",
+        std::string(slotName) + " " + key.to_string() + " is a " +
+            winner->signature.to_string() + ", but this slot holds a " + std::string(paramType)
+    };
+}
+
+bool conditionSlotIsNumeric(std::string_view paramType, std::uint8_t flags) {
+    const auto [kind, types] = ConditionFunctions::editorFor(paramType);
+    if (kind == "number") return true;
+    if (kind != "record") return false;
+    return (flags & fo4::k_ctda_flag_aliases) != 0 ||
+           (flags & fo4::k_ctda_flag_pack_data) != 0;
+}
+
+bool conditionSlotIsText(std::string_view paramType) {
+    return ConditionFunctions::editorFor(paramType).first == "text";
+}
+
 struct PendingQuestCondition {
     fo4::CtdaCondition condition;
     std::optional<fo4::FormKey> param1;
@@ -380,7 +469,9 @@ std::optional<Error> parseQuestCondition(
             "unknown condition function '" + functionText + "'"
         };
     }
-    if (*function == fo4::k_ctda_event_function_index) {
+    if (asciiLower(functionText) == "geteventdata" ||
+        *function == kMutagenGetEventData ||
+        *function == fo4::k_ctda_event_function_index) {
         return Error{
             "InvalidQuestStagePayload",
             "GetEventData is not supported on quest log entries"
@@ -495,29 +586,86 @@ std::optional<Error> parseQuestCondition(
         std::memcpy(&out.condition.comparison_raw, &value, sizeof(value));
     }
 
-    const auto bindForm = [&](std::optional<fo4::FormKey>& slot,
-                              const char* name) -> std::optional<Error> {
-        if (!slot.has_value()) return std::nullopt;
-        if (const auto error = requireLoadedRecord(graph, *slot, name)) return error;
-        conditionKeys.push_back(*slot);
+    const auto declared = ConditionFunctions::paramsOf(functionText);
+    const auto parseSlot = [&](std::size_t index,
+                               const char* jsonKey,
+                               std::int32_t& integer,
+                               std::optional<fo4::FormKey>& form) -> std::optional<Error> {
+        const bool present = element.contains(jsonKey) && !element[jsonKey].is_null();
+        if (index >= declared.size()) {
+            if (present) {
+                return Error{
+                    "InvalidQuestStagePayload",
+                    std::string(jsonKey) + " is not used by " + functionText
+                };
+            }
+            return std::nullopt;
+        }
+        const auto& paramType = declared[index];
+        if (conditionSlotIsText(paramType)) {
+            if (present) {
+                return Error{
+                    "InvalidQuestStagePayload",
+                    std::string(jsonKey) + " for " + functionText + " must use cis1/cis2"
+                };
+            }
+            return std::nullopt;
+        }
+        if (conditionSlotIsNumeric(paramType, out.condition.flags())) {
+            if (!present) return std::nullopt;
+            std::optional<fo4::FormKey> ignored;
+            if (const auto error =
+                    parseQuestConditionParam(element[jsonKey], jsonKey, integer, ignored)) {
+                return error;
+            }
+            if (ignored.has_value()) {
+                return Error{
+                    "InvalidQuestStagePayload",
+                    std::string(jsonKey) + " for " + functionText + " must be an integer"
+                };
+            }
+            return std::nullopt;
+        }
+        if (!present) {
+            if (asciiLower(paramType) == "factionnull") return std::nullopt;
+            return Error{
+                "InvalidQuestStagePayload",
+                std::string(jsonKey) + " for " + functionText + " must be a FormKey"
+            };
+        }
+        std::int32_t ignored = 0;
+        if (const auto error =
+                parseQuestConditionParam(element[jsonKey], jsonKey, ignored, form)) {
+            return error;
+        }
+        if (!form.has_value()) {
+            return Error{
+                "InvalidQuestStagePayload",
+                std::string(jsonKey) + " for " + functionText + " must be a FormKey"
+            };
+        }
+        if (const auto error = requireConditionTarget(graph, *form, paramType, jsonKey)) {
+            return error;
+        }
+        conditionKeys.push_back(*form);
         return std::nullopt;
     };
+    if (const auto error = parseSlot(0, "param1", out.condition.param1, out.param1)) {
+        return error;
+    }
+    if (const auto error = parseSlot(1, "param2", out.condition.param2, out.param2)) {
+        return error;
+    }
 
-    if (element.contains("param1") && !element["param1"].is_null()) {
-        if (const auto error = parseQuestConditionParam(
-                element["param1"], "param1", out.condition.param1, out.param1)) {
-            return error;
+    const bool hasReference =
+        element.contains("reference") && !element["reference"].is_null();
+    if (out.condition.run_on == kRunOnReference) {
+        if (!hasReference) {
+            return Error{
+                "InvalidQuestStagePayload",
+                "runOn Reference requires a reference FormKey"
+            };
         }
-        if (const auto error = bindForm(out.param1, "param1")) return error;
-    }
-    if (element.contains("param2") && !element["param2"].is_null()) {
-        if (const auto error = parseQuestConditionParam(
-                element["param2"], "param2", out.condition.param2, out.param2)) {
-            return error;
-        }
-        if (const auto error = bindForm(out.param2, "param2")) return error;
-    }
-    if (element.contains("reference") && !element["reference"].is_null()) {
         if (!element["reference"].is_string()) {
             return Error{"InvalidQuestStagePayload", "reference must be a FormKey string"};
         }
@@ -526,7 +674,16 @@ std::optional<Error> parseQuestCondition(
         } catch (const std::exception& error) {
             return Error{"InvalidFormKey", std::string("reference: ") + error.what()};
         }
-        if (const auto error = bindForm(out.reference, "reference")) return error;
+        if (const auto error =
+                requireConditionTarget(graph, *out.reference, "Reference", "reference")) {
+            return error;
+        }
+        conditionKeys.push_back(*out.reference);
+    } else if (hasReference) {
+        return Error{
+            "InvalidQuestStagePayload",
+            "reference is only valid when runOn is Reference"
+        };
     }
 
     const auto parseCis = [&](const char* key, std::optional<std::string>& target)
@@ -610,8 +767,108 @@ std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
     return std::nullopt;
 }
 
+std::optional<Error> adapterConditionUnrepresentable(
+    const fo4::Plugin& plugin,
+    const fo4::ConflictGraph& graph,
+    const fo4::CtdaCondition& condition) {
+    if (condition.is_event_data() || condition.function == kMutagenGetEventData) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry uses GetEventData"
+        };
+    }
+    const auto name = functionName(condition.function);
+    if (name.empty() || asciiLower(name) == "geteventdata") {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry has an unsupported condition function"
+        };
+    }
+    if (condition.unknown2 != 0 || condition.unknown3 != -1) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry CTDA has unknown fields"
+        };
+    }
+    if (condition.compare_operator() > 5) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry has an unsupported condition operator"
+        };
+    }
+    if (runOnName(condition.run_on).empty()) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry has an unsupported runOn"
+        };
+    }
+    const auto resolveRaw = [&](std::uint32_t raw,
+                                std::string_view paramType,
+                                std::string_view slot) -> std::optional<Error> {
+        if (raw == 0) {
+            if (asciiLower(paramType) == "factionnull") return std::nullopt;
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST log entry has an unresolved condition FormLink"
+            };
+        }
+        try {
+            const auto key = fo4::resolve_plugin_form_id(
+                fo4::RawFormId{raw}, fo4::plugin_form_id_context(plugin));
+            if (const auto error = requireConditionTarget(graph, key, paramType, slot)) {
+                return Error{"QuestAuthoringCoverageIncomplete", error->message};
+            }
+            return std::nullopt;
+        } catch (const std::exception&) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST log entry has an unresolved condition FormLink"
+            };
+        }
+    };
+    if (condition.use_global()) {
+        if (const auto error = resolveRaw(condition.comparison_raw, "Global", "compareGlobal")) {
+            return error;
+        }
+    }
+    if (condition.run_on == kRunOnReference) {
+        if (const auto error = resolveRaw(condition.reference, "Reference", "reference")) {
+            return error;
+        }
+    } else if (condition.reference != 0) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry stores a CTDA reference without runOn Reference"
+        };
+    }
+    const auto declared = ConditionFunctions::paramsOf(name);
+    const auto checkSlot = [&](std::size_t index,
+                               std::int32_t value,
+                               std::string_view slot) -> std::optional<Error> {
+        if (index >= declared.size()) {
+            if (value != 0) {
+                return Error{
+                    "QuestAuthoringCoverageIncomplete",
+                    "existing QUST log entry has unused condition parameter data"
+                };
+            }
+            return std::nullopt;
+        }
+        const auto& paramType = declared[index];
+        if (conditionSlotIsText(paramType) ||
+            conditionSlotIsNumeric(paramType, condition.flags())) {
+            return std::nullopt;
+        }
+        return resolveRaw(static_cast<std::uint32_t>(value), paramType, slot);
+    };
+    if (const auto error = checkSlot(0, condition.param1, "param1")) return error;
+    if (const auto error = checkSlot(1, condition.param2, "param2")) return error;
+    return std::nullopt;
+}
+
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
-                                                   const fo4::FormKey& quest) {
+                                                   const fo4::FormKey& quest,
+                                                   const fo4::ConflictGraph& graph) {
     const auto decoded = fo4::forms::decode_quest_stages(plugin, quest);
     for (const auto& stage : decoded.stages) {
         if (stage.unknown != 0) {
@@ -641,6 +898,12 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                     "QuestAuthoringCoverageIncomplete",
                     "existing QUST log entry has a CTDA/CIS run this adapter cannot reconstruct"
                 };
+            }
+            for (const auto& condition : conditions) {
+                if (const auto error =
+                        adapterConditionUnrepresentable(plugin, graph, condition)) {
+                    return error;
+                }
             }
             bool sawNam2 = false;
             bool sawCnam = false;
@@ -984,7 +1247,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         return std::unexpected(*error);
     }
     try {
-        if (const auto error = existingStagesUnrepresentable(loaded->plugin, questKey)) {
+        if (const auto error = existingStagesUnrepresentable(loaded->plugin, questKey, graph_)) {
             return std::unexpected(*error);
         }
     } catch (const fo4::forms::QuestError& error) {
