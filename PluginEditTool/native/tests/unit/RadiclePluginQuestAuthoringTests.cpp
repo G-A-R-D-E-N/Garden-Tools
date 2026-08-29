@@ -107,6 +107,31 @@ std::vector<std::byte> placedMasterPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> extraMasterPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(5);
+    hedr.u32(0x805);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    auto writeRecord = [&](std::string_view type, std::uint32_t formId, std::string_view edid) {
+        const auto group = fo4::test::begin_group(out, type, 0);
+        const auto record = fo4::test::begin_record(out, type, 0, formId);
+        fo4::test::write_subrecord(out, "EDID", edid);
+        fo4::test::end_record(out, record);
+        fo4::test::end_group(out, group);
+    };
+    writeRecord("KYWD", 0x00000800, std::string_view{"AliasKw\0", 8});
+    writeRecord("MISC", 0x00000801, std::string_view{"AliasItem\0", 10});
+    writeRecord("SPEL", 0x00000802, std::string_view{"AliasSpell\0", 11});
+    writeRecord("FACT", 0x00000803, std::string_view{"AliasFact\0", 10});
+    writeRecord("PACK", 0x00000804, std::string_view{"AliasPack\0", 10});
+    return out.bytes;
+}
+
 std::vector<std::byte> npcMasterPlugin() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
@@ -301,7 +326,7 @@ TEST_CASE("Native SetQuestAliases refuses unknown fields without writing") {
             "Patch.esp",
             "000800:Patch.esp",
             nlohmann::json::array({
-                {{"kind", "reference"}, {"id", 1}, {"flags", 0}, {"keywords", nlohmann::json::array()}}
+                {{"kind", "reference"}, {"id", 1}, {"flags", 0}, {"voiceTypes", nlohmann::json::array()}}
             })
         }));
     REQUIRE_FALSE(result.has_value());
@@ -1491,6 +1516,33 @@ TEST_CASE("Native SetQuestStages refuses existing unsupported operator and unkno
     tryRefuse(makeCtdaPayload(8, 1, 1.0f, 0, 1), "unknown fields");
 }
 
+TEST_CASE("Native SetQuestStages refuses existing GetAngle CTDA with CIS1 without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeIndx(out, 10, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CTDA", makeCtdaPayload(8, 1, 1.0f));
+        fo4::test::write_subrecord(out, "CIS1", std::string_view{"Nope\0", 5});
+        writeU32(out, "ANAM", 0);
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(result.error().message.find("CIS1") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
 TEST_CASE("Native SetQuestStages ties CIS strings to String/Event parameter slots") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -1608,5 +1660,117 @@ TEST_CASE("Native SetQuestStages refuses existing CIS or nonzero raw data on tex
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(result.error().message.find("nonzero raw data") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions and linked aliases") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, extraMasterPlugin());
+    writeBytes(patchPath, questPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            {
+                {"name", "Master.esm"},
+                {"path", masterPath.string()},
+                {"source", "MasterMod"},
+                {"resolved", true}
+            },
+            {
+                {"name", "Patch.esp"},
+                {"path", patchPath.string()},
+                {"source", "QuestTest"},
+                {"resolved", true}
+            }
+        })}}).has_value());
+
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {
+                    {"kind", "reference"},
+                    {"id", 1},
+                    {"name", "Rich"},
+                    {"flags", 0},
+                    {"keywords", nlohmann::json::array({"000800:Master.esm"})},
+                    {"items", nlohmann::json::array({
+                        {{"item", "000801:Master.esm"}, {"count", 2}}
+                    })},
+                    {"linkedAliases", nlohmann::json::array({
+                        {{"keyword", "000800:Master.esm"}, {"alias", 4}}
+                    })},
+                    {"spells", nlohmann::json::array({"000802:Master.esm"})},
+                    {"factions", nlohmann::json::array({"000803:Master.esm"})},
+                    {"packages", nlohmann::json::array({"000804:Master.esm"})}
+                }
+            })
+        }));
+    REQUIRE(result.has_value());
+
+    const auto disk = fo4::read_plugin_file(patchPath);
+    REQUIRE(disk.header.masters.size() == 1u);
+    const auto names = recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    const auto alst = std::find(names.begin(), names.end(), "ALST");
+    REQUIRE(alst != names.end());
+    std::vector<std::string> extras;
+    for (auto it = alst; it != names.end() && *it != "ALED"; ++it) extras.push_back(*it);
+    extras.push_back("ALED");
+    const std::vector<std::string> expected{
+        "ALST", "ALID", "FNAM", "KSIZ", "KWDA", "COCT", "CNTO", "ALLA",
+        "ALSP", "ALFC", "ALPC", "ALED"};
+    CHECK(extras == expected);
+
+    const auto locationExtras = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {
+                    {"kind", "location"},
+                    {"id", 2},
+                    {"flags", 0},
+                    {"keywords", nlohmann::json::array({"000800:Master.esm"})}
+                }
+            })
+        }));
+    REQUIRE_FALSE(locationExtras.has_value());
+    CHECK(locationExtras.error().type == "InvalidQuestAliasPayload");
+}
+
+TEST_CASE("Native SetQuestAliases refuses existing extra members that are out of order or incomplete") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0x10);
+        writeU32(out, "KWDA", 0);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(readBytes(path) == before);
 }

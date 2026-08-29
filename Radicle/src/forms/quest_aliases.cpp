@@ -45,6 +45,14 @@ constexpr auto k_knam = Signature::from_string("KNAM");
 constexpr auto k_aleq = Signature::from_string("ALEQ");
 constexpr auto k_alea = Signature::from_string("ALEA");
 constexpr auto k_aled = Signature::from_string("ALED");
+constexpr auto k_ksiz = Signature::from_string("KSIZ");
+constexpr auto k_kwda = Signature::from_string("KWDA");
+constexpr auto k_coct = Signature::from_string("COCT");
+constexpr auto k_cnto = Signature::from_string("CNTO");
+constexpr auto k_alla = Signature::from_string("ALLA");
+constexpr auto k_alsp = Signature::from_string("ALSP");
+constexpr auto k_alfc = Signature::from_string("ALFC");
+constexpr auto k_alpc = Signature::from_string("ALPC");
 
 std::uint16_t read_u16(const std::vector<std::byte>& data, std::size_t offset = 0) {
   std::uint16_t value = 0;
@@ -690,6 +698,87 @@ void insert_alias_fill(QuestAlias& alias,
       std::make_move_iterator(members.end()));
 }
 
+bool has_reference_extras(const QuestAliasCreation& creation) {
+  return !creation.keywords.empty() || !creation.items.empty() ||
+         !creation.linked_aliases.empty() || !creation.spells.empty() ||
+         !creation.factions.empty() || !creation.packages.empty();
+}
+
+void append_encoded_form_id(std::vector<std::byte>& packed,
+                            const FormKey& key,
+                            const PluginFormIdContext& context) {
+  try {
+    const auto raw = encode_plugin_form_id(key, context).value();
+    const auto bytes = write_u32(raw);
+    packed.insert(packed.end(), bytes.begin(), bytes.end());
+  } catch (const FormIdError& error) {
+    throw QuestError("QUST alias FormLink cannot be encoded: " + std::string(error.what()));
+  }
+}
+
+void insert_before_aled(QuestAlias& alias, std::vector<Subrecord> members) {
+  if (alias.subrecords.empty() || alias.subrecords.back().signature != k_aled) {
+    throw QuestError("QUST alias encoder lost required ALED boundary");
+  }
+  alias.subrecords.insert(
+      alias.subrecords.end() - 1,
+      std::make_move_iterator(members.begin()),
+      std::make_move_iterator(members.end()));
+}
+
+void insert_alias_extras(QuestAlias& alias,
+                         const QuestAliasCreation& creation,
+                         const PluginFormIdContext& context) {
+  if (!has_reference_extras(creation)) return;
+  if (alias.kind != QuestAliasKind::reference) {
+    throw QuestError(
+        "QUST keywords, items, linked aliases, spells, factions, and packages "
+        "are valid only on reference aliases");
+  }
+  std::vector<Subrecord> extra;
+  if (!creation.keywords.empty()) {
+    extra.push_back(make_subrecord(
+        k_ksiz, write_u32(static_cast<std::uint32_t>(creation.keywords.size()))));
+    std::vector<std::byte> packed;
+    packed.reserve(creation.keywords.size() * 4);
+    for (const auto& key : creation.keywords) {
+      append_encoded_form_id(packed, key, context);
+    }
+    extra.push_back(make_subrecord(k_kwda, std::move(packed)));
+  }
+  if (!creation.items.empty()) {
+    extra.push_back(make_subrecord(
+        k_coct, write_u32(static_cast<std::uint32_t>(creation.items.size()))));
+    for (const auto& item : creation.items) {
+      if (item.count < 1) {
+        throw QuestError("QUST alias item count must be at least 1");
+      }
+      std::vector<std::byte> cnto;
+      append_encoded_form_id(cnto, item.item, context);
+      const auto count = write_i32(item.count);
+      cnto.insert(cnto.end(), count.begin(), count.end());
+      extra.push_back(make_subrecord(k_cnto, std::move(cnto)));
+    }
+  }
+  for (const auto& linked : creation.linked_aliases) {
+    std::vector<std::byte> alla;
+    append_encoded_form_id(alla, linked.keyword, context);
+    const auto alias_id = write_i32(linked.alias);
+    alla.insert(alla.end(), alias_id.begin(), alias_id.end());
+    extra.push_back(make_subrecord(k_alla, std::move(alla)));
+  }
+  for (const auto& spell : creation.spells) {
+    extra.push_back(encoded_form_key(k_alsp, spell, context));
+  }
+  for (const auto& faction : creation.factions) {
+    extra.push_back(encoded_form_key(k_alfc, faction, context));
+  }
+  for (const auto& package : creation.packages) {
+    extra.push_back(encoded_form_key(k_alpc, package, context));
+  }
+  insert_before_aled(alias, std::move(extra));
+}
+
 void insert_post_fill_fields(QuestAlias& alias,
                              const QuestAliasCreation& creation) {
   if (!creation.closest_to_alias.has_value()) return;
@@ -710,6 +799,9 @@ QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
   if (!std::holds_alternative<std::monostate>(creation.fill)) {
     throw QuestError("QUST FormLink-bearing Fill Type encoding requires a plugin context");
   }
+  if (has_reference_extras(creation)) {
+    throw QuestError("QUST alias extra FormLinks require a plugin context");
+  }
   auto alias = encode_base_alias(creation);
   insert_post_fill_fields(alias, creation);
   decode_alias_semantics(alias, nullptr);
@@ -721,6 +813,7 @@ QuestAlias encode_quest_alias(const Plugin& plugin,
   auto alias = encode_base_alias(creation);
   const auto context = plugin_form_id_context(plugin);
   insert_alias_fill(alias, creation.fill, context);
+  insert_alias_extras(alias, creation, context);
   insert_post_fill_fields(alias, creation);
   decode_alias_semantics(alias, &context);
   return alias;

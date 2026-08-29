@@ -139,6 +139,16 @@ struct QuestAlias {
   std::vector<Subrecord> subrecords;
 };
 
+struct QuestAliasItem {
+  FormKey item;
+  std::int32_t count{1};
+};
+
+struct QuestLinkedAlias {
+  FormKey keyword;
+  std::int32_t alias{0};
+};
+
 struct QuestAliasCreation {
   QuestAliasKind kind{QuestAliasKind::reference};
   std::uint32_t id{0};
@@ -148,6 +158,12 @@ struct QuestAliasCreation {
   std::optional<std::uint8_t> max_initial_fill_count;
   std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
+  std::vector<FormKey> keywords;
+  std::vector<QuestAliasItem> items;
+  std::vector<QuestLinkedAlias> linked_aliases;
+  std::vector<FormKey> spells;
+  std::vector<FormKey> factions;
+  std::vector<FormKey> packages;
 };
 
 /*
