@@ -1,6 +1,7 @@
 #include "fo4/forms/quest.hpp"
 
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/ctda.hpp"
 #include "fo4/signature.hpp"
 
 #include <algorithm>
@@ -10,6 +11,7 @@
 #include <iterator>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -726,6 +728,14 @@ void insert_before_aled(QuestAlias& alias, std::vector<Subrecord> members) {
       std::make_move_iterator(members.end()));
 }
 
+void insert_alias_conditions(QuestAlias& alias, std::span<const CtdaCondition> conditions) {
+  if (conditions.empty()) return;
+  if (alias.kind == QuestAliasKind::collection) {
+    throw QuestError("QUST collection aliases do not use CTDA/CIS conditions");
+  }
+  insert_before_aled(alias, fo4::serialize_ctda_run(conditions));
+}
+
 void insert_alias_extras(QuestAlias& alias,
                          const QuestAliasCreation& creation,
                          const PluginFormIdContext& context) {
@@ -806,6 +816,7 @@ QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
     throw QuestError("QUST alias extra FormLinks require a plugin context");
   }
   auto alias = encode_base_alias(creation);
+  insert_alias_conditions(alias, creation.conditions);
   insert_post_fill_fields(alias, creation);
   decode_alias_semantics(alias, nullptr);
   return alias;
@@ -816,6 +827,7 @@ QuestAlias encode_quest_alias(const Plugin& plugin,
   auto alias = encode_base_alias(creation);
   const auto context = plugin_form_id_context(plugin);
   insert_alias_fill(alias, creation.fill, context);
+  insert_alias_conditions(alias, creation.conditions);
   insert_alias_extras(alias, creation, context);
   insert_post_fill_fields(alias, creation);
   decode_alias_semantics(alias, &context);

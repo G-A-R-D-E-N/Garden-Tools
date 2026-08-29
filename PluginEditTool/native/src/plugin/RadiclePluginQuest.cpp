@@ -214,7 +214,8 @@ bool knownAliasKey(std::string_view key) {
            key == "maxInitialFillCount" || key == "forcedReference" ||
            key == "uniqueActor" || key == "specificLocation" ||
            key == "keywords" || key == "items" || key == "linkedAliases" ||
-           key == "spells" || key == "factions" || key == "packages";
+           key == "spells" || key == "factions" || key == "packages" ||
+           key == "conditions";
 }
 
 bool knownStageKey(std::string_view key) {
@@ -366,11 +367,12 @@ struct PendingQuestCondition {
 
 std::optional<Error> rejectUnknownKeys(const nlohmann::json& object,
                                        bool (*known)(std::string_view),
-                                       std::string_view label) {
+                                       std::string_view label,
+                                       std::string_view errorType = "InvalidQuestStagePayload") {
     for (auto it = object.begin(); it != object.end(); ++it) {
         if (!known(it.key())) {
             return Error{
-                "InvalidQuestStagePayload",
+                std::string(errorType),
                 "Unsupported " + std::string(label) + " field '" + it.key() + "'"
             };
         }
@@ -504,11 +506,14 @@ std::optional<Error> parseQuestCondition(
     const nlohmann::json& element,
     const fo4::ConflictGraph& graph,
     PendingQuestCondition& out,
-    std::vector<fo4::FormKey>& conditionKeys) {
+    std::vector<fo4::FormKey>& conditionKeys,
+    std::string_view errorType = "InvalidQuestStagePayload",
+    std::string_view surface = "quest log entries") {
     if (!element.is_object()) {
-        return Error{"InvalidQuestStagePayload", "every condition must be an object"};
+        return Error{std::string(errorType), "every condition must be an object"};
     }
-    if (const auto error = rejectUnknownKeys(element, knownConditionKey, "condition")) {
+    if (const auto error =
+            rejectUnknownKeys(element, knownConditionKey, "condition", errorType)) {
         return error;
     }
     const auto functionField = element.find("function");
@@ -527,8 +532,8 @@ std::optional<Error> parseQuestCondition(
         *function == kMutagenGetEventData ||
         *function == fo4::k_ctda_event_function_index) {
         return Error{
-            "InvalidQuestStagePayload",
-            "GetEventData is not supported on quest log entries"
+            std::string(errorType),
+            "GetEventData is not supported on " + std::string(surface)
         };
     }
     out = {};
@@ -783,14 +788,22 @@ bool allowedAliasMember(fo4::forms::QuestAliasKind kind, std::string_view signat
     if (kind == fo4::forms::QuestAliasKind::location) {
         return signature == "ALLS" || signature == "ALID" || signature == "FNAM" ||
                signature == "ALFI" || signature == "ALFL" || signature == "ALCC" ||
+               signature == "CTDA" || signature == "CIS1" || signature == "CIS2" ||
                signature == "ALED";
     }
     return signature == "ALST" || signature == "ALID" || signature == "FNAM" ||
            signature == "ALFI" || signature == "ALFR" || signature == "ALUA" ||
+           signature == "CTDA" || signature == "CIS1" || signature == "CIS2" ||
            signature == "KSIZ" || signature == "KWDA" || signature == "COCT" ||
            signature == "CNTO" || signature == "ALLA" || signature == "ALSP" ||
            signature == "ALFC" || signature == "ALPC" || signature == "ALED";
 }
+
+std::optional<Error> adapterConditionUnrepresentable(
+    const fo4::Plugin& plugin,
+    const fo4::ConflictGraph& graph,
+    const fo4::CtdaCondition& condition,
+    std::string_view surface);
 
 bool fourByteMember(const fo4::Subrecord& member) {
     return member.data.size() == 4;
@@ -1038,47 +1051,36 @@ std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
 std::optional<Error> adapterConditionUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::ConflictGraph& graph,
-    const fo4::CtdaCondition& condition) {
-    if (condition.is_event_data() || condition.function == kMutagenGetEventData) {
+    const fo4::CtdaCondition& condition,
+    std::string_view surface = "log entry") {
+    const auto existingFail = [&](std::string_view rest) {
         return Error{
             "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry uses GetEventData"
+            "existing QUST " + std::string(surface) + " " + std::string(rest)
         };
+    };
+    if (condition.is_event_data() || condition.function == kMutagenGetEventData) {
+        return existingFail("uses GetEventData");
     }
     const auto name = functionName(condition.function);
     if (name.empty() || asciiLower(name) == "geteventdata") {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry has an unsupported condition function"
-        };
+        return existingFail("has an unsupported condition function");
     }
     if (condition.unknown2 != 0 || condition.unknown3 != -1) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry CTDA has unknown fields"
-        };
+        return existingFail("CTDA has unknown fields");
     }
     if (condition.compare_operator() > 5) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry has an unsupported condition operator"
-        };
+        return existingFail("has an unsupported condition operator");
     }
     if (runOnName(condition.run_on).empty()) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry has an unsupported runOn"
-        };
+        return existingFail("has an unsupported runOn");
     }
     const auto resolveRaw = [&](std::uint32_t raw,
                                 std::string_view paramType,
                                 std::string_view slot) -> std::optional<Error> {
         if (raw == 0) {
             if (asciiLower(paramType) == "factionnull") return std::nullopt;
-            return Error{
-                "QuestAuthoringCoverageIncomplete",
-                "existing QUST log entry has an unresolved condition FormLink"
-            };
+            return existingFail("has an unresolved condition FormLink");
         }
         try {
             const auto key = fo4::resolve_plugin_form_id(
@@ -1088,10 +1090,7 @@ std::optional<Error> adapterConditionUnrepresentable(
             }
             return std::nullopt;
         } catch (const std::exception&) {
-            return Error{
-                "QuestAuthoringCoverageIncomplete",
-                "existing QUST log entry has an unresolved condition FormLink"
-            };
+            return existingFail("has an unresolved condition FormLink");
         }
     };
     if (condition.use_global()) {
@@ -1104,10 +1103,7 @@ std::optional<Error> adapterConditionUnrepresentable(
             return error;
         }
     } else if (condition.reference != 0) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry stores a CTDA reference without runOn Reference"
-        };
+        return existingFail("stores a CTDA reference without runOn Reference");
     }
     const auto declared = ConditionFunctions::paramsOf(name);
     const auto checkSlot = [&](std::size_t index,
@@ -1115,20 +1111,14 @@ std::optional<Error> adapterConditionUnrepresentable(
                                std::string_view slot) -> std::optional<Error> {
         if (index >= declared.size()) {
             if (value != 0) {
-                return Error{
-                    "QuestAuthoringCoverageIncomplete",
-                    "existing QUST log entry has unused condition parameter data"
-                };
+                return existingFail("has unused condition parameter data");
             }
             return std::nullopt;
         }
         const auto& paramType = declared[index];
         if (conditionSlotIsText(paramType)) {
             if (value != 0) {
-                return Error{
-                    "QuestAuthoringCoverageIncomplete",
-                    "existing QUST log entry has nonzero raw data on a text condition parameter"
-                };
+                return existingFail("has nonzero raw data on a text condition parameter");
             }
             return std::nullopt;
         }
@@ -1143,16 +1133,10 @@ std::optional<Error> adapterConditionUnrepresentable(
         return index < declared.size() && conditionSlotIsText(declared[index]);
     };
     if (condition.parameter1_string.has_value() && !cisAllowed(0)) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry has CIS1 on a non-text condition parameter"
-        };
+        return existingFail("has CIS1 on a non-text condition parameter");
     }
     if (condition.parameter2_string.has_value() && !cisAllowed(1)) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST log entry has CIS2 on a non-text condition parameter"
-        };
+        return existingFail("has CIS2 on a non-text condition parameter");
     }
     return std::nullopt;
 }
@@ -1230,6 +1214,62 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
     return std::nullopt;
 }
 
+bool isAliasConditionSignature(std::string_view name) {
+    return name == "CTDA" || name == "CIS1" || name == "CIS2";
+}
+
+bool isAliasConditionPrefix(std::string_view name) {
+    return name == "ALST" || name == "ALLS" || name == "ALID" || name == "FNAM" ||
+           name == "ALFI" || name == "ALFR" || name == "ALUA" || name == "ALFL";
+}
+
+std::optional<Error> aliasConditionsUnrepresentable(
+    const std::vector<fo4::Subrecord>& members,
+    const fo4::Plugin& plugin,
+    const fo4::ConflictGraph& graph) {
+    std::optional<std::size_t> begin;
+    std::optional<std::size_t> end;
+    for (std::size_t i = 0; i < members.size(); ++i) {
+        const auto name = members[i].signature.to_string();
+        if (name == "ALED") break;
+        if (!isAliasConditionSignature(name)) continue;
+        if (end.has_value() && i != *end) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST alias conditions are not a contiguous CTDA/CIS run"
+            };
+        }
+        if (!begin.has_value()) begin = i;
+        end = i + 1;
+    }
+    if (!begin.has_value()) return std::nullopt;
+    for (std::size_t i = 0; i < *begin; ++i) {
+        if (!isAliasConditionPrefix(members[i].signature.to_string())) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST alias conditions are out of order"
+            };
+        }
+    }
+    const std::span<const fo4::Subrecord> run{members.data() + *begin, *end - *begin};
+    std::vector<fo4::CtdaCondition> conditions;
+    std::size_t consumed = 0;
+    if (!fo4::forms::lossless_quest_log_entry_conditions(run, conditions, consumed) ||
+        consumed != run.size()) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST alias has a CTDA/CIS run this adapter cannot reconstruct"
+        };
+    }
+    for (const auto& condition : conditions) {
+        if (const auto error =
+                adapterConditionUnrepresentable(plugin, graph, condition, "alias")) {
+            return error;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<Error> existingAliasesUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::FormKey& quest,
@@ -1267,6 +1307,13 @@ std::optional<Error> existingAliasesUnrepresentable(
         if (alias.kind == fo4::forms::QuestAliasKind::reference) {
             if (const auto error =
                     extraAliasMembersUnrepresentable(alias.subrecords, plugin, graph)) {
+                return error;
+            }
+        }
+        if (alias.kind == fo4::forms::QuestAliasKind::reference ||
+            alias.kind == fo4::forms::QuestAliasKind::location) {
+            if (const auto error =
+                    aliasConditionsUnrepresentable(alias.subrecords, plugin, graph)) {
                 return error;
             }
         }
@@ -1345,6 +1392,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
     nameStorage.reserve(aliasesJson->size());
     std::uint32_t autoId = 0;
     std::vector<fo4::FormKey> fillKeys;
+    std::vector<std::vector<PendingQuestCondition>> pendingConditions;
 
     for (const auto& element : *aliasesJson) {
         if (!element.is_object()) {
@@ -1608,12 +1656,69 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 creation.linked_aliases.push_back(std::move(linked));
             }
         }
+        std::vector<PendingQuestCondition> parsedConditions;
+        if (element.contains("conditions") && !element["conditions"].is_null()) {
+            if (creation.kind == fo4::forms::QuestAliasKind::collection) {
+                return std::unexpected(Error{
+                    "InvalidQuestAliasPayload",
+                    "conditions are valid only on reference and location aliases"
+                });
+            }
+            if (!element["conditions"].is_array()) {
+                return std::unexpected(Error{
+                    "InvalidQuestAliasPayload",
+                    "conditions must be an array"
+                });
+            }
+            for (const auto& conditionJson : element["conditions"]) {
+                PendingQuestCondition pending;
+                if (const auto error = parseQuestCondition(
+                        conditionJson, graph_, pending, fillKeys,
+                        "InvalidQuestAliasPayload", "quest aliases")) {
+                    if (error->type == "InvalidQuestStagePayload") {
+                        auto remapped = *error;
+                        remapped.type = "InvalidQuestAliasPayload";
+                        return std::unexpected(std::move(remapped));
+                    }
+                    return std::unexpected(*error);
+                }
+                parsedConditions.push_back(std::move(pending));
+            }
+        }
+        pendingConditions.push_back(std::move(parsedConditions));
         creations.push_back(std::move(creation));
     }
 
     try {
         auto mutated = loaded->plugin;
         for (const auto& key : fillKeys) ensureOwnerMaster(mutated, key.owner());
+        const auto context = fo4::plugin_form_id_context(mutated);
+        const auto encodeKey = [&](const std::optional<fo4::FormKey>& key) -> std::uint32_t {
+            if (!key.has_value()) return 0;
+            return fo4::encode_plugin_form_id(*key, context).value();
+        };
+        for (std::size_t i = 0; i < creations.size(); ++i) {
+            const auto& pending = pendingConditions[i];
+            if (pending.empty()) continue;
+            creations[i].conditions.reserve(pending.size());
+            for (auto condition : pending) {
+                if (condition.param1.has_value()) {
+                    condition.condition.param1 =
+                        static_cast<std::int32_t>(encodeKey(condition.param1));
+                }
+                if (condition.param2.has_value()) {
+                    condition.condition.param2 =
+                        static_cast<std::int32_t>(encodeKey(condition.param2));
+                }
+                if (condition.reference.has_value()) {
+                    condition.condition.reference = encodeKey(condition.reference);
+                }
+                if (condition.compareGlobal.has_value()) {
+                    condition.condition.comparison_raw = encodeKey(condition.compareGlobal);
+                }
+                creations[i].conditions.push_back(std::move(condition.condition));
+            }
+        }
         fo4::forms::write_quest_aliases(mutated, questKey, creations);
         fo4::write_plugin_file(mutated, loaded->path);
         loaded->plugin = std::move(mutated);

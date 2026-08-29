@@ -66,6 +66,7 @@ fo4::forms::QuestAliasCreation base_reference() {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   };
 }
 
