@@ -763,8 +763,8 @@ void insert_alias_extras(QuestAlias& alias,
   for (const auto& linked : creation.linked_aliases) {
     std::vector<std::byte> alla;
     append_encoded_form_id(alla, linked.keyword, context);
-    const auto alias_id = write_i32(linked.alias);
-    alla.insert(alla.end(), alias_id.begin(), alias_id.end());
+    const auto aliasBytes = write_i32(linked.alias);
+    alla.insert(alla.end(), aliasBytes.begin(), aliasBytes.end());
     extra.push_back(make_subrecord(k_alla, std::move(alla)));
   }
   for (const auto& spell : creation.spells) {

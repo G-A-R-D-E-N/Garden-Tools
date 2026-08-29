@@ -59,6 +59,12 @@ fo4::forms::QuestAliasCreation base_location() {
       .max_initial_fill_count = std::nullopt,
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   };
 }
 
@@ -151,6 +157,12 @@ TEST(QuestAliasLocationFormLinks, RejectsEmptyExternalAndWrongAliasKind) {
       .closest_to_alias = std::nullopt,
       .fill = fo4::forms::QuestSpecificLocationFill{
           fo4::FormKey::parse("000500:Patch.esp")},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   };
   EXPECT_THROW(
       static_cast<void>(fo4::forms::encode_quest_alias(plugin, reference)),

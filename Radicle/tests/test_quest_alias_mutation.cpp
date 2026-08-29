@@ -105,6 +105,12 @@ fo4::forms::QuestAliasCreation collection(std::uint32_t id, std::uint8_t max_fil
       .max_initial_fill_count = max_fill,
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   };
 }
 
@@ -118,6 +124,12 @@ fo4::forms::QuestAliasCreation reference(std::uint32_t id) {
       .max_initial_fill_count = std::nullopt,
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   };
 }
 
@@ -137,6 +149,12 @@ TEST(QuestAliasMutation, AddsBeforeTailAndAdvancesNextAliasId) {
       .closest_to_alias = std::nullopt,
       .fill = fo4::forms::QuestSpecificReferenceFill{
           fo4::FormKey::parse("000123:Master.esm")},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   };
   fo4::forms::add_quest_alias(plugin, quest, creation);
 
@@ -264,6 +282,12 @@ TEST(QuestAliasMutation, WriteReplacesWholeArrayIncludingCollectionsAndPreserves
       .max_initial_fill_count = std::nullopt,
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   };
   const std::array<fo4::forms::QuestAliasCreation, 2> creations{
       location,

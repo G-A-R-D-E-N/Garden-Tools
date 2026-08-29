@@ -17,6 +17,12 @@ TEST(QuestAliasEncoding, BuildsReferenceAliasInProvenOrder) {
       .max_initial_fill_count = std::nullopt,
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::reference);
@@ -43,6 +49,12 @@ TEST(QuestAliasEncoding, BuildsLocationAliasWithoutInventingName) {
       .max_initial_fill_count = std::nullopt,
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::location);
@@ -64,6 +76,12 @@ TEST(QuestAliasEncoding, BuildsCompactCollectionAlias) {
       .max_initial_fill_count = std::uint8_t{6},
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::collection);
@@ -89,6 +107,12 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .max_initial_fill_count = std::nullopt,
           .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
       })),
       fo4::forms::QuestError);
 
@@ -102,6 +126,12 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .max_initial_fill_count = std::nullopt,
           .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
       })),
       fo4::forms::QuestError);
 
@@ -115,6 +145,12 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .max_initial_fill_count = std::nullopt,
           .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
       })),
       fo4::forms::QuestError);
 
@@ -129,6 +165,12 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
           .max_initial_fill_count = std::nullopt,
           .closest_to_alias = std::nullopt,
           .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
       })),
       fo4::forms::QuestError);
 }
