@@ -456,3 +456,15 @@ TEST(KwdaFormLinkList, InnrIsNotAFlatKeywordRecord) {
   EXPECT_FALSE(fo4::schema::formlink_list_descriptor(
       fo4::Signature::from_string("INNR"), "INNR\\Keywords").has_value());
 }
+
+TEST(SigBaseObjects, MatchesXeditUnionAndRejectsNonBaseRecords) {
+  EXPECT_TRUE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("ACTI")));
+  EXPECT_TRUE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("NPC_")));
+  EXPECT_TRUE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("STAT")));
+  EXPECT_TRUE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("FLST")));
+  EXPECT_TRUE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("LVSP")));
+  EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("QUST")));
+  EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("KYWD")));
+  EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("FACT")));
+  EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("ENCH")));
+}

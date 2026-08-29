@@ -10,6 +10,7 @@
 #include <initializer_list>
 #include <limits>
 #include <optional>
+#include <span>
 #include <set>
 #include <sstream>
 #include <string>
@@ -23,6 +24,7 @@
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/ctda.hpp>
+#include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/localized_fields.hpp>
 #include <fo4/schema/vmad.hpp>
 #include <fo4/signature.hpp>
@@ -238,12 +240,12 @@ bool isPlacedSignature(fo4::Signature signature) {
            text == "PCON" || text == "PFLA";
 }
 
-bool isItemSignature(fo4::Signature signature) {
-    const auto text = signature.to_string();
-    return text == "AMMO" || text == "ARMO" || text == "BOOK" || text == "CMPO" ||
-           text == "COBJ" || text == "NOTE" || text == "ALCH" || text == "INGR" ||
-           text == "KEYM" || text == "LVLI" || text == "LIGH" || text == "MISC" ||
-           text == "WEAP";
+bool knownItemKey(std::string_view key) {
+    return key == "item" || key == "count";
+}
+
+bool knownLinkedAliasKey(std::string_view key) {
+    return key == "keyword" || key == "alias";
 }
 
 std::optional<Error> requireLoadedFill(
@@ -438,7 +440,7 @@ std::optional<Error> parseAliasFormKeyList(
                     std::string(key) + " must resolve to a loaded record: " + parsed.to_string()
                 };
             }
-            if (!isItemSignature(winner->signature)) {
+            if (!fo4::schema::is_sig_base_object(winner->signature)) {
                 return Error{
                     "InvalidTypedFormKey",
                     std::string(key) + " " + parsed.to_string() + " is a " +
@@ -794,11 +796,73 @@ bool fourByteMember(const fo4::Subrecord& member) {
     return member.data.size() == 4;
 }
 
+std::optional<Error> existingTypedFormIdUnrepresentable(
+    const fo4::PluginFormIdContext& context,
+    const fo4::ConflictGraph& graph,
+    std::span<const std::byte> data,
+    std::size_t offset,
+    std::initializer_list<std::string_view> accepted,
+    bool baseObjects,
+    std::string_view slot) {
+    if (offset + 4 > data.size()) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST alias " + std::string(slot) + " cannot be reconstructed"
+        };
+    }
+    std::uint32_t raw = 0;
+    std::memcpy(&raw, data.data() + offset, 4);
+    if (raw == 0) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST alias " + std::string(slot) + " is null"
+        };
+    }
+    fo4::FormKey key;
+    try {
+        key = fo4::resolve_plugin_form_id(fo4::RawFormId{raw}, context);
+    } catch (const fo4::FormIdError&) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST alias " + std::string(slot) + " cannot be reconstructed"
+        };
+    }
+    const auto* winner = graph.winner(key);
+    if (winner == nullptr) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST alias " + std::string(slot) + " does not resolve to a loaded record"
+        };
+    }
+    if (baseObjects) {
+        if (!fo4::schema::is_sig_base_object(winner->signature)) {
+            return Error{
+                "QuestAuthoringCoverageIncomplete",
+                "existing QUST alias " + std::string(slot) + " is a " +
+                    winner->signature.to_string() + ", but this slot holds an item"
+            };
+        }
+        return std::nullopt;
+    }
+    const auto signature = winner->signature.to_string();
+    for (const auto name : accepted) {
+        if (signature == name) return std::nullopt;
+    }
+    return Error{
+        "QuestAuthoringCoverageIncomplete",
+        "existing QUST alias " + std::string(slot) + " is a " + signature +
+            ", which this adapter cannot reconstruct"
+    };
+}
+
 std::optional<Error> extraAliasMembersUnrepresentable(
-    const std::vector<fo4::Subrecord>& members) {
+    const std::vector<fo4::Subrecord>& members,
+    const fo4::Plugin& plugin,
+    const fo4::ConflictGraph& graph) {
     enum class Phase { keywords, items, linked, spells, factions, packages, done };
     auto phase = Phase::keywords;
     std::size_t i = 0;
+    const auto context = fo4::plugin_form_id_context(plugin);
     const auto fail = [](std::string_view message) {
         return Error{"QuestAuthoringCoverageIncomplete", std::string(message)};
     };
@@ -826,6 +890,13 @@ std::optional<Error> extraAliasMembersUnrepresentable(
             if (count != members[i + 1].data.size() / 4) {
                 return fail("existing QUST alias KSIZ does not match KWDA");
             }
+            for (std::uint32_t n = 0; n < count; ++n) {
+                if (const auto error = existingTypedFormIdUnrepresentable(
+                        context, graph, members[i + 1].data, n * 4u, {"KYWD"}, false,
+                        "keywords")) {
+                    return error;
+                }
+            }
             i += 2;
             phase = Phase::items;
             continue;
@@ -843,6 +914,15 @@ std::optional<Error> extraAliasMembersUnrepresentable(
                 if (i >= members.size() || sig(i) != "CNTO" || members[i].data.size() != 8) {
                     return fail("existing QUST alias CNTO entries cannot be reconstructed");
                 }
+                std::int32_t itemCount = 0;
+                std::memcpy(&itemCount, members[i].data.data() + 4, 4);
+                if (itemCount < 1) {
+                    return fail("existing QUST alias item count must be at least 1");
+                }
+                if (const auto error = existingTypedFormIdUnrepresentable(
+                        context, graph, members[i].data, 0, {}, true, "items")) {
+                    return error;
+                }
                 ++i;
             }
             phase = Phase::linked;
@@ -851,17 +931,28 @@ std::optional<Error> extraAliasMembersUnrepresentable(
         if (name == "CNTO") return fail("existing QUST alias CNTO is missing COCT");
         if (name == "ALLA") {
             if (phase > Phase::linked) return fail("existing QUST alias extra members are out of order");
-            if (members[i].data.size() != 8) {
+            if (members[i].data.empty() || members[i].data.size() % 8 != 0) {
                 return fail("existing QUST alias linked aliases cannot be reconstructed");
             }
+            for (std::size_t offset = 0; offset < members[i].data.size(); offset += 8) {
+                if (const auto error = existingTypedFormIdUnrepresentable(
+                        context, graph, members[i].data, offset, {"KYWD"}, false,
+                        "linkedAliases")) {
+                    return error;
+                }
+            }
             ++i;
-            phase = Phase::linked;
+            phase = Phase::spells;
             continue;
         }
         if (name == "ALSP") {
             if (phase > Phase::spells) return fail("existing QUST alias extra members are out of order");
             if (!fourByteMember(members[i])) {
                 return fail("existing QUST alias spells cannot be reconstructed");
+            }
+            if (const auto error = existingTypedFormIdUnrepresentable(
+                    context, graph, members[i].data, 0, {"SPEL"}, false, "spells")) {
+                return error;
             }
             ++i;
             phase = Phase::spells;
@@ -872,6 +963,10 @@ std::optional<Error> extraAliasMembersUnrepresentable(
             if (!fourByteMember(members[i])) {
                 return fail("existing QUST alias factions cannot be reconstructed");
             }
+            if (const auto error = existingTypedFormIdUnrepresentable(
+                    context, graph, members[i].data, 0, {"FACT"}, false, "factions")) {
+                return error;
+            }
             ++i;
             phase = Phase::factions;
             continue;
@@ -880,6 +975,10 @@ std::optional<Error> extraAliasMembersUnrepresentable(
             if (phase > Phase::packages) return fail("existing QUST alias extra members are out of order");
             if (!fourByteMember(members[i])) {
                 return fail("existing QUST alias packages cannot be reconstructed");
+            }
+            if (const auto error = existingTypedFormIdUnrepresentable(
+                    context, graph, members[i].data, 0, {"PACK"}, false, "packages")) {
+                return error;
             }
             ++i;
             phase = Phase::packages;
@@ -1131,8 +1230,10 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
     return std::nullopt;
 }
 
-std::optional<Error> existingAliasesUnrepresentable(const fo4::Plugin& plugin,
-                                                    const fo4::FormKey& quest) {
+std::optional<Error> existingAliasesUnrepresentable(
+    const fo4::Plugin& plugin,
+    const fo4::FormKey& quest,
+    const fo4::ConflictGraph& graph) {
     const auto decoded = fo4::forms::decode_quest_aliases(plugin, quest);
     for (const auto& alias : decoded.aliases) {
         if (!alias.unresolved_links.empty()) {
@@ -1164,7 +1265,8 @@ std::optional<Error> existingAliasesUnrepresentable(const fo4::Plugin& plugin,
             }
         }
         if (alias.kind == fo4::forms::QuestAliasKind::reference) {
-            if (const auto error = extraAliasMembersUnrepresentable(alias.subrecords)) {
+            if (const auto error =
+                    extraAliasMembersUnrepresentable(alias.subrecords, plugin, graph)) {
                 return error;
             }
         }
@@ -1229,7 +1331,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
         return std::unexpected(*error);
     }
     try {
-        if (const auto error = existingAliasesUnrepresentable(loaded->plugin, questKey)) {
+        if (const auto error =
+                existingAliasesUnrepresentable(loaded->plugin, questKey, graph_)) {
             return std::unexpected(*error);
         }
     } catch (const fo4::forms::QuestError& error) {
@@ -1419,6 +1522,14 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                         "every item must be an object with an item FormKey"
                     });
                 }
+                for (auto it = itemJson.begin(); it != itemJson.end(); ++it) {
+                    if (!knownItemKey(it.key())) {
+                        return std::unexpected(Error{
+                            "InvalidQuestAliasPayload",
+                            "Unsupported item field '" + it.key() + "'"
+                        });
+                    }
+                }
                 fo4::forms::QuestAliasItem item;
                 try {
                     item.item = fo4::FormKey::parse(itemJson["item"].get<std::string>());
@@ -1432,7 +1543,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                         "items must resolve to a loaded record: " + item.item.to_string()
                     });
                 }
-                if (!isItemSignature(winner->signature)) {
+                if (!fo4::schema::is_sig_base_object(winner->signature)) {
                     return std::unexpected(Error{
                         "InvalidTypedFormKey",
                         "items " + item.item.to_string() + " is a " +
@@ -1466,6 +1577,14 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                         "InvalidQuestAliasPayload",
                         "every linked alias must be an object with a keyword FormKey"
                     });
+                }
+                for (auto it = linkedJson.begin(); it != linkedJson.end(); ++it) {
+                    if (!knownLinkedAliasKey(it.key())) {
+                        return std::unexpected(Error{
+                            "InvalidQuestAliasPayload",
+                            "Unsupported linked alias field '" + it.key() + "'"
+                        });
+                    }
                 }
                 fo4::forms::QuestLinkedAlias linked;
                 try {

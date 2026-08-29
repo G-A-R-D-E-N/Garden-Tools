@@ -91,3 +91,55 @@ TEST(QuestAliasFormLinkRemap, RemapsRealLinksButLeavesQuestScalarsAndStringsUnto
         << record.subrecords[index].signature.to_string();
   }
 }
+
+fo4::Subrecord packed_alla(std::uint32_t keyword_a,
+                           std::int32_t alias_a,
+                           std::uint32_t keyword_b,
+                           std::int32_t alias_b) {
+  fo4::Subrecord subrecord;
+  subrecord.signature = fo4::Signature::from_string("ALLA");
+  subrecord.data.resize(16);
+  std::memcpy(subrecord.data.data(), &keyword_a, 4);
+  std::memcpy(subrecord.data.data() + 4, &alias_a, 4);
+  std::memcpy(subrecord.data.data() + 8, &keyword_b, 4);
+  std::memcpy(subrecord.data.data() + 12, &alias_b, 4);
+  return subrecord;
+}
+
+TEST(QuestAliasFormLinkRemap, PackedAllaRemapsKeywordsAndLeavesAliasInts) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("QUST");
+  record.subrecords.push_back(packed_alla(0x01000001u, 0x7F7F7F7F, 0x01000002u, 0x01020304));
+
+  fo4::remap_record_form_links(record, context(false), context(true));
+
+  ASSERT_EQ(record.subrecords.size(), 1u);
+  ASSERT_EQ(record.subrecords[0].data.size(), 16u);
+  std::uint32_t keyword_a = 0;
+  std::memcpy(&keyword_a, record.subrecords[0].data.data(), 4);
+  EXPECT_EQ(keyword_a, 0x00000001u);
+  std::int32_t alias_a = 0;
+  std::memcpy(&alias_a, record.subrecords[0].data.data() + 4, 4);
+  EXPECT_EQ(alias_a, 0x7F7F7F7F);
+  std::uint32_t keyword_b = 0;
+  std::memcpy(&keyword_b, record.subrecords[0].data.data() + 8, 4);
+  EXPECT_EQ(keyword_b, 0x00000002u);
+  std::int32_t alias_b = 0;
+  std::memcpy(&alias_b, record.subrecords[0].data.data() + 12, 4);
+  EXPECT_EQ(alias_b, 0x01020304);
+
+  const auto remapped = context(true);
+  EXPECT_EQ(fo4::resolve_plugin_form_id(fo4::RawFormId{0x00000001u}, remapped),
+            fo4::FormKey::parse("000001:MasterB.esm"));
+  EXPECT_EQ(fo4::resolve_plugin_form_id(fo4::RawFormId{0x00000002u}, remapped),
+            fo4::FormKey::parse("000002:MasterB.esm"));
+}
+
+TEST(QuestAliasFormLinkRemap, MalformedAllaFailsClosed) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("QUST");
+  auto alla = raw_u32_subrecord("ALLA", 0x01000001u);
+  record.subrecords.push_back(std::move(alla));
+  EXPECT_THROW(fo4::remap_record_form_links(record, context(false), context(true)),
+               fo4::FormIdError);
+}

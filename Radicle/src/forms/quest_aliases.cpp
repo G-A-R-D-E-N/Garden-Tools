@@ -760,11 +760,14 @@ void insert_alias_extras(QuestAlias& alias,
       extra.push_back(make_subrecord(k_cnto, std::move(cnto)));
     }
   }
-  for (const auto& linked : creation.linked_aliases) {
+  if (!creation.linked_aliases.empty()) {
     std::vector<std::byte> alla;
-    append_encoded_form_id(alla, linked.keyword, context);
-    const auto aliasBytes = write_i32(linked.alias);
-    alla.insert(alla.end(), aliasBytes.begin(), aliasBytes.end());
+    alla.reserve(creation.linked_aliases.size() * 8);
+    for (const auto& linked : creation.linked_aliases) {
+      append_encoded_form_id(alla, linked.keyword, context);
+      const auto aliasBytes = write_i32(linked.alias);
+      alla.insert(alla.end(), aliasBytes.begin(), aliasBytes.end());
+    }
     extra.push_back(make_subrecord(k_alla, std::move(alla)));
   }
   for (const auto& spell : creation.spells) {
