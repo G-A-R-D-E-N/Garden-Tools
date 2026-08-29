@@ -267,19 +267,6 @@ std::optional<Error> requireLoadedFill(
     };
 }
 
-std::optional<Error> requireLoadedRecord(
-    const fo4::ConflictGraph& graph,
-    const fo4::FormKey& key,
-    std::string_view slotName) {
-    if (graph.winner(key) == nullptr) {
-        return Error{
-            "InvalidTypedFormKey",
-            std::string(slotName) + " must resolve to a loaded record: " + key.to_string()
-        };
-    }
-    return std::nullopt;
-}
-
 bool editorTokenMatches(fo4::Signature signature, std::string_view token) {
     const auto name = signature.to_string();
     const auto wanted = asciiLower(token);
