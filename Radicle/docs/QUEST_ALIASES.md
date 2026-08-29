@@ -93,8 +93,11 @@ implemented and tested:
 - Alias-from-event / event-data variants.
 - Location `Find Matching Location` (`ALFE` / `ALFD`) event/data semantics.
 - Remaining reference/location alias fields after the Fill Type union:
-  conditions, keyword arrays, inventory/items, packages, spells, factions,
-  voice type, linked aliases, and other xEdit-modeled members.
+  conditions, voice type, death item, display name, and package-list overrides
+  (`SPOR`/`OCOR`/`GWOR`/`ECOR`).
+- Reference alias extras now modeled: keywords (`KSIZ`/`KWDA`), items
+  (`COCT`/`CNTO` without `COED`), linked aliases (`ALLA`), spells (`ALSP`),
+  factions (`ALFC`), and packages (`ALPC`), in Mutagen WriteRecordTypes order.
 - Alias VMAD interactions beyond the existing global VMAD safety contract. PluginEditTool `SetQuestAliases` / `SetQuestStages` fail closed when QUST VMAD extras bind alias IDs or stage fragments (`fo4::quest_vmad_bindings`). Whole-array replace still does not rewrite VMAD.
 
 Unknown members inside an existing reference/location alias are preserved in

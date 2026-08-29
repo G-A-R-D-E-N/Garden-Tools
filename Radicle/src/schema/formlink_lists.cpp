@@ -429,6 +429,12 @@ FormLinkListMutationStatus clear_packed(
 
 }  // namespace
 
+bool is_sig_base_object(Signature signature) noexcept {
+  const auto begin = std::begin(k_generated_sig_base_objects);
+  const auto end = std::end(k_generated_sig_base_objects);
+  return std::find(begin, end, signature) != end;
+}
+
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
     Signature record,
     std::string_view base_path) noexcept {

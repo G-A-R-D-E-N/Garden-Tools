@@ -93,6 +93,8 @@ public:
 
 #include "fo4/schema/generated_formlink_lists.inc"
 
+bool is_sig_base_object(Signature signature) noexcept;
+
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
     Signature record,
     std::string_view base_path) noexcept;

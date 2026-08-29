@@ -60,6 +60,12 @@ fo4::forms::QuestAliasCreation base_reference() {
       .max_initial_fill_count = std::nullopt,
       .closest_to_alias = std::nullopt,
       .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
   };
 }
 

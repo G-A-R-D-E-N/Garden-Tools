@@ -70,6 +70,7 @@ constexpr auto k_obts = Signature::from_string("OBTS");
 constexpr auto k_sraf = Signature::from_string("SRAF");
 constexpr auto k_alco = Signature::from_string("ALCO");
 constexpr auto k_alfr = Signature::from_string("ALFR");
+constexpr auto k_alla = Signature::from_string("ALLA");
 constexpr auto k_anam = Signature::from_string("ANAM");
 constexpr auto k_cnam = Signature::from_string("CNAM");
 constexpr auto k_dnam = Signature::from_string("DNAM");
@@ -598,6 +599,18 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   if (record.header.signature == k_qust) {
     if (sub.signature == k_alfr || sub.signature == k_alco) {
       if (sub.data.size() == 4) fn(0);
+      return;
+    }
+    if (sub.signature == k_alla) {
+      if (sub.data.size() % 8 != 0) {
+        if (strict_remap) {
+          throw FormIdError("cannot safely remap malformed QUST ALLA payload");
+        }
+        return;
+      }
+      for (std::size_t offset = 0; offset < sub.data.size(); offset += 8) {
+        fn(offset);
+      }
       return;
     }
     if (qust_non_formid_signature(sub.signature)) {
