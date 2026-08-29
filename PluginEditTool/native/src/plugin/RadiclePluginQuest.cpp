@@ -689,8 +689,23 @@ std::optional<Error> parseQuestCondition(
         target = std::move(text);
         return std::nullopt;
     };
+    const auto cisAllowed = [&](std::size_t index) {
+        return index < declared.size() && conditionSlotIsText(declared[index]);
+    };
     if (const auto error = parseCis("cis1", out.condition.parameter1_string)) return error;
+    if (out.condition.parameter1_string.has_value() && !cisAllowed(0)) {
+        return Error{
+            "InvalidQuestStagePayload",
+            "cis1 is only valid when parameter 1 is String or Event"
+        };
+    }
     if (const auto error = parseCis("cis2", out.condition.parameter2_string)) return error;
+    if (out.condition.parameter2_string.has_value() && !cisAllowed(1)) {
+        return Error{
+            "InvalidQuestStagePayload",
+            "cis2 is only valid when parameter 2 is String or Event"
+        };
+    }
     return std::nullopt;
 }
 
@@ -842,14 +857,37 @@ std::optional<Error> adapterConditionUnrepresentable(
             return std::nullopt;
         }
         const auto& paramType = declared[index];
-        if (conditionSlotIsText(paramType) ||
-            conditionSlotIsNumeric(paramType, condition.flags())) {
+        if (conditionSlotIsText(paramType)) {
+            if (value != 0) {
+                return Error{
+                    "QuestAuthoringCoverageIncomplete",
+                    "existing QUST log entry has nonzero raw data on a text condition parameter"
+                };
+            }
+            return std::nullopt;
+        }
+        if (conditionSlotIsNumeric(paramType, condition.flags())) {
             return std::nullopt;
         }
         return resolveRaw(static_cast<std::uint32_t>(value), paramType, slot);
     };
     if (const auto error = checkSlot(0, condition.param1, "param1")) return error;
     if (const auto error = checkSlot(1, condition.param2, "param2")) return error;
+    const auto cisAllowed = [&](std::size_t index) {
+        return index < declared.size() && conditionSlotIsText(declared[index]);
+    };
+    if (condition.parameter1_string.has_value() && !cisAllowed(0)) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry has CIS1 on a non-text condition parameter"
+        };
+    }
+    if (condition.parameter2_string.has_value() && !cisAllowed(1)) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST log entry has CIS2 on a non-text condition parameter"
+        };
+    }
     return std::nullopt;
 }
 
