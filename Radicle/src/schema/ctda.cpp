@@ -140,10 +140,7 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) 
   return out;
 }
 
-namespace {
-
-std::vector<Subrecord> build_condition_subrecords(
-    std::span<const CtdaCondition> conditions) {
+std::vector<Subrecord> serialize_ctda_run(std::span<const CtdaCondition> conditions) {
   std::vector<Subrecord> replacement;
   replacement.reserve(conditions.size() * 2 + 1);
   for (const auto& condition : conditions) {
@@ -166,8 +163,6 @@ std::vector<Subrecord> build_condition_subrecords(
   }
   return replacement;
 }
-
-}  // namespace
 
 std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
                                                    std::size_t begin,
@@ -221,7 +216,7 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
     }
   }
 
-  auto replacement = build_condition_subrecords(conditions);
+  auto replacement = serialize_ctda_run(conditions);
 
   if (first == end) {
     if (conditions.empty()) return CtdaScopeWrite::no_op;

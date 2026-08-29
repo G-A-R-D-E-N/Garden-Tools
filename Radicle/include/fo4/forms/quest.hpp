@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/ctda.hpp"
 #include "fo4/schema/localized_fields.hpp"
 
 #include <cstdint>
@@ -198,6 +199,10 @@ struct QuestStages {
 };
 
 QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest);
+
+bool lossless_quest_log_entry_conditions(std::span<const Subrecord> members,
+                                         std::vector<CtdaCondition>& conditions,
+                                         std::size_t& consumed);
 
 /*
  * Quest objectives, measured on Fallout4.esm (1,198 objectives, 1,500
