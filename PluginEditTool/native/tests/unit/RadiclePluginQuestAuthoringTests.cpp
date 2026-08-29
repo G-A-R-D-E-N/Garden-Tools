@@ -3,6 +3,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -101,6 +102,107 @@ std::vector<std::byte> npcMasterPlugin() {
     const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x00000800);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"UniqueNpc\0", 10});
     fo4::test::end_record(out, npc);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
+void writeIndx(fo4::test::ByteWriter& out,
+               std::uint16_t index,
+               std::uint8_t flags,
+               std::uint8_t unknown) {
+    fo4::test::ByteWriter data;
+    data.u16(index);
+    data.u8(flags);
+    data.u8(unknown);
+    fo4::test::write_subrecord(out, "INDX", data.bytes);
+}
+
+void writeSimpleAlias(fo4::test::ByteWriter& out) {
+    writeU32(out, "ANAM", 2);
+    writeU32(out, "ALST", 1);
+    fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+    writeU32(out, "FNAM", 0x10);
+    fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+}
+
+void writeVmadWstring(fo4::test::ByteWriter& out, std::string_view text) {
+    out.u16(static_cast<std::uint16_t>(text.size()));
+    out.raw(text);
+}
+
+std::vector<std::byte> vmadEmptyExtras() {
+    fo4::test::ByteWriter vmad;
+    vmad.u16(6);
+    vmad.u16(2);
+    vmad.u16(0);
+    vmad.u8(3);
+    vmad.u16(0);
+    vmad.u16(0);
+    vmad.u16(0);
+    return vmad.bytes;
+}
+
+std::vector<std::byte> vmadStageFragments() {
+    fo4::test::ByteWriter vmad;
+    vmad.u16(6);
+    vmad.u16(2);
+    vmad.u16(0);
+    vmad.u8(3);
+    vmad.u16(1);
+    vmad.u16(0);
+    vmad.u16(10);
+    vmad.u16(0);
+    vmad.u32(0);
+    vmad.u8(0);
+    writeVmadWstring(vmad, "QF_Test");
+    writeVmadWstring(vmad, "Fragment_10");
+    vmad.u16(0);
+    return vmad.bytes;
+}
+
+std::vector<std::byte> vmadAliasObjects() {
+    fo4::test::ByteWriter vmad;
+    vmad.u16(6);
+    vmad.u16(2);
+    vmad.u16(0);
+    vmad.u8(3);
+    vmad.u16(0);
+    vmad.u16(0);
+    vmad.u16(1);
+    vmad.u16(0);
+    vmad.u16(1);
+    vmad.u32(0x00000014);
+    vmad.u16(6);
+    vmad.u16(2);
+    vmad.u16(0);
+    return vmad.bytes;
+}
+
+std::vector<std::byte> vmadTruncated() {
+    fo4::test::ByteWriter vmad;
+    vmad.u16(6);
+    vmad.u16(2);
+    vmad.u16(1);
+    vmad.u16(20);
+    vmad.raw(std::string_view{"x"});
+    return vmad.bytes;
+}
+
+template <typename Body>
+std::vector<std::byte> questPluginWith(std::uint32_t tes4Flags, Body&& body) {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", tes4Flags, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    const auto group = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
+    body(out);
+    fo4::test::end_record(out, quest);
     fo4::test::end_group(out, group);
     return out.bytes;
 }
@@ -575,4 +677,299 @@ TEST_CASE("Native SetQuestAliases refuses existing unsupported alias members wit
     CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(result.error().message.find("KWDA") != std::string::npos);
     CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native QUST authoring refuses unrepresentable existing data without writing") {
+    struct GuardCase {
+        const char* name;
+        bool aliases;
+        std::function<std::vector<std::byte>()> make;
+        const char* needle;
+    };
+
+    const GuardCase cases[] = {
+        {
+            "non-zero INDX unknown",
+            false,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    writeIndx(out, 10, 0, 1);
+                    fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+                    writeU32(out, "ANAM", 0);
+                });
+            },
+            "INDX unknown"
+        },
+        {
+            "leading members before QSDT",
+            false,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    writeIndx(out, 10, 0, 0);
+                    fo4::test::write_subrecord(out, "NAM2", std::string_view{"Ahead\0", 6});
+                    fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+                    writeU32(out, "ANAM", 0);
+                });
+            },
+            "members before the first QSDT"
+        },
+        {
+            "existing localized CNAM",
+            false,
+            [] {
+                return questPluginWith(fo4::RecordFlags::localized, [](fo4::test::ByteWriter& out) {
+                    writeIndx(out, 10, 0, 0);
+                    fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+                    writeU32(out, "CNAM", 42);
+                    writeU32(out, "ANAM", 0);
+                });
+            },
+            "localized CNAM"
+        },
+        {
+            "reversed CNAM before NAM2",
+            false,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    writeIndx(out, 10, 0, 0);
+                    fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+                    fo4::test::write_subrecord(out, "CNAM", std::string_view{"Log\0", 4});
+                    fo4::test::write_subrecord(out, "NAM2", std::string_view{"Note\0", 5});
+                    writeU32(out, "ANAM", 0);
+                });
+            },
+            "NAM2/CNAM order"
+        },
+        {
+            "unsupported Fill Type ALCO/ALCA",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    writeU32(out, "ANAM", 2);
+                    writeU32(out, "ALST", 1);
+                    fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+                    writeU32(out, "FNAM", 0x10);
+                    writeU32(out, "ALCO", 0x00000123);
+                    fo4::test::ByteWriter alca;
+                    alca.u16(0);
+                    alca.u16(0);
+                    fo4::test::write_subrecord(out, "ALCA", alca.bytes);
+                    fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+                });
+            },
+            "Fill Type"
+        },
+        {
+            "unresolved alias FormLink",
+            true,
+            [] {
+                fo4::test::ByteWriter out;
+                const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+                fo4::test::ByteWriter hedr;
+                hedr.f32(1.0f);
+                hedr.u32(1);
+                hedr.u32(0x801);
+                fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+                fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+                fo4::test::ByteWriter data;
+                data.u32(0);
+                data.u32(0);
+                fo4::test::write_subrecord(out, "DATA", data.bytes);
+                fo4::test::end_record(out, tes4);
+                const auto group = fo4::test::begin_group(out, "QUST", 0);
+                const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x01000800);
+                fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
+                writeU32(out, "ANAM", 2);
+                writeU32(out, "ALST", 1);
+                fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+                writeU32(out, "FNAM", 0x10);
+                writeU32(out, "ALFR", 0x03000123);
+                fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+                fo4::test::end_record(out, quest);
+                fo4::test::end_group(out, group);
+                return out.bytes;
+            },
+            "unresolved FormLink"
+        },
+        {
+            "multi-entry ALCS collection",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    writeU32(out, "ANAM", 10);
+                    writeU32(out, "ALCS", 5);
+                    fo4::test::write_subrecord(out, "ALMI", std::vector<std::byte>{std::byte{2}});
+                    writeU32(out, "ALCS", 7);
+                });
+            },
+            "multiple ALCS"
+        },
+        {
+            "VMAD stage fragments",
+            false,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    fo4::test::write_subrecord(out, "VMAD", vmadStageFragments());
+                    writeSimpleAlias(out);
+                });
+            },
+            "stage identity"
+        },
+        {
+            "VMAD alias objects",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    fo4::test::write_subrecord(out, "VMAD", vmadAliasObjects());
+                    writeSimpleAlias(out);
+                });
+            },
+            "alias IDs"
+        },
+        {
+            "truncated VMAD",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    fo4::test::write_subrecord(out, "VMAD", vmadTruncated());
+                    writeSimpleAlias(out);
+                });
+            },
+            "cannot be inspected"
+        },
+        {
+            "empty first VMAD plus binding second VMAD",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    fo4::test::write_subrecord(out, "VMAD", vmadEmptyExtras());
+                    fo4::test::write_subrecord(out, "VMAD", vmadAliasObjects());
+                    writeSimpleAlias(out);
+                });
+            },
+            "more than one VMAD"
+        },
+        {
+            "valid empty QUST extras with trailing byte",
+            true,
+            [] {
+                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
+                    auto vmad = vmadEmptyExtras();
+                    vmad.push_back(std::byte{0});
+                    fo4::test::write_subrecord(out, "VMAD", vmad);
+                    writeSimpleAlias(out);
+                });
+            },
+            "cannot be inspected"
+        },
+    };
+
+    for (const auto& test : cases) {
+        SECTION(test.name) {
+            const auto root = tempRoot();
+            Cleanup cleanup{root};
+            const auto path = root / "Patch.esp";
+            writeBytes(path, test.make());
+            const auto before = readBytes(path);
+
+            fo4ide::plugin::RadiclePluginBackend backend;
+            load(backend, path);
+            const auto result = test.aliases
+                ? backend.invokeBackend(
+                      "SetQuestAliases",
+                      nlohmann::json::array({
+                          "Patch.esp",
+                          "000800:Patch.esp",
+                          nlohmann::json::array({
+                              {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+                          })
+                      }))
+                : backend.invokeBackend(
+                      "SetQuestStages",
+                      nlohmann::json::array({
+                          "Patch.esp",
+                          "000800:Patch.esp",
+                          nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
+                      }));
+            REQUIRE_FALSE(result.has_value());
+            CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+            CHECK(result.error().message.find(test.needle) != std::string::npos);
+            CHECK(readBytes(path) == before);
+        }
+    }
+}
+
+TEST_CASE("Native QUST authoring allows mutation when VMAD extras have no alias or stage bindings") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::write_subrecord(out, "VMAD", vmadEmptyExtras());
+        writeSimpleAlias(out);
+    }));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto aliases = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE(aliases.has_value());
+    const auto stages = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 20}, {"logEntry", "ok"}}})
+        }));
+    REQUIRE(stages.has_value());
+}
+
+TEST_CASE("Native SetQuestAliases is allowed when VMAD only binds stage fragments") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::write_subrecord(out, "VMAD", vmadStageFragments());
+        writeSimpleAlias(out);
+    }));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE(result.has_value());
+}
+
+TEST_CASE("Native SetQuestStages is allowed when VMAD only binds alias objects") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::write_subrecord(out, "VMAD", vmadAliasObjects());
+        writeSimpleAlias(out);
+    }));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 20}, {"logEntry", "ok"}}})
+        }));
+    REQUIRE(result.has_value());
 }

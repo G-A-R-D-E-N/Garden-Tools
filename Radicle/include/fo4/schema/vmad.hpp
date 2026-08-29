@@ -26,4 +26,12 @@ std::optional<std::vector<std::size_t>> vmad_formid_offsets_for_remap(
     std::span<const std::byte> data,
     Signature record_signature);
 
+struct QuestVmadBindings {
+  bool binds_stages{false};
+  bool binds_aliases{false};
+  bool unparseable{false};
+};
+
+QuestVmadBindings quest_vmad_bindings(std::span<const std::byte> data);
+
 }  // namespace fo4

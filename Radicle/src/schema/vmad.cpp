@@ -65,6 +65,11 @@ struct UnsupportedVmadProperty {};
 struct VmadScan {
   std::vector<std::size_t> offsets;
   bool unsupported{false};
+  bool failed{false};
+  bool fully_consumed{false};
+  bool trailing_data{false};
+  std::uint16_t quest_fragment_count{0};
+  std::uint16_t quest_alias_count{0};
 };
 
 constexpr std::uint8_t k_type_object = 1;
@@ -196,15 +201,14 @@ void walk_scripts(Slice& slice, std::int16_t object_format, std::uint16_t count,
   }
 }
 
-void walk_quest_extra(Slice& slice, std::int16_t object_format,
-                      std::vector<std::size_t>& offsets) {
-  slice.u8();  // extra bind
+void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result) {
+  slice.u8();
   const auto fragment_count = slice.u16();
   const auto script_name_len = slice.u16();
   slice.skip(script_name_len);
   if (script_name_len != 0) {
     slice.u8();
-    walk_properties(slice, object_format, slice.u16(), offsets);
+    walk_properties(slice, object_format, slice.u16(), result.offsets);
   }
   for (std::uint16_t i = 0; i < fragment_count; ++i) {
     slice.u16();
@@ -215,11 +219,13 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format,
     slice.skip_wstring();
   }
   const auto alias_count = slice.u16();
+  result.quest_fragment_count = fragment_count;
+  result.quest_alias_count = alias_count;
   for (std::uint16_t i = 0; i < alias_count; ++i) {
-    walk_object(slice, object_format, offsets);
-    slice.i16();  // version
+    walk_object(slice, object_format, result.offsets);
+    slice.i16();
     const auto alias_format = slice.i16();
-    walk_scripts(slice, alias_format, slice.u16(), offsets);
+    walk_scripts(slice, alias_format, slice.u16(), result.offsets);
   }
 }
 
@@ -280,25 +286,30 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
     slice.i16();  // version
     const auto object_format = slice.i16();
     walk_scripts(slice, object_format, slice.u16(), result.offsets);
-    if (slice.at_end()) {
-      return result;
+    if (!slice.at_end()) {
+      if (record_signature == sig_qust) {
+        walk_quest_extra(slice, object_format, result);
+      } else if (record_signature == sig_perk) {
+        walk_perk_extra(slice, object_format, result.offsets);
+      } else if (record_signature == sig_pack || record_signature == sig_info) {
+        walk_flagged_fragments(slice, object_format, result.offsets, false);
+      } else if (record_signature == sig_scen) {
+        walk_flagged_fragments(slice, object_format, result.offsets, true);
+      }
     }
-    if (record_signature == sig_qust) {
-      walk_quest_extra(slice, object_format, result.offsets);
-    } else if (record_signature == sig_perk) {
-      walk_perk_extra(slice, object_format, result.offsets);
-    } else if (record_signature == sig_pack || record_signature == sig_info) {
-      walk_flagged_fragments(slice, object_format, result.offsets, false);
-    } else if (record_signature == sig_scen) {
-      walk_flagged_fragments(slice, object_format, result.offsets, true);
-    }
+    result.fully_consumed = slice.at_end();
+    result.trailing_data = !slice.at_end();
   } catch (const UnsupportedVmadProperty&) {
     result.offsets.clear();
     result.unsupported = true;
+    result.failed = true;
+    result.quest_fragment_count = 0;
+    result.quest_alias_count = 0;
   } catch (const parse_error&) {
-    // Preserve the historical tolerant inspection behavior for malformed or
-    // truncated VMAD, but never return offsets collected before the failure.
     result.offsets.clear();
+    result.failed = true;
+    result.quest_fragment_count = 0;
+    result.quest_alias_count = 0;
   }
   return result;
 }
@@ -323,6 +334,22 @@ std::optional<std::vector<std::size_t>> vmad_formid_offsets_for_remap(
     return std::nullopt;
   }
   return std::move(scan.offsets);
+}
+
+QuestVmadBindings quest_vmad_bindings(std::span<const std::byte> data) {
+  QuestVmadBindings bindings;
+  if (data.size() < 6) {
+    bindings.unparseable = true;
+    return bindings;
+  }
+  const auto scan = scan_vmad(data, sig_qust);
+  if (scan.unsupported || scan.failed || scan.trailing_data || !scan.fully_consumed) {
+    bindings.unparseable = true;
+    return bindings;
+  }
+  bindings.binds_stages = scan.quest_fragment_count > 0;
+  bindings.binds_aliases = scan.quest_alias_count > 0;
+  return bindings;
 }
 
 }  // namespace fo4

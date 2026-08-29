@@ -142,7 +142,7 @@ Object v1: FormID, alias int16, unused uint16.
 
 Property types 1 / 11 / 7 / 17 contain objects. Type 3 int is not a FormID even if the bits look like one.
 
-QUST extras after scripts: bind byte, fragment count, optional fragment script, fragments, then aliases (object + nested version/format/scripts).
+QUST extras after scripts: bind byte, fragment count, optional fragment script, fragments, then aliases (object + nested version/format/scripts). Each fragment stores `Stage` (uint16) and `StageIndex` (int32). Object format 2 stores an alias ID (int16) before the FormID, so those extras bind Papyrus to stage identity and alias IDs.
 
 Truncated VMAD is skipped for remap rather than aborting the plugin write.
 

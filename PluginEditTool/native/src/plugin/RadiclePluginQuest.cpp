@@ -19,6 +19,7 @@
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/localized_fields.hpp>
+#include <fo4/schema/vmad.hpp>
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
@@ -260,6 +261,45 @@ bool supportedAliasFill(const fo4::forms::QuestAliasFill& fill) {
            std::holds_alternative<fo4::forms::QuestSpecificLocationFill>(fill);
 }
 
+std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
+                                                      bool aliases,
+                                                      bool stages) {
+    const fo4::Subrecord* vmad = nullptr;
+    std::size_t vmadCount = 0;
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != fo4::sig_vmad) continue;
+        ++vmadCount;
+        if (vmad == nullptr) vmad = &subrecord;
+    }
+    if (vmadCount == 0) return std::nullopt;
+    if (vmadCount > 1) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST has more than one VMAD subrecord"
+        };
+    }
+    const auto bindings = fo4::quest_vmad_bindings(vmad->data);
+    if (bindings.unparseable) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST VMAD cannot be inspected for alias or stage bindings"
+        };
+    }
+    if (aliases && bindings.binds_aliases) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST VMAD binds Papyrus scripts to alias IDs"
+        };
+    }
+    if (stages && bindings.binds_stages) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST VMAD binds Papyrus fragments to stage identity"
+        };
+    }
+    return std::nullopt;
+}
+
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                                                    const fo4::FormKey& quest) {
     const auto decoded = fo4::forms::decode_quest_stages(plugin, quest);
@@ -405,6 +445,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             "RecordTypeMismatch",
             "SetQuestAliases requires a QUST record"
         });
+    }
+    if (const auto error = existingQuestVmadUnrepresentable(*record, true, false)) {
+        return std::unexpected(*error);
     }
     try {
         if (const auto error = existingAliasesUnrepresentable(loaded->plugin, questKey)) {
@@ -617,6 +660,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             "RecordTypeMismatch",
             "SetQuestStages requires a QUST record"
         });
+    }
+    if (const auto error = existingQuestVmadUnrepresentable(*record, false, true)) {
+        return std::unexpected(*error);
     }
     try {
         if (const auto error = existingStagesUnrepresentable(loaded->plugin, questKey)) {
