@@ -1,7 +1,11 @@
 #include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/ctda.hpp"
 
 #include "plugin_bytes.hpp"
+
+#include <span>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -155,4 +159,33 @@ TEST(QuestStages, RejectsMalformedMarkers) {
   const auto plugin = fo4::read_plugin(out.bytes, "Quests.esp");
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_quest_stages(plugin, quest_key())),
                fo4::forms::QuestError);
+}
+
+TEST(QuestStages, LosslessLogEntryConditionsRoundTripCtdaAndCis) {
+  fo4::CtdaCondition condition;
+  condition.function = 1;
+  condition.unknown3 = -1;
+  condition.param1 = 1;
+  condition.parameter1_string = "KeywordOne";
+  condition.parameter2_string = "KeywordTwo";
+  auto members = fo4::serialize_ctda_run(std::span<const fo4::CtdaCondition>(&condition, 1));
+  fo4::Subrecord nam2;
+  nam2.signature = fo4::Signature::from_string("NAM2");
+  nam2.data = {std::byte{'n'}, std::byte{0}};
+  members.push_back(nam2);
+
+  std::vector<fo4::CtdaCondition> decoded;
+  std::size_t consumed = 0;
+  ASSERT_TRUE(fo4::forms::lossless_quest_log_entry_conditions(members, decoded, consumed));
+  ASSERT_EQ(decoded.size(), 1u);
+  EXPECT_EQ(decoded[0].function, 1u);
+  EXPECT_EQ(*decoded[0].parameter1_string, "KeywordOne");
+  EXPECT_EQ(*decoded[0].parameter2_string, "KeywordTwo");
+  EXPECT_EQ(consumed, 3u);
+
+  fo4::Subrecord short_ctda;
+  short_ctda.signature = fo4::Signature::from_string("CTDA");
+  short_ctda.data = {std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}};
+  std::vector<fo4::Subrecord> bad{short_ctda};
+  EXPECT_FALSE(fo4::forms::lossless_quest_log_entry_conditions(bad, decoded, consumed));
 }

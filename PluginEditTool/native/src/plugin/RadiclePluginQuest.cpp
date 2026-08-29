@@ -1,13 +1,17 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <initializer_list>
 #include <limits>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -18,9 +22,11 @@
 #include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/ctda.hpp>
 #include <fo4/schema/localized_fields.hpp>
 #include <fo4/schema/vmad.hpp>
 #include <fo4/signature.hpp>
+#include <fo4ide/plugin/ConditionFunctions.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -45,6 +51,46 @@ const nlohmann::json* questArrayArg(const nlohmann::json& args, std::size_t inde
         return &parsed;
     }
     return nullptr;
+}
+
+bool parseEntireInt32(std::string_view text, std::int32_t& value) {
+    if (text.empty()) return false;
+    if (text.front() == '+') return false;
+    int base = 10;
+    auto view = text;
+    bool negative = false;
+    if (view.front() == '-') {
+        negative = true;
+        view.remove_prefix(1);
+        if (view.empty()) return false;
+    }
+    if (view.size() >= 2 && view[0] == '0' && (view[1] == 'x' || view[1] == 'X')) {
+        base = 16;
+        view.remove_prefix(2);
+        if (view.empty()) return false;
+    }
+    std::uint64_t parsed = 0;
+    const auto [ptr, error] = std::from_chars(
+        view.data(), view.data() + view.size(), parsed, base);
+    if (error != std::errc{} || ptr != view.data() + view.size()) return false;
+    if (negative) {
+        if (parsed > static_cast<std::uint64_t>(
+                std::numeric_limits<std::int32_t>::max()) + 1ull) {
+            return false;
+        }
+        if (parsed == static_cast<std::uint64_t>(
+                std::numeric_limits<std::int32_t>::max()) + 1ull) {
+            value = std::numeric_limits<std::int32_t>::min();
+            return true;
+        }
+        value = -static_cast<std::int32_t>(parsed);
+        return true;
+    }
+    if (parsed > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max())) {
+        return false;
+    }
+    value = static_cast<std::int32_t>(parsed);
+    return true;
 }
 
 bool parseEntireUnsigned32(std::string_view text, std::uint32_t& value) {
@@ -161,7 +207,14 @@ bool knownStageKey(std::string_view key) {
 }
 
 bool knownLogEntryKey(std::string_view key) {
-    return key == "flags" || key == "note" || key == "logText";
+    return key == "flags" || key == "note" || key == "logText" || key == "conditions";
+}
+
+bool knownConditionKey(std::string_view key) {
+    return key == "function" || key == "operator" || key == "param1" ||
+           key == "param2" || key == "value" || key == "compareGlobal" ||
+           key == "runOn" || key == "reference" || key == "flags" ||
+           key == "cis1" || key == "cis2";
 }
 
 bool isPlacedSignature(fo4::Signature signature) {
@@ -202,6 +255,27 @@ std::optional<Error> requireLoadedFill(
     };
 }
 
+std::optional<Error> requireLoadedRecord(
+    const fo4::ConflictGraph& graph,
+    const fo4::FormKey& key,
+    std::string_view slotName) {
+    if (graph.winner(key) == nullptr) {
+        return Error{
+            "InvalidTypedFormKey",
+            std::string(slotName) + " must resolve to a loaded record: " + key.to_string()
+        };
+    }
+    return std::nullopt;
+}
+
+struct PendingQuestCondition {
+    fo4::CtdaCondition condition;
+    std::optional<fo4::FormKey> param1;
+    std::optional<fo4::FormKey> param2;
+    std::optional<fo4::FormKey> reference;
+    std::optional<fo4::FormKey> compareGlobal;
+};
+
 std::optional<Error> rejectUnknownKeys(const nlohmann::json& object,
                                        bool (*known)(std::string_view),
                                        std::string_view label) {
@@ -238,6 +312,242 @@ std::optional<Error> parseFillFormKey(const nlohmann::json& object,
     } catch (const std::exception& error) {
         return Error{"InvalidFormKey", std::string(key) + ": " + error.what()};
     }
+}
+
+std::optional<Error> parseQuestConditionParam(
+    const nlohmann::json& value,
+    const char* slot,
+    std::int32_t& integer,
+    std::optional<fo4::FormKey>& form) {
+    form = std::nullopt;
+    integer = 0;
+    if (value.is_number_integer()) {
+        const auto parsed = value.get<std::int64_t>();
+        if (parsed < std::numeric_limits<std::int32_t>::min() ||
+            parsed > std::numeric_limits<std::int32_t>::max()) {
+            return Error{"InvalidQuestStagePayload", std::string(slot) + " is out of range"};
+        }
+        integer = static_cast<std::int32_t>(parsed);
+        return std::nullopt;
+    }
+    if (value.is_number_unsigned()) {
+        const auto parsed = value.get<std::uint64_t>();
+        if (parsed > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max())) {
+            return Error{"InvalidQuestStagePayload", std::string(slot) + " is out of range"};
+        }
+        integer = static_cast<std::int32_t>(parsed);
+        return std::nullopt;
+    }
+    if (!value.is_string()) {
+        return Error{"InvalidQuestStagePayload", std::string(slot) + " must be an integer or FormKey string"};
+    }
+    const auto text = value.get<std::string>();
+    if (text.empty()) return std::nullopt;
+    try {
+        form = fo4::FormKey::parse(text);
+        return std::nullopt;
+    } catch (const std::exception&) {
+    }
+    if (!parseEntireInt32(text, integer)) {
+        return Error{
+            "InvalidQuestStagePayload",
+            std::string(slot) + " must be an integer or FormKey string"
+        };
+    }
+    return std::nullopt;
+}
+
+std::optional<Error> parseQuestCondition(
+    const nlohmann::json& element,
+    const fo4::ConflictGraph& graph,
+    PendingQuestCondition& out,
+    std::vector<fo4::FormKey>& conditionKeys) {
+    if (!element.is_object()) {
+        return Error{"InvalidQuestStagePayload", "every condition must be an object"};
+    }
+    if (const auto error = rejectUnknownKeys(element, knownConditionKey, "condition")) {
+        return error;
+    }
+    const auto functionField = element.find("function");
+    if (functionField == element.end() || !functionField->is_string()) {
+        return Error{"InvalidQuestStagePayload", "condition function must be a string"};
+    }
+    const auto functionText = functionField->get<std::string>();
+    const auto function = functionIndex(functionText);
+    if (!function.has_value()) {
+        return Error{
+            "InvalidQuestStagePayload",
+            "unknown condition function '" + functionText + "'"
+        };
+    }
+    if (*function == fo4::k_ctda_event_function_index) {
+        return Error{
+            "InvalidQuestStagePayload",
+            "GetEventData is not supported on quest log entries"
+        };
+    }
+    out = {};
+    out.condition.function = *function;
+    out.condition.unknown3 = -1;
+
+    if (element.contains("runOn") && !element["runOn"].is_null()) {
+        if (!element["runOn"].is_string()) {
+            return Error{"InvalidQuestStagePayload", "runOn must be a string"};
+        }
+        const auto runOn = runOnValue(element["runOn"].get<std::string>());
+        if (!runOn.has_value()) {
+            return Error{"InvalidQuestStagePayload", "unknown runOn value"};
+        }
+        out.condition.run_on = *runOn;
+    }
+
+    if (element.contains("operator") && !element["operator"].is_null()) {
+        if (!element["operator"].is_string()) {
+            return Error{"InvalidQuestStagePayload", "operator must be a string"};
+        }
+        const auto opText = element["operator"].get<std::string>();
+        std::uint8_t compareOperator = 0;
+        if (opText == "==" || opText == "EqualTo") compareOperator = 0;
+        else if (opText == "!=" || opText == "<>" || opText == "NotEqualTo") compareOperator = 1;
+        else if (opText == ">" || opText == "GreaterThan") compareOperator = 2;
+        else if (opText == ">=" || opText == "GreaterThanOrEqualTo") compareOperator = 3;
+        else if (opText == "<" || opText == "LessThan") compareOperator = 4;
+        else if (opText == "<=" || opText == "LessThanOrEqualTo") compareOperator = 5;
+        else {
+            return Error{"InvalidQuestStagePayload", "unknown condition operator"};
+        }
+        out.condition.flags_byte = static_cast<std::uint8_t>(compareOperator << 5);
+    }
+
+    if (element.contains("flags") && !element["flags"].is_null()) {
+        if (!element["flags"].is_string()) {
+            return Error{"InvalidQuestStagePayload", "condition flags must be a string"};
+        }
+        std::string flagsText = element["flags"].get<std::string>();
+        std::string part;
+        std::istringstream stream(std::move(flagsText));
+        while (std::getline(stream, part, ',')) {
+            part.erase(part.begin(),
+                       std::find_if(part.begin(), part.end(), [](unsigned char ch) {
+                           return !std::isspace(ch);
+                       }));
+            part.erase(std::find_if(part.rbegin(), part.rend(), [](unsigned char ch) {
+                           return !std::isspace(ch);
+                       }).base(),
+                       part.end());
+            if (part.empty()) continue;
+            const auto needle = part;
+            std::string lower;
+            lower.reserve(needle.size());
+            for (const auto ch : needle) {
+                lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+            }
+            std::optional<std::uint8_t> flag;
+            if (lower == "or") flag = fo4::k_ctda_flag_or;
+            else if (lower == "parametersusealiases") flag = fo4::k_ctda_flag_aliases;
+            else if (lower == "usepackdata") flag = fo4::k_ctda_flag_pack_data;
+            else if (lower == "swapsubjectandtarget") flag = fo4::k_ctda_flag_swap;
+            if (!flag.has_value()) {
+                return Error{
+                    "InvalidQuestStagePayload",
+                    "unknown condition flag '" + part + "'"
+                };
+            }
+            out.condition.flags_byte =
+                static_cast<std::uint8_t>(out.condition.flags_byte | *flag);
+        }
+    }
+
+    const bool hasGlobal =
+        element.contains("compareGlobal") && !element["compareGlobal"].is_null();
+    const bool hasValue = element.contains("value") && !element["value"].is_null();
+    if (hasGlobal && hasValue) {
+        return Error{
+            "InvalidQuestStagePayload",
+            "a condition may set value or compareGlobal, not both"
+        };
+    }
+    if (hasGlobal) {
+        if (!element["compareGlobal"].is_string()) {
+            return Error{"InvalidQuestStagePayload", "compareGlobal must be a FormKey string"};
+        }
+        try {
+            out.compareGlobal = fo4::FormKey::parse(element["compareGlobal"].get<std::string>());
+        } catch (const std::exception& error) {
+            return Error{"InvalidFormKey", std::string("compareGlobal: ") + error.what()};
+        }
+        if (const auto error = requireLoadedFill(
+                graph, *out.compareGlobal, {"GLOB"}, false, "compareGlobal")) {
+            return error;
+        }
+        conditionKeys.push_back(*out.compareGlobal);
+        out.condition.flags_byte =
+            static_cast<std::uint8_t>(out.condition.flags_byte | fo4::k_ctda_flag_use_global);
+    } else {
+        float value = 1.0f;
+        if (hasValue) {
+            if (!element["value"].is_number()) {
+                return Error{"InvalidQuestStagePayload", "condition value must be a number"};
+            }
+            value = element["value"].get<float>();
+        }
+        static_assert(sizeof(value) == sizeof(out.condition.comparison_raw));
+        std::memcpy(&out.condition.comparison_raw, &value, sizeof(value));
+    }
+
+    const auto bindForm = [&](std::optional<fo4::FormKey>& slot,
+                              const char* name) -> std::optional<Error> {
+        if (!slot.has_value()) return std::nullopt;
+        if (const auto error = requireLoadedRecord(graph, *slot, name)) return error;
+        conditionKeys.push_back(*slot);
+        return std::nullopt;
+    };
+
+    if (element.contains("param1") && !element["param1"].is_null()) {
+        if (const auto error = parseQuestConditionParam(
+                element["param1"], "param1", out.condition.param1, out.param1)) {
+            return error;
+        }
+        if (const auto error = bindForm(out.param1, "param1")) return error;
+    }
+    if (element.contains("param2") && !element["param2"].is_null()) {
+        if (const auto error = parseQuestConditionParam(
+                element["param2"], "param2", out.condition.param2, out.param2)) {
+            return error;
+        }
+        if (const auto error = bindForm(out.param2, "param2")) return error;
+    }
+    if (element.contains("reference") && !element["reference"].is_null()) {
+        if (!element["reference"].is_string()) {
+            return Error{"InvalidQuestStagePayload", "reference must be a FormKey string"};
+        }
+        try {
+            out.reference = fo4::FormKey::parse(element["reference"].get<std::string>());
+        } catch (const std::exception& error) {
+            return Error{"InvalidFormKey", std::string("reference: ") + error.what()};
+        }
+        if (const auto error = bindForm(out.reference, "reference")) return error;
+    }
+
+    const auto parseCis = [&](const char* key, std::optional<std::string>& target)
+        -> std::optional<Error> {
+        if (!element.contains(key) || element[key].is_null()) return std::nullopt;
+        if (!element[key].is_string()) {
+            return Error{"InvalidQuestStagePayload", std::string(key) + " must be a string"};
+        }
+        auto text = element[key].get<std::string>();
+        if (text.find('\0') != std::string::npos) {
+            return Error{
+                "InvalidQuestStagePayload",
+                std::string(key) + " cannot contain an embedded NUL"
+            };
+        }
+        target = std::move(text);
+        return std::nullopt;
+    };
+    if (const auto error = parseCis("cis1", out.condition.parameter1_string)) return error;
+    if (const auto error = parseCis("cis2", out.condition.parameter2_string)) return error;
+    return std::nullopt;
 }
 
 bool allowedAliasMember(fo4::forms::QuestAliasKind kind, std::string_view signature) {
@@ -323,10 +633,19 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                     "existing QUST log entry has a localized CNAM that this adapter cannot reconstruct"
                 };
             }
+            std::vector<fo4::CtdaCondition> conditions;
+            std::size_t consumed = 0;
+            if (!fo4::forms::lossless_quest_log_entry_conditions(
+                    entry.members, conditions, consumed)) {
+                return Error{
+                    "QuestAuthoringCoverageIncomplete",
+                    "existing QUST log entry has a CTDA/CIS run this adapter cannot reconstruct"
+                };
+            }
             bool sawNam2 = false;
             bool sawCnam = false;
-            for (const auto& member : entry.members) {
-                const auto signature = member.signature.to_string();
+            for (std::size_t i = consumed; i < entry.members.size(); ++i) {
+                const auto signature = entry.members[i].signature.to_string();
                 if (signature == "NAM2") {
                     if (sawNam2 || sawCnam) {
                         return Error{
@@ -674,6 +993,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
 
     const bool localized = loaded->plugin.header.tes4_flags.is_localized();
     fo4::forms::QuestStages stages;
+    std::vector<std::vector<std::vector<PendingQuestCondition>>> pendingConditions;
+    std::vector<fo4::FormKey> conditionKeys;
     std::set<std::uint16_t> indexes;
 
     for (const auto& element : *stagesJson) {
@@ -687,6 +1008,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             return std::unexpected(*error);
         }
         fo4::forms::QuestStage stage;
+        pendingConditions.emplace_back();
         std::uint32_t index = 0;
         std::uint32_t flags = 0;
         if (!questUnsigned(element, "index", 0, index) ||
@@ -842,13 +1164,66 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 cnam.data = fo4::schema::write_localized_string(value);
                 entry.members.push_back(std::move(cnam));
             }
+            std::vector<PendingQuestCondition> parsedConditions;
+            if (entryJson.contains("conditions") && !entryJson["conditions"].is_null()) {
+                if (!entryJson["conditions"].is_array()) {
+                    return std::unexpected(Error{
+                        "InvalidQuestStagePayload",
+                        "conditions must be an array"
+                    });
+                }
+                for (const auto& conditionJson : entryJson["conditions"]) {
+                    PendingQuestCondition pending;
+                    if (const auto error = parseQuestCondition(
+                            conditionJson, graph_, pending, conditionKeys)) {
+                        return std::unexpected(*error);
+                    }
+                    parsedConditions.push_back(std::move(pending));
+                }
+            }
             stage.log_entries.push_back(std::move(entry));
+            pendingConditions.back().push_back(std::move(parsedConditions));
         }
         stages.stages.push_back(std::move(stage));
     }
 
     try {
         auto mutated = loaded->plugin;
+        for (const auto& key : conditionKeys) ensureOwnerMaster(mutated, key.owner());
+        const auto context = fo4::plugin_form_id_context(mutated);
+        const auto encodeKey = [&](const std::optional<fo4::FormKey>& key) -> std::uint32_t {
+            if (!key.has_value()) return 0;
+            return fo4::encode_plugin_form_id(*key, context).value();
+        };
+        for (std::size_t stageIndex = 0; stageIndex < stages.stages.size(); ++stageIndex) {
+            auto& stage = stages.stages[stageIndex];
+            for (std::size_t entryIndex = 0; entryIndex < stage.log_entries.size(); ++entryIndex) {
+                const auto& pending = pendingConditions[stageIndex][entryIndex];
+                if (pending.empty()) continue;
+                std::vector<fo4::CtdaCondition> encoded;
+                encoded.reserve(pending.size());
+                for (auto condition : pending) {
+                    if (condition.param1.has_value()) {
+                        condition.condition.param1 =
+                            static_cast<std::int32_t>(encodeKey(condition.param1));
+                    }
+                    if (condition.param2.has_value()) {
+                        condition.condition.param2 =
+                            static_cast<std::int32_t>(encodeKey(condition.param2));
+                    }
+                    if (condition.reference.has_value()) {
+                        condition.condition.reference = encodeKey(condition.reference);
+                    }
+                    if (condition.compareGlobal.has_value()) {
+                        condition.condition.comparison_raw = encodeKey(condition.compareGlobal);
+                    }
+                    encoded.push_back(std::move(condition.condition));
+                }
+                auto run = fo4::serialize_ctda_run(encoded);
+                auto& members = stage.log_entries[entryIndex].members;
+                members.insert(members.begin(), run.begin(), run.end());
+            }
+        }
         fo4::forms::write_quest_stages(mutated, questKey, stages);
         fo4::write_plugin_file(mutated, loaded->path);
         loaded->plugin = std::move(mutated);

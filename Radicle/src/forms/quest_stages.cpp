@@ -1,6 +1,7 @@
 #include "fo4/forms/quest.hpp"
 
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/ctda.hpp"
 #include "fo4/schema/localized_fields.hpp"
 
 #include "fo4/plugin/visit.hpp"
@@ -8,6 +9,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <exception>
+#include <span>
 #include <utility>
 
 namespace fo4::forms {
@@ -18,8 +21,23 @@ constexpr auto k_indx = Signature::from_string("INDX");
 constexpr auto k_qsdt = Signature::from_string("QSDT");
 constexpr auto k_cnam = Signature::from_string("CNAM");
 constexpr auto k_nam2 = Signature::from_string("NAM2");
+constexpr auto k_ctda = Signature::from_string("CTDA");
+constexpr auto k_cis1 = Signature::from_string("CIS1");
+constexpr auto k_cis2 = Signature::from_string("CIS2");
 constexpr auto k_qobj = Signature::from_string("QOBJ");
 constexpr auto k_anam = Signature::from_string("ANAM");
+
+bool exact_zstring(std::span<const std::byte> data, std::string& text) {
+  if (data.empty() || data.back() != std::byte{0}) return false;
+  text.clear();
+  text.reserve(data.size() - 1);
+  for (std::size_t i = 0; i + 1 < data.size(); ++i) {
+    const auto ch = static_cast<char>(std::to_integer<std::uint8_t>(data[i]));
+    if (ch == '\0') return false;
+    text.push_back(ch);
+  }
+  return true;
+}
 
 std::string decode_note(const Subrecord& subrecord) {
   const auto& data = subrecord.data;
@@ -105,6 +123,59 @@ QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest) {
   }
 
   return result;
+}
+
+bool lossless_quest_log_entry_conditions(std::span<const Subrecord> members,
+                                         std::vector<CtdaCondition>& conditions,
+                                         std::size_t& consumed) {
+  conditions.clear();
+  consumed = 0;
+  std::vector<Subrecord> prefix;
+  std::size_t i = 0;
+  while (i < members.size()) {
+    const auto& member = members[i];
+    if (member.signature == k_nam2 || member.signature == k_cnam) break;
+    if (member.signature != k_ctda) return false;
+    CtdaCondition condition;
+    try {
+      condition = parse_ctda_condition(member.data);
+    } catch (const std::exception&) {
+      return false;
+    }
+    if (serialize_ctda_condition(condition) != member.data) return false;
+    prefix.push_back(member);
+    ++i;
+    bool saw_cis1 = false;
+    bool saw_cis2 = false;
+    while (i < members.size()) {
+      const auto& extra = members[i];
+      if (extra.signature != k_cis1 && extra.signature != k_cis2) break;
+      std::string text;
+      if (!exact_zstring(extra.data, text)) return false;
+      if (extra.signature == k_cis1) {
+        if (saw_cis1) return false;
+        saw_cis1 = true;
+        condition.parameter1_string = std::move(text);
+      } else {
+        if (saw_cis2) return false;
+        saw_cis2 = true;
+        condition.parameter2_string = std::move(text);
+      }
+      prefix.push_back(extra);
+      ++i;
+    }
+    conditions.push_back(std::move(condition));
+  }
+  consumed = i;
+  const auto rebuilt = serialize_ctda_run(conditions);
+  if (rebuilt.size() != prefix.size()) return false;
+  for (std::size_t n = 0; n < prefix.size(); ++n) {
+    if (rebuilt[n].signature != prefix[n].signature ||
+        rebuilt[n].data != prefix[n].data) {
+      return false;
+    }
+  }
+  return true;
 }
 
 namespace {

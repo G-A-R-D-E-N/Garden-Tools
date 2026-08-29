@@ -85,6 +85,8 @@ CtdaCondition parse_ctda_condition(std::span<const std::byte> payload);
 // Serializes a condition back to a CTDA subrecord payload.
 std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition);
 
+std::vector<Subrecord> serialize_ctda_run(std::span<const CtdaCondition> conditions);
+
 // Reads the record's condition list: every CTDA subrecord in order, each with
 // its trailing CIS1/CIS2 strings attached. Records without CTDA subrecords
 // yield an empty vector.
