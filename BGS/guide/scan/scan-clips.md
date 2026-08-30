@@ -8,9 +8,9 @@ Opens a [Mod Organizer 2 instance](README.md#mo2-instance-setup), layers the ena
 base game, and for every **behaviour** file that a mod actually loads, checks each clip generator's
 animation against the merged load order. It reports any clip whose animation resolves nowhere.
 
-This is the mode aimed at the **animation load‑time crash**: when the engine goes to bind the
-animation a clip plays and that animation is not present anywhere in the load order, the load can
-fault. Catching an unresolved clip here is catching that crash input before the game does.
+This is a static load-order check for unresolved clip references. A missing animation may be useful
+evidence when investigating a runtime failure, but this mode does not reproduce the engine's
+animation-DB or binding behavior.
 
 ## What it scans
 
@@ -60,6 +60,6 @@ done  18 winning behaviour file(s) checked, 1 with unresolved clip animations, 2
 ## Scope
 
 A clip resolving to a present file means the animation **exists**, not that its payload is
-guaranteed decodable — an existing‑but‑malformed animation is a separate, suspected case tracked in
-issue #209 (blocked on the runtime RE in #201/#207). This mode covers the common, confirmed cause:
-a clip animation that is simply absent from the load order.
+guaranteed decodable. The runtime RE pass did not establish an engine fault branch for an animation
+class unsupported by BGS's decoder, so this mode does not add a decoder-based finding; see issues
+#207–#209 for the evidence and scope decision.

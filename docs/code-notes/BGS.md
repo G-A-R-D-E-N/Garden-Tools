@@ -47,17 +47,16 @@ modes, emitted as one JSON document under `--json`.
   (`corrupt`). A consumer that must treat "could not inspect an archive" as a failure asserts the JSON
   has no `skip` finding rather than relying on the process status — see the exit-0 assertion in
   `tools/tests/ScanCliTests.cs`.
-- `missing-clip-animations` from `ModlistScan.ScanClips` is the animation load-time crash class: a
-  clip whose animation resolves nowhere across the merged load order. It is NOT
-  `BoundAnimationData::Create` — that name was a mislabel (it was the CHANGELOG's original wording and
-  does not correspond to a real FO4 1.10.163 symbol). The real runtime fault path — the clip -> binding
-  resolver and the subgraph / animation-DB build — and its verified symbols and addresses are
-  catalogued in issue #201 (sourced from the `commonlib_NonVR/RE-Work` KB); the completeness proof is
-  blocked on the #207 Ghidra pass. The resolution rule these scans depend on — clip references are
-  authoring-time `.hkt` tails that resolve by stripping the authoring root and swapping the extension
-  to `.hkx` — is verified FO4 reverse-engineering of the animation load path; `GameData.Normalize` and
-  `ProjectChain.ResolvePath` implement the extension-agnostic match that the scan's existence checks
-  rely on.
+
+### `BGS/app/ModlistScan.cs:ModlistScan.ScanClips`
+
+- `missing-clip-animations` from `ModlistScan.ScanClips` is a static unresolved-reference finding:
+  a clip whose animation resolves nowhere across the merged load order. It is not a reproduction of
+  the Fallout 4 animation-DB or binding failure path. Runtime evidence recorded in issue #207 shows
+  guarded lookup, update gating, default-animation fallback, and validation diagnostics for missing
+  or unready bindings in the examined path. The scan's path rule remains the authoring-time `.hkt`
+  tail mapped to the corresponding `.hkx` in the merged view; `GameData.Normalize` and
+  `ProjectChain.ResolvePath` implement that existence check.
 
 ## Headless scan progress + performance (issue #193)
 
@@ -76,8 +75,9 @@ character/behaviour file to parse it).
 Policy: `ResolveSource` / `ContainsAnimation` validate **virtual-path resolution only** — whether the
 declared animation resolves to a loose file or an archive entry. Whether that entry's payload can
 actually be read/decompressed (corruption, unsupported compression) is a **separate validation
-concern**, deliberately out of scope here — do not "fix" this back into decompression. Corrupt /
-unloadable animation crash coverage belongs to #201.
+concern**, deliberately out of scope here — do not "fix" this back into decompression. The runtime
+RE pass did not establish a corresponding engine fault branch for an animation class unsupported by
+BGS's decoder; see issue #207 and the rejected hypotheses in #208/#209.
 
 ### `src/Archive/GameData.cs` — `TryArchiveEntries` (archive index parsed once per run)
 

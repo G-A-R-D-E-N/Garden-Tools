@@ -50,8 +50,9 @@ BehaviourGraphStudio.exe --scan-clips  "C:\MO2\Instances\Fallout 4"
 ```
 
 `--scan-archives` finds corrupt behaviour files, `--scan-modlist` finds missing declared
-animations, and `--scan-clips` finds clips that play an animation missing from the load order (the
-animation load-time crash). Each mode returns an exit code (`0`/`1`/`2`) and takes `--json` for a
+animations, and `--scan-clips` finds clips whose animation is absent from the merged load order.
+These are static findings rather than a reproduction of the game's runtime load path. Each mode
+returns an exit code (`0`/`1`/`2`) and takes `--json` for a
 machine-readable report. See the [Headless scanning guide](guide/scan/README.md).
 
 ## Requirements

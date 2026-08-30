@@ -23,8 +23,8 @@ window — for vetting a mod or gating a build in CI. See the
   engine loads them, and reports character files whose declared animations no longer resolve. See
   the [scan-modlist guide](guide/scan/scan-modlist.md).
 * `--scan-clips <MO2 instance>` checks, for every behaviour a mod actually loads, that each clip's
-  animation resolves somewhere in the merged load order — the direct cause of the animation
-  load-time crash, where the engine tries to bind a clip animation that is not present anywhere.
+  animation resolves somewhere in the merged load order. It reports unresolved virtual references;
+  it does not reproduce the game's animation-DB or binding behavior.
   See the [scan-clips guide](guide/scan/scan-clips.md).
 * Every mode returns a clear exit code — `0` clean, `1` defects found, `2` usage/config error — so a
   scan can gate a script or CI job directly.
@@ -110,7 +110,7 @@ August 15, 2026
 * `symrm chain` and `symrm check` now accept `--data <Data folder>` and resolve every animation against the game's `.ba2` archives (loose files first, archives in plugin load order), so vanilla animations are no longer reported missing just because they are packed.
 * The Chain tab has a Game Data folder field: set your game's `Data` folder once and every chain, graph check and project check resolves animations against its `.ba2` archives, with each animation marked as loose or naming the archive it came from.
 * With game data attached, an animation that is genuinely absent anywhere becomes an error instead of a warning.
-* Weapon subgraphs (behaviors that play `Animations\Weapon\...` clips) get one finding per genuinely missing clip, each resolved to the exact engine search: the failing weapon chain prefix the engine looked under (in fallback order, from the master's AnimationSetData) and whether a generic `Animations\<clip>` fallback exists — a clip with no chain copy and no generic fallback is marked as a crash for that weapon type. Adding the generic copy clears the warning. The Chain tab shows these gaps directly under a "weapon clips" group when game data is attached, with the same message text `symrm` reports.
+* Weapon subgraphs (behaviors that play `Animations\Weapon\...` clips) get one finding per genuinely missing clip, each resolved to the exact engine search: the failing weapon chain prefix the engine looked under (in fallback order, from the master's AnimationSetData) and whether a generic `Animations\<clip>` fallback exists. Adding the generic copy clears the warning. The Chain tab shows these gaps directly under a "weapon clips" group when game data is attached, with the same message text `symrm` reports.
 * Borrowed `..\` animation paths (for example into `PowerArmor`) resolve correctly against the archives.
 * The Playback tab can now play clips that only exist inside a `.ba2` archive: with the Game Data folder set, selecting a clip whose animation is packed reads the animation (and, when the rig is packed too, the `CharacterAssets` skeleton) straight out of the archive, and the summary names the archive it came from.
 
