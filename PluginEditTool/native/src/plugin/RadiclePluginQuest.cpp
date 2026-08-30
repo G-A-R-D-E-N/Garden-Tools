@@ -2181,7 +2181,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 });
             }
             std::set<std::uint32_t> entryIds;
-            std::uint32_t maxEntryId = 0;
             for (const auto& entryJson : element["entries"]) {
                 if (!entryJson.is_object()) {
                     return std::unexpected(Error{
@@ -2218,13 +2217,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                         "collection entry maxInitialFillCount has an invalid type"
                     });
                 }
-                if (entry.id >= maxEntryId) maxEntryId = entry.id;
                 creation.collection_entries.push_back(std::move(entry));
             }
             creation.id = creation.collection_entries.front().id;
-            if (maxEntryId < std::numeric_limits<std::uint32_t>::max()) {
-                autoId = maxEntryId + 1;
-            }
         } else {
             if (!questUnsigned(element, "id", autoId, creation.id)) {
                 return std::unexpected(Error{
@@ -2232,7 +2227,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                     "alias id must be an unsigned 32-bit value"
                 });
             }
-            autoId = creation.id + 1;
+            if (!isCollection) {
+                autoId = creation.id + 1;
+            }
         }
 
         std::optional<std::string> name;

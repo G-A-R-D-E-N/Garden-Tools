@@ -3344,7 +3344,41 @@ TEST_CASE("Native SetQuestAliases rewrites existing multi-entry collections") {
     REQUIRE(decoded.aliases[0].collection_entries.size() == 2u);
     CHECK(decoded.aliases[0].collection_entries[0].id == 8u);
     CHECK(decoded.aliases[0].collection_entries[1].id == 9u);
-    CHECK(decoded.next_alias_id == 0u);
+    CHECK(decoded.next_alias_id == 10u);
+}
+
+TEST_CASE("Native SetQuestAliases does not allocate reference IDs from collection entries") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "collection"},
+                {"entries", nlohmann::json::array({
+                    {{"id", 100}},
+                    {{"id", 101}}
+                })}
+            },
+            {
+                {"kind", "reference"},
+                {"name", "AutoRef"},
+                {"flags", 0}
+            }
+        })));
+    REQUIRE(result.has_value());
+    const auto decoded = fo4::forms::decode_quest_aliases(
+        fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.aliases.size() == 2u);
+    REQUIRE(decoded.aliases[0].collection_entries.size() == 2u);
+    CHECK(decoded.aliases[0].collection_entries[0].id == 100u);
+    CHECK(decoded.aliases[1].kind == fo4::forms::QuestAliasKind::reference);
+    CHECK(decoded.aliases[1].id == 0u);
+    CHECK(decoded.next_alias_id == 2u);
 }
 
 TEST_CASE("Native SetQuestAliases refuses invalid collection payloads without writing") {

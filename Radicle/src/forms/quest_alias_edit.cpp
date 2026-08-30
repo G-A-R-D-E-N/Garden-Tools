@@ -189,6 +189,24 @@ void grow_next_alias_id(Record& record,
   write_u32(record.subrecords[section.anam_index].data, inserted_id + 1);
 }
 
+void refuse_adjacent_collections(const std::vector<std::uint8_t>& flags) {
+  for (std::size_t i = 1; i < flags.size(); ++i) {
+    if (flags[i - 1] != 0 && flags[i] != 0) {
+      throw QuestError(
+          "QUST collection aliases cannot be adjacent; contiguous ALCS runs are one alias");
+    }
+  }
+}
+
+std::vector<std::uint8_t> collection_flags(const AliasSection& section) {
+  std::vector<std::uint8_t> flags;
+  flags.reserve(section.ranges.size());
+  for (const auto& range : section.ranges) {
+    flags.push_back(range.collection ? 1 : 0);
+  }
+  return flags;
+}
+
 }  // namespace
 
 void write_quest_aliases(Plugin& plugin,
@@ -231,12 +249,13 @@ void write_quest_aliases(Plugin& plugin,
   auto insertion = record->subrecords.erase(begin, end);
   record->subrecords.insert(insertion, encoded.begin(), encoded.end());
 
-  std::uint32_t next_id = 0;
+  std::uint32_t next_id = section.next_alias_id;
   if (have_ref_id) {
     if (max_ref_id == std::numeric_limits<std::uint32_t>::max()) {
       throw QuestError("QUST Alias ID UINT32_MAX cannot advance ANAM Next Alias ID");
     }
-    next_id = max_ref_id + 1;
+    const auto needed = max_ref_id + 1;
+    if (needed > next_id) next_id = needed;
   }
   write_u32(record->subrecords[section.anam_index].data, next_id);
   mark_modified(next, *record);
@@ -256,6 +275,9 @@ void add_quest_alias(Plugin& plugin,
   if (!is_collection && find_range(section, creation.id) != nullptr) {
     throw QuestError("QUST Alias ID already exists: " + std::to_string(creation.id));
   }
+  auto flags = collection_flags(section);
+  flags.push_back(is_collection ? 1 : 0);
+  refuse_adjacent_collections(flags);
 
   const auto alias = encode_quest_alias(next, creation);
   if (!is_collection) {
@@ -286,6 +308,10 @@ void replace_quest_alias(Plugin& plugin,
   if (range == nullptr) {
     throw QuestError("QUST Alias ID not found: " + std::to_string(alias_id));
   }
+  auto flags = collection_flags(section);
+  flags[static_cast<std::size_t>(range - section.ranges.data())] =
+      creation.kind == QuestAliasKind::collection ? 1 : 0;
+  refuse_adjacent_collections(flags);
 
   const auto alias = encode_quest_alias(next, creation);
   const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->begin);
@@ -307,6 +333,9 @@ bool remove_quest_alias(Plugin& plugin,
   const auto section = inspect_alias_section(*record);
   const auto* range = find_range(section, alias_id);
   if (range == nullptr) return false;
+  auto flags = collection_flags(section);
+  flags.erase(flags.begin() + (range - section.ranges.data()));
+  refuse_adjacent_collections(flags);
 
   record->subrecords.erase(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->begin),
@@ -341,6 +370,14 @@ bool reorder_quest_alias(Plugin& plugin,
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->end));
   const auto from = static_cast<std::size_t>(range - section.ranges.data());
   if (from == to) return true;
+  auto flags = collection_flags(section);
+  const auto moved_flag = flags[from];
+  flags.erase(flags.begin() + static_cast<std::ptrdiff_t>(from));
+  if (to > flags.size()) {
+    throw QuestError("QUST alias reorder target is out of range");
+  }
+  flags.insert(flags.begin() + static_cast<std::ptrdiff_t>(to), moved_flag);
+  refuse_adjacent_collections(flags);
 
   record->subrecords.erase(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->begin),
