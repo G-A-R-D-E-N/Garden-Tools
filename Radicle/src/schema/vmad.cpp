@@ -68,6 +68,7 @@ struct VmadScan {
   bool failed{false};
   bool fully_consumed{false};
   bool trailing_data{false};
+  std::int16_t object_format{0};
   std::uint16_t quest_fragment_count{0};
   std::uint16_t quest_alias_count{0};
   std::vector<QuestVmadFragmentBinding> quest_fragments;
@@ -309,6 +310,7 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
     Slice slice{data};
     slice.i16();  // version
     const auto object_format = slice.i16();
+    result.object_format = object_format;
     walk_scripts(slice, object_format, slice.u16(), result.offsets);
     if (!slice.at_end()) {
       if (record_signature == sig_qust) {
@@ -392,6 +394,7 @@ QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data) {
     layout.unparseable = true;
     return layout;
   }
+  layout.object_format = scan.object_format;
   layout.fragments = scan.quest_fragments;
   layout.aliases = scan.quest_aliases;
   return layout;

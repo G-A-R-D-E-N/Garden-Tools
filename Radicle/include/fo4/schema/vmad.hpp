@@ -50,6 +50,7 @@ struct QuestVmadFragmentBinding {
 struct QuestVmadLayout {
   bool unparseable{false};
   bool unsupported{false};
+  std::int16_t object_format{0};
   std::vector<QuestVmadFragmentBinding> fragments;
   std::vector<QuestVmadAliasBinding> aliases;
 };

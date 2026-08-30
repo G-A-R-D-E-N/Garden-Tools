@@ -156,7 +156,7 @@ strict remap. Missing or short `COED`, `COED` without a preceding `CNTO`, two
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- Alias VMAD extras bind Papyrus to alias IDs (object format 2: unused u16, alias i16, QUST FormID) and stage fragments (`Stage` u16 + `StageIndex` i32). `write_quest_aliases` / `write_quest_stages` patch those fields in the same plugin copy as the array replace. Duplicate, trailing, unsupported, or unmappable bindings fail closed with disk unchanged.
+- Alias VMAD extras bind Papyrus to alias IDs (FO4 object format 2 only: unused u16, alias i16, QUST FormID) and stage fragments (`Stage` u16 = QUST INDX). Format 1 alias objects fail closed on rewrite. `StageIndex` i32 is preserved; it is not treated as a QSDT count. INDX remap is identity or a unique stage-body match, never array position. Duplicate, trailing, unsupported, or unmappable bindings fail closed with disk unchanged.
 
 Unknown members inside an existing reference/location alias are preserved in
 original order. Semantic replacement intentionally emits only the fields that

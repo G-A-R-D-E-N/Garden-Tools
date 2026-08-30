@@ -1083,6 +1083,8 @@ TEST_CASE("Native SetQuestAliases rewrites VMAD alias IDs by unique name") {
             })
         }));
     REQUIRE(kept.has_value());
+    std::vector<std::byte> beforeRename;
+    std::size_t aliasOffset = 0;
     {
         const auto disk = fo4::read_plugin_file(path);
         const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -1095,6 +1097,8 @@ TEST_CASE("Native SetQuestAliases rewrites VMAD alias IDs by unique name") {
         const auto layout = fo4::inspect_quest_vmad(vmad->data);
         REQUIRE(layout.aliases.size() == 1u);
         CHECK(layout.aliases[0].alias_id == 1);
+        beforeRename = vmad->data;
+        aliasOffset = layout.aliases[0].alias_id_offset;
     }
 
     const auto renamed = backend.invokeBackend(
@@ -1119,6 +1123,11 @@ TEST_CASE("Native SetQuestAliases rewrites VMAD alias IDs by unique name") {
     REQUIRE(layout.aliases.size() == 1u);
     CHECK(layout.aliases[0].alias_id == 4);
     CHECK(layout.fragments.empty());
+    REQUIRE(vmad->data.size() == beforeRename.size());
+    for (std::size_t i = 0; i < vmad->data.size(); ++i) {
+        if (i >= aliasOffset && i < aliasOffset + 2) continue;
+        CHECK(vmad->data[i] == beforeRename[i]);
+    }
 }
 
 TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
@@ -1135,7 +1144,7 @@ TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
         mixed.u16(0);
         mixed.u16(10);
         mixed.u16(0);
-        mixed.u32(0);
+        mixed.u32(7);
         mixed.u8(0);
         writeVmadWstring(mixed, "QF_Test");
         writeVmadWstring(mixed, "Fragment_10");
@@ -1175,6 +1184,7 @@ TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
         const auto layout = fo4::inspect_quest_vmad(vmad->data);
         REQUIRE(layout.fragments.size() == 1u);
         CHECK(layout.fragments[0].stage == 10);
+        CHECK(layout.fragments[0].stage_index == 7);
         REQUIRE(layout.aliases.size() == 1u);
         CHECK(layout.aliases[0].alias_id == 1);
     }
@@ -1198,6 +1208,7 @@ TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
     const auto layout = fo4::inspect_quest_vmad(vmad->data);
     REQUIRE(layout.fragments.size() == 1u);
     CHECK(layout.fragments[0].stage == 20);
+    CHECK(layout.fragments[0].stage_index == 7);
     REQUIRE(layout.aliases.size() == 1u);
     CHECK(layout.aliases[0].alias_id == 1);
 
@@ -1215,6 +1226,133 @@ TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
     CHECK(dangling.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(readBytes(path) == afterRenumber);
     (void)before;
+}
+
+TEST_CASE("Native SetQuestStages remaps VMAD Stage by unique body not array position") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::ByteWriter vmad;
+        vmad.u16(6);
+        vmad.u16(2);
+        vmad.u16(0);
+        vmad.u8(3);
+        vmad.u16(1);
+        vmad.u16(0);
+        vmad.u16(10);
+        vmad.u16(0);
+        vmad.u32(7);
+        vmad.u8(0);
+        writeVmadWstring(vmad, "QF_Test");
+        writeVmadWstring(vmad, "Fragment_10");
+        vmad.u16(0);
+        fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
+        writeIndx(out, 10, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CNAM", std::string_view{"Alpha\0", 6});
+        writeIndx(out, 20, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CNAM", std::string_view{"Beta\0", 5});
+        writeSimpleAlias(out);
+    }));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"index", 30}, {"logEntry", "Beta"}},
+                {{"index", 40}, {"logEntry", "Alpha"}}
+            })
+        }));
+    REQUIRE(result.has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(quest != nullptr);
+    const fo4::Subrecord* vmad = nullptr;
+    for (const auto& sub : quest->subrecords) {
+        if (sub.signature.to_string() == "VMAD") vmad = &sub;
+    }
+    REQUIRE(vmad != nullptr);
+    const auto layout = fo4::inspect_quest_vmad(vmad->data);
+    REQUIRE(layout.fragments.size() == 1u);
+    CHECK(layout.fragments[0].stage == 40);
+    CHECK(layout.fragments[0].stage_index == 7);
+}
+
+TEST_CASE("Native SetQuestStages refuses ambiguous VMAD stage remapping without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::write_subrecord(out, "VMAD", vmadStageFragments());
+        writeIndx(out, 10, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CNAM", std::string_view{"Log\0", 4});
+        writeIndx(out, 20, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CNAM", std::string_view{"Log\0", 4});
+        writeSimpleAlias(out);
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"index", 30}, {"logEntry", "Log"}},
+                {{"index", 40}, {"logEntry", "Log"}}
+            })
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases refuses object format 1 VMAD rewrite without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::ByteWriter vmad;
+        vmad.u16(6);
+        vmad.u16(1);
+        vmad.u16(0);
+        vmad.u8(3);
+        vmad.u16(0);
+        vmad.u16(0);
+        vmad.u16(1);
+        vmad.u32(0x00000014);
+        vmad.u16(1);
+        vmad.u16(0);
+        vmad.u16(6);
+        vmad.u16(1);
+        vmad.u16(0);
+        fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
+        writeSimpleAlias(out);
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 1}, {"name", "Existing"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(result.error().message.find("object format 1") != std::string::npos);
+    CHECK(readBytes(path) == before);
 }
 
 TEST_CASE("Native SetQuestStages is allowed when VMAD only binds alias objects") {
