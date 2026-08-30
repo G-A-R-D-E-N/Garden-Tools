@@ -17,6 +17,9 @@ public sealed class ScanCliCollection { }
 [Collection("ScanCli")]
 public sealed class ScanCliTests
 {
+    private static string Fixture(string relative) =>
+        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla", relative.Replace('/', Path.DirectorySeparatorChar));
+
     [Fact]
     public void ScanArchivesCleanDirEmitsSingleJsonToStdoutExit0()
     {
@@ -29,7 +32,7 @@ public sealed class ScanCliTests
         Assert.Equal("scan-archives", json.GetProperty("mode").GetString());
         Assert.Equal(exit, json.GetProperty("exitCode").GetInt32());
         Assert.Empty(json.GetProperty("findings").EnumerateArray());
-        Assert.Equal(new[] { "archives", "corrupt", "scanned" }, SortedKeys(json.GetProperty("summary")));
+        Assert.Equal(new[] { "archives", "corrupt", "roundTripLosses", "scanned" }, SortedKeys(json.GetProperty("summary")));
         Assert.Equal(ScanReport.CurrentSchemaVersion, json.GetProperty("schemaVersion").GetInt32());
         Assert.DoesNotContain("scanning", stdout);
         Assert.Contains("scanning", stderr);
@@ -103,7 +106,7 @@ public sealed class ScanCliTests
         Assert.Equal(1, exit);
         var json = ParseSingle(stdout);
         Assert.Equal(exit, json.GetProperty("exitCode").GetInt32());
-        Assert.Equal(new[] { "broken", "checked", "missingClips", "unreadable" }, SortedKeys(json.GetProperty("summary")));
+        Assert.Equal(new[] { "broken", "checked", "missingClips", "roundTripLosses", "unreadable" }, SortedKeys(json.GetProperty("summary")));
         Assert.Contains("missing-clip-animations", Kinds(json));
     }
 
@@ -154,6 +157,37 @@ public sealed class ScanCliTests
         var json = ParseSingle(stdout);
         Assert.Equal(0, json.GetProperty("exitCode").GetInt32());
         Assert.Empty(json.GetProperty("findings").EnumerateArray());
+    }
+
+    [Fact]
+    public void ScanClipsReportsRoundTripLossFromResolvedAnimation()
+    {
+        using var mo2 = new Mo2Instance();
+        byte[] behaviour = BatchAnimationBuilder.Build(
+            Source("hkbStateMachine"),
+            NativeGraphModel.FirstId,
+            new[] { new BatchAnimationBuilder.Entry("Idle", "Animations\\Unsafe.hkx") }).Bytes;
+        mo2.AddModFile("Meshes/Actors/Test/Behaviors/test.hkx", behaviour);
+        mo2.AddModFile(
+            "Meshes/Actors/Test/Animations/Unsafe.hkx",
+            File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanClips(new[] { "--scan-clips", mo2.Instance, "--json" }));
+
+        Assert.Equal(1, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(0, json.GetProperty("summary").GetProperty("missingClips").GetInt32());
+        Assert.True(json.GetProperty("summary").GetProperty("roundTripLosses").GetInt32() > 0);
+
+        var roundTrips = json.GetProperty("findings").EnumerateArray()
+            .Where(f => f.GetProperty("kind").GetString() == "roundtrip-loss")
+            .ToList();
+        var animationFinding = Assert.Single(roundTrips.Where(f =>
+            f.GetProperty("path").GetString()!.Replace('\\', '/')
+                .EndsWith("Animations/Unsafe.hkx", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(animationFinding.GetProperty("details").EnumerateArray(), detail =>
+            detail.GetString()!.Contains("UnsupportedClass", StringComparison.Ordinal));
     }
 
     [Fact]

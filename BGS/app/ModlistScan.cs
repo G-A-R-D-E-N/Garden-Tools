@@ -66,7 +66,7 @@ public static class ModlistScan
             CollectArchiveWarnings(scan, json, findings);
 
             string temp = TempDirectory("bgs-modlist");
-            int parsed = 0, broken = 0, missing = 0, unreadable = 0, serial = 0;
+            int parsed = 0, broken = 0, missing = 0, unreadable = 0, roundTripLosses = 0, serial = 0;
             int processed = 0, total = characters.Count;
             try
             {
@@ -81,6 +81,9 @@ public static class ModlistScan
                         findings.Add(new ScanFinding("unreadable-character", dataRel, null, new[] { "winning copy could not be read" }));
                         continue;
                     }
+
+                    string source = scan.DescribeSource(dataRel, read);
+                    roundTripLosses += AddRoundTripFinding(read.Bytes, dataRel, source, json, findings);
 
                     int at = FolderIndex(dataRel, "characters");
                     if (at < 0) continue;
@@ -136,7 +139,6 @@ public static class ModlistScan
                     broken++;
                     missing += gone.Count;
 
-                    string source = scan.DescribeSource(dataRel, read);
                     if (!json)
                     {
                         Console.WriteLine(
@@ -153,20 +155,22 @@ public static class ModlistScan
                 TryDeleteDirectory(temp);
             }
 
-            int exit = missing == 0 && unreadable == 0 ? 0 : 1;
+            int exit = missing == 0 && unreadable == 0 && roundTripLosses == 0 ? 0 : 1;
             var summary = new Dictionary<string, int>
             {
                 ["checked"] = parsed,
                 ["broken"] = broken,
                 ["missing"] = missing,
                 ["unreadable"] = unreadable,
+                ["roundTripLosses"] = roundTripLosses,
             };
             if (json)
                 Console.WriteLine(new ScanReport("scan-modlist", ScanContextFor(scan, instance), summary, findings, exit).ToJson());
             else
                 Console.WriteLine(
                     $"done  {parsed} winning character file(s) checked, {broken} with missing animations, " +
-                    $"{missing} missing reference(s), {unreadable} unreadable");
+                    $"{missing} missing reference(s), {unreadable} unreadable, " +
+                    $"{roundTripLosses} round-trip issue(s)");
             return exit;
         }
     }
@@ -192,37 +196,42 @@ public static class ModlistScan
             var findings = new List<ScanFinding>();
             CollectArchiveWarnings(scan, json, findings);
 
-            bool Resolves(string projectRel, string animation)
+            string? Resolve(string projectRel, string animation)
             {
                 string flat = animation.Replace('\\', '/');
-                if (scan.ExistsDataRelative(CombineData(projectRel, flat))) return true;
+                string direct = CombineData(projectRel, flat);
+                if (scan.ExistsDataRelative(direct)) return direct;
 
                 var parts = flat.Split('/', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length != 2 ||
                     !parts[0].Equals("Animations", StringComparison.OrdinalIgnoreCase))
-                    return false;
+                    return null;
 
                 string leaf = parts[1];
 
                 // Prefer the engine-derived weapon search prefixes already maintained by GameData.
                 foreach (var set in scan.Data.WeaponTypeSets)
                     foreach (string prefix in set.Prefixes)
-                        if (scan.ExistsDataRelative(CombineData(projectRel, prefix + "\\" + leaf)))
-                            return true;
+                    {
+                        string candidate = CombineData(projectRel, prefix + "\\" + leaf);
+                        if (scan.ExistsDataRelative(candidate)) return candidate;
+                    }
 
                 // If Fallout4.esm is unavailable, preserve the static fallback using every
                 // weapon folder visible in the merged loose/archive data view.
                 foreach (string type in scan.WeaponSubfolders(projectRel))
-                    if (scan.ExistsDataRelative(
-                        CombineData(projectRel, $"Animations/Weapon/{type}/{leaf}")))
-                        return true;
+                {
+                    string candidate = CombineData(projectRel, $"Animations/Weapon/{type}/{leaf}");
+                    if (scan.ExistsDataRelative(candidate)) return candidate;
+                }
 
-                return false;
+                return null;
             }
 
             string temp = TempDirectory("bgs-clips");
-            int checkedBehaviours = 0, broken = 0, missingClips = 0, unreadable = 0, serial = 0;
+            int checkedBehaviours = 0, broken = 0, missingClips = 0, unreadable = 0, roundTripLosses = 0, serial = 0;
             int processed = 0, total = behaviours.Count;
+            var checkedAnimations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 foreach (string dataRel in behaviours)
@@ -236,6 +245,9 @@ public static class ModlistScan
                         findings.Add(new ScanFinding("unreadable-behaviour", dataRel, null, new[] { "winning copy could not be read" }));
                         continue;
                     }
+
+                    string source = scan.DescribeSource(dataRel, read);
+                    roundTripLosses += AddRoundTripFinding(read.Bytes, dataRel, source, json, findings);
 
                     int at = FolderIndex(dataRel, "behaviors");
                     if (at < 0) continue;
@@ -285,12 +297,27 @@ public static class ModlistScan
                     if (clips.Count == 0) continue;
                     checkedBehaviours++;
 
-                    var gone = clips.Where(c => !Resolves(projectRel, c.Anim)).ToList();
+                    var resolved = clips
+                        .Select(c => (c.Clip, c.Anim, Path: Resolve(projectRel, c.Anim)))
+                        .ToList();
+
+                    foreach (string animationPath in resolved
+                                 .Where(c => c.Path != null)
+                                 .Select(c => c.Path!)
+                                 .Where(checkedAnimations.Add))
+                    {
+                        var animationRead = scan.ReadDataRelative(animationPath);
+                        if (animationRead == null) continue;
+                        string animationSource = scan.DescribeSource(animationPath, animationRead);
+                        roundTripLosses += AddRoundTripFinding(
+                            animationRead.Bytes, animationPath, animationSource, json, findings);
+                    }
+
+                    var gone = resolved.Where(c => c.Path == null).ToList();
                     if (gone.Count == 0) continue;
 
                     broken++;
                     missingClips += gone.Count;
-                    string source = scan.DescribeSource(dataRel, read);
                     var details = gone.Select(c => $"clip '{c.Clip}' plays '{c.Anim}' - resolves nowhere").ToList();
                     if (!json)
                     {
@@ -308,20 +335,22 @@ public static class ModlistScan
                 TryDeleteDirectory(temp);
             }
 
-            int exit = missingClips == 0 && unreadable == 0 ? 0 : 1;
+            int exit = missingClips == 0 && unreadable == 0 && roundTripLosses == 0 ? 0 : 1;
             var summary = new Dictionary<string, int>
             {
                 ["checked"] = checkedBehaviours,
                 ["broken"] = broken,
                 ["missingClips"] = missingClips,
                 ["unreadable"] = unreadable,
+                ["roundTripLosses"] = roundTripLosses,
             };
             if (json)
                 Console.WriteLine(new ScanReport("scan-clips", ScanContextFor(scan, instance), summary, findings, exit).ToJson());
             else
                 Console.WriteLine(
                     $"done  {checkedBehaviours} winning behaviour file(s) checked, " +
-                    $"{broken} with unresolved clip animations, {missingClips} clip(s), {unreadable} unreadable");
+                    $"{broken} with unresolved clip animations, {missingClips} clip(s), {unreadable} unreadable, " +
+                    $"{roundTripLosses} round-trip issue(s)");
             return exit;
         }
     }
@@ -335,7 +364,7 @@ public static class ModlistScan
 
         bool errorsOnly = args.Contains("--errors-only");
         string temp = TempDirectory("bgs-scan");
-        int archives = 0, scanned = 0, corrupt = 0, serial = 0;
+        int archives = 0, scanned = 0, corrupt = 0, roundTripLosses = 0, serial = 0;
         var findings = new List<ScanFinding>();
 
         try
@@ -367,15 +396,23 @@ public static class ModlistScan
                     foreach (var entry in entries)
                     {
                         scanned++;
+                        string archiveName = Rel(root, ba2path);
                         string tmp = Path.Combine(temp, $"{serial++}_{Ba2.FlatFileName(entry.Name)}");
-                        try { File.WriteAllBytes(tmp, archive.Read(entry)); }
+                        byte[] bytes;
+                        try
+                        {
+                            bytes = archive.Read(entry);
+                            File.WriteAllBytes(tmp, bytes);
+                        }
                         catch (Exception e)
                         {
                             corrupt++;
-                            if (!json) Console.WriteLine($"UNREADABLE  {Rel(root, ba2path)} :: {entry.Name}: {First(e.Message)}");
-                            findings.Add(new ScanFinding("unreadable", entry.Name, Rel(root, ba2path), new[] { First(e.Message) }));
+                            if (!json) Console.WriteLine($"UNREADABLE  {archiveName} :: {entry.Name}: {First(e.Message)}");
+                            findings.Add(new ScanFinding("unreadable", entry.Name, archiveName, new[] { First(e.Message) }));
                             continue;
                         }
+
+                        roundTripLosses += AddRoundTripFinding(bytes, entry.Name, archiveName, json, findings);
 
                         var errors = CheckBehaviour(tmp);
                         try { File.Delete(tmp); } catch { }
@@ -384,10 +421,10 @@ public static class ModlistScan
                         corrupt++;
                         if (!json)
                         {
-                            Console.WriteLine($"CORRUPT  {Rel(root, ba2path)} :: {entry.Name}");
+                            Console.WriteLine($"CORRUPT  {archiveName} :: {entry.Name}");
                             foreach (string finding in errors) Console.WriteLine("    " + finding);
                         }
-                        findings.Add(new ScanFinding("corrupt", entry.Name, Rel(root, ba2path), errors));
+                        findings.Add(new ScanFinding("corrupt", entry.Name, archiveName, errors));
                     }
                 }
             }
@@ -403,15 +440,18 @@ public static class ModlistScan
             {
                 if (StepDue(++looseIx, loose.Count)) Progress($"  checked {looseIx}/{loose.Count} loose file(s)...");
                 scanned++;
+                string relative = Rel(root, path);
+                roundTripLosses += AddRoundTripFinding(path, relative, "loose", json, findings);
+
                 var errors = CheckBehaviour(path);
                 if (errors.Count == 0) continue;
                 corrupt++;
                 if (!json)
                 {
-                    Console.WriteLine($"CORRUPT  {Rel(root, path)}  (loose)");
+                    Console.WriteLine($"CORRUPT  {relative}  (loose)");
                     foreach (string finding in errors) Console.WriteLine("    " + finding);
                 }
-                findings.Add(new ScanFinding("corrupt", Rel(root, path), "loose", errors));
+                findings.Add(new ScanFinding("corrupt", relative, "loose", errors));
             }
         }
         finally
@@ -419,19 +459,20 @@ public static class ModlistScan
             TryDeleteDirectory(temp);
         }
 
-        int exit = corrupt == 0 ? 0 : 1;
+        int exit = corrupt == 0 && roundTripLosses == 0 ? 0 : 1;
         var summary = new Dictionary<string, int>
         {
             ["archives"] = archives,
             ["scanned"] = scanned,
             ["corrupt"] = corrupt,
+            ["roundTripLosses"] = roundTripLosses,
         };
         if (json)
             Console.WriteLine(new ScanReport("scan-archives", new ScanContext(root, null, null, 0), summary, findings, exit).ToJson());
         else
             Console.WriteLine(
                 $"done  {scanned} behaviour/character hkx scanned across {archives} archive(s) + loose, " +
-                $"{corrupt} with errors");
+                $"{corrupt} with errors, {roundTripLosses} round-trip issue(s)");
         return exit;
     }
 
@@ -455,6 +496,45 @@ public static class ModlistScan
             string message = sep > 0 ? warning[(sep + 2)..] : warning;
             findings.Add(new ScanFinding("archive-warning", where, null, new[] { message }));
         }
+    }
+
+    private static int AddRoundTripFinding(byte[] bytes, string path, string? source, bool json,
+                                           List<ScanFinding> findings)
+    {
+        var report = RoundTripReport.ForBytes(bytes);
+        if (!report.HasLosses) return 0;
+
+        var details = report.Losses.Select(DescribeRoundTripLoss).ToList();
+        if (!json)
+        {
+            Console.WriteLine($"ROUND-TRIP BLOCKED  {path}" + (source == null ? "" : $"  [{source}]"));
+            foreach (string detail in details) Console.WriteLine("    " + detail);
+        }
+        findings.Add(new ScanFinding("roundtrip-loss", path, source, details));
+        return report.Count;
+    }
+
+    private static int AddRoundTripFinding(string filePath, string displayPath, string? source, bool json,
+                                           List<ScanFinding> findings)
+    {
+        try
+        {
+            return AddRoundTripFinding(InputFilePolicy.ReadHkx(filePath), displayPath, source, json, findings);
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+        {
+            // The ordinary scanner path owns malformed/unreadable reporting. Do not turn that
+            // same failure into a second round-trip finding.
+            return 0;
+        }
+    }
+
+    private static string DescribeRoundTripLoss(RoundTripLoss loss)
+    {
+        string where = loss.ObjectId is long id
+            ? $"object {id}" + (loss.Member.Length > 0 ? $".{loss.Member}" : "") + ": "
+            : loss.Member.Length > 0 ? loss.Member + ": " : "";
+        return $"{loss.Kind}: {where}{loss.Message}";
     }
 
     private static ScanContext ScanContextFor(Mo2ScanData scan, string target) =>
