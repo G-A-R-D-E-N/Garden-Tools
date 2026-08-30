@@ -1848,18 +1848,8 @@ std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
             "existing QUST VMAD cannot be inspected for alias or stage bindings"
         };
     }
-    if (aliases && bindings.binds_aliases) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST VMAD binds Papyrus scripts to alias IDs"
-        };
-    }
-    if (stages && bindings.binds_stages) {
-        return Error{
-            "QuestAuthoringCoverageIncomplete",
-            "existing QUST VMAD binds Papyrus fragments to stage identity"
-        };
-    }
+    (void)aliases;
+    (void)stages;
     return std::nullopt;
 }
 
@@ -2740,7 +2730,11 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             "Set " + std::to_string(creations.size()) + " quest alias(es) on " +
             recordText + " in " + pluginName + ". Written to disk.");
     } catch (const fo4::forms::QuestError& error) {
-        return std::unexpected(Error{"SetQuestAliasesFailed", error.what()});
+        const std::string message = error.what();
+        if (message.find("QUST VMAD") != std::string::npos) {
+            return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", message});
+        }
+        return std::unexpected(Error{"SetQuestAliasesFailed", message});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetQuestAliasesFailed", error.what()});
     }
@@ -3045,7 +3039,11 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
             recordText + " in " + pluginName + ". Written to disk.");
     } catch (const fo4::forms::QuestError& error) {
-        return std::unexpected(Error{"SetQuestStagesFailed", error.what()});
+        const std::string message = error.what();
+        if (message.find("QUST VMAD") != std::string::npos) {
+            return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", message});
+        }
+        return std::unexpected(Error{"SetQuestStagesFailed", message});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetQuestStagesFailed", error.what()});
     }

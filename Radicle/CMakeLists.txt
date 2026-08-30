@@ -113,6 +113,7 @@ add_library(fo4
   src/forms/quest_stages.cpp
   src/forms/quest_objectives.cpp
   src/forms/quest_alias_edit.cpp
+  src/forms/quest_vmad.cpp
   src/forms/race.cpp
   src/forms/race_body.cpp
   src/io/atomic_write.cpp

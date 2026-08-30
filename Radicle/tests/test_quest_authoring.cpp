@@ -5,11 +5,13 @@
 #include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/vmad.hpp"
 
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -110,6 +112,30 @@ std::size_t count(const fo4::Plugin& plugin, const char* signature) {
   return n;
 }
 
+fo4::Subrecord stage_member(std::string_view signature,
+                            std::initializer_list<std::byte> data) {
+  return fo4::Subrecord{fo4::Signature::from_string(signature),
+                        std::vector<std::byte>{data}, false};
+}
+
+std::vector<std::byte> vmad_stage_fragment() {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(6);
+  vmad.u16(2);
+  vmad.u16(0);
+  vmad.u8(3);
+  vmad.u16(1);
+  vmad.u16(0);
+  vmad.u16(10);
+  vmad.u16(0);
+  vmad.u32(0);
+  vmad.u8(0);
+  vmad.u16(0);
+  vmad.u16(0);
+  vmad.u16(0);
+  return vmad.bytes;
+}
+
 }  // namespace
 
 TEST(QuestAuthoring, RewritingUnchangedArraysIsByteExact) {
@@ -165,6 +191,37 @@ TEST(QuestAuthoring, DuplicateStageIndexIsRefused) {
   stage.index = 10;
   EXPECT_THROW(fo4::forms::add_quest_stage(plugin, key(), stage), fo4::forms::QuestError);
   EXPECT_EQ(fo4::forms::decode_quest_stages(plugin, key()).stages.size(), 2u);
+}
+
+TEST(QuestAuthoring, StageBodyMatchingDoesNotCrossBinaryMemberBoundaries) {
+  fo4::Record record;
+  record.subrecords.push_back(
+      fo4::Subrecord{fo4::sig_vmad, vmad_stage_fragment(), false});
+
+  fo4::forms::QuestStages previous;
+  fo4::forms::QuestStage old_stage;
+  old_stage.index = 10;
+  old_stage.leading_members = {
+      stage_member("AAAA", {std::byte{0x11}}),
+      stage_member("BCDE", {std::byte{0x00}, std::byte{0x45}, std::byte{0x46},
+                             std::byte{0x47}, std::byte{0x48}}),
+  };
+  previous.stages.push_back(old_stage);
+
+  fo4::forms::QuestStages next;
+  fo4::forms::QuestStage replacement;
+  replacement.index = 30;
+  replacement.leading_members = {
+      stage_member("AAAA", {std::byte{0x11}, std::byte{0x00}, std::byte{0x42},
+                             std::byte{0x43}, std::byte{0x44}, std::byte{0x45}}),
+      stage_member("EFGH", {}),
+  };
+  next.stages.push_back(replacement);
+
+  const auto before = record.subrecords.front().data;
+  EXPECT_THROW(fo4::forms::sync_quest_vmad_stages(record, previous, next),
+               fo4::forms::QuestError);
+  EXPECT_EQ(record.subrecords.front().data, before);
 }
 
 TEST(QuestAuthoring, ReorderStagePreservesLogEntriesAndNeighbours) {

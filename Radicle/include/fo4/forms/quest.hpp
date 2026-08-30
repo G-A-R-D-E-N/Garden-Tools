@@ -333,6 +333,13 @@ QuestAlias encode_quest_alias(const Plugin& plugin,
                               const QuestAliasCreation& creation);
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
 
+void sync_quest_vmad_aliases(Record& record,
+                             const QuestAliases& previous,
+                             std::span<const QuestAliasCreation> next);
+void sync_quest_vmad_stages(Record& record,
+                            const QuestStages& previous,
+                            const QuestStages& next);
+
 // Mutates only the xEdit-proven contiguous Alias array immediately following
 // ANAM. Add/replace encode through the destination plugin's master table.
 // ANAM Next Alias ID grows monotonically when an inserted ID reaches/exceeds it.

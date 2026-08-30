@@ -315,6 +315,50 @@ TEST(Vmad, QuestBindingsDetectStageFragmentsAndAliasObjects) {
   EXPECT_FALSE(trailing_bindings.binds_aliases);
 }
 
+TEST(Vmad, InspectQuestExtrasReportsAliasAndFragmentOffsets) {
+  fo4::test::ByteWriter aliases;
+  aliases.u16(6);
+  aliases.u16(2);
+  aliases.u16(0);
+  aliases.u8(3);
+  aliases.u16(0);
+  aliases.u16(0);
+  aliases.u16(1);
+  aliases.u16(0);
+  aliases.u16(1);
+  aliases.u32(0x00000014);
+  aliases.u16(6);
+  aliases.u16(2);
+  aliases.u16(0);
+  const auto alias_layout = fo4::inspect_quest_vmad(aliases.bytes);
+  ASSERT_FALSE(alias_layout.unparseable);
+  ASSERT_EQ(alias_layout.aliases.size(), 1u);
+  EXPECT_EQ(alias_layout.aliases[0].alias_id, 1);
+  std::int16_t alias_id = 0;
+  std::memcpy(&alias_id, aliases.bytes.data() + alias_layout.aliases[0].alias_id_offset, 2);
+  EXPECT_EQ(alias_id, 1);
+
+  fo4::test::ByteWriter fragments;
+  fragments.u16(6);
+  fragments.u16(2);
+  fragments.u16(0);
+  fragments.u8(3);
+  fragments.u16(1);
+  fragments.u16(0);
+  fragments.u16(10);
+  fragments.u16(0);
+  fragments.u32(0);
+  fragments.u8(0);
+  wstring(fragments, "QF_Test");
+  wstring(fragments, "Fragment_10");
+  fragments.u16(0);
+  const auto fragment_layout = fo4::inspect_quest_vmad(fragments.bytes);
+  ASSERT_FALSE(fragment_layout.unparseable);
+  ASSERT_EQ(fragment_layout.fragments.size(), 1u);
+  EXPECT_EQ(fragment_layout.fragments[0].stage, 10u);
+  EXPECT_EQ(fragment_layout.fragments[0].stage_index, 0);
+}
+
 TEST(Vmad, TruncatedPayloadDoesNotThrow) {
   fo4::test::ByteWriter vmad;
   vmad.u16(5);

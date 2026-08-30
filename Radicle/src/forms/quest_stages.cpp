@@ -238,6 +238,8 @@ Record* mutable_quest(Plugin& plugin, const FormKey& quest) {
 void write_quest_stages(Plugin& plugin, const FormKey& quest, const QuestStages& stages) {
   auto next = plugin;
   auto* record = mutable_quest(next, quest);
+  const auto previous = decode_quest_stages(next, quest);
+  sync_quest_vmad_stages(*record, previous, stages);
   const auto [begin, end] = stage_array_bounds(*record);
   const auto encoded = encode_stages(stages);
 
