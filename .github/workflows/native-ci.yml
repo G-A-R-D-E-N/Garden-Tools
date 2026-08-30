@@ -60,7 +60,7 @@ jobs:
             build/radicle/**/*.log
             build/radicle/bin/**
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
   plugineditool-native-linux:
     name: PluginEditTool native (Linux, Debug)
@@ -94,7 +94,7 @@ jobs:
             build/fo4ide/**/*.log
             build/fo4ide/bin/**
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
   radicle-windows-cross:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
@@ -152,7 +152,7 @@ jobs:
             build/radicle-win/**/*.dll
             build/radicle-win/**/*.lib
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
   plugineditool-native-windows-cross:
     name: PluginEditTool native (Windows cross, clang-cl/xwin)
@@ -191,4 +191,4 @@ jobs:
           name: fo4recordeditor-windows-x64
           path: build/fo4ide-win/bin/FO4RecordEditor.exe
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
