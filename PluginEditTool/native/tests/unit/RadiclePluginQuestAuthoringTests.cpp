@@ -2689,7 +2689,7 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                                fo4::FormKey::parse("000800:Patch.esp")),
               "ALST") ==
           std::vector<std::string>{
-              "ALST", "ALID", "FNAM", "ALCO", "ALCA", "CTDA", "ALED"});
+              "ALST", "ALID", "FNAM", "ALCO", "ALCA", "ALCL", "CTDA", "ALED"});
     CHECK(fo4::read_plugin_file(patchPath).header.masters.size() == 1u);
 
     const auto locRef = backend.invokeBackend(
@@ -2883,7 +2883,7 @@ TEST_CASE("Native SetQuestAliases refuses invalid remaining fills without writin
                 {"kind", "reference"},
                 {"id", 1},
                 {"flags", 0},
-                {"createReference", {{"alias", 0}, {"level", 1}}}
+                {"createReference", {{"alias", 0}, {"typo", 1}}}
             }
         })));
     REQUIRE_FALSE(unknown.has_value());
@@ -2901,10 +2901,23 @@ TEST_CASE("Native SetQuestAliases refuses invalid remaining fills without writin
         })));
     REQUIRE_FALSE(badMode.has_value());
     CHECK(badMode.error().type == "InvalidQuestAliasPayload");
+
+    const auto badLevel = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"createReference", {{"alias", 0}, {"level", 7}}}
+            }
+        })));
+    REQUIRE_FALSE(badLevel.has_value());
+    CHECK(badLevel.error().type == "InvalidQuestAliasPayload");
     CHECK(readBytes(path) == before);
 }
 
-TEST_CASE("Native SetQuestAliases refuses existing ALCL and replaces lossless remaining fills") {
+TEST_CASE("Native SetQuestAliases writes and reconstructs Create Reference Level") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -2917,6 +2930,50 @@ TEST_CASE("Native SetQuestAliases refuses existing ALCL and replaces lossless re
         writeU32(out, "ALCA", 0x80000000);
         writeU32(out, "ALCL", 1);
         fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+        fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
+    }));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto written = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Create"},
+                {"flags", 0},
+                {"createReference", {{"alias", 0}, {"create", "At"}, {"level", "VeryHard"}}}
+            }
+        })));
+    REQUIRE(written.has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{"ALST", "ALID", "FNAM", "ALCO", "ALCA", "ALCL", "ALED"});
+    const auto decoded = fo4::forms::decode_quest_aliases(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.aliases.size() == 1u);
+    const auto* fill = std::get_if<fo4::forms::QuestCreateReferenceFill>(
+        &decoded.aliases[0].fill);
+    REQUIRE(fill != nullptr);
+    CHECK(fill->level == 3u);
+    CHECK(recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp")).back() == "NNAM");
+}
+
+TEST_CASE("Native SetQuestAliases refuses existing invalid ALCL without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0);
+        writeU32(out, "ALCO", 0);
+        writeU32(out, "ALCA", 0);
+        writeU32(out, "ALCL", 9);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
     }));
     const auto before = readBytes(path);
     fo4ide::plugin::RadiclePluginBackend backend;
@@ -2928,7 +2985,6 @@ TEST_CASE("Native SetQuestAliases refuses existing ALCL and replaces lossless re
         })));
     REQUIRE_FALSE(blocked.has_value());
     CHECK(blocked.error().type == "QuestAuthoringCoverageIncomplete");
-    CHECK(blocked.error().message.find("ALCL") != std::string::npos);
     CHECK(readBytes(path) == before);
 }
 

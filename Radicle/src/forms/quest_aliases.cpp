@@ -37,6 +37,7 @@ constexpr auto k_alfa = Signature::from_string("ALFA");
 constexpr auto k_alrt = Signature::from_string("ALRT");
 constexpr auto k_alco = Signature::from_string("ALCO");
 constexpr auto k_alca = Signature::from_string("ALCA");
+constexpr auto k_alcl = Signature::from_string("ALCL");
 constexpr auto k_alna = Signature::from_string("ALNA");
 constexpr auto k_alnt = Signature::from_string("ALNT");
 constexpr auto k_alfe = Signature::from_string("ALFE");
@@ -272,6 +273,7 @@ void decode_reference_fill(QuestAlias& alias,
   const auto* external_alias = unique_member(alias, k_alea, "ALEA");
   const auto* create_object = unique_member(alias, k_alco, "ALCO");
   const auto* create_alias = unique_member(alias, k_alca, "ALCA");
+  const auto* create_level = unique_member(alias, k_alcl, "ALCL");
   const auto* near_alias = unique_member(alias, k_alna, "ALNA");
   const auto* near_type = unique_member(alias, k_alnt, "ALNT");
   const auto* event = unique_member(alias, k_alfe, "ALFE");
@@ -282,7 +284,8 @@ void decode_reference_fill(QuestAlias& alias,
   const bool has_unique = unique_actor != nullptr;
   const bool has_location = location_alias != nullptr || location_type != nullptr;
   const bool has_external = external_quest != nullptr || external_alias != nullptr;
-  const bool has_create = create_object != nullptr || create_alias != nullptr;
+  const bool has_create =
+      create_object != nullptr || create_alias != nullptr || create_level != nullptr;
   const bool has_matching = near_alias != nullptr || near_type != nullptr ||
                             event != nullptr || event_data != nullptr ||
                             closest != nullptr;
@@ -345,10 +348,21 @@ void decode_reference_fill(QuestAlias& alias,
     if (create_alias->data.size() != 4) {
       throw QuestError("QUST ALCA Create Reference data must be exactly four bytes");
     }
+    std::uint32_t level = 0;
+    if (create_level != nullptr) {
+      if (create_level->data.size() != 4) {
+        throw QuestError("QUST ALCL Level must be exactly four bytes");
+      }
+      level = read_u32(create_level->data);
+      if (level > 3u) {
+        throw QuestError("QUST ALCL Level must be 0..3 (Easy, Medium, Hard, VeryHard)");
+      }
+    }
     alias.fill = QuestCreateReferenceFill{
         .object = decode_optional_form_key(*create_object, context, "ALCO Object"),
         .alias = read_i16(create_alias->data),
         .create_mode = read_u16(create_alias->data, 2),
+        .level = level,
     };
     return;
   }
@@ -654,6 +668,7 @@ void decode_alias_semantics(QuestAlias& alias,
       unique_member(alias, k_alea, "ALEA") != nullptr ||
       unique_member(alias, k_alco, "ALCO") != nullptr ||
       unique_member(alias, k_alca, "ALCA") != nullptr ||
+      unique_member(alias, k_alcl, "ALCL") != nullptr ||
       unique_member(alias, k_alna, "ALNA") != nullptr ||
       unique_member(alias, k_alnt, "ALNT") != nullptr ||
       unique_member(alias, k_alfe, "ALFE") != nullptr ||
@@ -803,9 +818,13 @@ void insert_alias_fill(QuestAlias& alias,
           if (value.create_mode != 0 && value.create_mode != 0x8000u) {
             throw QuestError("QUST ALCA Create mode must be 0 (At) or 0x8000 (In)");
           }
+          if (value.level > 3u) {
+            throw QuestError("QUST ALCL Level must be 0..3 (Easy, Medium, Hard, VeryHard)");
+          }
           members.push_back(encoded_optional_form_key(k_alco, value.object, context));
           members.push_back(make_subrecord(
               k_alca, write_i16_u16(value.alias, value.create_mode)));
+          members.push_back(make_subrecord(k_alcl, write_u32(value.level)));
         } else if constexpr (std::is_same_v<T, QuestFindMatchingReferenceFill>) {
           if (alias.kind != QuestAliasKind::reference) {
             throw QuestError("Find Matching Reference fill is valid only on reference aliases");
