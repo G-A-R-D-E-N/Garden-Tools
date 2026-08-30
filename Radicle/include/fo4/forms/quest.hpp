@@ -111,6 +111,16 @@ struct QuestCollectionEntry {
   std::optional<std::uint8_t> max_initial_fill_count;
 };
 
+struct QuestAliasItem {
+  FormKey item;
+  std::int32_t count{1};
+};
+
+struct QuestLinkedAlias {
+  FormKey keyword;
+  std::int32_t alias{0};
+};
+
 // One alias is kept as an ordered subrecord sequence because reference and
 // location aliases are repeatable tagged unions with conditions/arrays inside
 // them. Semantic members are added incrementally, but the raw ordered sequence
@@ -126,6 +136,20 @@ struct QuestAlias {
   std::optional<std::int32_t> closest_to_alias;
   QuestAliasFill fill;
   std::vector<QuestCollectionEntry> collection_entries;
+  std::vector<FormKey> keywords;
+  std::vector<QuestAliasItem> items;
+  std::vector<QuestLinkedAlias> linked_aliases;
+  std::vector<FormKey> spells;
+  std::vector<FormKey> factions;
+  std::vector<FormKey> packages;
+  std::optional<FormKey> spectator_override;
+  std::optional<FormKey> observe_dead_body_override;
+  std::optional<FormKey> guard_warn_override;
+  std::optional<FormKey> combat_override;
+  std::optional<FormKey> display_name;
+  std::optional<FormKey> forced_voice;
+  std::optional<FormKey> death_item;
+  std::optional<FormKey> voice_types;
   // Subrecord signatures in this alias whose FormID names a master index
   // outside the plugin's master table. Real mods ship these dangling links --
   // OWR.esp has 28 ALFR references to index 3 with a single master -- and
@@ -137,16 +161,6 @@ struct QuestAlias {
   // target.
   std::vector<Signature> unresolved_links;
   std::vector<Subrecord> subrecords;
-};
-
-struct QuestAliasItem {
-  FormKey item;
-  std::int32_t count{1};
-};
-
-struct QuestLinkedAlias {
-  FormKey keyword;
-  std::int32_t alias{0};
 };
 
 struct QuestAliasCreation {

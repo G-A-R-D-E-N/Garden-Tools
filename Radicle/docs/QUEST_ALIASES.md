@@ -101,20 +101,35 @@ Collections reject conditions. `GetEventData` stays fail-closed.
 fail closed on unknown keys. `ALCL` Level is not modeled; existing `ALCL` fails
 coverage closed.
 
+## Reference alias extras
+
+`decode_alias_semantics` and `insert_alias_extras` share Mutagen WriteRecordTypes
+order. Semantic fields live on `QuestAlias`; `subrecords` remain the write
+authority.
+
+| Member | Subrecords | Cardinality | Target |
+| --- | --- | --- | --- |
+| keywords | `KSIZ` + `KWDA` | unique packed list | `KYWD` |
+| items | `COCT` + `CNTO` | unique count + one `CNTO` per item | `sigBaseObjects`, count `>= 1` on author |
+| spectator/observe/guard/combat overrides | `SPOR`/`OCOR`/`GWOR`/`ECOR` | unique optional | `FLST` |
+| linked aliases | one packed `ALLA` | 8-byte `{KYWD, alias i32}` rows | `KYWD` |
+| display name | `ALDN` | unique optional | `MESG` |
+| forced voice | `ALFV` | unique optional | `VTYP` |
+| death item | `ALDI` | unique optional | `LVLI` |
+| spells / factions / packages | `ALSP` / `ALFC` / `ALPC` | repeatable | `SPEL` / `FACT` / `PACK` |
+| voice types | `VTCK` | unique optional | `VTYP`/`FLST`/`NPC_`/`FACT` |
+
+Dangling extra FormIDs degrade that one semantic entry (`unresolved_links`)
+instead of failing the quest. `COED` is unmodeled: if present, `items` stays
+empty.
+
 ## Deliberately not modeled yet
 
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- Semantic decoded collections for extras (keywords/items/linked/spells/factions/packages).
 - Collection multi-entry authoring (multiple `ALCS`).
 - `COED` on alias items.
-- Reference alias extras now modeled in Mutagen WriteRecordTypes order:
-  keywords (`KSIZ`/`KWDA`), items (`COCT`/`CNTO` without `COED`),
-  package-list overrides (`SPOR`/`OCOR`/`GWOR`/`ECOR`, nullable `FLST`),
-  linked aliases (`ALLA`), display name (`ALDN` `MESG`), forced voice (`ALFV` `VTYP`),
-  death item (`ALDI` `LVLI`), spells (`ALSP`), factions (`ALFC`), packages (`ALPC`),
-  and voice types (`VTCK`: `VTYP`/`FLST`/`NPC_`/`FACT`).
 - Alias VMAD interactions beyond the existing global VMAD safety contract. PluginEditTool `SetQuestAliases` / `SetQuestStages` fail closed when QUST VMAD extras bind alias IDs or stage fragments (`fo4::quest_vmad_bindings`). Whole-array replace still does not rewrite VMAD.
 
 Unknown members inside an existing reference/location alias are preserved in
