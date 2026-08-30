@@ -6478,10 +6478,13 @@ public static class Program
         if (!int.TryParse(argv[3], out int bytes) || (bytes != 4 && bytes != 8)) { Usage(); return 1; }
 
         var image = PackfileImage.Read(Path.GetFullPath(argv[1]));
-        if (!PackfileConverter.ConvertTo(image, new PointerLayout(bytes)))
+        try
         {
-            Console.WriteLine("could not convert: the file holds a class, section or fixup the converter " +
-                              "will not vouch for (see the fail-closed section rules)");
+            PackfileConverter.ConvertTo(image, new PointerLayout(bytes));
+        }
+        catch (InvalidDataException e)
+        {
+            Console.WriteLine($"could not convert: {e.Message}");
             return 1;
         }
         image.Save(Path.GetFullPath(argv[2]));

@@ -498,7 +498,7 @@ public static class Tests
         BitConverter.GetBytes(0x1_0000_0000UL).CopyTo(big.Section("__data__")!.Data, userData);
         var bigImage = PackfileImage.Read(big.Rebuild());
         CheckTrue("narrowing a value that needs more than 32 bits is refused",
-                  !PackfileConverter.ConvertTo(bigImage, PointerLayout.FourByte));
+                  !PackfileConverter.TryConvertTo(bigImage, PointerLayout.FourByte));
 
         var ok = ClipInAPackfile("A.hkx", out _);
         BitConverter.GetBytes(0xDEADBEEFUL).CopyTo(ok.Section("__data__")!.Data, userData);
@@ -680,9 +680,9 @@ public static class Tests
     {
         var image = PackfileImage.Read(ClipInAPackfile("A.hkx", out _).Rebuild());
         CheckTrue("a three-byte target is refused",
-                  !PackfileConverter.ConvertTo(image, new PointerLayout(3)));
+                  !PackfileConverter.TryConvertTo(image, new PointerLayout(3)));
         CheckTrue("a default (zero) target is refused",
-                  !PackfileConverter.ConvertTo(image, default));
+                  !PackfileConverter.TryConvertTo(image, default));
         Check("the file is untouched after a refused conversion", 8, image.Layout.PointerSize);
     }
 
@@ -1015,7 +1015,7 @@ public static class Tests
         });
 
         CheckTrue("a signature mismatch refuses conversion",
-                  !PackfileConverter.ConvertTo(image, PointerLayout.FourByte));
+                  !PackfileConverter.TryConvertTo(image, PointerLayout.FourByte));
         Check("and the file stays eight-byte", 8, image.Layout.PointerSize);
     }
 
@@ -1038,7 +1038,7 @@ public static class Tests
         image.ContentsSectionIndex = 1;
 
         CheckTrue("same-width conversion refuses a signature mismatch",
-                  !PackfileConverter.ConvertTo(image, PointerLayout.EightByte));
+                  !PackfileConverter.TryConvertTo(image, PointerLayout.EightByte));
         Check("and the header is untouched", 8, image.Layout.PointerSize);
     }
 
@@ -1568,7 +1568,7 @@ public static class Tests
         var zeroImage = PolytopeImage(zero);
         byte[] zeroBefore = zeroImage.Rebuild();
         CheckTrue("an encoded size of zero is refused",
-                  !PackfileConverter.ConvertTo(zeroImage, PointerLayout.FourByte));
+                  !PackfileConverter.TryConvertTo(zeroImage, PointerLayout.FourByte));
         CheckTrue("and the file is untouched", zeroBefore.SequenceEqual(zeroImage.Rebuild()));
 
         // A relative offset whose payload would run past the end of the section is refused.
@@ -1578,7 +1578,7 @@ public static class Tests
         var overrunImage = PolytopeImage(overrun);
         byte[] overrunBefore = overrunImage.Rebuild();
         CheckTrue("a payload running past the section end is refused",
-                  !PackfileConverter.ConvertTo(overrunImage, PointerLayout.FourByte));
+                  !PackfileConverter.TryConvertTo(overrunImage, PointerLayout.FourByte));
         CheckTrue("and the file is untouched", overrunBefore.SequenceEqual(overrunImage.Rebuild()));
 
         // A count whose payload cannot fit is refused the same way.
@@ -1588,7 +1588,7 @@ public static class Tests
         var hugeImage = PolytopeImage(huge);
         byte[] hugeBefore = hugeImage.Rebuild();
         CheckTrue("a count whose payload does not fit is refused",
-                  !PackfileConverter.ConvertTo(hugeImage, PointerLayout.FourByte));
+                  !PackfileConverter.TryConvertTo(hugeImage, PointerLayout.FourByte));
         CheckTrue("and the file is untouched", hugeBefore.SequenceEqual(hugeImage.Rebuild()));
     }
 
@@ -1794,7 +1794,7 @@ public static class Tests
     {
         byte[] before = image.Rebuild();
         CheckTrue(what + " refuses conversion",
-                  !PackfileConverter.ConvertTo(image, PointerLayout.FourByte, types));
+                  !PackfileConverter.TryConvertTo(image, PointerLayout.FourByte, types));
         CheckTrue(what + " leaves the file untouched", before.SequenceEqual(image.Rebuild()));
     }
 
