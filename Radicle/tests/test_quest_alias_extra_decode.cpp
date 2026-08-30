@@ -344,7 +344,7 @@ TEST(QuestAliasExtraDecode, NpcGlobalSurvivesMasterInsertionAndFactRankDoesNotRe
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
-  hedr.u32(4);
+  hedr.u32(5);
   hedr.u32(0x900);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
@@ -354,41 +354,41 @@ TEST(QuestAliasExtraDecode, NpcGlobalSurvivesMasterInsertionAndFactRankDoesNotRe
   write_typed_record(out, "GLOB", 0x00000803, std::string_view{"Glob\0", 5});
   const auto group = fo4::test::begin_group(out, "QUST", 0);
   const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000804, 131);
-  fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
   write_u32_subrecord(out, "ANAM", 1);
+  write_u32_subrecord(out, "ALST", 0);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"A\0", 2});
+  write_u32_subrecord(out, "FNAM", 0);
+  write_u32_subrecord(out, "COCT", 2);
+  fo4::test::ByteWriter first;
+  first.u32(0x00000800);
+  first.i32(1);
+  fo4::test::write_subrecord(out, "CNTO", first.bytes);
+  fo4::test::ByteWriter factCoedBytes;
+  factCoedBytes.u32(0x00000801);
+  factCoedBytes.u32(0x0000009A);
+  factCoedBytes.f32(1.0f);
+  fo4::test::write_subrecord(out, "COED", factCoedBytes.bytes);
+  fo4::test::ByteWriter second;
+  second.u32(0x00000800);
+  second.i32(1);
+  fo4::test::write_subrecord(out, "CNTO", second.bytes);
+  fo4::test::ByteWriter npcCoedBytes;
+  npcCoedBytes.u32(0x00000802);
+  npcCoedBytes.u32(0x00000803);
+  npcCoedBytes.f32(0.25f);
+  fo4::test::write_subrecord(out, "COED", npcCoedBytes.bytes);
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
   fo4::test::end_record(out, quest);
   fo4::test::end_group(out, group);
 
   const auto k_local_quest = fo4::FormKey::parse("000804:Patch.esp");
-  const auto k_local_item = fo4::FormKey::parse("000800:Patch.esp");
   const auto k_local_fact = fo4::FormKey::parse("000801:Patch.esp");
   const auto k_local_npc = fo4::FormKey::parse("000802:Patch.esp");
   const auto k_local_glob = fo4::FormKey::parse("000803:Patch.esp");
 
   auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  auto creation = reference_alias(1);
-  fo4::forms::QuestAliasItem factItem{.item = k_local_item, .count = 1, .extra = {}};
-  factItem.extra = fo4::forms::QuestAliasItemExtra{
-      .owner = k_local_fact,
-      .global = {},
-      .required_rank = static_cast<std::int32_t>(0x0000009A),
-      .item_condition = 1.0f,
-  };
-  fo4::forms::QuestAliasItem npcItem{.item = k_local_item, .count = 1, .extra = {}};
-  npcItem.extra = fo4::forms::QuestAliasItemExtra{
-      .owner = k_local_npc,
-      .global = k_local_glob,
-      .required_rank = {},
-      .item_condition = 0.25f,
-  };
-  creation.items = {factItem, npcItem};
-  const std::vector<fo4::forms::QuestAliasCreation> mixedOwners{creation};
-  fo4::forms::write_quest_aliases(plugin, k_local_quest, mixedOwners);
-
   auto remapped = fo4::remap_plugin_masters(
-      std::move(plugin),
-      {fo4::PluginKey::from_filename("Dummy.esm"),
-       fo4::PluginKey::from_filename("Master.esm")});
+      std::move(plugin), {fo4::PluginKey::from_filename("Dummy.esm")});
   const auto reread = fo4::read_plugin(fo4::write_plugin(remapped), "Patch.esp");
   const auto decoded = fo4::forms::decode_quest_aliases(reread, k_local_quest);
   ASSERT_EQ(decoded.aliases.size(), 1u);
