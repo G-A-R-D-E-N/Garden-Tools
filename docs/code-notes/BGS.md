@@ -99,3 +99,33 @@ archive's index is parsed **once per run** and reused by both discovery and reso
   (which opens every enabled mod's `.ba2`) reports progress too.
 - Progress strings use ASCII `...`, not `…` (U+2026), to avoid mojibake under the Windows console
   codepage.
+
+## Packfile pointer-layout conversion (issue #188)
+
+### `BGS/src/Hkx/PackfileConverter.cs:PackfileConverter.ConvertTo`
+
+The conversion matrix is deliberately limited to the canonical little-endian layouts reproduced
+by `LayoutWalker`:
+
+| Source pointer/layout | Target pointer/layout | Status | Basis or refusal |
+| --- | --- | --- | --- |
+| 8-byte / `[8,1,0,1]` | 4-byte / `[4,1,0,1]` | Supported | Existing FO4 packfiles and the shipped class table; tested against the checked-in vanilla fixtures. |
+| 4-byte / `[4,1,0,1]` | 8-byte / `[8,1,0,1]` | Supported | A 4-byte result produced from the FO4 fixtures is read back and widened successfully. |
+| 8-byte / `[8,1,0,1]` | 8-byte / `[8,1,0,1]` | Supported | Header restamp/no-op after signature validation. |
+| 4-byte / `[4,1,0,1]` | 4-byte / `[4,1,0,1]` | Supported | Header restamp/no-op for a canonical 4-byte image. |
+| Any other pointer width | Any target | Unsupported | `TryConvertTo` reports that only 4-byte and 8-byte pointers are representable. |
+| Canonical source | Canonical target with an unsafe section, fixup, signature, value, or placement | Unsupported | The conversion remains fail-closed; the refusal names the first exact condition. |
+| Any newer or non-canonical Havok layout | Any target | Unsupported | No real fixture or verified layout rule justifies inferring the conversion. `#115` and `#116` remain out of scope. |
+
+`PackfileImage.Read` rejects non-canonical source rules before conversion. `ConvertTo` is the
+tool-facing throwing boundary: it returns `true` for a proven conversion and otherwise throws
+`InvalidDataException` naming the source layout, target layout, and refusal. `TryConvertTo` keeps
+the boolean fail-closed API and exposes the precise refusal reason for callers that need to handle
+it without throwing. Neither API commits a partially converted image; bytes and fixups are
+committed only after every safety and placement check succeeds.
+
+### `BGS/tools/tests/PackfileConverterTests.cs:PackfileConverterTests`
+
+Focused tests cover both canonical directions, the source/target wording for an unsupported width,
+and the exact section-level refusal. The broader FO4 graph, array, variant, relative-array, fixup,
+overflow, and real-file coverage remains in `BGS/tools/symrm/Tests.cs`.
