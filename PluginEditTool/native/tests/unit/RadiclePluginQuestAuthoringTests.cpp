@@ -2933,3 +2933,157 @@ TEST_CASE("Native SetQuestAliases replaces existing Create Reference without ALC
     CHECK(aliasMembersUntilAled(names, "ALST") ==
           std::vector<std::string>{"ALST", "ALID", "FNAM", "ALNA", "ALNT", "ALED"});
 }
+
+TEST_CASE("Native SetQuestAliases refuses existing invalid ALCA create mode and ALNT type") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    auto tryRefuse = [&](auto body, const char* needle) {
+        writeBytes(path, questPluginWith(0, body));
+        const auto before = readBytes(path);
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        const auto result = backend.invokeBackend(
+            "SetQuestAliases",
+            setAliasesArgs(nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+        CHECK(result.error().message.find(needle) != std::string::npos);
+        CHECK(readBytes(path) == before);
+    };
+
+    tryRefuse(
+        [](fo4::test::ByteWriter& out) {
+            writeU32(out, "ANAM", 2);
+            writeU32(out, "ALST", 1);
+            fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+            writeU32(out, "FNAM", 0);
+            writeU32(out, "ALCO", 0);
+            fo4::test::ByteWriter alca;
+            alca.u16(0);
+            alca.u16(7);
+            fo4::test::write_subrecord(out, "ALCA", alca.bytes);
+            fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+        },
+        "create mode");
+
+    tryRefuse(
+        [](fo4::test::ByteWriter& out) {
+            writeU32(out, "ANAM", 2);
+            writeU32(out, "ALST", 1);
+            fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+            writeU32(out, "FNAM", 0);
+            writeU32(out, "ALNA", 0);
+            writeU32(out, "ALNT", 2);
+            fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+        },
+        "type");
+}
+
+TEST_CASE("Native SetQuestAliases refuses existing null ALFR without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0);
+        writeU32(out, "ALFR", 0);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+        })));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(result.error().message.find("forcedReference is null") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases refuses Fill Type members after alias CTDA") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0);
+        fo4::test::write_subrecord(out, "CTDA", makeCtdaPayload(8, 1, 1.0f));
+        writeU32(out, "ALNA", 0);
+        writeU32(out, "ALNT", 0);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    auto before = readBytes(path);
+    {
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        const auto result = backend.invokeBackend(
+            "SetQuestAliases",
+            setAliasesArgs(nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+        CHECK(result.error().message.find("out of order") != std::string::npos);
+        CHECK(readBytes(path) == before);
+    }
+
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALLS", 1);
+        writeU32(out, "FNAM", 0);
+        fo4::test::write_subrecord(out, "CTDA", makeCtdaPayload(8, 1, 1.0f));
+        writeU32(out, "ALFE", 9);
+        writeU32(out, "ALFD", 2);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto location = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+        })));
+    REQUIRE_FALSE(location.has_value());
+    CHECK(location.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(location.error().message.find("out of order") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases reports alias payload errors for condition helpers") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetAngle"}, {"param1", 1}, {"operator", "~~"}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestAliasPayload");
+    CHECK(result.error().message.find("operator") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
