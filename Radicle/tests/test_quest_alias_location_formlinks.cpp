@@ -65,6 +65,7 @@ fo4::forms::QuestAliasCreation base_location() {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   };
 }
 
@@ -163,6 +164,7 @@ TEST(QuestAliasLocationFormLinks, RejectsEmptyExternalAndWrongAliasKind) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   };
   EXPECT_THROW(
       static_cast<void>(fo4::forms::encode_quest_alias(plugin, reference)),

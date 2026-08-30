@@ -83,17 +83,23 @@ the old master-index space.
 
 The semantic encoder refuses an External Alias Location with neither member.
 
+## Conditions
+
+Reference and location aliases author a contiguous CTDA/CIS run after Fill Type
+members and before extras / location `ALCC`. PluginEditTool `SetQuestAliases`
+reuses the log-entry codec (`parseQuestCondition` / `serialize_ctda_run`).
+Collections reject conditions. `GetEventData` stays fail-closed.
+
 ## Deliberately not modeled yet
 
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- Reference `Create Reference to Object` Fill Type.
-- Reference `Find Matching Reference` Fill Type and its packed members.
-- Alias-from-event / event-data variants.
-- Location `Find Matching Location` (`ALFE` / `ALFD`) event/data semantics.
+- PluginEditTool JSON for remaining Fill Types already encoded in Radicle:
+  Create Reference, Find Matching Reference, External Alias, Location Alias
+  Reference, and event/data forms.
 - Remaining reference/location alias fields after the Fill Type union:
-  conditions, voice type, death item, display name, and package-list overrides
+  voice type, death item, display name, and package-list overrides
   (`SPOR`/`OCOR`/`GWOR`/`ECOR`).
 - Reference alias extras now modeled: keywords (`KSIZ`/`KWDA`), items
   (`COCT`/`CNTO` without `COED`), linked aliases (`ALLA`), spells (`ALSP`),

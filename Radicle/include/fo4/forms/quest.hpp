@@ -164,6 +164,7 @@ struct QuestAliasCreation {
   std::vector<FormKey> spells;
   std::vector<FormKey> factions;
   std::vector<FormKey> packages;
+  std::vector<CtdaCondition> conditions;
 };
 
 /*

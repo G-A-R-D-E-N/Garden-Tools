@@ -23,6 +23,7 @@ TEST(QuestAliasEncoding, BuildsReferenceAliasInProvenOrder) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::reference);
@@ -37,6 +38,39 @@ TEST(QuestAliasEncoding, BuildsReferenceAliasInProvenOrder) {
   EXPECT_EQ(alias.subrecords[3].signature.to_string(), "ALFI");
   EXPECT_EQ(alias.subrecords[4].signature.to_string(), "ALED");
   EXPECT_TRUE(alias.subrecords.back().data.empty());
+}
+
+TEST(QuestAliasEncoding, InsertsConditionsBeforeAled) {
+  fo4::forms::QuestAliasCreation creation{
+      .kind = fo4::forms::QuestAliasKind::reference,
+      .id = 7,
+      .name = std::string_view{"ReferenceSeven"},
+      .flags = 0x12u,
+      .force_into_alias = std::nullopt,
+      .max_initial_fill_count = std::nullopt,
+      .closest_to_alias = std::nullopt,
+      .fill = std::monostate{},
+      .keywords = {},
+      .items = {},
+      .linked_aliases = {},
+      .spells = {},
+      .factions = {},
+      .packages = {},
+      .conditions = {},
+  };
+  fo4::CtdaCondition condition;
+  condition.function = 675;
+  condition.parameter1_string = "MyVar";
+  creation.conditions.push_back(std::move(condition));
+
+  const auto alias = fo4::forms::encode_quest_alias(creation);
+  ASSERT_EQ(alias.subrecords.size(), 6u);
+  EXPECT_EQ(alias.subrecords[0].signature.to_string(), "ALST");
+  EXPECT_EQ(alias.subrecords[1].signature.to_string(), "ALID");
+  EXPECT_EQ(alias.subrecords[2].signature.to_string(), "FNAM");
+  EXPECT_EQ(alias.subrecords[3].signature.to_string(), "CTDA");
+  EXPECT_EQ(alias.subrecords[4].signature.to_string(), "CIS1");
+  EXPECT_EQ(alias.subrecords[5].signature.to_string(), "ALED");
 }
 
 TEST(QuestAliasEncoding, BuildsLocationAliasWithoutInventingName) {
@@ -55,6 +89,7 @@ TEST(QuestAliasEncoding, BuildsLocationAliasWithoutInventingName) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::location);
@@ -82,6 +117,7 @@ TEST(QuestAliasEncoding, BuildsCompactCollectionAlias) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::collection);
@@ -113,6 +149,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
       })),
       fo4::forms::QuestError);
 
@@ -132,6 +169,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
       })),
       fo4::forms::QuestError);
 
@@ -151,6 +189,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
       })),
       fo4::forms::QuestError);
 
@@ -171,6 +210,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
       })),
       fo4::forms::QuestError);
 }

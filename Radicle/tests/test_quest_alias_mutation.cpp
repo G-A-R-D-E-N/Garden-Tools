@@ -111,6 +111,7 @@ fo4::forms::QuestAliasCreation collection(std::uint32_t id, std::uint8_t max_fil
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   };
 }
 
@@ -130,6 +131,7 @@ fo4::forms::QuestAliasCreation reference(std::uint32_t id) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   };
 }
 
@@ -155,6 +157,7 @@ TEST(QuestAliasMutation, AddsBeforeTailAndAdvancesNextAliasId) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   };
   fo4::forms::add_quest_alias(plugin, quest, creation);
 
@@ -288,6 +291,7 @@ TEST(QuestAliasMutation, WriteReplacesWholeArrayIncludingCollectionsAndPreserves
       .spells = {},
       .factions = {},
       .packages = {},
+      .conditions = {},
   };
   const std::array<fo4::forms::QuestAliasCreation, 2> creations{
       location,
