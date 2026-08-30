@@ -114,8 +114,8 @@ std::vector<std::byte> extraMasterPlugin() {
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
     fo4::test::ByteWriter hedr;
     hedr.f32(1.0f);
-    hedr.u32(6);
-    hedr.u32(0x806);
+    hedr.u32(8);
+    hedr.u32(0x808);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
     fo4::test::end_record(out, tes4);
 
@@ -132,6 +132,8 @@ std::vector<std::byte> extraMasterPlugin() {
     writeRecord("FACT", 0x00000803, std::string_view{"AliasFact\0", 10});
     writeRecord("PACK", 0x00000804, std::string_view{"AliasPack\0", 10});
     writeRecord("ACTI", 0x00000805, std::string_view{"AliasActi\0", 10});
+    writeRecord("NPC_", 0x00000806, std::string_view{"AliasNpc\0", 9});
+    writeRecord("GLOB", 0x00000807, std::string_view{"AliasGlob\0", 10});
     return out.bytes;
 }
 
@@ -2041,6 +2043,126 @@ TEST_CASE("Native SetQuestAliases accepts sigBaseObjects items and rejects neste
     CHECK(readBytes(patchPath) == before);
 }
 
+TEST_CASE("Native SetQuestAliases binds mixed item COED to the preceding CNTO") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, extraMasterPlugin());
+    writeBytes(patchPath, questPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadExtraMaster(backend, masterPath, patchPath);
+
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"items", nlohmann::json::array({
+                    {{"item", "000801:Master.esm"}, {"count", 1}},
+                    {
+                        {"item", "000801:Master.esm"},
+                        {"count", 2},
+                        {"extra", {
+                            {"owner", "000803:Master.esm"},
+                            {"requiredRank", 3},
+                            {"itemCondition", 1.0}
+                        }}
+                    },
+                    {
+                        {"item", "000805:Master.esm"},
+                        {"count", 1},
+                        {"extra", {
+                            {"owner", "000806:Master.esm"},
+                            {"global", "000807:Master.esm"},
+                            {"itemCondition", 0.5}
+                        }}
+                    }
+                })}
+            }
+        })));
+    REQUIRE(result.has_value());
+
+    const auto disk = fo4::read_plugin_file(patchPath);
+    const auto names = recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    const auto alst = std::find(names.begin(), names.end(), "ALST");
+    REQUIRE(alst != names.end());
+    std::vector<std::string> extras;
+    for (auto it = alst; it != names.end() && *it != "ALED"; ++it) extras.push_back(*it);
+    extras.push_back("ALED");
+    const std::vector<std::string> expected{
+        "ALST", "ALID", "FNAM", "COCT", "CNTO", "CNTO", "COED", "CNTO", "COED", "ALED"};
+    CHECK(extras == expected);
+
+    const auto decoded = fo4::forms::decode_quest_aliases(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.aliases.size() == 1u);
+    REQUIRE(decoded.aliases[0].items.size() == 3u);
+    CHECK_FALSE(decoded.aliases[0].items[0].extra.has_value());
+    REQUIRE(decoded.aliases[0].items[1].extra.has_value());
+    CHECK(decoded.aliases[0].items[1].extra->owner ==
+          std::optional<fo4::FormKey>{fo4::FormKey::parse("000803:Master.esm")});
+    CHECK(decoded.aliases[0].items[1].extra->required_rank == std::optional<std::int32_t>{3});
+    CHECK(decoded.aliases[0].items[1].extra->item_condition == 1.0f);
+    REQUIRE(decoded.aliases[0].items[2].extra.has_value());
+    CHECK(decoded.aliases[0].items[2].extra->owner ==
+          std::optional<fo4::FormKey>{fo4::FormKey::parse("000806:Master.esm")});
+    CHECK(decoded.aliases[0].items[2].extra->global ==
+          std::optional<fo4::FormKey>{fo4::FormKey::parse("000807:Master.esm")});
+    CHECK(decoded.aliases[0].items[2].extra->item_condition == 0.5f);
+
+    const auto before = readBytes(patchPath);
+    const auto both = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"items", nlohmann::json::array({
+                    {
+                        {"item", "000801:Master.esm"},
+                        {"count", 1},
+                        {"extra", {
+                            {"owner", "000803:Master.esm"},
+                            {"global", "000807:Master.esm"},
+                            {"requiredRank", 1}
+                        }}
+                    }
+                })}
+            }
+        })));
+    REQUIRE_FALSE(both.has_value());
+    CHECK(both.error().type == "InvalidQuestAliasPayload");
+    CHECK(readBytes(patchPath) == before);
+
+    const auto factGlobal = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"items", nlohmann::json::array({
+                    {
+                        {"item", "000801:Master.esm"},
+                        {"count", 1},
+                        {"extra", {
+                            {"owner", "000803:Master.esm"},
+                            {"global", "000807:Master.esm"}
+                        }}
+                    }
+                })}
+            }
+        })));
+    REQUIRE_FALSE(factGlobal.has_value());
+    CHECK(factGlobal.error().type == "InvalidQuestAliasPayload");
+    CHECK(readBytes(patchPath) == before);
+}
+
 template <typename Body>
 std::vector<std::byte> questPatchWithMaster(Body&& body) {
     fo4::test::ByteWriter out;
@@ -2078,6 +2200,17 @@ void writeAlla(fo4::test::ByteWriter& out, std::uint32_t keyword, std::int32_t a
     data.u32(keyword);
     data.u32(static_cast<std::uint32_t>(alias));
     fo4::test::write_subrecord(out, "ALLA", data.bytes);
+}
+
+void writeCoed(fo4::test::ByteWriter& out,
+               std::uint32_t owner,
+               std::uint32_t ownerData,
+               float itemCondition) {
+    fo4::test::ByteWriter data;
+    data.u32(owner);
+    data.u32(ownerData);
+    data.f32(itemCondition);
+    fo4::test::write_subrecord(out, "COED", data.bytes);
 }
 
 TEST_CASE("Native SetQuestAliases refuses existing extras that fail authoring type rules") {
@@ -2133,6 +2266,18 @@ TEST_CASE("Native SetQuestAliases refuses existing extras that fail authoring ty
     }));
     refuse(questPatchWithMaster([&](fo4::test::ByteWriter& out) {
         aliasPrefix(out);
+        writeU32(out, "COCT", 1);
+        writeCnto(out, 0x00000801, 1);
+        writeCoed(out, 0x00000802, 0, 1.0f);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    refuse(questPatchWithMaster([&](fo4::test::ByteWriter& out) {
+        aliasPrefix(out);
+        writeCoed(out, 0x00000803, 0, 1.0f);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    refuse(questPatchWithMaster([&](fo4::test::ByteWriter& out) {
+        aliasPrefix(out);
         writeAlla(out, 0, 1);
         fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
     }));
@@ -2151,6 +2296,33 @@ TEST_CASE("Native SetQuestAliases still rewrites reconstructable extra members")
         writeU32(out, "FNAM", 0);
         writeU32(out, "KSIZ", 1);
         writeU32(out, "KWDA", 0x00000800);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadExtraMaster(backend, masterPath, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+        })));
+    REQUIRE(result.has_value());
+}
+
+TEST_CASE("Native SetQuestAliases rewrites reconstructable mixed item COED") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto path = root / "Patch.esp";
+    writeBytes(masterPath, extraMasterPlugin());
+    writeBytes(path, questPatchWithMaster([](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0);
+        writeU32(out, "COCT", 2);
+        writeCnto(out, 0x00000801, 1);
+        writeCnto(out, 0x00000801, 2);
+        writeCoed(out, 0x00000803, 3, 1.0f);
         fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
     }));
     fo4ide::plugin::RadiclePluginBackend backend;

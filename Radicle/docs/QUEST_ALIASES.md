@@ -124,7 +124,7 @@ authority.
 | Member | Subrecords | Cardinality | Target |
 | --- | --- | --- | --- |
 | keywords | `KSIZ` + `KWDA` | unique packed list | `KYWD` |
-| items | `COCT` + `CNTO` | unique count + one `CNTO` per item | `sigBaseObjects`, count `>= 1` on author |
+| items | `COCT` + `CNTO` + optional `COED` | unique count + one `CNTO` per item; `COED` binds to the preceding `CNTO` | `sigBaseObjects`, count `>= 1` on author; `COED` is 12 bytes |
 | spectator/observe/guard/combat overrides | `SPOR`/`OCOR`/`GWOR`/`ECOR` | unique optional | `FLST` |
 | linked aliases | one packed `ALLA` | 8-byte `{KYWD, alias i32}` rows | `KYWD` |
 | display name | `ALDN` | unique optional | `MESG` |
@@ -134,15 +134,22 @@ authority.
 | voice types | `VTCK` | unique optional | `VTYP`/`FLST`/`NPC_`/`FACT` |
 
 Dangling extra FormIDs degrade that one semantic entry (`unresolved_links`)
-instead of failing the quest. `COED` is unmodeled: if present, `items` stays
-empty.
+instead of failing the quest. Alias-item `COED` is bound to the preceding
+`CNTO` (xEdit `wbCNTO` / Mutagen `ContainerEntry.Data`). It is 12 bytes:
+owner FormID (`NPC_`/`FACT`/`NULL`), union (GLOB FormID or i32 required rank;
+unused when owner is `NULL`), then float item condition. Mixed lists are
+valid: only some `CNTO` entries may carry `COED`. JSON uses
+`items[].extra.{owner,global,requiredRank,itemCondition}`; omit `extra` to
+write `CNTO` alone. `global` requires an `NPC_` owner; `requiredRank` requires
+a `FACT` owner. Encode writes `COED` immediately after that item's `CNTO`.
+Missing or short `COED`, `COED` without a preceding `CNTO`, and two `COED`
+records on one item fail closed.
 
 ## Deliberately not modeled yet
 
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- `COED` on alias items.
 - Alias VMAD interactions beyond the existing global VMAD safety contract. PluginEditTool `SetQuestAliases` / `SetQuestStages` fail closed when QUST VMAD extras bind alias IDs or stage fragments (`fo4::quest_vmad_bindings`). Whole-array replace still does not rewrite VMAD.
 
 Unknown members inside an existing reference/location alias are preserved in

@@ -90,6 +90,12 @@ std::int32_t read_i32(const std::vector<std::byte>& data, std::size_t offset = 0
   return value;
 }
 
+float read_f32(const std::vector<std::byte>& data, std::size_t offset = 0) {
+  float value = 0.0f;
+  std::memcpy(&value, data.data() + offset, sizeof(value));
+  return value;
+}
+
 std::vector<std::byte> write_u32(std::uint32_t value) {
   std::vector<std::byte> data(sizeof(value));
   std::memcpy(data.data(), &value, sizeof(value));
@@ -97,6 +103,12 @@ std::vector<std::byte> write_u32(std::uint32_t value) {
 }
 
 std::vector<std::byte> write_i32(std::int32_t value) {
+  std::vector<std::byte> data(sizeof(value));
+  std::memcpy(data.data(), &value, sizeof(value));
+  return data;
+}
+
+std::vector<std::byte> write_f32(float value) {
   std::vector<std::byte> data(sizeof(value));
   std::memcpy(data.data(), &value, sizeof(value));
   return data;
@@ -506,42 +518,96 @@ void decode_alias_extras(QuestAlias& alias, const PluginFormIdContext& context) 
     }
   }
 
-  bool has_coed = false;
   std::size_t cnto_count = 0;
+  std::size_t coed_total = 0;
+  std::size_t coed_before_coct = 0;
+  bool seen_coct = false;
   for (const auto& member : alias.subrecords) {
-    if (member.signature == k_coed) has_coed = true;
+    if (member.signature == k_coct) seen_coct = true;
     if (member.signature == k_cnto) ++cnto_count;
+    if (member.signature == k_coed) {
+      ++coed_total;
+      if (!seen_coct) ++coed_before_coct;
+    }
   }
   const auto* coct = unique_member(alias, k_coct, "COCT");
   if (coct == nullptr) {
     if (cnto_count != 0) {
       throw QuestError("QUST alias CNTO is missing COCT");
     }
-  } else if (!has_coed) {
+    if (coed_before_coct != 0) {
+      throw QuestError("QUST alias COED is missing preceding CNTO");
+    }
+  } else {
+    if (coed_before_coct != 0) {
+      throw QuestError("QUST alias COED is missing preceding CNTO");
+    }
     if (coct->data.size() != 4) {
       throw QuestError("QUST alias COCT must be exactly four bytes");
     }
     const auto expected = read_u32(coct->data);
     std::size_t seen = 0;
+    std::size_t coed_seen = 0;
     bool after_coct = false;
+    bool item_open = false;
+    bool item_has_extra = false;
     for (const auto& member : alias.subrecords) {
       if (member.signature == k_coct) {
         after_coct = true;
         continue;
       }
       if (!after_coct) continue;
-      if (member.signature != k_cnto) break;
-      if (member.data.size() != 8) {
-        throw QuestError("QUST alias CNTO must be exactly eight bytes");
+      if (member.signature == k_cnto) {
+        if (seen == expected) {
+          throw QuestError("QUST alias COCT does not match CNTO");
+        }
+        if (member.data.size() != 8) {
+          throw QuestError("QUST alias CNTO must be exactly eight bytes");
+        }
+        if (auto key = decode_optional_form_key_at(
+                member.data, 0, k_cnto, context, "CNTO")) {
+          alias.items.push_back(QuestAliasItem{
+              .item = *key,
+              .count = read_i32(member.data, 4),
+              .extra = {},
+          });
+          item_open = true;
+        } else {
+          item_open = false;
+        }
+        item_has_extra = false;
+        ++seen;
+        continue;
       }
-      if (auto key = decode_optional_form_key_at(
-              member.data, 0, k_cnto, context, "CNTO")) {
-        alias.items.push_back(QuestAliasItem{*key, read_i32(member.data, 4)});
+      if (member.signature == k_coed) {
+        if (seen == 0 || item_has_extra) {
+          throw QuestError("QUST alias COED is missing preceding CNTO");
+        }
+        if (member.data.size() != 12) {
+          throw QuestError("QUST alias COED must be exactly twelve bytes");
+        }
+        QuestAliasItemExtra extra;
+        extra.owner = decode_optional_form_key_at(
+            member.data, 0, k_coed, context, "COED owner");
+        extra.required_rank = read_i32(member.data, 4);
+        extra.global = decode_optional_form_key_at(
+            member.data, 4, k_coed, context, "COED global");
+        extra.item_condition = read_f32(member.data, 8);
+        if (item_open) {
+          alias.items.back().extra = std::move(extra);
+        }
+        item_has_extra = true;
+        item_open = false;
+        ++coed_seen;
+        continue;
       }
-      ++seen;
+      break;
     }
     if (seen != expected) {
       throw QuestError("QUST alias COCT does not match CNTO");
+    }
+    if (coed_seen != coed_total) {
+      throw QuestError("QUST alias COED is missing preceding CNTO");
     }
   }
 
@@ -965,6 +1031,27 @@ void insert_alias_extras(QuestAlias& alias,
       const auto count = write_i32(item.count);
       cnto.insert(cnto.end(), count.begin(), count.end());
       extra.push_back(make_subrecord(k_cnto, std::move(cnto)));
+      if (!item.extra.has_value()) continue;
+      const auto& extra_data = *item.extra;
+      std::vector<std::byte> coed;
+      if (extra_data.owner.has_value()) {
+        append_encoded_form_id(coed, *extra_data.owner, context);
+      } else {
+        const auto none = write_u32(0);
+        coed.insert(coed.end(), none.begin(), none.end());
+      }
+      if (extra_data.global.has_value()) {
+        append_encoded_form_id(coed, *extra_data.global, context);
+      } else if (extra_data.required_rank.has_value()) {
+        const auto rank = write_i32(*extra_data.required_rank);
+        coed.insert(coed.end(), rank.begin(), rank.end());
+      } else {
+        const auto unused = write_u32(0);
+        coed.insert(coed.end(), unused.begin(), unused.end());
+      }
+      const auto condition = write_f32(extra_data.item_condition);
+      coed.insert(coed.end(), condition.begin(), condition.end());
+      extra.push_back(make_subrecord(k_coed, std::move(coed)));
     }
   }
   const auto emitOptional = [&](Signature signature, const std::optional<FormKey>& key) {

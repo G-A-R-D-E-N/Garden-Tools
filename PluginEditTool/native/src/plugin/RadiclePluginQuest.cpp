@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -174,6 +175,22 @@ bool questInt32(const nlohmann::json& object, const char* key, std::optional<std
     return false;
 }
 
+bool questFloat(const nlohmann::json& object,
+                const char* key,
+                float defaultValue,
+                float& value) {
+    const auto found = object.find(key);
+    if (found == object.end() || found->is_null()) {
+        value = defaultValue;
+        return true;
+    }
+    if (!found->is_number()) return false;
+    const auto parsed = found->get<double>();
+    if (!std::isfinite(parsed)) return false;
+    value = static_cast<float>(parsed);
+    return true;
+}
+
 bool questU8(const nlohmann::json& object, const char* key, std::optional<std::uint8_t>& value) {
     const auto found = object.find(key);
     if (found == object.end() || found->is_null()) {
@@ -284,7 +301,12 @@ bool isPlacedSignature(fo4::Signature signature) {
 }
 
 bool knownItemKey(std::string_view key) {
-    return key == "item" || key == "count";
+    return key == "item" || key == "count" || key == "extra";
+}
+
+bool knownItemExtraKey(std::string_view key) {
+    return key == "owner" || key == "global" || key == "requiredRank" ||
+           key == "itemCondition";
 }
 
 bool knownLinkedAliasKey(std::string_view key) {
@@ -1329,7 +1351,7 @@ bool allowedAliasMember(fo4::forms::QuestAliasKind kind, std::string_view signat
            signature == "ALFD" || signature == "ALCC" ||
            signature == "CTDA" || signature == "CIS1" || signature == "CIS2" ||
            signature == "KSIZ" || signature == "KWDA" || signature == "COCT" ||
-           signature == "CNTO" || signature == "SPOR" || signature == "OCOR" ||
+           signature == "CNTO" || signature == "COED" || signature == "SPOR" || signature == "OCOR" ||
            signature == "GWOR" || signature == "ECOR" || signature == "ALLA" ||
            signature == "ALDN" || signature == "ALFV" || signature == "ALDI" ||
            signature == "ALSP" || signature == "ALFC" || signature == "ALPC" ||
@@ -1353,7 +1375,8 @@ std::optional<Error> existingTypedFormIdUnrepresentable(
     std::size_t offset,
     std::initializer_list<std::string_view> accepted,
     bool baseObjects,
-    std::string_view slot) {
+    std::string_view slot,
+    bool allowNull = false) {
     if (offset + 4 > data.size()) {
         return Error{
             "QuestAuthoringCoverageIncomplete",
@@ -1363,6 +1386,7 @@ std::optional<Error> existingTypedFormIdUnrepresentable(
     std::uint32_t raw = 0;
     std::memcpy(&raw, data.data() + offset, 4);
     if (raw == 0) {
+        if (allowNull) return std::nullopt;
         return Error{
             "QuestAuthoringCoverageIncomplete",
             "existing QUST alias " + std::string(slot) + " is null"
@@ -1437,6 +1461,7 @@ std::optional<Error> extraAliasMembersUnrepresentable(
     };
     const auto isExtraStart = [&](std::string_view name) {
         return name == "KSIZ" || name == "KWDA" || name == "COCT" || name == "CNTO" ||
+               name == "COED" ||
                name == "SPOR" || name == "OCOR" || name == "GWOR" || name == "ECOR" ||
                name == "ALLA" || name == "ALDN" || name == "ALFV" || name == "ALDI" ||
                name == "ALSP" || name == "ALFC" || name == "ALPC" || name == "VTCK";
@@ -1493,11 +1518,54 @@ std::optional<Error> extraAliasMembersUnrepresentable(
                     return error;
                 }
                 ++i;
+                if (i < members.size() && sig(i) == "COED") {
+                    if (members[i].data.size() != 12) {
+                        return fail("existing QUST alias item extra cannot be reconstructed");
+                    }
+                    std::uint32_t ownerRaw = 0;
+                    std::memcpy(&ownerRaw, members[i].data.data(), 4);
+                    if (ownerRaw == 0) {
+                        std::uint32_t unused = 0;
+                        std::memcpy(&unused, members[i].data.data() + 4, 4);
+                        if (unused != 0) {
+                            return fail(
+                                "existing QUST alias item extra unused owner data cannot be reconstructed");
+                        }
+                    } else {
+                        if (const auto error = existingTypedFormIdUnrepresentable(
+                                context, graph, members[i].data, 0, {"NPC_", "FACT"}, false,
+                                "item extra owner")) {
+                            return error;
+                        }
+                        fo4::FormKey ownerKey;
+                        try {
+                            ownerKey = fo4::resolve_plugin_form_id(
+                                fo4::RawFormId{ownerRaw}, context);
+                        } catch (const fo4::FormIdError&) {
+                            return fail("existing QUST alias item extra cannot be reconstructed");
+                        }
+                        const auto* ownerWinner = graph.winner(ownerKey);
+                        if (ownerWinner == nullptr) {
+                            return fail(
+                                "existing QUST alias item extra owner does not resolve to a loaded record");
+                        }
+                        const auto ownerSig = ownerWinner->signature.to_string();
+                        if (ownerSig == "NPC_") {
+                            if (const auto error = existingTypedFormIdUnrepresentable(
+                                    context, graph, members[i].data, 4, {"GLOB"}, false,
+                                    "item extra global", true)) {
+                                return error;
+                            }
+                        }
+                    }
+                    ++i;
+                }
             }
             phase = Phase::spor;
             continue;
         }
         if (name == "CNTO") return fail("existing QUST alias CNTO is missing COCT");
+        if (name == "COED") return fail("existing QUST alias COED is missing preceding CNTO");
         const auto uniqueLink = [&](Phase atMost,
                                     Phase next,
                                     std::initializer_list<std::string_view> accepted,
@@ -1972,6 +2040,7 @@ bool isAliasConditionPrefix(fo4::forms::QuestAliasKind kind, std::string_view na
 bool isAliasConditionSuccessor(fo4::forms::QuestAliasKind kind, std::string_view name) {
     if (kind == fo4::forms::QuestAliasKind::location) return name == "ALCC";
     return name == "KSIZ" || name == "KWDA" || name == "COCT" || name == "CNTO" ||
+           name == "COED" ||
            name == "SPOR" || name == "OCOR" || name == "GWOR" || name == "ECOR" ||
            name == "ALLA" || name == "ALDN" || name == "ALFV" || name == "ALDI" ||
            name == "ALSP" || name == "ALFC" || name == "ALPC" || name == "VTCK";
@@ -2462,6 +2531,84 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                     });
                 }
                 item.count = static_cast<std::int32_t>(count);
+                if (itemJson.contains("extra") && !itemJson["extra"].is_null()) {
+                    if (!itemJson["extra"].is_object()) {
+                        return std::unexpected(Error{
+                            "InvalidQuestAliasPayload",
+                            "item extra must be an object"
+                        });
+                    }
+                    const auto& extraJson = itemJson["extra"];
+                    for (auto it = extraJson.begin(); it != extraJson.end(); ++it) {
+                        if (!knownItemExtraKey(it.key())) {
+                            return std::unexpected(Error{
+                                "InvalidQuestAliasPayload",
+                                "Unsupported item extra field '" + it.key() + "'"
+                            });
+                        }
+                    }
+                    fo4::forms::QuestAliasItemExtra extra;
+                    if (const auto error = parseOptionalTypedFormKey(
+                            extraJson, "owner", graph_, {"NPC_", "FACT"}, extra.owner,
+                            fillKeys)) {
+                        return std::unexpected(*error);
+                    }
+                    if (const auto error = parseOptionalTypedFormKey(
+                            extraJson, "global", graph_, {"GLOB"}, extra.global, fillKeys)) {
+                        return std::unexpected(*error);
+                    }
+                    if (!questInt32(extraJson, "requiredRank", extra.required_rank)) {
+                        return std::unexpected(Error{
+                            "InvalidQuestAliasPayload",
+                            "item extra requiredRank must be an integer"
+                        });
+                    }
+                    if (!questFloat(extraJson, "itemCondition", 0.0f, extra.item_condition)) {
+                        return std::unexpected(Error{
+                            "InvalidQuestAliasPayload",
+                            "item extra itemCondition must be a finite number"
+                        });
+                    }
+                    if (extra.global.has_value() && extra.required_rank.has_value()) {
+                        return std::unexpected(Error{
+                            "InvalidQuestAliasPayload",
+                            "item extra cannot set both global and requiredRank"
+                        });
+                    }
+                    if (extra.global.has_value()) {
+                        if (!extra.owner.has_value()) {
+                            return std::unexpected(Error{
+                                "InvalidQuestAliasPayload",
+                                "item extra global requires an NPC_ owner"
+                            });
+                        }
+                        const auto* ownerWinner = graph_.winner(*extra.owner);
+                        if (ownerWinner == nullptr ||
+                            ownerWinner->signature.to_string() != "NPC_") {
+                            return std::unexpected(Error{
+                                "InvalidQuestAliasPayload",
+                                "item extra global requires an NPC_ owner"
+                            });
+                        }
+                    }
+                    if (extra.required_rank.has_value()) {
+                        if (!extra.owner.has_value()) {
+                            return std::unexpected(Error{
+                                "InvalidQuestAliasPayload",
+                                "item extra requiredRank requires a FACT owner"
+                            });
+                        }
+                        const auto* ownerWinner = graph_.winner(*extra.owner);
+                        if (ownerWinner == nullptr ||
+                            ownerWinner->signature.to_string() != "FACT") {
+                            return std::unexpected(Error{
+                                "InvalidQuestAliasPayload",
+                                "item extra requiredRank requires a FACT owner"
+                            });
+                        }
+                    }
+                    item.extra = std::move(extra);
+                }
                 creation.items.push_back(std::move(item));
             }
         }
