@@ -340,42 +340,67 @@ TEST(QuestAliasExtraDecode, NullOwnerHasNeitherUnionField) {
 }
 
 TEST(QuestAliasExtraDecode, NpcGlobalSurvivesMasterInsertionAndFactRankDoesNotRemap) {
-  auto plugin = fo4::read_plugin(empty_quest_plugin(), "Patch.esp");
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(4);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  write_typed_record(out, "MISC", 0x00000800, std::string_view{"Item\0", 5});
+  write_typed_record(out, "FACT", 0x00000801, std::string_view{"Fact\0", 5});
+  write_typed_record(out, "NPC_", 0x00000802, std::string_view{"Npc\0", 4});
+  write_typed_record(out, "GLOB", 0x00000803, std::string_view{"Glob\0", 5});
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000804, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
+  write_u32_subrecord(out, "ANAM", 1);
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+
+  const auto k_local_quest = fo4::FormKey::parse("000804:Patch.esp");
+  const auto k_local_item = fo4::FormKey::parse("000800:Patch.esp");
+  const auto k_local_fact = fo4::FormKey::parse("000801:Patch.esp");
+  const auto k_local_npc = fo4::FormKey::parse("000802:Patch.esp");
+  const auto k_local_glob = fo4::FormKey::parse("000803:Patch.esp");
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   auto creation = reference_alias(1);
-  fo4::forms::QuestAliasItem factItem{.item = k_item, .count = 1, .extra = {}};
+  fo4::forms::QuestAliasItem factItem{.item = k_local_item, .count = 1, .extra = {}};
   factItem.extra = fo4::forms::QuestAliasItemExtra{
-      .owner = k_faction,
+      .owner = k_local_fact,
       .global = {},
       .required_rank = static_cast<std::int32_t>(0x0000009A),
       .item_condition = 1.0f,
   };
-  fo4::forms::QuestAliasItem npcItem{.item = k_item, .count = 1, .extra = {}};
+  fo4::forms::QuestAliasItem npcItem{.item = k_local_item, .count = 1, .extra = {}};
   npcItem.extra = fo4::forms::QuestAliasItemExtra{
-      .owner = k_npc,
-      .global = k_glob,
+      .owner = k_local_npc,
+      .global = k_local_glob,
       .required_rank = {},
       .item_condition = 0.25f,
   };
   creation.items = {factItem, npcItem};
   const std::vector<fo4::forms::QuestAliasCreation> mixedOwners{creation};
-  fo4::forms::write_quest_aliases(plugin, k_quest, mixedOwners);
+  fo4::forms::write_quest_aliases(plugin, k_local_quest, mixedOwners);
 
   auto remapped = fo4::remap_plugin_masters(
       std::move(plugin),
       {fo4::PluginKey::from_filename("Dummy.esm"),
        fo4::PluginKey::from_filename("Master.esm")});
   const auto reread = fo4::read_plugin(fo4::write_plugin(remapped), "Patch.esp");
-  const auto decoded = fo4::forms::decode_quest_aliases(reread, k_quest);
+  const auto decoded = fo4::forms::decode_quest_aliases(reread, k_local_quest);
   ASSERT_EQ(decoded.aliases.size(), 1u);
   ASSERT_EQ(decoded.aliases[0].items.size(), 2u);
   ASSERT_TRUE(decoded.aliases[0].items[0].extra.has_value());
-  EXPECT_EQ(decoded.aliases[0].items[0].extra->owner, std::optional<fo4::FormKey>{k_faction});
+  EXPECT_EQ(decoded.aliases[0].items[0].extra->owner, std::optional<fo4::FormKey>{k_local_fact});
   EXPECT_EQ(decoded.aliases[0].items[0].extra->required_rank,
             std::optional<std::int32_t>{static_cast<std::int32_t>(0x0000009A)});
   EXPECT_FALSE(decoded.aliases[0].items[0].extra->global.has_value());
   ASSERT_TRUE(decoded.aliases[0].items[1].extra.has_value());
-  EXPECT_EQ(decoded.aliases[0].items[1].extra->owner, std::optional<fo4::FormKey>{k_npc});
-  EXPECT_EQ(decoded.aliases[0].items[1].extra->global, std::optional<fo4::FormKey>{k_glob});
+  EXPECT_EQ(decoded.aliases[0].items[1].extra->owner, std::optional<fo4::FormKey>{k_local_npc});
+  EXPECT_EQ(decoded.aliases[0].items[1].extra->global, std::optional<fo4::FormKey>{k_local_glob});
   EXPECT_FALSE(decoded.aliases[0].items[1].extra->required_rank.has_value());
 
   const fo4::Subrecord* factCoed = nullptr;
@@ -396,7 +421,7 @@ TEST(QuestAliasExtraDecode, NpcGlobalSurvivesMasterInsertionAndFactRankDoesNotRe
   std::uint32_t globRaw = 0;
   std::memcpy(&globRaw, npcCoed->data.data() + 4, 4);
   const auto context = fo4::plugin_form_id_context(reread);
-  EXPECT_EQ(fo4::resolve_plugin_form_id(fo4::RawFormId{globRaw}, context), k_glob);
+  EXPECT_EQ(fo4::resolve_plugin_form_id(fo4::RawFormId{globRaw}, context), k_local_glob);
 }
 
 TEST(QuestAliasExtraDecode, OwnerAndGlobalOnSeparateExternalMastersRemap) {
@@ -404,7 +429,7 @@ TEST(QuestAliasExtraDecode, OwnerAndGlobalOnSeparateExternalMastersRemap) {
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
-  hedr.u32(2);
+  hedr.u32(3);
   hedr.u32(0x900);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::write_subrecord(out, "MAST", std::string_view{"Owner.esm\0", 10});
@@ -416,6 +441,7 @@ TEST(QuestAliasExtraDecode, OwnerAndGlobalOnSeparateExternalMastersRemap) {
   fo4::test::write_subrecord(out, "DATA", master_data.bytes);
   fo4::test::end_record(out, tes4);
   write_typed_record(out, "NPC_", 0x00000800, std::string_view{"ExtNpc\0", 7});
+  write_typed_record(out, "GLOB", 0x01000800, std::string_view{"ExtGlob\0", 8});
 
   const auto group = fo4::test::begin_group(out, "QUST", 0);
   const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x02000800, 131);
