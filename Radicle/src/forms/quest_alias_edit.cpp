@@ -204,9 +204,16 @@ void write_quest_aliases(Plugin& plugin,
   std::set<std::uint32_t> ids;
   std::uint32_t max_ref_id = 0;
   bool have_ref_id = false;
+  bool previous_collection = false;
   for (const auto& creation : creations) {
+    const bool is_collection = creation.kind == QuestAliasKind::collection;
+    if (is_collection && previous_collection) {
+      throw QuestError(
+          "QUST collection aliases cannot be adjacent; contiguous ALCS runs are one alias");
+    }
+    previous_collection = is_collection;
     const auto alias = encode_quest_alias(next, creation);
-    if (creation.kind != QuestAliasKind::collection) {
+    if (!is_collection) {
       if (!ids.insert(creation.id).second) {
         throw QuestError("QUST Alias ID already exists: " + std::to_string(creation.id));
       }

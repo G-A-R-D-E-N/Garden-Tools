@@ -32,6 +32,7 @@ TEST(QuestAliasEncoding, BuildsReferenceAliasInProvenOrder) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::reference);
@@ -73,6 +74,7 @@ TEST(QuestAliasEncoding, InsertsConditionsBeforeAled) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
   fo4::CtdaCondition condition;
   condition.function = 675;
@@ -114,6 +116,7 @@ TEST(QuestAliasEncoding, BuildsLocationAliasWithoutInventingName) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::location);
@@ -150,6 +153,7 @@ TEST(QuestAliasEncoding, BuildsCompactCollectionAlias) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   });
 
   EXPECT_EQ(alias.kind, fo4::forms::QuestAliasKind::collection);
@@ -190,6 +194,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
       })),
       fo4::forms::QuestError);
 
@@ -218,6 +223,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
       })),
       fo4::forms::QuestError);
 
@@ -246,6 +252,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
       })),
       fo4::forms::QuestError);
 
@@ -275,6 +282,7 @@ TEST(QuestAliasEncoding, RejectsImpossibleFieldCombinations) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
       })),
       fo4::forms::QuestError);
 }

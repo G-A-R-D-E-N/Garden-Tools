@@ -287,6 +287,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_alias_formlink_remap.cpp
     tests/test_quest_alias_remaining_fills.cpp
     tests/test_quest_alias_extra_decode.cpp
+    tests/test_quest_alias_collection_authoring.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp

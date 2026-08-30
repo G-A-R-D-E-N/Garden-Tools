@@ -120,6 +120,7 @@ fo4::forms::QuestAliasCreation collection(std::uint32_t id, std::uint8_t max_fil
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
 }
 
@@ -148,6 +149,7 @@ fo4::forms::QuestAliasCreation reference(std::uint32_t id) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
 }
 
@@ -182,6 +184,7 @@ TEST(QuestAliasMutation, AddsBeforeTailAndAdvancesNextAliasId) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
   fo4::forms::add_quest_alias(plugin, quest, creation);
 
@@ -324,6 +327,7 @@ TEST(QuestAliasMutation, WriteReplacesWholeArrayIncludingCollectionsAndPreserves
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
   const std::array<fo4::forms::QuestAliasCreation, 2> creations{
       location,

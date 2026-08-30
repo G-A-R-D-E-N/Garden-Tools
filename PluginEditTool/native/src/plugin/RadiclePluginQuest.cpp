@@ -208,6 +208,10 @@ bool questOptionalString(const nlohmann::json& object,
     return true;
 }
 
+bool knownCollectionEntryKey(std::string_view key) {
+    return key == "id" || key == "maxInitialFillCount";
+}
+
 bool knownAliasKey(std::string_view key) {
     return key == "kind" || key == "id" || key == "name" || key == "flags" ||
            key == "forceIntoAlias" || key == "closestToAlias" ||
@@ -225,7 +229,7 @@ bool knownAliasKey(std::string_view key) {
            key == "guardWarnOverridePackageList" ||
            key == "combatOverridePackageList" || key == "displayName" ||
            key == "forcedVoice" || key == "deathItem" || key == "voiceTypes" ||
-           key == "conditions";
+           key == "conditions" || key == "entries";
 }
 
 bool knownCreateReferenceKey(std::string_view key) {
@@ -1998,10 +2002,10 @@ std::optional<Error> existingAliasesUnrepresentable(
             return error;
         }
         if (alias.kind == fo4::forms::QuestAliasKind::collection &&
-            alias.collection_entries.size() > 1) {
+            alias.collection_entries.empty()) {
             return Error{
                 "QuestAuthoringCoverageIncomplete",
-                "existing QUST collection alias has multiple ALCS entries"
+                "existing QUST collection alias has no ALCS entries"
             };
         }
         for (const auto& member : alias.subrecords) {
@@ -2103,6 +2107,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
     std::uint32_t autoId = 0;
     std::vector<fo4::FormKey> fillKeys;
     std::vector<std::vector<PendingQuestCondition>> pendingConditions;
+    bool previousCollection = false;
 
     for (const auto& element : *aliasesJson) {
         if (!element.is_object()) {
@@ -2141,14 +2146,94 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 "kind must be reference, location, or collection"
             });
         }
-
-        if (!questUnsigned(element, "id", autoId, creation.id)) {
+        const bool isCollection = creation.kind == fo4::forms::QuestAliasKind::collection;
+        if (isCollection && previousCollection) {
             return std::unexpected(Error{
                 "InvalidQuestAliasPayload",
-                "alias id must be an unsigned 32-bit value"
+                "collection aliases cannot be adjacent; contiguous ALCS runs are one alias"
             });
         }
-        autoId = creation.id + 1;
+        previousCollection = isCollection;
+
+        const bool hasEntries =
+            element.contains("entries") && !element["entries"].is_null();
+        const bool hasId = element.contains("id") && !element["id"].is_null();
+        const bool hasMaxFill =
+            element.contains("maxInitialFillCount") &&
+            !element["maxInitialFillCount"].is_null();
+        if (hasEntries) {
+            if (creation.kind != fo4::forms::QuestAliasKind::collection) {
+                return std::unexpected(Error{
+                    "InvalidQuestAliasPayload",
+                    "entries is valid only on collection aliases"
+                });
+            }
+            if (hasId || hasMaxFill) {
+                return std::unexpected(Error{
+                    "InvalidQuestAliasPayload",
+                    "collection entries cannot mix with top-level id or maxInitialFillCount"
+                });
+            }
+            if (!element["entries"].is_array() || element["entries"].empty()) {
+                return std::unexpected(Error{
+                    "InvalidQuestAliasPayload",
+                    "collection entries must be a non-empty array"
+                });
+            }
+            std::set<std::uint32_t> entryIds;
+            std::uint32_t maxEntryId = 0;
+            for (const auto& entryJson : element["entries"]) {
+                if (!entryJson.is_object()) {
+                    return std::unexpected(Error{
+                        "InvalidQuestAliasPayload",
+                        "every collection entry must be an object"
+                    });
+                }
+                for (auto it = entryJson.begin(); it != entryJson.end(); ++it) {
+                    if (!knownCollectionEntryKey(it.key())) {
+                        return std::unexpected(Error{
+                            "InvalidQuestAliasPayload",
+                            "Unsupported collection entry field '" + it.key() + "'"
+                        });
+                    }
+                }
+                fo4::forms::QuestCollectionEntry entry;
+                if (!entryJson.contains("id") || entryJson["id"].is_null() ||
+                    !questUnsigned(entryJson, "id", 0, entry.id)) {
+                    return std::unexpected(Error{
+                        "InvalidQuestAliasPayload",
+                        "collection entry id must be an unsigned 32-bit value"
+                    });
+                }
+                if (!entryIds.insert(entry.id).second) {
+                    return std::unexpected(Error{
+                        "InvalidQuestAliasPayload",
+                        "collection aliases cannot contain duplicate ALCS ids"
+                    });
+                }
+                if (!questU8(entryJson, "maxInitialFillCount",
+                             entry.max_initial_fill_count)) {
+                    return std::unexpected(Error{
+                        "InvalidQuestAliasPayload",
+                        "collection entry maxInitialFillCount has an invalid type"
+                    });
+                }
+                if (entry.id >= maxEntryId) maxEntryId = entry.id;
+                creation.collection_entries.push_back(std::move(entry));
+            }
+            creation.id = creation.collection_entries.front().id;
+            if (maxEntryId < std::numeric_limits<std::uint32_t>::max()) {
+                autoId = maxEntryId + 1;
+            }
+        } else {
+            if (!questUnsigned(element, "id", autoId, creation.id)) {
+                return std::unexpected(Error{
+                    "InvalidQuestAliasPayload",
+                    "alias id must be an unsigned 32-bit value"
+                });
+            }
+            autoId = creation.id + 1;
+        }
 
         std::optional<std::string> name;
         if (!questOptionalString(element, "name", name)) {
