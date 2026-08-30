@@ -187,7 +187,9 @@ bool questFloat(const nlohmann::json& object,
     if (!found->is_number()) return false;
     const auto parsed = found->get<double>();
     if (!std::isfinite(parsed)) return false;
-    value = static_cast<float>(parsed);
+    const auto converted = static_cast<float>(parsed);
+    if (!std::isfinite(converted)) return false;
+    value = converted;
     return true;
 }
 
@@ -1521,6 +1523,12 @@ std::optional<Error> extraAliasMembersUnrepresentable(
                 if (i < members.size() && sig(i) == "COED") {
                     if (members[i].data.size() != 12) {
                         return fail("existing QUST alias item extra cannot be reconstructed");
+                    }
+                    float itemCondition = 0.0f;
+                    std::memcpy(&itemCondition, members[i].data.data() + 8, 4);
+                    if (!std::isfinite(itemCondition)) {
+                        return fail(
+                            "existing QUST alias item extra itemCondition cannot be reconstructed");
                     }
                     std::uint32_t ownerRaw = 0;
                     std::memcpy(&ownerRaw, members[i].data.data(), 4);

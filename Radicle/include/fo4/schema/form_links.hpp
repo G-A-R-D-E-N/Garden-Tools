@@ -20,7 +20,8 @@ struct FormLinkHit {
 
 void remap_record_form_links(Record& record,
                              const PluginFormIdContext& old_context,
-                             const PluginFormIdContext& new_context);
+                             const PluginFormIdContext& new_context,
+                             const Plugin* type_source = nullptr);
 
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context);

@@ -142,8 +142,14 @@ valid: only some `CNTO` entries may carry `COED`. JSON uses
 `items[].extra.{owner,global,requiredRank,itemCondition}`; omit `extra` to
 write `CNTO` alone. `global` requires an `NPC_` owner; `requiredRank` requires
 a `FACT` owner. Encode writes `COED` immediately after that item's `CNTO`.
-Missing or short `COED`, `COED` without a preceding `CNTO`, and two `COED`
-records on one item fail closed.
+Decode fills the union from the owner's record type in the same plugin:
+`FACT` → `requiredRank` only, `NPC_` → `global` only, `NULL`/untyped owner →
+neither. Remap visits offset 4 only when that owner resolves to `NPC_` in the
+plugin being remapped; `FACT` ranks are never FormIDs. Offset 4 is not in
+`structured_formids.inc`. Unknown owner plus nonzero union fails closed on
+strict remap. Missing or short `COED`, `COED` without a preceding `CNTO`, two
+`COED` records on one item, non-finite item condition, and setting both
+`global` and `requiredRank` fail closed.
 
 ## Deliberately not modeled yet
 
