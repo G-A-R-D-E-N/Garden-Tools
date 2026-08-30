@@ -112,9 +112,9 @@ jobs:
       # Suppress symbol files for the whole build graph so referenced projects
       # (BehaviourGraph.Core et al.) do not drop portable PDBs into the package.
       # This override also disables the app's own embedded symbols (the csproj
-      # sets DebugType=embedded) -- a deliberate tradeoff: this is a run-the-exe
-      # release package, and shipping no debug symbols at all keeps it lean while
-      # the org is over its Actions storage quota.
+      # sets DebugType=embedded). The publish output is used only as a runtime
+      # verification target in CI, but keeping it release-shaped catches package
+      # regressions without retaining anything in Actions storage.
       - name: Publish platform package
         run: >
           dotnet publish app/BehaviourStudio.csproj --configuration Release
@@ -124,8 +124,8 @@ jobs:
 
       # The publish flags above only suppress managed symbols. Avalonia's Skia /
       # HarfBuzz NuGet packages ship native PDBs (libSkiaSharp.pdb is ~80 MB on
-      # Windows) that otherwise land in publish-check, so strip them per leg --
-      # this is a run-the-exe package; nobody needs debug files in it.
+      # Windows) that otherwise land in publish-check. Strip those too so CI
+      # validates the same lean release-shaped output on both platforms.
       - name: Strip debug symbols from the package
         run: ${{ matrix.strip }}
 
@@ -151,37 +151,3 @@ jobs:
               return;
             }
             core.info(output);
-
-      # Read the version from the project rather than hard-coding it here, so
-      # the artifact name cannot drift from the shipped assembly / CHANGELOG.
-      # github-script runs in the runner's bundled Node with no shell, which
-      # sidesteps this host's broken bash stub and disabled PowerShell scripts.
-      - name: Resolve package version
-        id: version
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { execSync } = require('node:child_process');
-            const version = execSync(
-              'dotnet msbuild app/BehaviourStudio.csproj -getProperty:Version',
-              { cwd: 'BGS', encoding: 'utf8' }
-            ).trim();
-            if (!/^\d+\.\d+\.\d+$/.test(version)) {
-              core.setFailed(`Project version '${version}' is not a semantic version`);
-              return;
-            }
-            core.setOutput('version', version);
-
-      # Verification artifact for non-PR builds. PR CI still performs the full
-      # build/test/publish/version/build-identity validation, but deliberately
-      # bypasses Actions artifact storage so quota/accounting cannot block PR jobs.
-      # Release creation on a tag remains a separate concern and out of scope.
-      - name: Upload versioned package
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: BehaviourGraphStudio-${{ steps.version.outputs.version }}-${{ matrix.rid }}
-          path: BGS/publish-check
-          if-no-files-found: error
-          compression-level: 9
-          retention-days: 3
