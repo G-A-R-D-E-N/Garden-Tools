@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -2105,14 +2107,29 @@ TEST_CASE("Native SetQuestAliases binds mixed item COED to the preceding CNTO") 
     REQUIRE(decoded.aliases[0].items[1].extra.has_value());
     CHECK(decoded.aliases[0].items[1].extra->owner ==
           std::optional<fo4::FormKey>{fo4::FormKey::parse("000803:Master.esm")});
-    CHECK(decoded.aliases[0].items[1].extra->required_rank == std::optional<std::int32_t>{3});
+    CHECK_FALSE(decoded.aliases[0].items[1].extra->required_rank.has_value());
+    CHECK_FALSE(decoded.aliases[0].items[1].extra->global.has_value());
     CHECK(decoded.aliases[0].items[1].extra->item_condition == 1.0f);
     REQUIRE(decoded.aliases[0].items[2].extra.has_value());
     CHECK(decoded.aliases[0].items[2].extra->owner ==
           std::optional<fo4::FormKey>{fo4::FormKey::parse("000806:Master.esm")});
-    CHECK(decoded.aliases[0].items[2].extra->global ==
-          std::optional<fo4::FormKey>{fo4::FormKey::parse("000807:Master.esm")});
+    CHECK_FALSE(decoded.aliases[0].items[2].extra->required_rank.has_value());
     CHECK(decoded.aliases[0].items[2].extra->item_condition == 0.5f);
+    {
+        const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+        REQUIRE(quest != nullptr);
+        std::vector<const fo4::Subrecord*> coeds;
+        for (const auto& sub : quest->subrecords) {
+            if (sub.signature.to_string() == "COED") coeds.push_back(&sub);
+        }
+        REQUIRE(coeds.size() == 2u);
+        std::int32_t rank = 0;
+        std::memcpy(&rank, coeds[0]->data.data() + 4, 4);
+        CHECK(rank == 3);
+        std::uint32_t glob = 0;
+        std::memcpy(&glob, coeds[1]->data.data() + 4, 4);
+        CHECK(glob == 0x00000807u);
+    }
 
     const auto before = readBytes(patchPath);
     const auto both = backend.invokeBackend(
@@ -2160,6 +2177,30 @@ TEST_CASE("Native SetQuestAliases binds mixed item COED to the preceding CNTO") 
         })));
     REQUIRE_FALSE(factGlobal.has_value());
     CHECK(factGlobal.error().type == "InvalidQuestAliasPayload");
+    CHECK(readBytes(patchPath) == before);
+
+    const auto huge = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"items", nlohmann::json::array({
+                    {
+                        {"item", "000801:Master.esm"},
+                        {"count", 1},
+                        {"extra", {
+                            {"owner", "000803:Master.esm"},
+                            {"requiredRank", 1},
+                            {"itemCondition", 1e40}
+                        }}
+                    }
+                })}
+            }
+        })));
+    REQUIRE_FALSE(huge.has_value());
+    CHECK(huge.error().type == "InvalidQuestAliasPayload");
     CHECK(readBytes(patchPath) == before);
 }
 
@@ -2274,6 +2315,13 @@ TEST_CASE("Native SetQuestAliases refuses existing extras that fail authoring ty
     refuse(questPatchWithMaster([&](fo4::test::ByteWriter& out) {
         aliasPrefix(out);
         writeCoed(out, 0x00000803, 0, 1.0f);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    refuse(questPatchWithMaster([&](fo4::test::ByteWriter& out) {
+        aliasPrefix(out);
+        writeU32(out, "COCT", 1);
+        writeCnto(out, 0x00000801, 1);
+        writeCoed(out, 0x00000803, 0, std::numeric_limits<float>::infinity());
         fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
     }));
     refuse(questPatchWithMaster([&](fo4::test::ByteWriter& out) {

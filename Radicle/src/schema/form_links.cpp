@@ -78,6 +78,8 @@ constexpr auto k_fnam = Signature::from_string("FNAM");
 constexpr auto k_nam2 = Signature::from_string("NAM2");
 constexpr auto k_nnam = Signature::from_string("NNAM");
 constexpr auto k_snam = Signature::from_string("SNAM");
+constexpr auto k_npc_ = Signature::from_string("NPC_");
+constexpr auto k_fact = Signature::from_string("FACT");
 constexpr auto k_tpic = Signature::from_string("TPIC");
 constexpr auto k_pnam = Signature::from_string("PNAM");
 constexpr auto k_gnam = Signature::from_string("GNAM");
@@ -563,8 +565,63 @@ std::optional<std::vector<std::size_t>> obts_formid_offsets(const Subrecord& sub
   return offsets;
 }
 
+bool visit_coed_formids(const Subrecord& sub,
+                        bool strict_remap,
+                        const Plugin* type_source,
+                        const PluginFormIdContext* context,
+                        auto&& fn) {
+  if (sub.data.size() != 12) {
+    if (strict_remap) {
+      throw FormIdError("cannot safely remap malformed COED payload");
+    }
+    return true;
+  }
+  const auto owner_raw = RawFormId{read_u32(sub.data, 0)};
+  const auto union_raw = read_u32(sub.data, 4);
+  bool remap_global = false;
+  if (!owner_raw.is_null() && union_raw != 0) {
+    if (type_source == nullptr || context == nullptr) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap COED union without owner type");
+      }
+    } else {
+      FormKey owner_key;
+      try {
+        owner_key = resolve_plugin_form_id(owner_raw, *context);
+      } catch (const FormIdError&) {
+        if (strict_remap) {
+          throw FormIdError("cannot safely remap COED union: owner FormID does not resolve");
+        }
+        owner_key = FormKey{};
+      }
+      if (!owner_key.owner().empty() || owner_key.local().value() != 0) {
+        const auto* owner = find_record(*type_source, owner_key);
+        if (owner == nullptr) {
+          if (strict_remap) {
+            throw FormIdError("cannot safely remap COED union: owner type unknown");
+          }
+        } else if (owner->header.signature == k_npc_) {
+          remap_global = true;
+        } else if (owner->header.signature != k_fact) {
+          if (strict_remap) {
+            throw FormIdError("cannot safely remap COED union: owner is not NPC_ or FACT");
+          }
+        }
+      }
+    }
+  }
+  fn(0);
+  if (remap_global) {
+    fn(4);
+  }
+  return true;
+}
+
 void visit_link_offsets(const Record& record, const Subrecord& sub,
-                        bool strict_remap, auto&& fn) {
+                        bool strict_remap,
+                        const Plugin* type_source,
+                        const PluginFormIdContext* context,
+                        auto&& fn) {
   if (sub.signature == sig_xxxx) {
     return;
   }
@@ -688,6 +745,10 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   if (visit_tagged_formid_slot(sub, fn)) {
     return;
   }
+  if (sub.signature == sig_coed) {
+    visit_coed_formids(sub, strict_remap, type_source, context, fn);
+    return;
+  }
   if (visit_structured_slots(sub.signature, sub.data.size(), fn)) {
     return;
   }
@@ -749,14 +810,16 @@ void remap_raw(std::span<std::byte> data, std::size_t offset,
 
 void remap_record_form_links(Record& record,
                              const PluginFormIdContext& old_context,
-                             const PluginFormIdContext& new_context) {
+                             const PluginFormIdContext& new_context,
+                             const Plugin* type_source) {
   if (record.header.signature == k_info &&
       same_form_id_context(old_context, new_context)) {
     return;
   }
   for (auto& sub : record.subrecords) {
     auto bytes = std::span<std::byte>(sub.data);
-    visit_link_offsets(record, sub, true, [&](std::size_t offset) {
+    visit_link_offsets(record, sub, true, type_source, &old_context,
+                       [&](std::size_t offset) {
       remap_raw(bytes, offset, old_context, new_context);
     });
   }
@@ -765,7 +828,7 @@ void remap_record_form_links(Record& record,
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context) {
   visit_records(plugin, [&](Record& record) {
-    remap_record_form_links(record, old_context, new_context);
+    remap_record_form_links(record, old_context, new_context, &plugin);
   });
 }
 
@@ -780,7 +843,7 @@ void rekey_form_links(Plugin& plugin,
     bool changed = false;
     for (auto& sub : record.subrecords) {
       auto bytes = std::span<std::byte>(sub.data);
-      visit_link_offsets(record, sub, true, [&](std::size_t offset) {
+      visit_link_offsets(record, sub, true, &plugin, &context, [&](std::size_t offset) {
         if (offset + 4 > bytes.size()) return;
         const auto raw = RawFormId{read_u32(bytes, offset)};
         if (raw.is_null()) return;
@@ -824,7 +887,7 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
         current_record_unsupported = true;
       }
       const auto ordinal = ordinals[sub.signature.packed()]++;
-      visit_link_offsets(record, sub, false, [&](std::size_t offset) {
+      visit_link_offsets(record, sub, false, &plugin, &context, [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
           return;
         }

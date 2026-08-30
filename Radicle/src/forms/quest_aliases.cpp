@@ -5,6 +5,7 @@
 #include "fo4/signature.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -491,7 +492,9 @@ void decode_location_fill(QuestAlias& alias,
   }
 }
 
-void decode_alias_extras(QuestAlias& alias, const PluginFormIdContext& context) {
+void decode_alias_extras(QuestAlias& alias,
+                         const PluginFormIdContext& context,
+                         const Plugin* plugin) {
   if (alias.kind != QuestAliasKind::reference) return;
 
   const auto* ksiz = unique_member(alias, k_ksiz, "KSIZ");
@@ -589,10 +592,22 @@ void decode_alias_extras(QuestAlias& alias, const PluginFormIdContext& context) 
         QuestAliasItemExtra extra;
         extra.owner = decode_optional_form_key_at(
             member.data, 0, k_coed, context, "COED owner");
-        extra.required_rank = read_i32(member.data, 4);
-        extra.global = decode_optional_form_key_at(
-            member.data, 4, k_coed, context, "COED global");
         extra.item_condition = read_f32(member.data, 8);
+        if (!std::isfinite(extra.item_condition)) {
+          throw QuestError("QUST alias COED item condition must be finite");
+        }
+        const auto* owner_record =
+            extra.owner.has_value() && plugin != nullptr
+                ? find_record(*plugin, *extra.owner)
+                : nullptr;
+        if (owner_record != nullptr &&
+            owner_record->header.signature.to_string() == "FACT") {
+          extra.required_rank = read_i32(member.data, 4);
+        } else if (owner_record != nullptr &&
+                   owner_record->header.signature.to_string() == "NPC_") {
+          extra.global = decode_optional_form_key_at(
+              member.data, 4, k_coed, context, "COED global");
+        }
         if (item_open) {
           alias.items.back().extra = std::move(extra);
         }
@@ -659,7 +674,8 @@ void decode_alias_extras(QuestAlias& alias, const PluginFormIdContext& context) 
 }
 
 void decode_alias_semantics(QuestAlias& alias,
-                            const PluginFormIdContext* context) {
+                            const PluginFormIdContext* context,
+                            const Plugin* plugin) {
   // Scope the unresolved-link collector to this alias so a dangling FormID
   // degrades one field rather than aborting the quest.
   alias.unresolved_links.clear();
@@ -762,7 +778,7 @@ void decode_alias_semantics(QuestAlias& alias,
   }
 
   if (alias.kind == QuestAliasKind::reference && context != nullptr) {
-    decode_alias_extras(alias, *context);
+    decode_alias_extras(alias, *context, plugin);
   }
 }
 
@@ -1033,6 +1049,12 @@ void insert_alias_extras(QuestAlias& alias,
       extra.push_back(make_subrecord(k_cnto, std::move(cnto)));
       if (!item.extra.has_value()) continue;
       const auto& extra_data = *item.extra;
+      if (extra_data.global.has_value() && extra_data.required_rank.has_value()) {
+        throw QuestError("QUST alias COED cannot set both global and requiredRank");
+      }
+      if (!std::isfinite(extra_data.item_condition)) {
+        throw QuestError("QUST alias COED item condition must be finite");
+      }
       std::vector<std::byte> coed;
       if (extra_data.owner.has_value()) {
         append_encoded_form_id(coed, *extra_data.owner, context);
@@ -1114,7 +1136,7 @@ QuestAlias encode_quest_alias(const QuestAliasCreation& creation) {
   auto alias = encode_base_alias(creation);
   insert_alias_conditions(alias, creation.conditions);
   insert_post_fill_fields(alias, creation);
-  decode_alias_semantics(alias, nullptr);
+  decode_alias_semantics(alias, nullptr, nullptr);
   return alias;
 }
 
@@ -1126,7 +1148,7 @@ QuestAlias encode_quest_alias(const Plugin& plugin,
   insert_alias_conditions(alias, creation.conditions);
   insert_alias_extras(alias, creation, context);
   insert_post_fill_fields(alias, creation);
-  decode_alias_semantics(alias, &context);
+  decode_alias_semantics(alias, &context, &plugin);
   return alias;
 }
 
@@ -1192,7 +1214,7 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
           ++index;
         }
       }
-      decode_alias_semantics(alias, &context);
+      decode_alias_semantics(alias, &context, &plugin);
       result.aliases.push_back(std::move(alias));
       continue;
     }
@@ -1224,7 +1246,7 @@ QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
           "QUST " + std::string(alias_label(alias.kind)) +
           " alias is missing required ALED end marker");
     }
-    decode_alias_semantics(alias, &context);
+    decode_alias_semantics(alias, &context, &plugin);
     result.aliases.push_back(std::move(alias));
   }
 
