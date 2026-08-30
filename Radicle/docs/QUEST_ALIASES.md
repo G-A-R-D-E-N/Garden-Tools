@@ -23,7 +23,13 @@ region immediately after `ANAM`. Once the tail starts, a later `ALST`, `ALLS`,
 second alias array.
 
 Alias IDs must be unique. `ANAM` grows monotonically when a newly inserted
-alias ID reaches or exceeds it; removals do not recycle/decrease it.
+reference/location ID reaches or exceeds it: `max(existing ANAM, max(ref/location
+id)+1)`. Removals and collection-only rewrites do not recycle or decrease it.
+Collection entry IDs do not contribute.
+
+`add_quest_alias`, `remove_quest_alias`, `replace_quest_alias`, and
+`reorder_quest_alias` refuse any result that would place two collection ranges
+next to each other. A later decode would merge those runs into one alias.
 
 ## Alias discriminators
 
@@ -59,7 +65,8 @@ collection aliases, so authoring refuses consecutive collection objects.
 
 `SetQuestAliases` JSON: `entries: [{id, maxInitialFillCount?}, ...]`. Single-entry
 sugar `id` + `maxInitialFillCount` remains. Mixing `entries` with those
-top-level keys fails. ANAM still grows from reference/location IDs only.
+top-level keys fails. Collection IDs do not allocate automatic
+reference/location IDs. ANAM still grows from reference/location IDs only.
 
 ## FormID-bearing Fill Types currently modeled
 
