@@ -135,6 +135,29 @@ std::vector<std::byte> extraMasterPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> conditionMasterPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(3);
+    hedr.u32(0x803);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    auto writeRecord = [&](std::string_view type, std::uint32_t formId, std::string_view edid) {
+        const auto group = fo4::test::begin_group(out, type, 0);
+        const auto record = fo4::test::begin_record(out, type, 0, formId);
+        fo4::test::write_subrecord(out, "EDID", edid);
+        fo4::test::end_record(out, record);
+        fo4::test::end_group(out, group);
+    };
+    writeRecord("NPC_", 0x00000800, std::string_view{"CondNpc\0", 8});
+    writeRecord("GLOB", 0x00000801, std::string_view{"CondGlob\0", 9});
+    writeRecord("REFR", 0x00000802, std::string_view{"CondRef\0", 8});
+    return out.bytes;
+}
+
 std::vector<std::byte> npcMasterPlugin() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
@@ -2257,5 +2280,316 @@ TEST_CASE("Native SetQuestAliases refuses existing alias CIS on a non-text slot"
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(result.error().message.find("CIS1") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+std::vector<fo4::CtdaCondition> readFirstAliasConditions(const std::filesystem::path& path) {
+    const auto disk = fo4::read_plugin_file(path);
+    const auto decoded = fo4::forms::decode_quest_aliases(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE_FALSE(decoded.aliases.empty());
+    const auto& members = decoded.aliases[0].subrecords;
+    auto begin = members.begin();
+    while (begin != members.end() && begin->signature.to_string() != "CTDA") ++begin;
+    REQUIRE(begin != members.end());
+    auto end = begin;
+    while (end != members.end()) {
+        const auto name = end->signature.to_string();
+        if (name != "CTDA" && name != "CIS1" && name != "CIS2") break;
+        ++end;
+    }
+    std::vector<fo4::CtdaCondition> conditions;
+    std::size_t consumed = 0;
+    const std::span<const fo4::Subrecord> run{
+        &*begin, static_cast<std::size_t>(end - begin)};
+    REQUIRE(fo4::forms::lossless_quest_log_entry_conditions(run, conditions, consumed));
+    REQUIRE(consumed == run.size());
+    return conditions;
+}
+
+TEST_CASE("Native SetQuestAliases writes zero, multiple, scalar, and CIS2 conditions") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto empty = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {{"kind", "reference"}, {"id", 1}, {"name", "None"}, {"flags", 0}}
+        })));
+    REQUIRE(empty.has_value());
+    {
+        const auto names = recordSignatures(
+            fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+        CHECK(std::find(names.begin(), names.end(), "CTDA") == names.end());
+        CHECK(std::find(names.begin(), names.end(), "CIS1") == names.end());
+        CHECK(names.back() == "NNAM");
+    }
+
+    const auto written = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Many"},
+                {"flags", 0},
+                {"conditions", nlohmann::json::array({
+                    {
+                        {"function", "GetGraphVariableInt"},
+                        {"operator", "=="},
+                        {"cis1", "KeywordOne"},
+                        {"value", 1.0}
+                    },
+                    {
+                        {"function", "GetAngle"},
+                        {"operator", "!="},
+                        {"param1", 1},
+                        {"value", 0.0}
+                    },
+                    {
+                        {"function", "GetVMQuestVariable"},
+                        {"param1", "000800:Patch.esp"},
+                        {"cis2", "QuestVar"},
+                        {"value", 1.0}
+                    }
+                })}
+            }
+        })));
+    REQUIRE(written.has_value());
+
+    const auto names = recordSignatures(
+        fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    const auto alst = std::find(names.begin(), names.end(), "ALST");
+    REQUIRE(alst != names.end());
+    std::vector<std::string> members;
+    for (auto it = alst; it != names.end() && *it != "ALED"; ++it) members.push_back(*it);
+    members.push_back("ALED");
+    const std::vector<std::string> expected{
+        "ALST", "ALID", "FNAM", "CTDA", "CIS1", "CTDA", "CTDA", "CIS2", "ALED"};
+    CHECK(members == expected);
+    CHECK(names.back() == "NNAM");
+
+    const auto conditions = readFirstAliasConditions(path);
+    REQUIRE(conditions.size() == 3u);
+    CHECK(conditions[0].function == 675u);
+    REQUIRE(conditions[0].parameter1_string.has_value());
+    CHECK(*conditions[0].parameter1_string == "KeywordOne");
+    CHECK(conditions[1].function == 8u);
+    CHECK(conditions[1].param1 == 1);
+    CHECK(conditions[1].compare_operator() == 1u);
+    CHECK_FALSE(conditions[1].parameter1_string.has_value());
+    CHECK(conditions[2].function == 629u);
+    REQUIRE(conditions[2].parameter2_string.has_value());
+    CHECK(*conditions[2].parameter2_string == "QuestVar");
+    CHECK_FALSE(conditions[2].parameter1_string.has_value());
+}
+
+TEST_CASE("Native SetQuestAliases encodes FormKey compareGlobal and RunOn Reference") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, conditionMasterPlugin());
+    writeBytes(patchPath, questPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadExtraMaster(backend, masterPath, patchPath);
+
+    const auto written = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Links"},
+                {"flags", 0},
+                {"conditions", nlohmann::json::array({
+                    {
+                        {"function", "GetIsID"},
+                        {"param1", "000800:Master.esm"},
+                        {"compareGlobal", "000801:Master.esm"}
+                    },
+                    {
+                        {"function", "GetDistance"},
+                        {"param1", "000802:Master.esm"},
+                        {"runOn", "Reference"},
+                        {"reference", "000802:Master.esm"},
+                        {"value", 1.0}
+                    },
+                    {
+                        {"function", "GetDistance"},
+                        {"flags", "ParametersUseAliases"},
+                        {"param1", 2},
+                        {"value", 1.0}
+                    }
+                })}
+            }
+        })));
+    REQUIRE(written.has_value());
+
+    const auto disk = fo4::read_plugin_file(patchPath);
+    REQUIRE(disk.header.masters.size() == 1u);
+    CHECK(disk.header.masters[0].key.filename() == "Master.esm");
+    const auto context = fo4::plugin_form_id_context(disk);
+    const auto conditions = readFirstAliasConditions(patchPath);
+    REQUIRE(conditions.size() == 3u);
+    CHECK((conditions[0].flags_byte & fo4::k_ctda_flag_use_global) != 0);
+    CHECK(fo4::resolve_plugin_form_id(
+              fo4::RawFormId{static_cast<std::uint32_t>(conditions[0].param1)}, context) ==
+          fo4::FormKey::parse("000800:Master.esm"));
+    CHECK(fo4::resolve_plugin_form_id(
+              fo4::RawFormId{conditions[0].comparison_raw}, context) ==
+          fo4::FormKey::parse("000801:Master.esm"));
+    CHECK(conditions[1].run_on == 2u);
+    CHECK(fo4::resolve_plugin_form_id(
+              fo4::RawFormId{static_cast<std::uint32_t>(conditions[1].param1)}, context) ==
+          fo4::FormKey::parse("000802:Master.esm"));
+    CHECK(fo4::resolve_plugin_form_id(
+              fo4::RawFormId{conditions[1].reference}, context) ==
+          fo4::FormKey::parse("000802:Master.esm"));
+    CHECK((conditions[2].flags_byte & fo4::k_ctda_flag_aliases) != 0);
+    CHECK(conditions[2].param1 == 2);
+
+    fo4ide::plugin::RadiclePluginBackend reloaded;
+    loadExtraMaster(reloaded, masterPath, patchPath);
+    const auto again = readFirstAliasConditions(patchPath);
+    REQUIRE(again.size() == 3u);
+    CHECK(again[0].function == conditions[0].function);
+    CHECK(again[1].run_on == 2u);
+    CHECK(again[2].param1 == 2);
+}
+
+TEST_CASE("Native SetQuestAliases preserves stages and tail when writing conditions") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeIndx(out, 5, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CNAM", std::string_view{"KeepMe\0", 7});
+        writeSimpleAlias(out);
+        fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
+    }));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto written = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 4},
+                {"name", "Cond"},
+                {"flags", 0},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetAngle"}, {"param1", 1}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE(written.has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    const auto names = recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    CHECK(std::find(names.begin(), names.end(), "INDX") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "QSDT") != names.end());
+    CHECK(names.back() == "NNAM");
+    CHECK(fo4::forms::decode_quest_stages(
+              disk, fo4::FormKey::parse("000800:Patch.esp")).stages.size() == 1u);
+    const auto aliases = fo4::forms::decode_quest_aliases(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(aliases.aliases.size() == 1u);
+    CHECK(aliases.aliases[0].id == 4u);
+    CHECK(readFirstAliasConditions(path).size() == 1u);
+}
+
+TEST_CASE("Native SetQuestAliases refuses malformed and EventData existing alias CTDA") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    auto tryRefuse = [&](std::vector<std::byte> ctda, const char* needle) {
+        writeBytes(path, questPluginWith(0, [&](fo4::test::ByteWriter& out) {
+            writeU32(out, "ANAM", 2);
+            writeU32(out, "ALST", 1);
+            fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+            writeU32(out, "FNAM", 0);
+            fo4::test::write_subrecord(out, "CTDA", ctda);
+            fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+        }));
+        const auto before = readBytes(path);
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        const auto result = backend.invokeBackend(
+            "SetQuestAliases",
+            setAliasesArgs(nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+        CHECK(result.error().message.find(needle) != std::string::npos);
+        CHECK(readBytes(path) == before);
+    };
+
+    tryRefuse(std::vector<std::byte>(33, std::byte{0}), "CTDA/CIS");
+    tryRefuse(makeEventDataPayload(), "GetEventData");
+    tryRefuse(makeCtdaPayload(8, 1, 1.0f, static_cast<std::uint8_t>(6u << 5)), "operator");
+    tryRefuse(makeCtdaPayload(8, 1, 1.0f, 0, 1), "unknown fields");
+}
+
+TEST_CASE("Native SetQuestAliases refuses invalid condition FormKeys and GetEventData JSON") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto eventData = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetEventData"}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE_FALSE(eventData.has_value());
+    CHECK(eventData.error().type == "InvalidQuestAliasPayload");
+    CHECK(eventData.error().message.find("GetEventData") != std::string::npos);
+
+    const auto mistyped = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetDistance"}, {"param1", "000800:Patch.esp"}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE_FALSE(mistyped.has_value());
+    CHECK(mistyped.error().type == "InvalidTypedFormKey");
+
+    const auto unresolved = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetIsID"}, {"param1", "000800:Missing.esm"}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE_FALSE(unresolved.has_value());
     CHECK(readBytes(path) == before);
 }
