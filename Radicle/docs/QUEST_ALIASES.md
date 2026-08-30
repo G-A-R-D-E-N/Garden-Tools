@@ -63,10 +63,14 @@ constructed by manipulating runtime/file-index bits directly.
 
 | Fill Type | Subrecords | Semantics |
 | --- | --- | --- |
-| Specific Reference | `ALFR` | nullable reference FormID |
+| Specific Reference | `ALFR` | non-null reference FormID (JSON cannot author `ALFR=0`) |
 | Unique Actor | `ALUA` | required `NPC_` FormID |
 | Location Alias Reference | `ALFA` + `ALRT` | alias i32 + required `LCRT` FormID |
 | External Alias Reference | optional `ALEQ` + required `ALEA` | optional `QUST` FormID + alias i32 |
+| Create Reference | `ALCO` + `ALCA` | optional object FormID + alias i16 + create mode `0`/`0x8000` (`ALCL` unmodeled) |
+| Find Matching Near Alias | `ALNA` + `ALNT` | alias i32 + type `0`/`1` |
+| Find Matching From Event | `ALFE` + `ALFD` | event u32 + data u32 |
+| Find Matching Closest | `ALCC` | alias i32 (fill; before conditions) |
 
 `ALFA` and `ALEA` are alias IDs, not FormIDs. The generic FormLink scanner must
 not remap them. `ALFR` is explicitly listed in the scanner because it is a real
@@ -80,6 +84,7 @@ the old master-index space.
 | Specific Location | `ALFL` | required `LCTN` FormID |
 | Reference Alias Location | `ALFA` + optional `KNAM` | alias i32 + optional `KYWD` FormID |
 | External Alias Location | optional `ALEQ` + optional `ALEA` | optional `QUST` FormID + optional alias i32 |
+| Find Matching Location | `ALFE` + `ALFD` | event u32 + data u32 (before post-condition `ALCC`) |
 
 The semantic encoder refuses an External Alias Location with neither member.
 
@@ -101,12 +106,15 @@ coverage closed.
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- Remaining reference/location alias fields after the Fill Type union:
-  voice type, death item, display name, and package-list overrides
-  (`SPOR`/`OCOR`/`GWOR`/`ECOR`).
-- Reference alias extras now modeled: keywords (`KSIZ`/`KWDA`), items
-  (`COCT`/`CNTO` without `COED`), linked aliases (`ALLA`), spells (`ALSP`),
-  factions (`ALFC`), and packages (`ALPC`), in Mutagen WriteRecordTypes order.
+- Semantic decoded collections for extras (keywords/items/linked/spells/factions/packages).
+- Collection multi-entry authoring (multiple `ALCS`).
+- `COED` on alias items.
+- Reference alias extras now modeled in Mutagen WriteRecordTypes order:
+  keywords (`KSIZ`/`KWDA`), items (`COCT`/`CNTO` without `COED`),
+  package-list overrides (`SPOR`/`OCOR`/`GWOR`/`ECOR`, nullable `FLST`),
+  linked aliases (`ALLA`), display name (`ALDN` `MESG`), forced voice (`ALFV` `VTYP`),
+  death item (`ALDI` `LVLI`), spells (`ALSP`), factions (`ALFC`), packages (`ALPC`),
+  and voice types (`VTCK`: `VTYP`/`FLST`/`NPC_`/`FACT`).
 - Alias VMAD interactions beyond the existing global VMAD safety contract. PluginEditTool `SetQuestAliases` / `SetQuestStages` fail closed when QUST VMAD extras bind alias IDs or stage fragments (`fo4::quest_vmad_bindings`). Whole-array replace still does not rewrite VMAD.
 
 Unknown members inside an existing reference/location alias are preserved in

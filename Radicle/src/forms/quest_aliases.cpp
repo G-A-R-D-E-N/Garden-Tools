@@ -52,9 +52,17 @@ constexpr auto k_kwda = Signature::from_string("KWDA");
 constexpr auto k_coct = Signature::from_string("COCT");
 constexpr auto k_cnto = Signature::from_string("CNTO");
 constexpr auto k_alla = Signature::from_string("ALLA");
+constexpr auto k_spor = Signature::from_string("SPOR");
+constexpr auto k_ocor = Signature::from_string("OCOR");
+constexpr auto k_gwor = Signature::from_string("GWOR");
+constexpr auto k_ecor = Signature::from_string("ECOR");
+constexpr auto k_aldn = Signature::from_string("ALDN");
+constexpr auto k_alfv = Signature::from_string("ALFV");
+constexpr auto k_aldi = Signature::from_string("ALDI");
 constexpr auto k_alsp = Signature::from_string("ALSP");
 constexpr auto k_alfc = Signature::from_string("ALFC");
 constexpr auto k_alpc = Signature::from_string("ALPC");
+constexpr auto k_vtck = Signature::from_string("VTCK");
 
 std::uint16_t read_u16(const std::vector<std::byte>& data, std::size_t offset = 0) {
   std::uint16_t value = 0;
@@ -703,7 +711,15 @@ void insert_alias_fill(QuestAlias& alias,
 bool has_reference_extras(const QuestAliasCreation& creation) {
   return !creation.keywords.empty() || !creation.items.empty() ||
          !creation.linked_aliases.empty() || !creation.spells.empty() ||
-         !creation.factions.empty() || !creation.packages.empty();
+         !creation.factions.empty() || !creation.packages.empty() ||
+         creation.spectator_override.has_value() ||
+         creation.observe_dead_body_override.has_value() ||
+         creation.guard_warn_override.has_value() ||
+         creation.combat_override.has_value() ||
+         creation.display_name.has_value() ||
+         creation.forced_voice.has_value() ||
+         creation.death_item.has_value() ||
+         creation.voice_types.has_value();
 }
 
 void append_encoded_form_id(std::vector<std::byte>& packed,
@@ -742,7 +758,8 @@ void insert_alias_extras(QuestAlias& alias,
   if (!has_reference_extras(creation)) return;
   if (alias.kind != QuestAliasKind::reference) {
     throw QuestError(
-        "QUST keywords, items, linked aliases, spells, factions, and packages "
+        "QUST keywords, items, linked aliases, package-list overrides, "
+        "display name, voice, death item, spells, factions, and packages "
         "are valid only on reference aliases");
   }
   std::vector<Subrecord> extra;
@@ -770,6 +787,14 @@ void insert_alias_extras(QuestAlias& alias,
       extra.push_back(make_subrecord(k_cnto, std::move(cnto)));
     }
   }
+  const auto emitOptional = [&](Signature signature, const std::optional<FormKey>& key) {
+    if (!key.has_value()) return;
+    extra.push_back(encoded_form_key(signature, *key, context));
+  };
+  emitOptional(k_spor, creation.spectator_override);
+  emitOptional(k_ocor, creation.observe_dead_body_override);
+  emitOptional(k_gwor, creation.guard_warn_override);
+  emitOptional(k_ecor, creation.combat_override);
   if (!creation.linked_aliases.empty()) {
     std::vector<std::byte> alla;
     alla.reserve(creation.linked_aliases.size() * 8);
@@ -780,6 +805,9 @@ void insert_alias_extras(QuestAlias& alias,
     }
     extra.push_back(make_subrecord(k_alla, std::move(alla)));
   }
+  emitOptional(k_aldn, creation.display_name);
+  emitOptional(k_alfv, creation.forced_voice);
+  emitOptional(k_aldi, creation.death_item);
   for (const auto& spell : creation.spells) {
     extra.push_back(encoded_form_key(k_alsp, spell, context));
   }
@@ -789,6 +817,7 @@ void insert_alias_extras(QuestAlias& alias,
   for (const auto& package : creation.packages) {
     extra.push_back(encoded_form_key(k_alpc, package, context));
   }
+  emitOptional(k_vtck, creation.voice_types);
   insert_before_aled(alias, std::move(extra));
 }
 

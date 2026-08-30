@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -66,10 +67,37 @@ fo4::forms::QuestAliasCreation base_reference() {
       .spells = {},
       .factions = {},
       .packages = {},
+      .spectator_override = {},
+      .observe_dead_body_override = {},
+      .guard_warn_override = {},
+      .combat_override = {},
+      .display_name = {},
+      .forced_voice = {},
+      .death_item = {},
+      .voice_types = {},
       .conditions = {},
   };
 }
 
+}
+
+TEST(QuestAliasFormLinks, EmitsRemainingMembersInMutagenOrder) {
+  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto creation = base_reference();
+  creation.keywords = {fo4::FormKey::parse("000111:Master.esm")};
+  creation.spectator_override = fo4::FormKey::parse("000122:Master.esm");
+  creation.linked_aliases = {{fo4::FormKey::parse("000111:Master.esm"), 4}};
+  creation.display_name = fo4::FormKey::parse("000133:Master.esm");
+  creation.spells = {fo4::FormKey::parse("000144:Master.esm")};
+  creation.voice_types = fo4::FormKey::parse("000155:Master.esm");
+
+  const auto alias = fo4::forms::encode_quest_alias(plugin, creation);
+  std::vector<std::string> names;
+  for (const auto& sub : alias.subrecords) names.push_back(sub.signature.to_string());
+  const std::vector<std::string> expected{
+      "ALST", "ALID", "FNAM", "KSIZ", "KWDA", "SPOR", "ALLA", "ALDN", "ALSP", "VTCK",
+      "ALED"};
+  EXPECT_EQ(names, expected);
 }
 
 TEST(QuestAliasFormLinks, EncodesSpecificMasterReferenceWithPluginMasterIndex) {
