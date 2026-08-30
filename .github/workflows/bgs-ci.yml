@@ -172,22 +172,12 @@ jobs:
             }
             core.setOutput('version', version);
 
-      # Verification artifact for this build. Release creation on a tag is a
-      # separate concern and out of scope here. path is workspace-relative
-      # (working-directory does not apply to `uses:` steps); uploading the
-      # publish-check directory places BehaviourGraphStudio[.exe] at the
-      # artifact root with no extra nesting.
-      #
-      # Size controls: symbols are suppressed at publish time, the zip is
-      # max-compressed (compression-level 9), and retention is 3 days -- the
-      # org is over its Actions storage quota, so every artifact byte counts.
-      #
-      # Non-gating on pull_request on purpose: a quota-exhausted org can refuse
-      # artifact storage and must not turn an otherwise healthy build/test PR
-      # red. Uploads stay fatal on push/workflow_dispatch, so the main-line
-      # artifact remains a hard verification gate.
+      # Verification artifact for non-PR builds. PR CI still performs the full
+      # build/test/publish/version/build-identity validation, but deliberately
+      # bypasses Actions artifact storage so quota/accounting cannot block PR jobs.
+      # Release creation on a tag remains a separate concern and out of scope.
       - name: Upload versioned package
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
           name: BehaviourGraphStudio-${{ steps.version.outputs.version }}-${{ matrix.rid }}
