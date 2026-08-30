@@ -241,6 +241,9 @@ void write_quest_aliases(Plugin& plugin,
     encoded.insert(encoded.end(), alias.subrecords.begin(), alias.subrecords.end());
   }
 
+  const auto previous = decode_quest_aliases(next, quest);
+  sync_quest_vmad_aliases(*record, previous, creations);
+
   const auto section = inspect_alias_section(*record);
   auto begin = record->subrecords.begin() +
                static_cast<std::ptrdiff_t>(section.anam_index + 1);

@@ -70,6 +70,8 @@ struct VmadScan {
   bool trailing_data{false};
   std::uint16_t quest_fragment_count{0};
   std::uint16_t quest_alias_count{0};
+  std::vector<QuestVmadFragmentBinding> quest_fragments;
+  std::vector<QuestVmadAliasBinding> quest_aliases;
 };
 
 constexpr std::uint8_t k_type_object = 1;
@@ -210,19 +212,41 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
     slice.u8();
     walk_properties(slice, object_format, slice.u16(), result.offsets);
   }
+  result.quest_fragments.reserve(fragment_count);
   for (std::uint16_t i = 0; i < fragment_count; ++i) {
+    QuestVmadFragmentBinding fragment;
+    fragment.stage_offset = slice.position();
+    fragment.stage = slice.u16();
     slice.u16();
-    slice.u16();
-    slice.u32();
+    fragment.stage_index_offset = slice.position();
+    fragment.stage_index = static_cast<std::int32_t>(slice.u32());
     slice.u8();
     slice.skip_wstring();
     slice.skip_wstring();
+    result.quest_fragments.push_back(fragment);
   }
   const auto alias_count = slice.u16();
   result.quest_fragment_count = fragment_count;
   result.quest_alias_count = alias_count;
+  result.quest_aliases.reserve(alias_count);
   for (std::uint16_t i = 0; i < alias_count; ++i) {
-    walk_object(slice, object_format, result.offsets);
+    QuestVmadAliasBinding alias;
+    if (object_format == 2) {
+      slice.u16();
+      alias.alias_id_offset = slice.position();
+      alias.alias_id = slice.i16();
+      result.offsets.push_back(slice.position());
+      slice.u32();
+    } else if (object_format == 1) {
+      result.offsets.push_back(slice.position());
+      slice.u32();
+      alias.alias_id_offset = slice.position();
+      alias.alias_id = slice.i16();
+      slice.u16();
+    } else {
+      throw parse_error(slice.position(), "unknown VMAD object format");
+    }
+    result.quest_aliases.push_back(alias);
     slice.i16();
     const auto alias_format = slice.i16();
     walk_scripts(slice, alias_format, slice.u16(), result.offsets);
@@ -350,6 +374,27 @@ QuestVmadBindings quest_vmad_bindings(std::span<const std::byte> data) {
   bindings.binds_stages = scan.quest_fragment_count > 0;
   bindings.binds_aliases = scan.quest_alias_count > 0;
   return bindings;
+}
+
+QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data) {
+  QuestVmadLayout layout;
+  if (data.size() < 6) {
+    layout.unparseable = true;
+    return layout;
+  }
+  const auto scan = scan_vmad(data, sig_qust);
+  if (scan.unsupported) {
+    layout.unsupported = true;
+    layout.unparseable = true;
+    return layout;
+  }
+  if (scan.failed || scan.trailing_data || !scan.fully_consumed) {
+    layout.unparseable = true;
+    return layout;
+  }
+  layout.fragments = scan.quest_fragments;
+  layout.aliases = scan.quest_aliases;
+  return layout;
 }
 
 }  // namespace fo4

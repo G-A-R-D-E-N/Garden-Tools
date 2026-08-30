@@ -19,6 +19,7 @@
 #include <fo4/forms/quest.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/vmad.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -1060,6 +1061,160 @@ TEST_CASE("Native SetQuestAliases is allowed when VMAD only binds stage fragment
             })
         }));
     REQUIRE(result.has_value());
+}
+
+TEST_CASE("Native SetQuestAliases rewrites VMAD alias IDs by unique name") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::write_subrecord(out, "VMAD", vmadAliasObjects());
+        writeSimpleAlias(out);
+    }));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto kept = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 1}, {"name", "Existing"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE(kept.has_value());
+    {
+        const auto disk = fo4::read_plugin_file(path);
+        const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+        REQUIRE(quest != nullptr);
+        const fo4::Subrecord* vmad = nullptr;
+        for (const auto& sub : quest->subrecords) {
+            if (sub.signature.to_string() == "VMAD") vmad = &sub;
+        }
+        REQUIRE(vmad != nullptr);
+        const auto layout = fo4::inspect_quest_vmad(vmad->data);
+        REQUIRE(layout.aliases.size() == 1u);
+        CHECK(layout.aliases[0].alias_id == 1);
+    }
+
+    const auto renamed = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 4}, {"name", "Existing"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE(renamed.has_value());
+    const auto reread = fo4::read_plugin_file(path);
+    const auto* quest = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(quest != nullptr);
+    const fo4::Subrecord* vmad = nullptr;
+    for (const auto& sub : quest->subrecords) {
+        if (sub.signature.to_string() == "VMAD") vmad = &sub;
+    }
+    REQUIRE(vmad != nullptr);
+    const auto layout = fo4::inspect_quest_vmad(vmad->data);
+    REQUIRE(layout.aliases.size() == 1u);
+    CHECK(layout.aliases[0].alias_id == 4);
+    CHECK(layout.fragments.empty());
+}
+
+TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        fo4::test::ByteWriter mixed;
+        mixed.u16(6);
+        mixed.u16(2);
+        mixed.u16(0);
+        mixed.u8(3);
+        mixed.u16(1);
+        mixed.u16(0);
+        mixed.u16(10);
+        mixed.u16(0);
+        mixed.u32(0);
+        mixed.u8(0);
+        writeVmadWstring(mixed, "QF_Test");
+        writeVmadWstring(mixed, "Fragment_10");
+        mixed.u16(1);
+        mixed.u16(0);
+        mixed.u16(1);
+        mixed.u32(0x00000800);
+        mixed.u16(6);
+        mixed.u16(2);
+        mixed.u16(0);
+        fo4::test::write_subrecord(out, "VMAD", mixed.bytes);
+        writeIndx(out, 10, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CNAM", std::string_view{"Log\0", 4});
+        writeSimpleAlias(out);
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto same = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "Log"}}})
+        }));
+    REQUIRE(same.has_value());
+    {
+        const auto disk = fo4::read_plugin_file(path);
+        const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+        REQUIRE(quest != nullptr);
+        const fo4::Subrecord* vmad = nullptr;
+        for (const auto& sub : quest->subrecords) {
+            if (sub.signature.to_string() == "VMAD") vmad = &sub;
+        }
+        REQUIRE(vmad != nullptr);
+        const auto layout = fo4::inspect_quest_vmad(vmad->data);
+        REQUIRE(layout.fragments.size() == 1u);
+        CHECK(layout.fragments[0].stage == 10);
+        REQUIRE(layout.aliases.size() == 1u);
+        CHECK(layout.aliases[0].alias_id == 1);
+    }
+
+    const auto renumbered = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 20}, {"logEntry", "Log"}}})
+        }));
+    REQUIRE(renumbered.has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(quest != nullptr);
+    const fo4::Subrecord* vmad = nullptr;
+    for (const auto& sub : quest->subrecords) {
+        if (sub.signature.to_string() == "VMAD") vmad = &sub;
+    }
+    REQUIRE(vmad != nullptr);
+    const auto layout = fo4::inspect_quest_vmad(vmad->data);
+    REQUIRE(layout.fragments.size() == 1u);
+    CHECK(layout.fragments[0].stage == 20);
+    REQUIRE(layout.aliases.size() == 1u);
+    CHECK(layout.aliases[0].alias_id == 1);
+
+    const auto afterRenumber = readBytes(path);
+    const auto dangling = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 9}, {"name", "Other"}, {"flags", 0}}
+            })
+        }));
+    REQUIRE_FALSE(dangling.has_value());
+    CHECK(dangling.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(readBytes(path) == afterRenumber);
+    (void)before;
 }
 
 TEST_CASE("Native SetQuestStages is allowed when VMAD only binds alias objects") {
