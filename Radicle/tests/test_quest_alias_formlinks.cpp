@@ -98,6 +98,19 @@ TEST(QuestAliasFormLinks, EmitsRemainingMembersInMutagenOrder) {
       "ALST", "ALID", "FNAM", "KSIZ", "KWDA", "SPOR", "ALLA", "ALDN", "ALSP", "VTCK",
       "ALED"};
   EXPECT_EQ(names, expected);
+  ASSERT_EQ(alias.keywords.size(), 1u);
+  EXPECT_EQ(alias.keywords[0], fo4::FormKey::parse("000111:Master.esm"));
+  ASSERT_TRUE(alias.spectator_override.has_value());
+  EXPECT_EQ(*alias.spectator_override, fo4::FormKey::parse("000122:Master.esm"));
+  ASSERT_EQ(alias.linked_aliases.size(), 1u);
+  EXPECT_EQ(alias.linked_aliases[0].keyword, fo4::FormKey::parse("000111:Master.esm"));
+  EXPECT_EQ(alias.linked_aliases[0].alias, 4);
+  ASSERT_TRUE(alias.display_name.has_value());
+  EXPECT_EQ(*alias.display_name, fo4::FormKey::parse("000133:Master.esm"));
+  ASSERT_EQ(alias.spells.size(), 1u);
+  EXPECT_EQ(alias.spells[0], fo4::FormKey::parse("000144:Master.esm"));
+  ASSERT_TRUE(alias.voice_types.has_value());
+  EXPECT_EQ(*alias.voice_types, fo4::FormKey::parse("000155:Master.esm"));
 }
 
 TEST(QuestAliasFormLinks, EncodesSpecificMasterReferenceWithPluginMasterIndex) {

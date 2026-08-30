@@ -63,6 +63,7 @@ constexpr auto k_alsp = Signature::from_string("ALSP");
 constexpr auto k_alfc = Signature::from_string("ALFC");
 constexpr auto k_alpc = Signature::from_string("ALPC");
 constexpr auto k_vtck = Signature::from_string("VTCK");
+constexpr auto k_coed = Signature::from_string("COED");
 
 std::uint16_t read_u16(const std::vector<std::byte>& data, std::size_t offset = 0) {
   std::uint16_t value = 0;
@@ -82,9 +83,9 @@ std::uint32_t read_u32(const std::vector<std::byte>& data) {
   return value;
 }
 
-std::int32_t read_i32(const std::vector<std::byte>& data) {
+std::int32_t read_i32(const std::vector<std::byte>& data, std::size_t offset = 0) {
   std::int32_t value = 0;
-  std::memcpy(&value, data.data(), sizeof(value));
+  std::memcpy(&value, data.data() + offset, sizeof(value));
   return value;
 }
 
@@ -216,6 +217,30 @@ FormKey decode_required_form_key(const Subrecord& member,
     throw QuestError("QUST " + std::string(label) + " cannot be null");
   }
   return *resolved;
+}
+
+std::optional<FormKey> decode_optional_form_key_at(
+    const std::vector<std::byte>& data,
+    std::size_t offset,
+    Signature signature,
+    const PluginFormIdContext& context,
+    std::string_view label) {
+  if (offset + 4 > data.size()) {
+    throw QuestError("QUST " + std::string(label) + " FormID must be exactly four bytes");
+  }
+  std::uint32_t raw = 0;
+  std::memcpy(&raw, data.data() + offset, sizeof(raw));
+  const RawFormId id{raw};
+  if (id.is_null()) return std::nullopt;
+  try {
+    return resolve_plugin_form_id(id, context);
+  } catch (const FormIdError& error) {
+    if (t_unresolved != nullptr) {
+      t_unresolved->push_back(signature);
+      return std::nullopt;
+    }
+    throw QuestError("QUST " + std::string(label) + " cannot resolve: " + error.what());
+  }
 }
 
 Subrecord encoded_form_key(Signature signature,
@@ -440,6 +465,119 @@ void decode_location_fill(QuestAlias& alias,
   }
 }
 
+void decode_alias_extras(QuestAlias& alias, const PluginFormIdContext& context) {
+  if (alias.kind != QuestAliasKind::reference) return;
+
+  const auto* ksiz = unique_member(alias, k_ksiz, "KSIZ");
+  const auto* kwda = unique_member(alias, k_kwda, "KWDA");
+  if (ksiz != nullptr || kwda != nullptr) {
+    if (ksiz == nullptr || kwda == nullptr) {
+      throw QuestError("QUST alias keywords require both KSIZ and KWDA");
+    }
+    if (ksiz->data.size() != 4) {
+      throw QuestError("QUST alias KSIZ must be exactly four bytes");
+    }
+    if (kwda->data.size() % 4 != 0) {
+      throw QuestError("QUST alias KWDA must be a multiple of four bytes");
+    }
+    const auto count = read_u32(ksiz->data);
+    if (count != kwda->data.size() / 4) {
+      throw QuestError("QUST alias KSIZ does not match KWDA");
+    }
+    for (std::uint32_t n = 0; n < count; ++n) {
+      if (auto key = decode_optional_form_key_at(
+              kwda->data, n * 4u, k_kwda, context, "KWDA")) {
+        alias.keywords.push_back(*key);
+      }
+    }
+  }
+
+  bool has_coed = false;
+  std::size_t cnto_count = 0;
+  for (const auto& member : alias.subrecords) {
+    if (member.signature == k_coed) has_coed = true;
+    if (member.signature == k_cnto) ++cnto_count;
+  }
+  const auto* coct = unique_member(alias, k_coct, "COCT");
+  if (coct == nullptr) {
+    if (cnto_count != 0) {
+      throw QuestError("QUST alias CNTO is missing COCT");
+    }
+  } else if (!has_coed) {
+    if (coct->data.size() != 4) {
+      throw QuestError("QUST alias COCT must be exactly four bytes");
+    }
+    const auto expected = read_u32(coct->data);
+    std::size_t seen = 0;
+    bool after_coct = false;
+    for (const auto& member : alias.subrecords) {
+      if (member.signature == k_coct) {
+        after_coct = true;
+        continue;
+      }
+      if (!after_coct) continue;
+      if (member.signature != k_cnto) break;
+      if (member.data.size() != 8) {
+        throw QuestError("QUST alias CNTO must be exactly eight bytes");
+      }
+      if (auto key = decode_optional_form_key_at(
+              member.data, 0, k_cnto, context, "CNTO")) {
+        alias.items.push_back(QuestAliasItem{*key, read_i32(member.data, 4)});
+      }
+      ++seen;
+    }
+    if (seen != expected) {
+      throw QuestError("QUST alias COCT does not match CNTO");
+    }
+  }
+
+  const auto decode_unique_optional = [&](Signature signature,
+                                          std::string_view label,
+                                          std::optional<FormKey>& out) {
+    const auto* member = unique_member(alias, signature, label);
+    if (member == nullptr) return;
+    out = decode_optional_form_key(*member, context, label);
+  };
+  decode_unique_optional(k_spor, "SPOR", alias.spectator_override);
+  decode_unique_optional(k_ocor, "OCOR", alias.observe_dead_body_override);
+  decode_unique_optional(k_gwor, "GWOR", alias.guard_warn_override);
+  decode_unique_optional(k_ecor, "ECOR", alias.combat_override);
+
+  const auto* alla = unique_member(alias, k_alla, "ALLA");
+  if (alla != nullptr) {
+    if (alla->data.size() % 8 != 0) {
+      throw QuestError("QUST alias ALLA must be a multiple of eight bytes");
+    }
+    for (std::size_t offset = 0; offset < alla->data.size(); offset += 8) {
+      auto keyword =
+          decode_optional_form_key_at(alla->data, offset, k_alla, context, "ALLA");
+      if (!keyword.has_value()) continue;
+      alias.linked_aliases.push_back(
+          QuestLinkedAlias{*keyword, read_i32(alla->data, offset + 4)});
+    }
+  }
+
+  decode_unique_optional(k_aldn, "ALDN", alias.display_name);
+  decode_unique_optional(k_alfv, "ALFV", alias.forced_voice);
+  decode_unique_optional(k_aldi, "ALDI", alias.death_item);
+
+  const auto decode_repeatable = [&](Signature signature,
+                                     std::string_view label,
+                                     std::vector<FormKey>& out) {
+    for (const auto& member : alias.subrecords) {
+      if (member.signature != signature) continue;
+      if (auto key = decode_optional_form_key(member, context, label)) {
+        out.push_back(*key);
+      }
+    }
+  };
+  decode_repeatable(k_alsp, "ALSP", alias.spells);
+  decode_repeatable(k_alfc, "ALFC", alias.factions);
+  decode_repeatable(k_alpc, "ALPC", alias.packages);
+
+  decode_unique_optional(k_vtck, "VTCK", alias.voice_types);
+}
+
 void decode_alias_semantics(QuestAlias& alias,
                             const PluginFormIdContext* context) {
   // Scope the unresolved-link collector to this alias so a dangling FormID
@@ -540,6 +678,10 @@ void decode_alias_semantics(QuestAlias& alias,
     } else {
       decode_location_fill(alias, *context);
     }
+  }
+
+  if (alias.kind == QuestAliasKind::reference && context != nullptr) {
+    decode_alias_extras(alias, *context);
   }
 }
 

@@ -1815,6 +1815,26 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
         REQUIRE(alla != nullptr);
         CHECK(alla->data.size() == 8u);
     }
+    {
+        const auto decoded = fo4::forms::decode_quest_aliases(
+            disk, fo4::FormKey::parse("000800:Patch.esp"));
+        REQUIRE(decoded.aliases.size() == 1u);
+        const auto& alias = decoded.aliases[0];
+        REQUIRE(alias.keywords.size() == 1u);
+        CHECK(alias.keywords[0] == fo4::FormKey::parse("000800:Master.esm"));
+        REQUIRE(alias.items.size() == 1u);
+        CHECK(alias.items[0].item == fo4::FormKey::parse("000801:Master.esm"));
+        CHECK(alias.items[0].count == 2);
+        REQUIRE(alias.linked_aliases.size() == 1u);
+        CHECK(alias.linked_aliases[0].keyword == fo4::FormKey::parse("000800:Master.esm"));
+        CHECK(alias.linked_aliases[0].alias == 4);
+        REQUIRE(alias.spells.size() == 1u);
+        CHECK(alias.spells[0] == fo4::FormKey::parse("000802:Master.esm"));
+        REQUIRE(alias.factions.size() == 1u);
+        CHECK(alias.factions[0] == fo4::FormKey::parse("000803:Master.esm"));
+        REQUIRE(alias.packages.size() == 1u);
+        CHECK(alias.packages[0] == fo4::FormKey::parse("000804:Master.esm"));
+    }
 
     const auto locationExtras = backend.invokeBackend(
         "SetQuestAliases",
