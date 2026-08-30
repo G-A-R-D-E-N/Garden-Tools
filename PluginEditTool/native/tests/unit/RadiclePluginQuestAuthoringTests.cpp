@@ -158,6 +158,28 @@ std::vector<std::byte> conditionMasterPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> fillMasterPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(2);
+    hedr.u32(0x802);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    auto writeRecord = [&](std::string_view type, std::uint32_t formId, std::string_view edid) {
+        const auto group = fo4::test::begin_group(out, type, 0);
+        const auto record = fo4::test::begin_record(out, type, 0, formId);
+        fo4::test::write_subrecord(out, "EDID", edid);
+        fo4::test::end_record(out, record);
+        fo4::test::end_group(out, group);
+    };
+    writeRecord("LCRT", 0x00000800, std::string_view{"FillLcrt\0", 9});
+    writeRecord("KYWD", 0x00000801, std::string_view{"FillKw\0", 7});
+    return out.bytes;
+}
+
 std::vector<std::byte> npcMasterPlugin() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
@@ -811,7 +833,7 @@ TEST_CASE("Native QUST authoring refuses unrepresentable existing data without w
             "NAM2/CNAM order"
         },
         {
-            "unsupported Fill Type ALCO/ALCA",
+            "unresolved Create Reference ALCO",
             true,
             [] {
                 return questPluginWith(0, [](fo4::test::ByteWriter& out) {
@@ -827,7 +849,7 @@ TEST_CASE("Native QUST authoring refuses unrepresentable existing data without w
                     fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
                 });
             },
-            "Fill Type"
+            "does not resolve"
         },
         {
             "unresolved alias FormLink",
@@ -2592,4 +2614,322 @@ TEST_CASE("Native SetQuestAliases refuses invalid condition FormKeys and GetEven
         })));
     REQUIRE_FALSE(unresolved.has_value());
     CHECK(readBytes(path) == before);
+}
+
+std::vector<std::string> aliasMembersUntilAled(const std::vector<std::string>& names,
+                                               std::string_view start) {
+    const auto first = std::find(names.begin(), names.end(), start);
+    REQUIRE(first != names.end());
+    std::vector<std::string> members;
+    for (auto it = first; it != names.end() && *it != "ALED"; ++it) members.push_back(*it);
+    members.push_back("ALED");
+    return members;
+}
+
+TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, fillMasterPlugin());
+    writeBytes(patchPath, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadExtraMaster(backend, masterPath, patchPath);
+
+    const auto created = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Create"},
+                {"flags", 0},
+                {"createReference", {{"object", "000801:Master.esm"}, {"alias", -2}, {"create", "In"}}},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetAngle"}, {"param1", 1}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE(created.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{
+              "ALST", "ALID", "FNAM", "ALCO", "ALCA", "CTDA", "ALED"});
+    CHECK(fo4::read_plugin_file(patchPath).header.masters.size() == 1u);
+
+    const auto locRef = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "LocRef"},
+                {"flags", 0},
+                {"locationAliasReference", {{"alias", 3}, {"referenceType", "000800:Master.esm"}}}
+            }
+        })));
+    REQUIRE(locRef.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{"ALST", "ALID", "FNAM", "ALFA", "ALRT", "ALED"});
+
+    const auto external = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Ext"},
+                {"flags", 0},
+                {"externalAlias", {{"quest", "000800:Patch.esp"}, {"alias", 4}}}
+            }
+        })));
+    REQUIRE(external.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{"ALST", "ALID", "FNAM", "ALEQ", "ALEA", "ALED"});
+
+    const auto near = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Near"},
+                {"flags", 0},
+                {"findMatchingNearAlias", {{"alias", -3}, {"type", 1}}}
+            }
+        })));
+    REQUIRE(near.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{"ALST", "ALID", "FNAM", "ALNA", "ALNT", "ALED"});
+
+    const auto fromEvent = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Evt"},
+                {"flags", 0},
+                {"findMatchingFromEvent", {{"event", 17}, {"data", 4}}}
+            }
+        })));
+    REQUIRE(fromEvent.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{"ALST", "ALID", "FNAM", "ALFE", "ALFD", "ALED"});
+
+    const auto closest = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Close"},
+                {"flags", 0},
+                {"findMatchingClosest", {{"alias", 2}}},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetAngle"}, {"param1", 1}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE(closest.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{"ALST", "ALID", "FNAM", "ALCC", "CTDA", "ALED"});
+}
+
+TEST_CASE("Native SetQuestAliases writes remaining location fill types") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, fillMasterPlugin());
+    writeBytes(patchPath, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadExtraMaster(backend, masterPath, patchPath);
+
+    const auto refLoc = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "location"},
+                {"id", 2},
+                {"flags", 0},
+                {"referenceAliasLocation", {{"alias", 1}, {"keyword", "000801:Master.esm"}}},
+                {"closestToAlias", -5}
+            }
+        })));
+    REQUIRE(refLoc.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALLS") ==
+          std::vector<std::string>{"ALLS", "FNAM", "ALFA", "KNAM", "ALCC", "ALED"});
+
+    const auto extLoc = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "location"},
+                {"id", 2},
+                {"flags", 0},
+                {"externalAliasLocation", {{"quest", "000800:Patch.esp"}, {"alias", 8}}}
+            }
+        })));
+    REQUIRE(extLoc.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALLS") ==
+          std::vector<std::string>{"ALLS", "FNAM", "ALEQ", "ALEA", "ALED"});
+
+    const auto matchLoc = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "location"},
+                {"id", 2},
+                {"flags", 0},
+                {"findMatchingLocation", {{"event", 9}, {"data", 2}}},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetGraphVariableInt"}, {"cis1", "LocVar"}, {"value", 1.0}}
+                })},
+                {"closestToAlias", 1}
+            }
+        })));
+    REQUIRE(matchLoc.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALLS") ==
+          std::vector<std::string>{"ALLS", "FNAM", "ALFE", "ALFD", "CTDA", "CIS1", "ALCC", "ALED"});
+}
+
+TEST_CASE("Native SetQuestAliases refuses invalid remaining fills without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto twoFills = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"uniqueActor", "000800:Patch.esp"},
+                {"createReference", {{"alias", 0}, {"create", "At"}}}
+            }
+        })));
+    REQUIRE_FALSE(twoFills.has_value());
+    CHECK(twoFills.error().type == "InvalidQuestAliasPayload");
+
+    const auto unknown = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"createReference", {{"alias", 0}, {"level", 1}}}
+            }
+        })));
+    REQUIRE_FALSE(unknown.has_value());
+    CHECK(unknown.error().type == "InvalidQuestAliasPayload");
+
+    const auto badMode = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"flags", 0},
+                {"createReference", {{"alias", 0}, {"create", 7}}}
+            }
+        })));
+    REQUIRE_FALSE(badMode.has_value());
+    CHECK(badMode.error().type == "InvalidQuestAliasPayload");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases refuses existing ALCL and replaces lossless remaining fills") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0);
+        writeU32(out, "ALCO", 0);
+        writeU32(out, "ALCA", 0x80000000);
+        writeU32(out, "ALCL", 1);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+    }));
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto blocked = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+        })));
+    REQUIRE_FALSE(blocked.has_value());
+    CHECK(blocked.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(blocked.error().message.find("ALCL") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases replaces existing Create Reference without ALCL") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0);
+        writeU32(out, "ALCO", 0);
+        writeU32(out, "ALCA", 0);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+        fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
+    }));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto replaced = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 3},
+                {"name", "Near"},
+                {"flags", 0},
+                {"findMatchingNearAlias", {{"alias", 1}, {"type", 0}}}
+            }
+        })));
+    REQUIRE(replaced.has_value());
+    const auto names = recordSignatures(
+        fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    CHECK(names.back() == "NNAM");
+    CHECK(aliasMembersUntilAled(names, "ALST") ==
+          std::vector<std::string>{"ALST", "ALID", "FNAM", "ALNA", "ALNT", "ALED"});
 }

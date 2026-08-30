@@ -90,14 +90,17 @@ members and before extras / location `ALCC`. PluginEditTool `SetQuestAliases`
 reuses the log-entry codec (`parseQuestCondition` / `serialize_ctda_run`).
 Collections reject conditions. `GetEventData` stays fail-closed.
 
+## PluginEditTool JSON fill types
+
+`SetQuestAliases` authors every Fill Type Radicle already encodes. Nested objects
+fail closed on unknown keys. `ALCL` Level is not modeled; existing `ALCL` fails
+coverage closed.
+
 ## Deliberately not modeled yet
 
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- PluginEditTool JSON for remaining Fill Types already encoded in Radicle:
-  Create Reference, Find Matching Reference, External Alias, Location Alias
-  Reference, and event/data forms.
 - Remaining reference/location alias fields after the Fill Type union:
   voice type, death item, display name, and package-list overrides
   (`SPOR`/`OCOR`/`GWOR`/`ECOR`).
