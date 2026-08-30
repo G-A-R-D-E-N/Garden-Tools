@@ -3,6 +3,7 @@
 #include "fo4/schema/vmad.hpp"
 #include "fo4/signature.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -102,32 +103,32 @@ std::int16_t alias_id_i16(std::uint32_t id) {
   return static_cast<std::int16_t>(id);
 }
 
-std::string stage_body_key(const QuestStage& stage) {
-  std::string key;
-  key.push_back(static_cast<char>(stage.flags));
-  key.push_back(static_cast<char>(stage.unknown));
-  key += std::to_string(stage.leading_members.size());
-  key.push_back('\0');
-  for (const auto& member : stage.leading_members) {
-    key += member.signature.to_string();
-    key.append(reinterpret_cast<const char*>(member.data.data()),
-               static_cast<std::size_t>(member.data.size()));
-    key.push_back('\0');
-  }
-  key += std::to_string(stage.log_entries.size());
-  key.push_back('\0');
-  for (const auto& entry : stage.log_entries) {
-    key.push_back(static_cast<char>(entry.flags));
-    key += std::to_string(entry.members.size());
-    key.push_back('\0');
-    for (const auto& member : entry.members) {
-      key += member.signature.to_string();
-      key.append(reinterpret_cast<const char*>(member.data.data()),
-                 static_cast<std::size_t>(member.data.size()));
-      key.push_back('\0');
+bool subrecord_lists_equal(const std::vector<Subrecord>& lhs,
+                           const std::vector<Subrecord>& rhs) {
+  if (lhs.size() != rhs.size()) return false;
+  for (std::size_t i = 0; i < lhs.size(); ++i) {
+    if (lhs[i].signature != rhs[i].signature || lhs[i].data != rhs[i].data) {
+      return false;
     }
   }
-  return key;
+  return true;
+}
+
+bool stage_body_equal(const QuestStage& lhs, const QuestStage& rhs) {
+  if (lhs.flags != rhs.flags || lhs.unknown != rhs.unknown ||
+      !subrecord_lists_equal(lhs.leading_members, rhs.leading_members) ||
+      lhs.log_entries.size() != rhs.log_entries.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < lhs.log_entries.size(); ++i) {
+    const auto& left = lhs.log_entries[i];
+    const auto& right = rhs.log_entries[i];
+    if (left.flags != right.flags ||
+        !subrecord_lists_equal(left.members, right.members)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace
@@ -193,43 +194,38 @@ void sync_quest_vmad_stages(Record& record,
   if (layout.fragments.empty()) return;
 
   std::set<std::uint16_t> new_indexes;
-  std::map<std::string, std::vector<std::uint16_t>> new_bodies;
-  std::map<std::string, std::vector<std::uint16_t>> old_bodies;
-  std::map<std::uint16_t, std::string> old_index_body;
   for (const auto& stage : next.stages) {
     new_indexes.insert(stage.index);
-    new_bodies[stage_body_key(stage)].push_back(stage.index);
-  }
-  for (const auto& stage : previous.stages) {
-    const auto key = stage_body_key(stage);
-    old_bodies[key].push_back(stage.index);
-    old_index_body[stage.index] = key;
-  }
-
-  std::map<std::uint16_t, std::uint16_t> stage_map;
-  for (const auto& stage : previous.stages) {
-    if (new_indexes.contains(stage.index)) {
-      stage_map[stage.index] = stage.index;
-    }
   }
 
   for (const auto& fragment : layout.fragments) {
-    if (stage_map.contains(fragment.stage)) {
-      write_u16(vmad->data, fragment.stage_offset, stage_map[fragment.stage]);
+    if (new_indexes.contains(fragment.stage)) {
+      write_u16(vmad->data, fragment.stage_offset, fragment.stage);
       continue;
     }
-    const auto body = old_index_body.find(fragment.stage);
-    if (body == old_index_body.end()) {
+    const auto old_stage = std::find_if(
+        previous.stages.begin(), previous.stages.end(),
+        [&](const QuestStage& stage) { return stage.index == fragment.stage; });
+    if (old_stage == previous.stages.end()) {
       throw QuestError(
           "QUST VMAD binds stage identity that is not in the replacement stages");
     }
-    const auto& old_hits = old_bodies[body->second];
-    const auto& new_hits = new_bodies[body->second];
-    if (old_hits.size() != 1 || new_hits.size() != 1) {
+    std::size_t old_hits = 0;
+    std::size_t new_hits = 0;
+    std::uint16_t new_index = 0;
+    for (const auto& stage : previous.stages) {
+      if (stage_body_equal(*old_stage, stage)) ++old_hits;
+    }
+    for (const auto& stage : next.stages) {
+      if (!stage_body_equal(*old_stage, stage)) continue;
+      ++new_hits;
+      new_index = stage.index;
+    }
+    if (old_hits != 1 || new_hits != 1) {
       throw QuestError(
           "QUST VMAD binds stage identity that is not in the replacement stages");
     }
-    write_u16(vmad->data, fragment.stage_offset, new_hits.front());
+    write_u16(vmad->data, fragment.stage_offset, new_index);
   }
 }
 
