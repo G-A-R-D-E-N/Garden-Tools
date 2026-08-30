@@ -81,7 +81,7 @@ constructed by manipulating runtime/file-index bits directly.
 | Unique Actor | `ALUA` | required `NPC_` FormID |
 | Location Alias Reference | `ALFA` + `ALRT` | alias i32 + required `LCRT` FormID |
 | External Alias Reference | optional `ALEQ` + required `ALEA` | optional `QUST` FormID + alias i32 |
-| Create Reference | `ALCO` + `ALCA` | optional object FormID + alias i16 + create mode `0`/`0x8000` (`ALCL` unmodeled) |
+| Create Reference | `ALCO` + `ALCA` + `ALCL` | optional object FormID + alias i16 + create mode `0`/`0x8000` + level `0..3` (Easy/Medium/Hard/VeryHard; missing ALCL decodes as Easy; encode always writes ALCL) |
 | Find Matching Near Alias | `ALNA` + `ALNT` | alias i32 + type `0`/`1` |
 | Find Matching From Event | `ALFE` + `ALFD` | event u32 + data u32 |
 | Find Matching Closest | `ALCC` | alias i32 (fill; before conditions) |
@@ -112,8 +112,8 @@ Collections reject conditions. `GetEventData` stays fail-closed.
 ## PluginEditTool JSON fill types
 
 `SetQuestAliases` authors every Fill Type Radicle already encodes. Nested objects
-fail closed on unknown keys. `ALCL` Level is not modeled; existing `ALCL` fails
-coverage closed.
+fail closed on unknown keys. `createReference.level` is `Easy`/`Medium`/`Hard`/`VeryHard`
+or `0..3`. Existing `ALCL` outside that range fails coverage closed.
 
 ## Reference alias extras
 
@@ -142,7 +142,6 @@ empty.
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- `ALCL` Create Reference Level.
 - `COED` on alias items.
 - Alias VMAD interactions beyond the existing global VMAD safety contract. PluginEditTool `SetQuestAliases` / `SetQuestStages` fail closed when QUST VMAD extras bind alias IDs or stage fragments (`fo4::quest_vmad_bindings`). Whole-array replace still does not rewrite VMAD.
 

@@ -233,7 +233,7 @@ bool knownAliasKey(std::string_view key) {
 }
 
 bool knownCreateReferenceKey(std::string_view key) {
-    return key == "object" || key == "alias" || key == "create";
+    return key == "object" || key == "alias" || key == "create" || key == "level";
 }
 
 bool knownLocationAliasReferenceKey(std::string_view key) {
@@ -536,6 +536,50 @@ std::optional<Error> parseCreateMode(const nlohmann::json& object, std::uint16_t
     return Error{"InvalidQuestAliasPayload", "create must be At or In"};
 }
 
+std::optional<Error> parseCreateLevel(const nlohmann::json& object, std::uint32_t& out) {
+    out = 0;
+    const auto found = object.find("level");
+    if (found == object.end() || found->is_null()) return std::nullopt;
+    if (found->is_string()) {
+        const auto text = found->get<std::string>();
+        if (text == "Easy" || text == "0") {
+            out = 0;
+            return std::nullopt;
+        }
+        if (text == "Medium" || text == "1") {
+            out = 1;
+            return std::nullopt;
+        }
+        if (text == "Hard" || text == "2") {
+            out = 2;
+            return std::nullopt;
+        }
+        if (text == "VeryHard" || text == "3") {
+            out = 3;
+            return std::nullopt;
+        }
+        return Error{
+            "InvalidQuestAliasPayload",
+            "createReference.level must be Easy, Medium, Hard, or VeryHard"
+        };
+    }
+    if (found->is_number_unsigned() || found->is_number_integer()) {
+        const auto parsed = found->get<std::int64_t>();
+        if (parsed < 0 || parsed > 3) {
+            return Error{
+                "InvalidQuestAliasPayload",
+                "createReference.level must be 0..3 (Easy, Medium, Hard, VeryHard)"
+            };
+        }
+        out = static_cast<std::uint32_t>(parsed);
+        return std::nullopt;
+    }
+    return Error{
+        "InvalidQuestAliasPayload",
+        "createReference.level must be Easy, Medium, Hard, or VeryHard"
+    };
+}
+
 std::optional<Error> requireLoadedRecord(
     const fo4::ConflictGraph& graph,
     const fo4::FormKey& key,
@@ -679,10 +723,13 @@ std::optional<Error> parseAliasFill(
         }
         std::uint16_t createMode = 0;
         if (const auto error = parseCreateMode(*createJson, createMode)) return error;
+        std::uint32_t level = 0;
+        if (const auto error = parseCreateLevel(*createJson, level)) return error;
         fill = fo4::forms::QuestCreateReferenceFill{
             .object = object,
             .alias = static_cast<std::int16_t>(aliasId),
             .create_mode = createMode,
+            .level = level,
         };
         return std::nullopt;
     }
@@ -1277,6 +1324,7 @@ bool allowedAliasMember(fo4::forms::QuestAliasKind kind, std::string_view signat
            signature == "ALFI" || signature == "ALFR" || signature == "ALUA" ||
            signature == "ALFA" || signature == "ALRT" || signature == "ALEQ" ||
            signature == "ALEA" || signature == "ALCO" || signature == "ALCA" ||
+           signature == "ALCL" ||
            signature == "ALNA" || signature == "ALNT" || signature == "ALFE" ||
            signature == "ALFD" || signature == "ALCC" ||
            signature == "CTDA" || signature == "CIS1" || signature == "CIS2" ||
@@ -1649,6 +1697,12 @@ std::optional<Error> existingFillUnrepresentable(
                         "existing QUST alias createReference create mode cannot be reconstructed"
                     };
                 }
+                if (value.level > 3u) {
+                    return Error{
+                        "QuestAuthoringCoverageIncomplete",
+                        "existing QUST alias createReference level cannot be reconstructed"
+                    };
+                }
                 return existingFillKeyUnrepresentable(
                     graph, value.object, {}, false, true, "createReference");
             } else if constexpr (std::is_same_v<T, fo4::forms::QuestFindMatchingReferenceFill>) {
@@ -1907,7 +1961,8 @@ bool isAliasConditionPrefix(fo4::forms::QuestAliasKind kind, std::string_view na
     if (name == "ALST" || name == "ALLS" || name == "ALID" || name == "FNAM" ||
         name == "ALFI" || name == "ALFR" || name == "ALUA" || name == "ALFL" ||
         name == "ALFA" || name == "ALRT" || name == "KNAM" || name == "ALEQ" ||
-        name == "ALEA" || name == "ALCO" || name == "ALCA" || name == "ALNA" ||
+        name == "ALEA" || name == "ALCO" || name == "ALCA" || name == "ALCL" ||
+        name == "ALNA" ||
         name == "ALNT" || name == "ALFE" || name == "ALFD") {
         return true;
     }

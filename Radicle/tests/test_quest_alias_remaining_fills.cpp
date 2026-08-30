@@ -108,6 +108,7 @@ TEST(QuestAliasRemainingFills, CreateReferenceRoundTripsMasterObjectAndALCA) {
       .object = fo4::FormKey::parse("000123:Master.esm"),
       .alias = -2,
       .create_mode = 0x8000u,
+      .level = 2,
   };
   fo4::forms::add_quest_alias(plugin, quest, creation);
 
@@ -121,15 +122,18 @@ TEST(QuestAliasRemainingFills, CreateReferenceRoundTripsMasterObjectAndALCA) {
                               fo4::FormKey::parse("000123:Master.esm")});
   EXPECT_EQ(fill->alias, -2);
   EXPECT_EQ(fill->create_mode, 0x8000u);
+  EXPECT_EQ(fill->level, 2u);
 
   const auto& raw = aliases.aliases[0].subrecords;
-  ASSERT_EQ(raw.size(), 6u);
+  ASSERT_EQ(raw.size(), 7u);
   EXPECT_EQ(raw[3].signature.to_string(), "ALCO");
   EXPECT_EQ(raw_u32(raw[3]), 0x00000123u);
   EXPECT_EQ(raw[4].signature.to_string(), "ALCA");
   EXPECT_EQ(raw_i16(raw[4], 0), -2);
   EXPECT_EQ(raw_u16(raw[4], 2), 0x8000u);
-  EXPECT_EQ(raw[5].signature.to_string(), "ALED");
+  EXPECT_EQ(raw[5].signature.to_string(), "ALCL");
+  EXPECT_EQ(raw_u32(raw[5]), 2u);
+  EXPECT_EQ(raw[6].signature.to_string(), "ALED");
 }
 
 TEST(QuestAliasRemainingFills, MatchingReferenceSelectorsRoundTripDistinctly) {
@@ -216,6 +220,16 @@ TEST(QuestAliasRemainingFills, RejectsInvalidAuthoredEnumsAndMixedMatchingSelect
       .object = std::nullopt,
       .alias = 0,
       .create_mode = 7,
+      .level = 0,
+  };
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::encode_quest_alias(plugin, create)),
+      fo4::forms::QuestError);
+  create.fill = fo4::forms::QuestCreateReferenceFill{
+      .object = std::nullopt,
+      .alias = 0,
+      .create_mode = 0,
+      .level = 4,
   };
   EXPECT_THROW(
       static_cast<void>(fo4::forms::encode_quest_alias(plugin, create)),

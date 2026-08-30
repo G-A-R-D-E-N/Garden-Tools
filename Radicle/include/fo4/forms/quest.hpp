@@ -49,6 +49,7 @@ struct QuestCreateReferenceFill {
   std::optional<FormKey> object;
   std::int16_t alias{0};
   std::uint16_t create_mode{0};
+  std::uint32_t level{0};
 };
 
 struct QuestMatchingReferenceNearAlias {
