@@ -74,6 +74,7 @@ fo4::forms::QuestAliasCreation base_location() {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
 }
 
@@ -181,6 +182,7 @@ TEST(QuestAliasLocationFormLinks, RejectsEmptyExternalAndWrongAliasKind) {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
   EXPECT_THROW(
       static_cast<void>(fo4::forms::encode_quest_alias(plugin, reference)),

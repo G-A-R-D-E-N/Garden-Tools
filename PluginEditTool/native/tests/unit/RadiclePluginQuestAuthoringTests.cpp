@@ -910,19 +910,6 @@ TEST_CASE("Native QUST authoring refuses unrepresentable existing data without w
             "unresolved FormLink"
         },
         {
-            "multi-entry ALCS collection",
-            true,
-            [] {
-                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
-                    writeU32(out, "ANAM", 10);
-                    writeU32(out, "ALCS", 5);
-                    fo4::test::write_subrecord(out, "ALMI", std::vector<std::byte>{std::byte{2}});
-                    writeU32(out, "ALCS", 7);
-                });
-            },
-            "multiple ALCS"
-        },
-        {
             "VMAD stage fragments",
             false,
             [] {
@@ -3282,4 +3269,143 @@ TEST_CASE("Native SetQuestAliases refuses existing remaining-member coverage gap
     CHECK(ordered.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(ordered.error().message.find("out of order") != std::string::npos);
     CHECK(readBytes(path) == beforeOrder);
+}
+
+TEST_CASE("Native SetQuestAliases writes multi-entry collections and preserves tail") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "collection"},
+                {"entries", nlohmann::json::array({
+                    {{"id", 5}, {"maxInitialFillCount", 2}},
+                    {{"id", 7}}
+                })}
+            },
+            {
+                {"kind", "reference"},
+                {"id", 2},
+                {"name", "AfterCollection"},
+                {"flags", 0}
+            }
+        })));
+    REQUIRE(result.has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto decoded = fo4::forms::decode_quest_aliases(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.aliases.size() == 2u);
+    REQUIRE(decoded.aliases[0].collection_entries.size() == 2u);
+    CHECK(decoded.aliases[0].collection_entries[0].id == 5u);
+    CHECK(decoded.aliases[0].collection_entries[0].max_initial_fill_count ==
+          std::optional<std::uint8_t>{std::uint8_t{2}});
+    CHECK(decoded.aliases[0].collection_entries[1].id == 7u);
+    CHECK_FALSE(decoded.aliases[0].collection_entries[1].max_initial_fill_count.has_value());
+    CHECK(decoded.aliases[1].id == 2u);
+    CHECK(decoded.next_alias_id == 3u);
+    CHECK(recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp")).back() == "NNAM");
+}
+
+TEST_CASE("Native SetQuestAliases rewrites existing multi-entry collections") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeU32(out, "ANAM", 10);
+        writeU32(out, "ALCS", 5);
+        fo4::test::write_subrecord(out, "ALMI", std::vector<std::byte>{std::byte{2}});
+        writeU32(out, "ALCS", 7);
+        fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
+    }));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "collection"},
+                {"entries", nlohmann::json::array({
+                    {{"id", 8}, {"maxInitialFillCount", 1}},
+                    {{"id", 9}, {"maxInitialFillCount", 4}}
+                })}
+            }
+        })));
+    REQUIRE(result.has_value());
+    const auto decoded = fo4::forms::decode_quest_aliases(
+        fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.aliases.size() == 1u);
+    REQUIRE(decoded.aliases[0].collection_entries.size() == 2u);
+    CHECK(decoded.aliases[0].collection_entries[0].id == 8u);
+    CHECK(decoded.aliases[0].collection_entries[1].id == 9u);
+    CHECK(decoded.next_alias_id == 0u);
+}
+
+TEST_CASE("Native SetQuestAliases refuses invalid collection payloads without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    auto refuse = [&](const nlohmann::json& aliases) {
+        const auto result = backend.invokeBackend("SetQuestAliases", setAliasesArgs(aliases));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "InvalidQuestAliasPayload");
+        CHECK(readBytes(path) == before);
+    };
+
+    refuse(nlohmann::json::array({
+        {
+            {"kind", "collection"},
+            {"entries", nlohmann::json::array({
+                {{"id", 1}},
+                {{"id", 2}}
+            })}
+        },
+        {
+            {"kind", "collection"},
+            {"entries", nlohmann::json::array({
+                {{"id", 3}}
+            })}
+        }
+    }));
+    refuse(nlohmann::json::array({
+        {
+            {"kind", "collection"},
+            {"id", 1},
+            {"entries", nlohmann::json::array({{{"id", 1}}})}
+        }
+    }));
+    refuse(nlohmann::json::array({
+        {
+            {"kind", "collection"},
+            {"entries", nlohmann::json::array()}
+        }
+    }));
+    refuse(nlohmann::json::array({
+        {
+            {"kind", "collection"},
+            {"entries", nlohmann::json::array({
+                {{"id", 1}},
+                {{"id", 1}}
+            })}
+        }
+    }));
+    refuse(nlohmann::json::array({
+        {
+            {"kind", "collection"},
+            {"entries", nlohmann::json::array({
+                {{"id", 1}, {"alias", 2}}
+            })}
+        }
+    }));
 }

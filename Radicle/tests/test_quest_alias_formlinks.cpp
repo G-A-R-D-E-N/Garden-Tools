@@ -76,6 +76,7 @@ fo4::forms::QuestAliasCreation base_reference() {
       .death_item = {},
       .voice_types = {},
       .conditions = {},
+      .collection_entries = {},
   };
 }
 

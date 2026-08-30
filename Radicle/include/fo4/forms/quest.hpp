@@ -187,6 +187,7 @@ struct QuestAliasCreation {
   std::optional<FormKey> death_item;
   std::optional<FormKey> voice_types;
   std::vector<CtdaCondition> conditions;
+  std::vector<QuestCollectionEntry> collection_entries;
 };
 
 /*

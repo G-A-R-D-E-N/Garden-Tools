@@ -49,10 +49,17 @@ alias ID reaches or exceeds it; removals do not recycle/decrease it.
 
 ### Collection alias
 
-- `ALCS`: Alias ID, u32
-- `ALMI`: optional Max Initial Fill Count, u8
+A contiguous `ALCS[+ALMI]` run is one logical alias (Mutagen
+`QuestCollectionAlias.Collection`). Disk cannot separate two adjacent
+collection aliases, so authoring refuses consecutive collection objects.
 
-The compact collection variant does not use `ALED`.
+- `ALCS`: per-entry Alias ID, u32; unique inside that collection, not versus `ALST`/`ALLS`
+- `ALMI`: optional Max Initial Fill Count, u8, immediately after its `ALCS`
+- no `ALED`
+
+`SetQuestAliases` JSON: `entries: [{id, maxInitialFillCount?}, ...]`. Single-entry
+sugar `id` + `maxInitialFillCount` remains. Mixing `entries` with those
+top-level keys fails. ANAM still grows from reference/location IDs only.
 
 ## FormID-bearing Fill Types currently modeled
 
@@ -128,7 +135,7 @@ empty.
 The following remain fail-closed / raw-preserved until their full structure is
 implemented and tested:
 
-- Collection multi-entry authoring (multiple `ALCS`).
+- `ALCL` Create Reference Level.
 - `COED` on alias items.
 - Alias VMAD interactions beyond the existing global VMAD safety contract. PluginEditTool `SetQuestAliases` / `SetQuestStages` fail closed when QUST VMAD extras bind alias IDs or stage fragments (`fo4::quest_vmad_bindings`). Whole-array replace still does not rewrite VMAD.
 

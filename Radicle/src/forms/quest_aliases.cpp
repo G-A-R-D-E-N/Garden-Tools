@@ -698,11 +698,27 @@ QuestAlias encode_base_alias(const QuestAliasCreation& creation) {
     if (!std::holds_alternative<std::monostate>(creation.fill)) {
       throw QuestError("QUST collection alias Fill Type is not modeled by ALCS/ALMI");
     }
-    alias.subrecords.push_back(make_subrecord(k_alcs, write_u32(creation.id)));
-    if (creation.max_initial_fill_count.has_value()) {
-      alias.subrecords.push_back(make_subrecord(
-          k_almi,
-          std::vector<std::byte>{std::byte{*creation.max_initial_fill_count}}));
+    std::vector<QuestCollectionEntry> entries = creation.collection_entries;
+    if (entries.empty()) {
+      entries.push_back(QuestCollectionEntry{
+          creation.id, creation.max_initial_fill_count});
+    } else if (creation.max_initial_fill_count.has_value()) {
+      throw QuestError(
+          "QUST collection aliases cannot mix entries with max_initial_fill_count");
+    }
+    std::set<std::uint32_t> entry_ids;
+    for (const auto& entry : entries) {
+      if (!entry_ids.insert(entry.id).second) {
+        throw QuestError(
+            "QUST collection alias contains duplicate ALCS id " +
+            std::to_string(entry.id));
+      }
+      alias.subrecords.push_back(make_subrecord(k_alcs, write_u32(entry.id)));
+      if (entry.max_initial_fill_count.has_value()) {
+        alias.subrecords.push_back(make_subrecord(
+            k_almi,
+            std::vector<std::byte>{std::byte{*entry.max_initial_fill_count}}));
+      }
     }
     return alias;
   }
@@ -719,6 +735,9 @@ QuestAlias encode_base_alias(const QuestAliasCreation& creation) {
   }
   if (creation.max_initial_fill_count.has_value()) {
     throw QuestError("QUST reference/location aliases do not use collection ALMI");
+  }
+  if (!creation.collection_entries.empty()) {
+    throw QuestError("QUST collection entries are valid only on collection aliases");
   }
 
   alias.subrecords.push_back(make_subrecord(
