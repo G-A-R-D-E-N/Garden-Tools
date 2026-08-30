@@ -220,6 +220,11 @@ bool knownAliasKey(std::string_view key) {
            key == "findMatchingLocation" ||
            key == "keywords" || key == "items" || key == "linkedAliases" ||
            key == "spells" || key == "factions" || key == "packages" ||
+           key == "spectatorOverridePackageList" ||
+           key == "observeDeadBodyOverridePackageList" ||
+           key == "guardWarnOverridePackageList" ||
+           key == "combatOverridePackageList" || key == "displayName" ||
+           key == "forcedVoice" || key == "deathItem" || key == "voiceTypes" ||
            key == "conditions";
 }
 
@@ -435,6 +440,22 @@ std::optional<Error> parseFillFormKey(const nlohmann::json& object,
     } catch (const std::exception& error) {
         return Error{"InvalidFormKey", std::string(key) + ": " + error.what()};
     }
+}
+
+std::optional<Error> parseOptionalTypedFormKey(
+    const nlohmann::json& object,
+    const char* key,
+    const fo4::ConflictGraph& graph,
+    std::initializer_list<std::string_view> accepted,
+    std::optional<fo4::FormKey>& out,
+    std::vector<fo4::FormKey>& fillKeys) {
+    if (const auto error = parseFillFormKey(object, key, out)) return error;
+    if (!out.has_value()) return std::nullopt;
+    if (const auto error = requireLoadedFill(graph, *out, accepted, false, key)) {
+        return error;
+    }
+    fillKeys.push_back(*out);
+    return std::nullopt;
 }
 
 bool jsonObjectPresent(const nlohmann::json& object, const char* key) {
@@ -1256,8 +1277,11 @@ bool allowedAliasMember(fo4::forms::QuestAliasKind kind, std::string_view signat
            signature == "ALFD" || signature == "ALCC" ||
            signature == "CTDA" || signature == "CIS1" || signature == "CIS2" ||
            signature == "KSIZ" || signature == "KWDA" || signature == "COCT" ||
-           signature == "CNTO" || signature == "ALLA" || signature == "ALSP" ||
-           signature == "ALFC" || signature == "ALPC" || signature == "ALED";
+           signature == "CNTO" || signature == "SPOR" || signature == "OCOR" ||
+           signature == "GWOR" || signature == "ECOR" || signature == "ALLA" ||
+           signature == "ALDN" || signature == "ALFV" || signature == "ALDI" ||
+           signature == "ALSP" || signature == "ALFC" || signature == "ALPC" ||
+           signature == "VTCK" || signature == "ALED";
 }
 
 std::optional<Error> adapterConditionUnrepresentable(
@@ -1333,7 +1357,23 @@ std::optional<Error> extraAliasMembersUnrepresentable(
     const std::vector<fo4::Subrecord>& members,
     const fo4::Plugin& plugin,
     const fo4::ConflictGraph& graph) {
-    enum class Phase { keywords, items, linked, spells, factions, packages, done };
+    enum class Phase {
+        keywords,
+        items,
+        spor,
+        ocor,
+        gwor,
+        ecor,
+        linked,
+        display,
+        forcedVoice,
+        deathItem,
+        spells,
+        factions,
+        packages,
+        voiceTypes,
+        done
+    };
     auto phase = Phase::keywords;
     std::size_t i = 0;
     const auto context = fo4::plugin_form_id_context(plugin);
@@ -1343,10 +1383,13 @@ std::optional<Error> extraAliasMembersUnrepresentable(
     const auto sig = [&](std::size_t index) {
         return members[index].signature.to_string();
     };
-    while (i < members.size() && sig(i) != "ALED" &&
-           sig(i) != "KSIZ" && sig(i) != "KWDA" && sig(i) != "COCT" &&
-           sig(i) != "CNTO" && sig(i) != "ALLA" && sig(i) != "ALSP" &&
-           sig(i) != "ALFC" && sig(i) != "ALPC") {
+    const auto isExtraStart = [&](std::string_view name) {
+        return name == "KSIZ" || name == "KWDA" || name == "COCT" || name == "CNTO" ||
+               name == "SPOR" || name == "OCOR" || name == "GWOR" || name == "ECOR" ||
+               name == "ALLA" || name == "ALDN" || name == "ALFV" || name == "ALDI" ||
+               name == "ALSP" || name == "ALFC" || name == "ALPC" || name == "VTCK";
+    };
+    while (i < members.size() && sig(i) != "ALED" && !isExtraStart(sig(i))) {
         ++i;
     }
     while (i < members.size() && sig(i) != "ALED") {
@@ -1399,10 +1442,87 @@ std::optional<Error> extraAliasMembersUnrepresentable(
                 }
                 ++i;
             }
-            phase = Phase::linked;
+            phase = Phase::spor;
             continue;
         }
         if (name == "CNTO") return fail("existing QUST alias CNTO is missing COCT");
+        const auto uniqueLink = [&](Phase atMost,
+                                    Phase next,
+                                    std::initializer_list<std::string_view> accepted,
+                                    std::string_view slot) -> std::optional<Error> {
+            if (phase > atMost) {
+                return fail("existing QUST alias extra members are out of order");
+            }
+            if (!fourByteMember(members[i])) {
+                return fail("existing QUST alias " + std::string(slot) +
+                            " cannot be reconstructed");
+            }
+            if (const auto error = existingTypedFormIdUnrepresentable(
+                    context, graph, members[i].data, 0, accepted, false, slot)) {
+                return error;
+            }
+            ++i;
+            phase = next;
+            return std::nullopt;
+        };
+        if (name == "SPOR") {
+            if (const auto error = uniqueLink(
+                    Phase::spor, Phase::ocor, {"FLST"}, "spectatorOverridePackageList")) {
+                return error;
+            }
+            continue;
+        }
+        if (name == "OCOR") {
+            if (const auto error = uniqueLink(
+                    Phase::ocor, Phase::gwor, {"FLST"},
+                    "observeDeadBodyOverridePackageList")) {
+                return error;
+            }
+            continue;
+        }
+        if (name == "GWOR") {
+            if (const auto error = uniqueLink(
+                    Phase::gwor, Phase::ecor, {"FLST"}, "guardWarnOverridePackageList")) {
+                return error;
+            }
+            continue;
+        }
+        if (name == "ECOR") {
+            if (const auto error = uniqueLink(
+                    Phase::ecor, Phase::linked, {"FLST"}, "combatOverridePackageList")) {
+                return error;
+            }
+            continue;
+        }
+        if (name == "ALDN") {
+            if (const auto error =
+                    uniqueLink(Phase::display, Phase::forcedVoice, {"MESG"}, "displayName")) {
+                return error;
+            }
+            continue;
+        }
+        if (name == "ALFV") {
+            if (const auto error =
+                    uniqueLink(Phase::forcedVoice, Phase::deathItem, {"VTYP"}, "forcedVoice")) {
+                return error;
+            }
+            continue;
+        }
+        if (name == "ALDI") {
+            if (const auto error =
+                    uniqueLink(Phase::deathItem, Phase::spells, {"LVLI"}, "deathItem")) {
+                return error;
+            }
+            continue;
+        }
+        if (name == "VTCK") {
+            if (const auto error = uniqueLink(
+                    Phase::voiceTypes, Phase::done, {"VTYP", "FLST", "NPC_", "FACT"},
+                    "voiceTypes")) {
+                return error;
+            }
+            continue;
+        }
         if (name == "ALLA") {
             if (phase > Phase::linked) return fail("existing QUST alias extra members are out of order");
             if (members[i].data.empty() || members[i].data.size() % 8 != 0) {
@@ -1416,7 +1536,7 @@ std::optional<Error> extraAliasMembersUnrepresentable(
                 }
             }
             ++i;
-            phase = Phase::spells;
+            phase = Phase::display;
             continue;
         }
         if (name == "ALSP") {
@@ -1455,7 +1575,7 @@ std::optional<Error> extraAliasMembersUnrepresentable(
                 return error;
             }
             ++i;
-            phase = Phase::packages;
+            phase = Phase::voiceTypes;
             continue;
         }
         return fail("existing QUST alias has unsupported member " + name);
@@ -1793,7 +1913,9 @@ bool isAliasConditionPrefix(fo4::forms::QuestAliasKind kind, std::string_view na
 bool isAliasConditionSuccessor(fo4::forms::QuestAliasKind kind, std::string_view name) {
     if (kind == fo4::forms::QuestAliasKind::location) return name == "ALCC";
     return name == "KSIZ" || name == "KWDA" || name == "COCT" || name == "CNTO" ||
-           name == "ALLA" || name == "ALSP" || name == "ALFC" || name == "ALPC";
+           name == "SPOR" || name == "OCOR" || name == "GWOR" || name == "ECOR" ||
+           name == "ALLA" || name == "ALDN" || name == "ALFV" || name == "ALDI" ||
+           name == "ALSP" || name == "ALFC" || name == "ALPC" || name == "VTCK";
 }
 
 std::optional<Error> aliasConditionsUnrepresentable(
@@ -2080,11 +2202,20 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             (element.contains("linkedAliases") && !element["linkedAliases"].is_null()) ||
             (element.contains("spells") && !element["spells"].is_null()) ||
             (element.contains("factions") && !element["factions"].is_null()) ||
-            (element.contains("packages") && !element["packages"].is_null());
+            (element.contains("packages") && !element["packages"].is_null()) ||
+            jsonObjectPresent(element, "spectatorOverridePackageList") ||
+            jsonObjectPresent(element, "observeDeadBodyOverridePackageList") ||
+            jsonObjectPresent(element, "guardWarnOverridePackageList") ||
+            jsonObjectPresent(element, "combatOverridePackageList") ||
+            jsonObjectPresent(element, "displayName") ||
+            jsonObjectPresent(element, "forcedVoice") ||
+            jsonObjectPresent(element, "deathItem") ||
+            jsonObjectPresent(element, "voiceTypes");
         if (hasExtras && creation.kind != fo4::forms::QuestAliasKind::reference) {
             return std::unexpected(Error{
                 "InvalidQuestAliasPayload",
-                "keywords, items, linkedAliases, spells, factions, and packages "
+                "keywords, items, linkedAliases, package-list overrides, displayName, "
+                "forcedVoice, deathItem, voiceTypes, spells, factions, and packages "
                 "are valid only on reference aliases"
             });
         }
@@ -2102,6 +2233,43 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
         }
         if (const auto error = parseAliasFormKeyList(
                 element, "packages", graph_, {"PACK"}, false, creation.packages, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "spectatorOverridePackageList", graph_, {"FLST"},
+                creation.spectator_override, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "observeDeadBodyOverridePackageList", graph_, {"FLST"},
+                creation.observe_dead_body_override, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "guardWarnOverridePackageList", graph_, {"FLST"},
+                creation.guard_warn_override, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "combatOverridePackageList", graph_, {"FLST"},
+                creation.combat_override, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "displayName", graph_, {"MESG"}, creation.display_name, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "forcedVoice", graph_, {"VTYP"}, creation.forced_voice, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "deathItem", graph_, {"LVLI"}, creation.death_item, fillKeys)) {
+            return std::unexpected(*error);
+        }
+        if (const auto error = parseOptionalTypedFormKey(
+                element, "voiceTypes", graph_, {"VTYP", "FLST", "NPC_", "FACT"},
+                creation.voice_types, fillKeys)) {
             return std::unexpected(*error);
         }
         if (element.contains("items") && !element["items"].is_null()) {

@@ -158,6 +158,32 @@ std::vector<std::byte> conditionMasterPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> memberMasterPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(6);
+    hedr.u32(0x806);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    auto writeRecord = [&](std::string_view type, std::uint32_t formId, std::string_view edid) {
+        const auto group = fo4::test::begin_group(out, type, 0);
+        const auto record = fo4::test::begin_record(out, type, 0, formId);
+        fo4::test::write_subrecord(out, "EDID", edid);
+        fo4::test::end_record(out, record);
+        fo4::test::end_group(out, group);
+    };
+    writeRecord("FLST", 0x00000800, std::string_view{"PkgList\0", 8});
+    writeRecord("MESG", 0x00000801, std::string_view{"DispName\0", 9});
+    writeRecord("VTYP", 0x00000802, std::string_view{"Voice\0", 6});
+    writeRecord("LVLI", 0x00000803, std::string_view{"DeathIt\0", 8});
+    writeRecord("KYWD", 0x00000804, std::string_view{"MemberKw\0", 9});
+    writeRecord("SPEL", 0x00000805, std::string_view{"MemberSp\0", 9});
+    return out.bytes;
+}
+
 std::vector<std::byte> fillMasterPlugin() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
@@ -3086,4 +3112,154 @@ TEST_CASE("Native SetQuestAliases reports alias payload errors for condition hel
     CHECK(result.error().type == "InvalidQuestAliasPayload");
     CHECK(result.error().message.find("operator") != std::string::npos);
     CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases writes remaining members in Mutagen order") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, memberMasterPlugin());
+    writeBytes(patchPath, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadExtraMaster(backend, masterPath, patchPath);
+
+    const auto written = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "reference"},
+                {"id", 1},
+                {"name", "Rich"},
+                {"flags", 0},
+                {"keywords", nlohmann::json::array({"000804:Master.esm"})},
+                {"spectatorOverridePackageList", "000800:Master.esm"},
+                {"linkedAliases", nlohmann::json::array({
+                    {{"keyword", "000804:Master.esm"}, {"alias", 2}}
+                })},
+                {"displayName", "000801:Master.esm"},
+                {"forcedVoice", "000802:Master.esm"},
+                {"deathItem", "000803:Master.esm"},
+                {"spells", nlohmann::json::array({"000805:Master.esm"})},
+                {"voiceTypes", "000802:Master.esm"},
+                {"conditions", nlohmann::json::array({
+                    {{"function", "GetAngle"}, {"param1", 1}, {"value", 1.0}}
+                })}
+            }
+        })));
+    REQUIRE(written.has_value());
+    CHECK(aliasMembersUntilAled(
+              recordSignatures(fo4::read_plugin_file(patchPath),
+                               fo4::FormKey::parse("000800:Patch.esp")),
+              "ALST") ==
+          std::vector<std::string>{
+              "ALST", "ALID", "FNAM", "CTDA", "KSIZ", "KWDA", "SPOR", "ALLA", "ALDN",
+              "ALFV", "ALDI", "ALSP", "VTCK", "ALED"});
+    CHECK(fo4::read_plugin_file(patchPath).header.masters.size() == 1u);
+}
+
+TEST_CASE("Native SetQuestAliases refuses remaining members on location aliases") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {
+                {"kind", "location"},
+                {"id", 2},
+                {"flags", 0},
+                {"displayName", "000800:Patch.esp"}
+            }
+        })));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestAliasPayload");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestAliases refuses existing remaining-member coverage gaps") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    auto tryRefuse = [&](auto body, const char* needle) {
+        writeBytes(path, questPluginWith(0, body));
+        const auto before = readBytes(path);
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        const auto result = backend.invokeBackend(
+            "SetQuestAliases",
+            setAliasesArgs(nlohmann::json::array({
+                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+            })));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+        CHECK(result.error().message.find(needle) != std::string::npos);
+        CHECK(readBytes(path) == before);
+    };
+
+    tryRefuse(
+        [](fo4::test::ByteWriter& out) {
+            writeU32(out, "ANAM", 2);
+            writeU32(out, "ALST", 1);
+            fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+            writeU32(out, "FNAM", 0);
+            writeU32(out, "SPOR", 0);
+            fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+        },
+        "is null");
+
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(3);
+    hedr.u32(0x803);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    {
+        const auto group = fo4::test::begin_group(out, "FLST", 0);
+        const auto record = fo4::test::begin_record(out, "FLST", 0, 0x00000801);
+        fo4::test::write_subrecord(out, "EDID", std::string_view{"List\0", 5});
+        fo4::test::end_record(out, record);
+        fo4::test::end_group(out, group);
+    }
+    {
+        const auto group = fo4::test::begin_group(out, "MESG", 0);
+        const auto record = fo4::test::begin_record(out, "MESG", 0, 0x00000802);
+        fo4::test::write_subrecord(out, "EDID", std::string_view{"Msg\0", 4});
+        fo4::test::end_record(out, record);
+        fo4::test::end_group(out, group);
+    }
+    {
+        const auto group = fo4::test::begin_group(out, "QUST", 0);
+        const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+        fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
+        writeU32(out, "ANAM", 2);
+        writeU32(out, "ALST", 1);
+        fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
+        writeU32(out, "FNAM", 0);
+        writeU32(out, "ALDN", 0x00000802);
+        writeU32(out, "SPOR", 0x00000801);
+        fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+        fo4::test::end_record(out, quest);
+        fo4::test::end_group(out, group);
+    }
+    writeBytes(path, out.bytes);
+    const auto beforeOrder = readBytes(path);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto ordered = backend.invokeBackend(
+        "SetQuestAliases",
+        setAliasesArgs(nlohmann::json::array({
+            {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
+        })));
+    REQUIRE_FALSE(ordered.has_value());
+    CHECK(ordered.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(ordered.error().message.find("out of order") != std::string::npos);
+    CHECK(readBytes(path) == beforeOrder);
 }

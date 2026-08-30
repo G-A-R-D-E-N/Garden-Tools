@@ -164,6 +164,14 @@ struct QuestAliasCreation {
   std::vector<FormKey> spells;
   std::vector<FormKey> factions;
   std::vector<FormKey> packages;
+  std::optional<FormKey> spectator_override;
+  std::optional<FormKey> observe_dead_body_override;
+  std::optional<FormKey> guard_warn_override;
+  std::optional<FormKey> combat_override;
+  std::optional<FormKey> display_name;
+  std::optional<FormKey> forced_voice;
+  std::optional<FormKey> death_item;
+  std::optional<FormKey> voice_types;
   std::vector<CtdaCondition> conditions;
 };
 
