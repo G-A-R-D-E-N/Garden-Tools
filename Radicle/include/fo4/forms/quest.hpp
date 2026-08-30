@@ -112,9 +112,17 @@ struct QuestCollectionEntry {
   std::optional<std::uint8_t> max_initial_fill_count;
 };
 
+struct QuestAliasItemExtra {
+  std::optional<FormKey> owner;
+  std::optional<FormKey> global;
+  std::optional<std::int32_t> required_rank;
+  float item_condition{0.0f};
+};
+
 struct QuestAliasItem {
   FormKey item;
   std::int32_t count{1};
+  std::optional<QuestAliasItemExtra> extra;
 };
 
 struct QuestLinkedAlias {
