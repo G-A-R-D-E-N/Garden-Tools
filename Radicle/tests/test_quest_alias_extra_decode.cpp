@@ -326,7 +326,8 @@ TEST(QuestAliasExtraDecode, NullOwnerHasNeitherUnionField) {
       .item_condition = 1.0f,
   };
   creation.items = {item};
-  fo4::forms::write_quest_aliases(plugin, k_quest, {creation});
+  const std::vector<fo4::forms::QuestAliasCreation> nullOwner{creation};
+  fo4::forms::write_quest_aliases(plugin, k_quest, nullOwner);
   const auto decoded = fo4::forms::decode_quest_aliases(
       fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp"), k_quest);
   ASSERT_EQ(decoded.aliases.size(), 1u);
@@ -356,7 +357,8 @@ TEST(QuestAliasExtraDecode, NpcGlobalSurvivesMasterInsertionAndFactRankDoesNotRe
       .item_condition = 0.25f,
   };
   creation.items = {factItem, npcItem};
-  fo4::forms::write_quest_aliases(plugin, k_quest, {creation});
+  const std::vector<fo4::forms::QuestAliasCreation> mixedOwners{creation};
+  fo4::forms::write_quest_aliases(plugin, k_quest, mixedOwners);
 
   auto remapped = fo4::remap_plugin_masters(
       std::move(plugin),
