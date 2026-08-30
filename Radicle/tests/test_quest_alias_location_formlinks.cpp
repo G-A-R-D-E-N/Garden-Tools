@@ -65,6 +65,14 @@ fo4::forms::QuestAliasCreation base_location() {
       .spells = {},
       .factions = {},
       .packages = {},
+      .spectator_override = {},
+      .observe_dead_body_override = {},
+      .guard_warn_override = {},
+      .combat_override = {},
+      .display_name = {},
+      .forced_voice = {},
+      .death_item = {},
+      .voice_types = {},
       .conditions = {},
   };
 }
@@ -164,6 +172,14 @@ TEST(QuestAliasLocationFormLinks, RejectsEmptyExternalAndWrongAliasKind) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .spectator_override = {},
+      .observe_dead_body_override = {},
+      .guard_warn_override = {},
+      .combat_override = {},
+      .display_name = {},
+      .forced_voice = {},
+      .death_item = {},
+      .voice_types = {},
       .conditions = {},
   };
   EXPECT_THROW(

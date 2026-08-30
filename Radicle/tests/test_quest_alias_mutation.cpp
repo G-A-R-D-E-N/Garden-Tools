@@ -111,6 +111,14 @@ fo4::forms::QuestAliasCreation collection(std::uint32_t id, std::uint8_t max_fil
       .spells = {},
       .factions = {},
       .packages = {},
+      .spectator_override = {},
+      .observe_dead_body_override = {},
+      .guard_warn_override = {},
+      .combat_override = {},
+      .display_name = {},
+      .forced_voice = {},
+      .death_item = {},
+      .voice_types = {},
       .conditions = {},
   };
 }
@@ -131,6 +139,14 @@ fo4::forms::QuestAliasCreation reference(std::uint32_t id) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .spectator_override = {},
+      .observe_dead_body_override = {},
+      .guard_warn_override = {},
+      .combat_override = {},
+      .display_name = {},
+      .forced_voice = {},
+      .death_item = {},
+      .voice_types = {},
       .conditions = {},
   };
 }
@@ -157,6 +173,14 @@ TEST(QuestAliasMutation, AddsBeforeTailAndAdvancesNextAliasId) {
       .spells = {},
       .factions = {},
       .packages = {},
+      .spectator_override = {},
+      .observe_dead_body_override = {},
+      .guard_warn_override = {},
+      .combat_override = {},
+      .display_name = {},
+      .forced_voice = {},
+      .death_item = {},
+      .voice_types = {},
       .conditions = {},
   };
   fo4::forms::add_quest_alias(plugin, quest, creation);
@@ -291,6 +315,14 @@ TEST(QuestAliasMutation, WriteReplacesWholeArrayIncludingCollectionsAndPreserves
       .spells = {},
       .factions = {},
       .packages = {},
+      .spectator_override = {},
+      .observe_dead_body_override = {},
+      .guard_warn_override = {},
+      .combat_override = {},
+      .display_name = {},
+      .forced_voice = {},
+      .death_item = {},
+      .voice_types = {},
       .conditions = {},
   };
   const std::array<fo4::forms::QuestAliasCreation, 2> creations{
