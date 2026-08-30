@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -315,6 +316,48 @@ TEST(QuestAliasExtraDecode, RejectsShortCoedAndStrayCoed) {
       fo4::forms::QuestError);
 }
 
+TEST(QuestAliasExtraDecode, RejectsNonFiniteCoedItemCondition) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Master.esm\0", 11});
+  fo4::test::ByteWriter master_data;
+  master_data.u32(0);
+  master_data.u32(0);
+  fo4::test::write_subrecord(out, "DATA", master_data.bytes);
+  fo4::test::end_record(out, tes4);
+  write_typed_record(out, "FACT", 0x00000811, std::string_view{"OwnerFact\0", 10});
+
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x01000800, 131);
+  write_u32_subrecord(out, "ANAM", 1);
+  write_u32_subrecord(out, "ALST", 0);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"A\0", 2});
+  write_u32_subrecord(out, "FNAM", 0);
+  write_u32_subrecord(out, "COCT", 1);
+  fo4::test::ByteWriter cnto;
+  cnto.u32(0x00000211);
+  cnto.i32(1);
+  fo4::test::write_subrecord(out, "CNTO", cnto.bytes);
+  fo4::test::ByteWriter coed;
+  coed.u32(0x00000811);
+  coed.i32(3);
+  coed.f32(std::numeric_limits<float>::infinity());
+  fo4::test::write_subrecord(out, "COED", coed.bytes);
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+
+  EXPECT_THROW(
+      (void)fo4::forms::decode_quest_aliases(
+          fo4::read_plugin(out.bytes, "Patch.esp"), k_quest),
+      fo4::forms::QuestError);
+}
+
 TEST(QuestAliasExtraDecode, NullOwnerHasNeitherUnionField) {
   auto plugin = fo4::read_plugin(empty_quest_plugin(), "Patch.esp");
   auto creation = reference_alias(1);
@@ -530,6 +573,44 @@ TEST(QuestAliasExtraDecode, UnknownOwnerWithNonzeroUnionFailsClosedOnRemap) {
           std::move(plugin),
           {fo4::PluginKey::from_filename("Dummy.esm"),
            fo4::PluginKey::from_filename("Master.esm")}),
+      fo4::FormIdError);
+}
+
+TEST(QuestAliasExtraDecode, WrongTypeOwnerWithNonzeroUnionFailsClosedOnRemap) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(3);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  write_typed_record(out, "MISC", 0x00000800, std::string_view{"Item\0", 5});
+  write_typed_record(out, "GLOB", 0x00000801, std::string_view{"Glob\0", 5});
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000802, 131);
+  write_u32_subrecord(out, "ANAM", 1);
+  write_u32_subrecord(out, "ALST", 0);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"A\0", 2});
+  write_u32_subrecord(out, "FNAM", 0);
+  write_u32_subrecord(out, "COCT", 1);
+  fo4::test::ByteWriter cnto;
+  cnto.u32(0x00000800);
+  cnto.i32(1);
+  fo4::test::write_subrecord(out, "CNTO", cnto.bytes);
+  fo4::test::ByteWriter coed;
+  coed.u32(0x00000800);
+  coed.u32(0x00000801);
+  coed.f32(1.0f);
+  fo4::test::write_subrecord(out, "COED", coed.bytes);
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  EXPECT_THROW(
+      (void)fo4::remap_plugin_masters(
+          std::move(plugin), {fo4::PluginKey::from_filename("Dummy.esm")}),
       fo4::FormIdError);
 }
 

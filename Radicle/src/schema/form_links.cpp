@@ -576,43 +576,43 @@ bool visit_coed_formids(const Subrecord& sub,
     }
     return true;
   }
-  fn(0);
   const auto owner_raw = RawFormId{read_u32(sub.data, 0)};
   const auto union_raw = read_u32(sub.data, 4);
-  if (owner_raw.is_null() || union_raw == 0) {
-    return true;
-  }
-  if (type_source == nullptr || context == nullptr) {
-    if (strict_remap) {
-      throw FormIdError("cannot safely remap COED union without owner type");
+  bool remap_global = false;
+  if (!owner_raw.is_null() && union_raw != 0) {
+    if (type_source == nullptr || context == nullptr) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap COED union without owner type");
+      }
+    } else {
+      FormKey owner_key;
+      try {
+        owner_key = resolve_plugin_form_id(owner_raw, *context);
+      } catch (const FormIdError&) {
+        if (strict_remap) {
+          throw FormIdError("cannot safely remap COED union: owner FormID does not resolve");
+        }
+        owner_key = FormKey{};
+      }
+      if (!owner_key.owner().empty() || owner_key.local().value() != 0) {
+        const auto* owner = find_record(*type_source, owner_key);
+        if (owner == nullptr) {
+          if (strict_remap) {
+            throw FormIdError("cannot safely remap COED union: owner type unknown");
+          }
+        } else if (owner->header.signature == k_npc_) {
+          remap_global = true;
+        } else if (owner->header.signature != k_fact) {
+          if (strict_remap) {
+            throw FormIdError("cannot safely remap COED union: owner is not NPC_ or FACT");
+          }
+        }
+      }
     }
-    return true;
   }
-  FormKey owner_key;
-  try {
-    owner_key = resolve_plugin_form_id(owner_raw, *context);
-  } catch (const FormIdError&) {
-    if (strict_remap) {
-      throw FormIdError("cannot safely remap COED union: owner FormID does not resolve");
-    }
-    return true;
-  }
-  const auto* owner = find_record(*type_source, owner_key);
-  if (owner == nullptr) {
-    if (strict_remap) {
-      throw FormIdError("cannot safely remap COED union: owner type unknown");
-    }
-    return true;
-  }
-  if (owner->header.signature == k_npc_) {
+  fn(0);
+  if (remap_global) {
     fn(4);
-    return true;
-  }
-  if (owner->header.signature == k_fact) {
-    return true;
-  }
-  if (strict_remap) {
-    throw FormIdError("cannot safely remap COED union: owner is not NPC_ or FACT");
   }
   return true;
 }

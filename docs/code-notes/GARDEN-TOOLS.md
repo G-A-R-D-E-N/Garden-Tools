@@ -150,6 +150,10 @@ Native `CreateRecord` now admits `PROJ`, `EXPL` and `HAZD` through Radicle's mea
 
 `visit_link_offsets` handles `COED` before `structured_formids.inc`. Offset 0 (owner) always remaps. Offset 4 remaps only when the owner FormID resolves through the current plugin to an `NPC_` record. `FACT` leaves offset 4 as an i32 rank. Null owner or a zero union skips offset 4. Strict remap throws when the payload is not 12 bytes, when a nonzero union cannot be typed from a record in the plugin, or when the owner is neither `NPC_` nor `FACT`. Offset 4 is not registered in `structured_formids.inc`.
 
+## Radicle/src/schema/form_links.cpp:visit_coed_formids
+
+Owner and union dwords are snapshotted before remapping offset 0 so typing uses the old FormID encoding.
+
 ## Radicle/src/forms/quest_alias_edit.cpp:write_quest_aliases — full alias-array replace (#73)
 
 `write_quest_aliases` replaces the contiguous post-ANAM alias span in one transaction. Collections cannot be addressed by ID through `remove_quest_alias`, so a whole-array writer is the SetQuestAliases primitive. Encodes every `QuestAliasCreation` first, then splices, then sets ANAM to `max(existing ANAM, max(ref/location id)+1)` without decreasing it. NNAM/GNAM/SNAM tail is preserved. `add/remove/replace/reorder_quest_alias` fail closed if the planned range sequence would join two collection runs.
