@@ -4,10 +4,12 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #if defined(_WIN32)
   #ifndef WIN32_LEAN_AND_MEAN
@@ -49,6 +51,52 @@ std::filesystem::path temp_sibling(const std::filesystem::path& path) {
   std::error_code remove_ec;
   std::filesystem::remove(temp, remove_ec);
   throw std::runtime_error(message);
+}
+
+std::vector<std::byte> read_existing_regular_file(
+    const std::filesystem::path& path) {
+  std::error_code status_ec;
+  const auto status = std::filesystem::symlink_status(path, status_ec);
+  if (status_ec || !std::filesystem::is_regular_file(status)) {
+    throw std::runtime_error(
+        "dependency must exist as a regular, non-symlink file: " + path.string());
+  }
+
+  std::error_code size_ec;
+  const auto file_size = std::filesystem::file_size(path, size_ec);
+  if (size_ec || file_size > std::numeric_limits<std::size_t>::max() ||
+      file_size > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
+    throw std::runtime_error("unable to determine dependency size: " + path.string());
+  }
+
+  std::ifstream stream(path, std::ios::binary);
+  if (!stream) {
+    throw std::runtime_error("unable to open dependency for rollback: " + path.string());
+  }
+
+  std::vector<std::byte> bytes(static_cast<std::size_t>(file_size));
+  if (!bytes.empty()) {
+    stream.read(reinterpret_cast<char*>(bytes.data()),
+                static_cast<std::streamsize>(bytes.size()));
+    if (!stream) {
+      throw std::runtime_error("unable to read dependency for rollback: " + path.string());
+    }
+  }
+  return bytes;
+}
+
+StagedFile stage_bytes(const std::filesystem::path& path,
+                       const std::span<const std::byte> bytes) {
+  auto staged = StagedFile::create(path);
+  staged.write(bytes);
+  staged.finish();
+  try {
+    staged.verify(bytes.size());
+  } catch (...) {
+    std::move(staged).cancel();
+    throw;
+  }
+  return staged;
 }
 
 }  // namespace
@@ -319,6 +367,59 @@ void write_file_atomic(const std::filesystem::path& path,
     throw;
   }
   std::move(staged).commit();
+}
+
+void write_file_pair_dependency_first(
+    const std::filesystem::path& dependency,
+    const std::span<const std::byte> dependencyBytes,
+    const std::filesystem::path& primary,
+    const std::span<const std::byte> primaryBytes) {
+  if (dependency.empty() || primary.empty()) {
+    throw std::runtime_error("coordinated file destinations must not be empty");
+  }
+
+  std::error_code equivalent_ec;
+  if (std::filesystem::equivalent(dependency, primary, equivalent_ec) &&
+      !equivalent_ec) {
+    throw std::runtime_error("dependency and primary destinations must be distinct");
+  }
+
+  // Take the rollback snapshot before creating any staged output. Requiring a
+  // regular non-symlink dependency is intentional: the localization contract
+  // only authorizes an already-resolved editable loose sidecar.
+  const auto original_dependency = read_existing_regular_file(dependency);
+
+  // Nothing has changed on disk until all three stages exist, are closed, and
+  // match their expected sizes. Any staging/verification error therefore
+  // leaves both destinations untouched and RAII removes every completed stage.
+  auto dependency_stage = stage_bytes(dependency, dependencyBytes);
+  auto primary_stage = stage_bytes(primary, primaryBytes);
+  auto rollback_stage = stage_bytes(dependency, original_dependency);
+
+  // Commit the dependency first. For the localized-CNAM use case the new
+  // sidecar is a backward-compatible superset of what the old plugin can
+  // reference, so a process crash here leaves a usable old-plugin/new-sidecar
+  // pair rather than a plugin that points at a missing string ID.
+  std::move(dependency_stage).commit();
+
+  try {
+    std::move(primary_stage).commit();
+  } catch (const std::exception& primary_error) {
+    try {
+      std::move(rollback_stage).commit();
+    } catch (const std::exception& rollback_error) {
+      throw std::runtime_error(
+          "primary commit failed after dependency commit, and dependency rollback also failed: " +
+          std::string(primary_error.what()) + "; rollback: " + rollback_error.what());
+    }
+    throw std::runtime_error(
+        "primary commit failed after dependency commit; dependency restored: " +
+        std::string(primary_error.what()));
+  }
+
+  // Both destinations are now committed. The rollback copy is no longer
+  // needed; cancel explicitly so successful transactions leave no temp file.
+  std::move(rollback_stage).cancel();
 }
 
 }  // namespace fo4::io
