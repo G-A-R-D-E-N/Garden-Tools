@@ -34,6 +34,14 @@ public sealed class PhysicsInspectorTests
     }
 
     [Fact]
+    public void UnknownPhysicsLookingClassDoesNotBecomeReadOnly()
+    {
+        Assert.Null(HavokPhysicsSchemaCatalog.TryGetSignature("hkpUnknownExperimentalThing", out _) ?
+            new object() : null);
+        Assert.False(Inspector.IsSchemaReadOnlyClass("hkpUnknownExperimentalThing"));
+    }
+
+    [Fact]
     public void VanillaCharacterSkeletonPhysicsObjectUsesReadOnlyInspectorFields()
     {
         var obj = FindCataloguedObject(
@@ -71,6 +79,7 @@ public sealed class PhysicsInspectorTests
         var model = BehaviourGraphModel.Parse(NativeXml.From(bytes));
         var found = model.Objects.FirstOrDefault(obj =>
         {
+            if (!HavokPhysicsSchemaCatalog.TryGetSignature(obj.Class, out _)) return false;
             var family = HavokPhysicsSchemaCatalog.FamilyOf(obj.Class);
             return family.HasValue && predicate(family.Value);
         });
