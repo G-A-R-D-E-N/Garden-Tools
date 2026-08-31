@@ -72,6 +72,43 @@ The entire data block is walked to record boundaries before table offsets are ac
 
 The writer is logically round-trip safe but does not promise byte-identical data-block ordering to an arbitrary source file because Bethesda's writer uses insertion/hash-table order.
 
+## QUST CNAM authoring contract (#74A)
+
+The following ownership facts are pinned for the later localized-CNAM writer:
+
+- Fallout 4 `QUST` stage-log `CNAM` uses the `DL` source, so its sidecar is
+  `.DLSTRINGS`. This matches both the vendored Mutagen record definition at
+  `PluginEditTool/Mutagen/Mutagen.Bethesda.Fallout4/Records/Major Records/Quest.xml`
+  and xEdit's `LocalizedValueDecider` in `wbLocalization.pas`.
+- The sidecar belongs to the plugin and is under its `Strings` directory, with
+  the plugin stem and active localization language token in the filename:
+  `<plugin-stem>_<language>.DLSTRINGS`, such as `Patch_en.DLSTRINGS`.
+  xEdit builds this filename from its active `wbLanguage` value, normally
+  derived from Fallout 4's `sLanguage` setting.
+- Radicle authoring must receive the selected language and resolved writable
+  sidecar root explicitly. It must not guess a language from whichever file
+  happens to exist, fall back to English, or write into a protected game-data
+  directory.
+- The allocation domain is one plugin/language localization set. New IDs are
+  the first unused value after the maximum ID observed across that set's three
+  table kinds. Existing IDs are never renumbered or deleted. The file format's
+  per-table row IDs remain independently validated, while the allocator keeps
+  the stronger set-wide invariant used by xEdit.
+- Existing localized CNAM provenance wins over text matching: an unchanged
+  entry keeps its original ID. Newly authored equal text does not reuse an
+  unrelated existing ID by default; only the table writer may deduplicate the
+  underlying data payload. This preserves the option for distinct records to
+  receive independent future translations.
+- If the selected sidecar or its required localization root cannot be resolved
+  as an editable loose file, authoring fails closed before either the plugin or
+  sidecar is staged. Creating a new sidecar from an absent or archive-only
+  source is outside this slice.
+
+These facts define ownership and allocation; they do not claim that the
+current backend already implements them. The implementation remains split into
+a sidecar-aware transaction primitive and the later `SetQuestStages` CNAM
+adapter.
+
 ## TES4 bit 7 and plugin fields
 
 This support does **not** settle Radicle issue #29 (`TES4 bit 7: localized vs delocalized`). The string-table container and the plugin localization flag are separate questions.
