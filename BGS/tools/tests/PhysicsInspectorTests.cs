@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Xml;
+using Avalonia.Controls;
 using BehaviourStudio.App;
 using OpenCommonwealth.Services.Hkx;
 using Xunit;
@@ -13,6 +14,24 @@ public sealed class PhysicsInspectorTests
     private static string Fixture(string relative) =>
         Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
                      relative.Replace('/', Path.DirectorySeparatorChar));
+
+    [Theory]
+    [InlineData("hkpRagdollConstraintData")]
+    [InlineData("hclClothData")]
+    public void CataloguedSchemaRowsAreActuallyReadOnly(string className)
+    {
+        var inspector = new Inspector(300);
+        var heading = new TextBlock { Text = $"#12   {className}   1 editable fields" };
+        inspector.Add(heading);
+
+        var value = new TextBox { Text = "42" };
+        inspector.TwoColumnRow(new TextBlock { Text = "value" }, value);
+
+        Assert.True(inspector.SchemaReadOnly);
+        Assert.True(value.IsReadOnly);
+        Assert.False(value.IsTabStop);
+        Assert.Contains("read-only fields", heading.Text);
+    }
 
     [Fact]
     public void VanillaCharacterSkeletonPhysicsObjectUsesReadOnlyInspectorFields()
