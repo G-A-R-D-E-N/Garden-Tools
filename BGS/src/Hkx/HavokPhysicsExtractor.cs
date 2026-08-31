@@ -56,7 +56,7 @@ public static class HavokPhysicsExtractor
 
         if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
             for (int i = 0; i < constraints.Count; i++)
-                if (Constraint(graph, i, constraints[i]) is { } constraint)
+                if (Constraint(objects, graph, i, constraints[i]) is { } constraint)
                     model.Constraints.Add(constraint);
 
         if (ragdoll.Lists.TryGetValue("boneToBodyMap", out var map))
@@ -161,23 +161,168 @@ public static class HavokPhysicsExtractor
         };
     }
 
-    private static HavokConstraint? Constraint(BehaviourGraphModel graph, int id, IReadOnlyDictionary<string, string> cinfo)
+    private static HavokConstraint? Constraint(PackfileObjects objects, BehaviourGraphModel graph, int id,
+                                               IReadOnlyDictionary<string, string> cinfo)
     {
         int bodyA = Int(cinfo, "bodyA");
         int bodyB = Int(cinfo, "bodyB");
         if (bodyA < 0 || bodyB < 0) return null;
 
-        string kindName = "";
+        string className = "";
+        PackfileObjects.Instance? data = null;
         if (cinfo.TryGetValue("constraintData", out var reference) && RefId(reference) is { } refId && refId >= 0)
-            kindName = graph.Get(refId.ToString())?.Class ?? "";
+        {
+            className = graph.Get(refId.ToString())?.Class ?? "";
+            int index = refId - NativeGraphModel.FirstId;
+            if (index >= 0 && index < objects.Instances.Count) data = objects.Instances[index];
+        }
+
+        var measured = data == null
+            ? new ConstraintMeasured(KindOfConstraint(className), null, null, null, null, null,
+                                     0, 1, 0, 0, 0, 0, 0)
+            : MeasureConstraint(objects, data);
 
         return new HavokConstraint
         {
             Id = id,
             BodyA = bodyA,
             BodyB = bodyB,
-            Kind = KindOfConstraint(kindName),
+            Kind = measured.Kind,
+            MinAngle = measured.MinAngle,
+            MaxAngle = measured.MaxAngle,
+            TwistMinAngle = measured.TwistMinAngle,
+            TwistMaxAngle = measured.TwistMaxAngle,
+            ConeMaxAngle = measured.ConeMaxAngle,
+            TwistAxis = measured.TwistAxis,
+            TwistRefAxis = measured.TwistRefAxis,
+            ConeTwistAxis = measured.ConeTwistAxis,
+            ConeRefAxis = measured.ConeRefAxis,
+            LimitAxis = measured.LimitAxis,
+            FrameA = measured.FrameA,
+            FrameB = measured.FrameB,
         };
+    }
+
+    private readonly record struct ConstraintMeasured(
+        HavokConstraintKind Kind,
+        float[]? FrameA,
+        float[]? FrameB,
+        float? TwistMinAngle,
+        float? TwistMaxAngle,
+        float? ConeMaxAngle,
+        int TwistAxis,
+        int TwistRefAxis,
+        int ConeTwistAxis,
+        int ConeRefAxis,
+        int LimitAxis,
+        float MinAngle,
+        float MaxAngle);
+
+    // Walks the constraint atoms through the measured type table: every offset comes from the
+    // flattened parent-chain layout of the class that owns the member, exactly like the
+    // byte-backed XML writer resolves them.
+    private static ConstraintMeasured MeasureConstraint(PackfileObjects objects, PackfileObjects.Instance instance)
+    {
+        var reader = new MemberReader(objects);
+        var kind = KindOfConstraint(instance.ClassName);
+
+        int? atoms = reader.At(instance.Offset, instance.ClassName, "atoms");
+        string? atomsType = reader.CType(instance.ClassName, "atoms");
+        if (atoms == null || atomsType == null)
+            return new ConstraintMeasured(kind, null, null, null, null, null, 0, 1, 0, 0, 0, 0, 0);
+
+        var frameA = Frame(reader, atoms, atomsType, "transformA");
+        var frameB = Frame(reader, atoms, atomsType, "transformB");
+
+        float? twistMin = null, twistMax = null, coneMax = null;
+        int twistAxis = 0, twistRef = 1, coneTwist = 0, coneRef = 0, limitAxis = 0;
+        float hingeMin = 0, hingeMax = 0;
+
+        switch (kind)
+        {
+            case HavokConstraintKind.Ragdoll:
+                int? twist = reader.At(atoms, atomsType, "twistLimit");
+                string? twistType = reader.CType(atomsType, "twistLimit");
+                if (twist != null && twistType != null)
+                {
+                    twistAxis = reader.Narrow(twist, twistType, "twistAxis") ?? 0;
+                    twistRef = reader.Narrow(twist, twistType, "refAxis") ?? 1;
+                    twistMin = reader.Float(twist, twistType, "minAngle");
+                    twistMax = reader.Float(twist, twistType, "maxAngle");
+                }
+
+                int? cone = reader.At(atoms, atomsType, "coneLimit");
+                string? coneType = reader.CType(atomsType, "coneLimit");
+                if (cone != null && coneType != null)
+                {
+                    coneTwist = reader.Narrow(cone, coneType, "twistAxisInA") ?? 0;
+                    coneRef = reader.Narrow(cone, coneType, "refAxisInB") ?? 0;
+                    coneMax = reader.Float(cone, coneType, "maxAngle");
+                }
+                break;
+
+            case HavokConstraintKind.LimitedHinge:
+                int? ang = reader.At(atoms, atomsType, "angLimit");
+                string? angType = reader.CType(atomsType, "angLimit");
+                if (ang != null && angType != null)
+                {
+                    limitAxis = reader.Narrow(ang, angType, "limitAxis") ?? 0;
+                    hingeMin = reader.Float(ang, angType, "minAngle") ?? 0;
+                    hingeMax = reader.Float(ang, angType, "maxAngle") ?? 0;
+                }
+                break;
+        }
+
+        return new ConstraintMeasured(kind, frameA, frameB, twistMin, twistMax, coneMax,
+                                      twistAxis, twistRef, coneTwist, coneRef, limitAxis,
+                                      hingeMin, hingeMax);
+    }
+
+    private static float[]? Frame(MemberReader reader, int? atoms, string atomsType, string which)
+    {
+        int? transforms = reader.At(atoms, atomsType, "transforms");
+        string? transformsType = reader.CType(atomsType, "transforms");
+        int? at = transformsType == null ? null : reader.At(transforms, transformsType, which);
+        return at is int abs ? reader.Objects.ReadFloatsAt(abs, 16) : null;
+    }
+
+    private sealed class MemberReader
+    {
+        public MemberReader(PackfileObjects objects)
+        {
+            Objects = objects;
+            Types = HavokClassTypes.Shipped;
+        }
+
+        public PackfileObjects Objects { get; }
+        private HavokClassTypes Types { get; }
+
+        public string? CType(string className, string member) =>
+            Types.Members(className).FirstOrDefault(m => m.Name == member)?.CType;
+
+        public int? At(int? baseAt, string className, string member)
+        {
+            if (baseAt == null) return null;
+            return LayoutWalker.Active(Types, className, Objects.PointerWidth)?.OffsetOf(member) is { } offset
+                ? baseAt + offset
+                : null;
+        }
+
+        public int? Narrow(int? baseAt, string className, string member)
+        {
+            if (baseAt == null) return null;
+            return LayoutWalker.Active(Types, className, Objects.PointerWidth)?.OffsetOf(member) is { } offset
+                ? Objects.ReadNarrowAt(baseAt.Value + offset, 1)
+                : null;
+        }
+
+        public float? Float(int? baseAt, string className, string member)
+        {
+            if (baseAt == null) return null;
+            return LayoutWalker.Active(Types, className, Objects.PointerWidth)?.OffsetOf(member) is { } offset
+                ? Objects.ReadFloatAt(baseAt.Value + offset)
+                : null;
+        }
     }
 
     private static HavokPhysicsShapeKind KindOf(string className) =>

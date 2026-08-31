@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
+
 namespace OpenCommonwealth.Services.Hkx;
 
 public enum HavokPhysicsShapeKind
@@ -63,8 +64,34 @@ public sealed class HavokConstraint
     public HavokConstraintKind Kind { get; init; }
     public int BodyA { get; init; }
     public int BodyB { get; init; }
+
+    // The hinge-style joint limit (hkpLimitedHingeConstraintData angLimit atom). Zero when the
+    // file carries no such limit for this constraint.
     public float MinAngle { get; init; }
     public float MaxAngle { get; init; }
+
+    // Ragdoll twist limit (hkpTwistLimitConstraintAtom) and cone half-angle
+    // (hkpConeLimitConstraintAtom), measured from the constraint atoms. Null when absent.
+    public float? TwistMinAngle { get; init; }
+    public float? TwistMaxAngle { get; init; }
+    public float? ConeMaxAngle { get; init; }
+
+    // Axis/ref column indices into the measured constraint frames: the twist limit is measured
+    // around frame-A column TwistAxis from frame-A column TwistRefAxis; the cone around
+    // frame-A column ConeTwistAxis from frame-B column ConeRefAxis; the hinge limit around
+    // frame-A column LimitAxis.
+    public int TwistAxis { get; init; }
+    public int TwistRefAxis { get; init; } = 1;
+    public int ConeTwistAxis { get; init; }
+    public int ConeRefAxis { get; init; }
+    public int LimitAxis { get; init; }
+
+    // The measured local frames (transformA/transformB of the constraint atoms), each sixteen
+    // column-major floats exactly as the file stores them: columns 0-2 are the basis, column 3
+    // is the translation (the pivot in the owning body's local frame). Null when the constraint
+    // data carried no transforms atom or could not be read.
+    public float[]? FrameA { get; init; }
+    public float[]? FrameB { get; init; }
 }
 
 public sealed record HavokRagdollBoneBinding(int BoneIndex, int BodyId);
@@ -180,6 +207,29 @@ public static class HavokPhysicsValidator
                 findings.Add(Error($"constraint {constraint.Id}", "angle limits must be finite"));
             else if (constraint.MinAngle > constraint.MaxAngle)
                 findings.Add(Error($"constraint {constraint.Id}", "minimum angle is greater than maximum angle"));
+
+            CheckFrame(constraint.FrameA, $"constraint {constraint.Id}", "frame A", findings);
+            CheckFrame(constraint.FrameB, $"constraint {constraint.Id}", "frame B", findings);
+
+            if (constraint.TwistMinAngle is float twistMin && constraint.TwistMaxAngle is float twistMax)
+            {
+                if (!Finite(twistMin) || !Finite(twistMax))
+                    findings.Add(Error($"constraint {constraint.Id}", "twist angle limits must be finite"));
+                else if (twistMin > twistMax)
+                    findings.Add(Error($"constraint {constraint.Id}", "minimum twist angle is greater than maximum twist angle"));
+            }
+
+            if (constraint.ConeMaxAngle is float coneMax)
+            {
+                if (!Finite(coneMax) || coneMax < 0)
+                    findings.Add(Error($"constraint {constraint.Id}", "cone half-angle must be a finite non-negative value"));
+            }
+
+            CheckAxisIndex(constraint.TwistAxis, constraint.FrameA, $"constraint {constraint.Id}", "twist axis", findings);
+            CheckAxisIndex(constraint.TwistRefAxis, constraint.FrameA, $"constraint {constraint.Id}", "twist reference axis", findings);
+            CheckAxisIndex(constraint.ConeTwistAxis, constraint.FrameA, $"constraint {constraint.Id}", "cone twist axis", findings);
+            CheckAxisIndex(constraint.ConeRefAxis, constraint.FrameB, $"constraint {constraint.Id}", "cone reference axis", findings);
+            CheckAxisIndex(constraint.LimitAxis, constraint.FrameA, $"constraint {constraint.Id}", "limit axis", findings);
         }
 
         var boundBones = new HashSet<int>();
@@ -267,6 +317,29 @@ public static class HavokPhysicsValidator
     {
         foreach (var duplicate in ids.GroupBy(id => id).Where(group => group.Count() > 1))
             findings.Add(Error($"{kind} {duplicate.Key}", $"duplicate {kind} id"));
+    }
+
+    // A constraint frame is sixteen measured column-major floats; the translation column must
+    // be finite and the basis columns must be usable unit-ish directions.
+    private static void CheckFrame(float[]? frame, string where, string label,
+                                   List<HavokPhysicsValidationFinding> findings)
+    {
+        if (frame == null) return;
+        if (frame.Length != 16)
+        {
+            findings.Add(Error(where, $"{label} must hold sixteen floats"));
+            return;
+        }
+        if (frame.Any(value => !Finite(value)))
+            findings.Add(Error(where, $"{label} must contain only finite values"));
+    }
+
+    private static void CheckAxisIndex(int axis, float[]? frame, string where, string label,
+                                       List<HavokPhysicsValidationFinding> findings)
+    {
+        if (frame == null) return;
+        if (axis < 0 || axis > 2)
+            findings.Add(Error(where, $"{label} {axis} is outside a three-column frame"));
     }
 
     private static HavokPhysicsValidationFinding Error(string where, string message) =>
