@@ -115,30 +115,32 @@ adapter.
 primitive needed before localized CNAM authoring can be enabled.
 
 It intentionally does not pretend that two independent filesystem paths can be
-committed by one atomic replace operation. Instead it makes the only partial
-state allowed by the operation safe for the caller's dependency relationship:
+committed by one atomic replace operation. Instead it makes the only expected
+partial state safe for the caller's dependency relationship:
 
 - the new dependency bytes, new primary bytes, and a rollback copy of the
   existing dependency are all staged and verified before either destination
   changes;
 - the dependency is committed first;
 - the primary is committed second;
-- if the primary replace reports failure, the dependency is restored from the
-  pre-staged rollback copy before the error is returned;
+- if the primary replace reports failure, restoring the dependency from the
+  pre-staged rollback copy is attempted before the error is returned; a
+  rollback failure is reported together with the primary failure;
 - failed staging and failed dependency replacement leave both original
   destinations untouched;
 - successful completion removes the rollback stage and leaves no
   `.radicle-tmp` file behind.
 
-A process crash between the two replace operations can still leave the **new
-dependency with the old primary**. That is deliberate, and is why callers must
-supply a dependency payload that remains valid for the old primary. For the
-localized QUST path, the later adapter must preserve every sidecar ID/text pair
-that the currently committed plugin may still reference. In particular, a
-changed CNAM must receive a newly allocated ID before the plugin is switched to
-it; the old ID remains present rather than being overwritten or deleted first.
-This turns the sidecar-first intermediate state into a backward-compatible
-superset instead of a broken reference set.
+A process crash between the two replace operations, or an ordinary primary
+failure followed by a rollback failure, can leave the **new dependency with the
+old primary**. That is deliberate, and is why callers must supply a dependency
+payload that remains valid for the old primary. For the localized QUST path,
+the later adapter must preserve every sidecar ID/text pair that the currently
+committed plugin may still reference. In particular, a changed CNAM must
+receive a newly allocated ID before the plugin is switched to it; the old ID
+remains present rather than being overwritten or deleted first. This turns the
+sidecar-first intermediate state into a backward-compatible superset instead of
+a broken reference set.
 
 This is process-crash consistency, not a claim of cross-file transactional
 atomicity or stronger sudden-power-loss durability than the platform's existing
