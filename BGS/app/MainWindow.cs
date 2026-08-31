@@ -3541,9 +3541,8 @@ public class MainWindow : Window
         }
 
         var filter = SelectedDiffFilter();
+        var export = BehaviourCompareSession.CreateExport(result, filter);
         var filtered = BehaviourCompareSession.ApplyFilter(result, filter);
-        var export = BehaviourCompareSession.CreateExport(filtered,
-            new BehaviourCompareSession.BehaviourDiffFilter());
         RenderDiff(_diffOtherName, filtered, export, result.Lines.Count != filtered.Lines.Count);
     }
 
@@ -3569,8 +3568,13 @@ public class MainWindow : Window
     {
         _diff.Clear();
         string suffix = filtered ? $" ({export.Differences.Count} shown)" : "";
-        SetDiffSummary($"{Path.GetFileName(_hkxPath)} against {otherName}: {result}{suffix}",
-                       result.Identical ? Ux.MetaBrush : Ux.TitleBrush);
+        string comparison = export.Differences.Count == 0
+            ? export.OriginalCount == 0
+                ? "the two files hold the same objects with the same values"
+                : "no differences match the current filter"
+            : result.ToString();
+        SetDiffSummary($"{Path.GetFileName(_hkxPath)} against {otherName}: {comparison}{suffix}",
+                       export.OriginalCount == 0 ? Ux.MetaBrush : Ux.TitleBrush);
 
         foreach (var group in new[] { BehaviourDiff.Kind.Changed, BehaviourDiff.Kind.Removed, BehaviourDiff.Kind.Added })
         {
@@ -3591,7 +3595,7 @@ public class MainWindow : Window
                 _diff.Add(head, "", $"and {lines.Count - 2000} more").Colour(1, Ux.MutedBrush);
         }
 
-        if (result.Identical)
+        if (export.OriginalCount == 0)
             _diff.Add(null, "", "no difference", "the two files hold the same objects with the same values")
                  .Colour(2, Ux.MutedBrush);
     }

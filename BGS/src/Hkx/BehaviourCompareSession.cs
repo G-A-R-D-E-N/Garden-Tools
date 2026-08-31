@@ -13,6 +13,8 @@ internal sealed class BehaviourCompareSession
         BehaviourDiff.Kind? Kind = null,
         string ObjectClass = "")
     {
+        internal bool IsActive => Kind.HasValue || ObjectClass.Trim().Length > 0;
+
         internal bool Matches(BehaviourDiff.Line line)
         {
             string objectClass = ObjectClass.Trim();
@@ -32,7 +34,9 @@ internal sealed class BehaviourCompareSession
         IReadOnlyList<BehaviourDiffExportLine> Differences,
         int Added,
         int Removed,
-        int Changed);
+        int Changed,
+        int OriginalCount,
+        bool IsFiltered);
 
     internal sealed record Outcome(bool Stale, BehaviourDiff.Result? Value, string Error)
     {
@@ -105,7 +109,9 @@ internal sealed class BehaviourCompareSession
             lines,
             lines.Count(line => line.Kind == BehaviourDiff.Kind.Added),
             lines.Count(line => line.Kind == BehaviourDiff.Kind.Removed),
-            lines.Count(line => line.Kind == BehaviourDiff.Kind.Changed));
+            lines.Count(line => line.Kind == BehaviourDiff.Kind.Changed),
+            source.Lines.Count,
+            filter.IsActive);
     }
 
     internal static string ExportJson(BehaviourDiffExport export) =>
@@ -113,7 +119,10 @@ internal sealed class BehaviourCompareSession
 
     internal static string ExportText(BehaviourDiffExport export)
     {
-        if (export.Differences.Count == 0) return "No differences.\n";
+        if (export.Differences.Count == 0)
+            return export.OriginalCount == 0 || !export.IsFiltered
+                ? "No differences.\n"
+                : "No differences match the current filter.\n";
 
         string summary = $"{export.Added} added, {export.Removed} removed, " +
                          $"{export.Changed} value{(export.Changed == 1 ? "" : "s")} changed";

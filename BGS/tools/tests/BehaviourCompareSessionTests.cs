@@ -179,13 +179,26 @@ public sealed class BehaviourCompareSessionTests
     }
 
     [Fact]
-    public void DiffExportCanBeEmpty()
+    public void DiffExportReportsZeroMatchesForAnActiveFilter()
     {
         var export = BehaviourCompareSession.CreateExport(
             FixtureResult(), new BehaviourCompareSession.BehaviourDiffFilter(
                 ObjectClass: "hkbMissingClass"));
 
         Assert.Empty(export.Differences);
+        Assert.Equal(4, export.OriginalCount);
+        Assert.True(export.IsFiltered);
+        Assert.Equal("No differences match the current filter.\n",
+            BehaviourCompareSession.ExportText(export));
+    }
+
+    [Fact]
+    public void DiffExportReportsIdenticalFilesOnlyForAnEmptyUnfilteredResult()
+    {
+        var export = BehaviourCompareSession.CreateExport(
+            new BehaviourDiff.Result(), new BehaviourCompareSession.BehaviourDiffFilter());
+
+        Assert.False(export.IsFiltered);
         Assert.Equal("No differences.\n", BehaviourCompareSession.ExportText(export));
     }
 

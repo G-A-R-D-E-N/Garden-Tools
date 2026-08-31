@@ -140,10 +140,14 @@ change kind, class, field/name, and before/after values so repeated comparisons 
 
 ### `BGS/src/Hkx/BehaviourCompareSession.cs:BehaviourCompareSession.CreateExport`
 
-`BehaviourDiffExport` is the single structured export model. JSON is serialized from that model with
+`BGS/src/Hkx/BehaviourCompareSession.cs:BehaviourCompareSession.CreateExport` produces the single
+structured `BehaviourDiffExport` model. JSON is serialized from that model with
 camelCase properties and string change kinds; text is rendered from the same ordered entries. The app
 view uses the same filtered model for its grid and offers file exports for `.txt` and `.json`. This is
-read-only comparison output; it does not add patch, apply, or merge behavior.
+read-only comparison output; it does not add patch, apply, or merge behavior. The model retains the
+original difference count and whether a filter is active, so an empty filtered result is reported as
+zero matches rather than as identical files. The UI likewise leaves the grid empty for zero matches
+and reserves the `no difference` row for an actually identical unfiltered comparison.
 
 ### `BGS/tools/tests/BehaviourCompareSessionTests.cs:BehaviourCompareSessionTests`
 
