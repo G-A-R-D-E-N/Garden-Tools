@@ -136,6 +136,14 @@ public class MainWindow : Window
 
     private RootMotion.Motion _poseMotion = new();
     private bool _followTravel;
+    private HavokRagdollModel? _ragdoll;
+    private readonly CheckBox _bodiesToggle = new()
+    {
+        Content = "Bodies",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
     private readonly PlaybackSession _playback = new();
     private bool _scrubbing;
     private DispatcherTimer? _clock;
@@ -2701,6 +2709,15 @@ public class MainWindow : Window
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+        _bodiesToggle.IsEnabled = false;
+        ToolTip.SetTip(_bodiesToggle, "Draw the rigid bodies this file measures (hknpRagdollData), " +
+                                      "as a static file-space overlay on the skeleton.");
+        _bodiesToggle.IsCheckedChanged += (_, _) =>
+        {
+            _skeleton.ShowBodies = _bodiesToggle.IsChecked == true;
+            _skeleton.InvalidateVisual();
+        };
         ToolTip.SetTip(travel, "Move the character along the path the clip carries, instead of " +
                                "playing it on the spot the way the file stores it.");
         travel.IsCheckedChanged += (_, _) =>
@@ -2729,7 +2746,7 @@ public class MainWindow : Window
 
         var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         foreach (var control in new Control[]
-                 { _playButton, first, back, forward, last, fit, reference, travel, reload, mesh, clearMesh })
+                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, reload, mesh, clearMesh })
             transport.Children.Add(control);
 
         var bar = Bar(Ux.Pill(_playbackSummary), transport);
@@ -2751,6 +2768,31 @@ public class MainWindow : Window
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
                            "the skeleton; use Mesh... to hang a model on it.", Ux.MutedBrush);
         return panel;
+    }
+
+    private void TryLoadRagdoll(string path)
+    {
+        byte[] raw;
+        try { raw = File.ReadAllBytes(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return; }
+
+        _ragdoll = HavokPhysicsExtractor.TryExtract(raw);
+        bool any = _ragdoll is { Bodies.Count: > 0 };
+        _bodiesToggle.IsEnabled = any;
+        _bodiesToggle.IsChecked = any;
+        _skeleton.SetBodies(any ? _ragdoll : null);
+        if (!any) return;
+
+        SetPlaybackSummary(
+            $"{_ragdoll!.Bodies.Count} rigid bodies, {_ragdoll.Shapes.Count} shapes and " +
+            $"{_ragdoll.Constraints.Count} constraints measured from this file. Bodies draws them " +
+            "as a static file-space overlay; it is not physics yet.", Ux.MetaBrush);
+
+        HkxSkeleton? skeleton = null;
+        try { skeleton = new HkxBinaryReader().ReadSkeleton(path); }
+        catch { skeleton = null; }
+        if (skeleton != null && skeleton.BoneNames.Count > 0)
+            _skeleton.Show(AnimationPose.ReferencePose(skeleton));
     }
 
     private HkxSkeleton? PoseSkeleton(string? animationPath = null)
@@ -3998,6 +4040,8 @@ public class MainWindow : Window
             RefreshTemplates();
             return;
         }
+
+        TryLoadRagdoll(path);
 
         bool isAnimation = BuildAnimation(path);
 

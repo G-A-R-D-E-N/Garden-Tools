@@ -23,6 +23,12 @@ public sealed class HavokPhysicsShape
     public Vector3 HalfExtents { get; init; }
     public float Radius { get; init; }
     public List<int> Children { get; } = new();
+
+    // A measured convex-polytope hull (vertices plus closed index rings, one ring per face),
+    // as FO4 serializes hknpCapsuleShape and friends. Empty when the source file carried no
+    // polytope payload for this shape; renderers then draw nothing but keep the shape listed.
+    public List<Vector3> Vertices { get; } = new();
+    public List<int[]> FaceRings { get; } = new();
 }
 
 public sealed class HavokRigidBody
@@ -33,6 +39,11 @@ public sealed class HavokRigidBody
     public int BoneIndex { get; init; } = -1;
     public float Mass { get; init; }
     public Vector3 CenterOfMass { get; init; }
+
+    // The body frame origin (hknp body cinfo position) and orientation (hknp body cinfo
+    // orientation, an (x, y, z, w) quaternion). Newer-Havok ragdoll data carries the full
+    // frame this way; legacy hkp bodies express the same idea through CenterOfMass/Rotation.
+    public Vector3 Position { get; init; }
     public Quaternion Rotation { get; init; } = Quaternion.Identity;
 }
 
@@ -100,6 +111,22 @@ public static class HavokPhysicsValidator
             CheckFiniteNonNegative(shape.HalfExtents.Y, $"shape {shape.Id}", "half extent Y", findings);
             CheckFiniteNonNegative(shape.HalfExtents.Z, $"shape {shape.Id}", "half extent Z", findings);
 
+            foreach (var vertex in shape.Vertices)
+                if (!Finite(vertex))
+                    findings.Add(Error($"shape {shape.Id}", "polytope vertices must contain only finite values"));
+
+            foreach (var ring in shape.FaceRings)
+                foreach (int index in ring)
+                    if (index < 0 || index >= shape.Vertices.Count)
+                        // The authored file is authoritative: vanilla capsule polytopes can
+                        // reference a corner the vertex list leaves out. The preview skips the
+                        // dangling edges; this merely notes the inconsistency for future physics
+                        // work rather than pretending the shape is complete.
+                        findings.Add(new HavokPhysicsValidationFinding(
+                            HavokPhysicsValidationLevel.Warning,
+                            $"shape {shape.Id}",
+                            $"face references missing polytope vertex {index}"));
+
             foreach (int child in shape.Children)
             {
                 if (!shapes.ContainsKey(child))
@@ -118,6 +145,8 @@ public static class HavokPhysicsValidator
             CheckFiniteNonNegative(body.Mass, $"body {body.Id}", "mass", findings);
             if (!Finite(body.CenterOfMass))
                 findings.Add(Error($"body {body.Id}", "center of mass must contain only finite values"));
+            if (!Finite(body.Position))
+                findings.Add(Error($"body {body.Id}", "position must contain only finite values"));
             if (!Finite(body.Rotation))
                 findings.Add(Error($"body {body.Id}", "rotation must contain only finite values"));
             else
