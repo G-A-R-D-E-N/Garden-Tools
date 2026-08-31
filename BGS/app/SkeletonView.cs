@@ -38,11 +38,15 @@ public class SkeletonView : Control
     public bool ShowReference { get; set; }
     public bool ShowBodies { get; set; }
     public bool ShowConstraints { get; set; }
+    public bool ShowBindings { get; set; }
 
     public int DrawnBones => _pose?.Bones.Count ?? 0;
     public int DrawnEdges => _mesh?.Length ?? 0;
     public int DrawnBodies => _bodies?.Bodies.Count ?? 0;
     public int DrawnConstraints => _bodies?.Constraints.Count ?? 0;
+    public int DrawnBindings => _bodies?.BoneBindings.Count ?? 0;
+
+    private int _hoveredBody = -1;
 
     private (Vector3 A, Vector3 B)[]? _mesh;
 
@@ -80,6 +84,8 @@ public class SkeletonView : Control
         _bodyFit = 1;
         ShowBodies = false;
         ShowConstraints = false;
+        ShowBindings = false;
+        _hoveredBody = -1;
         _yaw = 0.6;
         _pitch = 0.25;
         _zoom = 1;
@@ -218,6 +224,9 @@ public class SkeletonView : Control
             ctx.DrawEllipse(brush, null, at, radius, radius);
         }
 
+        if (ShowBindings && _bodies is { BoneBindings.Count: > 0, Skeleton: { BoneNames.Count: > 0 } })
+            DrawBindings(ctx, _bodies);
+
         if (HoveredBone.Length > 0)
         {
             var label = new FormattedText(HoveredBone, CultureInfo.InvariantCulture,
@@ -253,6 +262,53 @@ public class SkeletonView : Control
             }
 
             ctx.DrawEllipse(null, centre, Project(body.Position), 2.2, 2.2);
+        }
+    }
+
+    private void DrawBindings(DrawingContext ctx, HavokRagdollModel model)
+    {
+        var labelPen = new Pen(new SolidColorBrush(Ux.Accent, 0.75), 1);
+        var hoveredBody = model.Bodies.FirstOrDefault(b => b.Id == _hoveredBody);
+
+        foreach (var binding in model.BoneBindings)
+        {
+            var body = model.Bodies.FirstOrDefault(b => b.Id == binding.BodyId);
+            if (body == null || model.Skeleton == null ||
+                binding.BoneIndex < 0 || binding.BoneIndex >= model.Skeleton.BoneNames.Count)
+                continue;
+
+            string label = model.Skeleton.BoneNames[binding.BoneIndex];
+            if (label.Length == 0) continue;
+
+            bool hovered = binding.BodyId == _hoveredBody;
+            var at = Project(body.Position);
+            var text = new FormattedText(label, CultureInfo.InvariantCulture,
+                                         FlowDirection.LeftToRight, Typeface.Default,
+                                         hovered ? 12 : 11,
+                                         hovered ? Ux.AccentBrush : Ux.MetaBrush);
+            ctx.DrawText(text, new Point(at.X + 7, at.Y - 15));
+        }
+
+        // The hovered body itself is highlighted by re-drawing its hull in accent so the
+        // body-to-bone association reads at a glance; the label above already changed colour.
+        if (hoveredBody == null || model.Skeleton == null) return;
+        var shape = model.Shapes.FirstOrDefault(s => s.Id == hoveredBody.ShapeId);
+        if (shape == null) return;
+
+        foreach (var ring in shape.FaceRings)
+        {
+            if (ring.Length < 2) continue;
+            for (int i = 0; i < ring.Length; i++)
+            {
+                int from = ring[i];
+                int to = ring[(i + 1) % ring.Length];
+                if (from < 0 || from >= shape.Vertices.Count ||
+                    to < 0 || to >= shape.Vertices.Count) continue;
+
+                var a = hoveredBody.Position + Vector3.Transform(shape.Vertices[from], hoveredBody.Rotation);
+                var b = hoveredBody.Position + Vector3.Transform(shape.Vertices[to], hoveredBody.Rotation);
+                ctx.DrawLine(labelPen, Project(a), Project(b));
+            }
         }
     }
 
@@ -422,6 +478,28 @@ public class SkeletonView : Control
         }
 
         NameBoneUnder(at);
+        NameBodyUnder(at);
+    }
+
+    private void NameBodyUnder(Point at)
+    {
+        if (!ShowBindings || _bodies == null || _bodies.Bodies.Count == 0) return;
+
+        int found = -1;
+        double nearest = 12 * 12;
+
+        foreach (var body in _bodies.Bodies)
+        {
+            var p = Project(body.Position);
+            double d = (p.X - at.X) * (p.X - at.X) + (p.Y - at.Y) * (p.Y - at.Y);
+            if (d >= nearest) continue;
+            nearest = d;
+            found = body.Id;
+        }
+
+        if (found == _hoveredBody) return;
+        _hoveredBody = found;
+        InvalidateVisual();
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)

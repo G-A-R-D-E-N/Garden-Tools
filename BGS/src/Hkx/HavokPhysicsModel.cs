@@ -96,12 +96,26 @@ public sealed class HavokConstraint
 
 public sealed record HavokRagdollBoneBinding(int BoneIndex, int BodyId);
 
+// The physics skeleton hknpRagdollData references (hkaSkeleton). boneToBodyMap indexes
+// this bone list, so its names label each bound rigid body in the preview.
+public sealed class HavokRagdollSkeleton
+{
+    public string Name { get; init; } = "";
+    public List<string> BoneNames { get; } = new();
+    public List<int> ParentIndices { get; } = new();
+
+    // Local-space reference-pose translations (the translation column of each measured
+    // hkQsTransform), for a bone chain the binding labels can hang on.
+    public List<Vector3> ReferencePositions { get; } = new();
+}
+
 public sealed class HavokRagdollModel
 {
     public List<HavokPhysicsShape> Shapes { get; } = new();
     public List<HavokRigidBody> Bodies { get; } = new();
     public List<HavokConstraint> Constraints { get; } = new();
     public List<HavokRagdollBoneBinding> BoneBindings { get; } = new();
+    public HavokRagdollSkeleton? Skeleton { get; set; }
 }
 
 public enum HavokPhysicsValidationLevel
@@ -242,6 +256,9 @@ public static class HavokPhysicsValidator
                 findings.Add(Error($"bone {binding.BoneIndex}", "bone index must be non-negative"));
             if (skeletonBoneCount is int count && binding.BoneIndex >= count)
                 findings.Add(Error($"bone {binding.BoneIndex}", $"is outside a {count}-bone skeleton"));
+            if (model.Skeleton is { } boundSkeleton && binding.BoneIndex >= boundSkeleton.BoneNames.Count)
+                findings.Add(Error($"bone {binding.BoneIndex}",
+                    $"is outside the {boundSkeleton.BoneNames.Count}-bone physics skeleton"));
             if (!boundBones.Add(binding.BoneIndex))
                 findings.Add(Error($"bone {binding.BoneIndex}", "is mapped to more than one rigid body"));
             if (!boundBodies.Add(binding.BodyId))
@@ -249,6 +266,28 @@ public static class HavokPhysicsValidator
                     HavokPhysicsValidationLevel.Warning,
                     $"body {binding.BodyId}",
                     "is mapped to more than one skeleton bone"));
+        }
+
+        if (model.Skeleton is { } skeleton)
+        {
+            int boneCount = skeleton.BoneNames.Count;
+            if (skeleton.ParentIndices.Count != boneCount)
+                findings.Add(Error("skeleton",
+                    $"has {boneCount} bone names but {skeleton.ParentIndices.Count} parent indices"));
+            if (skeleton.ReferencePositions.Count != boneCount)
+                findings.Add(Error("skeleton",
+                    $"has {boneCount} bone names but {skeleton.ReferencePositions.Count} reference poses"));
+
+            for (int i = 0; i < skeleton.ParentIndices.Count; i++)
+            {
+                int parent = skeleton.ParentIndices[i];
+                if (parent < -1 || parent >= boneCount)
+                    findings.Add(Error($"bone {i}", $"parent index {parent} is outside the skeleton"));
+            }
+
+            for (int i = 0; i < skeleton.ReferencePositions.Count; i++)
+                if (!Finite(skeleton.ReferencePositions[i]))
+                    findings.Add(Error($"bone {i}", "reference pose must contain only finite values"));
         }
 
         return findings;
