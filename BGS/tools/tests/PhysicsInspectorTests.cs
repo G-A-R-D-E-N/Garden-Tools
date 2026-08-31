@@ -70,12 +70,15 @@ public sealed class PhysicsInspectorTests
         byte[] bytes = File.ReadAllBytes(fixture);
         var image = PackfileImage.Read(bytes);
         var objects = new PackfileObjects(image);
+        string xml = NativeXml.From(objects, image);
 
         var instance = objects.Instances.FirstOrDefault(candidate =>
         {
             if (!HavokPhysicsSchemaCatalog.TryGetSignature(candidate.ClassName, out _)) return false;
             var family = HavokPhysicsSchemaCatalog.FamilyOf(candidate.ClassName);
-            return family.HasValue && predicate(family.Value);
+            if (!family.HasValue || !predicate(family.Value)) return false;
+            string id = (NativeGraphModel.FirstId + objects.IndexOf(candidate)).ToString();
+            return HkxTextEdit.ReadParams(xml, id).Count > 0;
         });
 
         Assert.NotNull(instance);
@@ -84,7 +87,6 @@ public sealed class PhysicsInspectorTests
         int index = objects.IndexOf(instance);
         Assert.True(index >= 0);
         string id = (NativeGraphModel.FirstId + index).ToString();
-        string xml = NativeXml.From(objects, image);
         var model = BehaviourGraphModel.Parse(xml);
         var obj = model.Get(id);
         Assert.NotNull(obj);
