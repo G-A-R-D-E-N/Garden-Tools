@@ -19,7 +19,7 @@ public sealed class PhysicsInspectorTests
     {
         var obj = FindCataloguedObject(
             "Meshes/Actors/Character/CharacterAssets/skeleton.hkx",
-            schema => schema.Family != HavokPhysicsFamily.Cloth);
+            family => family != HavokPhysicsClassFamily.Cloth);
 
         Assert.True(Inspector.IsSchemaReadOnlyClass(obj.Class));
         Assert.Equal(obj.Class,
@@ -32,7 +32,7 @@ public sealed class PhysicsInspectorTests
     {
         var obj = FindCataloguedObject(
             "Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx",
-            schema => schema.Family == HavokPhysicsFamily.Cloth);
+            family => family == HavokPhysicsClassFamily.Cloth);
 
         Assert.True(Inspector.IsSchemaReadOnlyClass(obj.Class));
         AssertObjectHasVisibleValue(obj);
@@ -46,14 +46,14 @@ public sealed class PhysicsInspectorTests
 
     private static GraphObject FindCataloguedObject(
         string relative,
-        Func<HavokPhysicsSchema, bool> predicate)
+        Func<HavokPhysicsClassFamily, bool> predicate)
     {
         byte[] bytes = File.ReadAllBytes(Fixture(relative));
         var model = BehaviourGraphModel.Parse(NativeXml.From(bytes));
         var found = model.Objects.FirstOrDefault(obj =>
         {
-            var schema = HavokPhysicsSchemaCatalog.ForClass(obj.Class);
-            return schema.HasValue && predicate(schema.Value);
+            var family = HavokPhysicsSchemaCatalog.FamilyOf(obj.Class);
+            return family.HasValue && predicate(family.Value);
         });
 
         Assert.NotNull(found);
