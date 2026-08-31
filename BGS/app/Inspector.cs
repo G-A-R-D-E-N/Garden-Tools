@@ -42,6 +42,8 @@ public sealed class Inspector : DockPanel
 
     public bool SchemaReadOnly => _schemaReadOnly;
 
+    public void SetSchemaClass(string className) => _schemaReadOnly = IsSchemaReadOnlyClass(className);
+
     public void Clear()
     {
         _schemaReadOnly = false;
@@ -50,14 +52,6 @@ public sealed class Inspector : DockPanel
 
     public void Add(Control control)
     {
-        if (_body.Children.Count == 0 && control is TextBlock heading)
-        {
-            _schemaReadOnly = ReadOnlyClassFromHeading(heading.Text ?? "") is { } className &&
-                              IsSchemaReadOnlyClass(className);
-            if (_schemaReadOnly && heading.Text != null)
-                heading.Text = heading.Text.Replace(" editable fields", " read-only fields",
-                                                    StringComparison.Ordinal);
-        }
         _body.Children.Add(control);
     }
 
@@ -116,12 +110,4 @@ public sealed class Inspector : DockPanel
     public static bool IsSchemaReadOnlyClass(string className) =>
         HavokPhysicsSchemaCatalog.TryGetSignature(className, out _);
 
-    public static string? ReadOnlyClassFromHeading(string heading)
-    {
-        // MainWindow.FillProps owns this heading contract: "#id   class   N editable fields".
-        // Keep the detection local to Inspector so physics/cloth read-only behavior cannot leak
-        // into the normal graph-editor field model or save path.
-        var parts = heading.Split("   ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return parts.Length >= 2 && parts[0].StartsWith('#') ? parts[1] : null;
-    }
 }

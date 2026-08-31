@@ -21,8 +21,8 @@ public sealed class PhysicsInspectorTests
     public void CataloguedSchemaRowsAreActuallyReadOnly(string className)
     {
         var inspector = new Inspector(300);
-        var heading = new TextBlock { Text = $"#12   {className}   1 editable fields" };
-        inspector.Add(heading);
+        inspector.SetSchemaClass(className);
+        inspector.Add(new TextBlock { Text = $"#12   {className}   1 fields" });
 
         var value = new TextBox { Text = "42" };
         inspector.TwoColumnRow(new TextBlock { Text = "value" }, value);
@@ -30,7 +30,6 @@ public sealed class PhysicsInspectorTests
         Assert.True(inspector.SchemaReadOnly);
         Assert.True(value.IsReadOnly);
         Assert.False(value.IsTabStop);
-        Assert.Contains("read-only fields", heading.Text);
     }
 
     [Fact]
@@ -91,11 +90,11 @@ public sealed class PhysicsInspectorTests
         var obj = model.Get(id);
         Assert.NotNull(obj);
         Assert.Equal(instance.ClassName, obj!.Class);
-        Assert.Equal(instance.ClassName,
-            Inspector.ReadOnlyClassFromHeading($"#{id}   {instance.ClassName}   4 editable fields"));
 
         var root = HkxBehaviorParser.ParseBehavior(fixture);
         Assert.NotNull(root);
+        int parserIndex = HkxBehaviorParser.LastObjects.FindIndex(node => node.Offset == instance.Offset);
+        Assert.Equal(index, parserIndex);
         Assert.Contains(Reachable(root!), node =>
             node.Offset == instance.Offset && node.ClassName == instance.ClassName);
 
