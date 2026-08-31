@@ -109,7 +109,7 @@ public sealed class Inspector : DockPanel
     }
 
     public static bool IsSchemaReadOnlyClass(string className) =>
-        HavokPhysicsSchemaCatalog.IncludesClass(className);
+        HavokPhysicsSchemaCatalog.FamilyOf(className).HasValue;
 
     public static string? ReadOnlyClassFromHeading(string heading)
     {
