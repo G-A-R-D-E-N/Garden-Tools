@@ -1,7 +1,9 @@
+using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
@@ -10,6 +12,7 @@ public sealed class Inspector : DockPanel
     private readonly StackPanel _body = new() { Spacing = 6 };
     private readonly Grid _header = new();
     private readonly ScrollViewer _scroll;
+    private bool _schemaReadOnly;
 
     public Inspector(double width)
     {
@@ -37,9 +40,21 @@ public sealed class Inspector : DockPanel
 
     public StackPanel Body => _body;
 
-    public void Clear() => _body.Children.Clear();
+    public bool SchemaReadOnly => _schemaReadOnly;
 
-    public void Add(Control control) => _body.Children.Add(control);
+    public void Clear()
+    {
+        _schemaReadOnly = false;
+        _body.Children.Clear();
+    }
+
+    public void Add(Control control)
+    {
+        if (_body.Children.Count == 0 && control is TextBlock heading)
+            _schemaReadOnly = ReadOnlyClassFromHeading(heading.Text ?? "") is { } className &&
+                              HavokPhysicsSchemaCatalog.IncludesClass(className);
+        _body.Children.Add(control);
+    }
 
     public Control TwoColumnRow(Control label, Control value, double labelWidth = 128)
     {
@@ -47,6 +62,20 @@ public sealed class Inspector : DockPanel
         value.ClipToBounds = true;
         value.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         value.MinWidth = 0;
+
+        if (_schemaReadOnly)
+        {
+            if (value is TextBox text)
+            {
+                text.IsReadOnly = true;
+                text.IsTabStop = false;
+            }
+            else if (value is ComboBox combo)
+            {
+                combo.IsEnabled = false;
+                combo.IsTabStop = false;
+            }
+        }
 
         var row = new Grid { ClipToBounds = true };
         row.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(labelWidth)));
@@ -75,7 +104,16 @@ public sealed class Inspector : DockPanel
 
     public void FocusFirstField()
     {
-        var box = _body.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault();
+        var box = _body.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(field => !field.IsReadOnly);
         box?.Focus();
+    }
+
+    public static string? ReadOnlyClassFromHeading(string heading)
+    {
+        // MainWindow.FillProps owns this heading contract: "#id   class   N editable fields".
+        // Keep the detection local to Inspector so physics/cloth read-only behavior cannot leak
+        // into the normal graph-editor field model or save path.
+        var parts = heading.Split("   ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length >= 2 && parts[0].StartsWith('#') ? parts[1] : null;
     }
 }
