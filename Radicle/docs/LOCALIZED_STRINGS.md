@@ -109,6 +109,45 @@ current backend already implements them. The implementation remains split into
 a sidecar-aware transaction primitive and the later `SetQuestStages` CNAM
 adapter.
 
+## Coordinated plugin + sidecar persistence (#74B)
+
+`fo4::io::write_file_pair_dependency_first` provides the reusable persistence
+primitive needed before localized CNAM authoring can be enabled.
+
+It intentionally does not pretend that two independent filesystem paths can be
+committed by one atomic replace operation. Instead it makes the only partial
+state allowed by the operation safe for the caller's dependency relationship:
+
+- the new dependency bytes, new primary bytes, and a rollback copy of the
+  existing dependency are all staged and verified before either destination
+  changes;
+- the dependency is committed first;
+- the primary is committed second;
+- if the primary replace reports failure, the dependency is restored from the
+  pre-staged rollback copy before the error is returned;
+- failed staging and failed dependency replacement leave both original
+  destinations untouched;
+- successful completion removes the rollback stage and leaves no
+  `.radicle-tmp` file behind.
+
+A process crash between the two replace operations can still leave the **new
+dependency with the old primary**. That is deliberate, and is why callers must
+supply a dependency payload that remains valid for the old primary. For the
+localized QUST path, the later adapter must preserve every sidecar ID/text pair
+that the currently committed plugin may still reference. In particular, a
+changed CNAM must receive a newly allocated ID before the plugin is switched to
+it; the old ID remains present rather than being overwritten or deleted first.
+This turns the sidecar-first intermediate state into a backward-compatible
+superset instead of a broken reference set.
+
+This is process-crash consistency, not a claim of cross-file transactional
+atomicity or stronger sudden-power-loss durability than the platform's existing
+single-file replace/flush primitives provide.
+
+#74B also does **not** change PluginEditTool's current write-through backend
+model. Deferred in-memory dirty state and making `SavePlugin` the sole
+persistence point remain tracked separately in #174.
+
 ## TES4 bit 7 and plugin fields
 
 This support does **not** settle Radicle issue #29 (`TES4 bit 7: localized vs delocalized`). The string-table container and the plugin localization flag are separate questions.
