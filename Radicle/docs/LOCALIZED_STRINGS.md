@@ -81,11 +81,10 @@ The following ownership facts are pinned for the later localized-CNAM writer:
   `PluginEditTool/Mutagen/Mutagen.Bethesda.Fallout4/Records/Major Records/Quest.xml`
   and xEdit's `LocalizedValueDecider` in `wbLocalization.pas`.
 - The sidecar belongs to the plugin and is under its `Strings` directory, with
-  the plugin stem and Fallout 4 ISO language in the filename:
+  the plugin stem and active localization language token in the filename:
   `<plugin-stem>_<language>.DLSTRINGS`, such as `Patch_en.DLSTRINGS`.
-  Mutagen's Fallout 4 constants select ISO language names; xEdit derives the
-  active language from its localization setting, normally Fallout 4's
-  `sLanguage` setting.
+  xEdit builds this filename from its active `wbLanguage` value, normally
+  derived from Fallout 4's `sLanguage` setting.
 - Radicle authoring must receive the selected language and resolved writable
   sidecar root explicitly. It must not guess a language from whichever file
   happens to exist, fall back to English, or write into a protected game-data
@@ -94,8 +93,7 @@ The following ownership facts are pinned for the later localized-CNAM writer:
   the first unused value after the maximum ID observed across that set's three
   table kinds. Existing IDs are never renumbered or deleted. The file format's
   per-table row IDs remain independently validated, while the allocator keeps
-  the stronger set-wide invariant used by xEdit and Mutagen's monotonic
-  localized writer.
+  the stronger set-wide invariant used by xEdit.
 - Existing localized CNAM provenance wins over text matching: an unchanged
   entry keeps its original ID. Newly authored equal text does not reuse an
   unrelated existing ID by default; only the table writer may deduplicate the
