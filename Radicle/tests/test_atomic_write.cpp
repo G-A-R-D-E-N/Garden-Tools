@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <system_error>
 #include <vector>
 
@@ -27,6 +28,22 @@ struct Cleanup {
 std::vector<std::byte> bytes(std::string_view text) {
   return {reinterpret_cast<const std::byte*>(text.data()),
           reinterpret_cast<const std::byte*>(text.data() + text.size())};
+}
+
+std::string read_text(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  return std::string{std::istreambuf_iterator<char>(in),
+                     std::istreambuf_iterator<char>()};
+}
+
+bool has_radicle_temp(const std::filesystem::path& parent) {
+  if (!std::filesystem::exists(parent)) return false;
+  for (const auto& entry : std::filesystem::directory_iterator(parent)) {
+    if (entry.path().filename().string().find(".radicle-tmp") != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
 }
 
 TEST(AtomicWrite, RoundTripReplacesExistingFileAtomically) {
@@ -171,4 +188,125 @@ TEST(AtomicWrite, MoveAssignmentDiscardsTheReplacedUncommittedStage) {
     }
   }
   EXPECT_FALSE(stray_temp_files);
+}
+
+TEST(AtomicWrite, DependencyFirstPairCommitsBothOutputs) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto dependency = root / "Patch_en.DLSTRINGS";
+  const auto primary = root / "Patch.esp";
+  {
+    std::ofstream out(dependency, std::ios::binary);
+    out << "old-sidecar";
+  }
+  {
+    std::ofstream out(primary, std::ios::binary);
+    out << "old-plugin";
+  }
+
+  ASSERT_NO_THROW((fo4::io::write_file_pair_dependency_first(
+      dependency, bytes("new-sidecar-superset"), primary, bytes("new-plugin"))));
+
+  EXPECT_EQ(read_text(dependency), "new-sidecar-superset");
+  EXPECT_EQ(read_text(primary), "new-plugin");
+  EXPECT_FALSE(has_radicle_temp(root));
+}
+
+TEST(AtomicWrite, DependencyFirstPairMissingDependencyFailsBeforeStaging) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto dependency = root / "missing_en.DLSTRINGS";
+  const auto primary = root / "Patch.esp";
+  {
+    std::ofstream out(primary, std::ios::binary);
+    out << "old-plugin";
+  }
+
+  EXPECT_THROW((fo4::io::write_file_pair_dependency_first(
+      dependency, bytes("new-sidecar"), primary, bytes("new-plugin"))),
+               std::exception);
+
+  EXPECT_FALSE(std::filesystem::exists(dependency));
+  EXPECT_EQ(read_text(primary), "old-plugin");
+  EXPECT_FALSE(has_radicle_temp(root));
+}
+
+#if !defined(_WIN32)
+TEST(AtomicWrite, DependencyFirstPairRefusesSymlinkDependency) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto real_dependency = root / "real_en.DLSTRINGS";
+  const auto dependency = root / "Patch_en.DLSTRINGS";
+  const auto primary = root / "Patch.esp";
+  {
+    std::ofstream out(real_dependency, std::ios::binary);
+    out << "real-sidecar";
+  }
+  {
+    std::ofstream out(primary, std::ios::binary);
+    out << "old-plugin";
+  }
+  std::filesystem::create_symlink(real_dependency.filename(), dependency);
+
+  EXPECT_THROW((fo4::io::write_file_pair_dependency_first(
+      dependency, bytes("new-sidecar"), primary, bytes("new-plugin"))),
+               std::exception);
+
+  EXPECT_EQ(read_text(real_dependency), "real-sidecar");
+  EXPECT_EQ(read_text(primary), "old-plugin");
+  EXPECT_TRUE(std::filesystem::is_symlink(dependency));
+  EXPECT_FALSE(has_radicle_temp(root));
+}
+#endif
+
+TEST(AtomicWrite, DependencyFirstPairStagingFailureChangesNeitherDestination) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto dependency = root / "Patch_en.DLSTRINGS";
+  const auto primary = root / "missing" / "Patch.esp";
+  {
+    std::ofstream out(dependency, std::ios::binary);
+    out << "old-sidecar";
+  }
+
+  EXPECT_THROW((fo4::io::write_file_pair_dependency_first(
+      dependency, bytes("new-sidecar"), primary, bytes("new-plugin"))),
+               std::exception);
+
+  EXPECT_EQ(read_text(dependency), "old-sidecar");
+  EXPECT_FALSE(std::filesystem::exists(primary));
+  EXPECT_FALSE(has_radicle_temp(root));
+}
+
+TEST(AtomicWrite, DependencyFirstPairRestoresDependencyWhenPrimaryCommitFails) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto dependency = root / "Patch_en.DLSTRINGS";
+  const auto primary = root / "blocked-primary";
+  {
+    std::ofstream out(dependency, std::ios::binary);
+    out << "old-sidecar";
+  }
+  std::filesystem::create_directories(primary / "inner");
+  const auto sentinel = primary / "inner" / "sentinel.txt";
+  {
+    std::ofstream out(sentinel, std::ios::binary);
+    out << "old-primary";
+  }
+
+  EXPECT_THROW((fo4::io::write_file_pair_dependency_first(
+      dependency, bytes("new-sidecar-superset"), primary, bytes("new-plugin"))),
+               std::exception);
+
+  // The primary replace failed, so its original destination is untouched and
+  // the already-committed dependency has been restored from the rollback stage.
+  EXPECT_EQ(read_text(dependency), "old-sidecar");
+  EXPECT_TRUE(std::filesystem::is_directory(primary));
+  EXPECT_EQ(read_text(sentinel), "old-primary");
+  EXPECT_FALSE(has_radicle_temp(root));
 }

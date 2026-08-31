@@ -1,13 +1,15 @@
 #include "fo4/io/atomic_write.hpp"
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstring>
-#include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #if defined(_WIN32)
   #ifndef WIN32_LEAN_AND_MEAN
@@ -19,6 +21,7 @@
   #include <windows.h>
 #else
   #include <fcntl.h>
+  #include <sys/stat.h>
   #include <unistd.h>
 #endif
 
@@ -49,6 +52,117 @@ std::filesystem::path temp_sibling(const std::filesystem::path& path) {
   std::error_code remove_ec;
   std::filesystem::remove(temp, remove_ec);
   throw std::runtime_error(message);
+}
+
+std::vector<std::byte> read_existing_regular_file(
+    const std::filesystem::path& path) {
+#if defined(_WIN32)
+  const auto handle = ::CreateFileW(
+      path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+  if (handle == INVALID_HANDLE_VALUE) {
+    throw std::runtime_error(
+        "unable to open dependency for rollback without following reparse points: " +
+        path.string() + " (error " + std::to_string(::GetLastError()) + ")");
+  }
+
+  try {
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(handle, &info)) {
+      throw std::runtime_error(
+          "unable to inspect dependency for rollback: " + path.string() +
+          " (error " + std::to_string(::GetLastError()) + ")");
+    }
+    if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+      throw std::runtime_error(
+          "dependency must exist as a regular, non-reparse-point file: " +
+          path.string());
+    }
+
+    LARGE_INTEGER size{};
+    if (!::GetFileSizeEx(handle, &size) || size.QuadPart < 0 ||
+        static_cast<std::uint64_t>(size.QuadPart) >
+            static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
+      throw std::runtime_error("unable to determine dependency size: " + path.string());
+    }
+
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size.QuadPart));
+    auto* data = reinterpret_cast<char*>(bytes.data());
+    std::size_t remaining = bytes.size();
+    constexpr auto k_max_chunk = static_cast<std::size_t>(0xFFFFFFFFu);
+    while (remaining > 0) {
+      const auto chunk = static_cast<DWORD>(remaining < k_max_chunk ? remaining : k_max_chunk);
+      DWORD read = 0;
+      if (!::ReadFile(handle, data, chunk, &read, nullptr) || read == 0) {
+        throw std::runtime_error(
+            "unable to read dependency for rollback: " + path.string() +
+            " (error " + std::to_string(::GetLastError()) + ")");
+      }
+      data += read;
+      remaining -= read;
+    }
+
+    ::CloseHandle(handle);
+    return bytes;
+  } catch (...) {
+    ::CloseHandle(handle);
+    throw;
+  }
+#else
+  const auto fd = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW);
+  if (fd < 0) {
+    throw std::runtime_error(
+        "unable to open dependency for rollback without following symlinks: " +
+        path.string() + ": " + std::strerror(errno));
+  }
+
+  try {
+    struct stat status {};
+    if (::fstat(fd, &status) != 0 || !S_ISREG(status.st_mode) || status.st_size < 0 ||
+        static_cast<std::uintmax_t>(status.st_size) >
+            static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max())) {
+      throw std::runtime_error(
+          "dependency must exist as a readable regular, non-symlink file: " +
+          path.string());
+    }
+
+    std::vector<std::byte> bytes(static_cast<std::size_t>(status.st_size));
+    auto* data = reinterpret_cast<char*>(bytes.data());
+    std::size_t remaining = bytes.size();
+    while (remaining > 0) {
+      const auto read = ::read(fd, data, remaining);
+      if (read < 0 && errno == EINTR) continue;
+      if (read <= 0) {
+        throw std::runtime_error(
+            "unable to read dependency for rollback: " + path.string() +
+            (read < 0 ? ": " + std::string(std::strerror(errno)) : ": unexpected EOF"));
+      }
+      data += read;
+      remaining -= static_cast<std::size_t>(read);
+    }
+
+    ::close(fd);
+    return bytes;
+  } catch (...) {
+    ::close(fd);
+    throw;
+  }
+#endif
+}
+
+StagedFile stage_bytes(const std::filesystem::path& path,
+                       const std::span<const std::byte> bytes) {
+  auto staged = StagedFile::create(path);
+  staged.write(bytes);
+  staged.finish();
+  try {
+    staged.verify(bytes.size());
+  } catch (...) {
+    std::move(staged).cancel();
+    throw;
+  }
+  return staged;
 }
 
 }  // namespace
@@ -319,6 +433,59 @@ void write_file_atomic(const std::filesystem::path& path,
     throw;
   }
   std::move(staged).commit();
+}
+
+void write_file_pair_dependency_first(
+    const std::filesystem::path& dependency,
+    const std::span<const std::byte> dependencyBytes,
+    const std::filesystem::path& primary,
+    const std::span<const std::byte> primaryBytes) {
+  if (dependency.empty() || primary.empty()) {
+    throw std::runtime_error("coordinated file destinations must not be empty");
+  }
+
+  std::error_code equivalent_ec;
+  if (std::filesystem::equivalent(dependency, primary, equivalent_ec) &&
+      !equivalent_ec) {
+    throw std::runtime_error("dependency and primary destinations must be distinct");
+  }
+
+  // Take the rollback snapshot before creating any staged output. Requiring a
+  // regular non-symlink dependency is intentional: the localization contract
+  // only authorizes an already-resolved editable loose sidecar.
+  const auto original_dependency = read_existing_regular_file(dependency);
+
+  // Nothing has changed on disk until all three stages exist, are closed, and
+  // match their expected sizes. Any staging/verification error therefore
+  // leaves both destinations untouched and RAII removes every completed stage.
+  auto dependency_stage = stage_bytes(dependency, dependencyBytes);
+  auto primary_stage = stage_bytes(primary, primaryBytes);
+  auto rollback_stage = stage_bytes(dependency, original_dependency);
+
+  // Commit the dependency first. For the localized-CNAM use case the new
+  // sidecar is a backward-compatible superset of what the old plugin can
+  // reference, so a process crash here leaves a usable old-plugin/new-sidecar
+  // pair rather than a plugin that points at a missing string ID.
+  std::move(dependency_stage).commit();
+
+  try {
+    std::move(primary_stage).commit();
+  } catch (const std::exception& primary_error) {
+    try {
+      std::move(rollback_stage).commit();
+    } catch (const std::exception& rollback_error) {
+      throw std::runtime_error(
+          "primary commit failed after dependency commit, and dependency rollback also failed: " +
+          std::string(primary_error.what()) + "; rollback: " + rollback_error.what());
+    }
+    throw std::runtime_error(
+        "primary commit failed after dependency commit; dependency restored: " +
+        std::string(primary_error.what()));
+  }
+
+  // Both destinations are now committed. The rollback copy is no longer
+  // needed; cancel explicitly so successful transactions leave no temp file.
+  std::move(rollback_stage).cancel();
 }
 
 }  // namespace fo4::io

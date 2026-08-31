@@ -61,4 +61,29 @@ private:
 void write_file_atomic(const std::filesystem::path& path,
                        std::span<const std::byte> bytes);
 
+// Coordinates a pair where `primary` may reference data in `dependency`.
+// Both new files and a rollback copy of the existing dependency are staged
+// before either destination changes. The dependency is committed first, then
+// the primary. If the primary replace reports failure, restoring the dependency
+// from its rollback stage is attempted before an error is returned. A rollback
+// failure is reported together with the primary failure; in that case the new
+// dependency may remain committed while the old primary remains untouched.
+//
+// This deliberately does NOT claim two-file atomicity. A process crash between
+// the two replace operations can leave the new dependency with the old primary.
+// Callers must therefore guarantee that `dependencyBytes` is backward-compatible
+// with the currently committed primary. For localized plugins that means the
+// new string table must preserve every ID/text pair the old plugin can still
+// reference until the primary commit moves those references forward.
+//
+// The dependency must already exist as a regular, non-symlink file so a rollback
+// snapshot can be taken fail-closed. The primary destination is left to the
+// platform replace primitive; callers are still responsible for their normal
+// destination trust/permission validation before entering this helper.
+void write_file_pair_dependency_first(
+    const std::filesystem::path& dependency,
+    std::span<const std::byte> dependencyBytes,
+    const std::filesystem::path& primary,
+    std::span<const std::byte> primaryBytes);
+
 }
