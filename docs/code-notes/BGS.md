@@ -153,3 +153,24 @@ and reserves the `no difference` row for an actually identical unfiltered compar
 
 Focused coverage checks no-filter, kind, class, combined, and empty filters plus deterministic JSON
 and text output ordering.
+
+## Read-only physics/cloth Inspector fields (issue #190)
+
+### `BGS/app/Inspector.cs:Inspector`
+
+The normal graph Inspector remains editable. When the first object heading names a class classified by
+`HavokPhysicsSchemaCatalog.FamilyOf` (`hkp*`, `hknp*`, or `hcl*` from the measured catalog), the same
+property rows are kept visible but their controls are forced read-only: text boxes cannot be edited or
+tab-focused, enum combo boxes are disabled, and the heading says `read-only fields`. This keeps the
+existing `PanelFields` byte/schema rendering and fallback metadata intact while ensuring physics and
+cloth data cannot accidentally enter the graph-edit/save path before an editing contract exists.
+
+`Inspector.Clear` resets the mode for the next selected object, and `FocusFirstField` skips read-only
+text boxes so keyboard focus does not land on a field the user cannot modify.
+
+### `BGS/tools/tests/PhysicsInspectorTests.cs:PhysicsInspectorTests`
+
+Coverage checks the actual control state for catalogued legacy-physics and cloth classes, confirms a
+normal `hkbClipGenerator` remains editable, and uses the checked-in vanilla character skeleton plus
+`FemaleHair04.hkx` cloth fixture to prove catalogued object parameters remain visible with their parsed
+values.
