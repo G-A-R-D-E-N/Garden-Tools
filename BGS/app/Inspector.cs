@@ -51,8 +51,13 @@ public sealed class Inspector : DockPanel
     public void Add(Control control)
     {
         if (_body.Children.Count == 0 && control is TextBlock heading)
+        {
             _schemaReadOnly = ReadOnlyClassFromHeading(heading.Text ?? "") is { } className &&
                               IsSchemaReadOnlyClass(className);
+            if (_schemaReadOnly && heading.Text != null)
+                heading.Text = heading.Text.Replace(" editable fields", " read-only fields",
+                                                    StringComparison.Ordinal);
+        }
         _body.Children.Add(control);
     }
 
