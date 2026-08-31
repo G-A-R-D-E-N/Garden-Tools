@@ -1,9 +1,9 @@
 #include "fo4/io/atomic_write.hpp"
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstring>
-#include <fstream>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -21,6 +21,7 @@
   #include <windows.h>
 #else
   #include <fcntl.h>
+  #include <sys/stat.h>
   #include <unistd.h>
 #endif
 
@@ -55,34 +56,99 @@ std::filesystem::path temp_sibling(const std::filesystem::path& path) {
 
 std::vector<std::byte> read_existing_regular_file(
     const std::filesystem::path& path) {
-  std::error_code status_ec;
-  const auto status = std::filesystem::symlink_status(path, status_ec);
-  if (status_ec || !std::filesystem::is_regular_file(status)) {
+#if defined(_WIN32)
+  const auto handle = ::CreateFileW(
+      path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+  if (handle == INVALID_HANDLE_VALUE) {
     throw std::runtime_error(
-        "dependency must exist as a regular, non-symlink file: " + path.string());
+        "unable to open dependency for rollback without following reparse points: " +
+        path.string() + " (error " + std::to_string(::GetLastError()) + ")");
   }
 
-  std::error_code size_ec;
-  const auto file_size = std::filesystem::file_size(path, size_ec);
-  if (size_ec || file_size > std::numeric_limits<std::size_t>::max() ||
-      file_size > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
-    throw std::runtime_error("unable to determine dependency size: " + path.string());
-  }
-
-  std::ifstream stream(path, std::ios::binary);
-  if (!stream) {
-    throw std::runtime_error("unable to open dependency for rollback: " + path.string());
-  }
-
-  std::vector<std::byte> bytes(static_cast<std::size_t>(file_size));
-  if (!bytes.empty()) {
-    stream.read(reinterpret_cast<char*>(bytes.data()),
-                static_cast<std::streamsize>(bytes.size()));
-    if (!stream) {
-      throw std::runtime_error("unable to read dependency for rollback: " + path.string());
+  try {
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(handle, &info)) {
+      throw std::runtime_error(
+          "unable to inspect dependency for rollback: " + path.string() +
+          " (error " + std::to_string(::GetLastError()) + ")");
     }
+    if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+      throw std::runtime_error(
+          "dependency must exist as a regular, non-reparse-point file: " +
+          path.string());
+    }
+
+    LARGE_INTEGER size{};
+    if (!::GetFileSizeEx(handle, &size) || size.QuadPart < 0 ||
+        static_cast<std::uint64_t>(size.QuadPart) >
+            static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
+      throw std::runtime_error("unable to determine dependency size: " + path.string());
+    }
+
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size.QuadPart));
+    auto* data = reinterpret_cast<char*>(bytes.data());
+    std::size_t remaining = bytes.size();
+    constexpr auto k_max_chunk = static_cast<std::size_t>(0xFFFFFFFFu);
+    while (remaining > 0) {
+      const auto chunk = static_cast<DWORD>(remaining < k_max_chunk ? remaining : k_max_chunk);
+      DWORD read = 0;
+      if (!::ReadFile(handle, data, chunk, &read, nullptr) || read == 0) {
+        throw std::runtime_error(
+            "unable to read dependency for rollback: " + path.string() +
+            " (error " + std::to_string(::GetLastError()) + ")");
+      }
+      data += read;
+      remaining -= read;
+    }
+
+    ::CloseHandle(handle);
+    return bytes;
+  } catch (...) {
+    ::CloseHandle(handle);
+    throw;
   }
-  return bytes;
+#else
+  const auto fd = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW);
+  if (fd < 0) {
+    throw std::runtime_error(
+        "unable to open dependency for rollback without following symlinks: " +
+        path.string() + ": " + std::strerror(errno));
+  }
+
+  try {
+    struct stat status {};
+    if (::fstat(fd, &status) != 0 || !S_ISREG(status.st_mode) || status.st_size < 0 ||
+        static_cast<std::uintmax_t>(status.st_size) >
+            static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max())) {
+      throw std::runtime_error(
+          "dependency must exist as a readable regular, non-symlink file: " +
+          path.string());
+    }
+
+    std::vector<std::byte> bytes(static_cast<std::size_t>(status.st_size));
+    auto* data = reinterpret_cast<char*>(bytes.data());
+    std::size_t remaining = bytes.size();
+    while (remaining > 0) {
+      const auto read = ::read(fd, data, remaining);
+      if (read < 0 && errno == EINTR) continue;
+      if (read <= 0) {
+        throw std::runtime_error(
+            "unable to read dependency for rollback: " + path.string() +
+            (read < 0 ? ": " + std::string(std::strerror(errno)) : ": unexpected EOF"));
+      }
+      data += read;
+      remaining -= static_cast<std::size_t>(read);
+    }
+
+    ::close(fd);
+    return bytes;
+  } catch (...) {
+    ::close(fd);
+    throw;
+  }
+#endif
 }
 
 StagedFile stage_bytes(const std::filesystem::path& path,
