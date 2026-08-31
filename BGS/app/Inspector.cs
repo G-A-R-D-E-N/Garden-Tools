@@ -52,7 +52,7 @@ public sealed class Inspector : DockPanel
     {
         if (_body.Children.Count == 0 && control is TextBlock heading)
             _schemaReadOnly = ReadOnlyClassFromHeading(heading.Text ?? "") is { } className &&
-                              HavokPhysicsSchemaCatalog.IncludesClass(className);
+                              IsSchemaReadOnlyClass(className);
         _body.Children.Add(control);
     }
 
@@ -107,6 +107,9 @@ public sealed class Inspector : DockPanel
         var box = _body.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(field => !field.IsReadOnly);
         box?.Focus();
     }
+
+    public static bool IsSchemaReadOnlyClass(string className) =>
+        HavokPhysicsSchemaCatalog.IncludesClass(className);
 
     public static string? ReadOnlyClassFromHeading(string heading)
     {
