@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <system_error>
 #include <vector>
 
@@ -31,7 +32,8 @@ std::vector<std::byte> bytes(std::string_view text) {
 
 std::string read_text(const std::filesystem::path& path) {
   std::ifstream in(path, std::ios::binary);
-  return {std::istreambuf_iterator<char>(in), {}};
+  return std::string{std::istreambuf_iterator<char>(in),
+                     std::istreambuf_iterator<char>()};
 }
 
 bool has_radicle_temp(const std::filesystem::path& parent) {
@@ -210,6 +212,55 @@ TEST(AtomicWrite, DependencyFirstPairCommitsBothOutputs) {
   EXPECT_EQ(read_text(primary), "new-plugin");
   EXPECT_FALSE(has_radicle_temp(root));
 }
+
+TEST(AtomicWrite, DependencyFirstPairMissingDependencyFailsBeforeStaging) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto dependency = root / "missing_en.DLSTRINGS";
+  const auto primary = root / "Patch.esp";
+  {
+    std::ofstream out(primary, std::ios::binary);
+    out << "old-plugin";
+  }
+
+  EXPECT_THROW((fo4::io::write_file_pair_dependency_first(
+      dependency, bytes("new-sidecar"), primary, bytes("new-plugin"))),
+               std::exception);
+
+  EXPECT_FALSE(std::filesystem::exists(dependency));
+  EXPECT_EQ(read_text(primary), "old-plugin");
+  EXPECT_FALSE(has_radicle_temp(root));
+}
+
+#if !defined(_WIN32)
+TEST(AtomicWrite, DependencyFirstPairRefusesSymlinkDependency) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto real_dependency = root / "real_en.DLSTRINGS";
+  const auto dependency = root / "Patch_en.DLSTRINGS";
+  const auto primary = root / "Patch.esp";
+  {
+    std::ofstream out(real_dependency, std::ios::binary);
+    out << "real-sidecar";
+  }
+  {
+    std::ofstream out(primary, std::ios::binary);
+    out << "old-plugin";
+  }
+  std::filesystem::create_symlink(real_dependency.filename(), dependency);
+
+  EXPECT_THROW((fo4::io::write_file_pair_dependency_first(
+      dependency, bytes("new-sidecar"), primary, bytes("new-plugin"))),
+               std::exception);
+
+  EXPECT_EQ(read_text(real_dependency), "real-sidecar");
+  EXPECT_EQ(read_text(primary), "old-plugin");
+  EXPECT_TRUE(std::filesystem::is_symlink(dependency));
+  EXPECT_FALSE(has_radicle_temp(root));
+}
+#endif
 
 TEST(AtomicWrite, DependencyFirstPairStagingFailureChangesNeitherDestination) {
   const auto root = temp_root();
