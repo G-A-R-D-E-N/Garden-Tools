@@ -64,8 +64,10 @@ void write_file_atomic(const std::filesystem::path& path,
 // Coordinates a pair where `primary` may reference data in `dependency`.
 // Both new files and a rollback copy of the existing dependency are staged
 // before either destination changes. The dependency is committed first, then
-// the primary. If the primary replace reports failure, the dependency is
-// restored from its rollback stage before the error is returned.
+// the primary. If the primary replace reports failure, restoring the dependency
+// from its rollback stage is attempted before an error is returned. A rollback
+// failure is reported together with the primary failure; in that case the new
+// dependency may remain committed while the old primary remains untouched.
 //
 // This deliberately does NOT claim two-file atomicity. A process crash between
 // the two replace operations can leave the new dependency with the old primary.
