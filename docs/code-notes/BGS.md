@@ -129,3 +129,27 @@ committed only after every safety and placement check succeeds.
 Focused tests cover both canonical directions, the source/target wording for an unsupported width,
 and the exact section-level refusal. The broader FO4 graph, array, variant, relative-array, fixup,
 overflow, and real-file coverage remains in `BGS/tools/symrm/Tests.cs`.
+
+## Behaviour compare export and filtering (issue #191)
+
+### `BGS/src/Hkx/BehaviourCompareSession.cs:BehaviourCompareSession.ApplyFilter`
+
+Compare filters are applied to the session result, not in the Avalonia view. `BehaviourDiffFilter`
+composes an optional change kind with an exact object-class match. The result is explicitly ordered by
+change kind, class, field/name, and before/after values so repeated comparisons produce the same rows.
+
+### `BGS/src/Hkx/BehaviourCompareSession.cs:BehaviourCompareSession.CreateExport`
+
+`BGS/src/Hkx/BehaviourCompareSession.cs:BehaviourCompareSession.CreateExport` produces the single
+structured `BehaviourDiffExport` model. JSON is serialized from that model with
+camelCase properties and string change kinds; text is rendered from the same ordered entries. The app
+view uses the same filtered model for its grid and offers file exports for `.txt` and `.json`. This is
+read-only comparison output; it does not add patch, apply, or merge behavior. The model retains the
+original difference count and whether a filter is active, so an empty filtered result is reported as
+zero matches rather than as identical files. The UI likewise leaves the grid empty for zero matches
+and reserves the `no difference` row for an actually identical unfiltered comparison.
+
+### `BGS/tools/tests/BehaviourCompareSessionTests.cs:BehaviourCompareSessionTests`
+
+Focused coverage checks no-filter, kind, class, combined, and empty filters plus deterministic JSON
+and text output ordering.

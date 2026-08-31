@@ -160,6 +160,14 @@ public class MainWindow : Window
             ("In the other file", -4));
     private readonly TextBlock _diffSummary =
         new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+    private readonly ComboBox _diffKind = new()
+        { MinWidth = 130, MaxWidth = 170, Foreground = Ux.CodeBrush, FontSize = 12 };
+    private readonly ComboBox _diffClass = new()
+        { MinWidth = 220, MaxWidth = 340, Foreground = Ux.CodeBrush, FontSize = 12 };
+    private readonly Button _diffExportText = Ux.Secondary("Export text...");
+    private readonly Button _diffExportJson = Ux.Secondary("Export JSON...");
+    private BehaviourDiff.Result? _diffResult;
+    private string _diffOtherName = "";
 
     private readonly HkGrid _problems = new(("", 70), ("Object", -3), ("What is wrong", -7));
     private readonly TextBlock _problemBar = new() { Foreground = Ux.MetaBrush, FontSize = 12, Margin = new Thickness(2, 6, 2, 2) };
@@ -3423,13 +3431,33 @@ public class MainWindow : Window
         var compare = Ux.Secondary("Compare with...");
         compare.Click += async (_, _) => await CompareWith();
 
-        var bar = Bar(Ux.Pill(_diffSummary), compare);
-        bar.Margin = new Thickness(0, 0, 0, 8);
+        _diffKind.ItemsSource = new[] { "All changes", "Added", "Removed", "Changed" };
+        _diffKind.SelectedIndex = 0;
+        _diffKind.SelectionChanged += (_, _) => RefreshDiff();
+        _diffClass.ItemsSource = new[] { "All classes" };
+        _diffClass.SelectedIndex = 0;
+        _diffClass.SelectionChanged += (_, _) => RefreshDiff();
+        _diffExportText.IsEnabled = false;
+        _diffExportJson.IsEnabled = false;
+        _diffExportText.Click += async (_, _) => await ExportDiff(json: false);
+        _diffExportJson.Click += async (_, _) => await ExportDiff(json: true);
 
-        var panel = new DockPanel();
-        DockPanel.SetDock(bar, Dock.Top);
-        panel.Children.Add(bar);
-        panel.Children.Add(_diff);
+        var summaryBar = Bar(Ux.Pill(_diffSummary), compare);
+        summaryBar.Margin = new Thickness(0, 0, 0, 8);
+
+        var filterBar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        filterBar.Children.Add(Ux.Label("Change"));
+        filterBar.Children.Add(_diffKind);
+        filterBar.Children.Add(Ux.Label("Object class"));
+        filterBar.Children.Add(_diffClass);
+        filterBar.Children.Add(_diffExportText);
+        filterBar.Children.Add(_diffExportJson);
+        filterBar.Margin = new Thickness(0, 0, 0, 8);
+
+        var panel = Rows(
+            (summaryBar, false),
+            (filterBar, false),
+            (_diff, true));
 
         _diffSummary.Text = "Open a behaviour, then pick another copy of it to see what differs.";
         _diffSummary.Foreground = Ux.MutedBrush;
@@ -3465,7 +3493,7 @@ public class MainWindow : Window
             return;
         }
 
-        _diff.Clear();
+        ClearDiff();
         SetDiffSummary($"Reading {Path.GetFileName(other)}...", Ux.MutedBrush);
 
         long stamp = CaptureStamp();
@@ -3491,9 +3519,62 @@ public class MainWindow : Window
 
     private void ShowDiff(string otherName, BehaviourDiff.Result result)
     {
+        _diffResult = result;
+        _diffOtherName = otherName;
+        _diffClass.ItemsSource = new[] { "All classes" }
+            .Concat(result.Lines.Select(line => line.Class)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal))
+            .ToList();
+        _diffClass.SelectedIndex = 0;
+        _diffExportText.IsEnabled = true;
+        _diffExportJson.IsEnabled = true;
+        RefreshDiff();
+    }
+
+    private void RefreshDiff()
+    {
+        if (_diffResult is not { } result)
+        {
+            _diff.Clear();
+            return;
+        }
+
+        var filter = SelectedDiffFilter();
+        var export = BehaviourCompareSession.CreateExport(result, filter);
+        var filtered = BehaviourCompareSession.ApplyFilter(result, filter);
+        RenderDiff(_diffOtherName, filtered, export, result.Lines.Count != filtered.Lines.Count);
+    }
+
+    private BehaviourCompareSession.BehaviourDiffFilter SelectedDiffFilter()
+    {
+        BehaviourDiff.Kind? kind = (_diffKind.SelectedItem as string) switch
+        {
+            "Added" => BehaviourDiff.Kind.Added,
+            "Removed" => BehaviourDiff.Kind.Removed,
+            "Changed" => BehaviourDiff.Kind.Changed,
+            _ => null,
+        };
+        string objectClass = _diffClass.SelectedItem as string ?? "";
+        return new BehaviourCompareSession.BehaviourDiffFilter(
+            kind, objectClass == "All classes" ? "" : objectClass);
+    }
+
+    private void RenderDiff(
+        string otherName,
+        BehaviourDiff.Result result,
+        BehaviourCompareSession.BehaviourDiffExport export,
+        bool filtered)
+    {
         _diff.Clear();
-        SetDiffSummary($"{Path.GetFileName(_hkxPath)} against {otherName}: {result}",
-                       result.Identical ? Ux.MetaBrush : Ux.TitleBrush);
+        string suffix = filtered ? $" ({export.Differences.Count} shown)" : "";
+        string comparison = export.Differences.Count == 0
+            ? export.OriginalCount == 0
+                ? "the two files hold the same objects with the same values"
+                : "no differences match the current filter"
+            : result.ToString();
+        SetDiffSummary($"{Path.GetFileName(_hkxPath)} against {otherName}: {comparison}{suffix}",
+                       export.OriginalCount == 0 ? Ux.MetaBrush : Ux.TitleBrush);
 
         foreach (var group in new[] { BehaviourDiff.Kind.Changed, BehaviourDiff.Kind.Removed, BehaviourDiff.Kind.Added })
         {
@@ -3514,9 +3595,61 @@ public class MainWindow : Window
                 _diff.Add(head, "", $"and {lines.Count - 2000} more").Colour(1, Ux.MutedBrush);
         }
 
-        if (result.Identical)
+        if (export.OriginalCount == 0)
             _diff.Add(null, "", "no difference", "the two files hold the same objects with the same values")
                  .Colour(2, Ux.MutedBrush);
+    }
+
+    private async Task ExportDiff(bool json)
+    {
+        if (_diffResult is not { } result)
+        {
+            SetDiffSummary("Compare two files before exporting a diff.", Ux.MutedBrush);
+            return;
+        }
+
+        var export = BehaviourCompareSession.CreateExport(result, SelectedDiffFilter());
+        string extension = json ? ".json" : ".txt";
+        string baseName = Path.GetFileNameWithoutExtension(_hkxPath);
+        var picked = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = json ? "Export behaviour diff as JSON" : "Export behaviour diff as text",
+            SuggestedFileName = (baseName.Length > 0 ? baseName : "behaviour") + "-diff" + extension,
+            SuggestedStartLocation = await StartFolder(),
+            DefaultExtension = extension[1..],
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType(json ? "JSON" : "Text") { Patterns = new[] { "*" + extension } },
+            },
+        });
+
+        string? path = picked?.TryGetLocalPath();
+        if (path == null) return;
+
+        try
+        {
+            string content = json
+                ? BehaviourCompareSession.ExportJson(export)
+                : BehaviourCompareSession.ExportText(export);
+            await File.WriteAllTextAsync(path, content);
+            SetDiffSummary($"Exported {export.Differences.Count} differences to {Path.GetFileName(path)}.",
+                           Ux.MetaBrush);
+        }
+        catch (Exception error)
+        {
+            SetDiffSummary($"Could not export the diff: {error.Message}", Ux.BadBrush);
+        }
+    }
+
+    private void ClearDiff()
+    {
+        _diffResult = null;
+        _diffOtherName = "";
+        _diff.Clear();
+        _diffClass.ItemsSource = new[] { "All classes" };
+        _diffClass.SelectedIndex = 0;
+        _diffExportText.IsEnabled = false;
+        _diffExportJson.IsEnabled = false;
     }
 
     private void SetDiffSummary(string text, IBrush brush)
