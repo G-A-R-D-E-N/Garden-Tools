@@ -36,8 +36,7 @@ public sealed class PhysicsInspectorTests
     [Fact]
     public void UnknownPhysicsLookingClassDoesNotBecomeReadOnly()
     {
-        Assert.Null(HavokPhysicsSchemaCatalog.TryGetSignature("hkpUnknownExperimentalThing", out _) ?
-            new object() : null);
+        Assert.False(HavokPhysicsSchemaCatalog.TryGetSignature("hkpUnknownExperimentalThing", out _));
         Assert.False(Inspector.IsSchemaReadOnlyClass("hkpUnknownExperimentalThing"));
     }
 
