@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -36,10 +37,12 @@ public class SkeletonView : Control
 
     public bool ShowReference { get; set; }
     public bool ShowBodies { get; set; }
+    public bool ShowConstraints { get; set; }
 
     public int DrawnBones => _pose?.Bones.Count ?? 0;
     public int DrawnEdges => _mesh?.Length ?? 0;
     public int DrawnBodies => _bodies?.Bodies.Count ?? 0;
+    public int DrawnConstraints => _bodies?.Constraints.Count ?? 0;
 
     private (Vector3 A, Vector3 B)[]? _mesh;
 
@@ -76,6 +79,7 @@ public class SkeletonView : Control
         _bodyCentre = Vector3.Zero;
         _bodyFit = 1;
         ShowBodies = false;
+        ShowConstraints = false;
         _yaw = 0.6;
         _pitch = 0.25;
         _zoom = 1;
@@ -197,6 +201,8 @@ public class SkeletonView : Control
         }
 
         if (bodies) DrawBodies(ctx, _bodies!);
+        if (ShowConstraints && _bodies != null && _bodies.Constraints.Count > 0)
+            DrawConstraints(ctx, _bodies);
 
         var bone = new Pen(Ux.MetaBrush, 1.6);
         foreach (var (from, to) in pose.Links)
@@ -249,6 +255,125 @@ public class SkeletonView : Control
             ctx.DrawEllipse(null, centre, Project(body.Position), 2.2, 2.2);
         }
     }
+
+    private const float ConstraintArm = 8f;
+
+    private void DrawConstraints(DrawingContext ctx, HavokRagdollModel model)
+    {
+        var link = new Pen(new SolidColorBrush(Ux.Warn, 0.55), 1);
+        var pivot = new Pen(new SolidColorBrush(Ux.Warn, 0.95), 1.2);
+        var arm = new Pen(new SolidColorBrush(Ux.Warn, 0.85), 1.1);
+
+        foreach (var constraint in model.Constraints)
+        {
+            var bodyA = model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyA);
+            var bodyB = model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyB);
+            if (bodyA == null || bodyB == null) continue;
+
+            ctx.DrawLine(link, Project(bodyA.Position), Project(bodyB.Position));
+
+            if (constraint.FrameA == null) continue;
+            var pivotA = bodyA.Position + Vector3.Transform(Translation(constraint.FrameA), bodyA.Rotation);
+            ctx.DrawEllipse(null, pivot, Project(pivotA), 2.2, 2.2);
+
+            Vector3 pivotB = pivotA;
+            if (constraint.FrameB != null)
+            {
+                pivotB = bodyB.Position + Vector3.Transform(Translation(constraint.FrameB), bodyB.Rotation);
+                ctx.DrawEllipse(null, pivot, Project(pivotB), 2.2, 2.2);
+            }
+
+            switch (constraint.Kind)
+            {
+                case HavokConstraintKind.Ragdoll:
+                    DrawTwist(ctx, arm, constraint, bodyA, pivotA);
+                    DrawCone(ctx, arm, constraint, bodyA, pivotA);
+                    break;
+                case HavokConstraintKind.LimitedHinge:
+                    DrawHinge(ctx, arm, constraint, bodyA, pivotB, pivotA);
+                    break;
+            }
+        }
+    }
+
+    private void DrawTwist(DrawingContext ctx, Pen pen, HavokConstraint constraint,
+                                  HavokRigidBody bodyA, Vector3 pivotA)
+    {
+        if (constraint.FrameA == null) return;
+        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistAxis, bodyA.Rotation));
+        var reference = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistRefAxis, bodyA.Rotation));
+
+        ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
+
+        if (constraint.TwistMinAngle is float min && constraint.TwistMaxAngle is float max)
+        {
+            ctx.DrawLine(pen, Project(pivotA),
+                              Project(pivotA + RotateAround(reference, axis, min) * ConstraintArm));
+            ctx.DrawLine(pen, Project(pivotA),
+                              Project(pivotA + RotateAround(reference, axis, max) * ConstraintArm));
+        }
+    }
+
+    private void DrawCone(DrawingContext ctx, Pen pen, HavokConstraint constraint,
+                                 HavokRigidBody bodyA, Vector3 pivotA)
+    {
+        if (constraint.FrameA == null || constraint.ConeMaxAngle is not float coneMax) return;
+        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.ConeTwistAxis, bodyA.Rotation));
+
+        ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
+
+        var centre = pivotA + axis * (MathF.Cos(coneMax) * ConstraintArm);
+        var radius = MathF.Sin(coneMax) * ConstraintArm;
+        var right = Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitY));
+        if (right.LengthSquared() < 1e-6f) right = Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitX));
+        var up = Vector3.Normalize(Vector3.Cross(axis, right));
+
+        const int segments = 24;
+        var previous = Project(centre + right * radius);
+        for (int i = 1; i <= segments; i++)
+        {
+            float angle = MathF.PI * 2 * i / segments;
+            var point = centre + (right * MathF.Cos(angle) + up * MathF.Sin(angle)) * radius;
+            var at = Project(point);
+            ctx.DrawLine(pen, previous, at);
+            previous = at;
+        }
+    }
+
+    private void DrawHinge(DrawingContext ctx, Pen pen, HavokConstraint constraint,
+                                  HavokRigidBody bodyA, Vector3 pivotB, Vector3 pivotA)
+    {
+        if (constraint.FrameA == null) return;
+        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.LimitAxis, bodyA.Rotation));
+
+        ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
+
+        if (constraint.MinAngle == 0 && constraint.MaxAngle == 0) return;
+
+        // The file stores no explicit angle reference for the hinge limit, so the wedge uses
+        // the measured A->B direction (projected perpendicular to the limit axis) as its zero.
+        var toward = pivotB - pivotA;
+        var perpendicular = toward - axis * Vector3.Dot(toward, axis);
+        var reference = perpendicular.LengthSquared() < 1e-8f
+            ? Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitY))
+            : Vector3.Normalize(perpendicular);
+
+        ctx.DrawLine(pen, Project(pivotA),
+                          Project(pivotA + RotateAround(reference, axis, constraint.MinAngle) * ConstraintArm));
+        ctx.DrawLine(pen, Project(pivotA),
+                          Project(pivotA + RotateAround(reference, axis, constraint.MaxAngle) * ConstraintArm));
+    }
+
+    private static Vector3 Translation(float[] frame) => new(frame[12], frame[13], frame[14]);
+
+    private static Vector3 Column(float[] frame, int axis) =>
+        new(frame[4 * axis], frame[4 * axis + 1], frame[4 * axis + 2]);
+
+    private static Vector3 WorldDir(float[] frame, int axis, Quaternion rotation) =>
+        Vector3.Transform(Column(frame, axis), rotation);
+
+    private static Vector3 RotateAround(Vector3 vector, Vector3 axis, float angle) =>
+        Vector3.Transform(vector, Quaternion.CreateFromAxisAngle(axis, angle));
 
     private void DrawGround(DrawingContext ctx)
     {
