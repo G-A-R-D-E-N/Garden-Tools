@@ -278,14 +278,14 @@ public class SkeletonView : Control
     // captured world offset (the joint can rotate but not stretch, within the projection
     // residual), its relative rotation is clamped to the measured twist/cone/hinge limits
     // (so limbs fold only as far as the file allows), and each body stops when its lowest
-    // shape vertex rests on the ground plane (z=0). Deterministic (fixed substeps, fixed
-    // iteration count) and it always settles: damping decays the pendulum motion and rest
-    // is position-based.
-    private const float DropGravity = 600f;        // file units per second^2
+    // shape vertex rests on the ground plane (z=0). The caller's wall-clock slices accumulate
+    // and only exact 120 Hz substeps enter the simulation, making the result independent of
+    // UI timer chunking.
+    private const float DropGravity = 600f;         // file units per second^2
     private const float DropRestEpsilon = 0.01f;    // resting position delta, file units
     private const float DropDamping = 4f;           // 1/second, decays the release swing
-    private const float DropSubstep = 1f / 120f;    // fixed integration step
-    private const int DropIterations = 20;           // constraint/ground passes per substep
+    private const float DropSubstep = 1f / 120f;    // exact simulation step
+    private const int DropIterations = 20;          // constraint/ground passes per substep
 
     private Vector3[]? _releasePositions;
     private Quaternion[]? _releaseRotations;
@@ -296,7 +296,7 @@ public class SkeletonView : Control
     private Dictionary<int, int>? _dropBodyIndexById;
     private int[]? _dropBodyBoneIndexes;
     private int[]? _dropBodyDepth;
-    private float _dropTime;
+    private double _dropAccumulator;
     private float _dropTotal;
     private bool _dropResting;
 
@@ -322,8 +322,7 @@ public class SkeletonView : Control
         // Body list index and render-bone index for every rigid body, plus the captured
         // world offset between each constraint's two pivots: the joint geometry is frozen at
         // release, so the settle can only rotate joints - the pivot offset is re-projected
-        // every pass, so a joint never visibly stretches (residual stays under a file unit
-        // with the fixed iteration count below).
+        // every pass, so a joint never visibly stretches (within the projection residual).
         _dropBodyIndexById = new Dictionary<int, int>();
         for (int i = 0; i < _bodies.Bodies.Count; i++) _dropBodyIndexById[_bodies.Bodies[i].Id] = i;
         _dropBodyBoneIndexes = new int[_bodies.Bodies.Count];
@@ -338,26 +337,29 @@ public class SkeletonView : Control
             }
         }
 
-        // The body graph is a tree (17 joints over 18 bodies in the measured files): BFS
-        // from the first body so each joint's child is known. Rotation clamps apply to the
-        // child only, so a hub like the pelvis (the B side of several constraints in the
-        // file) is never overwritten by its neighbours' clamps.
+        // The measured FO4 character graph is a tree (17 joints over 18 bodies). BFS from
+        // the first body establishes one kinematic child per joint so a hub is never rotated
+        // repeatedly by its neighbours' clamps. Disconnected bodies keep MaxValue depth and
+        // still participate in gravity/ground through their own bindings.
         _dropBodyDepth = new int[_bodies.Bodies.Count];
         Array.Fill(_dropBodyDepth, int.MaxValue);
-        _dropBodyDepth[0] = 0;
-        var queue = new Queue<int>();
-        queue.Enqueue(0);
-        while (queue.Count > 0)
+        if (_dropBodyDepth.Length > 0)
         {
-            int current = queue.Dequeue();
-            foreach (var constraint in _bodies.Constraints)
+            _dropBodyDepth[0] = 0;
+            var queue = new Queue<int>();
+            queue.Enqueue(0);
+            while (queue.Count > 0)
             {
-                if (!_dropBodyIndexById.TryGetValue(constraint.BodyA, out int ai) ||
-                    !_dropBodyIndexById.TryGetValue(constraint.BodyB, out int bi)) continue;
-                int other = ai == current ? bi : bi == current ? ai : -1;
-                if (other < 0 || _dropBodyDepth[other] != int.MaxValue) continue;
-                _dropBodyDepth[other] = _dropBodyDepth[current] + 1;
-                queue.Enqueue(other);
+                int current = queue.Dequeue();
+                foreach (var constraint in _bodies.Constraints)
+                {
+                    if (!_dropBodyIndexById.TryGetValue(constraint.BodyA, out int ai) ||
+                        !_dropBodyIndexById.TryGetValue(constraint.BodyB, out int bi)) continue;
+                    int other = ai == current ? bi : bi == current ? ai : -1;
+                    if (other < 0 || _dropBodyDepth[other] != int.MaxValue) continue;
+                    _dropBodyDepth[other] = _dropBodyDepth[current] + 1;
+                    queue.Enqueue(other);
+                }
             }
         }
 
@@ -378,8 +380,10 @@ public class SkeletonView : Control
             _dropPivotOffsets[constraint.Id] = pivotB - pivotA;
         }
 
-        _dropTime = 0;
-        _dropResting = _dropTotal <= 0.01f;
+        _dropAccumulator = 0;
+        // A grounded standing pose must still be released. Gravity plus the constraints decide
+        // whether it can remain standing; ground contact alone is not a reason to skip the sim.
+        _dropResting = false;
         InvalidateVisual();
     }
 
@@ -394,36 +398,37 @@ public class SkeletonView : Control
         _dropBodyIndexById = null;
         _dropBodyBoneIndexes = null;
         _dropBodyDepth = null;
-        _dropTime = 0;
+        _dropAccumulator = 0;
         _dropTotal = 0;
         _dropResting = false;
         InvalidateVisual();
     }
 
-    // Advance the release preview by a wall-clock slice, stepping the constrained settle in
-    // fixed substeps so the trajectory is deterministic and stable whatever the frame rate.
+    // Advance the release preview by a wall-clock slice. The wall-clock time is accumulated
+    // and consumed only in exact 1/120-second steps; no short remainder step enters the sim,
+    // so 16 ms UI ticks and any other chunking produce the same trajectory for equal elapsed
+    // simulated time.
     public void AdvanceDrop(float seconds)
     {
         if (_dropPositions == null || _dropResting || _dropBodyIndexById == null ||
             _dropBodyBoneIndexes == null || _dropBodyDepth == null || _dropVelocities == null ||
-            _dropPivotOffsets == null) return;
-        _dropTime += seconds;
-        while (seconds > 0 && !_dropResting)
+            _dropPivotOffsets == null || seconds <= 0 || !float.IsFinite(seconds)) return;
+
+        _dropAccumulator += seconds;
+        while (_dropAccumulator + 1e-12 >= DropSubstep && !_dropResting)
         {
-            float dt = Math.Min(DropSubstep, seconds);
-            seconds -= dt;
+            _dropAccumulator -= DropSubstep;
             _dropResting = StepConstrainedRelease(
                 _bodies!, _dropBodyIndexById, _dropBodyBoneIndexes, _dropBodyDepth,
-                _dropPositions, _dropRotations!, _dropVelocities, _dropPivotOffsets, dt, DropIterations);
+                _dropPositions, _dropRotations!, _dropVelocities, _dropPivotOffsets,
+                DropSubstep, DropIterations);
         }
         InvalidateVisual();
     }
 
-    // The deterministic per-body settle core. One substep: integrate gravity into every
-    // body's velocity, then alternate constraint projection/clamps with ground stops for a
-    // fixed number of passes, then damp. Returns true once nothing moved more than the rest
-    // epsilon (position-based, so chain-hung bodies that sway without changing velocity still
-    // settle); the last pass is always the ground, so the render never shows penetration.
+    // The deterministic per-body settle core. Only bones that are actually bound to rigid
+    // bodies participate in gravity, damping and rest detection. Unbound skeleton/helper bones
+    // stay at the captured pose and therefore cannot fall forever or keep the preview awake.
     internal static bool StepConstrainedRelease(
         HavokRagdollModel model,
         Dictionary<int, int> bodyIndexById,
@@ -436,11 +441,17 @@ public class SkeletonView : Control
         float dt,
         int iterations)
     {
+        var activeBones = new HashSet<int>();
+        foreach (int bone in bodyBoneIndexes)
+            if (bone >= 0 && bone < positions.Length && bone < rotations.Length && bone < velocities.Length)
+                activeBones.Add(bone);
+        if (activeBones.Count == 0) return true;
+
         var start = (Vector3[])positions.Clone();
-        for (int i = 0; i < positions.Length; i++)
+        foreach (int bone in activeBones)
         {
-            velocities[i].Z -= DropGravity * dt;
-            positions[i] += velocities[i] * dt;
+            velocities[bone].Z -= DropGravity * dt;
+            positions[bone] += velocities[bone] * dt;
         }
 
         for (int iter = 0; iter < iterations; iter++)
@@ -483,10 +494,6 @@ public class SkeletonView : Control
                 else if (constraint is { Kind: HavokConstraintKind.Hinge or HavokConstraintKind.LimitedHinge } &&
                          (constraint.MinAngle != 0 || constraint.MaxAngle != 0))
                 {
-                    // The hinge bends the tree child (the calf, not the thigh): measure the
-                    // child's local X against the parent->child direction around the limit
-                    // axis, and rotate the child by the correction, so each joint is clamped
-                    // exactly once and clamps never fight through a shared body.
                     int parentBone = childIsA ? bb : ba;
                     var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.LimitAxis, rotationA));
                     var toward = positions[childBone] - positions[parentBone];
@@ -534,11 +541,10 @@ public class SkeletonView : Control
         }
 
         bool resting = true;
-        for (int i = 0; i < velocities.Length; i++)
-            velocities[i] *= MathF.Max(0, 1f - DropDamping * dt);
-        for (int i = 0; i < positions.Length; i++)
+        foreach (int bone in activeBones)
         {
-            if ((positions[i] - start[i]).LengthSquared() > DropRestEpsilon * DropRestEpsilon)
+            velocities[bone] *= MathF.Max(0, 1f - DropDamping * dt);
+            if ((positions[bone] - start[bone]).LengthSquared() > DropRestEpsilon * DropRestEpsilon)
                 resting = false;
         }
         return resting;
@@ -569,7 +575,6 @@ public class SkeletonView : Control
         }
         if (!hasTwist && !hasCone) return rotationChild;
 
-        // The measured relative in the file's A frame (the frame the limit axes live in).
         Quaternion relative = fileAIsChild
             ? Quaternion.Normalize(Quaternion.Inverse(rotationChild) * rotationParent)
             : Quaternion.Normalize(Quaternion.Inverse(rotationParent) * rotationChild);
@@ -583,8 +588,6 @@ public class SkeletonView : Control
 
         if (fileAIsChild)
         {
-            // Adjust the child so Inverse(child') * parent equals the clamped relative:
-            // q' = Inverse(child*d) * parent = Inverse(d) * q, so d = q * q'^-1.
             var original = Quaternion.Normalize(Quaternion.Inverse(rotationChild) * rotationParent);
             var adjustment = Quaternion.Normalize(original * Quaternion.Inverse(relative));
             return Quaternion.Normalize(rotationChild * adjustment);
@@ -592,7 +595,6 @@ public class SkeletonView : Control
         return Quaternion.Normalize(rotationParent * relative);
     }
 
-    // The signed angle from `from` to `to` rotating around `axis`, in [-pi, pi].
     internal static float SignedAngleAround(Vector3 axis, Vector3 from, Vector3 to)
     {
         axis = Vector3.Normalize(axis);
@@ -603,54 +605,39 @@ public class SkeletonView : Control
         return angle;
     }
 
-    // The signed rotation angle of `relative` around `axis` (the axis in the same frame as
-    // the quaternion), i.e. the twist component of the swing-twist decomposition.
     internal static float TwistAngle(Quaternion relative, Vector3 axis)
     {
         var v = new Vector3(relative.X, relative.Y, relative.Z);
         return 2f * MathF.Atan2(Vector3.Dot(v, Vector3.Normalize(axis)), relative.W);
     }
 
-    // The swing-twist decomposition around `axis`: the twist is the component rotating
-    // around the axis, the swing everything else. A 180-degree swing has a zero-length
-    // twist, which the callers guard against before it can become NaN.
     private static (Quaternion Twist, Quaternion Swing) Decompose(Quaternion relative, Vector3 axis)
     {
         var axisUnit = Vector3.Normalize(axis);
         var v = new Vector3(relative.X, relative.Y, relative.Z);
         var twist = new Quaternion(Vector3.Dot(v, axisUnit) * axisUnit, relative.W);
         if (twist.LengthSquared() < 1e-10f)
-        {
-            // Pure 180-degree swing around an axis perpendicular to `axis`: nothing to
-            // decompose, treat it as all swing.
             return (Quaternion.Identity, Quaternion.Normalize(relative));
-        }
         twist = Quaternion.Normalize(twist);
         return (twist, Quaternion.Normalize(relative * Quaternion.Inverse(twist)));
     }
 
-    // The swing angle of `relative` around `axis`: the angle of the component left after
-    // removing the rotation around the axis (the cone angle in a ragdoll limit).
     internal static float SwingAngle(Quaternion relative, Vector3 axis)
     {
         var (_, swing) = Decompose(relative, axis);
         return 2f * MathF.Atan2(new Vector3(swing.X, swing.Y, swing.Z).Length(), swing.W);
     }
 
-    // Clamp the twist component of `relative` around `axis` into [min, max], keeping the
-    // swing untouched.
     internal static Quaternion ClampTwist(Quaternion relative, Vector3 axis, float min, float max)
     {
         var axisUnit = Vector3.Normalize(axis);
-        var (twist, swing) = Decompose(relative, axis);
+        var (_, swing) = Decompose(relative, axis);
         float angle = TwistAngle(relative, axis);
         float clamped = Math.Clamp(angle, min, max);
         if (Math.Abs(clamped - angle) < 1e-5f) return relative;
         return Quaternion.Normalize(swing * Quaternion.CreateFromAxisAngle(axisUnit, clamped));
     }
 
-    // Clamp the swing angle of `relative` around `axis` to the cone half-angle, keeping the
-    // twist untouched.
     internal static Quaternion ClampCone(Quaternion relative, Vector3 axis, float coneMax)
     {
         var (twist, swing) = Decompose(relative, axis);
@@ -779,7 +766,6 @@ public class SkeletonView : Control
         _pan = default;
         if (EngineeringFrames)
         {
-            // The engineering view shows the bodies' frames, so Fit frames those bodies.
             _centre = _bodyCentre;
             _fit = _bodyFit;
         }
@@ -811,9 +797,6 @@ public class SkeletonView : Control
     {
         ctx.FillRectangle(Ux.CardBrush, new Rect(Bounds.Size));
 
-        // The engineering view draws nothing but the frames overlay: triads and COM
-        // markers on the ground grid, no skeleton, hulls, constraints or bindings, and no
-        // auto-framing even for pose-less files.
         if (EngineeringFrames && _bodies is { Bodies.Count: > 0 })
         {
             DrawGround(ctx);
@@ -835,7 +818,6 @@ public class SkeletonView : Control
 
         if (pose == null || pose.Bones.Count == 0)
         {
-            // A physics-only file can be framed by its rigid-body hull alone.
             _centre = _bodyCentre;
             _fit = _bodyFit;
         }
@@ -889,8 +871,6 @@ public class SkeletonView : Control
         if (ShowFrames && _bodies is { Bodies.Count: > 0 })
             DrawFrames(ctx, _bodies);
 
-        // Pinned constraints keep their label without hovering; hovering another constraint
-        // while one is pinned shows both, so limits can be compared side by side.
         if (ShowConstraints && _bodies is { Constraints.Count: > 0 })
         {
             if (_pinnedConstraint >= 0) DrawConstraintLabel(ctx, _bodies, _pinnedConstraint);
@@ -937,18 +917,11 @@ public class SkeletonView : Control
         }
     }
 
-    // The physics skeleton hknpRagdollData carries, drawn as its own bone chain: the
-    // reference pose composed down the parent indices into file space, in green so it reads
-    // apart from the animation skeleton (gray), the bodies (blue) and the constraints
-    // (amber). Root bones get a slightly larger marker.
     private void DrawPhysicsSkeleton(DrawingContext ctx, HavokRagdollModel model)
     {
         var chain = new Pen(new SolidColorBrush(Ux.Good, 0.95), 2);
         var marker = new SolidColorBrush(Ux.Good, 0.9);
 
-        // Posed by the current animation when a mapper is present, by the settled drop
-        // frames during the release preview, or the measured reference pose composed down
-        // the parent chain.
         Vector3[] positions = _dropPositions != null
             ? _dropPositions
             : _physicsPose != null
@@ -971,10 +944,6 @@ public class SkeletonView : Control
         }
     }
 
-    // Each body's measured local frame (body cinfo position + orientation) drawn as a
-    // conventional red/green/blue axis triad, plus a marker at the measured world-space
-    // center of mass (motionCinfos centerOfMassWorld). The triad length scales with the
-    // model so it stays readable across files.
     private void DrawFrames(DrawingContext ctx, HavokRagdollModel model)
     {
         var xAxis = new Pen(new SolidColorBrush(Ux.Bad, 0.95), 1.6);
@@ -982,7 +951,6 @@ public class SkeletonView : Control
         var zAxis = new Pen(new SolidColorBrush(Ux.Accent, 0.95), 1.6);
         var comPen = new Pen(new SolidColorBrush(Ux.TextTitle, 0.9), 1.2);
 
-        // The stub length is published as AxisStubLength for the viewport status readout.
         float arm = AxisStubLength;
 
         foreach (var body in model.Bodies)
@@ -993,19 +961,12 @@ public class SkeletonView : Control
             ctx.DrawLine(yAxis, at, Project(position + Vector3.Transform(Vector3.UnitY, rotation) * arm));
             ctx.DrawLine(zAxis, at, Project(position + Vector3.Transform(Vector3.UnitZ, rotation) * arm));
 
-            // Zero is the sentinel for "no measured COM" (see HavokRigidBody.CenterOfMass).
-            // The COM is measured in file space, so when the body moves it keeps its
-            // body-relative offset from the measured frame.
             if (body.CenterOfMass != Vector3.Zero)
             {
                 var com = position + Vector3.Transform(body.CenterOfMass - body.Position, rotation);
                 ctx.DrawEllipse(null, comPen, Project(com), 2.6, 2.6);
             }
 
-            // The numeric readout for the hovered body and for every click-pinned body: the
-            // measured COM triplet (or a plain note when the file carries none) and the axis
-            // stub length, in file units. Pinned labels stay without hovering, so several
-            // bodies can be compared at once.
             if (body.Id == _hoveredBody || _pinnedBodies.Contains(body.Id))
             {
                 var label = new FormattedText(BodyFrameLabel(body, AxisStubLength),
@@ -1017,9 +978,6 @@ public class SkeletonView : Control
         }
     }
 
-    // The hover label for a body's frame: the measured world-space center of mass and the
-    // axis stub length, in file units. Zero is the "no measured COM" sentinel, so a body
-    // without one says so plainly rather than printing a false origin.
     public static string BodyFrameLabel(HavokRigidBody body, float stubLength)
     {
         string stub = stubLength.ToString("0.00", CultureInfo.InvariantCulture);
@@ -1058,8 +1016,6 @@ public class SkeletonView : Control
             ctx.DrawText(text, new Point(at.X + 7, at.Y - 15));
         }
 
-        // The hovered body itself is highlighted by re-drawing its hull in accent so the
-        // body-to-bone association reads at a glance; the label above already changed colour.
         if (hoveredBody == null || model.Skeleton == null) return;
         var shape = model.Shapes.FirstOrDefault(s => s.Id == hoveredBody.ShapeId);
         if (shape == null) return;
@@ -1084,10 +1040,6 @@ public class SkeletonView : Control
 
     private const float ConstraintArm = 8f;
 
-    // The hover label for a constraint: the measured limit summary in degrees. The angle
-    // atoms store radians; the readout converts for readability but never invents a value -
-    // kinds with no measured limit data (or a hinge whose 0..0 range means "absent", the
-    // same convention DrawHinge uses) say so plainly.
     public static string ConstraintLabel(HavokConstraint constraint, IReadOnlyList<HavokRigidBody> bodies)
     {
         string bodyA = bodies.FirstOrDefault(b => b.Id == constraint.BodyA)?.Name ?? "";
@@ -1178,9 +1130,6 @@ public class SkeletonView : Control
         }
     }
 
-    // A constraint's measured-limits label, drawn above everything else near the midpoint
-    // of its body link so the association reads at a glance - for the hovered constraint
-    // and for the click-pinned one (which stays without hovering).
     private void DrawConstraintLabel(DrawingContext ctx, HavokRagdollModel model, int constraintId)
     {
         var constraint = model.Constraints.FirstOrDefault(c => c.Id == constraintId);
@@ -1249,8 +1198,6 @@ public class SkeletonView : Control
 
         if (constraint.MinAngle == 0 && constraint.MaxAngle == 0) return;
 
-        // The file stores no explicit angle reference for the hinge limit, so the wedge uses
-        // the measured A->B direction (projected perpendicular to the limit axis) as its zero.
         var toward = pivotB - pivotA;
         var perpendicular = toward - axis * Vector3.Dot(toward, axis);
         var reference = perpendicular.LengthSquared() < 1e-8f
@@ -1265,8 +1212,6 @@ public class SkeletonView : Control
 
     private static Vector3 Translation(float[] frame) => new(frame[12], frame[13], frame[14]);
 
-    // Column/WorldDir are internal so the release tests can re-measure the settled angles
-    // with the same frame conventions the clamps use.
     internal static Vector3 Column(float[] frame, int axis) =>
         new(frame[4 * axis], frame[4 * axis + 1], frame[4 * axis + 2]);
 
@@ -1331,7 +1276,6 @@ public class SkeletonView : Control
     private void NameBodyUnder(Point at)
     {
         int found = PickBodyUnder(at);
-        // Hiding every body-label overlay clears the pins too, like the constraint pin.
         if (!ShowBindings && !ShowFrames && !EngineeringFrames && _pinnedBodies.Count > 0)
             _pinnedBodies.Clear();
         if (found == _hoveredBody) return;
@@ -1339,9 +1283,6 @@ public class SkeletonView : Control
         InvalidateVisual();
     }
 
-    // Body picking backs both the bindings labels (bone name) and the frames labels
-    // (measured COM + stub), so it is live whenever either overlay is showing, and in the
-    // engineering view (which draws the frames regardless of the toggles).
     private int PickBodyUnder(Point at)
     {
         if ((!ShowBindings && !ShowFrames && !EngineeringFrames) ||
@@ -1361,8 +1302,6 @@ public class SkeletonView : Control
         return found;
     }
 
-    // Hover picking for constraints: the nearest point on each body-link segment in projected
-    // space, within the same 12px reach the body labels use. Off when constraints are hidden.
     private void NameConstraintUnder(Point at)
     {
         int found = PickConstraintUnder(at);
@@ -1425,9 +1364,6 @@ public class SkeletonView : Control
         _orbiting = _panning = false;
         e.Pointer.Capture(null);
 
-        // A click - a left press and release without dragging - toggles the constraint
-        // pin: click a constraint to keep its limits label visible, click it again or
-        // click elsewhere to release it. Dragging keeps working as orbit.
         var released = e.GetPosition(this);
         double dx = released.X - _pressAt.X;
         double dy = released.Y - _pressAt.Y;
@@ -1441,9 +1377,6 @@ public class SkeletonView : Control
                 InvalidateVisual();
             }
 
-            // Clicking a body flips its frame label in the multi-pin set (the labels stay
-            // until clicked again or the overlays hide), while the constraint click above
-            // still releases a pinned constraint when the click hits no constraint.
             int bodyPicked = PickBodyUnder(released);
             if (bodyPicked >= 0)
             {
