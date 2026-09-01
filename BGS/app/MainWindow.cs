@@ -2862,11 +2862,15 @@ public class MainWindow : Window
         _skeleton.SetBodies(any ? _ragdoll : null);
         if (!any) return;
 
+        bool mappings = any && _ragdoll is { Mappings.Count: > 0, AnimationSkeleton: { BoneNames.Count: > 0 } };
         SetPlaybackSummary(
             $"{_ragdoll!.Bodies.Count} rigid bodies, {_ragdoll.Shapes.Count} shapes, " +
-            $"{_ragdoll.Constraints.Count} constraints and {_ragdoll.BoneBindings.Count} bone bindings " +
-            "measured from this file. Bodies, Constraints, Bone labels, Physics skeleton and Body " +
-            "frames draw them as a static file-space overlay; it is not physics yet.", Ux.MetaBrush);
+            $"{_ragdoll.Constraints.Count} constraints, {_ragdoll.BoneBindings.Count} bone bindings " +
+            $"and {_ragdoll.Mappings.Count} animation-to-ragdoll bone mappings measured from this file. " +
+            "Bodies, Constraints, Bone labels, Physics skeleton and Body frames draw them as a " +
+            (mappings
+                ? "file-space overlay that follows the playing animation through the measured mapper; it is not physics yet."
+                : "static file-space overlay; it is not physics yet."), Ux.MetaBrush);
 
         HkxSkeleton? skeleton = null;
         try { skeleton = new HkxBinaryReader().ReadSkeleton(path); }

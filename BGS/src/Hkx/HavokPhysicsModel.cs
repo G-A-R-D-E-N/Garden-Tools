@@ -101,6 +101,17 @@ public sealed class HavokConstraint
 
 public sealed record HavokRagdollBoneBinding(int BoneIndex, int BodyId);
 
+// One hkaSkeletonMapper simple mapping: the animation-skeleton bone BoneA maps onto the
+// physics bone BoneB through the measured aFromBTransform (translation + rotation of the
+// 48-byte hkQsTransform; scale is identity in every measured file). Composing the animation
+// bone's world pose as worldB = worldA * aFromB reproduces the ragdoll reference pose
+// exactly, which is how the preview poses the ragdoll from a playing clip.
+public sealed record HavokRagdollMapping(int BoneA, int BoneB, Vector3 AFromBTranslation, Quaternion AFromBRotation);
+
+// A world-space bone frame (position + rotation), used to feed the animation skeleton's
+// current pose into the ragdoll mapper and read the mapped physics frames back out.
+public readonly record struct HavokBoneFrame(Vector3 Position, Quaternion Rotation);
+
 // The physics skeleton hknpRagdollData references (hkaSkeleton). boneToBodyMap indexes
 // this bone list, so its names label each bound rigid body in the preview.
 public sealed class HavokRagdollSkeleton
@@ -156,6 +167,47 @@ public sealed class HavokRagdollModel
     public List<HavokConstraint> Constraints { get; } = new();
     public List<HavokRagdollBoneBinding> BoneBindings { get; } = new();
     public HavokRagdollSkeleton? Skeleton { get; set; }
+
+    // The file's own animation->ragdoll bridge (hkaSkeletonMapper): which animation bone
+    // drives which physics bone, plus the measured aFromB offset. Empty when the file carries
+    // no mapper, in which case the ragdoll stays at its measured reference pose.
+    public List<HavokRagdollMapping> Mappings { get; } = new();
+
+    // The animation skeleton the mapper maps FROM (its skeletonA, the file's full character
+    // rig). The app's playing pose is composed against this bone list's indices.
+    public HavokRagdollSkeleton? AnimationSkeleton { get; set; }
+
+    // Compose the physics skeleton's world frames from the animation skeleton's current world
+    // frames via the measured simple mappings (worldB = worldA * aFromBTransform). Returns
+    // null when the model has no mapper or the animation pose cannot drive boneA of every
+    // mapping. A physics bone the mapping leaves out (never measured in the fixture so far)
+    // stays at its measured reference world position so the chain never draws half-empty.
+    public HavokBoneFrame[]? MapPose(IReadOnlyList<HavokBoneFrame>? animationWorld)
+    {
+        if (animationWorld == null || Mappings.Count == 0 || Skeleton == null) return null;
+
+        var reference = Skeleton.WorldReferencePositions();
+        var frames = new HavokBoneFrame[reference.Count];
+        var covered = new bool[reference.Count];
+
+        foreach (var mapping in Mappings)
+        {
+            if (mapping.BoneA < 0 || mapping.BoneA >= animationWorld.Count) return null;
+            if (mapping.BoneB < 0 || mapping.BoneB >= frames.Length) return null;
+
+            var a = animationWorld[mapping.BoneA];
+            frames[mapping.BoneB] = new HavokBoneFrame(
+                a.Position + Vector3.Transform(mapping.AFromBTranslation, a.Rotation),
+                Quaternion.Normalize(a.Rotation * mapping.AFromBRotation));
+            covered[mapping.BoneB] = true;
+        }
+
+        for (int i = 0; i < reference.Count; i++)
+            if (!covered[i])
+                frames[i] = new HavokBoneFrame(reference[i], Quaternion.Identity);
+
+        return frames;
+    }
 }
 
 public enum HavokPhysicsValidationLevel
@@ -340,6 +392,59 @@ public static class HavokPhysicsValidator
                         $"reference pose scale ({pose.Scale}) is not identity and is not applied"));
             }
         }
+
+        if (model.AnimationSkeleton is { } animation)
+        {
+            int animBoneCount = animation.BoneNames.Count;
+            if (animation.ParentIndices.Count != animBoneCount)
+                findings.Add(Error("animation skeleton",
+                    $"has {animBoneCount} bone names but {animation.ParentIndices.Count} parent indices"));
+            if (animation.ReferencePose.Count != animBoneCount)
+                findings.Add(Error("animation skeleton",
+                    $"has {animBoneCount} bone names but {animation.ReferencePose.Count} reference poses"));
+        }
+
+        var mappedPhysicsBones = new HashSet<int>();
+        for (int i = 0; i < model.Mappings.Count; i++)
+        {
+            var mapping = model.Mappings[i];
+            string where = $"mapping {i}";
+            if (mapping.BoneA < 0 || (model.AnimationSkeleton is { } animated &&
+                                      mapping.BoneA >= animated.BoneNames.Count))
+                findings.Add(Error(where, $"animation bone {mapping.BoneA} is outside the animation skeleton"));
+            if (mapping.BoneB < 0 || (model.Skeleton is { } physics &&
+                                      mapping.BoneB >= physics.BoneNames.Count))
+                findings.Add(Error(where, $"physics bone {mapping.BoneB} is outside the physics skeleton"));
+
+            if (!Finite(mapping.AFromBTranslation))
+                findings.Add(Error(where, "aFromB translation must contain only finite values"));
+            if (!Finite(mapping.AFromBRotation))
+                findings.Add(Error(where, "aFromB rotation must contain only finite values"));
+            else
+            {
+                float norm = MathF.Sqrt(
+                    mapping.AFromBRotation.X * mapping.AFromBRotation.X +
+                    mapping.AFromBRotation.Y * mapping.AFromBRotation.Y +
+                    mapping.AFromBRotation.Z * mapping.AFromBRotation.Z +
+                    mapping.AFromBRotation.W * mapping.AFromBRotation.W);
+                if (norm < RotationNormEpsilon)
+                    findings.Add(Error(where, "aFromB rotation is degenerate (its length is effectively zero)"));
+            }
+
+            if (!mappedPhysicsBones.Add(mapping.BoneB))
+                findings.Add(Error(where, $"physics bone {mapping.BoneB} is mapped more than once"));
+        }
+
+        // When the file carries a mapper and both skeletons, every physics bone should be
+        // covered exactly once; an uncovered bone falls back to its reference position.
+        if (model.Mappings.Count > 0 && model.Skeleton is { } mappedPhysics &&
+            model.AnimationSkeleton != null)
+            for (int bone = 0; bone < mappedPhysics.BoneNames.Count; bone++)
+                if (!mappedPhysicsBones.Contains(bone))
+                    findings.Add(new HavokPhysicsValidationFinding(
+                        HavokPhysicsValidationLevel.Warning,
+                        $"bone {bone}",
+                        "is not covered by any animation mapping and stays at its reference position"));
 
         return findings;
     }

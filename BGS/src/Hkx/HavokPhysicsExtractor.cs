@@ -74,9 +74,84 @@ public static class HavokPhysicsExtractor
                 objects.Instances[index].ClassName == "hkaSkeleton" &&
                 Skeleton(objects, objects.Instances[index]) is { } skeleton)
                 model.Skeleton = skeleton;
+
+            // The file's animation->ragdoll bridge (hkaSkeletonMapper): take the mapper whose
+            // skeletonB is exactly the ragdoll skeleton, and keep its simple mappings plus the
+            // animation skeleton it maps from. Without it the ragdoll stays at the measured
+            // reference pose and nothing else changes.
+            if (model.Skeleton != null && skeletonId >= 0)
+                foreach (var mapper in objects.Instances.Where(i => i.ClassName == MapperClass))
+                    if (Mapper(objects, skeletonId, mapper, out var mappings, out var animation))
+                    {
+                        model.Mappings.AddRange(mappings);
+                        model.AnimationSkeleton = animation;
+                        break;
+                    }
         }
 
         return model;
+    }
+
+    public const string MapperClass = "hkaSkeletonMapper";
+
+    // The hkaSkeletonMapper's mapping data is an inline struct (hkaSkeletonMapper.mapping,
+    // not a packfile object), read through the measured type table exactly like the atoms:
+    // hkaSkeletonMapperData carries skeletonA/skeletonB pointers, the mappingType int32 and
+    // the simpleMappings array of 64-byte hkaSkeletonMapperDataSimpleMapping records (int16
+    // boneA/boneB, then the 48-byte aFromBTransform hkQsTransform: translation vector4,
+    // rotation quaternion, scale vector4). Only an HK_RAGDOLL_MAPPING (type 0) whose
+    // skeletonB is the ragdoll skeleton is accepted; everything else fails closed.
+    private static bool Mapper(PackfileObjects objects, int ragdollSkeletonId,
+                               PackfileObjects.Instance instance,
+                               out List<HavokRagdollMapping> mappings,
+                               out HavokRagdollSkeleton? animation)
+    {
+        mappings = new List<HavokRagdollMapping>();
+        animation = null;
+
+        var mapperLayout = LayoutWalker.Active(HavokClassTypes.Shipped, MapperClass, objects.PointerWidth);
+        int? mappingAt = mapperLayout?.OffsetOf("mapping") is { } offset ? instance.Offset + offset : null;
+        if (mappingAt == null) return false;
+
+        var skeletonA = objects.ReadRefAt(mappingAt.Value + 0, out _);
+        var skeletonB = objects.ReadRefAt(mappingAt.Value + 8, out _);
+        if (skeletonA == null || skeletonB == null) return false;
+        if (objects.IndexOf(skeletonB) + NativeGraphModel.FirstId != ragdollSkeletonId) return false;
+
+        var dataLayout = LayoutWalker.Active(HavokClassTypes.Shipped, "hkaSkeletonMapperData", objects.PointerWidth);
+        if (dataLayout?.OffsetOf("simpleMappings") is not { } rowsOffset) return false;
+        int? typeAt = dataLayout.OffsetOf("mappingType") is { } typeOffset ? mappingAt.Value + typeOffset : null;
+        int mappingType = typeAt is { } ta ? (objects.ReadNarrowAt(ta, 4) ?? 1) : 1;
+        if (mappingType != 0) return false;
+
+        var rows = objects.ArrayAt(mappingAt.Value + rowsOffset, 64);
+        if (rows == null || rows.Count == 0) return false;
+
+        var simpleLayout = LayoutWalker.Active(
+            HavokClassTypes.Shipped, "hkaSkeletonMapperDataSimpleMapping", objects.PointerWidth);
+        if (simpleLayout?.OffsetOf("boneA") is not { } boneAOffset ||
+            simpleLayout.OffsetOf("boneB") is not { } boneBOffset ||
+            simpleLayout.OffsetOf("aFromBTransform") is not { } transformOffset)
+            return false;
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            int row = rows.At + i * 64;
+            int? boneA = objects.ReadNarrowAt(row + boneAOffset, 2);
+            int? boneB = objects.ReadNarrowAt(row + boneBOffset, 2);
+            float[]? values = objects.ReadFloatsAt(row + transformOffset, 12);
+            if (boneA == null || boneB == null || values == null) return false;
+
+            mappings.Add(new HavokRagdollMapping(
+                unchecked((short)boneA.Value),
+                unchecked((short)boneB.Value),
+                new Vector3(values[0], values[1], values[2]),
+                Quaternion.Normalize(new Quaternion(values[4], values[5], values[6], values[7]))));
+        }
+
+        if (skeletonA.ClassName != "hkaSkeleton") return false;
+        animation = Skeleton(objects, skeletonA);
+        return animation != null;
     }
 
     // The physics skeleton hknpRagdollData references, read through the measured type table

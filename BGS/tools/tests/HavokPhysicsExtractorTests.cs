@@ -421,4 +421,209 @@ public sealed class HavokPhysicsExtractorTests
                     MathF.Abs(expected.W - actual.W) <= tolerance,
                     $"expected {expected}, measured {actual}");
     }
+
+    [Fact]
+    public void AnimationToRagdollMapperIsMeasured()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        Assert.Equal(18, model!.Mappings.Count);
+
+        // The mapper is animation (skeletonA = Root, 95 bones) -> ragdoll
+        // (skeletonB = the ragdoll skeleton hknpRagdollData references).
+        var animation = model.AnimationSkeleton;
+        Assert.NotNull(animation);
+        Assert.Equal("Root", animation!.Name);
+        Assert.Equal(95, animation.BoneNames.Count);
+        Assert.Equal(model.Skeleton!.BoneNames.Count, model.Skeleton.BoneNames.Count);
+
+        // Every physics bone is covered exactly once by the measured mappings.
+        var covered = model.Mappings.Select(m => m.BoneB).OrderBy(b => b).ToArray();
+        Assert.Equal(Enumerable.Range(0, model.Skeleton.BoneNames.Count), covered);
+
+        // Pin individual mappings to the byte-backed XML values: the aFromB translation is
+        // the first three floats of the measured hkQsTransform, the rotation the quaternion.
+        var root = model.Mappings[0];
+        Assert.Equal(1, root.BoneA);
+        Assert.Equal(0, root.BoneB);
+
+        var thigh = model.Mappings[1];
+        Assert.Equal(3, thigh.BoneA);
+        Assert.Equal(1, thigh.BoneB);
+        AssertNear(new Vector3(7.62939453125E-6f, -9.5367431640625E-7f, -3.62396240234375E-5f),
+                   thigh.AFromBTranslation, 1e-6f);
+        AssertNear(new Quaternion(-3.6200135946273804E-4f, -0.006596028804779053f,
+                                  5.562007427215576E-4f, 0.9999775886535645f),
+                   thigh.AFromBRotation, 1e-6f);
+
+        var forearm = model.Mappings[17];
+        Assert.Equal(26, forearm.BoneA);
+        Assert.Equal(17, forearm.BoneB);
+    }
+
+    // Compose a skeleton's local reference pose down its parent chain into world frames, in
+    // the same space the app's AnimationPose produces (position + rotation per bone).
+    private static HavokBoneFrame[] WorldFrames(HavokRagdollSkeleton skeleton)
+    {
+        var frames = new HavokBoneFrame[skeleton.BoneNames.Count];
+        for (int i = 0; i < skeleton.BoneNames.Count; i++)
+        {
+            var local = skeleton.ReferencePose[i];
+            int parent = skeleton.ParentIndices[i];
+            if (parent >= 0 && parent < i)
+                frames[i] = new HavokBoneFrame(
+                    frames[parent].Position + Vector3.Transform(local.Translation, frames[parent].Rotation),
+                    Quaternion.Normalize(frames[parent].Rotation * local.Rotation));
+            else
+                frames[i] = new HavokBoneFrame(local.Translation, local.Rotation);
+        }
+        return frames;
+    }
+
+    [Fact]
+    public void MappingTheAnimationReferencePoseYieldsTheRagdollReference()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+        Assert.True(model!.Mappings.Count > 0);
+        Assert.NotNull(model.AnimationSkeleton);
+
+        var mapped = model.MapPose(WorldFrames(model.AnimationSkeleton!));
+        Assert.NotNull(mapped);
+        Assert.Equal(model.Skeleton!.BoneNames.Count, mapped!.Length);
+
+        // The measured composition worldB = worldA * aFromBTransform, fed with the animation
+        // reference pose, must land on the ragdoll's own measured reference world: two
+        // independent measured sources for the same file-space placement.
+        var expected = model.Skeleton.WorldReferencePositions();
+        var expectedRotations = WorldRotations(model.Skeleton);
+        for (int i = 0; i < expected.Count; i++)
+        {
+            Assert.True(Vector3.Distance(expected[i], mapped[i].Position) <= 5e-3f,
+                        $"bone {i} mapped {mapped[i].Position} vs reference {expected[i]}");
+            Assert.True(MathF.Abs(Quaternion.Dot(Quaternion.Normalize(mapped[i].Rotation),
+                                                 expectedRotations[i])) >= 0.999f,
+                        $"bone {i} mapped rotation {mapped[i].Rotation} vs {expectedRotations[i]}");
+        }
+    }
+
+    private static Quaternion[] WorldRotations(HavokRagdollSkeleton skeleton)
+    {
+        var rotations = new Quaternion[skeleton.BoneNames.Count];
+        for (int i = 0; i < skeleton.BoneNames.Count; i++)
+        {
+            int parent = skeleton.ParentIndices[i];
+            rotations[i] = parent >= 0 && parent < i
+                ? Quaternion.Normalize(rotations[parent] * skeleton.ReferencePose[i].Rotation)
+                : skeleton.ReferencePose[i].Rotation;
+        }
+        return rotations;
+    }
+
+    [Fact]
+    public void MapPoseFollowsAWholeRagdollTranslation()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+        Assert.True(model!.Mappings.Count > 0);
+        Assert.NotNull(model.AnimationSkeleton);
+
+        // worldB = worldA * aFromB is equivariant under a rigid translation of the whole
+        // animation pose, so moving every animation bone by a constant shift must move every
+        // mapped ragdoll bone by exactly that shift. This pins the composition orientation:
+        // the aFromB offset rides along with the source frame.
+        var reference = model.MapPose(WorldFrames(model.AnimationSkeleton!))!;
+        var offset = new Vector3(10f, -3f, 4.5f);
+
+        var shifted = WorldFrames(model.AnimationSkeleton!);
+        for (int i = 0; i < shifted.Length; i++)
+            shifted[i] = new HavokBoneFrame(shifted[i].Position + offset, shifted[i].Rotation);
+
+        var moved = model.MapPose(shifted)!;
+        for (int i = 0; i < moved.Length; i++)
+            Assert.True(Vector3.Distance(reference[i].Position + offset, moved[i].Position) <= 1e-3f,
+                        $"bone {i} did not ride the {offset} shift");
+    }
+
+    [Fact]
+    public void MapPoseFollowsAWholeRagdollRotation()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+        Assert.True(model!.Mappings.Count > 0);
+        Assert.NotNull(model.AnimationSkeleton);
+
+        // Rotating every animation bone about the world origin by a quarter turn must rotate
+        // every mapped ragdoll frame by the same quarter turn: the composition is
+        // rotation-equivariant too, so the ragdoll follows the animated character's turn.
+        var reference = model.MapPose(WorldFrames(model.AnimationSkeleton!))!;
+        var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2);
+
+        var rotated = WorldFrames(model.AnimationSkeleton!);
+        for (int i = 0; i < rotated.Length; i++)
+            rotated[i] = new HavokBoneFrame(Vector3.Transform(rotated[i].Position, turn),
+                                            Quaternion.Normalize(turn * rotated[i].Rotation));
+
+        var moved = model.MapPose(rotated)!;
+        for (int i = 0; i < moved.Length; i++)
+        {
+            Assert.True(Vector3.Distance(Vector3.Transform(reference[i].Position, turn),
+                                         moved[i].Position) <= 2e-3f,
+                        $"bone {i} did not follow the turn");
+            Assert.True(MathF.Abs(Quaternion.Dot(Quaternion.Normalize(turn * reference[i].Rotation),
+                                                 Quaternion.Normalize(moved[i].Rotation))) >= 0.999f,
+                        $"bone {i} rotation did not follow the turn");
+        }
+    }
+
+    [Fact]
+    public void MapPoseFailsClosedWithoutAUsableMapper()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        Assert.Null(model!.MapPose(null));
+        Assert.Null(model.MapPose(Array.Empty<HavokBoneFrame>()));
+
+        // A truncated pose cannot drive every mapping's boneA, so nothing is posed.
+        Assert.Null(model.MapPose(new[] { new HavokBoneFrame(Vector3.Zero, Quaternion.Identity) }));
+
+        var bare = new HavokRagdollModel { Skeleton = new HavokRagdollSkeleton() };
+        Assert.Null(bare.MapPose(new[] { new HavokBoneFrame(Vector3.Zero, Quaternion.Identity) }));
+    }
+
+    [Fact]
+    public void ValidatorFlagsBrokenAnimationMappings()
+    {
+        var model = new HavokRagdollModel
+        {
+            Skeleton = new HavokRagdollSkeleton { Name = "physics" },
+            AnimationSkeleton = new HavokRagdollSkeleton { Name = "animation" },
+        };
+        model.Skeleton!.BoneNames.AddRange(new[] { "A", "B" });
+        model.Skeleton.ParentIndices.AddRange(new[] { -1, 0 });
+        model.Skeleton.ReferencePose.Add(new HkxBonePose(new Vector3(0, 0, 0), Quaternion.Identity, Vector3.One));
+        model.Skeleton.ReferencePose.Add(new HkxBonePose(new Vector3(0, 0, 1), Quaternion.Identity, Vector3.One));
+        model.AnimationSkeleton!.BoneNames.AddRange(new[] { "X" });
+        model.AnimationSkeleton.ParentIndices.Add(-1);
+        model.AnimationSkeleton.ReferencePose.Add(new HkxBonePose(Vector3.Zero, Quaternion.Identity, Vector3.One));
+
+        model.Mappings.Add(new HavokRagdollMapping(7, 0, Vector3.Zero, Quaternion.Identity));
+
+        var findings = HavokPhysicsValidator.Check(model);
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("outside the animation skeleton"));
+
+        // Covering only bone 0 leaves bone 1 unmapped: flagged as a warning, and the bone
+        // would keep its reference position rather than silently disappearing.
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Warning && f.Message.Contains("not covered"));
+
+        // A second mapping for the same physics bone is an error (never measured so far).
+        model.Mappings.Add(new HavokRagdollMapping(1, 0, Vector3.Zero, Quaternion.Identity));
+        var duplicate = HavokPhysicsValidator.Check(model);
+        Assert.Contains(duplicate, f =>
+            f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("mapped more than once"));
+    }
 }

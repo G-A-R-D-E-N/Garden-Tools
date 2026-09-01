@@ -32,6 +32,12 @@ public class SkeletonView : Control
     private Vector3 _bodyCentre;
     private float _bodyFit = 1;
 
+    // The physics skeleton's world frames posed from the animation currently shown, via the
+    // file's own hkaSkeletonMapper (or null when the file has no mapper or nothing plays);
+    // all physics overlays draw through these when they exist, and otherwise fall back to
+    // the measured static file-space reference.
+    private HavokBoneFrame[]? _physicsPose;
+
     public string HoveredBone { get; private set; } = "";
     public Action<string>? BoneHovered;
 
@@ -49,6 +55,7 @@ public class SkeletonView : Control
     public int DrawnBindings => _bodies?.BoneBindings.Count ?? 0;
     public int DrawnPhysicsBones => _bodies?.Skeleton?.ReferencePose.Count ?? 0;
     public int DrawnFrames => _bodies?.Bodies.Count ?? 0;
+    public int DrawnMappings => _bodies?.Mappings.Count ?? 0;
 
     private int _hoveredBody = -1;
 
@@ -69,12 +76,14 @@ public class SkeletonView : Control
             _centre = pose.Centre;
             _fit = pose.Radius;
         }
+        UpdatePhysicsPose();
         InvalidateVisual();
     }
 
     public void Update(AnimationPose.Pose? pose)
     {
         _pose = pose;
+        UpdatePhysicsPose();
         InvalidateVisual();
     }
 
@@ -92,6 +101,7 @@ public class SkeletonView : Control
         ShowPhysicsSkeleton = false;
         ShowFrames = false;
         _hoveredBody = -1;
+        _physicsPose = null;
         _yaw = 0.6;
         _pitch = 0.25;
         _zoom = 1;
@@ -102,8 +112,40 @@ public class SkeletonView : Control
     public void SetBodies(HavokRagdollModel? model)
     {
         _bodies = model;
+        UpdatePhysicsPose();
         FitBodies();
         InvalidateVisual();
+    }
+
+    // Re-compose the physics skeleton from the animation pose currently shown. When the file
+    // carries a mapper and a pose is present, every physics bone gets a mapped world frame;
+    // otherwise the overlays keep using the measured static reference.
+    private void UpdatePhysicsPose()
+    {
+        if (_bodies == null || _pose == null || _bodies.Mappings.Count == 0)
+        {
+            _physicsPose = null;
+            return;
+        }
+
+        var source = new HavokBoneFrame[_pose.Bones.Count];
+        for (int i = 0; i < _pose.Bones.Count; i++)
+            source[i] = new HavokBoneFrame(_pose.Bones[i].Position, _pose.Bones[i].Rotation);
+
+        _physicsPose = _bodies.MapPose(source);
+    }
+
+    // The world frame a body draws at: its measured cinfo frame, or the pose of the physics
+    // bone it is bound to when the ragdoll follows the animation. A body with no binding to
+    // a posed bone keeps its measured frame.
+    private (Vector3 Position, Quaternion Rotation) BodyFrame(HavokRagdollModel model, HavokRigidBody body)
+    {
+        if (_physicsPose != null)
+            foreach (var binding in model.BoneBindings)
+                if (binding.BodyId == body.Id &&
+                    binding.BoneIndex >= 0 && binding.BoneIndex < _physicsPose.Length)
+                    return (_physicsPose[binding.BoneIndex].Position, _physicsPose[binding.BoneIndex].Rotation);
+        return (body.Position, body.Rotation);
     }
 
     private void FitBodies()
@@ -255,6 +297,7 @@ public class SkeletonView : Control
 
         foreach (var body in model.Bodies)
         {
+            var (position, rotation) = BodyFrame(model, body);
             var shape = model.Shapes.FirstOrDefault(s => s.Id == body.ShapeId);
             if (shape == null) continue;
 
@@ -268,13 +311,13 @@ public class SkeletonView : Control
                     if (from < 0 || from >= shape.Vertices.Count ||
                         to < 0 || to >= shape.Vertices.Count) continue;
 
-                    var a = body.Position + Vector3.Transform(shape.Vertices[from], body.Rotation);
-                    var b = body.Position + Vector3.Transform(shape.Vertices[to], body.Rotation);
+                    var a = position + Vector3.Transform(shape.Vertices[from], rotation);
+                    var b = position + Vector3.Transform(shape.Vertices[to], rotation);
                     ctx.DrawLine(hull, Project(a), Project(b));
                 }
             }
 
-            ctx.DrawEllipse(null, centre, Project(body.Position), 2.2, 2.2);
+            ctx.DrawEllipse(null, centre, Project(position), 2.2, 2.2);
         }
     }
 
@@ -287,17 +330,21 @@ public class SkeletonView : Control
         var chain = new Pen(new SolidColorBrush(Ux.Good, 0.95), 2);
         var marker = new SolidColorBrush(Ux.Good, 0.9);
 
-        var positions = model.Skeleton!.WorldReferencePositions();
+        // Posed by the current animation when a mapper is present; otherwise the measured
+        // reference pose composed down the parent chain.
+        Vector3[] positions = _physicsPose != null
+            ? _physicsPose.Take(model.Skeleton!.BoneNames.Count).Select(p => p.Position).ToArray()
+            : model.Skeleton!.WorldReferencePositions().ToArray();
         var parents = model.Skeleton.ParentIndices;
 
-        for (int i = 0; i < positions.Count && i < parents.Count; i++)
+        for (int i = 0; i < positions.Length && i < parents.Count; i++)
         {
             int parent = parents[i];
-            if (parent >= 0 && parent < positions.Count)
+            if (parent >= 0 && parent < positions.Length)
                 ctx.DrawLine(chain, Project(positions[parent]), Project(positions[i]));
         }
 
-        for (int i = 0; i < positions.Count; i++)
+        for (int i = 0; i < positions.Length; i++)
         {
             bool root = i >= parents.Count || parents[i] < 0;
             double radius = root ? 3.2 : 2.2;
@@ -320,14 +367,18 @@ public class SkeletonView : Control
 
         foreach (var body in model.Bodies)
         {
-            var at = Project(body.Position);
-            ctx.DrawLine(xAxis, at, Project(body.Position + Vector3.Transform(Vector3.UnitX, body.Rotation) * arm));
-            ctx.DrawLine(yAxis, at, Project(body.Position + Vector3.Transform(Vector3.UnitY, body.Rotation) * arm));
-            ctx.DrawLine(zAxis, at, Project(body.Position + Vector3.Transform(Vector3.UnitZ, body.Rotation) * arm));
+            var (position, rotation) = BodyFrame(model, body);
+            var at = Project(position);
+            ctx.DrawLine(xAxis, at, Project(position + Vector3.Transform(Vector3.UnitX, rotation) * arm));
+            ctx.DrawLine(yAxis, at, Project(position + Vector3.Transform(Vector3.UnitY, rotation) * arm));
+            ctx.DrawLine(zAxis, at, Project(position + Vector3.Transform(Vector3.UnitZ, rotation) * arm));
 
             // Zero is the sentinel for "no measured COM" (see HavokRigidBody.CenterOfMass).
+            // The COM is measured in file space, so when the body moves it keeps its
+            // body-relative offset from the measured frame.
             if (body.CenterOfMass == Vector3.Zero) continue;
-            ctx.DrawEllipse(null, comPen, Project(body.CenterOfMass), 2.6, 2.6);
+            var com = position + Vector3.Transform(body.CenterOfMass - body.Position, rotation);
+            ctx.DrawEllipse(null, comPen, Project(com), 2.6, 2.6);
         }
     }
 
@@ -347,7 +398,8 @@ public class SkeletonView : Control
             if (label.Length == 0) continue;
 
             bool hovered = binding.BodyId == _hoveredBody;
-            var at = Project(body.Position);
+            var (position, rotation) = BodyFrame(model, body);
+            var at = Project(position);
             var text = new FormattedText(label, CultureInfo.InvariantCulture,
                                          FlowDirection.LeftToRight, Typeface.Default,
                                          hovered ? 12 : 11,
@@ -371,8 +423,9 @@ public class SkeletonView : Control
                 if (from < 0 || from >= shape.Vertices.Count ||
                     to < 0 || to >= shape.Vertices.Count) continue;
 
-                var a = hoveredBody.Position + Vector3.Transform(shape.Vertices[from], hoveredBody.Rotation);
-                var b = hoveredBody.Position + Vector3.Transform(shape.Vertices[to], hoveredBody.Rotation);
+                var (hoveredPosition, hoveredRotation) = BodyFrame(model, hoveredBody);
+                var a = hoveredPosition + Vector3.Transform(shape.Vertices[from], hoveredRotation);
+                var b = hoveredPosition + Vector3.Transform(shape.Vertices[to], hoveredRotation);
                 ctx.DrawLine(labelPen, Project(a), Project(b));
             }
         }
@@ -392,38 +445,41 @@ public class SkeletonView : Control
             var bodyB = model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyB);
             if (bodyA == null || bodyB == null) continue;
 
-            ctx.DrawLine(link, Project(bodyA.Position), Project(bodyB.Position));
+            var (frameA, rotationA) = BodyFrame(model, bodyA);
+            var (frameB, rotationB) = BodyFrame(model, bodyB);
+
+            ctx.DrawLine(link, Project(frameA), Project(frameB));
 
             if (constraint.FrameA == null) continue;
-            var pivotA = bodyA.Position + Vector3.Transform(Translation(constraint.FrameA), bodyA.Rotation);
+            var pivotA = frameA + Vector3.Transform(Translation(constraint.FrameA), rotationA);
             ctx.DrawEllipse(null, pivot, Project(pivotA), 2.2, 2.2);
 
             Vector3 pivotB = pivotA;
             if (constraint.FrameB != null)
             {
-                pivotB = bodyB.Position + Vector3.Transform(Translation(constraint.FrameB), bodyB.Rotation);
+                pivotB = frameB + Vector3.Transform(Translation(constraint.FrameB), rotationB);
                 ctx.DrawEllipse(null, pivot, Project(pivotB), 2.2, 2.2);
             }
 
             switch (constraint.Kind)
             {
                 case HavokConstraintKind.Ragdoll:
-                    DrawTwist(ctx, arm, constraint, bodyA, pivotA);
-                    DrawCone(ctx, arm, constraint, bodyA, pivotA);
+                    DrawTwist(ctx, arm, constraint, rotationA, pivotA);
+                    DrawCone(ctx, arm, constraint, rotationA, pivotA);
                     break;
                 case HavokConstraintKind.LimitedHinge:
-                    DrawHinge(ctx, arm, constraint, bodyA, pivotB, pivotA);
+                    DrawHinge(ctx, arm, constraint, rotationA, pivotB, pivotA);
                     break;
             }
         }
     }
 
     private void DrawTwist(DrawingContext ctx, Pen pen, HavokConstraint constraint,
-                                  HavokRigidBody bodyA, Vector3 pivotA)
+                                  Quaternion rotationA, Vector3 pivotA)
     {
         if (constraint.FrameA == null) return;
-        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistAxis, bodyA.Rotation));
-        var reference = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistRefAxis, bodyA.Rotation));
+        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistAxis, rotationA));
+        var reference = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistRefAxis, rotationA));
 
         ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
 
@@ -437,10 +493,10 @@ public class SkeletonView : Control
     }
 
     private void DrawCone(DrawingContext ctx, Pen pen, HavokConstraint constraint,
-                                 HavokRigidBody bodyA, Vector3 pivotA)
+                                 Quaternion rotationA, Vector3 pivotA)
     {
         if (constraint.FrameA == null || constraint.ConeMaxAngle is not float coneMax) return;
-        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.ConeTwistAxis, bodyA.Rotation));
+        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.ConeTwistAxis, rotationA));
 
         ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
 
@@ -463,10 +519,10 @@ public class SkeletonView : Control
     }
 
     private void DrawHinge(DrawingContext ctx, Pen pen, HavokConstraint constraint,
-                                  HavokRigidBody bodyA, Vector3 pivotB, Vector3 pivotA)
+                                  Quaternion rotationA, Vector3 pivotB, Vector3 pivotA)
     {
         if (constraint.FrameA == null) return;
-        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.LimitAxis, bodyA.Rotation));
+        var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.LimitAxis, rotationA));
 
         ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
 
@@ -556,7 +612,7 @@ public class SkeletonView : Control
 
         foreach (var body in _bodies.Bodies)
         {
-            var p = Project(body.Position);
+            var p = Project(BodyFrame(_bodies, body).Position);
             double d = (p.X - at.X) * (p.X - at.X) + (p.Y - at.Y) * (p.Y - at.Y);
             if (d >= nearest) continue;
             nearest = d;
