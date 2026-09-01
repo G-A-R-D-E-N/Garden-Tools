@@ -22,6 +22,7 @@ public class SkeletonView : Control
     private double _zoom = 1;
     private Point _pan;
     private Point _lastPointer;
+    private Point _pressAt;
     private bool _orbiting;
     private bool _panning;
 
@@ -84,9 +85,11 @@ public class SkeletonView : Control
 
     private int _hoveredBody = -1;
     private int _hoveredConstraint = -1;
+    private int _pinnedConstraint = -1;
 
     public int HoveredConstraintId => _hoveredConstraint;
     public int HoveredBodyId => _hoveredBody;
+    public int PinnedConstraintId => _pinnedConstraint;
 
     public void HoverBodyForTest(int bodyId)
     {
@@ -99,6 +102,18 @@ public class SkeletonView : Control
         _hoveredConstraint = constraintId;
         InvalidateVisual();
     }
+
+    public void PinConstraintForTest(int constraintId)
+    {
+        _pinnedConstraint = constraintId;
+        InvalidateVisual();
+    }
+
+    // Click-to-pin bookkeeping: clicking the pinned constraint unpins it, clicking another
+    // one moves the pin, and a click that hits no constraint (empty space or a body) clears
+    // the pin - the usual selection semantics.
+    public static int PinnedAfterClick(int currentlyPinned, int picked) =>
+        picked < 0 ? -1 : picked == currentlyPinned ? -1 : picked;
 
     private (Vector3 A, Vector3 B)[]? _mesh;
 
@@ -146,6 +161,7 @@ public class SkeletonView : Control
         EngineeringFrames = false;
         _hoveredBody = -1;
         _hoveredConstraint = -1;
+        _pinnedConstraint = -1;
         _physicsPose = null;
         _yaw = 0.6;
         _pitch = 0.25;
@@ -343,8 +359,14 @@ public class SkeletonView : Control
         if (ShowFrames && _bodies is { Bodies.Count: > 0 })
             DrawFrames(ctx, _bodies);
 
-        if (_hoveredConstraint >= 0 && ShowConstraints && _bodies is { Constraints.Count: > 0 })
-            DrawConstraintLabel(ctx, _bodies);
+        // Pinned constraints keep their label without hovering; hovering another constraint
+        // while one is pinned shows both, so limits can be compared side by side.
+        if (ShowConstraints && _bodies is { Constraints.Count: > 0 })
+        {
+            if (_pinnedConstraint >= 0) DrawConstraintLabel(ctx, _bodies, _pinnedConstraint);
+            if (_hoveredConstraint >= 0 && _hoveredConstraint != _pinnedConstraint)
+                DrawConstraintLabel(ctx, _bodies, _hoveredConstraint);
+        }
 
         if (HoveredBone.Length > 0)
         {
@@ -581,7 +603,7 @@ public class SkeletonView : Control
 
         foreach (var constraint in model.Constraints)
         {
-            bool hovered = constraint.Id == _hoveredConstraint;
+            bool hovered = constraint.Id == _hoveredConstraint || constraint.Id == _pinnedConstraint;
             var linkPen = hovered ? linkHot : link;
             var pivotPen = hovered ? pivotHot : pivot;
             var armPen = hovered ? armHot : arm;
@@ -619,11 +641,12 @@ public class SkeletonView : Control
         }
     }
 
-    // The hovered constraint's measured-limits label, drawn above everything else near the
-    // midpoint of its body link so the association reads at a glance.
-    private void DrawConstraintLabel(DrawingContext ctx, HavokRagdollModel model)
+    // A constraint's measured-limits label, drawn above everything else near the midpoint
+    // of its body link so the association reads at a glance - for the hovered constraint
+    // and for the click-pinned one (which stays without hovering).
+    private void DrawConstraintLabel(DrawingContext ctx, HavokRagdollModel model, int constraintId)
     {
-        var constraint = model.Constraints.FirstOrDefault(c => c.Id == _hoveredConstraint);
+        var constraint = model.Constraints.FirstOrDefault(c => c.Id == constraintId);
         var bodyA = constraint != null ? model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyA) : null;
         var bodyB = constraint != null ? model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyB) : null;
         if (constraint == null || bodyA == null || bodyB == null) return;
@@ -732,6 +755,7 @@ public class SkeletonView : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         _lastPointer = e.GetPosition(this);
+        _pressAt = _lastPointer;
         var props = e.GetCurrentPoint(this).Properties;
         _panning = props.IsMiddleButtonPressed || props.IsRightButtonPressed;
         _orbiting = props.IsLeftButtonPressed;
@@ -794,6 +818,15 @@ public class SkeletonView : Control
     // space, within the same 12px reach the body labels use. Off when constraints are hidden.
     private void NameConstraintUnder(Point at)
     {
+        int found = PickConstraintUnder(at);
+        if (!ShowConstraints && _pinnedConstraint >= 0) _pinnedConstraint = -1;
+        if (found == _hoveredConstraint) return;
+        _hoveredConstraint = found;
+        InvalidateVisual();
+    }
+
+    private int PickConstraintUnder(Point at)
+    {
         int found = -1;
         if (ShowConstraints && _bodies != null && _bodies.Constraints.Count > 0)
         {
@@ -812,10 +845,7 @@ public class SkeletonView : Control
                 found = constraint.Id;
             }
         }
-
-        if (found == _hoveredConstraint) return;
-        _hoveredConstraint = found;
-        InvalidateVisual();
+        return found;
     }
 
     private static double DistanceSquaredToSegment(Point p, Point a, Point b)
@@ -838,8 +868,25 @@ public class SkeletonView : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        bool wasOrbiting = _orbiting;
         _orbiting = _panning = false;
         e.Pointer.Capture(null);
+
+        // A click - a left press and release without dragging - toggles the constraint
+        // pin: click a constraint to keep its limits label visible, click it again or
+        // click elsewhere to release it. Dragging keeps working as orbit.
+        var released = e.GetPosition(this);
+        double dx = released.X - _pressAt.X;
+        double dy = released.Y - _pressAt.Y;
+        if (wasOrbiting && dx * dx + dy * dy < 5 * 5)
+        {
+            int next = PinnedAfterClick(_pinnedConstraint, PickConstraintUnder(released));
+            if (next != _pinnedConstraint)
+            {
+                _pinnedConstraint = next;
+                InvalidateVisual();
+            }
+        }
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)

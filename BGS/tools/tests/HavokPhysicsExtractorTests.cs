@@ -596,6 +596,38 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void ConstraintPinCyclesOnClick()
+    {
+        // Click a constraint to pin it; click it again to release; click another to move
+        // the pin; click with no constraint under the cursor to clear it.
+        Assert.Equal(0, SkeletonView.PinnedAfterClick(-1, 0));
+        Assert.Equal(2, SkeletonView.PinnedAfterClick(0, 2));
+        Assert.Equal(-1, SkeletonView.PinnedAfterClick(0, 0));
+        Assert.Equal(-1, SkeletonView.PinnedAfterClick(0, -1));
+        Assert.Equal(-1, SkeletonView.PinnedAfterClick(-1, -1));
+    }
+
+    [Fact]
+    public void ConstraintPinIsIndependentOfHoverAndClearsOnReset()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // A pinned constraint keeps its label without any hover (HoveredConstraintId stays
+        // -1), and the pin clears on reset like every other transient view state.
+        var view = new SkeletonView();
+        view.SetBodies(model);
+        view.ShowConstraints = true;
+        view.PinConstraintForTest(0);
+        Assert.Equal(0, view.PinnedConstraintId);
+        Assert.Equal(-1, view.HoveredConstraintId);
+
+        view.Reset();
+        Assert.Equal(-1, view.PinnedConstraintId);
+        Assert.Equal(-1, view.HoveredConstraintId);
+    }
+
+    [Fact]
     public void EngineeringFrameModeClearsWithTheView()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
