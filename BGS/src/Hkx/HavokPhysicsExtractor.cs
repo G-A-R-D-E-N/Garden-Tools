@@ -49,9 +49,11 @@ public static class HavokPhysicsExtractor
             if (Shape(objects, instance) is { } shape)
                 model.Shapes.Add(shape);
 
+        ragdoll.StructLists.TryGetValue("motionCinfos", out var motions);
+
         if (ragdoll.StructLists.TryGetValue("bodyCinfos", out var cinfos))
             for (int i = 0; i < cinfos.Count; i++)
-                if (Body(graph, i, cinfos[i]) is { } body)
+                if (Body(graph, i, cinfos[i], motions) is { } body)
                     model.Bodies.Add(body);
 
         if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
@@ -203,7 +205,8 @@ public static class HavokPhysicsExtractor
         return values;
     }
 
-    private static HavokRigidBody? Body(BehaviourGraphModel graph, int id, IReadOnlyDictionary<string, string> cinfo)
+    private static HavokRigidBody? Body(BehaviourGraphModel graph, int id, IReadOnlyDictionary<string, string> cinfo,
+                                       IReadOnlyList<IReadOnlyDictionary<string, string>>? motions)
     {
         string position = cinfo.TryGetValue("position", out var p) ? p : "";
         string orientation = cinfo.TryGetValue("orientation", out var o) ? o : "";
@@ -213,6 +216,17 @@ public static class HavokPhysicsExtractor
             ? RefId(shape)
             : -1;
 
+        // The body cinfo carries a motion id into hknpRagdollData.motionCinfos, whose
+        // centerOfMassWorld is the measured world-space center of mass. When the file has no
+        // motion cinfo (or the id does not resolve) the body keeps the Zero default rather
+        // than inventing a value.
+        Vector3 com = Vector3.Zero;
+        int motionId = Int(cinfo, "motionId");
+        if (motions != null && motionId >= 0 && motionId < motions.Count &&
+            motions[motionId].TryGetValue("centerOfMassWorld", out var comText) &&
+            Vector4(comText, out var comVec))
+            com = new Vector3(comVec.X, comVec.Y, comVec.Z);
+
         return new HavokRigidBody
         {
             Id = id,
@@ -220,6 +234,7 @@ public static class HavokPhysicsExtractor
             ShapeId = shapeId,
             Position = new Vector3(frame.X, frame.Y, frame.Z),
             Rotation = new Quaternion(quat.X, quat.Y, quat.Z, quat.W),
+            CenterOfMass = com,
         };
     }
 

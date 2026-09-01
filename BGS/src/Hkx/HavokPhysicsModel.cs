@@ -39,6 +39,11 @@ public sealed class HavokRigidBody
     public int ShapeId { get; init; }
     public int BoneIndex { get; init; } = -1;
     public float Mass { get; init; }
+
+    // World-space center of mass, measured from the body's hknpMotionCinfo
+    // (motionCinfos[motionId].centerOfMassWorld). Zero when the file carries no measured COM
+    // for the body, so renderers can tell a real origin from a missing one. Legacy hkp
+    // bodies express the same idea through CenterOfMass/Rotation.
     public Vector3 CenterOfMass { get; init; }
 
     // The body frame origin (hknp body cinfo position) and orientation (hknp body cinfo

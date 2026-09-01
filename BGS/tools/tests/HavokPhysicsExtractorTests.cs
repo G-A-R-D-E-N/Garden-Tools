@@ -226,6 +226,52 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void MotionCinfosProvideMeasuredWorldCenterOfMass()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        var com = Assert.Single(model!.Bodies, b => b.Id == 0);
+        AssertNear(new Vector3(0.020323412492871284f, -0.0491427443921566f, 69.19477844238281f),
+                   com.CenterOfMass, 1e-3f);
+
+        // The motion id mapping is not identity in this file (R Thigh body 2 uses motion 4,
+        // L Calf body 4 uses motion 2), so these pin both the lookup and the values.
+        var leftThigh = Assert.Single(model.Bodies, b => b.Id == 1);
+        AssertNear(new Vector3(-8.432622909545898f, -0.5323612093925476f, 53.22739028930664f),
+                   leftThigh.CenterOfMass, 1e-3f);
+
+        var rightThigh = Assert.Single(model.Bodies, b => b.Id == 2);
+        AssertNear(new Vector3(8.431289672851562f, -0.5326367616653442f, 53.22724914550781f),
+                   rightThigh.CenterOfMass, 1e-3f);
+
+        var leftCalf = Assert.Single(model.Bodies, b => b.Id == 4);
+        AssertNear(new Vector3(-11.501089096069336f, -3.5246798992156982f, 21.728782653808594f),
+                   leftCalf.CenterOfMass, 1e-3f);
+    }
+
+    [Fact]
+    public void EveryBodyCarriesAFiniteMeasuredCom()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        Assert.All(model!.Bodies, body =>
+        {
+            // The fixture measures a center of mass for every body; zero is the sentinel
+            // for "no measured COM", so a non-zero finite value proves the read happened.
+            Assert.NotEqual(Vector3.Zero, body.CenterOfMass);
+            Assert.True(Finite(body.CenterOfMass), $"{body.Name} center of mass is not finite");
+        });
+
+        // The COM is genuinely the motion cinfo value, not a copy of the body position:
+        // the L Thigh body sits at z 68.91 while its measured COM is at z 53.23, down the
+        // capsule toward the knee.
+        var thigh = Assert.Single(model.Bodies, b => b.Id == 1);
+        Assert.True(MathF.Abs(thigh.CenterOfMass.Z - thigh.Position.Z) > 10f);
+    }
+
+    [Fact]
     public void PhysicsSkeletonWorldPoseAgreesWithBodyPositions()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));

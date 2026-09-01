@@ -40,6 +40,7 @@ public class SkeletonView : Control
     public bool ShowConstraints { get; set; }
     public bool ShowBindings { get; set; }
     public bool ShowPhysicsSkeleton { get; set; }
+    public bool ShowFrames { get; set; }
 
     public int DrawnBones => _pose?.Bones.Count ?? 0;
     public int DrawnEdges => _mesh?.Length ?? 0;
@@ -47,6 +48,7 @@ public class SkeletonView : Control
     public int DrawnConstraints => _bodies?.Constraints.Count ?? 0;
     public int DrawnBindings => _bodies?.BoneBindings.Count ?? 0;
     public int DrawnPhysicsBones => _bodies?.Skeleton?.ReferencePose.Count ?? 0;
+    public int DrawnFrames => _bodies?.Bodies.Count ?? 0;
 
     private int _hoveredBody = -1;
 
@@ -88,6 +90,7 @@ public class SkeletonView : Control
         ShowConstraints = false;
         ShowBindings = false;
         ShowPhysicsSkeleton = false;
+        ShowFrames = false;
         _hoveredBody = -1;
         _yaw = 0.6;
         _pitch = 0.25;
@@ -234,6 +237,9 @@ public class SkeletonView : Control
 
         if (physicsSkeleton) DrawPhysicsSkeleton(ctx, _bodies!);
 
+        if (ShowFrames && _bodies is { Bodies.Count: > 0 })
+            DrawFrames(ctx, _bodies);
+
         if (HoveredBone.Length > 0)
         {
             var label = new FormattedText(HoveredBone, CultureInfo.InvariantCulture,
@@ -296,6 +302,32 @@ public class SkeletonView : Control
             bool root = i >= parents.Count || parents[i] < 0;
             double radius = root ? 3.2 : 2.2;
             ctx.DrawEllipse(marker, null, Project(positions[i]), radius, radius);
+        }
+    }
+
+    // Each body's measured local frame (body cinfo position + orientation) drawn as a
+    // conventional red/green/blue axis triad, plus a marker at the measured world-space
+    // center of mass (motionCinfos centerOfMassWorld). The triad length scales with the
+    // model so it stays readable across files.
+    private void DrawFrames(DrawingContext ctx, HavokRagdollModel model)
+    {
+        var xAxis = new Pen(new SolidColorBrush(Ux.Bad, 0.95), 1.6);
+        var yAxis = new Pen(new SolidColorBrush(Ux.Good, 0.95), 1.6);
+        var zAxis = new Pen(new SolidColorBrush(Ux.Accent, 0.95), 1.6);
+        var comPen = new Pen(new SolidColorBrush(Ux.TextTitle, 0.9), 1.2);
+
+        float arm = Math.Max(0.5f, _bodyFit * 0.06f);
+
+        foreach (var body in model.Bodies)
+        {
+            var at = Project(body.Position);
+            ctx.DrawLine(xAxis, at, Project(body.Position + Vector3.Transform(Vector3.UnitX, body.Rotation) * arm));
+            ctx.DrawLine(yAxis, at, Project(body.Position + Vector3.Transform(Vector3.UnitY, body.Rotation) * arm));
+            ctx.DrawLine(zAxis, at, Project(body.Position + Vector3.Transform(Vector3.UnitZ, body.Rotation) * arm));
+
+            // Zero is the sentinel for "no measured COM" (see HavokRigidBody.CenterOfMass).
+            if (body.CenterOfMass == Vector3.Zero) continue;
+            ctx.DrawEllipse(null, comPen, Project(body.CenterOfMass), 2.6, 2.6);
         }
     }
 
