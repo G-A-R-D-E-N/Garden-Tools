@@ -39,12 +39,14 @@ public class SkeletonView : Control
     public bool ShowBodies { get; set; }
     public bool ShowConstraints { get; set; }
     public bool ShowBindings { get; set; }
+    public bool ShowPhysicsSkeleton { get; set; }
 
     public int DrawnBones => _pose?.Bones.Count ?? 0;
     public int DrawnEdges => _mesh?.Length ?? 0;
     public int DrawnBodies => _bodies?.Bodies.Count ?? 0;
     public int DrawnConstraints => _bodies?.Constraints.Count ?? 0;
     public int DrawnBindings => _bodies?.BoneBindings.Count ?? 0;
+    public int DrawnPhysicsBones => _bodies?.Skeleton?.ReferencePose.Count ?? 0;
 
     private int _hoveredBody = -1;
 
@@ -85,6 +87,7 @@ public class SkeletonView : Control
         ShowBodies = false;
         ShowConstraints = false;
         ShowBindings = false;
+        ShowPhysicsSkeleton = false;
         _hoveredBody = -1;
         _yaw = 0.6;
         _pitch = 0.25;
@@ -168,7 +171,9 @@ public class SkeletonView : Control
 
         var pose = _pose;
         bool bodies = ShowBodies && _bodies != null && _bodies.Bodies.Count > 0;
-        if ((pose == null || pose.Bones.Count == 0) && !bodies)
+        bool physicsSkeleton = ShowPhysicsSkeleton &&
+                               _bodies is { Skeleton: { ParentIndices.Count: > 0, ReferencePose.Count: > 0 } };
+        if ((pose == null || pose.Bones.Count == 0) && !bodies && !physicsSkeleton)
         {
             var empty = new FormattedText("No pose to draw.", CultureInfo.InvariantCulture,
                                           FlowDirection.LeftToRight, Typeface.Default, 12, Ux.MutedBrush);
@@ -227,6 +232,8 @@ public class SkeletonView : Control
         if (ShowBindings && _bodies is { BoneBindings.Count: > 0, Skeleton: { BoneNames.Count: > 0 } })
             DrawBindings(ctx, _bodies);
 
+        if (physicsSkeleton) DrawPhysicsSkeleton(ctx, _bodies!);
+
         if (HoveredBone.Length > 0)
         {
             var label = new FormattedText(HoveredBone, CultureInfo.InvariantCulture,
@@ -262,6 +269,33 @@ public class SkeletonView : Control
             }
 
             ctx.DrawEllipse(null, centre, Project(body.Position), 2.2, 2.2);
+        }
+    }
+
+    // The physics skeleton hknpRagdollData carries, drawn as its own bone chain: the
+    // reference pose composed down the parent indices into file space, in green so it reads
+    // apart from the animation skeleton (gray), the bodies (blue) and the constraints
+    // (amber). Root bones get a slightly larger marker.
+    private void DrawPhysicsSkeleton(DrawingContext ctx, HavokRagdollModel model)
+    {
+        var chain = new Pen(new SolidColorBrush(Ux.Good, 0.95), 2);
+        var marker = new SolidColorBrush(Ux.Good, 0.9);
+
+        var positions = model.Skeleton!.WorldReferencePositions();
+        var parents = model.Skeleton.ParentIndices;
+
+        for (int i = 0; i < positions.Count && i < parents.Count; i++)
+        {
+            int parent = parents[i];
+            if (parent >= 0 && parent < positions.Count)
+                ctx.DrawLine(chain, Project(positions[parent]), Project(positions[i]));
+        }
+
+        for (int i = 0; i < positions.Count; i++)
+        {
+            bool root = i >= parents.Count || parents[i] < 0;
+            double radius = root ? 3.2 : 2.2;
+            ctx.DrawEllipse(marker, null, Project(positions[i]), radius, radius);
         }
     }
 

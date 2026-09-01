@@ -118,9 +118,12 @@ public static class HavokPhysicsExtractor
             objects.ArrayAt(poseAt, 48) is { } poses)
             for (int i = 0; i < poses.Count; i++)
             {
-                float[]? row = objects.ReadFloatsAt(poses.At + i * 48, 4);
+                float[]? row = objects.ReadFloatsAt(poses.At + i * 48, 12);
                 if (row == null) return null;
-                skeleton.ReferencePositions.Add(new Vector3(row[0], row[1], row[2]));
+                skeleton.ReferencePose.Add(new HkxBonePose(
+                    new Vector3(row[0], row[1], row[2]),
+                    new Quaternion(row[4], row[5], row[6], row[7]),
+                    new Vector3(row[8], row[9], row[10])));
             }
 
         return skeleton;
