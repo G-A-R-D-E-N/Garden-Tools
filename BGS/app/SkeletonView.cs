@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -26,13 +27,19 @@ public class SkeletonView : Control
     private double _fit = 1;
     private Vector3 _centre;
 
+    private HavokRagdollModel? _bodies;
+    private Vector3 _bodyCentre;
+    private float _bodyFit = 1;
+
     public string HoveredBone { get; private set; } = "";
     public Action<string>? BoneHovered;
 
     public bool ShowReference { get; set; }
+    public bool ShowBodies { get; set; }
 
     public int DrawnBones => _pose?.Bones.Count ?? 0;
     public int DrawnEdges => _mesh?.Length ?? 0;
+    public int DrawnBodies => _bodies?.Bodies.Count ?? 0;
 
     private (Vector3 A, Vector3 B)[]? _mesh;
 
@@ -65,11 +72,56 @@ public class SkeletonView : Control
         _pose = null;
         _reference = null;
         _mesh = null;
+        _bodies = null;
+        _bodyCentre = Vector3.Zero;
+        _bodyFit = 1;
+        ShowBodies = false;
         _yaw = 0.6;
         _pitch = 0.25;
         _zoom = 1;
         _pan = default;
         InvalidateVisual();
+    }
+
+    public void SetBodies(HavokRagdollModel? model)
+    {
+        _bodies = model;
+        FitBodies();
+        InvalidateVisual();
+    }
+
+    private void FitBodies()
+    {
+        _bodyCentre = Vector3.Zero;
+        _bodyFit = 1;
+        if (_bodies == null || _bodies.Bodies.Count == 0) return;
+
+        var min = new Vector3(float.MaxValue);
+        var max = new Vector3(float.MinValue);
+        bool any = false;
+
+        foreach (var body in _bodies.Bodies)
+        {
+            var shape = _bodies.Shapes.FirstOrDefault(s => s.Id == body.ShapeId);
+            if (shape != null)
+                foreach (var vertex in shape.Vertices)
+                {
+                    var world = body.Position + Vector3.Transform(vertex, body.Rotation);
+                    min = Vector3.Min(min, world);
+                    max = Vector3.Max(max, world);
+                    any = true;
+                }
+
+            min = Vector3.Min(min, body.Position);
+            max = Vector3.Max(max, body.Position);
+            any = true;
+        }
+
+        if (!any) return;
+
+        _bodyCentre = (min + max) * 0.5f;
+        var size = max - min;
+        _bodyFit = Math.Max(0.001f, Math.Max(size.X, Math.Max(size.Y, size.Z)) * 0.5f);
     }
 
     public void Frame()
@@ -105,12 +157,20 @@ public class SkeletonView : Control
         ctx.FillRectangle(Ux.CardBrush, new Rect(Bounds.Size));
 
         var pose = _pose;
-        if (pose == null || pose.Bones.Count == 0)
+        bool bodies = ShowBodies && _bodies != null && _bodies.Bodies.Count > 0;
+        if ((pose == null || pose.Bones.Count == 0) && !bodies)
         {
             var empty = new FormattedText("No pose to draw.", CultureInfo.InvariantCulture,
                                           FlowDirection.LeftToRight, Typeface.Default, 12, Ux.MutedBrush);
             ctx.DrawText(empty, new Point(14, 14));
             return;
+        }
+
+        if (pose == null || pose.Bones.Count == 0)
+        {
+            // A physics-only file can be framed by its rigid-body hull alone.
+            _centre = _bodyCentre;
+            _fit = _bodyFit;
         }
 
         DrawGround(ctx);
@@ -136,6 +196,8 @@ public class SkeletonView : Control
             ctx.DrawGeometry(null, new Pen(new SolidColorBrush(Ux.TextMeta, 0.28), 0.7), skin);
         }
 
+        if (bodies) DrawBodies(ctx, _bodies!);
+
         var bone = new Pen(Ux.MetaBrush, 1.6);
         foreach (var (from, to) in pose.Links)
             ctx.DrawLine(bone, Project(pose.Bones[from].Position), Project(pose.Bones[to].Position));
@@ -155,6 +217,36 @@ public class SkeletonView : Control
             var label = new FormattedText(HoveredBone, CultureInfo.InvariantCulture,
                                           FlowDirection.LeftToRight, Typeface.Default, 12, Ux.TitleBrush);
             ctx.DrawText(label, new Point(14, Bounds.Height - 26));
+        }
+    }
+
+    private void DrawBodies(DrawingContext ctx, HavokRagdollModel model)
+    {
+        var hull = new Pen(new SolidColorBrush(Ux.Accent, 0.9), 1.2);
+        var centre = new Pen(new SolidColorBrush(Ux.Accent, 0.55), 1);
+
+        foreach (var body in model.Bodies)
+        {
+            var shape = model.Shapes.FirstOrDefault(s => s.Id == body.ShapeId);
+            if (shape == null) continue;
+
+            foreach (var ring in shape.FaceRings)
+            {
+                if (ring.Length < 2) continue;
+                for (int i = 0; i < ring.Length; i++)
+                {
+                    int from = ring[i];
+                    int to = ring[(i + 1) % ring.Length];
+                    if (from < 0 || from >= shape.Vertices.Count ||
+                        to < 0 || to >= shape.Vertices.Count) continue;
+
+                    var a = body.Position + Vector3.Transform(shape.Vertices[from], body.Rotation);
+                    var b = body.Position + Vector3.Transform(shape.Vertices[to], body.Rotation);
+                    ctx.DrawLine(hull, Project(a), Project(b));
+                }
+            }
+
+            ctx.DrawEllipse(null, centre, Project(body.Position), 2.2, 2.2);
         }
     }
 
