@@ -57,9 +57,6 @@ public sealed class RagdollDropRegressionTests
         var coarse = NewDrop(model, lifted);
         var split = NewDrop(model, lifted);
 
-        // 20 iterations represent the same wall-clock time. The second view receives each
-        // 1/30-second slice as two 1/60-second calls, so only a true fixed-step accumulator
-        // can produce byte-identical simulation arrays.
         for (int i = 0; i < 20; i++)
         {
             coarse.AdvanceDrop(1f / 30f);
@@ -141,6 +138,71 @@ public sealed class RagdollDropRegressionTests
         Assert.Equal(unboundVelocity, velocities[1]);
     }
 
+    [Fact]
+    public void UnmappedPhysicsBoneKeepsItsCompleteReferenceFrame()
+    {
+        var model = new HavokRagdollModel { Skeleton = new HavokRagdollSkeleton() };
+        model.Skeleton.BoneNames.AddRange(new[] { "root", "helper" });
+        model.Skeleton.ParentIndices.AddRange(new[] { -1, 0 });
+        model.Skeleton.ReferencePose.Add(new HkxBonePose(
+            new Vector3(1, 2, 3),
+            Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.35f),
+            Vector3.One));
+        model.Skeleton.ReferencePose.Add(new HkxBonePose(
+            new Vector3(0, 4, 0),
+            Quaternion.CreateFromAxisAngle(Vector3.UnitX, -0.6f),
+            Vector3.One));
+        model.Mappings.Add(new HavokRagdollMapping(0, 0, Vector3.Zero, Quaternion.Identity));
+
+        var animation = new[]
+        {
+            new HavokBoneFrame(new Vector3(20, 30, 40),
+                Quaternion.CreateFromAxisAngle(Vector3.UnitY, 0.8f))
+        };
+        var mapped = model.MapPose(animation);
+        Assert.NotNull(mapped);
+
+        var reference = model.Skeleton.WorldReferenceFrames();
+        AssertNear(reference[1].Position, mapped![1].Position, 1e-5f);
+        AssertRotationNear(reference[1].Rotation, mapped[1].Rotation, 1e-5f);
+    }
+
+    [Fact]
+    public void WorldSpaceComIsReprojectedThroughTheReferenceBodyFrame()
+    {
+        var referenceRotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2f);
+        var referencePosition = new Vector3(10, 0, 0);
+        var localCom = new Vector3(2, 0, 0);
+        var body = new HavokRigidBody
+        {
+            Position = referencePosition,
+            Rotation = referenceRotation,
+            CenterOfMass = referencePosition + Vector3.Transform(localCom, referenceRotation),
+        };
+
+        var posedPosition = new Vector3(3, 4, 5);
+        var posedRotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI);
+        var expected = posedPosition + Vector3.Transform(localCom, posedRotation);
+
+        AssertNear(expected, body.PosedCenterOfMass(posedPosition, posedRotation), 1e-5f);
+        AssertNear(body.CenterOfMass, body.PosedCenterOfMass(body.Position, body.Rotation), 1e-5f);
+    }
+
+    [Fact]
+    public void HidingConstraintsClearsHoverAndPinImmediately()
+    {
+        var view = new SkeletonView { ShowConstraints = true };
+        view.HoverConstraintForTest(4);
+        view.PinConstraintForTest(7);
+        Assert.Equal(4, view.HoveredConstraintId);
+        Assert.Equal(7, view.PinnedConstraintId);
+
+        view.ShowConstraints = false;
+
+        Assert.Equal(-1, view.HoveredConstraintId);
+        Assert.Equal(-1, view.PinnedConstraintId);
+    }
+
     private static SkeletonView NewDrop(HavokRagdollModel model, AnimationPose.Pose pose)
     {
         var view = new SkeletonView();
@@ -199,4 +261,12 @@ public sealed class RagdollDropRegressionTests
         model.BoneBindings.FirstOrDefault(binding => binding.BodyId == bodyId)?.BoneIndex ?? -1;
 
     private static Vector3 Pivot(float[] frame) => new(frame[12], frame[13], frame[14]);
+
+    private static void AssertNear(Vector3 expected, Vector3 actual, float tolerance) =>
+        Assert.True(Vector3.Distance(expected, actual) <= tolerance,
+            $"expected {expected}, measured {actual}");
+
+    private static void AssertRotationNear(Quaternion expected, Quaternion actual, float tolerance) =>
+        Assert.True(MathF.Abs(Quaternion.Dot(Quaternion.Normalize(expected), Quaternion.Normalize(actual))) >= 1f - tolerance,
+            $"expected rotation {expected}, measured {actual}");
 }
