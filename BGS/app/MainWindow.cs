@@ -128,6 +128,8 @@ public class MainWindow : Window
     private readonly TextBlock _playbackSummary =
         new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _frameLabel = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
+    private readonly TextBlock _scaleStatus = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
+    private Control? _scalePill;
     private readonly Slider _scrub = new() { Minimum = 0, Maximum = 0, SmallChange = 1, LargeChange = 5 };
     private Button _playButton = Ux.Secondary("Play");
     private HkxSkeleton? _poseSkeleton;
@@ -2259,6 +2261,22 @@ public class MainWindow : Window
     public int RedoStepsForTest => _redo.Count;
     public void UndoForTest() => Undo();
     public string StatusForTest => _status.Text ?? "";
+
+    public string ScaleStatusForTest => _scaleStatus.Text ?? "";
+
+    public bool ScaleStatusVisibleForTest => _scalePill?.IsVisible == true;
+
+    // The ragdoll scale readout reports the small set of view-computed numbers: the fitted
+    // body half-extent and the frame-axis stub length, in the file's own units. Refreshed on
+    // every load so opening another file swaps the numbers (or hides the pill entirely).
+    private void UpdateScaleStatus()
+    {
+        if (_scalePill == null) return;
+        string text = _skeleton.ScaleStatusText;
+        _scaleStatus.Text = text;
+        _scaleStatus.Foreground = Ux.MetaBrush;
+        _scalePill.IsVisible = text.Length > 0;
+    }
     public string PathFieldForTest => _pathField.Text ?? "";
 
     private Control BuildAnimationTab()
@@ -2821,7 +2839,12 @@ public class MainWindow : Window
         var bar = Bar(Ux.Pill(_playbackSummary), transport);
         bar.Margin = new Thickness(0, 0, 0, 8);
 
-        var scrubRow = Bar(_scrub, Ux.Pill(_frameLabel));
+        // The ragdoll scale readout lives on the viewport's status row and is only shown
+        // once a file with rigid bodies is open (see TryLoadRagdoll -> UpdateScaleStatus).
+        _scalePill = Ux.Pill(_scaleStatus);
+        _scalePill.IsVisible = false;
+
+        var scrubRow = Bar(_scrub, Ux.Pill(_frameLabel), _scalePill);
         scrubRow.Margin = new Thickness(0, 8, 0, 0);
 
         var panel = new DockPanel();
@@ -2860,6 +2883,7 @@ public class MainWindow : Window
         _framesToggle.IsEnabled = any;
         _framesToggle.IsChecked = any;
         _skeleton.SetBodies(any ? _ragdoll : null);
+        UpdateScaleStatus();
         if (!any) return;
 
         bool mappings = any && _ragdoll is { Mappings.Count: > 0, AnimationSkeleton: { BoneNames.Count: > 0 } };

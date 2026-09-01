@@ -594,6 +594,42 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void RagdollBodyFitAndFrameStubAreMeasurable()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // The viewport's FitBodies computation is deterministic over the measured inputs
+        // (world hull vertices plus body centres), so a fixture-backed replica pins the
+        // same numbers the Playback scale readout reports.
+        var min = new Vector3(float.MaxValue);
+        var max = new Vector3(float.MinValue);
+        foreach (var body in model!.Bodies)
+        {
+            var shape = model.Shapes.FirstOrDefault(s => s.Id == body.ShapeId);
+            if (shape != null)
+                foreach (var vertex in shape.Vertices)
+                {
+                    var world = body.Position + Vector3.Transform(vertex, body.Rotation);
+                    min = Vector3.Min(min, world);
+                    max = Vector3.Max(max, world);
+                }
+            min = Vector3.Min(min, body.Position);
+            max = Vector3.Max(max, body.Position);
+        }
+
+        var size = max - min;
+        float fit = Math.Max(0.001f, Math.Max(size.X, Math.Max(size.Y, size.Z)) * 0.5f);
+        float stub = Math.Max(0.5f, fit * 0.06f);
+
+        // Pinned to the vanilla fixture: the torso/head spans z 3.75..124.22, so the fitted
+        // half-extent is 60.24 file units and the frame triads draw 3.61-unit stubs.
+        AssertNear(60.237434f, fit, 2e-2f);
+        AssertNear(3.614246f, stub, 2e-3f);
+        Assert.Equal(3.614246f, Math.Max(0.5f, fit * 0.06f), 3);
+    }
+
+    [Fact]
     public void ValidatorFlagsBrokenAnimationMappings()
     {
         var model = new HavokRagdollModel

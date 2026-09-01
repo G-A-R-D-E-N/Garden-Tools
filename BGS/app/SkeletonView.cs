@@ -57,6 +57,26 @@ public class SkeletonView : Control
     public int DrawnFrames => _bodies?.Bodies.Count ?? 0;
     public int DrawnMappings => _bodies?.Mappings.Count ?? 0;
 
+    // The fitted half-extent of the rigid bodies (FitBodies' bounding-box half-size) and the
+    // length of the axis stubs the Body frames overlay draws, in the file's own units. Both
+    // are published for the Playback viewport status line, so ragdoll dimensions can be
+    // sanity-checked across files.
+    public float BodyFit => _bodyFit;
+    public float AxisStubLength => Math.Max(0.5f, _bodyFit * 0.06f);
+
+    // The scale/unit readout for the Playback viewport status line. Empty when no ragdoll
+    // model is loaded, so the status pill stays hidden.
+    public string ScaleStatusText
+    {
+        get
+        {
+            if (_bodies == null || _bodies.Bodies.Count == 0) return "";
+            return "body fit " + _bodyFit.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+                   "frame stub " + AxisStubLength.ToString("0.00", CultureInfo.InvariantCulture) +
+                   " file units";
+        }
+    }
+
     private int _hoveredBody = -1;
 
     private (Vector3 A, Vector3 B)[]? _mesh;
@@ -363,7 +383,8 @@ public class SkeletonView : Control
         var zAxis = new Pen(new SolidColorBrush(Ux.Accent, 0.95), 1.6);
         var comPen = new Pen(new SolidColorBrush(Ux.TextTitle, 0.9), 1.2);
 
-        float arm = Math.Max(0.5f, _bodyFit * 0.06f);
+        // The stub length is published as AxisStubLength for the viewport status readout.
+        float arm = AxisStubLength;
 
         foreach (var body in model.Bodies)
         {
