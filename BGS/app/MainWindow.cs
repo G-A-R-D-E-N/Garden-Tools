@@ -4477,10 +4477,12 @@ public class MainWindow : Window
     {
         panel.Clear();
         string className = HkxTextEdit.ClassOf(_xmlText, objectId);
+        panel.SetSchemaClass(className);
         var parameters = PanelValues(objectId, HkxTextEdit.ReadParams(_xmlText, objectId));
 
         int fromXml = parameters.Count(p => p.From == PanelFields.Source.Fallback);
-        var heading = Ux.Label($"#{objectId}   {className}   {parameters.Count} editable fields" +
+        string fieldKind = panel.SchemaReadOnly ? "read-only" : "editable";
+        var heading = Ux.Label($"#{objectId}   {className}   {parameters.Count} {fieldKind} fields" +
                                (fromXml > 0 ? $", {fromXml} from fallback metadata" : ""));
         heading.TextWrapping = TextWrapping.Wrap;
         panel.Add(heading);
