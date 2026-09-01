@@ -145,6 +145,8 @@ public class MainWindow : Window
     private RootMotion.Motion _poseMotion = new();
     private bool _followTravel;
     private HavokRagdollModel? _ragdoll;
+    private string? _ragdollSourceName;
+    private string? _ragdollSourceNote;
     private readonly CheckBox _bodiesToggle = new()
     {
         Content = "Bodies",
@@ -2681,17 +2683,29 @@ public class MainWindow : Window
                       .Colour(0, Ux.MutedBrush).Colour(1, Ux.DisabledBrush);
     }
 
-    private static HkxSkeleton? SiblingSkeleton(string primaryPath, string? fallbackPath = null)
+    // The sibling skeleton file: the first *.hkx under the sibling CharacterAssets folder
+    // that reads as a skeleton, or null. The ragdoll fallback uses the exact same file the
+    // pose pipeline poses with, so the mapper's skeletonA always matches the rig being
+    // played.
+    internal static string? SiblingSkeletonPath(string primaryPath, string? fallbackPath = null)
     {
         string? assets = FindPoseSkeletonFolder(primaryPath, fallbackPath);
         if (assets == null) return null;
 
         foreach (string file in Directory.EnumerateFiles(assets, "*.hkx").OrderBy(f => f))
         {
-            try { return new HkxBinaryReader().ReadSkeleton(file); }
+            try { new HkxBinaryReader().ReadSkeleton(file); return file; }
             catch { }
         }
         return null;
+    }
+
+    private static HkxSkeleton? SiblingSkeleton(string primaryPath, string? fallbackPath = null)
+    {
+        string? file = SiblingSkeletonPath(primaryPath, fallbackPath);
+        if (file == null) return null;
+        try { return new HkxBinaryReader().ReadSkeleton(file); }
+        catch { return null; }
     }
 
     internal static string? FindSiblingSkeletonFolder(string animationPath)
@@ -2899,6 +2913,29 @@ public class MainWindow : Window
 
         _ragdoll = HavokPhysicsExtractor.TryExtract(raw);
         bool any = _ragdoll is { Bodies.Count: > 0 };
+        string? ragdollSource = null;
+        if (!any)
+        {
+            // An animation file carries no ragdoll of its own; the character's sibling
+            // skeleton (the same rig the clip poses) does, including the mapper that lets
+            // the overlay follow the clip.
+            string? sibling = SiblingSkeletonPath(path);
+            if (sibling != null)
+            {
+                try
+                {
+                    var siblingModel = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(sibling));
+                    if (siblingModel is { Bodies.Count: > 0 })
+                    {
+                        _ragdoll = siblingModel;
+                        any = true;
+                        ragdollSource = sibling;
+                    }
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        _ragdollSourceName = ragdollSource == null ? null : Path.GetFileName(ragdollSource);
         // While the engineering view is on, the overlay checkboxes stay unchecked so their
         // state always matches what is actually drawn; the mode itself survives a re-load.
         bool engineering = _engineerToggle.IsChecked == true;
@@ -2921,14 +2958,24 @@ public class MainWindow : Window
         if (!any) return;
 
         bool mappings = any && _ragdoll is { Mappings.Count: > 0, AnimationSkeleton: { BoneNames.Count: > 0 } };
+        string source = ragdollSource == null
+            ? "measured from this file"
+            : $"measured from the sibling skeleton {Path.GetFileName(ragdollSource)}";
         SetPlaybackSummary(
             $"{_ragdoll!.Bodies.Count} rigid bodies, {_ragdoll.Shapes.Count} shapes, " +
             $"{_ragdoll.Constraints.Count} constraints, {_ragdoll.BoneBindings.Count} bone bindings " +
-            $"and {_ragdoll.Mappings.Count} animation-to-ragdoll bone mappings measured from this file. " +
+            $"and {_ragdoll.Mappings.Count} animation-to-ragdoll bone mappings {source}. " +
             "Bodies, Constraints, Bone labels, Physics skeleton and Body frames draw them as a " +
             (mappings
                 ? "file-space overlay that follows the playing animation through the measured mapper; it is not physics yet."
                 : "static file-space overlay; it is not physics yet."), Ux.MetaBrush);
+
+        // For an animation file the ragdoll summary above is replaced by the clip summary a
+        // moment later, so the sibling-sourced ragdoll gets its note appended there instead.
+        _ragdollSourceNote = ragdollSource == null
+            ? null
+            : $"{_ragdoll.Bodies.Count} rigid bodies and {_ragdoll.Mappings.Count} bone mappings " +
+              $"loaded from the sibling skeleton {_ragdollSourceName}; the ragdoll overlay follows this clip.";
 
         HkxSkeleton? skeleton = null;
         try { skeleton = new HkxBinaryReader().ReadSkeleton(path); }
@@ -4215,7 +4262,11 @@ public class MainWindow : Window
 
             BuildClipList(new BehaviourGraphModel());
 
-            if (_animationData != null) LoadPose(path, Path.GetFileName(path));
+            if (_animationData != null)
+            {
+                LoadPose(path, Path.GetFileName(path));
+                AppendRagdollSourceNote();
+            }
             return;
         }
 
@@ -4274,8 +4325,21 @@ public class MainWindow : Window
                                   RememberSetting("last_folder", Path.GetDirectoryName(path) ?? "", "The file opened");
         PrepareEditing();
 
-        if (_animationData != null) LoadPose(path, Path.GetFileName(path));
+        if (_animationData != null)
+        {
+            LoadPose(path, Path.GetFileName(path));
+            AppendRagdollSourceNote();
+        }
         if (settingsWarning != null) SetStatus(settingsWarning, Ux.WarnBrush);
+    }
+
+    // After an animation file loads its clip summary, append the sibling-sourced ragdoll
+    // note so the overlay's origin and follow behaviour stay visible on the summary line.
+    private void AppendRagdollSourceNote()
+    {
+        if (_ragdollSourceNote == null) return;
+        _playbackSummary.Text += "  |  " + _ragdollSourceNote;
+        _playbackSummary.Foreground = Ux.MetaBrush;
     }
 
     // Returns the file's pointer width when it is a readable packfile that is not 8-byte, or null

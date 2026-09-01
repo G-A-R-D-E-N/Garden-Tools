@@ -596,6 +596,49 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void RagdollFallsBackToTheSiblingSkeletonForAnAnimationFile()
+    {
+        // A real animation clip laid out next to its character skeleton exactly like the
+        // vanilla fixture tree: Animations/<clip>.hkx + CharacterAssets/skeleton.hkx. The
+        // clip itself has no ragdoll, so the app resolves the sibling skeleton - the same
+        // file the pose pipeline poses with - and extracts the ragdoll + mapper from it.
+        string root = Path.Combine(Path.GetTempPath(), "bgs-sibling-ragdoll-" + Guid.NewGuid().ToString("N"));
+        string assets = Path.Combine(root, "Meshes", "Actors", "Character", "CharacterAssets");
+        string anims = Path.Combine(root, "Meshes", "Actors", "Character", "Animations", "Paired");
+        Directory.CreateDirectory(assets);
+        Directory.CreateDirectory(anims);
+        string clipPath = Path.Combine(anims, "clip.hkx");
+        File.Copy(Fixture("Meshes/Actors/Character/Animations/Paired/" +
+                          "PairedKill2HMBashKneeAndHead_AttackerLead.hkx"), clipPath);
+        string skeletonPath = Path.Combine(assets, "skeleton.hkx");
+        File.Copy(Fixture("Meshes/Actors/Character/CharacterAssets/skeleton.hkx"), skeletonPath);
+
+        try
+        {
+            Assert.Equal(skeletonPath, MainWindow.SiblingSkeletonPath(clipPath));
+
+            var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(skeletonPath));
+            Assert.NotNull(model);
+            Assert.True(model!.Bodies.Count > 0);
+            Assert.Equal(18, model.Mappings.Count);
+
+            // The mapper bridges the clip's rig: posing the sibling skeleton's reference
+            // pose (what an animation would animate) through it drives all 18 ragdoll bones.
+            var skeleton = new HkxBinaryReader().ReadSkeleton(skeletonPath);
+            Assert.NotNull(skeleton);
+            var pose = AnimationPose.ReferencePose(skeleton!);
+            var source = pose.Bones.Select(b => new HavokBoneFrame(b.Position, b.Rotation)).ToArray();
+            var mapped = model.MapPose(source);
+            Assert.NotNull(mapped);
+            Assert.Equal(18, mapped!.Length);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void ConstraintInspectionLineShowsMeasuredLimitsAndPivots()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
