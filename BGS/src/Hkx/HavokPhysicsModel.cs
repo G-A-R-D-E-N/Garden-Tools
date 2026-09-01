@@ -104,9 +104,44 @@ public sealed class HavokRagdollSkeleton
     public List<string> BoneNames { get; } = new();
     public List<int> ParentIndices { get; } = new();
 
-    // Local-space reference-pose translations (the translation column of each measured
-    // hkQsTransform), for a bone chain the binding labels can hang on.
-    public List<Vector3> ReferencePositions { get; } = new();
+    // Local-space reference pose: the measured hkQsTransform array (translation vector4,
+    // rotation quaternion, scale vector4). Scale is identity in every measured file so far;
+    // composition below applies translation and rotation only and the validator warns when a
+    // file ever carries non-identity scale rather than silently mis-render it.
+    public List<HkxBonePose> ReferencePose { get; } = new();
+
+    // The reference pose composed down the parent chain into file space, so the physics
+    // skeleton can be drawn as a bone chain over the bodies. A parent is only applied when it
+    // precedes its child (valid Havok skeletons are topologically ordered); anything else is
+    // treated as a root so a broken file still composes deterministically.
+    public IReadOnlyList<Vector3> WorldReferencePositions()
+    {
+        int count = ReferencePose.Count;
+        var positions = new Vector3[count];
+        var rotations = new Quaternion[count];
+
+        for (int i = 0; i < count; i++)
+        {
+            var pose = ReferencePose[i];
+            int parent = i > 0 && ParentIndices.Count > i && ParentIndices[i] >= 0 && ParentIndices[i] < i
+                ? ParentIndices[i]
+                : -1;
+
+            if (parent < 0)
+            {
+                positions[i] = pose.Translation;
+                rotations[i] = pose.Rotation;
+            }
+            else
+            {
+                positions[i] = positions[parent] +
+                               Vector3.Transform(pose.Translation, rotations[parent]);
+                rotations[i] = Quaternion.Normalize(rotations[parent] * pose.Rotation);
+            }
+        }
+
+        return positions;
+    }
 }
 
 public sealed class HavokRagdollModel
@@ -274,9 +309,9 @@ public static class HavokPhysicsValidator
             if (skeleton.ParentIndices.Count != boneCount)
                 findings.Add(Error("skeleton",
                     $"has {boneCount} bone names but {skeleton.ParentIndices.Count} parent indices"));
-            if (skeleton.ReferencePositions.Count != boneCount)
+            if (skeleton.ReferencePose.Count != boneCount)
                 findings.Add(Error("skeleton",
-                    $"has {boneCount} bone names but {skeleton.ReferencePositions.Count} reference poses"));
+                    $"has {boneCount} bone names but {skeleton.ReferencePose.Count} reference poses"));
 
             for (int i = 0; i < skeleton.ParentIndices.Count; i++)
             {
@@ -285,9 +320,20 @@ public static class HavokPhysicsValidator
                     findings.Add(Error($"bone {i}", $"parent index {parent} is outside the skeleton"));
             }
 
-            for (int i = 0; i < skeleton.ReferencePositions.Count; i++)
-                if (!Finite(skeleton.ReferencePositions[i]))
+            for (int i = 0; i < skeleton.ReferencePose.Count; i++)
+            {
+                var pose = skeleton.ReferencePose[i];
+                if (!Finite(pose.Translation) || !Finite(pose.Rotation))
                     findings.Add(Error($"bone {i}", "reference pose must contain only finite values"));
+
+                // Scale is not composed (identity in every measured file); flag it rather
+                // than silently drawing a scaled chain as if it were unit scale.
+                if (Vector3.Distance(pose.Scale, Vector3.One) > ScaleTolerance)
+                    findings.Add(new HavokPhysicsValidationFinding(
+                        HavokPhysicsValidationLevel.Warning,
+                        $"bone {i}",
+                        $"reference pose scale ({pose.Scale}) is not identity and is not applied"));
+            }
         }
 
         return findings;
@@ -297,6 +343,10 @@ public static class HavokPhysicsValidator
     // float round-trips, but a near-zero length is a degenerate rotation, not slack.
     private const float RotationNormTolerance = 1e-3f;
     private const float RotationNormEpsilon = 1e-4f;
+
+    // Reference-pose scale is composed nowhere in the preview; any file that is not unit
+    // scale is flagged so the omission is visible rather than silent.
+    private const float ScaleTolerance = 1e-4f;
 
     // A compound shape may reference child shapes, which may themselves be compounds.
     // Direct self-reference is only the simplest cycle; an indirect cycle (A -> B -> A)

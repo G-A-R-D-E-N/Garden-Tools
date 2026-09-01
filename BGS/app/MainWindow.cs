@@ -158,6 +158,13 @@ public class MainWindow : Window
         FontSize = 12,
         VerticalAlignment = VerticalAlignment.Center,
     };
+    private readonly CheckBox _physicsSkeletonToggle = new()
+    {
+        Content = "Physics skeleton",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
     private readonly PlaybackSession _playback = new();
     private bool _scrubbing;
     private DispatcherTimer? _clock;
@@ -2753,6 +2760,16 @@ public class MainWindow : Window
             _skeleton.InvalidateVisual();
         };
 
+        _physicsSkeletonToggle.IsEnabled = false;
+        ToolTip.SetTip(_physicsSkeletonToggle, "Draw the physics skeleton hknpRagdollData references (hkaSkeleton): " +
+                                               "its bone chain and reference pose, composed down the parent " +
+                                               "indices into file space.");
+        _physicsSkeletonToggle.IsCheckedChanged += (_, _) =>
+        {
+            _skeleton.ShowPhysicsSkeleton = _physicsSkeletonToggle.IsChecked == true;
+            _skeleton.InvalidateVisual();
+        };
+
         ToolTip.SetTip(travel, "Move the character along the path the clip carries, instead of " +
                                "playing it on the spot the way the file stores it.");
         travel.IsCheckedChanged += (_, _) =>
@@ -2781,7 +2798,7 @@ public class MainWindow : Window
 
         var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         foreach (var control in new Control[]
-                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, reload, mesh, clearMesh })
+                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, reload, mesh, clearMesh })
             transport.Children.Add(control);
 
         var bar = Bar(Ux.Pill(_playbackSummary), transport);
@@ -2820,14 +2837,17 @@ public class MainWindow : Window
         bool bindings = any && _ragdoll is { BoneBindings.Count: > 0, Skeleton: { BoneNames.Count: > 0 } };
         _bindingsToggle.IsEnabled = bindings;
         _bindingsToggle.IsChecked = bindings;
+        bool physicsSkeleton = any && _ragdoll is { Skeleton: { ParentIndices.Count: > 0, ReferencePose.Count: > 0 } };
+        _physicsSkeletonToggle.IsEnabled = physicsSkeleton;
+        _physicsSkeletonToggle.IsChecked = physicsSkeleton;
         _skeleton.SetBodies(any ? _ragdoll : null);
         if (!any) return;
 
         SetPlaybackSummary(
             $"{_ragdoll!.Bodies.Count} rigid bodies, {_ragdoll.Shapes.Count} shapes, " +
             $"{_ragdoll.Constraints.Count} constraints and {_ragdoll.BoneBindings.Count} bone bindings " +
-            "measured from this file. Bodies, Constraints and Bone labels draw them as a static " +
-            "file-space overlay; it is not physics yet.", Ux.MetaBrush);
+            "measured from this file. Bodies, Constraints, Bone labels and Physics skeleton draw " +
+            "them as a static file-space overlay; it is not physics yet.", Ux.MetaBrush);
 
         HkxSkeleton? skeleton = null;
         try { skeleton = new HkxBinaryReader().ReadSkeleton(path); }

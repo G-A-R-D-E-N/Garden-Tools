@@ -192,20 +192,96 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
-    public void PhysicsSkeletonReferencePositionsMatchXml()
+    public void PhysicsSkeletonReferencePoseMatchesXml()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
         Assert.NotNull(model);
 
-        var poses = model!.Skeleton!.ReferencePositions;
+        var poses = model!.Skeleton!.ReferencePose;
         Assert.Equal(18, poses.Count);
+
+        // Translations (the translation column of each measured hkQsTransform).
+        AssertNear(new Vector3(-1.668929871811997E-5f, 2.1100042431498878E-5f, 68.91128540039062f),
+                   poses[0].Translation, 1e-3f);
         AssertNear(new Vector3(7.62939453125E-6f, 4.249164485372603E-4f, 6.615072250366211f),
-                   poses[1], 1e-3f);
+                   poses[1].Translation, 1e-3f);
         AssertNear(new Vector3(3.7916259765625f, 2.0265579223632812E-6f, -7.011654815869406E-6f),
-                   poses[3], 1e-3f);
+                   poses[3].Translation, 1e-3f);
         AssertNear(new Vector3(31.592391967773438f, -0.03480100631713867f, -0.41684722900390625f),
-                   poses[4], 1e-3f);
+                   poses[4].Translation, 1e-3f);
+
+        // Rotations (the quaternion column of each measured hkQsTransform).
+        AssertNear(new Quaternion(-4.6361520844584447E-7f, -0.7071065306663513f,
+                                  -4.6361529371097276E-7f, 0.7071069478988647f),
+                   poses[0].Rotation, 1e-4f);
+        AssertNear(new Quaternion(-0.008273639716207981f, 0.9874358773231506f,
+                                  0.14616334438323975f, -0.05948099493980408f),
+                   poses[1].Rotation, 1e-4f);
+        AssertNear(new Quaternion(7.332672566917608E-7f, -4.470348358154297E-7f,
+                                  0.06121326982975006f, 0.9981245994567871f),
+                   poses[3].Rotation, 1e-4f);
+
+        // Scale is identity in the measured file (the hkQsTransform scale column).
+        Assert.All(poses, pose => AssertNear(Vector3.One, pose.Scale, 1e-3f));
     }
+
+    [Fact]
+    public void PhysicsSkeletonWorldPoseAgreesWithBodyPositions()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // The composed reference pose and the measured body cinfo positions are two
+        // independent sources for the same file-space placement; the bindings say which
+        // body a bone owns, so each bone's composed world position must sit on its body.
+        var world = model!.Skeleton!.WorldReferencePositions();
+        Assert.Equal(18, world.Count);
+
+        foreach (var binding in model.BoneBindings)
+        {
+            var body = Assert.Single(model.Bodies, b => b.Id == binding.BodyId);
+            Assert.True(Vector3.Distance(world[binding.BoneIndex], body.Position) <= 5e-2f,
+                        $"bone {binding.BoneIndex} world {world[binding.BoneIndex]} vs body {body.Id} " +
+                        $"{body.Position}");
+        }
+
+        // Pin one explicitly to the XML-derived hand-computed value: the root sits at its
+        // local translation and the thigh bone hangs below it along the parent's -90 degree
+        // Y rotation, landing on the measured L Thigh body position.
+        AssertNear(new Vector3(-1.668929871811997E-5f, 2.1100042431498878E-5f, 68.91128540039062f),
+                   world[0], 1e-3f);
+        AssertNear(new Vector3(-6.6150898933410645f, 4.546909185592E-4f, 68.91129302978516f),
+                   world[1], 1e-3f);
+    }
+
+    [Fact]
+    public void PhysicsSkeletonChainIsTopologicallyOrdered()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        var skeleton = model!.Skeleton!;
+        var world = skeleton.WorldReferencePositions();
+
+        // Every non-root link connects two finite, distinct file-space points and always
+        // reaches back to an earlier bone (valid skeletons are topologically ordered).
+        for (int i = 0; i < skeleton.ParentIndices.Count; i++)
+        {
+            int parent = skeleton.ParentIndices[i];
+            if (parent < 0) continue;
+
+            Assert.True(parent < i, $"bone {i} parent {parent} is not topologically ordered");
+            Assert.True(Finite(world[i]), $"bone {i} world position is not finite");
+            Assert.True(Finite(world[parent]), $"bone {parent} world position is not finite");
+            Assert.True(Vector3.Distance(world[i], world[parent]) > 0f,
+                        $"bone {i} sits on its parent {parent}");
+        }
+    }
+
+    private static bool Finite(Vector3 value) =>
+        !float.IsNaN(value.X) && !float.IsInfinity(value.X) &&
+        !float.IsNaN(value.Y) && !float.IsInfinity(value.Y) &&
+        !float.IsNaN(value.Z) && !float.IsInfinity(value.Z);
 
     [Fact]
     public void BoneBindingsResolveBodyNamesForLabels()
@@ -237,8 +313,9 @@ public sealed class HavokPhysicsExtractorTests
         };
         model.Skeleton!.BoneNames.AddRange(new[] { "A", "B" });
         model.Skeleton.ParentIndices.Add(5);
-        model.Skeleton.ReferencePositions.Add(new Vector3(0, 0, 0));
-        model.Skeleton.ReferencePositions.Add(new Vector3(float.NaN, 0, 0));
+        model.Skeleton.ReferencePose.Add(new HkxBonePose(new Vector3(0, 0, 0), Quaternion.Identity, Vector3.One));
+        model.Skeleton.ReferencePose.Add(new HkxBonePose(
+            new Vector3(float.NaN, 0, 0), Quaternion.Identity, new Vector3(2, 2, 2)));
         model.BoneBindings.Add(new HavokRagdollBoneBinding(7, 0));
 
         var findings = HavokPhysicsValidator.Check(model);
@@ -252,6 +329,8 @@ public sealed class HavokPhysicsExtractorTests
             f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("reference pose"));
         Assert.Contains(findings, f =>
             f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("missing body 0"));
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Warning && f.Message.Contains("not identity"));
     }
 
     [Fact]
