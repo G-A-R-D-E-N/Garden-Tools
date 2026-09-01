@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using BehaviourStudio.App;
 using OpenCommonwealth.Services.Hkx;
 using Xunit;
 
@@ -591,6 +593,43 @@ public sealed class HavokPhysicsExtractorTests
 
         var bare = new HavokRagdollModel { Skeleton = new HavokRagdollSkeleton() };
         Assert.Null(bare.MapPose(new[] { new HavokBoneFrame(Vector3.Zero, Quaternion.Identity) }));
+    }
+
+    [Fact]
+    public void ConstraintHoverLabelShowsMeasuredLimits()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // Ragdoll constraint #0: twist -0.2618..+0.2618 rad and a 0.5236 rad cone half-angle,
+        // reported as degrees exactly as the viewport hover label formats them.
+        var ragdoll = Assert.Single(model!.Constraints, c => c.Kind == HavokConstraintKind.Ragdoll && c.Id == 0);
+        string ragdollLabel = SkeletonView.ConstraintLabel(ragdoll, model.Bodies);
+        Assert.Contains("ragdoll: ", ragdollLabel);
+        Assert.Contains(" -> ", ragdollLabel);
+        Assert.Contains("twist -15.0..15.0 deg", ragdollLabel);
+        Assert.Contains("cone 30.0 deg", ragdollLabel);
+
+        // The limited hinge between bodies 4 and 1: -1.9199..+0.0314 rad.
+        var hinge = Assert.Single(model.Constraints, c => c.Kind == HavokConstraintKind.LimitedHinge && c.BodyA == 4);
+        string hingeLabel = SkeletonView.ConstraintLabel(hinge, model.Bodies);
+        Assert.Contains("limited hinge: ", hingeLabel);
+        Assert.Contains("hinge -110.0..1.8 deg", hingeLabel);
+
+        // A kind with no measured limits says so plainly, and unnamed bodies fall back to
+        // their ids so the label never reads half-empty.
+        var bare = new HavokConstraint
+        {
+            Id = 99,
+            Kind = HavokConstraintKind.Hinge,
+            BodyA = 0,
+            BodyB = 1,
+            MinAngle = 0,
+            MaxAngle = 0,
+        };
+        string bareLabel = SkeletonView.ConstraintLabel(bare, new List<HavokRigidBody>());
+        Assert.Contains("no measured limits", bareLabel);
+        Assert.Contains("body 0 -> body 1", bareLabel);
     }
 
     [Fact]

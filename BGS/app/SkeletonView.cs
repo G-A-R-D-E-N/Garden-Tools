@@ -78,6 +78,15 @@ public class SkeletonView : Control
     }
 
     private int _hoveredBody = -1;
+    private int _hoveredConstraint = -1;
+
+    public int HoveredConstraintId => _hoveredConstraint;
+
+    public void HoverConstraintForTest(int constraintId)
+    {
+        _hoveredConstraint = constraintId;
+        InvalidateVisual();
+    }
 
     private (Vector3 A, Vector3 B)[]? _mesh;
 
@@ -121,6 +130,7 @@ public class SkeletonView : Control
         ShowPhysicsSkeleton = false;
         ShowFrames = false;
         _hoveredBody = -1;
+        _hoveredConstraint = -1;
         _physicsPose = null;
         _yaw = 0.6;
         _pitch = 0.25;
@@ -302,6 +312,9 @@ public class SkeletonView : Control
         if (ShowFrames && _bodies is { Bodies.Count: > 0 })
             DrawFrames(ctx, _bodies);
 
+        if (_hoveredConstraint >= 0 && ShowConstraints && _bodies is { Constraints.Count: > 0 })
+            DrawConstraintLabel(ctx, _bodies);
+
         if (HoveredBone.Length > 0)
         {
             var label = new FormattedText(HoveredBone, CultureInfo.InvariantCulture,
@@ -454,14 +467,65 @@ public class SkeletonView : Control
 
     private const float ConstraintArm = 8f;
 
+    // The hover label for a constraint: the measured limit summary in degrees. The angle
+    // atoms store radians; the readout converts for readability but never invents a value -
+    // kinds with no measured limit data (or a hinge whose 0..0 range means "absent", the
+    // same convention DrawHinge uses) say so plainly.
+    public static string ConstraintLabel(HavokConstraint constraint, IReadOnlyList<HavokRigidBody> bodies)
+    {
+        string bodyA = bodies.FirstOrDefault(b => b.Id == constraint.BodyA)?.Name ?? "";
+        string bodyB = bodies.FirstOrDefault(b => b.Id == constraint.BodyB)?.Name ?? "";
+        if (bodyA.Length == 0) bodyA = "body " + constraint.BodyA;
+        if (bodyB.Length == 0) bodyB = "body " + constraint.BodyB;
+
+        string kind = constraint.Kind switch
+        {
+            HavokConstraintKind.Ragdoll => "ragdoll",
+            HavokConstraintKind.LimitedHinge => "limited hinge",
+            HavokConstraintKind.Hinge => "hinge",
+            HavokConstraintKind.BallAndSocket => "ball and socket",
+            HavokConstraintKind.Fixed => "fixed",
+            _ => "constraint",
+        };
+
+        var limits = new List<string>();
+        switch (constraint.Kind)
+        {
+            case HavokConstraintKind.Ragdoll:
+                if (constraint.TwistMinAngle is float twistMin && constraint.TwistMaxAngle is float twistMax)
+                    limits.Add("twist " + Angle(twistMin) + ".." + Angle(twistMax) + " deg");
+                if (constraint.ConeMaxAngle is float coneMax)
+                    limits.Add("cone " + Angle(coneMax) + " deg");
+                break;
+            case HavokConstraintKind.LimitedHinge:
+                if (constraint.MinAngle != 0 || constraint.MaxAngle != 0)
+                    limits.Add("hinge " + Angle(constraint.MinAngle) + ".." + Angle(constraint.MaxAngle) + " deg");
+                break;
+        }
+
+        string measured = limits.Count > 0 ? string.Join(", ", limits) : "no measured limits";
+        return kind + ": " + bodyA + " -> " + bodyB + " - " + measured;
+    }
+
+    private static string Angle(float radians) =>
+        (radians * 180f / MathF.PI).ToString("0.0", CultureInfo.InvariantCulture);
+
     private void DrawConstraints(DrawingContext ctx, HavokRagdollModel model)
     {
         var link = new Pen(new SolidColorBrush(Ux.Warn, 0.55), 1);
         var pivot = new Pen(new SolidColorBrush(Ux.Warn, 0.95), 1.2);
         var arm = new Pen(new SolidColorBrush(Ux.Warn, 0.85), 1.1);
+        var linkHot = new Pen(new SolidColorBrush(Ux.TextTitle, 0.95), 1.5);
+        var pivotHot = new Pen(new SolidColorBrush(Ux.TextTitle, 0.95), 1.7);
+        var armHot = new Pen(new SolidColorBrush(Ux.TextTitle, 0.9), 1.4);
 
         foreach (var constraint in model.Constraints)
         {
+            bool hovered = constraint.Id == _hoveredConstraint;
+            var linkPen = hovered ? linkHot : link;
+            var pivotPen = hovered ? pivotHot : pivot;
+            var armPen = hovered ? armHot : arm;
+
             var bodyA = model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyA);
             var bodyB = model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyB);
             if (bodyA == null || bodyB == null) continue;
@@ -469,30 +533,46 @@ public class SkeletonView : Control
             var (frameA, rotationA) = BodyFrame(model, bodyA);
             var (frameB, rotationB) = BodyFrame(model, bodyB);
 
-            ctx.DrawLine(link, Project(frameA), Project(frameB));
+            ctx.DrawLine(linkPen, Project(frameA), Project(frameB));
 
             if (constraint.FrameA == null) continue;
             var pivotA = frameA + Vector3.Transform(Translation(constraint.FrameA), rotationA);
-            ctx.DrawEllipse(null, pivot, Project(pivotA), 2.2, 2.2);
+            ctx.DrawEllipse(null, pivotPen, Project(pivotA), 2.2, 2.2);
 
             Vector3 pivotB = pivotA;
             if (constraint.FrameB != null)
             {
                 pivotB = frameB + Vector3.Transform(Translation(constraint.FrameB), rotationB);
-                ctx.DrawEllipse(null, pivot, Project(pivotB), 2.2, 2.2);
+                ctx.DrawEllipse(null, pivotPen, Project(pivotB), 2.2, 2.2);
             }
 
             switch (constraint.Kind)
             {
                 case HavokConstraintKind.Ragdoll:
-                    DrawTwist(ctx, arm, constraint, rotationA, pivotA);
-                    DrawCone(ctx, arm, constraint, rotationA, pivotA);
+                    DrawTwist(ctx, armPen, constraint, rotationA, pivotA);
+                    DrawCone(ctx, armPen, constraint, rotationA, pivotA);
                     break;
                 case HavokConstraintKind.LimitedHinge:
-                    DrawHinge(ctx, arm, constraint, rotationA, pivotB, pivotA);
+                    DrawHinge(ctx, armPen, constraint, rotationA, pivotB, pivotA);
                     break;
             }
         }
+    }
+
+    // The hovered constraint's measured-limits label, drawn above everything else near the
+    // midpoint of its body link so the association reads at a glance.
+    private void DrawConstraintLabel(DrawingContext ctx, HavokRagdollModel model)
+    {
+        var constraint = model.Constraints.FirstOrDefault(c => c.Id == _hoveredConstraint);
+        var bodyA = constraint != null ? model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyA) : null;
+        var bodyB = constraint != null ? model.Bodies.FirstOrDefault(b => b.Id == constraint.BodyB) : null;
+        if (constraint == null || bodyA == null || bodyB == null) return;
+
+        var a = Project(BodyFrame(model, bodyA).Position);
+        var b = Project(BodyFrame(model, bodyB).Position);
+        var text = new FormattedText(ConstraintLabel(constraint, model.Bodies), CultureInfo.InvariantCulture,
+                                     FlowDirection.LeftToRight, Typeface.Default, 11, Ux.TitleBrush);
+        ctx.DrawText(text, new Point((a.X + b.X) / 2 + 10, (a.Y + b.Y) / 2 - 22));
     }
 
     private void DrawTwist(DrawingContext ctx, Pen pen, HavokConstraint constraint,
@@ -622,6 +702,7 @@ public class SkeletonView : Control
 
         NameBoneUnder(at);
         NameBodyUnder(at);
+        NameConstraintUnder(at);
     }
 
     private void NameBodyUnder(Point at)
@@ -643,6 +724,52 @@ public class SkeletonView : Control
         if (found == _hoveredBody) return;
         _hoveredBody = found;
         InvalidateVisual();
+    }
+
+    // Hover picking for constraints: the nearest point on each body-link segment in projected
+    // space, within the same 12px reach the body labels use. Off when constraints are hidden.
+    private void NameConstraintUnder(Point at)
+    {
+        int found = -1;
+        if (ShowConstraints && _bodies != null && _bodies.Constraints.Count > 0)
+        {
+            double nearest = 12 * 12;
+            foreach (var constraint in _bodies.Constraints)
+            {
+                var bodyA = _bodies.Bodies.FirstOrDefault(b => b.Id == constraint.BodyA);
+                var bodyB = _bodies.Bodies.FirstOrDefault(b => b.Id == constraint.BodyB);
+                if (bodyA == null || bodyB == null) continue;
+
+                var a = Project(BodyFrame(_bodies, bodyA).Position);
+                var b = Project(BodyFrame(_bodies, bodyB).Position);
+                double d = DistanceSquaredToSegment(at, a, b);
+                if (d >= nearest) continue;
+                nearest = d;
+                found = constraint.Id;
+            }
+        }
+
+        if (found == _hoveredConstraint) return;
+        _hoveredConstraint = found;
+        InvalidateVisual();
+    }
+
+    private static double DistanceSquaredToSegment(Point p, Point a, Point b)
+    {
+        double alongX = b.X - a.X;
+        double alongY = b.Y - a.Y;
+        double lengthSquared = alongX * alongX + alongY * alongY;
+        if (lengthSquared <= 1e-9)
+        {
+            double qx = p.X - a.X;
+            double qy = p.Y - a.Y;
+            return qx * qx + qy * qy;
+        }
+
+        double t = Math.Clamp(((p.X - a.X) * alongX + (p.Y - a.Y) * alongY) / lengthSquared, 0, 1);
+        double nearX = a.X + t * alongX - p.X;
+        double nearY = a.Y + t * alongY - p.Y;
+        return nearX * nearX + nearY * nearY;
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
