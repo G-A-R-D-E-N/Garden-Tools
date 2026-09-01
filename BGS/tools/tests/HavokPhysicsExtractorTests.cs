@@ -596,6 +596,91 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void ReleasedRagdollSettlesUnderGravityWithoutASolver()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+        var skeleton = new HkxBinaryReader().ReadSkeleton(Fixture(Skeleton));
+        Assert.NotNull(skeleton);
+
+        // Release from an airborne mapped pose (the reference lifted 20 units), so there is
+        // a real fall: the release state is the ragdoll's current physics frames, and the
+        // settle is the solver-free rigid ground stop.
+        var reference = AnimationPose.ReferencePose(skeleton);
+        var lifted = new AnimationPose.Pose();
+        foreach (var b in reference.Bones)
+            lifted.Bones.Add(new AnimationPose.Bone(b.Index, b.Name, b.Parent,
+                                                    b.Position + new Vector3(0, 0, 20), b.Rotation));
+
+        var view = new SkeletonView();
+        view.SetBodies(model);
+        view.Show(lifted);
+        view.StartDrop();
+        Assert.True(view.IsDropped);
+
+        int steps = 0;
+        while (!view.DropResting && steps < 600) { view.AdvanceDrop(1f / 60f); steps++; }
+        Assert.True(view.DropResting, "the drop settles");
+        Assert.True(steps is > 5 and < 600, $"the drop moved and finished in {steps} steps");
+
+        var settled = view.DroppedPositions!;
+        Assert.Equal(18, settled.Count);
+        foreach (var p in settled)
+        {
+            Assert.True(float.IsFinite(p.X) && float.IsFinite(p.Y) && float.IsFinite(p.Z));
+            Assert.True(p.Z >= -0.05f, $"bone settled underground at z={p.Z}");
+        }
+
+        // The rigid drop preserves every captured chain length exactly, and the ragdoll fell
+        // the full lift distance onto the ground.
+        var mapped = model.MapPose(lifted.Bones
+            .Select(b => new HavokBoneFrame(b.Position, b.Rotation)).ToArray())!;
+        var parents = model.Skeleton!.ParentIndices;
+        for (int i = 0; i < 18 && i < parents.Count; i++)
+        {
+            int parent = parents[i];
+            if (parent < 0) continue;
+            float captured = Vector3.Distance(mapped[parent].Position, mapped[i].Position);
+            float settledLength = Vector3.Distance(settled[parent], settled[i]);
+            Assert.True(Math.Abs(settledLength - captured) < 0.01f,
+                $"chain {parent}->{i} length drifted {captured:F3} -> {settledLength:F3}");
+        }
+        // The ragdoll fell the full lift distance plus its reference ground clearance, and
+        // every bone fell exactly the measured ground-stop distance (the lowest body vertex
+        // of the lifted pose - the bodies, not the joints, touch the ground plane).
+        float fell = mapped[0].Position.Z - settled[0].Z;
+        Assert.True(fell is > 15f and <= 25f, $"the root fell {fell:F2} units");
+        Assert.True(Math.Abs(fell - view.DropDistance) < 0.01f,
+            $"the root fell exactly the ground-stop distance {view.DropDistance:F2}");
+        Assert.True(fell > 15f, "the drop was not a no-op");
+    }
+
+    [Fact]
+    public void DropClearsBackToTheMappedPoseAndResetsWithTheView()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+        var skeleton = new HkxBinaryReader().ReadSkeleton(Fixture(Skeleton));
+        Assert.NotNull(skeleton);
+
+        var view = new SkeletonView();
+        view.SetBodies(model);
+        view.Show(AnimationPose.ReferencePose(skeleton!));
+        view.StartDrop();
+        Assert.True(view.IsDropped);
+        view.AdvanceDrop(1f);
+        Assert.True(view.IsDropped);
+
+        view.ClearDrop();
+        Assert.False(view.IsDropped);
+        Assert.Null(view.DroppedPositions);
+
+        view.StartDrop();
+        view.Reset();
+        Assert.False(view.IsDropped);
+    }
+
+    [Fact]
     public void RagdollFallsBackToTheSiblingSkeletonForAnAnimationFile()
     {
         // A real animation clip laid out next to its character skeleton exactly like the

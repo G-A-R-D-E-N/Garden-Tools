@@ -138,6 +138,9 @@ public class MainWindow : Window
 
     private readonly Slider _scrub = new() { Minimum = 0, Maximum = 0, SmallChange = 1, LargeChange = 5 };
     private Button _playButton = Ux.Secondary("Play");
+    private readonly Button _dropButton = Ux.Secondary("Drop");
+    private readonly DispatcherTimer _dropClock =
+        new() { Interval = TimeSpan.FromMilliseconds(16) };
     private HkxSkeleton? _poseSkeleton;
     private HkxAnimationData? _poseAnimation;
     private string _poseSource = "";
@@ -2762,6 +2765,30 @@ public class MainWindow : Window
         var fit = Ux.Secondary("Fit");
         fit.Click += (_, _) => _skeleton.Frame();
 
+        _dropButton.IsEnabled = false;
+        ToolTip.SetTip(_dropButton, "Release the current ragdoll pose (or the playing frame) and watch a " +
+                                    "gravity-settled approximation of how it would drop - no solver. " +
+                                    "Click again to return to the mapped pose.");
+        _dropClock.Tick += (_, _) =>
+        {
+            _skeleton.AdvanceDrop(0.016f);
+            if (_skeleton.DropResting) _dropClock.Stop();
+        };
+        _dropButton.Click += (_, _) =>
+        {
+            if (_skeleton.IsDropped)
+            {
+                _skeleton.ClearDrop();
+                _dropClock.Stop();
+            }
+            else
+            {
+                _skeleton.StartDrop();
+                if (_skeleton.IsDropped) _dropClock.Start();
+            }
+            _dropButton.Content = _skeleton.IsDropped ? "Recover" : "Drop";
+        };
+
         var reference = new CheckBox
         {
             Content = "Reference pose",
@@ -2876,7 +2903,7 @@ public class MainWindow : Window
 
         var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         foreach (var control in new Control[]
-                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle, reload, mesh, clearMesh })
+                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle, _dropButton, reload, mesh, clearMesh })
             transport.Children.Add(control);
 
         var bar = Bar(Ux.Pill(_playbackSummary), transport);
@@ -2953,6 +2980,8 @@ public class MainWindow : Window
         _framesToggle.IsChecked = any;
         _engineerToggle.IsEnabled = any;
         if (!any && engineering) _engineerToggle.IsChecked = false;
+        _dropButton.IsEnabled = any;
+        if (!any && _skeleton.IsDropped) _skeleton.ClearDrop();
         _skeleton.SetBodies(any ? _ragdoll : null);
         UpdateScaleStatus();
         if (!any) return;
@@ -3312,6 +3341,8 @@ public class MainWindow : Window
         _scrub.Value = 0;
         _scrubbing = false;
         _skeleton.Reset();
+        _dropClock.Stop();
+        _dropButton.Content = "Drop";
         _frameLabel.Text = "";
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +

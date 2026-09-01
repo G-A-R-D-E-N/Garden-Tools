@@ -243,6 +243,7 @@ public class SkeletonView : Control
         _hoveredConstraint = -1;
         _pinnedConstraint = -1;
         _physicsPose = null;
+        ClearDrop();
         _yaw = 0.6;
         _pitch = 0.25;
         _zoom = 1;
@@ -256,6 +257,114 @@ public class SkeletonView : Control
         UpdatePhysicsPose();
         FitBodies();
         InvalidateVisual();
+    }
+
+    // ---- gravity-settled release preview (no solver) ----
+    // StartDrop captures the current mapped ragdoll pose (the animation-following physics
+    // frames, or the measured reference when nothing plays) as a release state. The settled
+    // approximation, with no rigid-body solver, is the pose falling under gravity until its
+    // lowest shape vertex rests on the ground plane (z=0): a rigid drop, so every captured
+    // chain length is preserved exactly, nothing penetrates the ground, and the result is
+    // deterministic. Limb folding needs a solver and is deliberately out of scope.
+    private const float DropGravity = 600f;   // file units per second^2
+    private const float DropRestEpsilon = 0.01f;
+
+    private Vector3[]? _releasePositions;
+    private Quaternion[]? _dropRotations;
+    private Vector3[]? _dropPositions;
+    private float _dropTime;
+    private float _dropTotal;
+    private bool _dropResting;
+
+    public bool IsDropped => _dropPositions != null;
+    public bool DropResting => _dropResting;
+    internal IReadOnlyList<Vector3>? DroppedPositions => _dropPositions;
+    internal float DropDistance => _dropTotal;
+
+    public void StartDrop()
+    {
+        if (_bodies is not { Skeleton: { ReferencePose.Count: > 0 } }) return;
+        var source = ReleaseSourceFrames();
+        if (source == null || source.Length == 0) return;
+
+        _releasePositions = source.Select(f => f.Position).ToArray();
+        _dropRotations = source.Select(f => f.Rotation).ToArray();
+        _dropPositions = (Vector3[])_releasePositions.Clone();
+        _dropTime = 0;
+        _dropTotal = Math.Max(0, GlobalLowestVertexZ());
+        _dropResting = _dropTotal <= DropRestEpsilon;
+        InvalidateVisual();
+    }
+
+    public void ClearDrop()
+    {
+        _releasePositions = null;
+        _dropRotations = null;
+        _dropPositions = null;
+        _dropTime = 0;
+        _dropTotal = 0;
+        _dropResting = false;
+        InvalidateVisual();
+    }
+
+    // Fall from rest under gravity until the ground stop; the whole pose drops rigidly, so
+    // distances between bones never change.
+    public void AdvanceDrop(float seconds)
+    {
+        if (_dropPositions == null || _dropResting) return;
+        _dropTime += seconds;
+        float fallen = Math.Min(_dropTotal, 0.5f * DropGravity * _dropTime * _dropTime);
+        for (int i = 0; i < _dropPositions.Length; i++)
+        {
+            var p = _releasePositions![i];
+            _dropPositions[i] = new Vector3(p.X, p.Y, p.Z - fallen);
+        }
+        if (_dropTotal - fallen <= DropRestEpsilon) _dropResting = true;
+        InvalidateVisual();
+    }
+
+    // The lowest shape-vertex world height across all bodies at the captured pose: the drop
+    // brings exactly that point to the ground plane.
+    private float GlobalLowestVertexZ()
+    {
+        float lowest = float.MaxValue;
+        foreach (var body in _bodies!.Bodies)
+        {
+            var shape = _bodies.Shapes.FirstOrDefault(s => s.Id == body.ShapeId);
+            if (shape == null) continue;
+            var (position, rotation) = BodyFrame(_bodies, body);
+            foreach (var v in shape.Vertices)
+            {
+                var world = position + Vector3.Transform(v, rotation);
+                lowest = Math.Min(lowest, world.Z);
+            }
+        }
+        return lowest == float.MaxValue ? 0 : lowest;
+    }
+
+    // The frames the drop starts from: the mapped animation pose when one is playing,
+    // otherwise the measured reference pose composed down the physics skeleton.
+    private HavokBoneFrame[]? ReleaseSourceFrames()
+    {
+        if (_physicsPose is { Length: > 0 }) return _physicsPose;
+
+        var skeleton = _bodies!.Skeleton!;
+        if (skeleton.ReferencePose.Count == 0) return null;
+        var positions = skeleton.WorldReferencePositions();
+        int n = positions.Count;
+        var frames = new HavokBoneFrame[n];
+        for (int i = 0; i < n; i++)
+        {
+            var rotation = Quaternion.Identity;
+            foreach (var binding in _bodies.BoneBindings)
+            {
+                if (binding.BoneIndex != i) continue;
+                var body = _bodies.Bodies.FirstOrDefault(b => b.Id == binding.BodyId);
+                if (body != null) { rotation = body.Rotation; break; }
+            }
+            frames[i] = new HavokBoneFrame(positions[i], rotation);
+        }
+        return frames;
     }
 
     // Re-compose the physics skeleton from the animation pose currently shown. When the file
@@ -276,16 +385,20 @@ public class SkeletonView : Control
         _physicsPose = _bodies.MapPose(source);
     }
 
-    // The world frame a body draws at: its measured cinfo frame, or the pose of the physics
-    // bone it is bound to when the ragdoll follows the animation. A body with no binding to
-    // a posed bone keeps its measured frame.
+    // The world frame a body draws at: its measured cinfo frame, the pose of the physics
+    // bone it is bound to when the ragdoll follows the animation, or the settled drop frame
+    // while the release preview is running. A body with no binding to a posed bone keeps its
+    // measured frame.
     private (Vector3 Position, Quaternion Rotation) BodyFrame(HavokRagdollModel model, HavokRigidBody body)
     {
-        if (_physicsPose != null)
-            foreach (var binding in model.BoneBindings)
-                if (binding.BodyId == body.Id &&
-                    binding.BoneIndex >= 0 && binding.BoneIndex < _physicsPose.Length)
-                    return (_physicsPose[binding.BoneIndex].Position, _physicsPose[binding.BoneIndex].Rotation);
+        foreach (var binding in model.BoneBindings)
+        {
+            if (binding.BodyId != body.Id) continue;
+            if (_dropPositions != null && binding.BoneIndex >= 0 && binding.BoneIndex < _dropPositions.Length)
+                return (_dropPositions[binding.BoneIndex], _dropRotations![binding.BoneIndex]);
+            if (_physicsPose != null && binding.BoneIndex >= 0 && binding.BoneIndex < _physicsPose.Length)
+                return (_physicsPose[binding.BoneIndex].Position, _physicsPose[binding.BoneIndex].Rotation);
+        }
         return (body.Position, body.Rotation);
     }
 
@@ -496,11 +609,14 @@ public class SkeletonView : Control
         var chain = new Pen(new SolidColorBrush(Ux.Good, 0.95), 2);
         var marker = new SolidColorBrush(Ux.Good, 0.9);
 
-        // Posed by the current animation when a mapper is present; otherwise the measured
-        // reference pose composed down the parent chain.
-        Vector3[] positions = _physicsPose != null
-            ? _physicsPose.Take(model.Skeleton!.BoneNames.Count).Select(p => p.Position).ToArray()
-            : model.Skeleton!.WorldReferencePositions().ToArray();
+        // Posed by the current animation when a mapper is present, by the settled drop
+        // frames during the release preview, or the measured reference pose composed down
+        // the parent chain.
+        Vector3[] positions = _dropPositions != null
+            ? _dropPositions
+            : _physicsPose != null
+                ? _physicsPose.Take(model.Skeleton!.BoneNames.Count).Select(p => p.Position).ToArray()
+                : model.Skeleton!.WorldReferencePositions().ToArray();
         var parents = model.Skeleton.ParentIndices;
 
         for (int i = 0; i < positions.Length && i < parents.Count; i++)
