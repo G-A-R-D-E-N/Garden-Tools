@@ -596,6 +596,33 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void ConstraintInspectionLineShowsMeasuredLimitsAndPivots()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // The Playback summary line's per-constraint inspection: kind, ids, body names,
+        // every measured limit in degrees and the local pivot offsets, all from the file.
+        var ragdoll = model.Constraints.First(c => c.Id == 0);
+        Assert.Equal("ragdoll: c0 Ragdoll_NPC L Thigh(1) -> Ragdoll_NPC COM(0) - " +
+                     "twist -15.0..15.0 deg, cone 30.0 deg, " +
+                     "pivotA (0.00, 0.00, 0.00), pivotB (0.00, 0.00, 6.62)",
+                     SkeletonView.ConstraintInspectionLine(ragdoll, model.Bodies));
+
+        var hinge = model.Constraints.First(c => c.Id == 3);
+        Assert.Equal("limited hinge: c3 Ragdoll_NPC L Calf(4) -> Ragdoll_NPC L Thigh(1) - " +
+                     "hinge -110.0..1.8 deg, " +
+                     "pivotA (0.00, 0.00, 0.00), pivotB (31.59, -0.03, -0.42)",
+                     SkeletonView.ConstraintInspectionLine(hinge, model.Bodies));
+
+        // A kind with no measured limit atoms and no frames says so plainly, and unknown
+        // body ids fall back to numbered names.
+        var bare = new HavokConstraint { Id = 9, Kind = HavokConstraintKind.Hinge, BodyA = 42, BodyB = 43 };
+        Assert.Equal("hinge: c9 body 42(42) -> body 43(43) - no measured limits",
+                     SkeletonView.ConstraintInspectionLine(bare, model.Bodies));
+    }
+
+    [Fact]
     public void ConstraintPinCyclesOnClick()
     {
         // Click a constraint to pin it; click it again to release; click another to move

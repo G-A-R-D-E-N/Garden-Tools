@@ -130,6 +130,12 @@ public class MainWindow : Window
     private readonly TextBlock _frameLabel = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
     private readonly TextBlock _scaleStatus = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
     private Control? _scalePill;
+
+    // The last SetPlaybackSummary text and brush, so the constraint-inspection line can put
+    // the summary back exactly when the hover/pin selection ends.
+    private string _summaryBaseText = "";
+    private IBrush _summaryBaseBrush = Ux.MetaBrush;
+
     private readonly Slider _scrub = new() { Minimum = 0, Maximum = 0, SmallChange = 1, LargeChange = 5 };
     private Button _playButton = Ux.Secondary("Play");
     private HkxSkeleton? _poseSkeleton;
@@ -2852,6 +2858,7 @@ public class MainWindow : Window
         };
 
         _skeleton.BoneHovered += _ => _skeleton.InvalidateVisual();
+        _skeleton.ConstraintSelectionChanged += ShowConstraintInspection;
 
         var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         foreach (var control in new Control[]
@@ -3429,8 +3436,19 @@ public class MainWindow : Window
 
     private void SetPlaybackSummary(string text, IBrush brush)
     {
+        _summaryBaseText = text;
+        _summaryBaseBrush = brush;
         _playbackSummary.Text = text;
         _playbackSummary.Foreground = brush;
+    }
+
+    // The Playback summary line carries per-constraint limit inspection while a constraint
+    // is hovered or pinned (amber, like the constraint overlay), and restores the previous
+    // summary text and colour when the selection clears.
+    private void ShowConstraintInspection(string? line)
+    {
+        _playbackSummary.Text = line ?? _summaryBaseText;
+        _playbackSummary.Foreground = line == null ? _summaryBaseBrush : Ux.WarnBrush;
     }
 
     public SkeletonView Viewport => _skeleton;

@@ -42,9 +42,30 @@ public class SkeletonView : Control
     public string HoveredBone { get; private set; } = "";
     public Action<string>? BoneHovered;
 
+    // Fired whenever the selected constraint (pinned, else hovered) changes or clears, with
+    // its measured-limits inspection line (null when nothing is selected) so the Playback
+    // summary can show per-constraint details and restore itself when the selection goes.
+    public Action<string?>? ConstraintSelectionChanged;
+
     public bool ShowReference { get; set; }
     public bool ShowBodies { get; set; }
-    public bool ShowConstraints { get; set; }
+
+    private bool _showConstraints;
+
+    // Hiding the Constraints overlay clears the hover/pin and refreshes the Playback
+    // summary line, so it never keeps showing a constraint that is no longer drawn.
+    public bool ShowConstraints
+    {
+        get => _showConstraints;
+        set
+        {
+            if (_showConstraints == value) return;
+            _showConstraints = value;
+            NotifyConstraintSelection();
+            InvalidateVisual();
+        }
+    }
+
     public bool ShowBindings { get; set; }
     public bool ShowPhysicsSkeleton { get; set; }
     public bool ShowFrames { get; set; }
@@ -100,12 +121,14 @@ public class SkeletonView : Control
     public void HoverConstraintForTest(int constraintId)
     {
         _hoveredConstraint = constraintId;
+        NotifyConstraintSelection();
         InvalidateVisual();
     }
 
     public void PinConstraintForTest(int constraintId)
     {
         _pinnedConstraint = constraintId;
+        NotifyConstraintSelection();
         InvalidateVisual();
     }
 
@@ -114,6 +137,63 @@ public class SkeletonView : Control
     // the pin - the usual selection semantics.
     public static int PinnedAfterClick(int currentlyPinned, int picked) =>
         picked < 0 ? -1 : picked == currentlyPinned ? -1 : picked;
+
+    // The constraint the Playback summary reports: the click-pinned one while it exists,
+    // else the one under the cursor. Null (and a null line) when nothing is selected or the
+    // Constraints overlay is hidden.
+    private void NotifyConstraintSelection()
+    {
+        string? line = null;
+        int id = _pinnedConstraint >= 0 ? _pinnedConstraint : _hoveredConstraint;
+        if (_showConstraints && id >= 0 && _bodies is { Constraints.Count: > 0 })
+        {
+            var constraint = _bodies.Constraints.FirstOrDefault(c => c.Id == id);
+            if (constraint != null) line = ConstraintInspectionLine(constraint, _bodies.Bodies);
+        }
+        ConstraintSelectionChanged?.Invoke(line);
+    }
+
+    // The per-constraint inspection line for the Playback summary: kind, ids, body names,
+    // every measured limit in degrees, and the local pivot offsets - more detail than the
+    // viewport hover label, for reading the constraint at a glance.
+    public static string ConstraintInspectionLine(HavokConstraint constraint,
+                                                  IReadOnlyList<HavokRigidBody> bodies)
+    {
+        string bodyA = bodies.FirstOrDefault(b => b.Id == constraint.BodyA)?.Name ?? "";
+        string bodyB = bodies.FirstOrDefault(b => b.Id == constraint.BodyB)?.Name ?? "";
+        if (bodyA.Length == 0) bodyA = "body " + constraint.BodyA;
+        if (bodyB.Length == 0) bodyB = "body " + constraint.BodyB;
+
+        var parts = new List<string>();
+        switch (constraint.Kind)
+        {
+            case HavokConstraintKind.Ragdoll:
+                if (constraint.TwistMinAngle is float twistMin && constraint.TwistMaxAngle is float twistMax)
+                    parts.Add("twist " + Angle(twistMin) + ".." + Angle(twistMax) + " deg");
+                if (constraint.ConeMaxAngle is float coneMax)
+                    parts.Add("cone " + Angle(coneMax) + " deg");
+                break;
+            case HavokConstraintKind.LimitedHinge:
+                if (constraint.MinAngle != 0 || constraint.MaxAngle != 0)
+                    parts.Add("hinge " + Angle(constraint.MinAngle) + ".." + Angle(constraint.MaxAngle) + " deg");
+                break;
+        }
+
+        if (constraint.FrameA != null)
+            parts.Add("pivotA " + Offset(constraint.FrameA));
+        if (constraint.FrameB != null)
+            parts.Add("pivotB " + Offset(constraint.FrameB));
+
+        string measured = parts.Count > 0 ? string.Join(", ", parts) : "no measured limits";
+        return $"{KindName(constraint.Kind)}: c{constraint.Id} {bodyA}({constraint.BodyA}) -> " +
+               $"{bodyB}({constraint.BodyB}) - {measured}";
+    }
+
+    private static string Offset(float[] frame) =>
+        "(" + F(frame[12]) + ", " + F(frame[13]) + ", " + F(frame[14]) + ")";
+
+    private static string F(float v) =>
+        v == 0 ? "0.00" : v.ToString("0.00", CultureInfo.InvariantCulture);
 
     private (Vector3 A, Vector3 B)[]? _mesh;
 
@@ -560,15 +640,7 @@ public class SkeletonView : Control
         if (bodyA.Length == 0) bodyA = "body " + constraint.BodyA;
         if (bodyB.Length == 0) bodyB = "body " + constraint.BodyB;
 
-        string kind = constraint.Kind switch
-        {
-            HavokConstraintKind.Ragdoll => "ragdoll",
-            HavokConstraintKind.LimitedHinge => "limited hinge",
-            HavokConstraintKind.Hinge => "hinge",
-            HavokConstraintKind.BallAndSocket => "ball and socket",
-            HavokConstraintKind.Fixed => "fixed",
-            _ => "constraint",
-        };
+        string kind = KindName(constraint.Kind);
 
         var limits = new List<string>();
         switch (constraint.Kind)
@@ -591,6 +663,16 @@ public class SkeletonView : Control
 
     private static string Angle(float radians) =>
         (radians * 180f / MathF.PI).ToString("0.0", CultureInfo.InvariantCulture);
+
+    private static string KindName(HavokConstraintKind kind) => kind switch
+    {
+        HavokConstraintKind.Ragdoll => "ragdoll",
+        HavokConstraintKind.LimitedHinge => "limited hinge",
+        HavokConstraintKind.Hinge => "hinge",
+        HavokConstraintKind.BallAndSocket => "ball and socket",
+        HavokConstraintKind.Fixed => "fixed",
+        _ => "constraint",
+    };
 
     private void DrawConstraints(DrawingContext ctx, HavokRagdollModel model)
     {
@@ -819,9 +901,15 @@ public class SkeletonView : Control
     private void NameConstraintUnder(Point at)
     {
         int found = PickConstraintUnder(at);
-        if (!ShowConstraints && _pinnedConstraint >= 0) _pinnedConstraint = -1;
-        if (found == _hoveredConstraint) return;
+        bool pinCleared = false;
+        if (!ShowConstraints && _pinnedConstraint >= 0)
+        {
+            _pinnedConstraint = -1;
+            pinCleared = true;
+        }
+        if (found == _hoveredConstraint && !pinCleared) return;
         _hoveredConstraint = found;
+        NotifyConstraintSelection();
         InvalidateVisual();
     }
 
@@ -884,6 +972,7 @@ public class SkeletonView : Control
             if (next != _pinnedConstraint)
             {
                 _pinnedConstraint = next;
+                NotifyConstraintSelection();
                 InvalidateVisual();
             }
         }
