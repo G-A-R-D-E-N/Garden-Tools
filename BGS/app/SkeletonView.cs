@@ -32,28 +32,16 @@ public class SkeletonView : Control
     private HavokRagdollModel? _bodies;
     private Vector3 _bodyCentre;
     private float _bodyFit = 1;
-
-    // The physics skeleton's world frames posed from the animation currently shown, via the
-    // file's own hkaSkeletonMapper (or null when the file has no mapper or nothing plays);
-    // all physics overlays draw through these when they exist, and otherwise fall back to
-    // the measured static file-space reference.
     private HavokBoneFrame[]? _physicsPose;
 
     public string HoveredBone { get; private set; } = "";
     public Action<string>? BoneHovered;
-
-    // Fired whenever the selected constraint (pinned, else hovered) changes or clears, with
-    // its measured-limits inspection line (null when nothing is selected) so the Playback
-    // summary can show per-constraint details and restore itself when the selection goes.
     public Action<string?>? ConstraintSelectionChanged;
 
     public bool ShowReference { get; set; }
     public bool ShowBodies { get; set; }
 
     private bool _showConstraints;
-
-    // Hiding the Constraints overlay clears the hover/pin and refreshes the Playback
-    // summary line, so it never keeps showing a constraint that is no longer drawn.
     public bool ShowConstraints
     {
         get => _showConstraints;
@@ -61,6 +49,11 @@ public class SkeletonView : Control
         {
             if (_showConstraints == value) return;
             _showConstraints = value;
+            if (!value)
+            {
+                _hoveredConstraint = -1;
+                _pinnedConstraint = -1;
+            }
             NotifyConstraintSelection();
             InvalidateVisual();
         }
@@ -69,10 +62,6 @@ public class SkeletonView : Control
     public bool ShowBindings { get; set; }
     public bool ShowPhysicsSkeleton { get; set; }
     public bool ShowFrames { get; set; }
-
-    // The body-frame engineering view: draw only the measured axis triads and COM markers
-    // (plus the ground grid for orientation) whatever the other overlay toggles say, and
-    // never auto-frame the camera. The Fit button still frames the bodies manually.
     public bool EngineeringFrames { get; set; }
 
     public int DrawnBones => _pose?.Bones.Count ?? 0;
@@ -84,15 +73,9 @@ public class SkeletonView : Control
     public int DrawnFrames => _bodies?.Bodies.Count ?? 0;
     public int DrawnMappings => _bodies?.Mappings.Count ?? 0;
 
-    // The fitted half-extent of the rigid bodies (FitBodies' bounding-box half-size) and the
-    // length of the axis stubs the Body frames overlay draws, in the file's own units. Both
-    // are published for the Playback viewport status line, so ragdoll dimensions can be
-    // sanity-checked across files.
     public float BodyFit => _bodyFit;
     public float AxisStubLength => Math.Max(0.5f, _bodyFit * 0.06f);
 
-    // The scale/unit readout for the Playback viewport status line. Empty when no ragdoll
-    // model is loaded, so the status pill stays hidden.
     public string ScaleStatusText
     {
         get
@@ -120,8 +103,6 @@ public class SkeletonView : Control
         InvalidateVisual();
     }
 
-    // Body frame pins are multi-select: clicking a body flips it in the pinned set, so
-    // several measured COM + stub labels can stay on screen at once for comparison.
     public void ToggleBodyPinForTest(int bodyId)
     {
         if (!_pinnedBodies.Remove(bodyId)) _pinnedBodies.Add(bodyId);
@@ -142,15 +123,9 @@ public class SkeletonView : Control
         InvalidateVisual();
     }
 
-    // Click-to-pin bookkeeping: clicking the pinned constraint unpins it, clicking another
-    // one moves the pin, and a click that hits no constraint (empty space or a body) clears
-    // the pin - the usual selection semantics.
     public static int PinnedAfterClick(int currentlyPinned, int picked) =>
         picked < 0 ? -1 : picked == currentlyPinned ? -1 : picked;
 
-    // The constraint the Playback summary reports: the click-pinned one while it exists,
-    // else the one under the cursor. Null (and a null line) when nothing is selected or the
-    // Constraints overlay is hidden.
     private void NotifyConstraintSelection()
     {
         string? line = null;
@@ -163,9 +138,6 @@ public class SkeletonView : Control
         ConstraintSelectionChanged?.Invoke(line);
     }
 
-    // The per-constraint inspection line for the Playback summary: kind, ids, body names,
-    // every measured limit in degrees, and the local pivot offsets - more detail than the
-    // viewport hover label, for reading the constraint at a glance.
     public static string ConstraintInspectionLine(HavokConstraint constraint,
                                                   IReadOnlyList<HavokRigidBody> bodies)
     {
@@ -217,8 +189,6 @@ public class SkeletonView : Control
     {
         _pose = pose;
         _reference = reference;
-        // The engineering view never auto-frames: loading keeps the camera exactly where
-        // the user left it, so the triads can be inspected at the same scale and angle.
         if (!EngineeringFrames && pose != null && pose.Bones.Count > 0)
         {
             _centre = pose.Centre;
@@ -270,22 +240,11 @@ public class SkeletonView : Control
         InvalidateVisual();
     }
 
-    // ---- gravity-settled release preview (no solver) ----
-    // StartDrop captures the current mapped ragdoll pose (the animation-following physics
-    // frames, or the measured reference when nothing plays) as a release state, then the
-    // preview animates every constrained body under gravity with no rigid-body solver: each
-    // body integrates its own velocity, every constraint re-projects its pivots to the
-    // captured world offset (the joint can rotate but not stretch, within the projection
-    // residual), its relative rotation is clamped to the measured twist/cone/hinge limits
-    // (so limbs fold only as far as the file allows), and each body stops when its lowest
-    // shape vertex rests on the ground plane (z=0). The caller's wall-clock slices accumulate
-    // and only exact 120 Hz substeps enter the simulation, making the result independent of
-    // UI timer chunking.
-    private const float DropGravity = 600f;         // file units per second^2
-    private const float DropRestEpsilon = 0.01f;    // resting position delta, file units
-    private const float DropDamping = 4f;           // 1/second, decays the release swing
-    private const float DropSubstep = 1f / 120f;    // exact simulation step
-    private const int DropIterations = 20;          // constraint/ground passes per substep
+    private const float DropGravity = 600f;
+    private const float DropRestEpsilon = 0.01f;
+    private const float DropDamping = 4f;
+    private const float DropSubstep = 1f / 120f;
+    private const int DropIterations = 20;
 
     private Vector3[]? _releasePositions;
     private Quaternion[]? _releaseRotations;
@@ -319,10 +278,6 @@ public class SkeletonView : Control
         _dropVelocities = new Vector3[_dropPositions.Length];
         _dropTotal = Math.Max(0, GlobalLowestVertexZ());
 
-        // Body list index and render-bone index for every rigid body, plus the captured
-        // world offset between each constraint's two pivots: the joint geometry is frozen at
-        // release, so the settle can only rotate joints - the pivot offset is re-projected
-        // every pass, so a joint never visibly stretches (within the projection residual).
         _dropBodyIndexById = new Dictionary<int, int>();
         for (int i = 0; i < _bodies.Bodies.Count; i++) _dropBodyIndexById[_bodies.Bodies[i].Id] = i;
         _dropBodyBoneIndexes = new int[_bodies.Bodies.Count];
@@ -337,10 +292,6 @@ public class SkeletonView : Control
             }
         }
 
-        // The measured FO4 character graph is a tree (17 joints over 18 bodies). BFS from
-        // the first body establishes one kinematic child per joint so a hub is never rotated
-        // repeatedly by its neighbours' clamps. Disconnected bodies keep MaxValue depth and
-        // still participate in gravity/ground through their own bindings.
         _dropBodyDepth = new int[_bodies.Bodies.Count];
         Array.Fill(_dropBodyDepth, int.MaxValue);
         if (_dropBodyDepth.Length > 0)
@@ -381,8 +332,6 @@ public class SkeletonView : Control
         }
 
         _dropAccumulator = 0;
-        // A grounded standing pose must still be released. Gravity plus the constraints decide
-        // whether it can remain standing; ground contact alone is not a reason to skip the sim.
         _dropResting = false;
         InvalidateVisual();
     }
@@ -404,10 +353,6 @@ public class SkeletonView : Control
         InvalidateVisual();
     }
 
-    // Advance the release preview by a wall-clock slice. The wall-clock time is accumulated
-    // and consumed only in exact 1/120-second steps; no short remainder step enters the sim,
-    // so 16 ms UI ticks and any other chunking produce the same trajectory for equal elapsed
-    // simulated time.
     public void AdvanceDrop(float seconds)
     {
         if (_dropPositions == null || _dropResting || _dropBodyIndexById == null ||
@@ -426,9 +371,6 @@ public class SkeletonView : Control
         InvalidateVisual();
     }
 
-    // The deterministic per-body settle core. Only bones that are actually bound to rigid
-    // bodies participate in gravity, damping and rest detection. Unbound skeleton/helper bones
-    // stay at the captured pose and therefore cannot fall forever or keep the preview awake.
     internal static bool StepConstrainedRelease(
         HavokRagdollModel model,
         Dictionary<int, int> bodyIndexById,
@@ -468,10 +410,6 @@ public class SkeletonView : Control
 
                 var rotationA = rotations[ba];
                 var rotationB = rotations[bb];
-
-                // Re-attach the two pivots at the captured offset, weighted by mass so a
-                // heavy body barely moves while a light one follows it: a grounded child
-                // holds its parent up instead of being dragged through the floor.
                 var pivotA = positions[ba] + Vector3.Transform(Translation(constraint.FrameA), rotationA);
                 var pivotB = positions[bb] + Vector3.Transform(Translation(constraint.FrameB), rotationB);
                 var correction = pivotA + pivotOffsets[constraint.Id] - pivotB;
@@ -481,9 +419,6 @@ public class SkeletonView : Control
                 positions[ba] -= correction * (massB / total);
                 positions[bb] += correction * (massA / total);
 
-                // Clamp the joint's relative rotation to the measured limits. The tree child
-                // (the body further from the root in the BFS depth map) is the one adjusted,
-                // so each joint is clamped exactly once and a hub body is never overwritten.
                 bool childIsA = bodyDepth[ai] > bodyDepth[bi];
                 int childBone = childIsA ? ba : bb;
                 if (constraint.Kind == HavokConstraintKind.Ragdoll)
@@ -517,8 +452,6 @@ public class SkeletonView : Control
                 }
             }
 
-            // Ground: a body stops once its lowest shape vertex reaches z = 0, with contact
-            // friction on the tangential velocity.
             foreach (var body in model.Bodies)
             {
                 if (!bodyIndexById.TryGetValue(body.Id, out int bi)) continue;
@@ -550,11 +483,6 @@ public class SkeletonView : Control
         return resting;
     }
 
-    // Clamp the child's rotation within the measured ragdoll limits (twist range and cone
-    // half-angle) relative to its parent. The twist and cone axes are different frame
-    // columns, so clamping one can push the other out; a few passes converge (the fixture
-    // limits are tens of degrees). When the file's A side is the child, the relative is
-    // Inverse(child) * parent in the child's frame and the child is adjusted on the right.
     private static Quaternion ClampConstraintRotation(
         HavokConstraint constraint, Quaternion rotationParent, Quaternion rotationChild, bool fileAIsChild)
     {
@@ -647,8 +575,6 @@ public class SkeletonView : Control
         return Quaternion.Normalize(Quaternion.Slerp(Quaternion.Identity, swing, t) * twist);
     }
 
-    // The lowest shape-vertex world height across all bodies at the captured pose: the drop
-    // brings exactly that point to the ground plane.
     private float GlobalLowestVertexZ()
     {
         float lowest = float.MaxValue;
@@ -666,34 +592,13 @@ public class SkeletonView : Control
         return lowest == float.MaxValue ? 0 : lowest;
     }
 
-    // The frames the drop starts from: the mapped animation pose when one is playing,
-    // otherwise the measured reference pose composed down the physics skeleton.
     private HavokBoneFrame[]? ReleaseSourceFrames()
     {
-        if (_physicsPose is { Length: > 0 }) return _physicsPose;
-
-        var skeleton = _bodies!.Skeleton!;
-        if (skeleton.ReferencePose.Count == 0) return null;
-        var positions = skeleton.WorldReferencePositions();
-        int n = positions.Count;
-        var frames = new HavokBoneFrame[n];
-        for (int i = 0; i < n; i++)
-        {
-            var rotation = Quaternion.Identity;
-            foreach (var binding in _bodies.BoneBindings)
-            {
-                if (binding.BoneIndex != i) continue;
-                var body = _bodies.Bodies.FirstOrDefault(b => b.Id == binding.BodyId);
-                if (body != null) { rotation = body.Rotation; break; }
-            }
-            frames[i] = new HavokBoneFrame(positions[i], rotation);
-        }
-        return frames;
+        if (_physicsPose is { Length: > 0 }) return (HavokBoneFrame[])_physicsPose.Clone();
+        if (_bodies?.Skeleton is not { ReferencePose.Count: > 0 } skeleton) return null;
+        return skeleton.WorldReferenceFrames().ToArray();
     }
 
-    // Re-compose the physics skeleton from the animation pose currently shown. When the file
-    // carries a mapper and a pose is present, every physics bone gets a mapped world frame;
-    // otherwise the overlays keep using the measured static reference.
     private void UpdatePhysicsPose()
     {
         if (_bodies == null || _pose == null || _bodies.Mappings.Count == 0)
@@ -709,10 +614,6 @@ public class SkeletonView : Control
         _physicsPose = _bodies.MapPose(source);
     }
 
-    // The world frame a body draws at: its measured cinfo frame, the pose of the physics
-    // bone it is bound to when the ragdoll follows the animation, or the settled drop frame
-    // while the release preview is running. A body with no binding to a posed bone keeps its
-    // measured frame.
     private (Vector3 Position, Quaternion Rotation) BodyFrame(HavokRagdollModel model, HavokRigidBody body)
     {
         foreach (var binding in model.BoneBindings)
@@ -850,26 +751,26 @@ public class SkeletonView : Control
             DrawConstraints(ctx, _bodies);
 
         var bone = new Pen(Ux.MetaBrush, 1.6);
-        foreach (var (from, to) in pose.Links)
-            ctx.DrawLine(bone, Project(pose.Bones[from].Position), Project(pose.Bones[to].Position));
-
-        foreach (var b in pose.Bones)
+        if (pose != null)
         {
-            var at = Project(b.Position);
-            bool root = b.Parent < 0;
-            bool hovered = b.Name == HoveredBone && HoveredBone.Length > 0;
-            double radius = hovered ? 4.5 : root ? 3.5 : 2;
-            var brush = hovered ? Ux.AccentBrush : root ? Ux.CodeBrush : Ux.TitleBrush;
-            ctx.DrawEllipse(brush, null, at, radius, radius);
+            foreach (var (from, to) in pose.Links)
+                ctx.DrawLine(bone, Project(pose.Bones[from].Position), Project(pose.Bones[to].Position));
+
+            foreach (var b in pose.Bones)
+            {
+                var at = Project(b.Position);
+                bool root = b.Parent < 0;
+                bool hovered = b.Name == HoveredBone && HoveredBone.Length > 0;
+                double radius = hovered ? 4.5 : root ? 3.5 : 2;
+                var brush = hovered ? Ux.AccentBrush : root ? Ux.CodeBrush : Ux.TitleBrush;
+                ctx.DrawEllipse(brush, null, at, radius, radius);
+            }
         }
 
         if (ShowBindings && _bodies is { BoneBindings.Count: > 0, Skeleton: { BoneNames.Count: > 0 } })
             DrawBindings(ctx, _bodies);
-
         if (physicsSkeleton) DrawPhysicsSkeleton(ctx, _bodies!);
-
-        if (ShowFrames && _bodies is { Bodies.Count: > 0 })
-            DrawFrames(ctx, _bodies);
+        if (ShowFrames && _bodies is { Bodies.Count: > 0 }) DrawFrames(ctx, _bodies);
 
         if (ShowConstraints && _bodies is { Constraints.Count: > 0 })
         {
@@ -906,13 +807,11 @@ public class SkeletonView : Control
                     int to = ring[(i + 1) % ring.Length];
                     if (from < 0 || from >= shape.Vertices.Count ||
                         to < 0 || to >= shape.Vertices.Count) continue;
-
                     var a = position + Vector3.Transform(shape.Vertices[from], rotation);
                     var b = position + Vector3.Transform(shape.Vertices[to], rotation);
                     ctx.DrawLine(hull, Project(a), Project(b));
                 }
             }
-
             ctx.DrawEllipse(null, centre, Project(position), 2.2, 2.2);
         }
     }
@@ -935,7 +834,6 @@ public class SkeletonView : Control
             if (parent >= 0 && parent < positions.Length)
                 ctx.DrawLine(chain, Project(positions[parent]), Project(positions[i]));
         }
-
         for (int i = 0; i < positions.Length; i++)
         {
             bool root = i >= parents.Count || parents[i] < 0;
@@ -950,7 +848,6 @@ public class SkeletonView : Control
         var yAxis = new Pen(new SolidColorBrush(Ux.Good, 0.95), 1.6);
         var zAxis = new Pen(new SolidColorBrush(Ux.Accent, 0.95), 1.6);
         var comPen = new Pen(new SolidColorBrush(Ux.TextTitle, 0.9), 1.2);
-
         float arm = AxisStubLength;
 
         foreach (var body in model.Bodies)
@@ -963,7 +860,7 @@ public class SkeletonView : Control
 
             if (body.CenterOfMass != Vector3.Zero)
             {
-                var com = position + Vector3.Transform(body.CenterOfMass - body.Position, rotation);
+                var com = body.PosedCenterOfMass(position, rotation);
                 ctx.DrawEllipse(null, comPen, Project(com), 2.6, 2.6);
             }
 
@@ -1029,7 +926,6 @@ public class SkeletonView : Control
                 int to = ring[(i + 1) % ring.Length];
                 if (from < 0 || from >= shape.Vertices.Count ||
                     to < 0 || to >= shape.Vertices.Count) continue;
-
                 var (hoveredPosition, hoveredRotation) = BodyFrame(model, hoveredBody);
                 var a = hoveredPosition + Vector3.Transform(shape.Vertices[from], hoveredRotation);
                 var b = hoveredPosition + Vector3.Transform(shape.Vertices[to], hoveredRotation);
@@ -1046,9 +942,7 @@ public class SkeletonView : Control
         string bodyB = bodies.FirstOrDefault(b => b.Id == constraint.BodyB)?.Name ?? "";
         if (bodyA.Length == 0) bodyA = "body " + constraint.BodyA;
         if (bodyB.Length == 0) bodyB = "body " + constraint.BodyB;
-
         string kind = KindName(constraint.Kind);
-
         var limits = new List<string>();
         switch (constraint.Kind)
         {
@@ -1063,7 +957,6 @@ public class SkeletonView : Control
                     limits.Add("hinge " + Angle(constraint.MinAngle) + ".." + Angle(constraint.MaxAngle) + " deg");
                 break;
         }
-
         string measured = limits.Count > 0 ? string.Join(", ", limits) : "no measured limits";
         return kind + ": " + bodyA + " -> " + bodyB + " - " + measured;
     }
@@ -1103,7 +996,6 @@ public class SkeletonView : Control
 
             var (frameA, rotationA) = BodyFrame(model, bodyA);
             var (frameB, rotationB) = BodyFrame(model, bodyB);
-
             ctx.DrawLine(linkPen, Project(frameA), Project(frameB));
 
             if (constraint.FrameA == null) continue;
@@ -1145,14 +1037,12 @@ public class SkeletonView : Control
     }
 
     private void DrawTwist(DrawingContext ctx, Pen pen, HavokConstraint constraint,
-                                  Quaternion rotationA, Vector3 pivotA)
+                           Quaternion rotationA, Vector3 pivotA)
     {
         if (constraint.FrameA == null) return;
         var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistAxis, rotationA));
         var reference = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.TwistRefAxis, rotationA));
-
         ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
-
         if (constraint.TwistMinAngle is float min && constraint.TwistMaxAngle is float max)
         {
             ctx.DrawLine(pen, Project(pivotA),
@@ -1163,19 +1053,16 @@ public class SkeletonView : Control
     }
 
     private void DrawCone(DrawingContext ctx, Pen pen, HavokConstraint constraint,
-                                 Quaternion rotationA, Vector3 pivotA)
+                          Quaternion rotationA, Vector3 pivotA)
     {
         if (constraint.FrameA == null || constraint.ConeMaxAngle is not float coneMax) return;
         var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.ConeTwistAxis, rotationA));
-
         ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
-
         var centre = pivotA + axis * (MathF.Cos(coneMax) * ConstraintArm);
         var radius = MathF.Sin(coneMax) * ConstraintArm;
         var right = Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitY));
         if (right.LengthSquared() < 1e-6f) right = Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitX));
         var up = Vector3.Normalize(Vector3.Cross(axis, right));
-
         const int segments = 24;
         var previous = Project(centre + right * radius);
         for (int i = 1; i <= segments; i++)
@@ -1189,21 +1076,17 @@ public class SkeletonView : Control
     }
 
     private void DrawHinge(DrawingContext ctx, Pen pen, HavokConstraint constraint,
-                                  Quaternion rotationA, Vector3 pivotB, Vector3 pivotA)
+                           Quaternion rotationA, Vector3 pivotB, Vector3 pivotA)
     {
         if (constraint.FrameA == null) return;
         var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.LimitAxis, rotationA));
-
         ctx.DrawLine(pen, Project(pivotA), Project(pivotA + axis * ConstraintArm));
-
         if (constraint.MinAngle == 0 && constraint.MaxAngle == 0) return;
-
         var toward = pivotB - pivotA;
         var perpendicular = toward - axis * Vector3.Dot(toward, axis);
         var reference = perpendicular.LengthSquared() < 1e-8f
             ? Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitY))
             : Vector3.Normalize(perpendicular);
-
         ctx.DrawLine(pen, Project(pivotA),
                           Project(pivotA + RotateAround(reference, axis, constraint.MinAngle) * ConstraintArm));
         ctx.DrawLine(pen, Project(pivotA),
@@ -1225,7 +1108,6 @@ public class SkeletonView : Control
     {
         var pen = new Pen(new SolidColorBrush(Ux.Border, 0.7), 1);
         float reach = (float)(_fit * 1.5);
-
         for (int i = -2; i <= 2; i++)
         {
             float at = reach * i / 2f;
@@ -1255,12 +1137,10 @@ public class SkeletonView : Control
         if (_orbiting)
         {
             _yaw += delta.X * 0.01;
-
             _pitch = Math.Clamp(_pitch + delta.Y * 0.01, -1.5, 1.5);
             InvalidateVisual();
             return;
         }
-
         if (_panning)
         {
             _pan = new Point(_pan.X + delta.X, _pan.Y + delta.Y);
@@ -1290,7 +1170,6 @@ public class SkeletonView : Control
 
         int found = -1;
         double nearest = 12 * 12;
-
         foreach (var body in _bodies.Bodies)
         {
             var p = Project(BodyFrame(_bodies, body).Position);
@@ -1305,13 +1184,7 @@ public class SkeletonView : Control
     private void NameConstraintUnder(Point at)
     {
         int found = PickConstraintUnder(at);
-        bool pinCleared = false;
-        if (!ShowConstraints && _pinnedConstraint >= 0)
-        {
-            _pinnedConstraint = -1;
-            pinCleared = true;
-        }
-        if (found == _hoveredConstraint && !pinCleared) return;
+        if (found == _hoveredConstraint) return;
         _hoveredConstraint = found;
         NotifyConstraintSelection();
         InvalidateVisual();
@@ -1397,7 +1270,6 @@ public class SkeletonView : Control
     {
         string found = "";
         double nearest = 12 * 12;
-
         if (_pose != null)
             foreach (var b in _pose.Bones)
             {
