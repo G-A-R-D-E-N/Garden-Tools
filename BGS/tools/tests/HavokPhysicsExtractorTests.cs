@@ -596,6 +596,28 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void BodyFrameLabelShowsMeasuredComAndStub()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // Body 1 is the L Thigh: measured COM (-8.4326, -0.5324, 53.2274), shown with the
+        // fixture's stub length (fit 60.237 * 0.06) and two-decimal file-unit formatting.
+        var thigh = Assert.Single(model!.Bodies, b => b.Id == 1);
+        Assert.Equal("COM (-8.43, -0.53, 53.23)  stub 3.61",
+                     SkeletonView.BodyFrameLabel(thigh, 3.614246f));
+
+        var root = Assert.Single(model.Bodies, b => b.Id == 0);
+        Assert.Equal("COM (0.02, -0.05, 69.19)  stub 3.61",
+                     SkeletonView.BodyFrameLabel(root, 3.614246f));
+
+        // Zero is the sentinel for a missing COM; the label says so rather than printing a
+        // false origin.
+        var bare = new HavokRigidBody { Id = 42 };
+        Assert.Equal("no measured COM  stub 3.61", SkeletonView.BodyFrameLabel(bare, 3.614246f));
+    }
+
+    [Fact]
     public void ConstraintHoverLabelShowsMeasuredLimits()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));

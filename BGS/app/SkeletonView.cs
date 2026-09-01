@@ -81,6 +81,13 @@ public class SkeletonView : Control
     private int _hoveredConstraint = -1;
 
     public int HoveredConstraintId => _hoveredConstraint;
+    public int HoveredBodyId => _hoveredBody;
+
+    public void HoverBodyForTest(int bodyId)
+    {
+        _hoveredBody = bodyId;
+        InvalidateVisual();
+    }
 
     public void HoverConstraintForTest(int constraintId)
     {
@@ -410,10 +417,39 @@ public class SkeletonView : Control
             // Zero is the sentinel for "no measured COM" (see HavokRigidBody.CenterOfMass).
             // The COM is measured in file space, so when the body moves it keeps its
             // body-relative offset from the measured frame.
-            if (body.CenterOfMass == Vector3.Zero) continue;
-            var com = position + Vector3.Transform(body.CenterOfMass - body.Position, rotation);
-            ctx.DrawEllipse(null, comPen, Project(com), 2.6, 2.6);
+            if (body.CenterOfMass != Vector3.Zero)
+            {
+                var com = position + Vector3.Transform(body.CenterOfMass - body.Position, rotation);
+                ctx.DrawEllipse(null, comPen, Project(com), 2.6, 2.6);
+            }
+
+            // The numeric readout for the hovered body: its measured COM triplet (or a
+            // plain note when the file carries none) and the axis stub length, in file units.
+            if (body.Id == _hoveredBody)
+            {
+                var label = new FormattedText(BodyFrameLabel(body, AxisStubLength),
+                                              CultureInfo.InvariantCulture,
+                                              FlowDirection.LeftToRight, Typeface.Default, 11,
+                                              Ux.TitleBrush);
+                ctx.DrawText(label, new Point(at.X + 10, at.Y - 16));
+            }
         }
+    }
+
+    // The hover label for a body's frame: the measured world-space center of mass and the
+    // axis stub length, in file units. Zero is the "no measured COM" sentinel, so a body
+    // without one says so plainly rather than printing a false origin.
+    public static string BodyFrameLabel(HavokRigidBody body, float stubLength)
+    {
+        string stub = stubLength.ToString("0.00", CultureInfo.InvariantCulture);
+        if (body.CenterOfMass == Vector3.Zero)
+            return "no measured COM  stub " + stub;
+
+        var c = body.CenterOfMass;
+        string com = c.X.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+                     c.Y.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+                     c.Z.ToString("0.00", CultureInfo.InvariantCulture);
+        return "COM (" + com + ")  stub " + stub;
     }
 
     private void DrawBindings(DrawingContext ctx, HavokRagdollModel model)
@@ -707,7 +743,9 @@ public class SkeletonView : Control
 
     private void NameBodyUnder(Point at)
     {
-        if (!ShowBindings || _bodies == null || _bodies.Bodies.Count == 0) return;
+        // Body picking backs both the bindings labels (bone name) and the frames labels
+        // (measured COM + stub), so it is live whenever either overlay is showing.
+        if ((!ShowBindings && !ShowFrames) || _bodies == null || _bodies.Bodies.Count == 0) return;
 
         int found = -1;
         double nearest = 12 * 12;
