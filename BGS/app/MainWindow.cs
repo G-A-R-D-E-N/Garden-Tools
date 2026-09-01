@@ -174,6 +174,13 @@ public class MainWindow : Window
         FontSize = 12,
         VerticalAlignment = VerticalAlignment.Center,
     };
+    private readonly CheckBox _engineerToggle = new()
+    {
+        Content = "Frames only",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
     private readonly PlaybackSession _playback = new();
     private bool _scrubbing;
     private DispatcherTimer? _clock;
@@ -2805,6 +2812,21 @@ public class MainWindow : Window
             _skeleton.InvalidateVisual();
         };
 
+        _engineerToggle.IsEnabled = false;
+        ToolTip.SetTip(_engineerToggle, "Engineering view: draw only the measured body frames (axis triads + " +
+                                        "center-of-mass markers) over the ground grid - no skeleton, hulls, " +
+                                        "constraints or bindings - and never auto-frame the camera. Fit still " +
+                                        "frames the bodies.");
+        _engineerToggle.IsCheckedChanged += (_, _) =>
+        {
+            _skeleton.EngineeringFrames = _engineerToggle.IsChecked == true;
+            if (_engineerToggle.IsChecked == true)
+                foreach (var other in new[]
+                         { _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle })
+                    other.IsChecked = false;
+            _skeleton.InvalidateVisual();
+        };
+
         ToolTip.SetTip(travel, "Move the character along the path the clip carries, instead of " +
                                "playing it on the spot the way the file stores it.");
         travel.IsCheckedChanged += (_, _) =>
@@ -2833,7 +2855,7 @@ public class MainWindow : Window
 
         var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         foreach (var control in new Control[]
-                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, reload, mesh, clearMesh })
+                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle, reload, mesh, clearMesh })
             transport.Children.Add(control);
 
         var bar = Bar(Ux.Pill(_playbackSummary), transport);
@@ -2870,18 +2892,23 @@ public class MainWindow : Window
 
         _ragdoll = HavokPhysicsExtractor.TryExtract(raw);
         bool any = _ragdoll is { Bodies.Count: > 0 };
+        // While the engineering view is on, the overlay checkboxes stay unchecked so their
+        // state always matches what is actually drawn; the mode itself survives a re-load.
+        bool engineering = _engineerToggle.IsChecked == true;
         _bodiesToggle.IsEnabled = any;
-        _bodiesToggle.IsChecked = any;
+        _bodiesToggle.IsChecked = any && !engineering;
         _constraintsToggle.IsEnabled = any;
-        _constraintsToggle.IsChecked = any && _ragdoll is { Constraints.Count: > 0 };
+        _constraintsToggle.IsChecked = any && !engineering && _ragdoll is { Constraints.Count: > 0 };
         bool bindings = any && _ragdoll is { BoneBindings.Count: > 0, Skeleton: { BoneNames.Count: > 0 } };
         _bindingsToggle.IsEnabled = bindings;
-        _bindingsToggle.IsChecked = bindings;
+        _bindingsToggle.IsChecked = bindings && !engineering;
         bool physicsSkeleton = any && _ragdoll is { Skeleton: { ParentIndices.Count: > 0, ReferencePose.Count: > 0 } };
         _physicsSkeletonToggle.IsEnabled = physicsSkeleton;
-        _physicsSkeletonToggle.IsChecked = physicsSkeleton;
+        _physicsSkeletonToggle.IsChecked = physicsSkeleton && !engineering;
         _framesToggle.IsEnabled = any;
         _framesToggle.IsChecked = any;
+        _engineerToggle.IsEnabled = any;
+        if (!any && engineering) _engineerToggle.IsChecked = false;
         _skeleton.SetBodies(any ? _ragdoll : null);
         UpdateScaleStatus();
         if (!any) return;

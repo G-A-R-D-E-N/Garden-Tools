@@ -48,6 +48,11 @@ public class SkeletonView : Control
     public bool ShowPhysicsSkeleton { get; set; }
     public bool ShowFrames { get; set; }
 
+    // The body-frame engineering view: draw only the measured axis triads and COM markers
+    // (plus the ground grid for orientation) whatever the other overlay toggles say, and
+    // never auto-frame the camera. The Fit button still frames the bodies manually.
+    public bool EngineeringFrames { get; set; }
+
     public int DrawnBones => _pose?.Bones.Count ?? 0;
     public int DrawnEdges => _mesh?.Length ?? 0;
     public int DrawnBodies => _bodies?.Bodies.Count ?? 0;
@@ -107,7 +112,9 @@ public class SkeletonView : Control
     {
         _pose = pose;
         _reference = reference;
-        if (pose != null && pose.Bones.Count > 0)
+        // The engineering view never auto-frames: loading keeps the camera exactly where
+        // the user left it, so the triads can be inspected at the same scale and angle.
+        if (!EngineeringFrames && pose != null && pose.Bones.Count > 0)
         {
             _centre = pose.Centre;
             _fit = pose.Radius;
@@ -136,6 +143,7 @@ public class SkeletonView : Control
         ShowBindings = false;
         ShowPhysicsSkeleton = false;
         ShowFrames = false;
+        EngineeringFrames = false;
         _hoveredBody = -1;
         _hoveredConstraint = -1;
         _physicsPose = null;
@@ -223,7 +231,13 @@ public class SkeletonView : Control
     {
         _zoom = 1;
         _pan = default;
-        if (_pose is { Bones.Count: > 0 })
+        if (EngineeringFrames)
+        {
+            // The engineering view shows the bodies' frames, so Fit frames those bodies.
+            _centre = _bodyCentre;
+            _fit = _bodyFit;
+        }
+        else if (_pose is { Bones.Count: > 0 })
         {
             _centre = _pose.Centre;
             _fit = _pose.Radius;
@@ -250,6 +264,16 @@ public class SkeletonView : Control
     public override void Render(DrawingContext ctx)
     {
         ctx.FillRectangle(Ux.CardBrush, new Rect(Bounds.Size));
+
+        // The engineering view draws nothing but the frames overlay: triads and COM
+        // markers on the ground grid, no skeleton, hulls, constraints or bindings, and no
+        // auto-framing even for pose-less files.
+        if (EngineeringFrames && _bodies is { Bodies.Count: > 0 })
+        {
+            DrawGround(ctx);
+            DrawFrames(ctx, _bodies);
+            return;
+        }
 
         var pose = _pose;
         bool bodies = ShowBodies && _bodies != null && _bodies.Bodies.Count > 0;
@@ -744,8 +768,10 @@ public class SkeletonView : Control
     private void NameBodyUnder(Point at)
     {
         // Body picking backs both the bindings labels (bone name) and the frames labels
-        // (measured COM + stub), so it is live whenever either overlay is showing.
-        if ((!ShowBindings && !ShowFrames) || _bodies == null || _bodies.Bodies.Count == 0) return;
+        // (measured COM + stub), so it is live whenever either overlay is showing, and in
+        // the engineering view (which draws the frames regardless of the toggles).
+        if ((!ShowBindings && !ShowFrames && !EngineeringFrames) ||
+            _bodies == null || _bodies.Bodies.Count == 0) return;
 
         int found = -1;
         double nearest = 12 * 12;

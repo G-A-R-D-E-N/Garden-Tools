@@ -596,6 +596,24 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void EngineeringFrameModeClearsWithTheView()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // The engineering view survives a re-load of another ragdoll file (TryLoadRagdoll
+        // leaves the mode on), but Reset - the clear path - must switch it off so a new
+        // session never draws frames-only behind the user's back.
+        var view = new SkeletonView { EngineeringFrames = true };
+        view.SetBodies(model);
+        Assert.True(view.EngineeringFrames);
+
+        view.Reset();
+        Assert.False(view.EngineeringFrames);
+        Assert.Equal(0, view.DrawnBodies);
+    }
+
+    [Fact]
     public void BodyFrameLabelShowsMeasuredComAndStub()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
