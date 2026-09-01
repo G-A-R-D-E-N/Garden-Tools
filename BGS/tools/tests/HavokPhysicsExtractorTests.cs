@@ -605,7 +605,9 @@ public sealed class HavokPhysicsExtractorTests
 
         // Release from an airborne mapped pose (the reference lifted 20 units), so there is
         // a real fall: the release state is the ragdoll's current physics frames, and the
-        // settle is the solver-free rigid ground stop.
+        // settle is the solver-free constrained gravity drop - each body integrates its own
+        // velocity, pivots are re-projected to the captured offset, and every joint's
+        // relative rotation is clamped to the measured twist/cone/hinge limits.
         var reference = AnimationPose.ReferencePose(skeleton);
         var lifted = new AnimationPose.Pose();
         foreach (var b in reference.Bones)
@@ -624,6 +626,7 @@ public sealed class HavokPhysicsExtractorTests
         Assert.True(steps is > 5 and < 600, $"the drop moved and finished in {steps} steps");
 
         var settled = view.DroppedPositions!;
+        var settledRot = view.DroppedRotations!;
         Assert.Equal(18, settled.Count);
         foreach (var p in settled)
         {
@@ -631,28 +634,137 @@ public sealed class HavokPhysicsExtractorTests
             Assert.True(p.Z >= -0.05f, $"bone settled underground at z={p.Z}");
         }
 
-        // The rigid drop preserves every captured chain length exactly, and the ragdoll fell
-        // the full lift distance onto the ground.
+        // This slice replaces the rigid drop of #262: with per-body gravity the ragdoll
+        // folds and buckles, so the root falls well beyond the rigid ground-stop distance
+        // (which only lowers the whole pose by its lowest vertex clearance).
         var mapped = model.MapPose(lifted.Bones
             .Select(b => new HavokBoneFrame(b.Position, b.Rotation)).ToArray())!;
-        var parents = model.Skeleton!.ParentIndices;
-        for (int i = 0; i < 18 && i < parents.Count; i++)
-        {
-            int parent = parents[i];
-            if (parent < 0) continue;
-            float captured = Vector3.Distance(mapped[parent].Position, mapped[i].Position);
-            float settledLength = Vector3.Distance(settled[parent], settled[i]);
-            Assert.True(Math.Abs(settledLength - captured) < 0.01f,
-                $"chain {parent}->{i} length drifted {captured:F3} -> {settledLength:F3}");
-        }
-        // The ragdoll fell the full lift distance plus its reference ground clearance, and
-        // every bone fell exactly the measured ground-stop distance (the lowest body vertex
-        // of the lifted pose - the bodies, not the joints, touch the ground plane).
         float fell = mapped[0].Position.Z - settled[0].Z;
-        Assert.True(fell is > 15f and <= 25f, $"the root fell {fell:F2} units");
-        Assert.True(Math.Abs(fell - view.DropDistance) < 0.01f,
-            $"the root fell exactly the ground-stop distance {view.DropDistance:F2}");
-        Assert.True(fell > 15f, "the drop was not a no-op");
+        Assert.True(fell > view.DropDistance + 5f,
+            $"the root folded {fell:F2} units, well beyond the rigid drop {view.DropDistance:F2}");
+        Assert.True(view.DropDistance > 15f, "the release was not a no-op");
+
+        // Every constraint keeps its pivots within the projection residual and holds its
+        // measured limits exactly, and the settle is deterministic.
+        const float pivotEps = 1.5f;   // measured 0.87 with the fixed 20-pass iteration count
+        const float limitEps = 0.01f;  // radians, measured at the limit boundary exactly
+        float worstPivot = 0;
+        foreach (var c in model.Constraints.Where(c => c.FrameA != null && c.FrameB != null))
+        {
+            int ba = -1, bb = -1;
+            foreach (var binding in model.BoneBindings)
+            {
+                if (binding.BodyId == c.BodyA) ba = binding.BoneIndex;
+                if (binding.BodyId == c.BodyB) bb = binding.BoneIndex;
+            }
+            if (ba < 0 || bb < 0) continue;
+            var offA = new Vector3(c.FrameA![12], c.FrameA[13], c.FrameA[14]);
+            var offB = new Vector3(c.FrameB![12], c.FrameB[13], c.FrameB[14]);
+            float captured = Vector3.Distance(
+                mapped[ba].Position + Vector3.Transform(offA, mapped[ba].Rotation),
+                mapped[bb].Position + Vector3.Transform(offB, mapped[bb].Rotation));
+            float settledDist = Vector3.Distance(
+                settled[ba] + Vector3.Transform(offA, settledRot[ba]),
+                settled[bb] + Vector3.Transform(offB, settledRot[bb]));
+            worstPivot = Math.Max(worstPivot, Math.Abs(settledDist - captured));
+
+            AssertLimitsWithin(model, c, settled, settledRot, limitEps);
+        }
+        Assert.True(worstPivot < pivotEps, $"a joint stretched by {worstPivot:F3} units");
+
+        // A second run must land on the exact same arrays.
+        var view2 = new SkeletonView();
+        view2.SetBodies(model);
+        view2.Show(lifted);
+        view2.StartDrop();
+        int steps2 = 0;
+        while (!view2.DropResting && steps2 < 600) { view2.AdvanceDrop(1f / 60f); steps2++; }
+        Assert.True(view2.DroppedPositions!.SequenceEqual(settled) &&
+                    view2.DroppedRotations!.SequenceEqual(settledRot),
+            "the settle is deterministic");
+    }
+
+    // Assert the joint's relative rotation respects the measured limits, measured in the
+    // same convention the simulation clamps with: ragdoll twist/cone around the file's A
+    // frame axes, hinge sweep of the tree child's local X against the parent->child
+    // direction around the limit axis.
+    private static void AssertLimitsWithin(HavokRagdollModel model, HavokConstraint c,
+        IReadOnlyList<Vector3> settled, IReadOnlyList<Quaternion> settledRot, float eps)
+    {
+        int ba = -1, bb = -1;
+        foreach (var binding in model.BoneBindings)
+        {
+            if (binding.BodyId == c.BodyA) ba = binding.BoneIndex;
+            if (binding.BodyId == c.BodyB) bb = binding.BoneIndex;
+        }
+        if (ba < 0 || bb < 0) return;
+
+        if (c.Kind == HavokConstraintKind.Ragdoll)
+        {
+            var rel = Quaternion.Normalize(Quaternion.Inverse(settledRot[ba]) * settledRot[bb]);
+            if (c.TwistMinAngle is float mn && c.TwistMaxAngle is float mx)
+            {
+                float twist = SkeletonView.TwistAngle(rel, SkeletonView.Column(c.FrameA!, c.TwistAxis));
+                Assert.True(twist >= mn - eps && twist <= mx + eps,
+                    $"constraint {c.Id} twist {twist * 57.2958f:F1}° outside [{mn * 57.2958f:F1}°,{mx * 57.2958f:F1}°]");
+            }
+            if (c.ConeMaxAngle is float cone)
+            {
+                float swing = SkeletonView.SwingAngle(rel, SkeletonView.Column(c.FrameA!, c.ConeTwistAxis));
+                Assert.True(swing <= cone + eps,
+                    $"constraint {c.Id} swing {swing * 57.2958f:F1}° exceeds cone {cone * 57.2958f:F1}°");
+            }
+            return;
+        }
+
+        // Hinge: the sweep of the tree child's local X against the parent->child direction
+        // around the limit axis. The tree child is the side further from the root body in a
+        // BFS over the constraint graph (the same map the simulation clamps with), because
+        // the file's A side is not always the kinematic child.
+        if (c.Kind is not (HavokConstraintKind.Hinge or HavokConstraintKind.LimitedHinge)) return;
+        if (c.MinAngle == 0 && c.MaxAngle == 0) return;
+        int ai = model.Bodies.FindIndex(b => b.Id == c.BodyA);
+        int bi = model.Bodies.FindIndex(b => b.Id == c.BodyB);
+        if (ai < 0 || bi < 0 || Depth(model, ai) == Depth(model, bi)) return;
+        bool childIsA = Depth(model, ai) > Depth(model, bi);
+        int childBone = childIsA ? ba : bb;
+        int parentBone = childIsA ? bb : ba;
+
+        var axis = Vector3.Normalize(SkeletonView.WorldDir(c.FrameA!, c.LimitAxis, settledRot[ba]));
+        var toward = settled[childBone] - settled[parentBone];
+        var perpendicular = toward - axis * Vector3.Dot(toward, axis);
+        if (perpendicular.LengthSquared() < 1e-8f) return;
+        var reference = Vector3.Normalize(perpendicular);
+        var childFrame = childIsA ? c.FrameA! : c.FrameB!;
+        var childLocal = Vector3.Normalize(SkeletonView.WorldDir(childFrame, 0, settledRot[childBone]));
+        var childPerp = childLocal - axis * Vector3.Dot(childLocal, axis);
+        if (childPerp.LengthSquared() < 1e-8f) return;
+        float sweep = SkeletonView.SignedAngleAround(axis, reference, Vector3.Normalize(childPerp));
+        Assert.True(sweep >= c.MinAngle - eps && sweep <= c.MaxAngle + eps,
+            $"constraint {c.Id} hinge {sweep * 57.2958f:F1}° outside [{c.MinAngle * 57.2958f:F1}°,{c.MaxAngle * 57.2958f:F1}°]");
+    }
+
+    // BFS depth from the first body over the constraint graph: the kinematic parent is the
+    // body closer to the root, so the child is the side this simulation clamps.
+    private static int Depth(HavokRagdollModel model, int start)
+    {
+        var depth = new Dictionary<int, int> { [model.Bodies[0].Id] = 0 };
+        var queue = new Queue<int>();
+        queue.Enqueue(model.Bodies[0].Id);
+        while (queue.Count > 0)
+        {
+            int current = queue.Dequeue();
+            int d = depth[current];
+            foreach (var constraint in model.Constraints)
+            {
+                int other = constraint.BodyA == current ? constraint.BodyB
+                    : constraint.BodyB == current ? constraint.BodyA : -1;
+                if (other < 0 || depth.ContainsKey(other)) continue;
+                depth[other] = d + 1;
+                queue.Enqueue(other);
+            }
+        }
+        return depth.TryGetValue(model.Bodies[start].Id, out int value) ? value : int.MaxValue;
     }
 
     [Fact]

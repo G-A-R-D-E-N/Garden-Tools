@@ -272,17 +272,30 @@ public class SkeletonView : Control
 
     // ---- gravity-settled release preview (no solver) ----
     // StartDrop captures the current mapped ragdoll pose (the animation-following physics
-    // frames, or the measured reference when nothing plays) as a release state. The settled
-    // approximation, with no rigid-body solver, is the pose falling under gravity until its
-    // lowest shape vertex rests on the ground plane (z=0): a rigid drop, so every captured
-    // chain length is preserved exactly, nothing penetrates the ground, and the result is
-    // deterministic. Limb folding needs a solver and is deliberately out of scope.
-    private const float DropGravity = 600f;   // file units per second^2
-    private const float DropRestEpsilon = 0.01f;
+    // frames, or the measured reference when nothing plays) as a release state, then the
+    // preview animates every constrained body under gravity with no rigid-body solver: each
+    // body integrates its own velocity, every constraint re-projects its pivots to the
+    // captured world offset (the joint can rotate but not stretch, within the projection
+    // residual), its relative rotation is clamped to the measured twist/cone/hinge limits
+    // (so limbs fold only as far as the file allows), and each body stops when its lowest
+    // shape vertex rests on the ground plane (z=0). Deterministic (fixed substeps, fixed
+    // iteration count) and it always settles: damping decays the pendulum motion and rest
+    // is position-based.
+    private const float DropGravity = 600f;        // file units per second^2
+    private const float DropRestEpsilon = 0.01f;    // resting position delta, file units
+    private const float DropDamping = 4f;           // 1/second, decays the release swing
+    private const float DropSubstep = 1f / 120f;    // fixed integration step
+    private const int DropIterations = 20;           // constraint/ground passes per substep
 
     private Vector3[]? _releasePositions;
+    private Quaternion[]? _releaseRotations;
     private Quaternion[]? _dropRotations;
     private Vector3[]? _dropPositions;
+    private Vector3[]? _dropVelocities;
+    private Vector3[]? _dropPivotOffsets;
+    private Dictionary<int, int>? _dropBodyIndexById;
+    private int[]? _dropBodyBoneIndexes;
+    private int[]? _dropBodyDepth;
     private float _dropTime;
     private float _dropTotal;
     private bool _dropResting;
@@ -290,6 +303,7 @@ public class SkeletonView : Control
     public bool IsDropped => _dropPositions != null;
     public bool DropResting => _dropResting;
     internal IReadOnlyList<Vector3>? DroppedPositions => _dropPositions;
+    internal IReadOnlyList<Quaternion>? DroppedRotations => _dropRotations;
     internal float DropDistance => _dropTotal;
 
     public void StartDrop()
@@ -299,39 +313,351 @@ public class SkeletonView : Control
         if (source == null || source.Length == 0) return;
 
         _releasePositions = source.Select(f => f.Position).ToArray();
-        _dropRotations = source.Select(f => f.Rotation).ToArray();
+        _releaseRotations = source.Select(f => f.Rotation).ToArray();
         _dropPositions = (Vector3[])_releasePositions.Clone();
-        _dropTime = 0;
+        _dropRotations = (Quaternion[])_releaseRotations.Clone();
+        _dropVelocities = new Vector3[_dropPositions.Length];
         _dropTotal = Math.Max(0, GlobalLowestVertexZ());
-        _dropResting = _dropTotal <= DropRestEpsilon;
+
+        // Body list index and render-bone index for every rigid body, plus the captured
+        // world offset between each constraint's two pivots: the joint geometry is frozen at
+        // release, so the settle can only rotate joints - the pivot offset is re-projected
+        // every pass, so a joint never visibly stretches (residual stays under a file unit
+        // with the fixed iteration count below).
+        _dropBodyIndexById = new Dictionary<int, int>();
+        for (int i = 0; i < _bodies.Bodies.Count; i++) _dropBodyIndexById[_bodies.Bodies[i].Id] = i;
+        _dropBodyBoneIndexes = new int[_bodies.Bodies.Count];
+        for (int i = 0; i < _bodies.Bodies.Count; i++)
+        {
+            _dropBodyBoneIndexes[i] = -1;
+            foreach (var binding in _bodies.BoneBindings)
+            {
+                if (binding.BodyId != _bodies.Bodies[i].Id) continue;
+                _dropBodyBoneIndexes[i] = binding.BoneIndex;
+                break;
+            }
+        }
+
+        // The body graph is a tree (17 joints over 18 bodies in the measured files): BFS
+        // from the first body so each joint's child is known. Rotation clamps apply to the
+        // child only, so a hub like the pelvis (the B side of several constraints in the
+        // file) is never overwritten by its neighbours' clamps.
+        _dropBodyDepth = new int[_bodies.Bodies.Count];
+        Array.Fill(_dropBodyDepth, int.MaxValue);
+        _dropBodyDepth[0] = 0;
+        var queue = new Queue<int>();
+        queue.Enqueue(0);
+        while (queue.Count > 0)
+        {
+            int current = queue.Dequeue();
+            foreach (var constraint in _bodies.Constraints)
+            {
+                if (!_dropBodyIndexById.TryGetValue(constraint.BodyA, out int ai) ||
+                    !_dropBodyIndexById.TryGetValue(constraint.BodyB, out int bi)) continue;
+                int other = ai == current ? bi : bi == current ? ai : -1;
+                if (other < 0 || _dropBodyDepth[other] != int.MaxValue) continue;
+                _dropBodyDepth[other] = _dropBodyDepth[current] + 1;
+                queue.Enqueue(other);
+            }
+        }
+
+        _dropPivotOffsets = new Vector3[_bodies.Constraints.Count > 0
+            ? _bodies.Constraints.Max(c => c.Id) + 1 : 0];
+        foreach (var constraint in _bodies.Constraints)
+        {
+            if (constraint.FrameA == null || constraint.FrameB == null) continue;
+            if (!_dropBodyIndexById.TryGetValue(constraint.BodyA, out int ai) ||
+                !_dropBodyIndexById.TryGetValue(constraint.BodyB, out int bi)) continue;
+            int ba = _dropBodyBoneIndexes[ai];
+            int bb = _dropBodyBoneIndexes[bi];
+            if (ba < 0 || bb < 0 || ba >= _dropPositions.Length || bb >= _dropPositions.Length) continue;
+            if (constraint.Id < 0 || constraint.Id >= _dropPivotOffsets.Length) continue;
+
+            var pivotA = _dropPositions[ba] + Vector3.Transform(Translation(constraint.FrameA), _dropRotations[ba]);
+            var pivotB = _dropPositions[bb] + Vector3.Transform(Translation(constraint.FrameB), _dropRotations[bb]);
+            _dropPivotOffsets[constraint.Id] = pivotB - pivotA;
+        }
+
+        _dropTime = 0;
+        _dropResting = _dropTotal <= 0.01f;
         InvalidateVisual();
     }
 
     public void ClearDrop()
     {
         _releasePositions = null;
+        _releaseRotations = null;
         _dropRotations = null;
         _dropPositions = null;
+        _dropVelocities = null;
+        _dropPivotOffsets = null;
+        _dropBodyIndexById = null;
+        _dropBodyBoneIndexes = null;
+        _dropBodyDepth = null;
         _dropTime = 0;
         _dropTotal = 0;
         _dropResting = false;
         InvalidateVisual();
     }
 
-    // Fall from rest under gravity until the ground stop; the whole pose drops rigidly, so
-    // distances between bones never change.
+    // Advance the release preview by a wall-clock slice, stepping the constrained settle in
+    // fixed substeps so the trajectory is deterministic and stable whatever the frame rate.
     public void AdvanceDrop(float seconds)
     {
-        if (_dropPositions == null || _dropResting) return;
+        if (_dropPositions == null || _dropResting || _dropBodyIndexById == null ||
+            _dropBodyBoneIndexes == null || _dropBodyDepth == null || _dropVelocities == null ||
+            _dropPivotOffsets == null) return;
         _dropTime += seconds;
-        float fallen = Math.Min(_dropTotal, 0.5f * DropGravity * _dropTime * _dropTime);
-        for (int i = 0; i < _dropPositions.Length; i++)
+        while (seconds > 0 && !_dropResting)
         {
-            var p = _releasePositions![i];
-            _dropPositions[i] = new Vector3(p.X, p.Y, p.Z - fallen);
+            float dt = Math.Min(DropSubstep, seconds);
+            seconds -= dt;
+            _dropResting = StepConstrainedRelease(
+                _bodies!, _dropBodyIndexById, _dropBodyBoneIndexes, _dropBodyDepth,
+                _dropPositions, _dropRotations!, _dropVelocities, _dropPivotOffsets, dt, DropIterations);
         }
-        if (_dropTotal - fallen <= DropRestEpsilon) _dropResting = true;
         InvalidateVisual();
+    }
+
+    // The deterministic per-body settle core. One substep: integrate gravity into every
+    // body's velocity, then alternate constraint projection/clamps with ground stops for a
+    // fixed number of passes, then damp. Returns true once nothing moved more than the rest
+    // epsilon (position-based, so chain-hung bodies that sway without changing velocity still
+    // settle); the last pass is always the ground, so the render never shows penetration.
+    internal static bool StepConstrainedRelease(
+        HavokRagdollModel model,
+        Dictionary<int, int> bodyIndexById,
+        int[] bodyBoneIndexes,
+        int[] bodyDepth,
+        Vector3[] positions,
+        Quaternion[] rotations,
+        Vector3[] velocities,
+        Vector3[] pivotOffsets,
+        float dt,
+        int iterations)
+    {
+        var start = (Vector3[])positions.Clone();
+        for (int i = 0; i < positions.Length; i++)
+        {
+            velocities[i].Z -= DropGravity * dt;
+            positions[i] += velocities[i] * dt;
+        }
+
+        for (int iter = 0; iter < iterations; iter++)
+        {
+            foreach (var constraint in model.Constraints)
+            {
+                if (!bodyIndexById.TryGetValue(constraint.BodyA, out int ai) ||
+                    !bodyIndexById.TryGetValue(constraint.BodyB, out int bi)) continue;
+                int ba = bodyBoneIndexes[ai];
+                int bb = bodyBoneIndexes[bi];
+                if (ba < 0 || bb < 0 || ba >= positions.Length || bb >= positions.Length) continue;
+                if (constraint.FrameA == null || constraint.FrameB == null) continue;
+                if (constraint.Id < 0 || constraint.Id >= pivotOffsets.Length) continue;
+
+                var rotationA = rotations[ba];
+                var rotationB = rotations[bb];
+
+                // Re-attach the two pivots at the captured offset, weighted by mass so a
+                // heavy body barely moves while a light one follows it: a grounded child
+                // holds its parent up instead of being dragged through the floor.
+                var pivotA = positions[ba] + Vector3.Transform(Translation(constraint.FrameA), rotationA);
+                var pivotB = positions[bb] + Vector3.Transform(Translation(constraint.FrameB), rotationB);
+                var correction = pivotA + pivotOffsets[constraint.Id] - pivotB;
+                float massA = Math.Max(0.01f, model.Bodies[ai].Mass);
+                float massB = Math.Max(0.01f, model.Bodies[bi].Mass);
+                float total = massA + massB;
+                positions[ba] -= correction * (massB / total);
+                positions[bb] += correction * (massA / total);
+
+                // Clamp the joint's relative rotation to the measured limits. The tree child
+                // (the body further from the root in the BFS depth map) is the one adjusted,
+                // so each joint is clamped exactly once and a hub body is never overwritten.
+                bool childIsA = bodyDepth[ai] > bodyDepth[bi];
+                int childBone = childIsA ? ba : bb;
+                if (constraint.Kind == HavokConstraintKind.Ragdoll)
+                {
+                    rotations[childBone] = ClampConstraintRotation(
+                        constraint, childIsA ? rotations[bb] : rotations[ba], rotations[childBone], childIsA);
+                }
+                else if (constraint is { Kind: HavokConstraintKind.Hinge or HavokConstraintKind.LimitedHinge } &&
+                         (constraint.MinAngle != 0 || constraint.MaxAngle != 0))
+                {
+                    // The hinge bends the tree child (the calf, not the thigh): measure the
+                    // child's local X against the parent->child direction around the limit
+                    // axis, and rotate the child by the correction, so each joint is clamped
+                    // exactly once and clamps never fight through a shared body.
+                    int parentBone = childIsA ? bb : ba;
+                    var axis = Vector3.Normalize(WorldDir(constraint.FrameA, constraint.LimitAxis, rotationA));
+                    var toward = positions[childBone] - positions[parentBone];
+                    var perpendicular = toward - axis * Vector3.Dot(toward, axis);
+                    if (perpendicular.LengthSquared() > 1e-8f)
+                    {
+                        var reference = Vector3.Normalize(perpendicular);
+                        var childFrame = childIsA ? constraint.FrameA : constraint.FrameB;
+                        var childLocal = Vector3.Normalize(WorldDir(childFrame, 0, rotations[childBone]));
+                        var childPerpendicular = childLocal - axis * Vector3.Dot(childLocal, axis);
+                        if (childPerpendicular.LengthSquared() > 1e-8f)
+                        {
+                            float current = SignedAngleAround(axis, reference, Vector3.Normalize(childPerpendicular));
+                            float clamped = Math.Clamp(current, constraint.MinAngle, constraint.MaxAngle);
+                            float delta = clamped - current;
+                            if (Math.Abs(delta) > 1e-5f)
+                                rotations[childBone] = Quaternion.Normalize(
+                                    Quaternion.CreateFromAxisAngle(axis, delta) * rotations[childBone]);
+                        }
+                    }
+                }
+            }
+
+            // Ground: a body stops once its lowest shape vertex reaches z = 0, with contact
+            // friction on the tangential velocity.
+            foreach (var body in model.Bodies)
+            {
+                if (!bodyIndexById.TryGetValue(body.Id, out int bi)) continue;
+                int bone = bodyBoneIndexes[bi];
+                if (bone < 0 || bone >= positions.Length) continue;
+                var shape = model.Shapes.FirstOrDefault(s => s.Id == body.ShapeId);
+                if (shape == null || shape.Vertices.Count == 0) continue;
+
+                float lowest = float.MaxValue;
+                foreach (var vertex in shape.Vertices)
+                    lowest = Math.Min(lowest,
+                        (positions[bone] + Vector3.Transform(vertex, rotations[bone])).Z);
+                if (lowest >= 0) continue;
+
+                positions[bone].Z -= lowest;
+                velocities[bone].Z = Math.Max(0, velocities[bone].Z);
+                velocities[bone].X *= 0.6f;
+                velocities[bone].Y *= 0.6f;
+            }
+        }
+
+        bool resting = true;
+        for (int i = 0; i < velocities.Length; i++)
+            velocities[i] *= MathF.Max(0, 1f - DropDamping * dt);
+        for (int i = 0; i < positions.Length; i++)
+        {
+            if ((positions[i] - start[i]).LengthSquared() > DropRestEpsilon * DropRestEpsilon)
+                resting = false;
+        }
+        return resting;
+    }
+
+    // Clamp the child's rotation within the measured ragdoll limits (twist range and cone
+    // half-angle) relative to its parent. The twist and cone axes are different frame
+    // columns, so clamping one can push the other out; a few passes converge (the fixture
+    // limits are tens of degrees). When the file's A side is the child, the relative is
+    // Inverse(child) * parent in the child's frame and the child is adjusted on the right.
+    private static Quaternion ClampConstraintRotation(
+        HavokConstraint constraint, Quaternion rotationParent, Quaternion rotationChild, bool fileAIsChild)
+    {
+        if (constraint.FrameA == null || constraint.Kind != HavokConstraintKind.Ragdoll) return rotationChild;
+
+        float twistMin = 0, twistMax = 0, coneMax = 0;
+        bool hasTwist = false, hasCone = false;
+        if (constraint.TwistMinAngle is float min && constraint.TwistMaxAngle is float max)
+        {
+            twistMin = min;
+            twistMax = max;
+            hasTwist = true;
+        }
+        if (constraint.ConeMaxAngle is float cone)
+        {
+            coneMax = cone;
+            hasCone = true;
+        }
+        if (!hasTwist && !hasCone) return rotationChild;
+
+        // The measured relative in the file's A frame (the frame the limit axes live in).
+        Quaternion relative = fileAIsChild
+            ? Quaternion.Normalize(Quaternion.Inverse(rotationChild) * rotationParent)
+            : Quaternion.Normalize(Quaternion.Inverse(rotationParent) * rotationChild);
+        var twistAxis = Vector3.Normalize(Column(constraint.FrameA, constraint.TwistAxis));
+        var coneAxis = Vector3.Normalize(Column(constraint.FrameA, constraint.ConeTwistAxis));
+        for (int pass = 0; pass < 4; pass++)
+        {
+            if (hasTwist) relative = ClampTwist(relative, twistAxis, twistMin, twistMax);
+            if (hasCone) relative = ClampCone(relative, coneAxis, coneMax);
+        }
+
+        if (fileAIsChild)
+        {
+            // Adjust the child so Inverse(child') * parent equals the clamped relative:
+            // q' = Inverse(child*d) * parent = Inverse(d) * q, so d = q * q'^-1.
+            var original = Quaternion.Normalize(Quaternion.Inverse(rotationChild) * rotationParent);
+            var adjustment = Quaternion.Normalize(original * Quaternion.Inverse(relative));
+            return Quaternion.Normalize(rotationChild * adjustment);
+        }
+        return Quaternion.Normalize(rotationParent * relative);
+    }
+
+    // The signed angle from `from` to `to` rotating around `axis`, in [-pi, pi].
+    internal static float SignedAngleAround(Vector3 axis, Vector3 from, Vector3 to)
+    {
+        axis = Vector3.Normalize(axis);
+        from = Vector3.Normalize(from);
+        to = Vector3.Normalize(to);
+        float angle = MathF.Acos(Math.Clamp(Vector3.Dot(from, to), -1f, 1f));
+        if (Vector3.Dot(Vector3.Cross(from, to), axis) < 0) angle = -angle;
+        return angle;
+    }
+
+    // The signed rotation angle of `relative` around `axis` (the axis in the same frame as
+    // the quaternion), i.e. the twist component of the swing-twist decomposition.
+    internal static float TwistAngle(Quaternion relative, Vector3 axis)
+    {
+        var v = new Vector3(relative.X, relative.Y, relative.Z);
+        return 2f * MathF.Atan2(Vector3.Dot(v, Vector3.Normalize(axis)), relative.W);
+    }
+
+    // The swing-twist decomposition around `axis`: the twist is the component rotating
+    // around the axis, the swing everything else. A 180-degree swing has a zero-length
+    // twist, which the callers guard against before it can become NaN.
+    private static (Quaternion Twist, Quaternion Swing) Decompose(Quaternion relative, Vector3 axis)
+    {
+        var axisUnit = Vector3.Normalize(axis);
+        var v = new Vector3(relative.X, relative.Y, relative.Z);
+        var twist = new Quaternion(Vector3.Dot(v, axisUnit) * axisUnit, relative.W);
+        if (twist.LengthSquared() < 1e-10f)
+        {
+            // Pure 180-degree swing around an axis perpendicular to `axis`: nothing to
+            // decompose, treat it as all swing.
+            return (Quaternion.Identity, Quaternion.Normalize(relative));
+        }
+        twist = Quaternion.Normalize(twist);
+        return (twist, Quaternion.Normalize(relative * Quaternion.Inverse(twist)));
+    }
+
+    // The swing angle of `relative` around `axis`: the angle of the component left after
+    // removing the rotation around the axis (the cone angle in a ragdoll limit).
+    internal static float SwingAngle(Quaternion relative, Vector3 axis)
+    {
+        var (_, swing) = Decompose(relative, axis);
+        return 2f * MathF.Atan2(new Vector3(swing.X, swing.Y, swing.Z).Length(), swing.W);
+    }
+
+    // Clamp the twist component of `relative` around `axis` into [min, max], keeping the
+    // swing untouched.
+    internal static Quaternion ClampTwist(Quaternion relative, Vector3 axis, float min, float max)
+    {
+        var axisUnit = Vector3.Normalize(axis);
+        var (twist, swing) = Decompose(relative, axis);
+        float angle = TwistAngle(relative, axis);
+        float clamped = Math.Clamp(angle, min, max);
+        if (Math.Abs(clamped - angle) < 1e-5f) return relative;
+        return Quaternion.Normalize(swing * Quaternion.CreateFromAxisAngle(axisUnit, clamped));
+    }
+
+    // Clamp the swing angle of `relative` around `axis` to the cone half-angle, keeping the
+    // twist untouched.
+    internal static Quaternion ClampCone(Quaternion relative, Vector3 axis, float coneMax)
+    {
+        var (twist, swing) = Decompose(relative, axis);
+        float swingAngle = 2f * MathF.Atan2(new Vector3(swing.X, swing.Y, swing.Z).Length(), swing.W);
+        if (swingAngle <= coneMax + 1e-5f) return relative;
+        float t = coneMax / MathF.Max(swingAngle, 1e-5f);
+        return Quaternion.Normalize(Quaternion.Slerp(Quaternion.Identity, swing, t) * twist);
     }
 
     // The lowest shape-vertex world height across all bodies at the captured pose: the drop
@@ -939,10 +1265,12 @@ public class SkeletonView : Control
 
     private static Vector3 Translation(float[] frame) => new(frame[12], frame[13], frame[14]);
 
-    private static Vector3 Column(float[] frame, int axis) =>
+    // Column/WorldDir are internal so the release tests can re-measure the settled angles
+    // with the same frame conventions the clamps use.
+    internal static Vector3 Column(float[] frame, int axis) =>
         new(frame[4 * axis], frame[4 * axis + 1], frame[4 * axis + 2]);
 
-    private static Vector3 WorldDir(float[] frame, int axis, Quaternion rotation) =>
+    internal static Vector3 WorldDir(float[] frame, int axis, Quaternion rotation) =>
         Vector3.Transform(Column(frame, axis), rotation);
 
     private static Vector3 RotateAround(Vector3 vector, Vector3 axis, float angle) =>
