@@ -64,7 +64,66 @@ public static class HavokPhysicsExtractor
                 if (int.TryParse(map[bone], NumberStyles.Integer, CultureInfo.InvariantCulture, out int body))
                     model.BoneBindings.Add(new HavokRagdollBoneBinding(bone, body));
 
+        if (ragdoll.Scalars.TryGetValue("skeleton", out var skeletonReference) &&
+            RefId(skeletonReference) is { } skeletonId && skeletonId >= 0)
+        {
+            int index = skeletonId - NativeGraphModel.FirstId;
+            if (index >= 0 && index < objects.Instances.Count &&
+                objects.Instances[index].ClassName == "hkaSkeleton" &&
+                Skeleton(objects, objects.Instances[index]) is { } skeleton)
+                model.Skeleton = skeleton;
+        }
+
         return model;
+    }
+
+    // The physics skeleton hknpRagdollData references, read through the measured type table
+    // exactly like the byte-backed XML: name string, int16 parent array, hkaBone name array
+    // (each record is a string pointer followed by a lockTranslation bool) and the 48-byte
+    // hkQsTransform reference poses (translation vector4, rotation quaternion, scale vector4).
+    private static HavokRagdollSkeleton? Skeleton(PackfileObjects objects, PackfileObjects.Instance instance)
+    {
+        const string className = "hkaSkeleton";
+        var reader = new MemberReader(objects);
+
+        string name = "";
+        if (reader.At(instance.Offset, className, "name") is { } nameAt)
+            name = objects.ReadStringAt(nameAt) ?? "";
+
+        var skeleton = new HavokRagdollSkeleton { Name = name };
+
+        if (reader.At(instance.Offset, className, "parentIndices") is { } parentsAt &&
+            objects.ArrayAt(parentsAt, 2) is { } parents)
+            for (int i = 0; i < parents.Count; i++)
+            {
+                int? raw = objects.ReadNarrowAt(parents.At + i * 2, 2);
+                if (raw == null) return null;
+                skeleton.ParentIndices.Add(unchecked((short)raw.Value));
+            }
+
+        if (reader.At(instance.Offset, className, "bones") is { } bonesAt &&
+            objects.ArrayAt(bonesAt, 16) is { } bones)
+            for (int i = 0; i < bones.Count; i++)
+            {
+                string? boneName = objects.ReadStringAt(bones.At + i * 16);
+                if (boneName == null) return null;
+                skeleton.BoneNames.Add(boneName);
+            }
+
+        // Without the bone names the skeleton cannot label anything; a readable skeleton
+        // always carries them, so fail closed rather than expose a half-read object.
+        if (skeleton.BoneNames.Count == 0) return null;
+
+        if (reader.At(instance.Offset, className, "referencePose") is { } poseAt &&
+            objects.ArrayAt(poseAt, 48) is { } poses)
+            for (int i = 0; i < poses.Count; i++)
+            {
+                float[]? row = objects.ReadFloatsAt(poses.At + i * 48, 4);
+                if (row == null) return null;
+                skeleton.ReferencePositions.Add(new Vector3(row[0], row[1], row[2]));
+            }
+
+        return skeleton;
     }
 
     // A member offset through the same flattened parent-chain layout the byte-backed XML

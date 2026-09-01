@@ -161,6 +161,100 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void PhysicsSkeletonCarriesMeasuredBoneNames()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        var skeleton = model!.Skeleton;
+        Assert.NotNull(skeleton);
+        Assert.Equal("Ragdoll_NPC COM", skeleton!.Name);
+        Assert.Equal(18, skeleton.BoneNames.Count);
+        Assert.Equal("Ragdoll_NPC COM", skeleton.BoneNames[0]);
+        Assert.Equal("Ragdoll_NPC L Thigh", skeleton.BoneNames[1]);
+        Assert.Equal("Ragdoll_NPC R Calf", skeleton.BoneNames[5]);
+        Assert.Equal("Ragdoll_NPC R Foot", skeleton.BoneNames[8]);
+        Assert.Equal("Ragdoll_NPC L Forearm", skeleton.BoneNames[13]);
+    }
+
+    [Fact]
+    public void PhysicsSkeletonParentIndicesMatchXml()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        var parents = model!.Skeleton!.ParentIndices;
+        Assert.Equal(18, parents.Count);
+        Assert.Equal(new[]
+        {
+            -1, 0, 0, 0, 1, 2, 3, 4, 5, 6, 9, 9, 9, 10, 11, 12, 13, 15,
+        }, parents);
+    }
+
+    [Fact]
+    public void PhysicsSkeletonReferencePositionsMatchXml()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        var poses = model!.Skeleton!.ReferencePositions;
+        Assert.Equal(18, poses.Count);
+        AssertNear(new Vector3(7.62939453125E-6f, 4.249164485372603E-4f, 6.615072250366211f),
+                   poses[1], 1e-3f);
+        AssertNear(new Vector3(3.7916259765625f, 2.0265579223632812E-6f, -7.011654815869406E-6f),
+                   poses[3], 1e-3f);
+        AssertNear(new Vector3(31.592391967773438f, -0.03480100631713867f, -0.41684722900390625f),
+                   poses[4], 1e-3f);
+    }
+
+    [Fact]
+    public void BoneBindingsResolveBodyNamesForLabels()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // Every binding must point at a body we can label with the skeleton bone's name.
+        foreach (var binding in model!.BoneBindings)
+        {
+            var body = Assert.Single(model.Bodies, b => b.Id == binding.BodyId);
+            var boneName = model.Skeleton!.BoneNames[binding.BoneIndex];
+            Assert.NotEmpty(boneName);
+            Assert.NotEmpty(body.Name);
+        }
+
+        var thigh = Assert.Single(model.BoneBindings, binding => binding.BoneIndex == 1);
+        Assert.Equal(1, thigh.BodyId);
+        Assert.Equal("Ragdoll_NPC L Thigh", model.Skeleton!.BoneNames[thigh.BoneIndex]);
+        Assert.Equal("Ragdoll_NPC L Thigh", model.Bodies.Single(b => b.Id == thigh.BodyId).Name);
+    }
+
+    [Fact]
+    public void ValidatorFlagsBrokenSkeletonConsistency()
+    {
+        var model = new HavokRagdollModel
+        {
+            Skeleton = new HavokRagdollSkeleton { Name = "broken" },
+        };
+        model.Skeleton!.BoneNames.AddRange(new[] { "A", "B" });
+        model.Skeleton.ParentIndices.Add(5);
+        model.Skeleton.ReferencePositions.Add(new Vector3(0, 0, 0));
+        model.Skeleton.ReferencePositions.Add(new Vector3(float.NaN, 0, 0));
+        model.BoneBindings.Add(new HavokRagdollBoneBinding(7, 0));
+
+        var findings = HavokPhysicsValidator.Check(model);
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("parent index 5"));
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("2-bone physics skeleton"));
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("1 parent indices"));
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("reference pose"));
+        Assert.Contains(findings, f =>
+            f.Level == HavokPhysicsValidationLevel.Error && f.Message.Contains("missing body 0"));
+    }
+
+    [Fact]
     public void ExtractedModelPassesTheValidator()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
