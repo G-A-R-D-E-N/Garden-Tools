@@ -262,11 +262,15 @@ public sealed class RagdollDropRegressionTests
 
     private static Vector3 Pivot(float[] frame) => new(frame[12], frame[13], frame[14]);
 
-    private static void AssertNear(Vector3 expected, Vector3 actual, float tolerance) =>
+    private static void AssertNear(Vector3 expected, Vector3 actual, float tolerance)
+    {
         Assert.True(Vector3.Distance(expected, actual) <= tolerance,
             $"expected {expected}, measured {actual}");
+    }
 
-    private static void AssertRotationNear(Quaternion expected, Quaternion actual, float tolerance) =>
-        Assert.True(MathF.Abs(Quaternion.Dot(Quaternion.Normalize(expected), Quaternion.Normalize(actual))) >= 1f - tolerance,
-            $"expected rotation {expected}, measured {actual}");
+    private static void AssertRotationNear(Quaternion expected, Quaternion actual, float tolerance)
+    {
+        float dot = MathF.Abs(Quaternion.Dot(Quaternion.Normalize(expected), Quaternion.Normalize(actual)));
+        Assert.True(dot >= 1f - tolerance, $"expected {expected}, measured {actual}, dot={dot}");
+    }
 }
