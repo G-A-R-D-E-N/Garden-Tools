@@ -203,6 +203,27 @@ public sealed class RagdollDropRegressionTests
         Assert.Equal(-1, view.PinnedConstraintId);
     }
 
+    [Fact]
+    public void ReleaseSourceIsCapturedByValue()
+    {
+        var (model, pose) = LoadReference();
+        var view = new SkeletonView();
+        view.SetBodies(model);
+        view.Show(pose);
+        view.StartDrop();
+
+        var capturedPositions = view.DroppedPositions!.ToArray();
+        var capturedRotations = view.DroppedRotations!.ToArray();
+
+        var moved = Shift(pose, 50f);
+        view.Update(moved);
+
+        Assert.True(capturedPositions.SequenceEqual(view.DroppedPositions!),
+            "animation updates mutated the captured release positions");
+        Assert.True(capturedRotations.SequenceEqual(view.DroppedRotations!),
+            "animation updates mutated the captured release rotations");
+    }
+
     private static SkeletonView NewDrop(HavokRagdollModel model, AnimationPose.Pose pose)
     {
         var view = new SkeletonView();
