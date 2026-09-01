@@ -823,6 +823,39 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void BodyFramePinsPersistTogetherAndClear()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        // Body frame pins are multi-select: clicking several bodies keeps all their
+        // measured COM + stub labels on screen at once, with no hover required.
+        var view = new SkeletonView();
+        view.SetBodies(model);
+        view.ShowFrames = true;
+        view.ToggleBodyPinForTest(0);
+        view.ToggleBodyPinForTest(1);
+        view.ToggleBodyPinForTest(2);
+        Assert.Equal(new[] { 0, 1, 2 }, view.PinnedBodyIds.OrderBy(x => x).ToArray());
+        Assert.Equal(-1, view.HoveredBodyId);
+
+        // Clicking a pinned body again unpins just that one; the rest stay for comparison.
+        view.ToggleBodyPinForTest(1);
+        Assert.Equal(new[] { 0, 2 }, view.PinnedBodyIds.OrderBy(x => x).ToArray());
+
+        // The set bookkeeping is independent of the overlays (the real click path is gated
+        // by the overlay visibility instead); Reset clears everything like the constraint pin.
+        view.ToggleBodyPinForTest(0);
+        view.ToggleBodyPinForTest(2);
+        Assert.Empty(view.PinnedBodyIds);
+
+        view.ToggleBodyPinForTest(1);
+        view.Reset();
+        Assert.Empty(view.PinnedBodyIds);
+        Assert.False(view.ShowFrames);
+    }
+
+    [Fact]
     public void ConstraintHoverLabelShowsMeasuredLimits()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));

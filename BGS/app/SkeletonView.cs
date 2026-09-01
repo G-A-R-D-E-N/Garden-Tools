@@ -107,14 +107,24 @@ public class SkeletonView : Control
     private int _hoveredBody = -1;
     private int _hoveredConstraint = -1;
     private int _pinnedConstraint = -1;
+    private readonly HashSet<int> _pinnedBodies = new();
 
     public int HoveredConstraintId => _hoveredConstraint;
     public int HoveredBodyId => _hoveredBody;
     public int PinnedConstraintId => _pinnedConstraint;
+    public IReadOnlyCollection<int> PinnedBodyIds => _pinnedBodies;
 
     public void HoverBodyForTest(int bodyId)
     {
         _hoveredBody = bodyId;
+        InvalidateVisual();
+    }
+
+    // Body frame pins are multi-select: clicking a body flips it in the pinned set, so
+    // several measured COM + stub labels can stay on screen at once for comparison.
+    public void ToggleBodyPinForTest(int bodyId)
+    {
+        if (!_pinnedBodies.Remove(bodyId)) _pinnedBodies.Add(bodyId);
         InvalidateVisual();
     }
 
@@ -242,6 +252,7 @@ public class SkeletonView : Control
         _hoveredBody = -1;
         _hoveredConstraint = -1;
         _pinnedConstraint = -1;
+        _pinnedBodies.Clear();
         _physicsPose = null;
         ClearDrop();
         _yaw = 0.6;
@@ -665,9 +676,11 @@ public class SkeletonView : Control
                 ctx.DrawEllipse(null, comPen, Project(com), 2.6, 2.6);
             }
 
-            // The numeric readout for the hovered body: its measured COM triplet (or a
-            // plain note when the file carries none) and the axis stub length, in file units.
-            if (body.Id == _hoveredBody)
+            // The numeric readout for the hovered body and for every click-pinned body: the
+            // measured COM triplet (or a plain note when the file carries none) and the axis
+            // stub length, in file units. Pinned labels stay without hovering, so several
+            // bodies can be compared at once.
+            if (body.Id == _hoveredBody || _pinnedBodies.Contains(body.Id))
             {
                 var label = new FormattedText(BodyFrameLabel(body, AxisStubLength),
                                               CultureInfo.InvariantCulture,
@@ -989,11 +1002,22 @@ public class SkeletonView : Control
 
     private void NameBodyUnder(Point at)
     {
-        // Body picking backs both the bindings labels (bone name) and the frames labels
-        // (measured COM + stub), so it is live whenever either overlay is showing, and in
-        // the engineering view (which draws the frames regardless of the toggles).
+        int found = PickBodyUnder(at);
+        // Hiding every body-label overlay clears the pins too, like the constraint pin.
+        if (!ShowBindings && !ShowFrames && !EngineeringFrames && _pinnedBodies.Count > 0)
+            _pinnedBodies.Clear();
+        if (found == _hoveredBody) return;
+        _hoveredBody = found;
+        InvalidateVisual();
+    }
+
+    // Body picking backs both the bindings labels (bone name) and the frames labels
+    // (measured COM + stub), so it is live whenever either overlay is showing, and in the
+    // engineering view (which draws the frames regardless of the toggles).
+    private int PickBodyUnder(Point at)
+    {
         if ((!ShowBindings && !ShowFrames && !EngineeringFrames) ||
-            _bodies == null || _bodies.Bodies.Count == 0) return;
+            _bodies == null || _bodies.Bodies.Count == 0) return -1;
 
         int found = -1;
         double nearest = 12 * 12;
@@ -1006,10 +1030,7 @@ public class SkeletonView : Control
             nearest = d;
             found = body.Id;
         }
-
-        if (found == _hoveredBody) return;
-        _hoveredBody = found;
-        InvalidateVisual();
+        return found;
     }
 
     // Hover picking for constraints: the nearest point on each body-link segment in projected
@@ -1089,6 +1110,16 @@ public class SkeletonView : Control
             {
                 _pinnedConstraint = next;
                 NotifyConstraintSelection();
+                InvalidateVisual();
+            }
+
+            // Clicking a body flips its frame label in the multi-pin set (the labels stay
+            // until clicked again or the overlays hide), while the constraint click above
+            // still releases a pinned constraint when the click hits no constraint.
+            int bodyPicked = PickBodyUnder(released);
+            if (bodyPicked >= 0)
+            {
+                if (!_pinnedBodies.Remove(bodyPicked)) _pinnedBodies.Add(bodyPicked);
                 InvalidateVisual();
             }
         }
