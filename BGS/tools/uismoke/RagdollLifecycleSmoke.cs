@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using System.Linq;
+using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using BehaviourStudio.App;
@@ -42,9 +42,9 @@ public static class LifecycleSmoke
             window.Open(animation);
             Dispatcher.UIThread.RunJobs();
 
-            var play = Smoke.Find<Button>(window).First(button => button.Content?.ToString() == "Play");
-            var drop = Smoke.Find<Button>(window).First(button => button.Content?.ToString() == "Drop");
-            var engineer = Smoke.Find<CheckBox>(window).First(box => box.Content?.ToString() == "Frames only");
+            var play = Field<Button>(window, "_playButton");
+            var drop = Field<Button>(window, "_dropButton");
+            var engineer = Field<CheckBox>(window, "_engineerToggle");
 
             Check("sibling ragdoll source is shown",
                 window.PlaybackSummary.Contains("loaded from the sibling skeleton", StringComparison.Ordinal),
@@ -107,6 +107,12 @@ public static class LifecycleSmoke
         }
 
         return failed;
+    }
+
+    private static T Field<T>(MainWindow window, string name) where T : class
+    {
+        return (T)(typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(window)
+            ?? throw new InvalidOperationException($"Missing MainWindow field {name}"));
     }
 
     private static void Check(string what, bool value, ref int failed)
