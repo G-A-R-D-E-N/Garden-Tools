@@ -45,4 +45,37 @@ public sealed class RagdollFrameRegressionTests
                 $"body {body.Id} changed rotation when the static drop was captured");
         }
     }
+
+    [Fact]
+    public void EngineeringFitUsesDisplayedMappedBodyFrames()
+    {
+        string path = Fixture(Skeleton);
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(path));
+        Assert.NotNull(model);
+        var skeleton = new HkxBinaryReader().ReadSkeleton(path);
+        Assert.NotNull(skeleton);
+        var reference = AnimationPose.ReferencePose(skeleton!);
+
+        var view = new SkeletonView { EngineeringFrames = true };
+        view.SetBodies(model);
+        view.Show(reference);
+        view.Frame();
+        Vector3 baseline = view.ViewCentre;
+
+        view.Show(Shift(reference, 50f));
+        view.Frame();
+
+        Vector3 moved = view.ViewCentre - baseline;
+        Assert.True(Vector3.Distance(new Vector3(0, 0, 50), moved) <= 0.02f,
+            $"engineering Fit stayed on reference bounds instead of the displayed mapped pose: delta {moved}");
+    }
+
+    private static AnimationPose.Pose Shift(AnimationPose.Pose source, float dz)
+    {
+        var shifted = new AnimationPose.Pose();
+        foreach (var bone in source.Bones)
+            shifted.Bones.Add(new AnimationPose.Bone(bone.Index, bone.Name, bone.Parent,
+                bone.Position + new Vector3(0, 0, dz), bone.Rotation));
+        return shifted;
+    }
 }

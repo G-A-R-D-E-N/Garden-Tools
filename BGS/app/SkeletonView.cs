@@ -74,6 +74,7 @@ public class SkeletonView : Control
     public int DrawnMappings => _bodies?.Mappings.Count ?? 0;
 
     public float BodyFit => _bodyFit;
+    internal Vector3 ViewCentre => _centre;
     public float AxisStubLength => Math.Max(0.5f, _bodyFit * 0.06f);
 
     public string ScaleStatusText
@@ -629,9 +630,14 @@ public class SkeletonView : Control
 
     private void FitBodies()
     {
-        _bodyCentre = Vector3.Zero;
-        _bodyFit = 1;
-        if (_bodies == null || _bodies.Bodies.Count == 0) return;
+        var bounds = BodyBounds(current: false);
+        _bodyCentre = bounds.Centre;
+        _bodyFit = bounds.Fit;
+    }
+
+    private (Vector3 Centre, float Fit) BodyBounds(bool current)
+    {
+        if (_bodies == null || _bodies.Bodies.Count == 0) return (Vector3.Zero, 1);
 
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
@@ -639,26 +645,30 @@ public class SkeletonView : Control
 
         foreach (var body in _bodies.Bodies)
         {
+            var (position, rotation) = current
+                ? BodyFrame(_bodies, body)
+                : (body.Position, body.Rotation);
             var shape = _bodies.Shapes.FirstOrDefault(s => s.Id == body.ShapeId);
             if (shape != null)
                 foreach (var vertex in shape.Vertices)
                 {
-                    var world = body.Position + Vector3.Transform(vertex, body.Rotation);
+                    var world = position + Vector3.Transform(vertex, rotation);
                     min = Vector3.Min(min, world);
                     max = Vector3.Max(max, world);
                     any = true;
                 }
 
-            min = Vector3.Min(min, body.Position);
-            max = Vector3.Max(max, body.Position);
+            min = Vector3.Min(min, position);
+            max = Vector3.Max(max, position);
             any = true;
         }
 
-        if (!any) return;
+        if (!any) return (Vector3.Zero, 1);
 
-        _bodyCentre = (min + max) * 0.5f;
+        var centre = (min + max) * 0.5f;
         var size = max - min;
-        _bodyFit = Math.Max(0.001f, Math.Max(size.X, Math.Max(size.Y, size.Z)) * 0.5f);
+        float fit = Math.Max(0.001f, Math.Max(size.X, Math.Max(size.Y, size.Z)) * 0.5f);
+        return (centre, fit);
     }
 
     public void Frame()
@@ -667,8 +677,9 @@ public class SkeletonView : Control
         _pan = default;
         if (EngineeringFrames)
         {
-            _centre = _bodyCentre;
-            _fit = _bodyFit;
+            var bounds = BodyBounds(current: true);
+            _centre = bounds.Centre;
+            _fit = bounds.Fit;
         }
         else if (_pose is { Bones.Count: > 0 })
         {
