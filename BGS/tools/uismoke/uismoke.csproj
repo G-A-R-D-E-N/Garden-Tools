@@ -7,7 +7,7 @@
     <RootNamespace>BehaviourStudio.UiSmoke</RootNamespace>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AssemblyName>uismoke</AssemblyName>
-    <StartupObject>BehaviourStudio.UiSmoke.Smoke</StartupObject>
+    <StartupObject>BehaviourStudio.UiSmoke.LifecycleSmoke</StartupObject>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="*.cs" />
