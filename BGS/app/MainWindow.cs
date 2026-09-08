@@ -2784,7 +2784,11 @@ public class MainWindow : Window
             else
             {
                 _skeleton.StartDrop();
-                if (_skeleton.IsDropped) _dropClock.Start();
+                if (_skeleton.IsDropped)
+                {
+                    Stop();
+                    _dropClock.Start();
+                }
             }
             _dropButton.Content = _skeleton.IsDropped ? "Recover" : "Drop";
         };
@@ -2963,23 +2967,19 @@ public class MainWindow : Window
             }
         }
         _ragdollSourceName = ragdollSource == null ? null : Path.GetFileName(ragdollSource);
-        // While the engineering view is on, the overlay checkboxes stay unchecked so their
-        // state always matches what is actually drawn; the mode itself survives a re-load.
-        bool engineering = _engineerToggle.IsChecked == true;
         _bodiesToggle.IsEnabled = any;
-        _bodiesToggle.IsChecked = any && !engineering;
+        _bodiesToggle.IsChecked = any;
         _constraintsToggle.IsEnabled = any;
-        _constraintsToggle.IsChecked = any && !engineering && _ragdoll is { Constraints.Count: > 0 };
+        _constraintsToggle.IsChecked = any && _ragdoll is { Constraints.Count: > 0 };
         bool bindings = any && _ragdoll is { BoneBindings.Count: > 0, Skeleton: { BoneNames.Count: > 0 } };
         _bindingsToggle.IsEnabled = bindings;
-        _bindingsToggle.IsChecked = bindings && !engineering;
+        _bindingsToggle.IsChecked = bindings;
         bool physicsSkeleton = any && _ragdoll is { Skeleton: { ParentIndices.Count: > 0, ReferencePose.Count: > 0 } };
         _physicsSkeletonToggle.IsEnabled = physicsSkeleton;
-        _physicsSkeletonToggle.IsChecked = physicsSkeleton && !engineering;
+        _physicsSkeletonToggle.IsChecked = physicsSkeleton;
         _framesToggle.IsEnabled = any;
         _framesToggle.IsChecked = any;
         _engineerToggle.IsEnabled = any;
-        if (!any && engineering) _engineerToggle.IsChecked = false;
         _dropButton.IsEnabled = any;
         if (!any && _skeleton.IsDropped) _skeleton.ClearDrop();
         _skeleton.SetBodies(any ? _ragdoll : null);
@@ -3333,6 +3333,19 @@ public class MainWindow : Window
         _poseSource = "";
         _playback.Clear();
 
+        _ragdoll = null;
+        _ragdollSourceName = null;
+        _ragdollSourceNote = null;
+
+        foreach (var toggle in new[]
+                 { _bodiesToggle, _constraintsToggle, _bindingsToggle,
+                   _physicsSkeletonToggle, _framesToggle, _engineerToggle })
+        {
+            toggle.IsChecked = false;
+            toggle.IsEnabled = false;
+        }
+        _dropButton.IsEnabled = false;
+
         _poseMotion = new RootMotion.Motion();
         _cachedSkeleton = null;
         _cachedSkeletonFor = "";
@@ -3340,10 +3353,11 @@ public class MainWindow : Window
         _scrub.Maximum = 0;
         _scrub.Value = 0;
         _scrubbing = false;
-        _skeleton.Reset();
         _dropClock.Stop();
         _dropButton.Content = "Drop";
         _frameLabel.Text = "";
+        _skeleton.Reset();
+        UpdateScaleStatus();
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
                            "the skeleton; use Mesh... to hang a model on it.", Ux.MutedBrush);
@@ -4369,8 +4383,7 @@ public class MainWindow : Window
     private void AppendRagdollSourceNote()
     {
         if (_ragdollSourceNote == null) return;
-        _playbackSummary.Text += "  |  " + _ragdollSourceNote;
-        _playbackSummary.Foreground = Ux.MetaBrush;
+        SetPlaybackSummary(_summaryBaseText + "  |  " + _ragdollSourceNote, Ux.MetaBrush);
     }
 
     // Returns the file's pointer width when it is a readable packfile that is not 8-byte, or null
