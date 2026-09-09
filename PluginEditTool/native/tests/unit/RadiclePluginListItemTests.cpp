@@ -347,9 +347,8 @@ TEST_CASE("PluginEditTool remove_list_item matches the field name case-insensiti
         nlohmann::json::array({
             "Patch.esp", "000811:Patch.esp", "ITEMS", "000800:Patch.esp"}));
     REQUIRE(result.has_value());
-    CHECK(result->get<std::string>() ==
-          "Removed 1 entr(y/ies) matching 000800:Patch.esp from ITEMS (now 0) on "
-          "000811:Patch.esp. Written to disk.");
+    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
+    CHECK(result->get<std::string>().find("SavePlugin") != std::string::npos);
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());

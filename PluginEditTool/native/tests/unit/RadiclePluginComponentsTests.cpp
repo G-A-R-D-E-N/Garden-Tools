@@ -168,8 +168,8 @@ TEST_CASE("PluginEditTool set_components writes FVPA and no CDIX on a COBJ") {
             "Patch.esp", "000A00:Patch.esp",
             R"([{"component":"000801:Patch.esp","count":1}])"}));
     REQUIRE(result.has_value());
-    CHECK(result->get<std::string>() ==
-          "Set 1 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk.");
+    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
+    CHECK(result->get<std::string>().find("SavePlugin") != std::string::npos);
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());

@@ -258,6 +258,8 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
                                                                replacement.dump()}));
     REQUIRE(message.has_value());
     CHECK(message->get<std::string>().find("Set 2 condition(s)") == 0);
+    CHECK(message->get<std::string>().find("Written to disk") == std::string::npos);
+    CHECK(message->get<std::string>().find("SavePlugin") != std::string::npos);
 
     const auto conditions = parseStringResult(
         backend.invoke("backend.GetConditions",
