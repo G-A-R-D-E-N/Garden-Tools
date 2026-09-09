@@ -114,11 +114,17 @@ TEST_CASE("Native RenumberPluginFormIds vacates overlapping targets before rekey
     CHECK(preview->get<std::string>().starts_with("DRY RUN:"));
     CHECK(preview->get<std::string>().find("001000-001001") != std::string::npos);
 
+    const auto beforeSave = fo4::test::original_bytes(fo4::read_plugin_file(path));
+
     const auto applied = backend.renumberPluginFormIds(
         nlohmann::json::array({"Patch.esp", "001000", true}));
     REQUIRE(applied.has_value());
     REQUIRE(applied->is_string());
     CHECK(applied->get<std::string>().find("Renumbered 2 record(s)") != std::string::npos);
+
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == beforeSave);
+    CHECK(applied->get<std::string>().find("SavePlugin") != std::string::npos);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(path);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp")) == nullptr);

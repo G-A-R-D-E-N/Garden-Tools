@@ -144,6 +144,8 @@ TEST_CASE("Native ChangeReferencingRecords copies winners adds target master and
     CHECK(preview->get<std::string>().starts_with("DRY RUN: 1 record(s) reference"));
     CHECK(preview->get<std::string>().find("UsesFrom") != std::string::npos);
 
+    const auto beforeSave = fo4::test::original_bytes(fo4::read_plugin_file(patchPath));
+
     const auto applied = backend.changeReferencingRecords(
         nlohmann::json::array({
             "000800:Base.esm", "000800:Other.esm", "Patch.esp", true, 300
@@ -151,6 +153,10 @@ TEST_CASE("Native ChangeReferencingRecords copies winners adds target master and
     REQUIRE(applied.has_value());
     REQUIRE(applied->is_string());
     CHECK(applied->get<std::string>().find("Repointed 1 of 1 referencing record(s)") != std::string::npos);
+
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(patchPath)) == beforeSave);
+    CHECK(applied->get<std::string>().find("SavePlugin") != std::string::npos);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto patch = fo4::read_plugin_file(patchPath);
     const auto* race = fo4::find_record(
