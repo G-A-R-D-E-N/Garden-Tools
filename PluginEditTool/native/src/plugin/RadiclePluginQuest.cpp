@@ -2968,16 +2968,10 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             }
         }
         fo4::forms::write_quest_aliases(mutated, questKey, creations);
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Set " + std::to_string(creations.size()) + " quest alias(es) on " +
-            recordText + " in " + pluginName + ". Written to disk.");
+            recordText + " in " + pluginName + ". SavePlugin to persist.");
     } catch (const fo4::forms::QuestError& error) {
         const std::string message = error.what();
         if (message.find("QUST VMAD") != std::string::npos) {
@@ -3375,8 +3369,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             }
         }
         fo4::forms::write_quest_stages(mutated, questKey, stages);
-        const auto pluginBytes = fo4::write_plugin(mutated);
         if (localizedTableChanged) {
+            const auto pluginBytes = fo4::write_plugin(mutated);
 #ifdef FO4IDE_TEST_HOOKS
             if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
 #endif
@@ -3406,18 +3400,20 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 tableBytes,
                 loaded->path,
                 pluginBytes);
-        } else {
-            fo4::write_plugin_file(mutated, loaded->path);
+            loaded->plugin = std::move(mutated);
+            {
+                std::error_code ec;
+                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
+            }
+            rebuildGraphLocked();
+            return nlohmann::json(
+                "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
+                recordText + " in " + pluginName + ". Written to disk.");
         }
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
-            recordText + " in " + pluginName + ". Written to disk.");
+            recordText + " in " + pluginName + ". SavePlugin to persist.");
     } catch (const fo4::forms::QuestError& error) {
         const std::string message = error.what();
         if (message.find("QUST VMAD") != std::string::npos) {
