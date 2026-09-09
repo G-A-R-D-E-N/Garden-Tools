@@ -1,0 +1,107 @@
+name: issue-174b-generic-red
+on:
+  push:
+    branches:
+      - work/174b-deferred-mutations
+permissions:
+  contents: write
+jobs:
+  prove-generic-write-through:
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+      - name: Load Ponytail rules
+        run: |
+          rm -rf /tmp/ponytail-174b-generic-red
+          git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-generic-red
+          test -f /tmp/ponytail-174b-generic-red/AGENTS.md
+      - name: Apply deferred generic RED contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected one match in {path}, found {text.count(old)}")
+              p.write_text(text.replace(old, new, 1))
+
+          mutation = "PluginEditTool/native/tests/unit/RadiclePluginMutationTests.cpp"
+          replace_once(
+              mutation,
+              '''    const auto reloaded = fo4::read_plugin_file(path);\n    const auto* record = fo4::find_record(\n        reloaded, fo4::FormKey::parse("000800:Patch.esp"));\n    REQUIRE(record != nullptr);\n    CHECK(editorId(*record) == "NewEditorId");\n    REQUIRE(record->subrecords.size() == 2);\n    CHECK(record->subrecords[1].signature.to_string() == "FULL");\n\n    const auto matrix = parseStringResult(\n''',
+              '''    const auto beforeSave = fo4::read_plugin_file(path);\n    const auto* beforeSaveRecord = fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000800:Patch.esp"));\n    REQUIRE(beforeSaveRecord != nullptr);\n    CHECK(editorId(*beforeSaveRecord) == "OldEditorId");\n\n    const auto matrix = parseStringResult(\n'''
+          )
+          replace_once(
+              mutation,
+              '''    REQUIRE(edid != rows.end());\n    CHECK(edid->at("Values")[0] == "NewEditorId");\n}\n\nTEST_CASE("Native SetField rejects opaque raw fields without touching disk")''',
+              '''    REQUIRE(edid != rows.end());\n    CHECK(edid->at("Values")[0] == "NewEditorId");\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto reloaded = fo4::read_plugin_file(path);\n    const auto* record = fo4::find_record(\n        reloaded, fo4::FormKey::parse("000800:Patch.esp"));\n    REQUIRE(record != nullptr);\n    CHECK(editorId(*record) == "NewEditorId");\n    REQUIRE(record->subrecords.size() == 2);\n    CHECK(record->subrecords[1].signature.to_string() == "FULL");\n}\n\nTEST_CASE("Native SetField rejects opaque raw fields without touching disk")'''
+          )
+
+          armor = "PluginEditTool/native/tests/unit/RadiclePluginArmorCreationTests.cpp"
+          replace_once(
+              armor,
+              '''    const auto disk = fo4::read_plugin_file(path);\n    const auto model = fo4::forms::decode_armor(\n        disk, fo4::FormKey::parse(key));\n    REQUIRE(model.male_world_model.has_value());\n''',
+              '''    const auto beforeSave = fo4::read_plugin_file(path);\n    const auto beforeModel = fo4::forms::decode_armor(\n        beforeSave, fo4::FormKey::parse(key));\n    CHECK_FALSE(beforeModel.male_world_model.has_value());\n    CHECK_FALSE(beforeModel.male_icon.has_value());\n    CHECK_FALSE(beforeModel.female_world_model.has_value());\n    CHECK_FALSE(beforeModel.female_icon.has_value());\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(path);\n    const auto model = fo4::forms::decode_armor(\n        disk, fo4::FormKey::parse(key));\n    REQUIRE(model.male_world_model.has_value());\n'''
+          )
+
+          components = "PluginEditTool/native/tests/unit/RadiclePluginComponentsTests.cpp"
+          replace_once(
+              components,
+              '''    const auto disk = fo4::read_plugin_file(path);\n    const auto* misc = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));\n    REQUIRE(misc != nullptr);\n    const auto* cvpa = findSub(*misc, "CVPA");\n''',
+              '''    const auto beforeSave = fo4::read_plugin_file(path);\n    const auto* beforeSaveMisc = fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000900:Patch.esp"));\n    REQUIRE(beforeSaveMisc != nullptr);\n    CHECK(findSub(*beforeSaveMisc, "CVPA") == nullptr);\n    CHECK(findSub(*beforeSaveMisc, "CDIX") == nullptr);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(path);\n    const auto* misc = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));\n    REQUIRE(misc != nullptr);\n    const auto* cvpa = findSub(*misc, "CVPA");\n'''
+          )
+
+          element = "PluginEditTool/native/tests/unit/RadiclePluginElementTests.cpp"
+          replace_once(
+              element,
+              '''    REQUIRE(added.has_value());\n    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0u, 0x00000800u, 0x00000801u});\n\n    const auto moved = elementBackend.moveElement''',
+              '''    REQUIRE(added.has_value());\n    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});\n\n    const auto moved = elementBackend.moveElement'''
+          )
+          replace_once(
+              element,
+              '''    REQUIRE(moved.has_value());\n    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0u, 0x00000801u});\n\n    const auto removed = elementBackend.removeElement''',
+              '''    REQUIRE(moved.has_value());\n    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});\n\n    const auto removed = elementBackend.removeElement'''
+          )
+          replace_once(
+              element,
+              '''    REQUIRE(removed.has_value());\n    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});\n\n    const auto cleared = elementBackend.clearElement''',
+              '''    REQUIRE(removed.has_value());\n    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});\n\n    const auto cleared = elementBackend.clearElement'''
+          )
+          replace_once(
+              element,
+              '''    REQUIRE(cleared.has_value());\n    CHECK(rawLinks(path).empty());\n}\n''',
+              '''    REQUIRE(cleared.has_value());\n    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    CHECK(rawLinks(path).empty());\n}\n'''
+          )
+          PY
+          git diff --check
+      - name: Build focused generic tests
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-generic-red -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-generic-red --target fo4ide_test_plugin_backend
+      - name: Prove generic paths write through
+        run: |
+          set +e
+          for test in \
+            "Native SetField persists EDID and refreshes the record matrix" \
+            "PluginEditTool fills missing ARMO gendered fields after creation" \
+            "PluginEditTool set_components writes CVPA and identity CDIX on a MISC" \
+            "Native ElementService handles the current raw conflict-matrix FormLink path"; do
+            build/fo4ide-174b-generic-red/bin/fo4ide_test_plugin_backend "$test" > /tmp/current-red.txt 2>&1
+            status=$?
+            cat /tmp/current-red.txt
+            test "$status" -ne 0 || exit 1
+            grep -F 'FAILED:' /tmp/current-red.txt || exit 1
+          done
+          set -e
+      - name: Commit RED proof
+        run: |
+          git rm .github/workflows/174b-generic-red.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/tests/unit/RadiclePluginMutationTests.cpp PluginEditTool/native/tests/unit/RadiclePluginArmorCreationTests.cpp PluginEditTool/native/tests/unit/RadiclePluginComponentsTests.cpp PluginEditTool/native/tests/unit/RadiclePluginElementTests.cpp
+          git commit -m "test: prove deferred generic mutation contract"
+          git push origin HEAD:work/174b-deferred-mutations
