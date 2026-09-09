@@ -17,6 +17,22 @@ enum class FormLinkListStorage {
   packed_array,
 };
 
+struct FormLinkFieldDescriptor {
+  Signature record{};
+  std::string_view path;
+  std::string_view label;
+  Signature subrecord{};
+  std::size_t offset{0};
+  bool nullable{false};
+  std::size_t first_target{0};
+  std::size_t target_count{0};
+};
+
+class FormLinkFieldError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
 struct FormLinkListDescriptor {
   Signature record{};
   std::string_view path;
@@ -94,6 +110,17 @@ public:
 #include "fo4/schema/generated_formlink_lists.inc"
 
 bool is_sig_base_object(Signature signature) noexcept;
+
+std::optional<FormLinkFieldDescriptor> formlink_field_descriptor(
+    std::string_view path) noexcept;
+std::optional<FormLinkFieldDescriptor> formlink_field_descriptor(
+    Signature record, std::string_view path) noexcept;
+std::span<const FormLinkFieldDescriptor> formlink_fields(
+    Signature record) noexcept;
+std::span<const Signature> formlink_field_targets(
+    const FormLinkFieldDescriptor& descriptor) noexcept;
+bool formlink_field_target_allowed(
+    const FormLinkFieldDescriptor& descriptor, Signature signature) noexcept;
 
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
     Signature record,
