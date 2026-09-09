@@ -532,6 +532,22 @@ TEST_CASE("Native CopyAsNewRecord dispatches a contained INFO to the dialogue pr
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("as NEW record 000900:Patch.esp") != std::string::npos);
 
+    const auto pendingRaw = backend.invokeBackend(
+        "GetRecordDetails", nlohmann::json::array({"000900:Patch.esp"}));
+    REQUIRE(pendingRaw.has_value());
+    REQUIRE(pendingRaw->is_string());
+    const auto pending = nlohmann::json::parse(pendingRaw->get<std::string>());
+    CHECK(pending.at("FormKey") == "000900:Patch.esp");
+    CHECK(pending.at("EditorId") == "BackendInfoDUP");
+    CHECK(pending.at("Signature") == "INFO");
+    CHECK(pending.at("File") == "Patch.esp");
+
+    const auto beforeSave = fo4::read_plugin_file(patchPath);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto patch = fo4::read_plugin_file(patchPath);
     const auto* duplicate = fo4::find_record(
         patch, fo4::FormKey::parse("000900:Patch.esp"));
