@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <initializer_list>
 #include <limits>
+#include <map>
 #include <optional>
 #include <span>
 #include <set>
@@ -22,6 +23,8 @@
 
 #include <fo4/forms/quest.hpp>
 #include <fo4/graph/conflict_graph.hpp>
+#include <fo4/io/atomic_write.hpp>
+#include <fo4/localization/strings.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/ctda.hpp>
@@ -1946,9 +1949,111 @@ std::optional<Error> adapterConditionUnrepresentable(
     return std::nullopt;
 }
 
+struct LocalizedQuestTables {
+    std::filesystem::path dlstringsPath;
+    fo4::localization::LocalizedStringTable strings;
+    fo4::localization::LocalizedStringTable dlstrings;
+    fo4::localization::LocalizedStringTable ilstrings;
+    std::uint32_t nextId{1};
+};
+
+std::vector<std::byte> localizedTextBytes(std::string_view text) {
+    std::vector<std::byte> bytes;
+    bytes.reserve(text.size());
+    for (const auto ch : text) {
+        bytes.push_back(std::byte{static_cast<unsigned char>(ch)});
+    }
+    return bytes;
+}
+
+std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
+                                              const std::filesystem::path& pluginPath,
+                                              LocalizedQuestTables& result) {
+    if (!arguments.is_array() || arguments.size() <= 3 || !arguments[3].is_object()) {
+        return Error{
+            "LocalizedLogTextUnsupported",
+            "localized QUST CNAM authoring requires language and stringsDirectory"
+        };
+    }
+    const auto& context = arguments[3];
+    if (!context.contains("language") || !context["language"].is_string() ||
+        !context.contains("stringsDirectory") || !context["stringsDirectory"].is_string()) {
+        return Error{
+            "InvalidLocalizedQuestContext",
+            "localized QUST context requires string language and stringsDirectory"
+        };
+    }
+    const auto language = context["language"].get<std::string>();
+    const auto directory = std::filesystem::path(
+        context["stringsDirectory"].get<std::string>());
+    if (language.empty() || language.find_first_of("\\/") != std::string::npos ||
+        directory.empty()) {
+        return Error{
+            "InvalidLocalizedQuestContext",
+            "localized QUST context has an invalid language or stringsDirectory"
+        };
+    }
+
+    const auto stem = pluginPath.stem().string() + "_" + language;
+    const auto load = [&](fo4::localization::StringTableKind kind,
+                          std::string_view extension,
+                          fo4::localization::LocalizedStringTable& table)
+        -> std::optional<Error> {
+        const auto path = directory / (stem + std::string(extension));
+        std::error_code ec;
+        const auto status = std::filesystem::symlink_status(path, ec);
+        if (ec || std::filesystem::is_symlink(status) ||
+            !std::filesystem::is_regular_file(status)) {
+            return Error{
+                "LocalizedLogTableUnavailable",
+                "localized sibling table is unavailable: " + path.string()
+            };
+        }
+        try {
+            table = fo4::localization::read_string_table_file(path, kind);
+        } catch (const std::exception& error) {
+            return Error{
+                "LocalizedLogTableInvalid",
+                "could not read localized sibling table " + path.string() + ": " + error.what()
+            };
+        }
+        if (kind == fo4::localization::StringTableKind::dlstrings) {
+            result.dlstringsPath = path;
+        }
+        return std::nullopt;
+    };
+
+    if (const auto error = load(fo4::localization::StringTableKind::strings,
+                               ".STRINGS", result.strings)) {
+        return error;
+    }
+    if (const auto error = load(fo4::localization::StringTableKind::dlstrings,
+                               ".DLSTRINGS", result.dlstrings)) {
+        return error;
+    }
+    if (const auto error = load(fo4::localization::StringTableKind::ilstrings,
+                               ".ILSTRINGS", result.ilstrings)) {
+        return error;
+    }
+
+    std::uint32_t maximum = 0;
+    for (const auto* table : {&result.strings, &result.dlstrings, &result.ilstrings}) {
+        for (const auto& entry : table->entries) maximum = std::max(maximum, entry.id);
+    }
+    if (maximum == std::numeric_limits<std::uint32_t>::max()) {
+        return Error{
+            "LocalizedLogTableFull",
+            "localized string-table ID space is exhausted"
+        };
+    }
+    result.nextId = maximum + 1;
+    return std::nullopt;
+}
+
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                                                    const fo4::FormKey& quest,
-                                                   const fo4::ConflictGraph& graph) {
+                                                   const fo4::ConflictGraph& graph,
+                                                   bool allowLocalized) {
     const auto decoded = fo4::forms::decode_quest_stages(plugin, quest);
     for (const auto& stage : decoded.stages) {
         if (stage.unknown != 0) {
@@ -1964,7 +2069,7 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
             };
         }
         for (const auto& entry : stage.log_entries) {
-            if (entry.log_text.has_value() && entry.log_text->localized()) {
+            if (!allowLocalized && entry.log_text.has_value() && entry.log_text->localized()) {
                 return Error{
                     "QuestAuthoringCoverageIncomplete",
                     "existing QUST log entry has a localized CNAM that this adapter cannot reconstruct"
@@ -2786,15 +2891,30 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
     if (const auto error = existingQuestVmadUnrepresentable(*record, false, true)) {
         return std::unexpected(*error);
     }
+    const bool localized = loaded->plugin.header.tes4_flags.is_localized();
+    std::optional<LocalizedQuestTables> localizedTables;
+    fo4::forms::QuestStages previousStages;
+    if (localized && arguments.is_array() && arguments.size() > 3) {
+        localizedTables.emplace();
+        if (const auto error = loadLocalizedQuestTables(
+                arguments, loaded->path, *localizedTables)) {
+            return std::unexpected(*error);
+        }
+        try {
+            previousStages = fo4::forms::decode_quest_stages(loaded->plugin, questKey);
+        } catch (const fo4::forms::QuestError& error) {
+            return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
+        }
+    }
     try {
-        if (const auto error = existingStagesUnrepresentable(loaded->plugin, questKey, graph_)) {
+        if (const auto error = existingStagesUnrepresentable(
+                loaded->plugin, questKey, graph_, localizedTables.has_value())) {
             return std::unexpected(*error);
         }
     } catch (const fo4::forms::QuestError& error) {
         return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
 
-    const bool localized = loaded->plugin.header.tes4_flags.is_localized();
     fo4::forms::QuestStages stages;
     std::vector<std::vector<std::vector<PendingQuestCondition>>> pendingConditions;
     std::vector<fo4::FormKey> conditionKeys;
@@ -2933,7 +3053,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     "note and logText must be strings"
                 });
             }
-            if (localized && logText.has_value()) {
+            if (localized && logText.has_value() && !localizedTables.has_value()) {
                 return std::unexpected(Error{
                     "LocalizedLogTextUnsupported",
                     "new QUST CNAM log text in a localized plugin needs a string-table ID"
@@ -2992,6 +3112,63 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
 
     try {
         auto mutated = loaded->plugin;
+        bool localizedTableChanged = false;
+        if (localizedTables.has_value()) {
+            for (std::size_t stageIndex = 0; stageIndex < stages.stages.size(); ++stageIndex) {
+                auto& stage = stages.stages[stageIndex];
+                for (std::size_t entryIndex = 0; entryIndex < stage.log_entries.size(); ++entryIndex) {
+                    auto& entry = stage.log_entries[entryIndex];
+                    if (!entry.log_text.has_value() || !entry.log_text->text.has_value()) continue;
+
+                    std::optional<std::uint32_t> previousId;
+                    for (const auto& previous : previousStages.stages) {
+                        if (previous.index != stage.index ||
+                            entryIndex >= previous.log_entries.size()) {
+                            continue;
+                        }
+                        const auto& previousEntry = previous.log_entries[entryIndex];
+                        if (previousEntry.log_text.has_value() &&
+                            previousEntry.log_text->id.has_value()) {
+                            previousId = previousEntry.log_text->id;
+                        }
+                        break;
+                    }
+
+                    std::optional<std::uint32_t> id;
+                    const auto text = localizedTextBytes(*entry.log_text->text);
+                    if (previousId.has_value()) {
+                        const auto* previousText = fo4::localization::find_string(
+                            localizedTables->dlstrings, *previousId);
+                        if (previousText == nullptr) {
+                            return std::unexpected(Error{
+                                "LocalizedLogTableInvalid",
+                                "DLSTRINGS is missing existing QUST CNAM ID " +
+                                    std::to_string(*previousId)
+                            });
+                        }
+                        if (previousText->text == text) id = *previousId;
+                    }
+                    if (!id.has_value()) {
+                        if (localizedTables->nextId == std::numeric_limits<std::uint32_t>::max()) {
+                            return std::unexpected(Error{
+                                "LocalizedLogTableFull",
+                                "localized string-table ID space is exhausted"
+                            });
+                        }
+                        id = localizedTables->nextId++;
+                        localizedTables->dlstrings.entries.push_back({*id, text});
+                        localizedTableChanged = true;
+                    }
+                    entry.log_text->id = id;
+                    entry.log_text->text.reset();
+                    for (auto& member : entry.members) {
+                        if (member.signature == fo4::Signature::from_string("CNAM")) {
+                            member.data = fo4::schema::write_localized_string(*entry.log_text);
+                        }
+                    }
+                }
+            }
+        }
         for (const auto& key : conditionKeys) ensureOwnerMaster(mutated, key.owner());
         const auto context = fo4::plugin_form_id_context(mutated);
         const auto encodeKey = [&](const std::optional<fo4::FormKey>& key) -> std::uint32_t {
@@ -3028,7 +3205,18 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             }
         }
         fo4::forms::write_quest_stages(mutated, questKey, stages);
-        fo4::write_plugin_file(mutated, loaded->path);
+        const auto pluginBytes = fo4::write_plugin(mutated);
+        if (localizedTableChanged) {
+            const auto tableBytes = fo4::localization::write_string_table(
+                localizedTables->dlstrings);
+            fo4::io::write_file_pair_dependency_first(
+                localizedTables->dlstringsPath,
+                tableBytes,
+                loaded->path,
+                pluginBytes);
+        } else {
+            fo4::write_plugin_file(mutated, loaded->path);
+        }
         loaded->plugin = std::move(mutated);
         {
             std::error_code ec;

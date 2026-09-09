@@ -17,6 +17,7 @@
 
 #include <fo4/flags.hpp>
 #include <fo4/forms/quest.hpp>
+#include <fo4/localization/strings.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/vmad.hpp>
@@ -68,6 +69,39 @@ void writeU32(fo4::test::ByteWriter& out, std::string_view signature, std::uint3
     fo4::test::ByteWriter data;
     data.u32(value);
     fo4::test::write_subrecord(out, signature, data.bytes);
+}
+
+std::vector<std::byte> rawBytes(std::string_view text) {
+    std::vector<std::byte> bytes;
+    bytes.reserve(text.size());
+    for (const auto ch : text) {
+        bytes.push_back(std::byte{static_cast<unsigned char>(ch)});
+    }
+    return bytes;
+}
+
+void writeLocalizationSet(const std::filesystem::path& root,
+                           std::vector<fo4::localization::LocalizedStringEntry> strings,
+                           std::vector<fo4::localization::LocalizedStringEntry> dlstrings,
+                           std::vector<fo4::localization::LocalizedStringEntry> ilstrings) {
+    const auto directory = root / "Strings";
+    std::filesystem::create_directories(directory);
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::strings, std::move(strings)},
+        directory / "Patch_en.STRINGS");
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::dlstrings, std::move(dlstrings)},
+        directory / "Patch_en.DLSTRINGS");
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::ilstrings, std::move(ilstrings)},
+        directory / "Patch_en.ILSTRINGS");
+}
+
+nlohmann::json localizedQuestContext(const std::filesystem::path& root) {
+    return nlohmann::json{
+        {"language", "en"},
+        {"stringsDirectory", (root / "Strings").string()}
+    };
 }
 
 std::vector<std::byte> questPlugin(std::uint32_t tes4Flags = 0) {
@@ -678,6 +712,123 @@ TEST_CASE("Native SetQuestStages refuses new CNAM in a localized plugin without 
         }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "LocalizedLogTextUnsupported");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages preserves unchanged localized CNAM IDs") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(fo4::RecordFlags::localized, [](fo4::test::ByteWriter& out) {
+        writeIndx(out, 10, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        writeU32(out, "CNAM", 42);
+    }));
+    writeLocalizationSet(
+        root,
+        {{100, rawBytes("Other")}},
+        {{42, rawBytes("Existing")}},
+        {{200, rawBytes("Other")}});
+    const auto before = readBytes(path);
+    const auto dlBefore = readBytes(root / "Strings" / "Patch_en.DLSTRINGS");
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "Existing"}}}),
+            localizedQuestContext(root)
+        }));
+    REQUIRE(result.has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto decoded = fo4::forms::decode_quest_stages(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.stages.size() == 1u);
+    REQUIRE(decoded.stages[0].log_entries.size() == 1u);
+    REQUIRE(decoded.stages[0].log_entries[0].log_text.has_value());
+    CHECK(decoded.stages[0].log_entries[0].log_text->id == 42u);
+    CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == dlBefore);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages allocates changed localized CNAM from the full ID set") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(fo4::RecordFlags::localized, [](fo4::test::ByteWriter& out) {
+        writeIndx(out, 10, 0, 0);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        writeU32(out, "CNAM", 42);
+    }));
+    writeLocalizationSet(
+        root,
+        {{100, rawBytes("Other")}},
+        {{42, rawBytes("Existing")}},
+        {{200, rawBytes("Other")}});
+    const auto stringsBefore = readBytes(root / "Strings" / "Patch_en.STRINGS");
+    const auto ilstringsBefore = readBytes(root / "Strings" / "Patch_en.ILSTRINGS");
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "Changed"}}}),
+            localizedQuestContext(root)
+        }));
+    REQUIRE(result.has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto decoded = fo4::forms::decode_quest_stages(
+        disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.stages.size() == 1u);
+    REQUIRE(decoded.stages[0].log_entries.size() == 1u);
+    REQUIRE(decoded.stages[0].log_entries[0].log_text.has_value());
+    CHECK(decoded.stages[0].log_entries[0].log_text->id == 201u);
+
+    const auto dlstrings = fo4::localization::read_string_table_file(
+        root / "Strings" / "Patch_en.DLSTRINGS",
+        fo4::localization::StringTableKind::dlstrings);
+    REQUIRE(dlstrings.entries.size() == 2u);
+    CHECK(fo4::localization::find_string(dlstrings, 42u) != nullptr);
+    CHECK(fo4::localization::find_string(dlstrings, 201u) != nullptr);
+    CHECK(readBytes(root / "Strings" / "Patch_en.STRINGS") == stringsBefore);
+    CHECK(readBytes(root / "Strings" / "Patch_en.ILSTRINGS") == ilstringsBefore);
+}
+
+TEST_CASE("Native SetQuestStages fails closed when a localized sibling table is missing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
+    const auto stringsDirectory = root / "Strings";
+    std::filesystem::create_directories(stringsDirectory);
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::strings, {{100, rawBytes("Other")}}},
+        stringsDirectory / "Patch_en.STRINGS");
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::dlstrings, {}},
+        stringsDirectory / "Patch_en.DLSTRINGS");
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
+            localizedQuestContext(root)
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.find("ILSTRINGS") != std::string::npos);
     CHECK(readBytes(path) == before);
 }
 
