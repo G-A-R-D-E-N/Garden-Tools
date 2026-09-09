@@ -1261,6 +1261,8 @@ TEST_CASE("Native logEntry sugar ORs complete and fail into QSDT flags") {
             })
         }));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto decoded = fo4::forms::decode_quest_stages(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(decoded.stages.size() == 1u);
@@ -1663,6 +1665,8 @@ TEST_CASE("Native SetQuestAliases rewrites VMAD alias IDs by unique name") {
             })
         }));
     REQUIRE(kept.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     std::vector<std::byte> beforeRename;
     std::size_t aliasOffset = 0;
     {
@@ -1691,6 +1695,8 @@ TEST_CASE("Native SetQuestAliases rewrites VMAD alias IDs by unique name") {
             })
         }));
     REQUIRE(renamed.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto reread = fo4::read_plugin_file(path);
     const auto* quest = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(quest != nullptr);
@@ -1752,6 +1758,8 @@ TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
             nlohmann::json::array({{{"index", 10}, {"logEntry", "Log"}}})
         }));
     REQUIRE(same.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     {
         const auto disk = fo4::read_plugin_file(path);
         const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -1777,6 +1785,8 @@ TEST_CASE("Native SetQuestStages rewrites VMAD Stage and leaves alias extras") {
             nlohmann::json::array({{{"index", 20}, {"logEntry", "Log"}}})
         }));
     REQUIRE(renumbered.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(quest != nullptr);
@@ -2137,6 +2147,8 @@ TEST_CASE("Native SetQuestStages adds a loaded condition FormLink master") {
             })
         }));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(patchPath);
     REQUIRE(disk.header.masters.size() == 1u);
@@ -2419,6 +2431,8 @@ TEST_CASE("Native SetQuestStages accepts alias-index GetDistance and RunOn Refer
             })
         }));
     REQUIRE(referenced.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(patchPath);
     REQUIRE(disk.header.masters.size() == 1u);
     CHECK(disk.header.masters[0].key.filename() == "Master.esm");
@@ -2580,6 +2594,8 @@ TEST_CASE("Native SetQuestStages ties CIS strings to String/Event parameter slot
             })
         }));
     REQUIRE(questVar.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto decoded = fo4::forms::decode_quest_stages(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     std::vector<fo4::CtdaCondition> conditions;
@@ -2832,6 +2848,8 @@ TEST_CASE("Native SetQuestAliases packs linked aliases into one ALLA array") {
             }
         })));
     REQUIRE(none.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(findQuestSub(fo4::read_plugin_file(patchPath), "ALLA") == nullptr);
 
     const auto two = backend.invokeBackend(
@@ -2848,6 +2866,8 @@ TEST_CASE("Native SetQuestAliases packs linked aliases into one ALLA array") {
             }
         })));
     REQUIRE(two.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     auto disk = fo4::read_plugin_file(patchPath);
     const auto* alla = findQuestSub(disk, "ALLA");
     REQUIRE(alla != nullptr);
@@ -3314,6 +3334,8 @@ TEST_CASE("Native SetQuestAliases writes CTDA/CIS before extras") {
             }
         })));
     REQUIRE(written.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(patchPath);
     const auto names = recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -3364,6 +3386,8 @@ TEST_CASE("Native SetQuestAliases writes conditions on location aliases") {
             }
         })));
     REQUIRE(written.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto names = recordSignatures(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     const auto alls = std::find(names.begin(), names.end(), "ALLS");
@@ -3497,6 +3521,8 @@ TEST_CASE("Native SetQuestAliases writes zero, multiple, scalar, and CIS2 condit
             {{"kind", "reference"}, {"id", 1}, {"name", "None"}, {"flags", 0}}
         })));
     REQUIRE(empty.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     {
         const auto names = recordSignatures(
             fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
@@ -3536,6 +3562,8 @@ TEST_CASE("Native SetQuestAliases writes zero, multiple, scalar, and CIS2 condit
             }
         })));
     REQUIRE(written.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto names = recordSignatures(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
@@ -3606,6 +3634,8 @@ TEST_CASE("Native SetQuestAliases encodes FormKey compareGlobal and RunOn Refere
             }
         })));
     REQUIRE(written.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(patchPath);
     REQUIRE(disk.header.masters.size() == 1u);
@@ -3809,6 +3839,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
             }
         })));
     REQUIRE(created.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3829,6 +3861,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
             }
         })));
     REQUIRE(locRef.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3847,6 +3881,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
             }
         })));
     REQUIRE(external.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3865,6 +3901,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
             }
         })));
     REQUIRE(near.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3883,6 +3921,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
             }
         })));
     REQUIRE(fromEvent.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3904,6 +3944,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
             }
         })));
     REQUIRE(closest.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3933,6 +3975,8 @@ TEST_CASE("Native SetQuestAliases writes remaining location fill types") {
             }
         })));
     REQUIRE(refLoc.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3950,6 +3994,8 @@ TEST_CASE("Native SetQuestAliases writes remaining location fill types") {
             }
         })));
     REQUIRE(extLoc.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -3971,6 +4017,8 @@ TEST_CASE("Native SetQuestAliases writes remaining location fill types") {
             }
         })));
     REQUIRE(matchLoc.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -4071,6 +4119,8 @@ TEST_CASE("Native SetQuestAliases writes and reconstructs Create Reference Level
             }
         })));
     REQUIRE(written.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     CHECK(aliasMembersUntilAled(
               recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp")),
@@ -4141,6 +4191,8 @@ TEST_CASE("Native SetQuestAliases replaces existing Create Reference without ALC
             }
         })));
     REQUIRE(replaced.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto names = recordSignatures(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     CHECK(names.back() == "NNAM");
@@ -4336,6 +4388,8 @@ TEST_CASE("Native SetQuestAliases writes remaining members in Mutagen order") {
             }
         })));
     REQUIRE(written.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(aliasMembersUntilAled(
               recordSignatures(fo4::read_plugin_file(patchPath),
                                fo4::FormKey::parse("000800:Patch.esp")),
@@ -4523,6 +4577,8 @@ TEST_CASE("Native SetQuestAliases rewrites existing multi-entry collections") {
             }
         })));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto decoded = fo4::forms::decode_quest_aliases(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(decoded.aliases.size() == 1u);
@@ -4556,6 +4612,8 @@ TEST_CASE("Native SetQuestAliases does not allocate reference IDs from collectio
             }
         })));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto decoded = fo4::forms::decode_quest_aliases(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(decoded.aliases.size() == 2u);
