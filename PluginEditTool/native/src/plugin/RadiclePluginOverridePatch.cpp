@@ -236,16 +236,12 @@ Result<nlohmann::json> RadiclePluginBackend::createMergedPatch(const nlohmann::j
             }
         }
 
-        fo4::write_plugin_file(mutated, target->path);
-        target->plugin = std::move(mutated);
-        std::error_code ec;
-        target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*target, std::move(mutated));
 
         std::string result = "Merged patch " + patchName + ": forwarded " +
                              std::to_string(forwarded) + " of " + std::to_string(work.size()) +
                              " conflicting record(s). Ensure " + patchName +
-                             " loads last. Written to disk.";
+                             " loads last. SavePlugin to persist.";
         if (!failures.empty()) {
             result += " " + std::to_string(failures.size()) + " failed: ";
             for (std::size_t i = 0; i < failures.size() && i < std::size_t{5}; ++i) {
@@ -405,19 +401,15 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
             }
         }
 
-        fo4::write_plugin_file(mutated, target->path);
-        target->plugin = std::move(mutated);
-        std::error_code ec;
-        target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*target, std::move(mutated));
 
         std::string result = "Reverted " + std::to_string(reverted) + " record(s) that " +
                              badPlugin + " was overriding, into " + patchName + ". ";
         if (skipped > 0) {
             result += std::to_string(skipped) + " skipped (not the winner / filtered out). ";
         }
-        result += "Saved " + patchName + ". Load " + patchName + " AFTER " + badPlugin +
-                  " so the reverts win.";
+        result += "SavePlugin to persist " + patchName + ". Load " + patchName +
+                  " AFTER " + badPlugin + " so the reverts win.";
         return nlohmann::json(result);
     } catch (const std::exception& error) {
         return std::unexpected(Error{"RevertOverridesFailed", error.what()});
