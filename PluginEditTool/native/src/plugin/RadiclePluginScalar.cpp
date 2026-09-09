@@ -149,10 +149,16 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
     const auto fieldPath = stringArgument(arguments, 2);
     const auto field = fo4::schema::formlink_field_descriptor(fieldPath);
     if (!field.has_value()) return setField(arguments);
+    if (!arguments.is_array() || arguments.size() <= 3 || !arguments[3].is_string()) {
+        return std::unexpected(Error{
+            "InvalidFormLinkValue",
+            "FormLink value must be a string or NULL"
+        });
+    }
 
     const auto pluginName = stringArgument(arguments, 0);
     const auto formKeyText = stringArgument(arguments, 1);
-    const auto value = stringArgument(arguments, 3);
+    const auto value = arguments[3].get<std::string>();
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }

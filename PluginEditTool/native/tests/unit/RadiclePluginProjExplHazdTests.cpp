@@ -556,6 +556,40 @@ TEST_CASE("Native SetField edits an embedded PROJ FormLink") {
     REQUIRE(result.has_value());
 }
 
+TEST_CASE("Native FormLink SetField rejects missing and non-string values without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginWithRecord("LIGH"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto key = fo4::FormKey::parse("000801:Patch.esp");
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{{"editorId", "FormLinkBoundary"}, {"light", "000800:Patch.esp"}}
+        })));
+    REQUIRE(created.at("formKey") == key.to_string());
+
+    const auto beforeBytes = readBytes(path);
+    const auto invalidValues = std::array{
+        nlohmann::json::array({"Patch.esp", key.to_string(), "PROJ\\Light", 123}),
+        nlohmann::json::array({"Patch.esp", key.to_string(), "PROJ\\Light"})
+    };
+    for (const auto& arguments : invalidValues) {
+        const auto result = backend.setFieldValue(arguments);
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "InvalidFormLinkValue");
+        CHECK(readBytes(path) == beforeBytes);
+        CHECK(fo4::forms::decode_projectile(
+                  fo4::read_plugin_file(path), key)
+                  .light == fo4::FormKey::parse("000800:Patch.esp"));
+    }
+}
+
 TEST_CASE("Generated PROJ EXPL HAZD FormLink descriptors match the audited slots") {
     struct Expected {
         std::string_view record;
