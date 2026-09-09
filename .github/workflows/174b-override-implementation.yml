@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 jobs:
-  implement-override-deferred-save:
+  prove-and-implement-override-deferred-save:
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
       - uses: actions/checkout@v7
@@ -17,6 +17,40 @@ jobs:
           rm -rf /tmp/ponytail-174b-override
           git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-override
           test -f /tmp/ponytail-174b-override/AGENTS.md
+      - name: Add partial-batch deferred RED contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("PluginEditTool/native/tests/unit/RadiclePluginBatchMutationTests.cpp")
+          text = path.read_text()
+          old = '''    const auto reloaded = fo4::read_plugin_file(target);\n    CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm")) != nullptr);\n    CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000802:Master.esm")) == nullptr);\n}\n'''
+          new = '''    const auto beforeSave = fo4::read_plugin_file(target);\n    CHECK(fo4::find_record(beforeSave, fo4::FormKey::parse("000800:Master.esm")) == nullptr);\n    CHECK(fo4::find_record(beforeSave, fo4::FormKey::parse("000802:Master.esm")) == nullptr);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto reloaded = fo4::read_plugin_file(target);\n    CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm")) != nullptr);\n    CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000802:Master.esm")) == nullptr);\n}\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one partial-batch assertion block, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Build RED contract
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-override -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-override --target fo4ide_test_plugin_backend
+      - name: Prove partial batch still writes through
+        run: |
+          set +e
+          build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverrideMany reports per-item failures and commits successes" > /tmp/partial-red.txt 2>&1
+          status=$?
+          set -e
+          cat /tmp/partial-red.txt
+          test "$status" -ne 0
+          grep -F 'FAILED:' /tmp/partial-red.txt
+      - name: Commit extended RED proof
+        run: |
+          git rm .github/workflows/174b-override-implementation.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/tests/unit/RadiclePluginBatchMutationTests.cpp
+          git commit -m "test: cover partial batch deferred persistence"
+          git push origin HEAD:work/174b-deferred-mutations
       - name: Defer override mutations
         run: |
           python3 - <<'PY'
@@ -44,10 +78,8 @@ jobs:
           )
           PY
           git diff --check
-      - name: Build focused override tests
-        run: |
-          cmake -S PluginEditTool/native -B build/fo4ide-174b-override -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
-          cmake --build build/fo4ide-174b-override --target fo4ide_test_plugin_backend
+      - name: Rebuild incrementally
+        run: cmake --build build/fo4ide-174b-override --target fo4ide_test_plugin_backend
       - name: Prove deferred override persistence
         run: |
           build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverride persists a destination-safe override"
@@ -57,9 +89,6 @@ jobs:
           build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverrideMany reports per-item failures and commits successes"
       - name: Commit implementation
         run: |
-          git rm .github/workflows/174b-override-implementation.yml
-          git config user.name "NomadsReach"
-          git config user.email "144523850+NomadsReach@users.noreply.github.com"
           git add PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp PluginEditTool/native/src/plugin/RadiclePluginBatchMutation.cpp
           git commit -m "feat: defer override persistence until SavePlugin"
           git push origin HEAD:work/174b-deferred-mutations
