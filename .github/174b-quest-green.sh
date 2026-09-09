@@ -86,20 +86,26 @@ for filename, tests in cases.items():
         block = text[start:end]
         pattern = re.compile(r'(?m)^(    REQUIRE\(([A-Za-z_][A-Za-z0-9_]*)\.has_value\(\)\);)$')
         matches = list(pattern.finditer(block))
-        if not matches:
-            raise SystemExit(f"no successful result requirements in {name}")
-        offset = 0
         inserts = 0
-        for match in matches:
-            pos = match.end() + offset
-            current = block
-            following = current[pos:pos + 180]
-            if 'backend.SavePlugin' in following:
-                continue
-            insertion = save_template.format(plugin=plugin)
+        if not matches:
+            anchor = '    const auto disk = fo4::read_plugin_file(path);'
+            pos = block.find(anchor)
+            if pos == -1:
+                raise SystemExit(f"no successful result requirement or disk anchor in {name}")
+            insertion = save_template.format(plugin=plugin) + '\n'
             block = block[:pos] + insertion + block[pos:]
-            offset += len(insertion)
-            inserts += 1
+            inserts = 1
+        else:
+            offset = 0
+            for match in matches:
+                pos = match.end() + offset
+                following = block[pos:pos + 180]
+                if 'backend.SavePlugin' in following:
+                    continue
+                insertion = save_template.format(plugin=plugin)
+                block = block[:pos] + insertion + block[pos:]
+                offset += len(insertion)
+                inserts += 1
         if inserts == 0:
             raise SystemExit(f"no SavePlugin insertion made in {name}")
         text = text[:start] + block + text[end:]
