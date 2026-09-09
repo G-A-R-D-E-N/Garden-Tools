@@ -1280,6 +1280,7 @@ TEST_CASE("Native SetQuestStages preserves opaque INDX bytes") {
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    const auto beforeSave = readBytes(path);
     const auto result = backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({
@@ -1288,6 +1289,9 @@ TEST_CASE("Native SetQuestStages preserves opaque INDX bytes") {
             nlohmann::json::array({{{"index", 10}, {"flags", 4}, {"logEntry", "Updated"}}})
         }));
     REQUIRE(result.has_value());
+    CHECK(readBytes(path) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto decoded = fo4::forms::decode_quest_stages(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
@@ -1834,6 +1838,7 @@ TEST_CASE("Native SetQuestStages remaps VMAD Stage by unique body not array posi
     }));
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    const auto beforeSave = readBytes(path);
     const auto result = backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({
@@ -1845,6 +1850,9 @@ TEST_CASE("Native SetQuestStages remaps VMAD Stage by unique body not array posi
             })
         }));
     REQUIRE(result.has_value());
+    CHECK(readBytes(path) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* quest = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(quest != nullptr);
@@ -2044,10 +2052,14 @@ TEST_CASE("Native SetQuestStages writes per-log-entry CTDA and CIS strings") {
             {"logEntry", "Later"}
         }
     });
+    const auto beforeSave = readBytes(path);
     const auto result = backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages}));
     REQUIRE(result.has_value());
+    CHECK(readBytes(path) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(path);
     const auto decoded = fo4::forms::decode_quest_stages(
@@ -2208,6 +2220,7 @@ TEST_CASE("Native SetQuestStages replaces a lossless existing CTDA run") {
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    const auto beforeSave = readBytes(path);
     const auto result = backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({
@@ -2216,6 +2229,9 @@ TEST_CASE("Native SetQuestStages replaces a lossless existing CTDA run") {
             nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
         }));
     REQUIRE(result.has_value());
+    CHECK(readBytes(path) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto decoded = fo4::forms::decode_quest_stages(
         fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(decoded.stages.size() == 1u);
@@ -2371,6 +2387,7 @@ TEST_CASE("Native SetQuestStages accepts alias-index GetDistance and RunOn Refer
             }
         })}}).has_value());
 
+    const auto beforeSave = readBytes(patchPath);
     const auto aliasIndex = backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({
@@ -2384,6 +2401,9 @@ TEST_CASE("Native SetQuestStages accepts alias-index GetDistance and RunOn Refer
             })
         }));
     REQUIRE(aliasIndex.has_value());
+    CHECK(readBytes(patchPath) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto referenced = backend.invokeBackend(
         "SetQuestStages",
@@ -2517,6 +2537,7 @@ TEST_CASE("Native SetQuestStages ties CIS strings to String/Event parameter slot
     CHECK(angleCis2.error().type == "InvalidQuestStagePayload");
     CHECK(readBytes(path) == before);
 
+    const auto beforeSave = readBytes(path);
     const auto graphVar = backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({
@@ -2529,6 +2550,9 @@ TEST_CASE("Native SetQuestStages ties CIS strings to String/Event parameter slot
             })
         }));
     REQUIRE(graphVar.has_value());
+    CHECK(readBytes(path) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     {
         const auto decoded = fo4::forms::decode_quest_stages(
             fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
@@ -2623,6 +2647,7 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
             }
         })}}).has_value());
 
+    const auto beforeSave = readBytes(patchPath);
     const auto result = backend.invokeBackend(
         "SetQuestAliases",
         nlohmann::json::array({
@@ -2648,6 +2673,9 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
             })
         }));
     REQUIRE(result.has_value());
+    CHECK(readBytes(patchPath) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(patchPath);
     REQUIRE(disk.header.masters.size() == 1u);
@@ -2925,6 +2953,7 @@ TEST_CASE("Native SetQuestAliases binds mixed item COED to the preceding CNTO") 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadExtraMaster(backend, masterPath, patchPath);
 
+    const auto beforeSave = readBytes(patchPath);
     const auto result = backend.invokeBackend(
         "SetQuestAliases",
         setAliasesArgs(nlohmann::json::array({
@@ -2956,6 +2985,9 @@ TEST_CASE("Native SetQuestAliases binds mixed item COED to the preceding CNTO") 
             }
         })));
     REQUIRE(result.has_value());
+    CHECK(readBytes(patchPath) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(patchPath);
     const auto names = recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -3620,6 +3652,7 @@ TEST_CASE("Native SetQuestAliases preserves stages and tail when writing conditi
     }));
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    const auto beforeSave = readBytes(path);
     const auto written = backend.invokeBackend(
         "SetQuestAliases",
         setAliasesArgs(nlohmann::json::array({
@@ -3634,6 +3667,9 @@ TEST_CASE("Native SetQuestAliases preserves stages and tail when writing conditi
             }
         })));
     REQUIRE(written.has_value());
+    CHECK(readBytes(path) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto names = recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp"));
     CHECK(std::find(names.begin(), names.end(), "INDX") != names.end());
@@ -4424,6 +4460,7 @@ TEST_CASE("Native SetQuestAliases writes multi-entry collections and preserves t
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
 
+    const auto beforeSave = readBytes(path);
     const auto result = backend.invokeBackend(
         "SetQuestAliases",
         setAliasesArgs(nlohmann::json::array({
@@ -4442,6 +4479,9 @@ TEST_CASE("Native SetQuestAliases writes multi-entry collections and preserves t
             }
         })));
     REQUIRE(result.has_value());
+    CHECK(readBytes(path) == beforeSave);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(path);
     const auto decoded = fo4::forms::decode_quest_aliases(
