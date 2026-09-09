@@ -173,3 +173,15 @@ QUST VMAD extras bind Papyrus to the arrays these RPCs replace. Mutagen `QuestSc
 ## PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp:existingQuestVmadUnrepresentable
 
 Duplicate, trailing, unsupported, or unparseable QUST VMAD still fail closed before write. Alias/stage bindings no longer block `SetQuestAliases`/`SetQuestStages`; `write_quest_aliases` / `write_quest_stages` patch those fields in the same plugin copy or throw without committing.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp:RadiclePluginBackend::setQuestStages — localized CNAM encoding
+
+Localized QUST CNAM writes in `PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp:setQuestStages` use the explicit language and loose-table directory supplied by the caller, but the directory must resolve beneath a trusted editable plugin root; English text is encoded as CP1252, supported non-English text remains UTF-8, and all three allocation-participant sidecars are snapshotted and rechecked before dependency-first persistence of the changed DLSTRINGS and plugin.
+
+## PluginEditTool/native/src/plugin/RadiclePluginBackend.cpp:RadiclePluginBackend::allowedLocalizationDirectory — sidecar path trust
+
+Sidecar roots are canonicalized and accepted only beneath a trusted editable plugin root and outside the protected game Data directory.
+
+## PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp:mutateStaleLocalizationSiblingAfterTableParse
+
+The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp:mutateStaleLocalizationSiblingAfterTableParse` mutates ILSTRINGS after its parse, deterministically proving that the parsed table and retained freshness bytes come from the same read.

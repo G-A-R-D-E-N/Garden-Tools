@@ -332,6 +332,31 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedSavePath(
     return std::nullopt;
 }
 
+std::optional<std::filesystem::path> RadiclePluginBackend::allowedLocalizationDirectory(
+    const std::filesystem::path& path) const {
+    std::error_code targetEc;
+    const auto target = std::filesystem::weakly_canonical(path, targetEc);
+    if (targetEc || target.empty() || !std::filesystem::is_directory(target)) {
+        return std::nullopt;
+    }
+
+    if (!dataDirectory_.empty()) {
+        std::error_code dataEc;
+        const auto dataDir = std::filesystem::weakly_canonical(dataDirectory_, dataEc);
+        if (dataEc || dataDir.empty()) return std::nullopt;
+        const auto dataEnd = std::mismatch(
+            dataDir.begin(), dataDir.end(), target.begin(), target.end()).first;
+        if (dataEnd == dataDir.end()) return std::nullopt;
+    }
+
+    for (const auto& root : trustedSaveRoots_) {
+        const auto rootEnd =
+            std::mismatch(root.begin(), root.end(), target.begin(), target.end()).first;
+        if (rootEnd == root.end()) return target;
+    }
+    return std::nullopt;
+}
+
 Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
                                                      const nlohmann::json& arguments) {
     if (operation == "environment.LoadMo2") return loadEnvironment(arguments);

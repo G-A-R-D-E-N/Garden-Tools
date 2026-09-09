@@ -14,6 +14,13 @@
 
 namespace fo4ide::plugin {
 
+#ifdef FO4IDE_TEST_HOOKS
+using LocalizedQuestBeforeCommitHook = void (*)();
+void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook);
+using LocalizedQuestAfterTableParseHook = void (*)();
+void setLocalizedQuestAfterTableParseHook(LocalizedQuestAfterTableParseHook hook);
+#endif
+
 class RadiclePluginBackend final : public IPluginBackend {
 public:
     Capabilities capabilities() const noexcept override;
@@ -129,6 +136,8 @@ private:
     bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
     std::optional<std::filesystem::path> allowedSavePath(
+        const std::filesystem::path& path) const;
+    std::optional<std::filesystem::path> allowedLocalizationDirectory(
         const std::filesystem::path& path) const;
     void rebuildGraphLocked();
 

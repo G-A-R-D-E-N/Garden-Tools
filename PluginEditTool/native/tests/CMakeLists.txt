@@ -157,6 +157,7 @@ target_link_libraries(
     fo4ide_test_quest_authoring
     PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
 )
+target_compile_definitions(fo4ide_test_quest_authoring PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_enable_warnings(fo4ide_test_quest_authoring)
 fo4ide_enable_sanitizers(fo4ide_test_quest_authoring)
 catch_discover_tests(fo4ide_test_quest_authoring PROPERTIES TIMEOUT 10)

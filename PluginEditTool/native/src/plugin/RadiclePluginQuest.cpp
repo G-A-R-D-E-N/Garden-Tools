@@ -1,6 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <cmath>
@@ -8,8 +9,10 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
 #include <limits>
+#include <map>
 #include <optional>
 #include <span>
 #include <set>
@@ -22,6 +25,8 @@
 
 #include <fo4/forms/quest.hpp>
 #include <fo4/graph/conflict_graph.hpp>
+#include <fo4/io/atomic_write.hpp>
+#include <fo4/localization/strings.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/ctda.hpp>
@@ -32,6 +37,22 @@
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 
 namespace fo4ide::plugin {
+
+#ifdef FO4IDE_TEST_HOOKS
+namespace {
+LocalizedQuestBeforeCommitHook localizedQuestBeforeCommitHook = nullptr;
+LocalizedQuestAfterTableParseHook localizedQuestAfterTableParseHook = nullptr;
+}
+
+void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook) {
+    localizedQuestBeforeCommitHook = hook;
+}
+
+void setLocalizedQuestAfterTableParseHook(LocalizedQuestAfterTableParseHook hook) {
+    localizedQuestAfterTableParseHook = hook;
+}
+#endif
+
 namespace {
 
 std::string questStringArg(const nlohmann::json& args, std::size_t index) {
@@ -1946,9 +1967,243 @@ std::optional<Error> adapterConditionUnrepresentable(
     return std::nullopt;
 }
 
+struct LocalizedQuestTables {
+    std::string language;
+    std::filesystem::path stringsPath;
+    std::filesystem::path dlstringsPath;
+    std::filesystem::path ilstringsPath;
+    std::vector<std::byte> originalStringsBytes;
+    std::vector<std::byte> originalDlstringsBytes;
+    std::vector<std::byte> originalIlstringsBytes;
+    fo4::localization::LocalizedStringTable strings;
+    fo4::localization::LocalizedStringTable dlstrings;
+    fo4::localization::LocalizedStringTable ilstrings;
+    std::uint32_t nextId{1};
+};
+
+std::vector<std::byte> readLocalizedFileBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    if (!stream) throw std::runtime_error("could not open localized string file");
+    const auto end = stream.tellg();
+    if (end < 0) throw std::runtime_error("could not determine localized string file size");
+    std::vector<std::byte> bytes(static_cast<std::size_t>(end));
+    stream.seekg(0, std::ios::beg);
+    if (!bytes.empty()) {
+        stream.read(reinterpret_cast<char*>(bytes.data()),
+                    static_cast<std::streamsize>(bytes.size()));
+        if (!stream) throw std::runtime_error("could not read localized string file");
+    }
+    return bytes;
+}
+
+std::optional<Error> encodeLocalizedText(std::string_view language,
+                                          std::string_view text,
+                                          std::vector<std::byte>& bytes) {
+    bytes.clear();
+    bytes.reserve(text.size());
+    const bool english = language == "en";
+    for (std::size_t index = 0; index < text.size();) {
+        const auto first = static_cast<unsigned char>(text[index]);
+        std::size_t width = 0;
+        std::uint32_t codePoint = 0;
+        if (first <= 0x7f) {
+            width = 1;
+            codePoint = first;
+        } else if (first >= 0xc2 && first <= 0xdf) {
+            width = 2;
+            codePoint = first & 0x1f;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            width = 3;
+            codePoint = first & 0x0f;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            width = 4;
+            codePoint = first & 0x07;
+        } else {
+            return Error{
+                "LocalizedLogEncodingUnsupported",
+                "localized CNAM text is not valid UTF-8"
+            };
+        }
+        if (width > text.size() - index) {
+            return Error{
+                "LocalizedLogEncodingUnsupported",
+                "localized CNAM text is not valid UTF-8"
+            };
+        }
+        for (std::size_t offset = 1; offset < width; ++offset) {
+            const auto next = static_cast<unsigned char>(text[index + offset]);
+            if ((next & 0xc0) != 0x80) {
+                return Error{
+                    "LocalizedLogEncodingUnsupported",
+                    "localized CNAM text is not valid UTF-8"
+                };
+            }
+            codePoint = (codePoint << 6) | (next & 0x3f);
+        }
+        if ((width == 2 && codePoint < 0x80) ||
+            (width == 3 && codePoint < 0x800) ||
+            (width == 4 && codePoint < 0x10000) ||
+            (codePoint >= 0xd800 && codePoint <= 0xdfff) || codePoint > 0x10ffff) {
+            return Error{
+                "LocalizedLogEncodingUnsupported",
+                "localized CNAM text is not valid UTF-8"
+            };
+        }
+
+        if (!english) {
+            bytes.insert(bytes.end(),
+                         reinterpret_cast<const std::byte*>(text.data() + index),
+                         reinterpret_cast<const std::byte*>(text.data() + index + width));
+        } else if (codePoint <= 0x7f || (codePoint >= 0xa0 && codePoint <= 0xff)) {
+            bytes.push_back(std::byte{static_cast<unsigned char>(codePoint)});
+        } else {
+            std::uint8_t encoded = 0;
+            switch (codePoint) {
+            case 0x20ac: encoded = 0x80; break;
+            case 0x201a: encoded = 0x82; break;
+            case 0x192: encoded = 0x83; break;
+            case 0x201e: encoded = 0x84; break;
+            case 0x2026: encoded = 0x85; break;
+            case 0x2020: encoded = 0x86; break;
+            case 0x2021: encoded = 0x87; break;
+            case 0x2c6: encoded = 0x88; break;
+            case 0x2030: encoded = 0x89; break;
+            case 0x160: encoded = 0x8a; break;
+            case 0x2039: encoded = 0x8b; break;
+            case 0x152: encoded = 0x8c; break;
+            case 0x17d: encoded = 0x8e; break;
+            case 0x2018: encoded = 0x91; break;
+            case 0x2019: encoded = 0x92; break;
+            case 0x201c: encoded = 0x93; break;
+            case 0x201d: encoded = 0x94; break;
+            case 0x2022: encoded = 0x95; break;
+            case 0x2013: encoded = 0x96; break;
+            case 0x2014: encoded = 0x97; break;
+            case 0x2dc: encoded = 0x98; break;
+            case 0x2122: encoded = 0x99; break;
+            case 0x161: encoded = 0x9a; break;
+            case 0x203a: encoded = 0x9b; break;
+            case 0x153: encoded = 0x9c; break;
+            case 0x17e: encoded = 0x9e; break;
+            case 0x178: encoded = 0x9f; break;
+            default:
+                return Error{
+                    "LocalizedLogEncodingUnsupported",
+                    "localized English CNAM text is not representable in CP1252"
+                };
+            }
+            bytes.push_back(std::byte{encoded});
+        }
+        index += width;
+    }
+    return std::nullopt;
+}
+
+std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
+                                              const std::filesystem::path& pluginPath,
+                                              const std::filesystem::path& directory,
+                                              LocalizedQuestTables& result) {
+    if (!arguments.is_array() || arguments.size() <= 3 || !arguments[3].is_object()) {
+        return Error{
+            "LocalizedLogTextUnsupported",
+            "localized QUST CNAM authoring requires language and stringsDirectory"
+        };
+    }
+    const auto& context = arguments[3];
+    if (!context.contains("language") || !context["language"].is_string() ||
+        !context.contains("stringsDirectory") || !context["stringsDirectory"].is_string()) {
+        return Error{
+            "InvalidLocalizedQuestContext",
+            "localized QUST context requires string language and stringsDirectory"
+        };
+    }
+    const auto language = context["language"].get<std::string>();
+    static constexpr std::array<std::string_view, 11> supportedLanguages{
+        "en", "de", "it", "es", "esmx", "fr", "pl", "ptbr", "cn", "ru", "ja"};
+    if (std::find(supportedLanguages.begin(), supportedLanguages.end(), language) ==
+            supportedLanguages.end()) {
+        return Error{
+            "InvalidLocalizedQuestContext",
+            "localized QUST context has an unsupported language token: " + language
+        };
+    }
+    result.language = language;
+
+    const auto stem = pluginPath.stem().string() + "_" + language;
+    const auto load = [&](fo4::localization::StringTableKind kind,
+                          std::string_view extension,
+                          fo4::localization::LocalizedStringTable& table)
+        -> std::optional<Error> {
+        const auto path = directory / (stem + std::string(extension));
+        std::error_code ec;
+        const auto status = std::filesystem::symlink_status(path, ec);
+        if (ec || std::filesystem::is_symlink(status) ||
+            !std::filesystem::is_regular_file(status)) {
+            return Error{
+                "LocalizedLogTableUnavailable",
+                "localized sibling table is unavailable: " + path.string()
+            };
+        }
+        try {
+            const auto originalBytes = readLocalizedFileBytes(path);
+            table = fo4::localization::read_string_table(originalBytes, kind);
+#ifdef FO4IDE_TEST_HOOKS
+            if (kind == fo4::localization::StringTableKind::ilstrings &&
+                localizedQuestAfterTableParseHook != nullptr) {
+                localizedQuestAfterTableParseHook();
+            }
+#endif
+            if (kind == fo4::localization::StringTableKind::strings) {
+                result.stringsPath = path;
+                result.originalStringsBytes = originalBytes;
+            } else if (kind == fo4::localization::StringTableKind::dlstrings) {
+                result.dlstringsPath = path;
+                result.originalDlstringsBytes = originalBytes;
+            } else {
+                result.ilstringsPath = path;
+                result.originalIlstringsBytes = originalBytes;
+            }
+        } catch (const std::exception& error) {
+            return Error{
+                "LocalizedLogTableInvalid",
+                "could not read or snapshot localized sibling table " + path.string() + ": " +
+                    error.what()
+            };
+        }
+        return std::nullopt;
+    };
+
+    if (const auto error = load(fo4::localization::StringTableKind::strings,
+                               ".STRINGS", result.strings)) {
+        return error;
+    }
+    if (const auto error = load(fo4::localization::StringTableKind::dlstrings,
+                               ".DLSTRINGS", result.dlstrings)) {
+        return error;
+    }
+    if (const auto error = load(fo4::localization::StringTableKind::ilstrings,
+                               ".ILSTRINGS", result.ilstrings)) {
+        return error;
+    }
+
+    std::uint32_t maximum = 0;
+    for (const auto* table : {&result.strings, &result.dlstrings, &result.ilstrings}) {
+        for (const auto& entry : table->entries) maximum = std::max(maximum, entry.id);
+    }
+    if (maximum == std::numeric_limits<std::uint32_t>::max()) {
+        return Error{
+            "LocalizedLogTableFull",
+            "localized string-table ID space is exhausted"
+        };
+    }
+    result.nextId = maximum + 1;
+    return std::nullopt;
+}
+
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                                                    const fo4::FormKey& quest,
-                                                   const fo4::ConflictGraph& graph) {
+                                                   const fo4::ConflictGraph& graph,
+                                                   bool allowLocalized) {
     const auto decoded = fo4::forms::decode_quest_stages(plugin, quest);
     for (const auto& stage : decoded.stages) {
         if (stage.unknown != 0) {
@@ -1964,7 +2219,7 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
             };
         }
         for (const auto& entry : stage.log_entries) {
-            if (entry.log_text.has_value() && entry.log_text->localized()) {
+            if (!allowLocalized && entry.log_text.has_value() && entry.log_text->localized()) {
                 return Error{
                     "QuestAuthoringCoverageIncomplete",
                     "existing QUST log entry has a localized CNAM that this adapter cannot reconstruct"
@@ -2786,15 +3041,46 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
     if (const auto error = existingQuestVmadUnrepresentable(*record, false, true)) {
         return std::unexpected(*error);
     }
+    const bool localized = loaded->plugin.header.tes4_flags.is_localized();
+    std::optional<LocalizedQuestTables> localizedTables;
+    fo4::forms::QuestStages previousStages;
+    if (localized && arguments.is_array() && arguments.size() > 3) {
+        localizedTables.emplace();
+        std::filesystem::path stringsDirectory;
+        if (arguments[3].is_object() && arguments[3].contains("stringsDirectory") &&
+            arguments[3]["stringsDirectory"].is_string()) {
+            stringsDirectory = arguments[3]["stringsDirectory"].get<std::string>();
+        }
+        const auto allowedDirectory =
+            stringsDirectory.empty() ? std::nullopt
+                                     : allowedLocalizationDirectory(stringsDirectory);
+        if (!stringsDirectory.empty() && !allowedDirectory.has_value()) {
+            return std::unexpected(Error{
+                "LocalizedSidecarPathNotAllowed",
+                "Refusing to write localized sidecars outside a trusted writable root: " +
+                    stringsDirectory.string()
+            });
+        }
+        if (const auto error = loadLocalizedQuestTables(
+                arguments, loaded->path,
+                allowedDirectory.value_or(std::filesystem::path{}), *localizedTables)) {
+            return std::unexpected(*error);
+        }
+        try {
+            previousStages = fo4::forms::decode_quest_stages(loaded->plugin, questKey);
+        } catch (const fo4::forms::QuestError& error) {
+            return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
+        }
+    }
     try {
-        if (const auto error = existingStagesUnrepresentable(loaded->plugin, questKey, graph_)) {
+        if (const auto error = existingStagesUnrepresentable(
+                loaded->plugin, questKey, graph_, localizedTables.has_value())) {
             return std::unexpected(*error);
         }
     } catch (const fo4::forms::QuestError& error) {
         return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
 
-    const bool localized = loaded->plugin.header.tes4_flags.is_localized();
     fo4::forms::QuestStages stages;
     std::vector<std::vector<std::vector<PendingQuestCondition>>> pendingConditions;
     std::vector<fo4::FormKey> conditionKeys;
@@ -2933,7 +3219,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     "note and logText must be strings"
                 });
             }
-            if (localized && logText.has_value()) {
+            if (localized && logText.has_value() && !localizedTables.has_value()) {
                 return std::unexpected(Error{
                     "LocalizedLogTextUnsupported",
                     "new QUST CNAM log text in a localized plugin needs a string-table ID"
@@ -2992,6 +3278,67 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
 
     try {
         auto mutated = loaded->plugin;
+        bool localizedTableChanged = false;
+        if (localizedTables.has_value()) {
+            for (std::size_t stageIndex = 0; stageIndex < stages.stages.size(); ++stageIndex) {
+                auto& stage = stages.stages[stageIndex];
+                for (std::size_t entryIndex = 0; entryIndex < stage.log_entries.size(); ++entryIndex) {
+                    auto& entry = stage.log_entries[entryIndex];
+                    if (!entry.log_text.has_value() || !entry.log_text->text.has_value()) continue;
+
+                    std::optional<std::uint32_t> previousId;
+                    for (const auto& previous : previousStages.stages) {
+                        if (previous.index != stage.index ||
+                            entryIndex >= previous.log_entries.size()) {
+                            continue;
+                        }
+                        const auto& previousEntry = previous.log_entries[entryIndex];
+                        if (previousEntry.log_text.has_value() &&
+                            previousEntry.log_text->id.has_value()) {
+                            previousId = previousEntry.log_text->id;
+                        }
+                        break;
+                    }
+
+                    std::optional<std::uint32_t> id;
+                    std::vector<std::byte> text;
+                    if (const auto error = encodeLocalizedText(
+                            localizedTables->language, *entry.log_text->text, text)) {
+                        return std::unexpected(*error);
+                    }
+                    if (previousId.has_value()) {
+                        const auto* previousText = fo4::localization::find_string(
+                            localizedTables->dlstrings, *previousId);
+                        if (previousText == nullptr) {
+                            return std::unexpected(Error{
+                                "LocalizedLogTableInvalid",
+                                "DLSTRINGS is missing existing QUST CNAM ID " +
+                                    std::to_string(*previousId)
+                            });
+                        }
+                        if (previousText->text == text) id = *previousId;
+                    }
+                    if (!id.has_value()) {
+                        if (localizedTables->nextId == std::numeric_limits<std::uint32_t>::max()) {
+                            return std::unexpected(Error{
+                                "LocalizedLogTableFull",
+                                "localized string-table ID space is exhausted"
+                            });
+                        }
+                        id = localizedTables->nextId++;
+                        localizedTables->dlstrings.entries.push_back({*id, text});
+                        localizedTableChanged = true;
+                    }
+                    entry.log_text->id = id;
+                    entry.log_text->text.reset();
+                    for (auto& member : entry.members) {
+                        if (member.signature == fo4::Signature::from_string("CNAM")) {
+                            member.data = fo4::schema::write_localized_string(*entry.log_text);
+                        }
+                    }
+                }
+            }
+        }
         for (const auto& key : conditionKeys) ensureOwnerMaster(mutated, key.owner());
         const auto context = fo4::plugin_form_id_context(mutated);
         const auto encodeKey = [&](const std::optional<fo4::FormKey>& key) -> std::uint32_t {
@@ -3028,7 +3375,40 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             }
         }
         fo4::forms::write_quest_stages(mutated, questKey, stages);
-        fo4::write_plugin_file(mutated, loaded->path);
+        const auto pluginBytes = fo4::write_plugin(mutated);
+        if (localizedTableChanged) {
+#ifdef FO4IDE_TEST_HOOKS
+            if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
+#endif
+            try {
+                if (readLocalizedFileBytes(localizedTables->stringsPath) !=
+                        localizedTables->originalStringsBytes ||
+                    readLocalizedFileBytes(localizedTables->dlstringsPath) !=
+                        localizedTables->originalDlstringsBytes ||
+                    readLocalizedFileBytes(localizedTables->ilstringsPath) !=
+                        localizedTables->originalIlstringsBytes) {
+                    return std::unexpected(Error{
+                        "LocalizedSidecarChangedOnDisk",
+                        "localized sibling table changed after it was read; reload before writing"
+                    });
+                }
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{
+                    "LocalizedLogTableInvalid",
+                    "could not re-read localized DLSTRINGS before writing: " +
+                        std::string(error.what())
+                });
+            }
+            const auto tableBytes = fo4::localization::write_string_table(
+                localizedTables->dlstrings);
+            fo4::io::write_file_pair_dependency_first(
+                localizedTables->dlstringsPath,
+                tableBytes,
+                loaded->path,
+                pluginBytes);
+        } else {
+            fo4::write_plugin_file(mutated, loaded->path);
+        }
         loaded->plugin = std::move(mutated);
         {
             std::error_code ec;
