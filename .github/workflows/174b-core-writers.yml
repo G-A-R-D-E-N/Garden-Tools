@@ -6,8 +6,13 @@ on:
 permissions:
   contents: write
 jobs:
-  smoke:
+  prove-info-red:
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
-      - name: Smoke
-        run: echo runner-ok
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+          submodules: recursive
+          fetch-depth: 0
+      - name: Prove and commit INFO RED contract
+        run: bash .github/174b-info-red.sh
