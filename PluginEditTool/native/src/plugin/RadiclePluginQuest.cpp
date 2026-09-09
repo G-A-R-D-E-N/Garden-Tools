@@ -2206,12 +2206,6 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                                                    bool allowLocalized) {
     const auto decoded = fo4::forms::decode_quest_stages(plugin, quest);
     for (const auto& stage : decoded.stages) {
-        if (stage.unknown != 0) {
-            return Error{
-                "QuestAuthoringCoverageIncomplete",
-                "existing QUST stage has a non-zero INDX unknown byte"
-            };
-        }
         if (!stage.leading_members.empty()) {
             return Error{
                 "QuestAuthoringCoverageIncomplete",
@@ -3042,8 +3036,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         return std::unexpected(*error);
     }
     const bool localized = loaded->plugin.header.tes4_flags.is_localized();
-    std::optional<LocalizedQuestTables> localizedTables;
     fo4::forms::QuestStages previousStages;
+    std::optional<LocalizedQuestTables> localizedTables;
     if (localized && arguments.is_array() && arguments.size() > 3) {
         localizedTables.emplace();
         std::filesystem::path stringsDirectory;
@@ -3066,11 +3060,11 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 allowedDirectory.value_or(std::filesystem::path{}), *localizedTables)) {
             return std::unexpected(*error);
         }
-        try {
-            previousStages = fo4::forms::decode_quest_stages(loaded->plugin, questKey);
-        } catch (const fo4::forms::QuestError& error) {
-            return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
-        }
+    }
+    try {
+        previousStages = fo4::forms::decode_quest_stages(loaded->plugin, questKey);
+    } catch (const fo4::forms::QuestError& error) {
+        return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
     try {
         if (const auto error = existingStagesUnrepresentable(
@@ -3115,6 +3109,12 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         }
         stage.index = static_cast<std::uint16_t>(index);
         stage.flags = static_cast<std::uint8_t>(flags);
+        for (const auto& previous : previousStages.stages) {
+            if (previous.index == stage.index) {
+                stage.unknown = previous.unknown;
+                break;
+            }
+        }
         if (!indexes.insert(stage.index).second) {
             return std::unexpected(Error{
                 "InvalidQuestStagePayload",

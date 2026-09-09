@@ -1230,6 +1230,38 @@ TEST_CASE("Native logEntry sugar ORs complete and fail into QSDT flags") {
     CHECK(decoded.stages[0].log_entries[0].flags == 3u);
 }
 
+TEST_CASE("Native SetQuestStages preserves opaque INDX bytes") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
+        writeIndx(out, 10, 0, 0x37);
+        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+        fo4::test::write_subrecord(out, "CNAM", std::string_view{"Original\0", 9});
+    }));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"flags", 4}, {"logEntry", "Updated"}}})
+        }));
+    REQUIRE(result.has_value());
+
+    const auto decoded = fo4::forms::decode_quest_stages(
+        fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.stages.size() == 1u);
+    CHECK(decoded.stages[0].unknown == 0x37u);
+    CHECK(decoded.stages[0].flags == 4u);
+    REQUIRE(decoded.stages[0].log_entries.size() == 1u);
+    REQUIRE(decoded.stages[0].log_entries[0].log_text.has_value());
+    CHECK(decoded.stages[0].log_entries[0].log_text->text ==
+          std::optional<std::string>{"Updated"});
+}
+
 TEST_CASE("Native SetQuestStages refuses existing conditioned log entries without writing") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -1329,18 +1361,6 @@ TEST_CASE("Native QUST authoring refuses unrepresentable existing data without w
     };
 
     const GuardCase cases[] = {
-        {
-            "non-zero INDX unknown",
-            false,
-            [] {
-                return questPluginWith(0, [](fo4::test::ByteWriter& out) {
-                    writeIndx(out, 10, 0, 1);
-                    fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
-                    writeU32(out, "ANAM", 0);
-                });
-            },
-            "INDX unknown"
-        },
         {
             "leading members before QSDT",
             false,
