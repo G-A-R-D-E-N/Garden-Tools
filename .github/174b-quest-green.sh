@@ -41,17 +41,21 @@ for name in tests:
     end = len(text) if next_test == -1 else next_test
     block = text[start:end]
     path_var = "patchPath" if "const auto patchPath =" in block else "path"
-    match = re.search(r'    const auto ([A-Za-z_][A-Za-z0-9_]*) = backend\.invokeBackend\(\n', block)
-    if match is None:
-        raise SystemExit(f"missing backend invocation in {name}")
-    result_var = match.group(1)
+    selected = None
+    for match in re.finditer(r'    const auto ([A-Za-z_][A-Za-z0-9_]*) = backend\.invokeBackend\(\n', block):
+        result_var = match.group(1)
+        require_marker = f'    REQUIRE({result_var}.has_value());\n'
+        require_pos = block.find(require_marker, match.end())
+        if require_pos != -1:
+            selected = (match, result_var, require_marker, require_pos)
+            break
+    if selected is None:
+        raise SystemExit(f"missing successful backend invocation in {name}")
+    match, result_var, require_marker, require_pos = selected
     invoke_pos = match.start()
     before = f'    const auto beforeSave = readBytes({path_var});\n'
     block = block[:invoke_pos] + before + block[invoke_pos:]
-    require_marker = f'    REQUIRE({result_var}.has_value());\n'
-    require_pos = block.find(require_marker, invoke_pos + len(before))
-    if require_pos == -1:
-        raise SystemExit(f"missing success requirement for {result_var} in {name}")
+    require_pos += len(before)
     after_pos = require_pos + len(require_marker)
     save = (
         f'    CHECK(readBytes({path_var}) == beforeSave);\n'
