@@ -676,13 +676,7 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
             status = "Updated " + field + " for " + formKeyText + " in " + pluginName + ".";
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(std::move(status));
     } catch (const fo4::forms::EyesError& error) {
         return std::unexpected(Error{"EyesWriteFailed", error.what()});
