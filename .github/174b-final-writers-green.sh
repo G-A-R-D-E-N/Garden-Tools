@@ -11,11 +11,9 @@ test -f /tmp/ponytail-174b-final-green/AGENTS.md
 python3 - <<'PY'
 from pathlib import Path
 
-# masters.Reorder
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp")
 text = path.read_text()
-old = '''    try {
-        auto remapped = fo4::remap_plugin_masters(loaded->plugin, requested);
+old = '''        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
         fo4::write_plugin_file(remapped, loaded->path);
         loaded->plugin = std::move(remapped);
         {
@@ -24,83 +22,72 @@ old = '''    try {
         }
         rebuildGraphLocked();
         return nlohmann::json("Wrote " + name + " with reordered masters.");
-    } catch (const std::exception& error) {
 '''
-new = '''    try {
-        auto remapped = fo4::remap_plugin_masters(loaded->plugin, requested);
+new = '''        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
         stagePluginMutationLocked(*loaded, std::move(remapped));
         return nlohmann::json(
             "Reordered masters in " + name + ". SavePlugin to persist.");
-    } catch (const std::exception& error) {
 '''
 if text.count(old) != 1:
     raise SystemExit(f"masters reorder tail count {text.count(old)}")
 path.write_text(text.replace(old, new, 1))
 
-# ChangeReferencingRecords
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp")
 text = path.read_text()
-old = '''        fo4::write_plugin_file(mutated, patch->path);
+old = '''        fo4::rekey_form_links(mutated, fromKey, toKey);
+        fo4::write_plugin_file(mutated, patch->path);
         patch->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            patch->loadedTime = std::filesystem::last_write_time(patch->path, ec);
-        }
+        std::error_code ec;
+        patch->loadedTime = std::filesystem::last_write_time(patch->path, ec);
         rebuildGraphLocked();
 
         return nlohmann::json(
-            "Changed " + std::to_string(changed) + " referencing record(s) from " +
-            fromText + " to " + toText + " in " + patchName + ". Ensure " +
-            patchName + " loads after " + fromKey->plugin.filename() + " and " +
-            toKey->plugin.filename() + ", then save it.");
+            "Repointed " + std::to_string(work.size()) + " of " +
+            std::to_string(unique.size()) + " referencing record(s) from " +
+            fromKey.to_string() + " to " + toKey.to_string() + " in " + patchName +
+            ". Ensure " + patchName +
+            " loads after the plugins it copied from, then save it.");
 '''
-new = '''        stagePluginMutationLocked(*patch, std::move(mutated));
+new = '''        fo4::rekey_form_links(mutated, fromKey, toKey);
+        stagePluginMutationLocked(*patch, std::move(mutated));
 
         return nlohmann::json(
-            "Changed " + std::to_string(changed) + " referencing record(s) from " +
-            fromText + " to " + toText + " in " + patchName + ". Ensure " +
-            patchName + " loads after " + fromKey->plugin.filename() + " and " +
-            toKey->plugin.filename() + ". SavePlugin to persist.");
+            "Repointed " + std::to_string(work.size()) + " of " +
+            std::to_string(unique.size()) + " referencing record(s) from " +
+            fromKey.to_string() + " to " + toKey.to_string() + " in " + patchName +
+            ". Ensure " + patchName +
+            " loads after the plugins it copied from. SavePlugin to persist.");
 '''
 if text.count(old) != 1:
     raise SystemExit(f"reference remap tail count {text.count(old)}")
 path.write_text(text.replace(old, new, 1))
 
-# RenumberPluginFormIds
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginRenumber.cpp")
 text = path.read_text()
 old = '''        fo4::write_plugin_file(mutated, loaded->path);
         loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
+        std::error_code ec;
+        loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
         rebuildGraphLocked();
-
-        std::string message =
-            "Renumbered " + std::to_string(remappedCount) + " record(s) in " + pluginName;
-        if (externalCount != 0) {
-            message += ". Warning: " + std::to_string(externalCount) +
-                       " external reference(s) may now be dangling";
-        }
-        return nlohmann::json(std::move(message));
+        return nlohmann::json(
+            "Renumbered " + std::to_string(changed) + " record(s) in " + pluginName +
+            " into " + localHex(start) + "-" +
+            localHex(static_cast<std::uint32_t>(end64)) +
+            " and repointed every supported in-plugin reference. References from other plugins "
+            "into this one now dangle until patched.");
 '''
 new = '''        stagePluginMutationLocked(*loaded, std::move(mutated));
-
-        std::string message =
-            "Renumbered " + std::to_string(remappedCount) + " record(s) in " + pluginName;
-        if (externalCount != 0) {
-            message += ". Warning: " + std::to_string(externalCount) +
-                       " external reference(s) may now be dangling";
-        }
-        message += ". SavePlugin to persist.";
-        return nlohmann::json(std::move(message));
+        return nlohmann::json(
+            "Renumbered " + std::to_string(changed) + " record(s) in " + pluginName +
+            " into " + localHex(start) + "-" +
+            localHex(static_cast<std::uint32_t>(end64)) +
+            " and repointed every supported in-plugin reference. References from other plugins "
+            "into this one now dangle until patched. SavePlugin to persist.");
 '''
 if text.count(old) != 1:
     raise SystemExit(f"renumber tail count {text.count(old)}")
 path.write_text(text.replace(old, new, 1))
 
-# Components wording
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginComponents.cpp")
 text = path.read_text()
 old = '        message += " Written to disk.";\n'
@@ -109,7 +96,6 @@ if text.count(old) != 1:
     raise SystemExit(f"components wording count {text.count(old)}")
 path.write_text(text.replace(old, new, 1))
 
-# SetConditions wording
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp")
 text = path.read_text()
 old = '        message += " Written to disk.";\n'
@@ -118,7 +104,6 @@ if text.count(old) != 1:
     raise SystemExit(f"conditions wording count {text.count(old)}")
 path.write_text(text.replace(old, new, 1))
 
-# RemoveListItem wording
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp")
 text = path.read_text()
 old = '''        return nlohmann::json(
