@@ -289,18 +289,14 @@ Result<nlohmann::json> RadiclePluginBackend::changeReferencingRecords(
         }
 
         fo4::rekey_form_links(mutated, fromKey, toKey);
-        fo4::write_plugin_file(mutated, patch->path);
-        patch->plugin = std::move(mutated);
-        std::error_code ec;
-        patch->loadedTime = std::filesystem::last_write_time(patch->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*patch, std::move(mutated));
 
         return nlohmann::json(
             "Repointed " + std::to_string(work.size()) + " of " +
             std::to_string(unique.size()) + " referencing record(s) from " +
             fromKey.to_string() + " to " + toKey.to_string() + " in " + patchName +
             ". Ensure " + patchName +
-            " loads after the plugins it copied from, then save it.");
+            " loads after the plugins it copied from. SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"ReferenceRemapFailed", error.what()});
     }

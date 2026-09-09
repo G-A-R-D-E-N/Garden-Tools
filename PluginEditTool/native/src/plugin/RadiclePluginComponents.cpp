@@ -217,7 +217,7 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
             }
             message += ".";
         }
-        message += " Written to disk.";
+        message += " SavePlugin to persist.";
         return nlohmann::json(std::move(message));
     } catch (const fo4::forms::ComponentError& error) {
         return std::unexpected(Error{"SetComponentsFailed", error.what()});
