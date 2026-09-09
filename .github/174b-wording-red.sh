@@ -11,7 +11,19 @@ test -f /tmp/ponytail-174b-wording-red/AGENTS.md
 python3 - <<'PY'
 from pathlib import Path
 
-# Components message contract
+def replace_in_test(path_text, name, old, new):
+    marker = f'TEST_CASE("{name}")'
+    start = path_text.find(marker)
+    if start == -1:
+        raise SystemExit(f"missing test: {name}")
+    next_test = path_text.find('TEST_CASE("', start + len(marker))
+    end = len(path_text) if next_test == -1 else next_test
+    block = path_text[start:end]
+    if block.count(old) != 1:
+        raise SystemExit(f"wording anchor mismatch in {name}: {block.count(old)}")
+    block = block.replace(old, new, 1)
+    return path_text[:start] + block + path_text[end:]
+
 path = Path("PluginEditTool/native/tests/unit/RadiclePluginComponentsTests.cpp")
 text = path.read_text()
 old = '''    CHECK(result->get<std::string>() ==
@@ -20,21 +32,17 @@ old = '''    CHECK(result->get<std::string>() ==
 new = '''    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
     CHECK(result->get<std::string>().find("SavePlugin") != std::string::npos);
 '''
-if text.count(old) != 1:
-    raise SystemExit("component wording anchor mismatch")
-path.write_text(text.replace(old, new, 1))
+path.write_text(replace_in_test(
+    text, "PluginEditTool set_components writes FVPA and no CDIX on a COBJ", old, new))
 
-# Conditions message contract
 path = Path("PluginEditTool/native/tests/unit/ConditionBackendTests.cpp")
 text = path.read_text()
 old = '    CHECK(message->get<std::string>().find("Set 2 condition(s)") == 0);\n'
 new = old + '    CHECK(message->get<std::string>().find("Written to disk") == std::string::npos);\n' + \
       '    CHECK(message->get<std::string>().find("SavePlugin") != std::string::npos);\n'
-if text.count(old) != 1:
-    raise SystemExit("conditions wording anchor mismatch")
-path.write_text(text.replace(old, new, 1))
+path.write_text(replace_in_test(
+    text, "condition backend: SetConditions replaces the list and round-trips", old, new))
 
-# List removal message contract
 path = Path("PluginEditTool/native/tests/unit/RadiclePluginListItemTests.cpp")
 text = path.read_text()
 old = '''    CHECK(result->get<std::string>() ==
@@ -44,9 +52,8 @@ old = '''    CHECK(result->get<std::string>() ==
 new = '''    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
     CHECK(result->get<std::string>().find("SavePlugin") != std::string::npos);
 '''
-if text.count(old) != 1:
-    raise SystemExit("list wording anchor mismatch")
-path.write_text(text.replace(old, new, 1))
+path.write_text(replace_in_test(
+    text, "PluginEditTool remove_list_item matches the field name case-insensitively", old, new))
 PY
 
 git diff --check
