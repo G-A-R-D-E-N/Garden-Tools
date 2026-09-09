@@ -1,0 +1,83 @@
+name: issue-174b-list-red
+on:
+  push:
+    branches:
+      - work/174b-deferred-mutations
+permissions:
+  contents: write
+jobs:
+  prove-list-write-through:
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+      - name: Load Ponytail rules
+        run: |
+          rm -rf /tmp/ponytail-174b-list-red
+          git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-list-red
+          test -f /tmp/ponytail-174b-list-red/AGENTS.md
+      - name: Apply deferred list RED contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected one match in {path}, found {text.count(old)}")
+              p.write_text(text.replace(old, new, 1))
+
+          form_lists = "PluginEditTool/native/tests/unit/RadiclePluginFormLinkListTests.cpp"
+          replace_once(
+              form_lists,
+              '''    REQUIRE(result.has_value());\n\n    const auto disk = fo4::read_plugin_file(path);\n    const auto* race = fo4::find_record(\n        disk, fo4::FormKey::parse("000803:Patch.esp"));\n    REQUIRE(race != nullptr);\n    REQUIRE(countSubrecords(*race, "AHCM") == 3u);\n    CHECK(nthRaw(*race, "AHCM", 0) == 0x00000800u);\n    CHECK(nthRaw(*race, "AHCM", 1) == 0x00000801u);\n    CHECK(nthRaw(*race, "AHCM", 2) == 0x00000800u);\n}\n\nTEST_CASE("PluginEditTool removes generated FormLink list element")''',
+              '''    REQUIRE(result.has_value());\n\n    const auto beforeSave = fo4::read_plugin_file(path);\n    const auto* beforeSaveRace = fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000803:Patch.esp"));\n    REQUIRE(beforeSaveRace != nullptr);\n    REQUIRE(countSubrecords(*beforeSaveRace, "AHCM") == 2u);\n    CHECK(nthRaw(*beforeSaveRace, "AHCM", 0) == 0x00000800u);\n    CHECK(nthRaw(*beforeSaveRace, "AHCM", 1) == 0x00000800u);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(path);\n    const auto* race = fo4::find_record(\n        disk, fo4::FormKey::parse("000803:Patch.esp"));\n    REQUIRE(race != nullptr);\n    REQUIRE(countSubrecords(*race, "AHCM") == 3u);\n    CHECK(nthRaw(*race, "AHCM", 0) == 0x00000800u);\n    CHECK(nthRaw(*race, "AHCM", 1) == 0x00000801u);\n    CHECK(nthRaw(*race, "AHCM", 2) == 0x00000800u);\n}\n\nTEST_CASE("PluginEditTool removes generated FormLink list element")'''
+          )
+          replace_once(
+              form_lists,
+              '''    REQUIRE(result.has_value());\n\n    const auto disk = fo4::read_plugin_file(path);\n    const auto* race = fo4::find_record(\n        disk, fo4::FormKey::parse("000803:Patch.esp"));\n    REQUIRE(race != nullptr);\n    REQUIRE(countSubrecords(*race, "AHCM") == 1u);\n    CHECK(nthRaw(*race, "AHCM", 0) == 0x00000800u);\n}\n\nTEST_CASE("PluginEditTool rejects wrong FormLink target type without writing")''',
+              '''    REQUIRE(result.has_value());\n\n    const auto beforeSave = fo4::read_plugin_file(path);\n    const auto* beforeSaveRace = fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000803:Patch.esp"));\n    REQUIRE(beforeSaveRace != nullptr);\n    REQUIRE(countSubrecords(*beforeSaveRace, "AHCM") == 2u);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(path);\n    const auto* race = fo4::find_record(\n        disk, fo4::FormKey::parse("000803:Patch.esp"));\n    REQUIRE(race != nullptr);\n    REQUIRE(countSubrecords(*race, "AHCM") == 1u);\n    CHECK(nthRaw(*race, "AHCM", 0) == 0x00000800u);\n}\n\nTEST_CASE("PluginEditTool rejects wrong FormLink target type without writing")'''
+          )
+
+          list_items = "PluginEditTool/native/tests/unit/RadiclePluginListItemTests.cpp"
+          replace_once(
+              list_items,
+              '''    const auto disk = fo4::read_plugin_file(path);\n    const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));\n    REQUIRE(flst != nullptr);\n    REQUIRE(countSubrecords(*flst, "LNAM") == 2u);\n    CHECK(nthRaw(*flst, "LNAM", 0) == 0x00000800u);\n    CHECK(nthRaw(*flst, "LNAM", 1) == 0x00000801u);\n}\n\nTEST_CASE("PluginEditTool add_list_item resolves an EditorID value")''',
+              '''    const auto beforeSave = fo4::read_plugin_file(path);\n    const auto* beforeSaveFlst = fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000811:Patch.esp"));\n    REQUIRE(beforeSaveFlst != nullptr);\n    REQUIRE(countSubrecords(*beforeSaveFlst, "LNAM") == 1u);\n    CHECK(nthRaw(*beforeSaveFlst, "LNAM", 0) == 0x00000800u);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(path);\n    const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));\n    REQUIRE(flst != nullptr);\n    REQUIRE(countSubrecords(*flst, "LNAM") == 2u);\n    CHECK(nthRaw(*flst, "LNAM", 0) == 0x00000800u);\n    CHECK(nthRaw(*flst, "LNAM", 1) == 0x00000801u);\n}\n\nTEST_CASE("PluginEditTool add_list_item resolves an EditorID value")'''
+          )
+          replace_once(
+              list_items,
+              '''    const auto disk = fo4::read_plugin_file(path);\n    const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));\n    REQUIRE(flst != nullptr);\n    CHECK(countSubrecords(*flst, "LNAM") == 0u);\n}\n\nTEST_CASE("PluginEditTool remove_list_item reports a missing value")''',
+              '''    const auto beforeSave = fo4::read_plugin_file(path);\n    const auto* beforeSaveFlst = fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000811:Patch.esp"));\n    REQUIRE(beforeSaveFlst != nullptr);\n    CHECK(countSubrecords(*beforeSaveFlst, "LNAM") == 1u);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(path);\n    const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));\n    REQUIRE(flst != nullptr);\n    CHECK(countSubrecords(*flst, "LNAM") == 0u);\n}\n\nTEST_CASE("PluginEditTool remove_list_item reports a missing value")'''
+          )
+          PY
+          git diff --check
+      - name: Build focused list tests
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-list-red -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-list-red --target fo4ide_test_plugin_backend
+      - name: Prove remaining list paths write through
+        run: |
+          set +e
+          for test in \
+            "PluginEditTool inserts generated FormLink list element between neighbors" \
+            "PluginEditTool removes generated FormLink list element" \
+            "PluginEditTool add_list_item appends to a populated FLST" \
+            "PluginEditTool remove_list_item drops the matching FormLink"; do
+            build/fo4ide-174b-list-red/bin/fo4ide_test_plugin_backend "$test" > /tmp/current-red.txt 2>&1
+            status=$?
+            cat /tmp/current-red.txt
+            test "$status" -ne 0 || exit 1
+            grep -F 'FAILED:' /tmp/current-red.txt || exit 1
+          done
+          set -e
+      - name: Commit RED proof
+        run: |
+          git rm .github/workflows/174b-list-red.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/tests/unit/RadiclePluginFormLinkListTests.cpp PluginEditTool/native/tests/unit/RadiclePluginListItemTests.cpp
+          git commit -m "test: prove deferred list persistence contract"
+          git push origin HEAD:work/174b-deferred-mutations
