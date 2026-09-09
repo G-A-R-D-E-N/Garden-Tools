@@ -115,6 +115,18 @@ TEST_CASE("Native AddMasters appends loaded master and preserves target FormKey"
         "AddMasters", nlohmann::json::array({"Target.esp", "Master.esm"})));
     CHECK(message.find("Added 1 master") == 0);
 
+    const auto listedRaw = backend.invoke(
+        "masters.List", nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listedRaw.has_value());
+    const auto listed = nlohmann::json::parse(listedRaw->get<std::string>());
+    REQUIRE(listed.at("masters").size() == 1);
+    CHECK(listed.at("masters")[0].at("name") == "Master.esm");
+
+    const auto beforeSave = fo4::read_plugin_file(targetPath);
+    CHECK(beforeSave.header.masters.empty());
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
     const auto reloaded = fo4::read_plugin_file(targetPath);
     REQUIRE(reloaded.header.masters.size() == 1);
     CHECK(reloaded.header.masters[0].key.filename() == "Master.esm");

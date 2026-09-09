@@ -311,6 +311,14 @@ TEST_CASE("Native CleanPlugin undeletes and initially disables records on disk")
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("undeleted + disabled 1 record") != std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeRecord = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(beforeRecord != nullptr);
+    CHECK(beforeRecord->header.flags.is_deleted());
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* record = fo4::find_record(
         disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -348,6 +356,12 @@ TEST_CASE("Native RemoveIdenticalToMaster previews and removes top-level ITM ove
     REQUIRE(applied->is_string());
     CHECK(applied->get<std::string>().find("Removed 1 identical-to-master record") != std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(patchPath);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Base.esm")) != nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto patch = fo4::read_plugin_file(patchPath);
     CHECK(fo4::find_record(
         patch, fo4::FormKey::parse("000800:Base.esm")) == nullptr);
@@ -380,6 +394,14 @@ TEST_CASE("Native CopyAsNewRecord allocates a local record and remaps source For
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("as NEW record 000800:Patch.esp") != std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(patchPath);
+    CHECK(beforeSave.header.masters.empty());
+    CHECK(beforeSave.header.next_form_id == 0x800u);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Patch.esp")) == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto patch = fo4::read_plugin_file(patchPath);
     REQUIRE(patch.header.masters.size() == 1);
     CHECK(patch.header.masters[0].key.filename() == "Base.esm");
@@ -407,6 +429,14 @@ TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin refe
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("remapped 1 record") != std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("001000:Patch.esp")) != nullptr);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000801:Patch.esp")) == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     CHECK(fo4::find_record(
         disk, fo4::FormKey::parse("001000:Patch.esp")) == nullptr);
@@ -442,6 +472,14 @@ TEST_CASE("Native CopyAsNewRecord duplicates a contained REFR into an existing t
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("as NEW record 000900:Patch.esp") != std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(patchPath);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);
+    REQUIRE(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Base.esm")) != nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto patch = fo4::read_plugin_file(patchPath);
     const auto* duplicate = fo4::find_record(patch, fo4::FormKey::parse("000900:Patch.esp"));
     REQUIRE(duplicate != nullptr);

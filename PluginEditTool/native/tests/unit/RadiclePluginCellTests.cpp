@@ -222,6 +222,21 @@ TEST_CASE("Native cell transform creates a nested override before moving the ref
     CHECK(moved->get<std::string>().find("Created the nested override from Source.esp") !=
           std::string::npos);
 
+    const auto pendingView = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000800:Base.esm"})));
+    REQUIRE(pendingView.at("references").size() == 1);
+    CHECK(pendingView.at("references")[0].at("position").at("x") == 100.0f);
+
+    const auto beforeSave = fo4::read_plugin_file(patchPath);
+    REQUIRE(beforeSave.header.masters.size() == 1);
+    CHECK(beforeSave.header.masters[0].key.filename() == "Other.esm");
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Base.esm")) == nullptr);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000801:Base.esm")) == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto reread = fo4::read_plugin_file(patchPath);
     REQUIRE(reread.header.masters.size() == 2);
     CHECK(reread.header.masters[0].key.filename() == "Other.esm");
