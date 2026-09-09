@@ -199,13 +199,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
 
     if (copied != 0) {
         try {
-            fo4::write_plugin_file(mutated, target->path);
-            target->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-            }
-            rebuildGraphLocked();
+            stagePluginMutationLocked(*target, std::move(mutated));
         } catch (const std::exception& error) {
             return std::unexpected(Error{"BatchCopyWriteFailed", error.what()});
         }

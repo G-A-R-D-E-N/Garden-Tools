@@ -754,13 +754,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
                 break;
         }
 
-        fo4::write_plugin_file(mutated, target->path);
-        target->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*target, std::move(mutated));
 
         return nlohmann::json(
             std::string(status == fo4::RecordCopyStatus::replaced ? "Replaced " : "Copied ") +
