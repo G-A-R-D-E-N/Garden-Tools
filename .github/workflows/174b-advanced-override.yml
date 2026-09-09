@@ -1,0 +1,124 @@
+name: issue-174b-advanced-override
+on:
+  push:
+    branches:
+      - work/174b-deferred-mutations
+permissions:
+  contents: write
+jobs:
+  prove-and-implement-advanced-overrides:
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+      - name: Load Ponytail rules
+        run: |
+          rm -rf /tmp/ponytail-174b-advanced-override
+          git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-advanced-override
+          test -f /tmp/ponytail-174b-advanced-override/AGENTS.md
+      - name: Apply advanced override RED contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected one match in {path}, found {text.count(old)}")
+              p.write_text(text.replace(old, new, 1))
+
+          deep = "PluginEditTool/native/tests/unit/RadiclePluginDeepCopyTests.cpp"
+          replace_once(
+              deep,
+              '''    CHECK(applied->get<std::string>().find("Deep-copied 2 of 2 record(s)") != std::string::npos);\n\n    const auto patch = fo4::read_plugin_file(patchPath);\n    REQUIRE(patch.header.masters.size() == 1);\n    CHECK(patch.header.masters[0].key.filename() == "Base.esm");\n\n    const auto* color = fo4::find_record(\n        patch, fo4::FormKey::parse("000800:Base.esm"));\n    REQUIRE(color != nullptr);\n    CHECK(color->header.signature == fo4::Signature::from_string("CLFM"));\n\n    const auto* race = fo4::find_record(\n        patch, fo4::FormKey::parse("000801:Base.esm"));\n    REQUIRE(race != nullptr);\n    CHECK(race->header.signature == fo4::Signature::from_string("RACE"));\n    CHECK(deepRawSubrecord(*race, "AHCM") == 0x00000800u);\n\n    const auto collision = backend.deepCopyAsOverride(nlohmann::json::array({\n        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200\n    }));\n    REQUIRE(collision.has_value());\n    REQUIRE(collision->is_string());\n    CHECK(collision->get<std::string>().starts_with("EXISTS:"));\n    CHECK(collision->get<std::string>().find("2 of the 2 record(s)") != std::string::npos);\n''',
+              '''    CHECK(applied->get<std::string>().find("Deep-copied 2 of 2 record(s)") != std::string::npos);\n    CHECK(applied->get<std::string>().find("SavePlugin to persist") != std::string::npos);\n\n    const auto beforeSave = fo4::read_plugin_file(patchPath);\n    CHECK(beforeSave.header.masters.empty());\n    CHECK(fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000800:Base.esm")) == nullptr);\n    CHECK(fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000801:Base.esm")) == nullptr);\n\n    const auto collision = backend.deepCopyAsOverride(nlohmann::json::array({\n        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200\n    }));\n    REQUIRE(collision.has_value());\n    REQUIRE(collision->is_string());\n    CHECK(collision->get<std::string>().starts_with("EXISTS:"));\n    CHECK(collision->get<std::string>().find("2 of the 2 record(s)") != std::string::npos);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto patch = fo4::read_plugin_file(patchPath);\n    REQUIRE(patch.header.masters.size() == 1);\n    CHECK(patch.header.masters[0].key.filename() == "Base.esm");\n\n    const auto* color = fo4::find_record(\n        patch, fo4::FormKey::parse("000800:Base.esm"));\n    REQUIRE(color != nullptr);\n    CHECK(color->header.signature == fo4::Signature::from_string("CLFM"));\n\n    const auto* race = fo4::find_record(\n        patch, fo4::FormKey::parse("000801:Base.esm"));\n    REQUIRE(race != nullptr);\n    CHECK(race->header.signature == fo4::Signature::from_string("RACE"));\n    CHECK(deepRawSubrecord(*race, "AHCM") == 0x00000800u);\n'''
+          )
+
+          patch = "PluginEditTool/native/tests/unit/RadiclePluginOverridePatchTests.cpp"
+          replace_once(
+              patch,
+              '''    CHECK(result->get<std::string>().starts_with("Merged patch Patch.esp: forwarded 1 of 1"));\n\n    const auto disk = fo4::read_plugin_file(fixture.patchPath);\n    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));\n    REQUIRE(record != nullptr);\n    CHECK(readEdid(*record) == "WidgetB");  // highest selected plugin in load order wins\n''',
+              '''    CHECK(result->get<std::string>().starts_with("Merged patch Patch.esp: forwarded 1 of 1"));\n    CHECK(result->get<std::string>().find("SavePlugin to persist") != std::string::npos);\n    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);\n\n    const auto beforeSave = fo4::read_plugin_file(fixture.patchPath);\n    CHECK(fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000800:Base.esm")) == nullptr);\n\n    REQUIRE(fixture.backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(fixture.patchPath);\n    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));\n    REQUIRE(record != nullptr);\n    CHECK(readEdid(*record) == "WidgetB");\n'''
+          )
+          replace_once(
+              patch,
+              '''    CHECK(result->get<std::string>().starts_with(\n        "Reverted 1 record(s) that ModB.esp was overriding, into Patch.esp."));\n\n    const auto disk = fo4::read_plugin_file(fixture.patchPath);\n    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));\n    REQUIRE(record != nullptr);\n    CHECK(readEdid(*record) == "WidgetA");  // ModB's override reverted to ModA's version\n''',
+              '''    CHECK(result->get<std::string>().starts_with(\n        "Reverted 1 record(s) that ModB.esp was overriding, into Patch.esp."));\n    CHECK(result->get<std::string>().find("SavePlugin to persist") != std::string::npos);\n    CHECK(result->get<std::string>().find("Saved Patch.esp") == std::string::npos);\n\n    const auto beforeSave = fo4::read_plugin_file(fixture.patchPath);\n    CHECK(fo4::find_record(\n        beforeSave, fo4::FormKey::parse("000800:Base.esm")) == nullptr);\n\n    REQUIRE(fixture.backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(fixture.patchPath);\n    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));\n    REQUIRE(record != nullptr);\n    CHECK(readEdid(*record) == "WidgetA");\n'''
+          )
+          PY
+          git diff --check
+      - name: Build RED contracts
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-advanced -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-advanced --target fo4ide_test_plugin_backend
+      - name: Prove advanced override write-through
+        run: |
+          set +e
+          for test in \
+            "Native DeepCopyAsOverride previews copies dependencies and prompts on collisions" \
+            "CreateMergedPatch forwards the winning version into the patch" \
+            "RevertOverrides restores the prior version into the patch"; do
+            build/fo4ide-174b-advanced/bin/fo4ide_test_plugin_backend "$test" > /tmp/advanced-red.txt 2>&1
+            status=$?
+            cat /tmp/advanced-red.txt
+            test "$status" -ne 0 || exit 1
+            grep -F 'FAILED:' /tmp/advanced-red.txt || exit 1
+          done
+          set -e
+      - name: Commit advanced override RED proof
+        run: |
+          git rm .github/workflows/174b-advanced-override.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/tests/unit/RadiclePluginDeepCopyTests.cpp PluginEditTool/native/tests/unit/RadiclePluginOverridePatchTests.cpp
+          git commit -m "test: prove deferred advanced override contract"
+          git push origin HEAD:work/174b-deferred-mutations
+      - name: Defer advanced override mutations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          deep = Path("PluginEditTool/native/src/plugin/RadiclePluginDeepCopy.cpp")
+          text = deep.read_text()
+          old = '''        fo4::write_plugin_file(mutated, target->path);\n        target->plugin = std::move(mutated);\n        std::error_code ec;\n        target->loadedTime = std::filesystem::last_write_time(target->path, ec);\n        rebuildGraphLocked();\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one deep-copy write tail, found {text.count(old)}")
+          text = text.replace(old, '''        stagePluginMutationLocked(*target, std::move(mutated));\n''', 1)
+          old_message = '''            rootKey.to_string() + " into " + targetName +\n            ". Ensure " + targetName +\n            " loads after the conflicting plugins, then save it.");'''
+          new_message = '''            rootKey.to_string() + " into " + targetName +\n            ". Ensure " + targetName +\n            " loads after the conflicting plugins. SavePlugin to persist.");'''
+          if text.count(old_message) != 1:
+              raise SystemExit("deep-copy success wording anchor missing")
+          deep.write_text(text.replace(old_message, new_message, 1))
+
+          override = Path("PluginEditTool/native/src/plugin/RadiclePluginOverridePatch.cpp")
+          text = override.read_text()
+          common = '''        fo4::write_plugin_file(mutated, target->path);\n        target->plugin = std::move(mutated);\n        std::error_code ec;\n        target->loadedTime = std::filesystem::last_write_time(target->path, ec);\n        rebuildGraphLocked();\n'''
+          if text.count(common) != 2:
+              raise SystemExit(f"expected two override-patch write tails, found {text.count(common)}")
+          text = text.replace(common, '''        stagePluginMutationLocked(*target, std::move(mutated));\n''')
+          old_merged = '''                             " conflicting record(s). Ensure " + patchName +\n                             " loads last. Written to disk.";'''
+          new_merged = '''                             " conflicting record(s). Ensure " + patchName +\n                             " loads last. SavePlugin to persist.";'''
+          if text.count(old_merged) != 1:
+              raise SystemExit("merged-patch wording anchor missing")
+          text = text.replace(old_merged, new_merged, 1)
+          old_revert = '''        result += "Saved " + patchName + ". Load " + patchName + " AFTER " + badPlugin +\n                  " so the reverts win.";'''
+          new_revert = '''        result += "SavePlugin to persist " + patchName + ". Load " + patchName +\n                  " AFTER " + badPlugin + " so the reverts win.";'''
+          if text.count(old_revert) != 1:
+              raise SystemExit("revert wording anchor missing")
+          override.write_text(text.replace(old_revert, new_revert, 1))
+          PY
+          git diff --check
+      - name: Rebuild incrementally
+        run: cmake --build build/fo4ide-174b-advanced --target fo4ide_test_plugin_backend
+      - name: Prove deferred advanced overrides
+        run: |
+          build/fo4ide-174b-advanced/bin/fo4ide_test_plugin_backend "Native DeepCopyAsOverride*"
+          build/fo4ide-174b-advanced/bin/fo4ide_test_plugin_backend "CreateMergedPatch*"
+          build/fo4ide-174b-advanced/bin/fo4ide_test_plugin_backend "RevertOverrides*"
+      - name: Commit advanced override implementation
+        run: |
+          git add PluginEditTool/native/src/plugin/RadiclePluginDeepCopy.cpp PluginEditTool/native/src/plugin/RadiclePluginOverridePatch.cpp
+          git commit -m "feat: defer advanced override persistence"
+          git push origin HEAD:work/174b-deferred-mutations
