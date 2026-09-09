@@ -737,6 +737,12 @@ TEST_CASE("Native PROJ FormLink SetField preserves neighbors, NULL, grid, and re
     REQUIRE(backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", key.to_string(), "PROJ\\Light", "NULL"
     })).has_value());
+    const auto beforeClearSave = fo4::read_plugin_file(path);
+    CHECK(fo4::forms::decode_projectile(beforeClearSave, key).light ==
+          fo4::FormKey::parse("000800:Patch.esp"));
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto cleared = fo4::read_plugin_file(path);
     const auto* clearedRecord = fo4::find_record(cleared, key);
     REQUIRE(clearedRecord != nullptr);
@@ -751,6 +757,8 @@ TEST_CASE("Native PROJ FormLink SetField preserves neighbors, NULL, grid, and re
     REQUIRE(backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", key.to_string(), "PROJ\\Light", "000800:Patch.esp"
     })).has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto after = fo4::read_plugin_file(path);
     CHECK(fo4::forms::decode_projectile(after, key).light ==
           fo4::FormKey::parse("000800:Patch.esp"));
