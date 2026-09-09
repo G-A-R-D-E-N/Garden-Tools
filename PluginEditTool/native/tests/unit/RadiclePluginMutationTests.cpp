@@ -298,27 +298,15 @@ TEST_CASE("Native CopyAsOverride persists a destination-safe override") {
     REQUIRE(copied.has_value());
     CHECK(copied->get<std::string>().find("Copied") == 0);
 
-    const auto reloaded = fo4::read_plugin_file(targetPath);
-    REQUIRE(reloaded.header.masters.size() == 1);
-    CHECK(reloaded.header.masters[0].key.filename() == "Master.esm");
+    const auto beforeSave = fo4::read_plugin_file(targetPath);
+    CHECK(beforeSave.header.masters.empty());
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Master.esm")) == nullptr);
 
-    const auto* local = fo4::find_record(
-        reloaded, fo4::FormKey::parse("000810:Target.esp"));
-    REQUIRE(local != nullptr);
-    CHECK(local->header.form_id == fo4::RawFormId{0x01000810});
-
-    const auto* overrideRecord = fo4::find_record(
-        reloaded, fo4::FormKey::parse("000800:Master.esm"));
-    REQUIRE(overrideRecord != nullptr);
-    CHECK(editorId(*overrideRecord) == "SourceWeapon");
-
-    const auto links = fo4::collect_form_links(reloaded);
-    const auto link = std::find_if(links.begin(), links.end(), [](const auto& hit) {
-        return hit.record == fo4::FormKey::parse("000800:Master.esm") &&
-               hit.subrecord.to_string() == "NAME";
-    });
-    REQUIRE(link != links.end());
-    CHECK(link->key == fo4::FormKey::parse("000801:Master.esm"));
+    const auto pendingMatrix = parseStringResult(
+        backend.invoke("backend.GetConflictMatrix",
+                       nlohmann::json::array({"000800:Master.esm"})));
+    CHECK(pendingMatrix.at("Winner") == "Target.esp");
 
     const auto exists = backend.invokeBackend(
         "CopyAsOverride",
@@ -342,11 +330,29 @@ TEST_CASE("Native CopyAsOverride persists a destination-safe override") {
     REQUIRE(replaced.has_value());
     CHECK(replaced->get<std::string>().find("Replaced") == 0);
 
-    const auto matrix = parseStringResult(
-        backend.invoke("backend.GetConflictMatrix",
-                       nlohmann::json::array({"000800:Master.esm"})));
-    CHECK(matrix.at("Winner") == "Target.esp");
-    REQUIRE(matrix.at("Plugins").size() == 2);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+    const auto reloaded = fo4::read_plugin_file(targetPath);
+    REQUIRE(reloaded.header.masters.size() == 1);
+    CHECK(reloaded.header.masters[0].key.filename() == "Master.esm");
+
+    const auto* local = fo4::find_record(
+        reloaded, fo4::FormKey::parse("000810:Target.esp"));
+    REQUIRE(local != nullptr);
+    CHECK(local->header.form_id == fo4::RawFormId{0x01000810});
+
+    const auto* overrideRecord = fo4::find_record(
+        reloaded, fo4::FormKey::parse("000800:Master.esm"));
+    REQUIRE(overrideRecord != nullptr);
+    CHECK(editorId(*overrideRecord) == "SourceWeapon");
+
+    const auto links = fo4::collect_form_links(reloaded);
+    const auto link = std::find_if(links.begin(), links.end(), [](const auto& hit) {
+        return hit.record == fo4::FormKey::parse("000800:Master.esm") &&
+               hit.subrecord.to_string() == "NAME";
+    });
+    REQUIRE(link != links.end());
+    CHECK(link->key == fo4::FormKey::parse("000801:Master.esm"));
 }
 
 TEST_CASE("Native CopyAsOverride refuses protected destination plugins") {
