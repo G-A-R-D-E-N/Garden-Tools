@@ -307,13 +307,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 "Record '" + recordId + "' has no editable Conditions list."
             });
         }
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetConditionsFailed", error.what()});
     }
@@ -481,13 +475,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
                 "Record '" + recordId + "' has a malformed alias array for path '" + path + "'"
             });
         }
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetConditionsFailed", error.what()});
     }
