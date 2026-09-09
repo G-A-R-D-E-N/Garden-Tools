@@ -1,0 +1,63 @@
+name: issue-174b-lifecycle-red
+on:
+  push:
+    branches:
+      - work/174b-deferred-mutations
+permissions:
+  contents: write
+jobs:
+  prove-lifecycle-write-through:
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+      - name: Load Ponytail rules
+        run: |
+          rm -rf /tmp/ponytail-174b-lifecycle-red
+          git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-lifecycle-red
+          test -f /tmp/ponytail-174b-lifecycle-red/AGENTS.md
+      - name: Apply deferred lifecycle RED contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("PluginEditTool/native/tests/unit/RadiclePluginLifecycleTests.cpp")
+          text = path.read_text()
+
+          start = text.index('TEST_CASE("Native lifecycle creates renumbers and deletes a persisted typed record")')
+          end = text.index('TEST_CASE("Native lifecycle creates LVSP with validated initial entries")', start)
+          replacement = '''TEST_CASE("Native lifecycle creates renumbers and deletes a persisted typed record") {\n    const auto root = tempRoot();\n    Cleanup cleanup{root};\n    const auto pluginPath = root / "mods" / "MyMod" / "Patch.esp";\n    writeBytes(pluginPath, makePlugin());\n\n    fo4ide::plugin::RadiclePluginBackend backend;\n    const nlohmann::json environment{\n        {"plugins", nlohmann::json::array({\n            pluginEntry("Patch.esp", pluginPath, "MyMod")\n        })}\n    };\n    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());\n\n    const auto created = parseStringResult(backend.invokeBackend(\n        "CreateRecord", nlohmann::json::array({"Patch.esp", "EYES", eyesPayload()})));\n    REQUIRE(created.at("formKey") == "000900:Patch.esp");\n\n    auto disk = fo4::read_plugin_file(pluginPath);\n    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);\n    CHECK(disk.header.next_form_id == 0x900u);\n\n    const auto renumbered = parseStringResult(backend.invokeBackend(\n        "RenumberRecord",\n        nlohmann::json::array({"Patch.esp", "000900:Patch.esp", "000950:Patch.esp"})));\n    CHECK(renumbered.at("changed") == true);\n\n    disk = fo4::read_plugin_file(pluginPath);\n    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);\n    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) == nullptr);\n    CHECK(disk.header.next_form_id == 0x900u);\n\n    const auto deleted = parseStringResult(backend.invokeBackend(\n        "DeleteRecord", nlohmann::json::array({"Patch.esp", "000950:Patch.esp"})));\n    CHECK(deleted.at("deleted") == "000950:Patch.esp");\n\n    disk = fo4::read_plugin_file(pluginPath);\n    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) == nullptr);\n    CHECK(disk.header.next_form_id == 0x900u);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    disk = fo4::read_plugin_file(pluginPath);\n    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) == nullptr);\n    CHECK(disk.header.next_form_id == 0x951u);\n}\n\n'''
+          text = text[:start] + replacement + text[end:]
+
+          old = '''    const auto disk = fo4::read_plugin_file(pluginPath);\n    const auto key = fo4::FormKey::parse("000900:Patch.esp");\n    const auto list = fo4::forms::decode_leveled_spell(disk, key);\n'''
+          new = '''    const auto key = fo4::FormKey::parse("000900:Patch.esp");\n    const auto beforeSave = fo4::read_plugin_file(pluginPath);\n    CHECK(fo4::find_record(beforeSave, key) == nullptr);\n    CHECK(beforeSave.header.next_form_id == 0x900u);\n\n    REQUIRE(backend.invoke(\n        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n    const auto disk = fo4::read_plugin_file(pluginPath);\n    const auto list = fo4::forms::decode_leveled_spell(disk, key);\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one LVSP persistence block, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Build focused lifecycle tests
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-lifecycle-red -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-lifecycle-red --target fo4ide_test_plugin_backend
+      - name: Prove lifecycle paths write through
+        run: |
+          set +e
+          for test in \
+            "Native lifecycle creates renumbers and deletes a persisted typed record" \
+            "Native lifecycle creates LVSP with validated initial entries"; do
+            build/fo4ide-174b-lifecycle-red/bin/fo4ide_test_plugin_backend "$test" > /tmp/current-red.txt 2>&1
+            status=$?
+            cat /tmp/current-red.txt
+            test "$status" -ne 0 || exit 1
+            grep -F 'FAILED:' /tmp/current-red.txt || exit 1
+          done
+          set -e
+      - name: Commit RED proof
+        run: |
+          git rm .github/workflows/174b-lifecycle-red.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/tests/unit/RadiclePluginLifecycleTests.cpp
+          git commit -m "test: prove deferred lifecycle persistence contract"
+          git push origin HEAD:work/174b-deferred-mutations
