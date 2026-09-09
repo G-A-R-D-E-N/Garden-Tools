@@ -239,6 +239,12 @@ TEST_CASE("Native CopyAsOverrideMany reports per-item failures and commits succe
     REQUIRE(result.at("failures").size() == 1);
     CHECK(result.at("failures")[0].at("source") == "Missing.esp");
 
+    const auto beforeSave = fo4::read_plugin_file(target);
+    CHECK(fo4::find_record(beforeSave, fo4::FormKey::parse("000800:Master.esm")) == nullptr);
+    CHECK(fo4::find_record(beforeSave, fo4::FormKey::parse("000802:Master.esm")) == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto reloaded = fo4::read_plugin_file(target);
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm")) != nullptr);
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000802:Master.esm")) == nullptr);
