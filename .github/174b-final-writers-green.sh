@@ -98,10 +98,40 @@ path.write_text(text.replace(old, new, 1))
 
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp")
 text = path.read_text()
+set_conditions_old = '''    if (!failures.empty()) {
+        message += " Skipped " + std::to_string(failures.size()) + ": ";
+        for (std::size_t i = 0; i < failures.size(); ++i) {
+            if (i > 0) message += "; ";
+            message += failures[i];
+        }
+        message += ".";
+    }
+    return nlohmann::json(std::move(message));
+}
+
+Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
+'''
+set_conditions_new = '''    if (!failures.empty()) {
+        message += " Skipped " + std::to_string(failures.size()) + ": ";
+        for (std::size_t i = 0; i < failures.size(); ++i) {
+            if (i > 0) message += "; ";
+            message += failures[i];
+        }
+        message += ".";
+    }
+    message += " SavePlugin to persist.";
+    return nlohmann::json(std::move(message));
+}
+
+Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
+'''
+if text.count(set_conditions_old) != 1:
+    raise SystemExit(f"SetConditions response block count {text.count(set_conditions_old)}")
+text = text.replace(set_conditions_old, set_conditions_new, 1)
 old = '    message += " Written to disk.";\n'
 new = '    message += " SavePlugin to persist.";\n'
 if text.count(old) != 1:
-    raise SystemExit(f"conditions wording count {text.count(old)}")
+    raise SystemExit(f"SetConditionsAtPath wording count {text.count(old)}")
 path.write_text(text.replace(old, new, 1))
 
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp")
@@ -122,6 +152,8 @@ path.write_text(text.replace(old, new, 1))
 PY
 
 git diff --check
+grep -F 'SavePlugin to persist.' PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp
+test "$(grep -c 'Written to disk' PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp || true)" -eq 0
 actual="$(git diff --name-only | sort)"
 expected="$(printf '%s\n' \
   PluginEditTool/native/src/plugin/RadiclePluginComponents.cpp \
