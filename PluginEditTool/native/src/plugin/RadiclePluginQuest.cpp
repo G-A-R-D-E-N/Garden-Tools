@@ -1,6 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <cmath>
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
 #include <limits>
 #include <map>
@@ -1950,24 +1952,136 @@ std::optional<Error> adapterConditionUnrepresentable(
 }
 
 struct LocalizedQuestTables {
+    std::string language;
     std::filesystem::path dlstringsPath;
+    std::vector<std::byte> originalDlstringsBytes;
     fo4::localization::LocalizedStringTable strings;
     fo4::localization::LocalizedStringTable dlstrings;
     fo4::localization::LocalizedStringTable ilstrings;
     std::uint32_t nextId{1};
 };
 
-std::vector<std::byte> localizedTextBytes(std::string_view text) {
-    std::vector<std::byte> bytes;
-    bytes.reserve(text.size());
-    for (const auto ch : text) {
-        bytes.push_back(std::byte{static_cast<unsigned char>(ch)});
+std::vector<std::byte> readLocalizedFileBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    if (!stream) throw std::runtime_error("could not open localized string file");
+    const auto end = stream.tellg();
+    if (end < 0) throw std::runtime_error("could not determine localized string file size");
+    std::vector<std::byte> bytes(static_cast<std::size_t>(end));
+    stream.seekg(0, std::ios::beg);
+    if (!bytes.empty()) {
+        stream.read(reinterpret_cast<char*>(bytes.data()),
+                    static_cast<std::streamsize>(bytes.size()));
+        if (!stream) throw std::runtime_error("could not read localized string file");
     }
     return bytes;
 }
 
+std::optional<Error> encodeLocalizedText(std::string_view language,
+                                          std::string_view text,
+                                          std::vector<std::byte>& bytes) {
+    bytes.clear();
+    bytes.reserve(text.size());
+    const bool english = language == "en";
+    for (std::size_t index = 0; index < text.size();) {
+        const auto first = static_cast<unsigned char>(text[index]);
+        std::size_t width = 0;
+        std::uint32_t codePoint = 0;
+        if (first <= 0x7f) {
+            width = 1;
+            codePoint = first;
+        } else if (first >= 0xc2 && first <= 0xdf) {
+            width = 2;
+            codePoint = first & 0x1f;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            width = 3;
+            codePoint = first & 0x0f;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            width = 4;
+            codePoint = first & 0x07;
+        } else {
+            return Error{
+                "LocalizedLogEncodingUnsupported",
+                "localized CNAM text is not valid UTF-8"
+            };
+        }
+        if (width > text.size() - index) {
+            return Error{
+                "LocalizedLogEncodingUnsupported",
+                "localized CNAM text is not valid UTF-8"
+            };
+        }
+        for (std::size_t offset = 1; offset < width; ++offset) {
+            const auto next = static_cast<unsigned char>(text[index + offset]);
+            if ((next & 0xc0) != 0x80) {
+                return Error{
+                    "LocalizedLogEncodingUnsupported",
+                    "localized CNAM text is not valid UTF-8"
+                };
+            }
+            codePoint = (codePoint << 6) | (next & 0x3f);
+        }
+        if ((width == 2 && codePoint < 0x80) ||
+            (width == 3 && codePoint < 0x800) ||
+            (width == 4 && codePoint < 0x10000) ||
+            (codePoint >= 0xd800 && codePoint <= 0xdfff) || codePoint > 0x10ffff) {
+            return Error{
+                "LocalizedLogEncodingUnsupported",
+                "localized CNAM text is not valid UTF-8"
+            };
+        }
+
+        if (!english) {
+            bytes.insert(bytes.end(),
+                         reinterpret_cast<const std::byte*>(text.data() + index),
+                         reinterpret_cast<const std::byte*>(text.data() + index + width));
+        } else if (codePoint <= 0x7f || (codePoint >= 0xa0 && codePoint <= 0xff)) {
+            bytes.push_back(std::byte{static_cast<unsigned char>(codePoint)});
+        } else {
+            std::uint8_t encoded = 0;
+            switch (codePoint) {
+            case 0x20ac: encoded = 0x80; break;
+            case 0x201a: encoded = 0x82; break;
+            case 0x192: encoded = 0x83; break;
+            case 0x201e: encoded = 0x84; break;
+            case 0x2026: encoded = 0x85; break;
+            case 0x2020: encoded = 0x86; break;
+            case 0x2021: encoded = 0x87; break;
+            case 0x2c6: encoded = 0x88; break;
+            case 0x2030: encoded = 0x89; break;
+            case 0x160: encoded = 0x8a; break;
+            case 0x2039: encoded = 0x8b; break;
+            case 0x152: encoded = 0x8c; break;
+            case 0x17d: encoded = 0x8e; break;
+            case 0x2018: encoded = 0x91; break;
+            case 0x2019: encoded = 0x92; break;
+            case 0x201c: encoded = 0x93; break;
+            case 0x201d: encoded = 0x94; break;
+            case 0x2022: encoded = 0x95; break;
+            case 0x2013: encoded = 0x96; break;
+            case 0x2014: encoded = 0x97; break;
+            case 0x2dc: encoded = 0x98; break;
+            case 0x2122: encoded = 0x99; break;
+            case 0x161: encoded = 0x9a; break;
+            case 0x203a: encoded = 0x9b; break;
+            case 0x153: encoded = 0x9c; break;
+            case 0x17e: encoded = 0x9e; break;
+            case 0x178: encoded = 0x9f; break;
+            default:
+                return Error{
+                    "LocalizedLogEncodingUnsupported",
+                    "localized English CNAM text is not representable in CP1252"
+                };
+            }
+            bytes.push_back(std::byte{encoded});
+        }
+        index += width;
+    }
+    return std::nullopt;
+}
+
 std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
                                               const std::filesystem::path& pluginPath,
+                                              const std::filesystem::path& directory,
                                               LocalizedQuestTables& result) {
     if (!arguments.is_array() || arguments.size() <= 3 || !arguments[3].is_object()) {
         return Error{
@@ -1984,15 +2098,16 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
         };
     }
     const auto language = context["language"].get<std::string>();
-    const auto directory = std::filesystem::path(
-        context["stringsDirectory"].get<std::string>());
-    if (language.empty() || language.find_first_of("\\/") != std::string::npos ||
-        directory.empty()) {
+    static constexpr std::array<std::string_view, 11> supportedLanguages{
+        "en", "de", "it", "es", "esmx", "fr", "pl", "ptbr", "cn", "ru", "ja"};
+    if (std::find(supportedLanguages.begin(), supportedLanguages.end(), language) ==
+            supportedLanguages.end()) {
         return Error{
             "InvalidLocalizedQuestContext",
-            "localized QUST context has an invalid language or stringsDirectory"
+            "localized QUST context has an unsupported language token: " + language
         };
     }
+    result.language = language;
 
     const auto stem = pluginPath.stem().string() + "_" + language;
     const auto load = [&](fo4::localization::StringTableKind kind,
@@ -2019,6 +2134,15 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
         }
         if (kind == fo4::localization::StringTableKind::dlstrings) {
             result.dlstringsPath = path;
+            try {
+                result.originalDlstringsBytes = readLocalizedFileBytes(path);
+            } catch (const std::exception& error) {
+                return Error{
+                    "LocalizedLogTableInvalid",
+                    "could not snapshot localized sibling table " + path.string() + ": " +
+                        error.what()
+                };
+            }
         }
         return std::nullopt;
     };
@@ -2896,8 +3020,23 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
     fo4::forms::QuestStages previousStages;
     if (localized && arguments.is_array() && arguments.size() > 3) {
         localizedTables.emplace();
+        std::filesystem::path stringsDirectory;
+        if (arguments[3].is_object() && arguments[3].contains("stringsDirectory") &&
+            arguments[3]["stringsDirectory"].is_string()) {
+            stringsDirectory = arguments[3]["stringsDirectory"].get<std::string>();
+        }
+        const auto allowedDirectory =
+            stringsDirectory.empty() ? std::nullopt
+                                     : allowedLocalizationDirectory(stringsDirectory);
+        if (!stringsDirectory.empty() && !allowedDirectory.has_value()) {
+            return std::unexpected(Error{
+                "LocalizedSidecarPathNotAllowed",
+                "Refusing to write localized sidecars outside a trusted writable root: " +
+                    stringsDirectory.string()
+            });
+        }
         if (const auto error = loadLocalizedQuestTables(
-                arguments, loaded->path, *localizedTables)) {
+                arguments, loaded->path, allowedDirectory.value_or({}), *localizedTables)) {
             return std::unexpected(*error);
         }
         try {
@@ -3135,7 +3274,11 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     }
 
                     std::optional<std::uint32_t> id;
-                    const auto text = localizedTextBytes(*entry.log_text->text);
+                    std::vector<std::byte> text;
+                    if (const auto error = encodeLocalizedText(
+                            localizedTables->language, *entry.log_text->text, text)) {
+                        return std::unexpected(*error);
+                    }
                     if (previousId.has_value()) {
                         const auto* previousText = fo4::localization::find_string(
                             localizedTables->dlstrings, *previousId);
@@ -3207,6 +3350,21 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         fo4::forms::write_quest_stages(mutated, questKey, stages);
         const auto pluginBytes = fo4::write_plugin(mutated);
         if (localizedTableChanged) {
+            try {
+                if (readLocalizedFileBytes(localizedTables->dlstringsPath) !=
+                    localizedTables->originalDlstringsBytes) {
+                    return std::unexpected(Error{
+                        "LocalizedSidecarChangedOnDisk",
+                        "localized DLSTRINGS changed after it was read; reload before writing"
+                    });
+                }
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{
+                    "LocalizedLogTableInvalid",
+                    "could not re-read localized DLSTRINGS before writing: " +
+                        std::string(error.what())
+                });
+            }
             const auto tableBytes = fo4::localization::write_string_table(
                 localizedTables->dlstrings);
             fo4::io::write_file_pair_dependency_first(

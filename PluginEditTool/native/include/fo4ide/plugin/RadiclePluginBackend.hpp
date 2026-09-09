@@ -130,6 +130,8 @@ private:
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
     std::optional<std::filesystem::path> allowedSavePath(
         const std::filesystem::path& path) const;
+    std::optional<std::filesystem::path> allowedLocalizationDirectory(
+        const std::filesystem::path& path) const;
     void rebuildGraphLocked();
 
     mutable std::mutex mutex_;

@@ -173,3 +173,11 @@ QUST VMAD extras bind Papyrus to the arrays these RPCs replace. Mutagen `QuestSc
 ## PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp:existingQuestVmadUnrepresentable
 
 Duplicate, trailing, unsupported, or unparseable QUST VMAD still fail closed before write. Alias/stage bindings no longer block `SetQuestAliases`/`SetQuestStages`; `write_quest_aliases` / `write_quest_stages` patch those fields in the same plugin copy or throw without committing.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp:RadiclePluginBackend::setQuestStages — localized CNAM encoding
+
+Localized QUST CNAM writes use the explicit language and loose-table directory supplied by the caller, but the directory must resolve beneath a trusted editable plugin root; English text is encoded as CP1252, supported non-English text remains UTF-8, and all sidecar changes are committed dependency-first with a freshness check before replacement.
+
+## PluginEditTool/native/src/plugin/RadiclePluginBackend.cpp:RadiclePluginBackend::allowedLocalizationDirectory — sidecar path trust
+
+Sidecar roots are canonicalized and accepted only beneath a trusted editable plugin root and outside the protected game Data directory.
