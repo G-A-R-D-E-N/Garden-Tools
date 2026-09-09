@@ -267,6 +267,15 @@ TEST_CASE("PluginEditTool add_list_item appends to a populated FLST") {
     CHECK(result->get<std::string>() ==
           "Added 000801:Patch.esp to Items on 000811:Patch.esp in Patch.esp (now 2 item(s)).");
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveFlst = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000811:Patch.esp"));
+    REQUIRE(beforeSaveFlst != nullptr);
+    REQUIRE(countSubrecords(*beforeSaveFlst, "LNAM") == 1u);
+    CHECK(nthRaw(*beforeSaveFlst, "LNAM", 0) == 0x00000800u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
     REQUIRE(flst != nullptr);
@@ -359,6 +368,14 @@ TEST_CASE("PluginEditTool remove_list_item drops the matching FormLink") {
           "Removed 1 entr(y/ies) matching 000800:Patch.esp from Items (now 0) on "
           "000811:Patch.esp. Written to disk.");
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveFlst = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000811:Patch.esp"));
+    REQUIRE(beforeSaveFlst != nullptr);
+    CHECK(countSubrecords(*beforeSaveFlst, "LNAM") == 1u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
     REQUIRE(flst != nullptr);

@@ -183,6 +183,16 @@ TEST_CASE("PluginEditTool inserts generated FormLink list element between neighb
         }));
     REQUIRE(result.has_value());
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveRace = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000803:Patch.esp"));
+    REQUIRE(beforeSaveRace != nullptr);
+    REQUIRE(countSubrecords(*beforeSaveRace, "AHCM") == 2u);
+    CHECK(nthRaw(*beforeSaveRace, "AHCM", 0) == 0x00000800u);
+    CHECK(nthRaw(*beforeSaveRace, "AHCM", 1) == 0x00000800u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* race = fo4::find_record(
         disk, fo4::FormKey::parse("000803:Patch.esp"));
@@ -211,6 +221,14 @@ TEST_CASE("PluginEditTool removes generated FormLink list element") {
         }));
     REQUIRE(result.has_value());
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveRace = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000803:Patch.esp"));
+    REQUIRE(beforeSaveRace != nullptr);
+    REQUIRE(countSubrecords(*beforeSaveRace, "AHCM") == 2u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* race = fo4::find_record(
         disk, fo4::FormKey::parse("000803:Patch.esp"));
