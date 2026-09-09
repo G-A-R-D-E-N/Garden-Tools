@@ -222,6 +222,12 @@ TEST_CASE("Native CreateRecord writes a measured PROJ DNAM and remaps a typed EX
     REQUIRE(backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", "000801:Patch.esp", "PROJ\\Speed", "9000"
     })).has_value());
+    const auto beforeSave = fo4::forms::decode_projectile(
+        fo4::read_plugin_file(path), key);
+    CHECK(beforeSave.speed == 12000.0f);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto after = fo4::forms::decode_projectile(
         fo4::read_plugin_file(path), key);
     CHECK(after.speed == 9000.0f);
