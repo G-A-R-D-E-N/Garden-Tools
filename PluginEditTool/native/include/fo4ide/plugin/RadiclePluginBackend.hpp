@@ -14,6 +14,11 @@
 
 namespace fo4ide::plugin {
 
+#ifdef FO4IDE_TEST_HOOKS
+using LocalizedQuestBeforeCommitHook = void (*)();
+void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook);
+#endif
+
 class RadiclePluginBackend final : public IPluginBackend {
 public:
     Capabilities capabilities() const noexcept override;

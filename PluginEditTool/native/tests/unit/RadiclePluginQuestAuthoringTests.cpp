@@ -108,6 +108,24 @@ nlohmann::json localizedQuestContext(const std::filesystem::path& root,
     };
 }
 
+std::filesystem::path staleLocalizationSibling;
+fo4::localization::StringTableKind staleLocalizationKind;
+
+void mutateStaleLocalizationSibling() {
+    const auto table = fo4::localization::read_string_table_file(
+        staleLocalizationSibling, staleLocalizationKind);
+    auto entries = table.entries;
+    entries.push_back({201, rawBytes("External")});
+    fo4::localization::write_string_table_file(
+        {staleLocalizationKind, std::move(entries)}, staleLocalizationSibling);
+}
+
+struct LocalizedQuestHookCleanup {
+    ~LocalizedQuestHookCleanup() {
+        fo4ide::plugin::setLocalizedQuestBeforeCommitHook(nullptr);
+    }
+};
+
 std::vector<std::byte> questPlugin(std::uint32_t tes4Flags = 0) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", tes4Flags, 0);
@@ -987,6 +1005,53 @@ TEST_CASE("Native SetQuestStages allocates a brand-new localized CNAM") {
     CHECK(entry->text == rawBytes("New"));
 }
 
+TEST_CASE("Native SetQuestStages refuses stale localized allocation participants") {
+    const auto run = [](fo4::localization::StringTableKind kind, std::string_view extension) {
+        const auto root = tempRoot();
+        Cleanup cleanup{root};
+        const auto path = root / "Patch.esp";
+        writeBytes(path, questPlugin(fo4::RecordFlags::localized));
+        writeLocalizationSet(
+            root,
+            {{100, rawBytes("Other")}},
+            {},
+            {{200, rawBytes("Other")} });
+        const auto pluginBefore = readBytes(path);
+        const auto dlstringsPath = root / "Strings" / "Patch_en.DLSTRINGS";
+        const auto dlstringsBefore = readBytes(dlstringsPath);
+        staleLocalizationSibling = root / "Strings" / ("Patch_en" + std::string(extension));
+        staleLocalizationKind = kind;
+
+        LocalizedQuestHookCleanup hookCleanup;
+        fo4ide::plugin::setLocalizedQuestBeforeCommitHook(&mutateStaleLocalizationSibling);
+
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        const auto result = backend.invokeBackend(
+            "SetQuestStages",
+            nlohmann::json::array({
+                "Patch.esp",
+                "000800:Patch.esp",
+                nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
+                localizedQuestContext(root)
+            }));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "LocalizedSidecarChangedOnDisk");
+        CHECK(readBytes(path) == pluginBefore);
+        CHECK(readBytes(dlstringsPath) == dlstringsBefore);
+        const auto changed = fo4::localization::read_string_table_file(
+            staleLocalizationSibling, staleLocalizationKind);
+        CHECK(fo4::localization::find_string(changed, 201u) != nullptr);
+    };
+
+    SECTION("STRINGS") {
+        run(fo4::localization::StringTableKind::strings, ".STRINGS");
+    }
+    SECTION("ILSTRINGS") {
+        run(fo4::localization::StringTableKind::ilstrings, ".ILSTRINGS");
+    }
+}
+
 TEST_CASE("Native SetQuestStages refuses an untrusted localized sidecar root") {
     const auto pluginRoot = tempRoot();
     Cleanup pluginCleanup{pluginRoot};
@@ -1004,6 +1069,38 @@ TEST_CASE("Native SetQuestStages refuses an untrusted localized sidecar root") {
 
     fo4ide::plugin::RadiclePluginBackend backend;
     backend.setDataDirectory(sidecarRoot);
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
+            localizedQuestContext(pluginRoot, "en", sidecarRoot / "Strings")
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "LocalizedSidecarPathNotAllowed");
+    CHECK(readBytes(path) == pluginBefore);
+    CHECK(readBytes(sidecarRoot / "Strings" / "Patch_en.DLSTRINGS") == sidecarBefore);
+}
+
+TEST_CASE("Native SetQuestStages refuses a localized sidecar outside trusted roots") {
+    const auto pluginRoot = tempRoot();
+    Cleanup pluginCleanup{pluginRoot};
+    const auto sidecarRoot = tempRoot();
+    Cleanup sidecarCleanup{sidecarRoot};
+    const auto path = pluginRoot / "Patch.esp";
+    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
+    writeLocalizationSet(
+        sidecarRoot,
+        {{100, rawBytes("Other")}},
+        {},
+        {{200, rawBytes("Other")} });
+    const auto pluginBefore = readBytes(path);
+    const auto sidecarBefore = readBytes(sidecarRoot / "Strings" / "Patch_en.DLSTRINGS");
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(pluginRoot / "Data");
     load(backend, path);
     const auto result = backend.invokeBackend(
         "SetQuestStages",

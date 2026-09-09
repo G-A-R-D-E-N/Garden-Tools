@@ -37,6 +37,17 @@
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 
 namespace fo4ide::plugin {
+
+#ifdef FO4IDE_TEST_HOOKS
+namespace {
+LocalizedQuestBeforeCommitHook localizedQuestBeforeCommitHook = nullptr;
+}
+
+void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook) {
+    localizedQuestBeforeCommitHook = hook;
+}
+#endif
+
 namespace {
 
 std::string questStringArg(const nlohmann::json& args, std::size_t index) {
@@ -1953,8 +1964,12 @@ std::optional<Error> adapterConditionUnrepresentable(
 
 struct LocalizedQuestTables {
     std::string language;
+    std::filesystem::path stringsPath;
     std::filesystem::path dlstringsPath;
+    std::filesystem::path ilstringsPath;
+    std::vector<std::byte> originalStringsBytes;
     std::vector<std::byte> originalDlstringsBytes;
+    std::vector<std::byte> originalIlstringsBytes;
     fo4::localization::LocalizedStringTable strings;
     fo4::localization::LocalizedStringTable dlstrings;
     fo4::localization::LocalizedStringTable ilstrings;
@@ -2132,17 +2147,24 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
                 "could not read localized sibling table " + path.string() + ": " + error.what()
             };
         }
-        if (kind == fo4::localization::StringTableKind::dlstrings) {
-            result.dlstringsPath = path;
-            try {
-                result.originalDlstringsBytes = readLocalizedFileBytes(path);
-            } catch (const std::exception& error) {
-                return Error{
-                    "LocalizedLogTableInvalid",
-                    "could not snapshot localized sibling table " + path.string() + ": " +
-                        error.what()
-                };
+        try {
+            const auto originalBytes = readLocalizedFileBytes(path);
+            if (kind == fo4::localization::StringTableKind::strings) {
+                result.stringsPath = path;
+                result.originalStringsBytes = originalBytes;
+            } else if (kind == fo4::localization::StringTableKind::dlstrings) {
+                result.dlstringsPath = path;
+                result.originalDlstringsBytes = originalBytes;
+            } else {
+                result.ilstringsPath = path;
+                result.originalIlstringsBytes = originalBytes;
             }
+        } catch (const std::exception& error) {
+            return Error{
+                "LocalizedLogTableInvalid",
+                "could not snapshot localized sibling table " + path.string() + ": " +
+                    error.what()
+            };
         }
         return std::nullopt;
     };
@@ -3351,12 +3373,19 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         fo4::forms::write_quest_stages(mutated, questKey, stages);
         const auto pluginBytes = fo4::write_plugin(mutated);
         if (localizedTableChanged) {
+#ifdef FO4IDE_TEST_HOOKS
+            if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
+#endif
             try {
-                if (readLocalizedFileBytes(localizedTables->dlstringsPath) !=
-                    localizedTables->originalDlstringsBytes) {
+                if (readLocalizedFileBytes(localizedTables->stringsPath) !=
+                        localizedTables->originalStringsBytes ||
+                    readLocalizedFileBytes(localizedTables->dlstringsPath) !=
+                        localizedTables->originalDlstringsBytes ||
+                    readLocalizedFileBytes(localizedTables->ilstringsPath) !=
+                        localizedTables->originalIlstringsBytes) {
                     return std::unexpected(Error{
                         "LocalizedSidecarChangedOnDisk",
-                        "localized DLSTRINGS changed after it was read; reload before writing"
+                        "localized sibling table changed after it was read; reload before writing"
                     });
                 }
             } catch (const std::exception& error) {
