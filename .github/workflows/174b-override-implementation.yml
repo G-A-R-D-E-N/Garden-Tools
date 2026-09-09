@@ -1,0 +1,65 @@
+name: issue-174b-override-implementation
+on:
+  push:
+    branches:
+      - work/174b-deferred-mutations
+permissions:
+  contents: write
+jobs:
+  implement-override-deferred-save:
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+      - name: Load Ponytail rules
+        run: |
+          rm -rf /tmp/ponytail-174b-override
+          git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-override
+          test -f /tmp/ponytail-174b-override/AGENTS.md
+      - name: Defer override mutations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected one match in {path}, found {text.count(old)}")
+              p.write_text(text.replace(old, new, 1))
+
+          single = "PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp"
+          replace_once(
+              single,
+              '''        fo4::write_plugin_file(mutated, target->path);\n        target->plugin = std::move(mutated);\n        {\n            std::error_code ec;\n            target->loadedTime = std::filesystem::last_write_time(target->path, ec);\n        }\n        rebuildGraphLocked();\n\n        return nlohmann::json(\n''',
+              '''        stagePluginMutationLocked(*target, std::move(mutated));\n\n        return nlohmann::json(\n'''
+          )
+
+          batch = "PluginEditTool/native/src/plugin/RadiclePluginBatchMutation.cpp"
+          replace_once(
+              batch,
+              '''    if (copied != 0) {\n        try {\n            fo4::write_plugin_file(mutated, target->path);\n            target->plugin = std::move(mutated);\n            {\n                std::error_code ec;\n                target->loadedTime = std::filesystem::last_write_time(target->path, ec);\n            }\n            rebuildGraphLocked();\n        } catch (const std::exception& error) {\n            return std::unexpected(Error{"BatchCopyWriteFailed", error.what()});\n        }\n    }\n''',
+              '''    if (copied != 0) {\n        try {\n            stagePluginMutationLocked(*target, std::move(mutated));\n        } catch (const std::exception& error) {\n            return std::unexpected(Error{"BatchCopyWriteFailed", error.what()});\n        }\n    }\n'''
+          )
+          PY
+          git diff --check
+      - name: Build focused override tests
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-override -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-override --target fo4ide_test_plugin_backend
+      - name: Prove deferred override persistence
+        run: |
+          build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverride persists a destination-safe override"
+          build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverride refuses protected destination plugins"
+          build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverrideMany copies selected conflicts in one transaction"
+          build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverrideMany preflights overwrite conflicts without writing"
+          build/fo4ide-174b-override/bin/fo4ide_test_plugin_backend "Native CopyAsOverrideMany reports per-item failures and commits successes"
+      - name: Commit implementation
+        run: |
+          git rm .github/workflows/174b-override-implementation.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp PluginEditTool/native/src/plugin/RadiclePluginBatchMutation.cpp
+          git commit -m "feat: defer override persistence until SavePlugin"
+          git push origin HEAD:work/174b-deferred-mutations
