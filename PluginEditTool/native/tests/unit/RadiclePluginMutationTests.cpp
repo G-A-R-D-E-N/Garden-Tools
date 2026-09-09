@@ -166,13 +166,11 @@ TEST_CASE("Native SetField persists EDID and refreshes the record matrix") {
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("Updated EDID") != std::string::npos);
 
-    const auto reloaded = fo4::read_plugin_file(path);
-    const auto* record = fo4::find_record(
-        reloaded, fo4::FormKey::parse("000800:Patch.esp"));
-    REQUIRE(record != nullptr);
-    CHECK(editorId(*record) == "NewEditorId");
-    REQUIRE(record->subrecords.size() == 2);
-    CHECK(record->subrecords[1].signature.to_string() == "FULL");
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveRecord = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(beforeSaveRecord != nullptr);
+    CHECK(editorId(*beforeSaveRecord) == "OldEditorId");
 
     const auto matrix = parseStringResult(
         backend.invoke("backend.GetConflictMatrix",
@@ -184,6 +182,16 @@ TEST_CASE("Native SetField persists EDID and refreshes the record matrix") {
     });
     REQUIRE(edid != rows.end());
     CHECK(edid->at("Values")[0] == "NewEditorId");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto reloaded = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(
+        reloaded, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(record != nullptr);
+    CHECK(editorId(*record) == "NewEditorId");
+    REQUIRE(record->subrecords.size() == 2);
+    CHECK(record->subrecords[1].signature.to_string() == "FULL");
 }
 
 TEST_CASE("Native SetField rejects opaque raw fields without touching disk") {

@@ -134,6 +134,15 @@ TEST_CASE("PluginEditTool set_components writes CVPA and identity CDIX on a MISC
     CHECK(result->get<std::string>() ==
           "Set 2 component(s) on 000900:Patch.esp in Patch.esp. Written to disk.");
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveMisc = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(beforeSaveMisc != nullptr);
+    CHECK(findSub(*beforeSaveMisc, "CVPA") == nullptr);
+    CHECK(findSub(*beforeSaveMisc, "CDIX") == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* misc = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
     REQUIRE(misc != nullptr);

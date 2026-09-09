@@ -224,6 +224,16 @@ TEST_CASE("PluginEditTool fills missing ARMO gendered fields after creation") {
         "Patch.esp", key, "ARMO\\FemaleIcon", "Textures\\Female.dds"
     })).has_value());
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto beforeModel = fo4::forms::decode_armor(
+        beforeSave, fo4::FormKey::parse(key));
+    CHECK_FALSE(beforeModel.male_world_model.has_value());
+    CHECK_FALSE(beforeModel.male_icon.has_value());
+    CHECK_FALSE(beforeModel.female_world_model.has_value());
+    CHECK_FALSE(beforeModel.female_icon.has_value());
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto model = fo4::forms::decode_armor(
         disk, fo4::FormKey::parse(key));
