@@ -4,153 +4,98 @@ set -euo pipefail
 base=19948098
 
 git cat-file -e "${base}^{commit}"
-rm -rf /tmp/ponytail-174b-quest-green
-git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-quest-green
-test -f /tmp/ponytail-174b-quest-green/AGENTS.md
+changed="$(git diff --name-only "${base}..HEAD" | sort)"
+expected="$(printf '%s\n' '.github/174b-quest-green.sh' '.github/workflows/174b-core-writers.yml' | sort)"
+test "$changed" = "$expected"
+
+rm -rf /tmp/ponytail-174b-quest-red-more
+git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-quest-red-more
+test -f /tmp/ponytail-174b-quest-red-more/AGENTS.md
 
 python3 - <<'PY'
 from pathlib import Path
 
-path = Path("PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp")
+path = Path("PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp")
 text = path.read_text()
 
-alias_old = '''        fo4::forms::write_quest_aliases(mutated, questKey, creations);
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
-        return nlohmann::json(
-            "Set " + std::to_string(creations.size()) + " quest alias(es) on " +
-            recordText + " in " + pluginName + ". Written to disk.");
-'''
-alias_new = '''        fo4::forms::write_quest_aliases(mutated, questKey, creations);
-        stagePluginMutationLocked(*loaded, std::move(mutated));
-        return nlohmann::json(
-            "Set " + std::to_string(creations.size()) + " quest alias(es) on " +
-            recordText + " in " + pluginName + ". SavePlugin to persist.");
-'''
-if text.count(alias_old) != 1:
-    raise SystemExit(f"alias production tail count {text.count(alias_old)}")
-text = text.replace(alias_old, alias_new, 1)
+tests = [
+    "Native SetQuestStages preserves opaque INDX bytes",
+    "Native SetQuestAliases preserves stages and tail when writing conditions",
+    "Native SetQuestAliases writes keywords items packages spells factions and linked aliases",
+    "Native SetQuestAliases writes multi-entry collections and preserves tail",
+    "Native SetQuestStages writes per-log-entry CTDA and CIS strings",
+    "Native SetQuestAliases binds mixed item COED to the preceding CNTO",
+    "Native SetQuestStages replaces a lossless existing CTDA run",
+    "Native SetQuestStages accepts alias-index GetDistance and RunOn Reference FormKeys",
+    "Native SetQuestStages remaps VMAD Stage by unique body not array position",
+    "Native SetQuestStages ties CIS strings to String/Event parameter slots",
+]
 
-stage_old = '''        const auto pluginBytes = fo4::write_plugin(mutated);
-        if (localizedTableChanged) {
-#ifdef FO4IDE_TEST_HOOKS
-            if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
-#endif
-            try {
-                if (readLocalizedFileBytes(localizedTables->stringsPath) !=
-                        localizedTables->originalStringsBytes ||
-                    readLocalizedFileBytes(localizedTables->dlstringsPath) !=
-                        localizedTables->originalDlstringsBytes ||
-                    readLocalizedFileBytes(localizedTables->ilstringsPath) !=
-                        localizedTables->originalIlstringsBytes) {
-                    return std::unexpected(Error{
-                        "LocalizedSidecarChangedOnDisk",
-                        "localized sibling table changed after it was read; reload before writing"
-                    });
-                }
-            } catch (const std::exception& error) {
-                return std::unexpected(Error{
-                    "LocalizedLogTableInvalid",
-                    "could not re-read localized DLSTRINGS before writing: " +
-                        std::string(error.what())
-                });
-            }
-            const auto tableBytes = fo4::localization::write_string_table(
-                localizedTables->dlstrings);
-            fo4::io::write_file_pair_dependency_first(
-                localizedTables->dlstringsPath,
-                tableBytes,
-                loaded->path,
-                pluginBytes);
-        } else {
-            fo4::write_plugin_file(mutated, loaded->path);
-        }
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
-        return nlohmann::json(
-            "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
-            recordText + " in " + pluginName + ". Written to disk.");
-'''
-stage_new = '''        if (localizedTableChanged) {
-            const auto pluginBytes = fo4::write_plugin(mutated);
-#ifdef FO4IDE_TEST_HOOKS
-            if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
-#endif
-            try {
-                if (readLocalizedFileBytes(localizedTables->stringsPath) !=
-                        localizedTables->originalStringsBytes ||
-                    readLocalizedFileBytes(localizedTables->dlstringsPath) !=
-                        localizedTables->originalDlstringsBytes ||
-                    readLocalizedFileBytes(localizedTables->ilstringsPath) !=
-                        localizedTables->originalIlstringsBytes) {
-                    return std::unexpected(Error{
-                        "LocalizedSidecarChangedOnDisk",
-                        "localized sibling table changed after it was read; reload before writing"
-                    });
-                }
-            } catch (const std::exception& error) {
-                return std::unexpected(Error{
-                    "LocalizedLogTableInvalid",
-                    "could not re-read localized DLSTRINGS before writing: " +
-                        std::string(error.what())
-                });
-            }
-            const auto tableBytes = fo4::localization::write_string_table(
-                localizedTables->dlstrings);
-            fo4::io::write_file_pair_dependency_first(
-                localizedTables->dlstringsPath,
-                tableBytes,
-                loaded->path,
-                pluginBytes);
-            loaded->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            }
-            rebuildGraphLocked();
-            return nlohmann::json(
-                "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
-                recordText + " in " + pluginName + ". Written to disk.");
-        }
-        stagePluginMutationLocked(*loaded, std::move(mutated));
-        return nlohmann::json(
-            "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
-            recordText + " in " + pluginName + ". SavePlugin to persist.");
-'''
-if text.count(stage_old) != 1:
-    raise SystemExit(f"stage production tail count {text.count(stage_old)}")
-text = text.replace(stage_old, stage_new, 1)
+for name in tests:
+    marker = f'TEST_CASE("{name}")'
+    start = text.find(marker)
+    if start == -1:
+        raise SystemExit(f"missing test: {name}")
+    next_test = text.find('TEST_CASE("', start + len(marker))
+    end = len(text) if next_test == -1 else next_test
+    block = text[start:end]
+    path_var = "patchPath" if "const auto patchPath =" in block else "path"
+    invoke_marker = '    const auto result = backend.invokeBackend(\n'
+    invoke_pos = block.find(invoke_marker)
+    if invoke_pos == -1:
+        raise SystemExit(f"missing result invocation in {name}")
+    before = f'    const auto beforeSave = readBytes({path_var});\n'
+    block = block[:invoke_pos] + before + block[invoke_pos:]
+    require_marker = '    REQUIRE(result.has_value());\n'
+    require_pos = block.find(require_marker, invoke_pos + len(before))
+    if require_pos == -1:
+        raise SystemExit(f"missing success requirement in {name}")
+    after_pos = require_pos + len(require_marker)
+    save = (
+        f'    CHECK(readBytes({path_var}) == beforeSave);\n'
+        '    REQUIRE(backend.invoke(\n'
+        '        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());\n'
+    )
+    block = block[:after_pos] + save + block[after_pos:]
+    text = text[:start] + block + text[end:]
+
 path.write_text(text)
 PY
 
 git diff --check
-test "$(git diff --name-only | tr -d '\r')" = "PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp"
+test "$(git diff --name-only | tr -d '\r')" = "PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp"
 
-cmake -S PluginEditTool/native -B build/fo4ide-174b-quest-green -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
-cmake --build build/fo4ide-174b-quest-green --target fo4ide_test_quest_authoring fo4ide_test_plugin_backend
-quest=build/fo4ide-174b-quest-green/bin/fo4ide_test_quest_authoring
-backend=build/fo4ide-174b-quest-green/bin/fo4ide_test_plugin_backend
-"$quest" "Native SetQuestAliases replaces reference location and collection aliases"
-"$quest" "Native SetQuestStages writes multiple log entries with note and log text"
-"$quest" "Native SetQuestAliases adds a loaded uniqueActor master and remaps the fill"
-"$quest"
-"$backend"
+cmake -S PluginEditTool/native -B build/fo4ide-174b-quest-red-more -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+cmake --build build/fo4ide-174b-quest-red-more --target fo4ide_test_quest_authoring
+binary=build/fo4ide-174b-quest-red-more/bin/fo4ide_test_quest_authoring
 
-printf '\n=== persistence inventory ===\n'
-grep -RInE 'write_plugin_file|write_plugin\(|write_file_pair|atomic_write|std::ofstream|last_write_time|Written to disk|Saved |save it' PluginEditTool/native/src/plugin || true
+prove_red() {
+    local filter="$1"
+    local slug="$2"
+    set +e
+    "$binary" "$filter" > "/tmp/${slug}.txt" 2>&1
+    local status=$?
+    set -e
+    cat "/tmp/${slug}.txt"
+    test "$status" -ne 0
+    grep -F 'beforeSave' "/tmp/${slug}.txt"
+    grep -F 'FAILED:' "/tmp/${slug}.txt"
+}
+
+prove_red "Native SetQuestStages preserves opaque INDX bytes" q1
+prove_red "Native SetQuestAliases preserves stages and tail when writing conditions" q2
+prove_red "Native SetQuestAliases writes keywords items packages spells factions and linked aliases" q3
+prove_red "Native SetQuestAliases writes multi-entry collections and preserves tail" q4
+prove_red "Native SetQuestStages writes per-log-entry CTDA and CIS strings" q5
+prove_red "Native SetQuestAliases binds mixed item COED to the preceding CNTO" q6
+prove_red "Native SetQuestStages replaces a lossless existing CTDA run" q7
+prove_red "Native SetQuestStages accepts alias-index GetDistance and RunOn Reference FormKeys" q8
+prove_red "Native SetQuestStages remaps VMAD Stage by unique body not array position" q9
+prove_red "Native SetQuestStages ties CIS strings to String/Event parameter slots" q10
 
 git rm .github/workflows/174b-core-writers.yml .github/174b-quest-green.sh
 git config user.name "NomadsReach"
 git config user.email "144523850+NomadsReach@users.noreply.github.com"
-git add PluginEditTool/native/src/plugin/RadiclePluginQuest.cpp
-git commit -m "feat: defer plugin-only quest persistence"
+git add PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp
+git commit -m "test: prove remaining deferred quest contracts"
 git push origin HEAD:work/174b-deferred-mutations
