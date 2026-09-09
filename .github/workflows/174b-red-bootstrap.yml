@@ -65,7 +65,7 @@ jobs:
           cat /tmp/proj-red.txt
           test "$list_status" -ne 0
           test "$proj_status" -ne 0
-          grep -F '0x00000801' /tmp/list-red.txt
+          grep -F '0x801' /tmp/list-red.txt
           grep -F 'FAILED:' /tmp/proj-red.txt
       - name: Commit RED proof
         run: |
