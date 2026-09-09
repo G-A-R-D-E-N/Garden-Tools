@@ -413,6 +413,7 @@ TEST_CASE("Native SetQuestAliases replaces reference location and collection ali
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
@@ -440,7 +441,12 @@ TEST_CASE("Native SetQuestAliases replaces reference location and collection ali
         nlohmann::json::array({"Patch.esp", "000800:Patch.esp", aliases}));
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>().find("Set 3 quest alias(es)") == 0);
+    CHECK(readBytes(path) == before);
+    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
+    CHECK(result->get<std::string>().find("SavePlugin") != std::string::npos);
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto decoded = fo4::forms::decode_quest_aliases(
         disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -483,6 +489,7 @@ TEST_CASE("Native SetQuestStages writes multiple log entries with note and log t
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, questPlugin());
+    const auto before = readBytes(path);
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
@@ -505,7 +512,25 @@ TEST_CASE("Native SetQuestStages writes multiple log entries with note and log t
         "SetQuestStages",
         nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages}));
     REQUIRE(result.has_value());
+    CHECK(readBytes(path) == before);
 
+    const auto aliasResult = backend.invokeBackend(
+        "SetQuestAliases",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{
+                {"kind", "reference"},
+                {"id", 2},
+                {"name", "AfterStage"},
+                {"flags", 0x20}
+            }})
+        }));
+    REQUIRE(aliasResult.has_value());
+    CHECK(readBytes(path) == before);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto decoded = fo4::forms::decode_quest_stages(
         disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -522,7 +547,8 @@ TEST_CASE("Native SetQuestStages writes multiple log entries with note and log t
 
     const auto aliases = fo4::forms::decode_quest_aliases(
         disk, fo4::FormKey::parse("000800:Patch.esp"));
-    REQUIRE_FALSE(aliases.aliases.empty());
+    REQUIRE(aliases.aliases.size() == 1u);
+    CHECK(aliases.aliases[0].name == std::optional<std::string>{"AfterStage"});
 }
 
 TEST_CASE("Native SetQuestStages rejects unsupported fields and wrong types without writing") {
@@ -673,6 +699,7 @@ TEST_CASE("Native SetQuestAliases adds a loaded uniqueActor master and remaps th
     const auto patchPath = root / "Patch.esp";
     writeBytes(masterPath, npcMasterPlugin());
     writeBytes(patchPath, questPlugin());
+    const auto before = readBytes(patchPath);
 
     fo4ide::plugin::RadiclePluginBackend backend;
     REQUIRE(backend.invoke(
@@ -709,6 +736,17 @@ TEST_CASE("Native SetQuestAliases adds a loaded uniqueActor master and remaps th
         }));
     REQUIRE(result.has_value());
 
+    const auto pendingMastersRaw = backend.invoke(
+        "masters.List", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(pendingMastersRaw.has_value());
+    REQUIRE(pendingMastersRaw->is_string());
+    const auto pendingMasters = nlohmann::json::parse(pendingMastersRaw->get<std::string>());
+    REQUIRE(pendingMasters.at("masters").size() == 1u);
+    CHECK(pendingMasters.at("masters")[0].at("name") == "Master.esm");
+    CHECK(readBytes(patchPath) == before);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(patchPath);
     REQUIRE(disk.header.masters.size() == 1u);
     CHECK(disk.header.masters[0].key.filename() == "Master.esm");
