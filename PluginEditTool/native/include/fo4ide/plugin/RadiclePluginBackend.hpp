@@ -60,6 +60,8 @@ private:
         std::filesystem::file_time_type loadedTime{};
         bool trusted{false};
         fo4::Plugin plugin;
+        std::optional<fo4::Plugin> originalPlugin;
+        bool dirty{false};
     };
 
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);

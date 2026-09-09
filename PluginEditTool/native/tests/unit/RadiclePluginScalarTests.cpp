@@ -147,6 +147,13 @@ TEST_CASE("Native schema SetField defers REFR XHLT persistence until SavePlugin"
     REQUIRE(result.has_value());
     CHECK(readScalar(path, fo4::Signature::from_string("XHLT")) == "50");
 
+    const auto invalid = backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "101"
+    }));
+    REQUIRE_FALSE(invalid.has_value());
+    CHECK(invalid.error().type == "ScalarFieldWriteFailed");
+    CHECK(readScalar(path, fo4::Signature::from_string("XHLT")) == "50");
+
     const auto pending = grid(backend);
     const auto health = columnIndex(pending, "REFR\\HealthPercent");
     REQUIRE(pending.at("rows").size() == 1);
@@ -158,7 +165,37 @@ TEST_CASE("Native schema SetField defers REFR XHLT persistence until SavePlugin"
     CHECK(readScalar(path, fo4::Signature::from_string("XHLT")) == "75");
 }
 
-TEST_CASE("Native schema SetField writes generated REFR Scale without typed dispatch") {
+TEST_CASE("Native schema SavePlugin failure preserves pending scalar state") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    const auto loadedTime = std::filesystem::last_write_time(path);
+
+    const auto result = backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
+    }));
+    REQUIRE(result.has_value());
+
+    writeBytes(path, makePlugin(true, false, 60));
+    std::filesystem::last_write_time(path, loadedTime + std::chrono::seconds(2));
+
+    const auto saved = backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE_FALSE(saved.has_value());
+    CHECK(saved.error().type == "PluginChangedOnDisk");
+    CHECK(readScalar(path, fo4::Signature::from_string("XHLT")) == "60");
+
+    const auto pending = grid(backend);
+    const auto health = columnIndex(pending, "REFR\\HealthPercent");
+    REQUIRE(pending.at("rows").size() == 1);
+    CHECK(pending.at("rows")[0].at("cells")[health] == "75");
+}
+
+TEST_CASE("Native schema SetField defers generated REFR Scale until SavePlugin") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -171,6 +208,16 @@ TEST_CASE("Native schema SetField writes generated REFR Scale without typed disp
         "Patch.esp", "000800:Patch.esp", "REFR\\Scale", "1.25"
     }));
     REQUIRE(result.has_value());
+    CHECK(readScalar(path, fo4::Signature::from_string("XSCL")) == "1");
+
+    const auto pending = grid(backend);
+    const auto scale = columnIndex(pending, "REFR\\Scale");
+    REQUIRE(pending.at("rows").size() == 1);
+    CHECK(pending.at("rows")[0].at("cells")[scale] == "1.25");
+
+    const auto saved = backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(saved.has_value());
     CHECK(readScalar(path, fo4::Signature::from_string("XSCL")) == "1.25");
 }
 

@@ -126,12 +126,9 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
         }
 
         if (status == fo4::ScalarMutationStatus::updated) {
-            fo4::write_plugin_file(mutated, loaded->path);
+            if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;
             loaded->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            }
+            loaded->dirty = true;
             rebuildGraphLocked();
         }
         return nlohmann::json(

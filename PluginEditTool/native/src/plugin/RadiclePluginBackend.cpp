@@ -434,6 +434,8 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                 .loadedTime = std::filesystem::last_write_time(filePath, ec),
                 .trusted = true,
                 .plugin = std::move(plugin),
+                .originalPlugin = std::nullopt,
+                .dirty = false,
             });
         } catch (const std::exception& error) {
             errors.push_back({{"plugin", name}, {"path", path}, {"error", error.what()}});
@@ -613,7 +615,9 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             existing->loadedTime = loadedTime;
             existing->plugin = std::move(plugin);
         } else {
-            plugins_.push_back({name, filePath, {}, loadedTime, false, std::move(plugin)});
+            plugins_.push_back({
+                name, filePath, {}, loadedTime, false, std::move(plugin), std::nullopt, false
+            });
         }
 
         std::vector<fo4::MasterDescriptor> knownKinds;
@@ -675,6 +679,8 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
         loaded->path = output;
         std::error_code ec;
         loaded->loadedTime = std::filesystem::last_write_time(output, ec);
+        loaded->originalPlugin.reset();
+        loaded->dirty = false;
         return nlohmann::json{{"ok", true}, {"plugin", name}, {"path", output.string()}}.dump();
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginWriteFailed", error.what()});

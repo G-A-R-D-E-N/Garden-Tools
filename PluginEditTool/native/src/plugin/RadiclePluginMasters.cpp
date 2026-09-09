@@ -125,7 +125,9 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
 
     try {
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
+        if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;
         loaded->plugin = std::move(mutated);
+        loaded->dirty = true;
 
         std::vector<fo4::MasterDescriptor> known;
         known.reserve(plugins_.size());
@@ -173,6 +175,8 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
             std::error_code ec;
             loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
         }
+        loaded->originalPlugin.reset();
+        loaded->dirty = false;
         return nlohmann::json("Saved " + name + ".");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginWriteFailed", error.what()});
