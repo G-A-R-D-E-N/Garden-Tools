@@ -142,6 +142,34 @@ Mutagen `Quest.cs:FillBinaryAliasParseCustom` treats a **contiguous `ALCS[+ALMI]
 
 Native `CreateRecord` now admits `PROJ`, `EXPL` and `HAZD` through Radicle's measured typed creators (`fo4::forms::create_projectile` / `create_explosion` / `create_hazard`). Payload keys are camelCase and optional except HAZD `model`, which has no attested default. Provided numeric fields are run through `fo4::schema::encode_scalar` on the generated path (`PROJ\\SoundLevel`, `EXPL\\ProjectileCount`, `HAZD\\Limit`, and the rest) so CreateRecord cannot accept a value SetField would reject. Provided FormKey slots must resolve to a loaded `graph_.winner` of the slot's type (EXPL `impactPlacedObject` accepts any loaded record); unresolved or mistyped keys fail as `InvalidTypedFormKey` before the plugin copy is written. External owners are appended via `ensureOwnerMaster` so encode does not throw on a missing MAST. Schema scalar `SetField` continues to apply to the created records because creation emits the current 93/84/52-byte payloads. Embedded FormLink editing is not in this path: the generated schema still has no single-FormLink descriptors for the PROJ/EXPL/HAZD payload slots.
 
+## Radicle/tools/formlink_schema_codegen.py:single-FormLink descriptor audit — PROJ/EXPL/HAZD (#76)
+
+The Phase 1 audit is anchored to `Radicle/docs/FORMAT_NOTES.md`'s measured layouts, xEdit's checked-in FO4 definitions, `Radicle/src/forms/proj_expl_hazd.cpp` and its creation/re-encode tests. Each candidate is a four-byte on-disk FormID inside a required, single-cardinality payload subrecord; every accepted slot is nullable because the xEdit definitions include `NULL` in the target union (EXPL `impactPlacedObject` uses `sigBaseObjects`, which also admits `NULL`).
+
+| Record | Subrecord | Offset | Width | Zero legal | Target signature or union | Subrecord contract | Evidence |
+|---|---|---:|---:|---|---|---|---|
+| PROJ | DNAM | +16 | 4 | yes | LIGH | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +20 | 4 | yes | LIGH | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +32 | 4 | yes | EXPL | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +36 | 4 | yes | SNDR | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +52 | 4 | yes | SNDR | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +56 | 4 | yes | SNDR | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +60 | 4 | yes | WEAP | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +80 | 4 | yes | TXST | required, 93 bytes | measured table; xEdit `wbStruct` |
+| PROJ | DNAM | +84 | 4 | yes | COLL | required, 93 bytes | measured table; xEdit `wbStruct` |
+| EXPL | DATA | +0 | 4 | yes | LIGH | required, 52/56/60/64/84 bytes | measured table; xEdit `wbStruct` |
+| EXPL | DATA | +4 | 4 | yes | SNDR | required, 52/56/60/64/84 bytes | measured table; xEdit `wbStruct` |
+| EXPL | DATA | +8 | 4 | yes | SNDR | required, 52/56/60/64/84 bytes | measured table; xEdit `wbStruct` |
+| EXPL | DATA | +12 | 4 | yes | IPDS | required, 52/56/60/64/84 bytes | measured table; xEdit `wbStruct` |
+| EXPL | DATA | +16 | 4 | yes | sigBaseObjects | required, 52/56/60/64/84 bytes | measured table; xEdit `wbFormID`/`sigBaseObjects` |
+| EXPL | DATA | +20 | 4 | yes | PROJ | required, 52/56/60/64/84 bytes | measured table; xEdit `wbStruct` |
+| HAZD | DNAM | +24 | 4 | yes | SPEL or ENCH | required, 52 bytes | measured table; xEdit `wbStruct` |
+| HAZD | DNAM | +28 | 4 | yes | LIGH | required, 52 bytes | measured table; xEdit `wbStruct` |
+| HAZD | DNAM | +32 | 4 | yes | IPDS | required, 52 bytes | measured table; xEdit `wbStruct` |
+| HAZD | DNAM | +36 | 4 | yes | SNDR | required, 52 bytes | measured table; xEdit `wbStruct` |
+
+`PROJ DNAM+89` is intentionally not in the descriptor set. The checked-in GARDEN measured table and xEdit definition call it an unaligned PROJ FormID, while the read-only verified CommonLib audit `27-PROJ-EXPL-HAZD-DATA.md` explicitly says the same bytes are tracer-frequency/padding and must not be treated as a FormID. That is a field/document conflict, so this change does not choose a serialization rule for it. The existing typed creator and remap evidence remain unchanged until that conflict is resolved.
+
 ## Radicle/src/forms/quest_aliases.cpp:decode_alias_semantics — QUST alias extra collections (#73)
 
 `QuestAlias` now mirrors the extra FormLink collections already authored on `QuestAliasCreation`: `keywords` (`KSIZ`/`KWDA`), `items` (`COCT`/`CNTO` plus optional per-item `COED`), `linked_aliases` (packed `ALLA` rows), `spells`/`factions`/`packages` (repeatable `ALSP`/`ALFC`/`ALPC`), and the unique remaining members `SPOR`/`OCOR`/`GWOR`/`ECOR`/`ALDN`/`ALFV`/`ALDI`/`VTCK`. `decode_alias_semantics` fills those views after Fill Type decode when a plugin FormID context is present; `subrecords` stay the write authority. Dangling FormIDs follow the existing ALFR rule (`unresolved_links`, drop that one semantic entry). `COED` is not an independent list: each 12-byte extra binds to the immediately preceding `CNTO` (xEdit `wbCOED` / Mutagen `ContainerEntry.Data`). The owner/union is owner-aware: `find_record` on the same plugin types `NPC_` vs `FACT` so decode never fills both `global` and `required_rank`. Mixed items are valid. Location and collection aliases do not populate these fields.

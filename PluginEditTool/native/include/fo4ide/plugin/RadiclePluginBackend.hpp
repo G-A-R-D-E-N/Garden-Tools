@@ -75,6 +75,7 @@ private:
     Result<nlohmann::json> deleteRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> renumberRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setField(const nlohmann::json& arguments);
+    Result<nlohmann::json> setFormLinkField(const nlohmann::json& arguments);
     Result<nlohmann::json> setArmorField(const nlohmann::json& arguments);
     Result<nlohmann::json> setFormLinkListField(const nlohmann::json& arguments);
     Result<nlohmann::json> insertFormLinkListElement(const nlohmann::json& arguments);

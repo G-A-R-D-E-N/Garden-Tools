@@ -5,6 +5,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/ctda.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
 
 #include <span>
@@ -25,6 +26,14 @@ enum class ScalarMutationStatus {
   updated,
   unchanged,
   record_missing,
+  subrecord_missing,
+};
+
+enum class FormLinkFieldMutationStatus {
+  updated,
+  unchanged,
+  record_missing,
+  record_mismatch,
   subrecord_missing,
 };
 
@@ -86,6 +95,12 @@ ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
                                        Signature subrecord_signature,
                                        std::string_view value);
+
+FormLinkFieldMutationStatus set_record_formlink_field(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::FormLinkFieldDescriptor& field,
+    const FormKey& target);
 
 // Replaces the record's CTDA condition list with freshly serialized
 // conditions (see write_ctda_conditions for the subrecord-level contract).

@@ -382,6 +382,65 @@ ScalarMutationStatus set_record_scalar(Plugin& plugin,
   return set_record_scalar(plugin, record_key, *match, value);
 }
 
+FormLinkFieldMutationStatus set_record_formlink_field(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::FormLinkFieldDescriptor& field,
+    const FormKey& target) {
+  assign_record_form_keys(plugin);
+  auto* record = find_mutable_record(plugin, record_key);
+  if (record == nullptr) return FormLinkFieldMutationStatus::record_missing;
+  if (record->header.signature != field.record) {
+    return FormLinkFieldMutationStatus::record_mismatch;
+  }
+
+  if (target.owner().empty() && target.local().value() != 0) {
+    throw schema::FormLinkFieldError("FormLink target has no owner");
+  }
+  if (target.owner().empty() && target.local().value() == 0 && !field.nullable) {
+    throw schema::FormLinkFieldError(std::string(field.path) + " does not allow NULL");
+  }
+  if (!target.owner().empty() && target.owner() == plugin.key) {
+    const auto* local_target = find_record(plugin, target);
+    if (local_target == nullptr ||
+        !schema::formlink_field_target_allowed(field, local_target->header.signature)) {
+      throw schema::FormLinkFieldError(std::string(field.path) + " target type is not allowed");
+    }
+  }
+
+  Subrecord* found = nullptr;
+  for (auto& subrecord : record->subrecords) {
+    if (subrecord.signature != field.subrecord) continue;
+    if (found != nullptr) {
+      throw schema::FormLinkFieldError(
+          "record contains duplicate FormLink subrecords: " +
+          field.subrecord.to_string());
+    }
+    found = &subrecord;
+  }
+  if (found == nullptr) return FormLinkFieldMutationStatus::subrecord_missing;
+  if (field.offset > found->data.size() || found->data.size() - field.offset < 4) {
+    throw schema::FormLinkFieldError(std::string(field.path) +
+                                     " does not fit in the subrecord payload");
+  }
+
+  std::uint32_t current_raw = 0;
+  std::memcpy(&current_raw, found->data.data() + field.offset, sizeof(current_raw));
+  const auto context = plugin_form_id_context(plugin);
+  const auto current = resolve_plugin_form_id(RawFormId{current_raw}, context);
+  const auto encoded = encode_plugin_form_id(target, context);
+  if (current == target) return FormLinkFieldMutationStatus::unchanged;
+
+  const auto encoded_value = encoded.value();
+  std::memcpy(found->data.data() + field.offset, &encoded_value, sizeof(encoded_value));
+  record->original_range.clear();
+  record->decompressed_payload.clear();
+  record->header.data_size = 0;
+  record->uncompressed_size = 0;
+  plugin.original_range.clear();
+  return FormLinkFieldMutationStatus::updated;
+}
+
 RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
                                          const FormKey& record_key,

@@ -313,6 +313,62 @@
           "insertion": "existing_only"
         }
       ],
+      "formlink_fields": [
+        {
+          "path": "EXPL\\Light",
+          "label": "Light",
+          "subrecord": "DATA",
+          "offset": 0,
+          "targets": ["LIGH"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\Sound1",
+          "label": "Sound 1",
+          "subrecord": "DATA",
+          "offset": 4,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\Sound2",
+          "label": "Sound 2",
+          "subrecord": "DATA",
+          "offset": 8,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ImpactDataSet",
+          "label": "Impact data set",
+          "subrecord": "DATA",
+          "offset": 12,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\ImpactPlacedObject",
+          "label": "Impact placed object",
+          "subrecord": "DATA",
+          "offset": 16,
+          "target_union": "sigBaseObjects",
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "EXPL\\SpawnProjectile",
+          "label": "Spawn projectile",
+          "subrecord": "DATA",
+          "offset": 20,
+          "targets": ["PROJ"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
@@ -503,6 +559,44 @@
           "presentation": "identity",
           "minimum": -1000000000.0,
           "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "HAZD\\Spell",
+          "label": "Spell",
+          "subrecord": "DNAM",
+          "offset": 24,
+          "targets": ["SPEL", "ENCH"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Light",
+          "label": "Light",
+          "subrecord": "DNAM",
+          "offset": 28,
+          "targets": ["LIGH"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\ImpactDataSet",
+          "label": "Impact data set",
+          "subrecord": "DNAM",
+          "offset": 32,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\Sound",
+          "label": "Sound",
+          "subrecord": "DNAM",
+          "offset": 36,
+          "targets": ["SNDR"],
+          "nullable": true,
           "insertion": "existing_only"
         }
       ],
@@ -777,6 +871,89 @@
           "presentation": "identity",
           "minimum": 0,
           "maximum": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PROJ\\Light",
+          "label": "Light",
+          "subrecord": "DNAM",
+          "offset": 16,
+          "targets": ["LIGH"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\MuzzleFlashLight",
+          "label": "Muzzle flash light",
+          "subrecord": "DNAM",
+          "offset": 20,
+          "targets": ["LIGH"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ExplosionType",
+          "label": "Explosion type",
+          "subrecord": "DNAM",
+          "offset": 32,
+          "targets": ["EXPL"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\ActiveSoundLoop",
+          "label": "Active sound loop",
+          "subrecord": "DNAM",
+          "offset": 36,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\CountdownSound",
+          "label": "Countdown sound",
+          "subrecord": "DNAM",
+          "offset": 52,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\DeactivateSound",
+          "label": "Deactivate sound",
+          "subrecord": "DNAM",
+          "offset": 56,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\DefaultWeaponSource",
+          "label": "Default weapon source",
+          "subrecord": "DNAM",
+          "offset": 60,
+          "targets": ["WEAP"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\DecalData",
+          "label": "Decal data",
+          "subrecord": "DNAM",
+          "offset": 80,
+          "targets": ["TXST"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\CollisionLayer",
+          "label": "Collision layer",
+          "subrecord": "DNAM",
+          "offset": 84,
+          "targets": ["COLL"],
+          "nullable": true,
           "insertion": "existing_only"
         }
       ],

@@ -5,6 +5,8 @@
 #include <ctime>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <exception>
 #include <iomanip>
 #include <map>
@@ -17,6 +19,7 @@
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/scalar.hpp>
 
 namespace fo4ide::plugin {
@@ -173,6 +176,10 @@ nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 
     if (signature.size() == 4) {
         for (const auto& field :
              fo4::schema::scalar_fields(fo4::Signature::from_string(signature))) {
+            columns.push_back(std::string(field.path));
+        }
+        for (const auto& field :
+             fo4::schema::formlink_fields(fo4::Signature::from_string(signature))) {
             columns.push_back(std::string(field.path));
         }
     }
@@ -343,11 +350,57 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
                 }
 
                 try {
-                    cells.push_back(fo4::schema::decode_scalar(found->data, field.scalar));
+                    const auto bytes = fo4::schema::scalar_field_bytes(found->data, field.scalar);
+                    if (bytes.empty()) {
+                        cells.push_back("");
+                        editable.push_back(false);
+                        continue;
+                    }
+                    cells.push_back(fo4::schema::decode_scalar(bytes, field.scalar));
                     editable.push_back(true);
                 } catch (const fo4::schema::ScalarError& error) {
                     return std::unexpected(Error{
                         "ScalarReadFailed",
+                        record->form_key.to_string() + ": " + error.what()
+                    });
+                }
+            }
+            for (const auto& field : fo4::schema::formlink_fields(recordSignature)) {
+                const fo4::Subrecord* found = nullptr;
+                for (const auto& subrecord : record->subrecords) {
+                    if (subrecord.signature != field.subrecord) continue;
+                    if (found != nullptr) {
+                        return std::unexpected(Error{
+                            "FormLinkReadFailed",
+                            record->form_key.to_string() + ": duplicate " + signature + " " +
+                                field.subrecord.to_string() + " subrecords"
+                        });
+                    }
+                    found = &subrecord;
+                }
+
+                if (found == nullptr) {
+                    cells.push_back("");
+                    editable.push_back(false);
+                    continue;
+                }
+                if (field.offset > found->data.size() || found->data.size() - field.offset < 4) {
+                    return std::unexpected(Error{
+                        "FormLinkReadFailed",
+                        record->form_key.to_string() + ": " + std::string(field.path) +
+                            " does not fit in the subrecord payload"
+                    });
+                }
+
+                std::uint32_t raw = 0;
+                std::memcpy(&raw, found->data.data() + field.offset, sizeof(raw));
+                try {
+                    cells.push_back(fo4::resolve_plugin_form_id(
+                        fo4::RawFormId{raw}, fo4::plugin_form_id_context(loaded->plugin)).to_string());
+                    editable.push_back(true);
+                } catch (const fo4::FormIdError& error) {
+                    return std::unexpected(Error{
+                        "FormLinkReadFailed",
                         record->form_key.to_string() + ": " + error.what()
                     });
                 }

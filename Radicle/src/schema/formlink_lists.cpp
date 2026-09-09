@@ -435,6 +435,51 @@ bool is_sig_base_object(Signature signature) noexcept {
   return std::find(begin, end, signature) != end;
 }
 
+std::optional<FormLinkFieldDescriptor> formlink_field_descriptor(
+    std::string_view path) noexcept {
+  for (const auto& descriptor : k_generated_formlink_fields) {
+    if (descriptor.path == path) return descriptor;
+  }
+  return std::nullopt;
+}
+
+std::optional<FormLinkFieldDescriptor> formlink_field_descriptor(
+    Signature record, std::string_view path) noexcept {
+  for (const auto& descriptor : k_generated_formlink_fields) {
+    if (descriptor.record == record && descriptor.path == path) return descriptor;
+  }
+  return std::nullopt;
+}
+
+std::span<const FormLinkFieldDescriptor> formlink_fields(
+    Signature record) noexcept {
+  std::size_t first = 0;
+  while (first < std::size(k_generated_formlink_fields) &&
+         k_generated_formlink_fields[first].record != record) {
+    ++first;
+  }
+  if (first == std::size(k_generated_formlink_fields)) return {};
+
+  std::size_t last = first + 1;
+  while (last < std::size(k_generated_formlink_fields) &&
+         k_generated_formlink_fields[last].record == record) {
+    ++last;
+  }
+  return {k_generated_formlink_fields + first, last - first};
+}
+
+std::span<const Signature> formlink_field_targets(
+    const FormLinkFieldDescriptor& descriptor) noexcept {
+  return {k_generated_formlink_field_targets + descriptor.first_target,
+          descriptor.target_count};
+}
+
+bool formlink_field_target_allowed(
+    const FormLinkFieldDescriptor& descriptor, Signature signature) noexcept {
+  const auto targets = formlink_field_targets(descriptor);
+  return std::find(targets.begin(), targets.end(), signature) != targets.end();
+}
+
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
     Signature record,
     std::string_view base_path) noexcept {
