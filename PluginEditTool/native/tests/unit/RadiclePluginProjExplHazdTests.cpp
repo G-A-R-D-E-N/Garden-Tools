@@ -174,6 +174,11 @@ std::vector<std::byte> readBytes(const std::filesystem::path& path) {
     return bytes;
 }
 
+void savePlugin(fo4ide::plugin::RadiclePluginBackend& backend) {
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+}
+
 }
 
 TEST_CASE("Native CreateRecord writes a measured PROJ DNAM and remaps a typed EXPL slot") {
@@ -194,9 +199,12 @@ TEST_CASE("Native CreateRecord writes a measured PROJ DNAM and remaps a typed EX
         {"muzzleFlashModel", "Effects\\MuzPistolSmall01.nif"},
         {"soundLevel", 2}
     };
+    const auto beforeCreate = readBytes(path);
     const auto created = parseResult(backend.invokeBackend(
         "CreateRecord", nlohmann::json::array({"Patch.esp", "PROJ", payload})));
     REQUIRE(created.at("formKey") == "000801:Patch.esp");
+    CHECK(readBytes(path) == beforeCreate);
+    savePlugin(backend);
 
     const auto disk = fo4::read_plugin_file(path);
     const auto key = fo4::FormKey::parse("000801:Patch.esp");
@@ -255,9 +263,12 @@ TEST_CASE("Native CreateRecord writes a measured EXPL DATA payload") {
         {"projectileSpread", 180.0},
         {"projectileCount", 15}
     };
+    const auto beforeCreate = readBytes(path);
     const auto created = parseResult(backend.invokeBackend(
         "CreateRecord", nlohmann::json::array({"Patch.esp", "EXPL", payload})));
     REQUIRE(created.at("formKey") == "000801:Patch.esp");
+    CHECK(readBytes(path) == beforeCreate);
+    savePlugin(backend);
 
     const auto disk = fo4::read_plugin_file(path);
     const auto key = fo4::FormKey::parse("000801:Patch.esp");
@@ -312,9 +323,12 @@ TEST_CASE("Native CreateRecord requires a HAZD model and writes the attested MOD
         {"spell", "000800:Patch.esp"},
         {"taperWeight", 1.0}
     };
+    const auto beforeCreate = readBytes(path);
     const auto created = parseResult(backend.invokeBackend(
         "CreateRecord", nlohmann::json::array({"Patch.esp", "HAZD", payload})));
     REQUIRE(created.at("formKey") == "000801:Patch.esp");
+    CHECK(readBytes(path) == beforeCreate);
+    savePlugin(backend);
 
     const auto disk = fo4::read_plugin_file(path);
     const auto key = fo4::FormKey::parse("000801:Patch.esp");
@@ -472,6 +486,7 @@ TEST_CASE("Native CreateRecord adds a loaded master exactly once and remaps the 
             }
         })}}).has_value());
 
+    const auto beforeCreate = readBytes(patchPath);
     const auto created = parseResult(backend.invokeBackend(
         "CreateRecord",
         nlohmann::json::array({
@@ -483,6 +498,8 @@ TEST_CASE("Native CreateRecord adds a loaded master exactly once and remaps the 
             }
         })));
     REQUIRE(created.at("formKey") == "000811:Patch.esp");
+    CHECK(readBytes(patchPath) == beforeCreate);
+    savePlugin(backend);
 
     const auto disk = fo4::read_plugin_file(patchPath);
     REQUIRE(disk.header.masters.size() == 1u);
@@ -494,6 +511,7 @@ TEST_CASE("Native CreateRecord adds a loaded master exactly once and remaps the 
         disk, fo4::FormKey::parse("000811:Patch.esp"));
     CHECK(decoded.explosion_type == fo4::FormKey::parse("000800:Master.esm"));
 
+    const auto beforeSecondCreate = readBytes(patchPath);
     const auto second = parseResult(backend.invokeBackend(
         "CreateRecord",
         nlohmann::json::array({
@@ -505,6 +523,8 @@ TEST_CASE("Native CreateRecord adds a loaded master exactly once and remaps the 
             }
         })));
     CHECK(second.at("formKey") == "000812:Patch.esp");
+    CHECK(readBytes(patchPath) == beforeSecondCreate);
+    savePlugin(backend);
     const auto again = fo4::read_plugin_file(patchPath);
     REQUIRE(again.header.masters.size() == 1u);
     CHECK(again.header.masters[0].key.filename() == "Master.esm");
@@ -579,6 +599,7 @@ TEST_CASE("Native FormLink SetField rejects missing and non-string values withou
             nlohmann::json{{"editorId", "FormLinkBoundary"}, {"light", "000800:Patch.esp"}}
         })));
     REQUIRE(created.at("formKey") == key.to_string());
+    savePlugin(backend);
 
     const auto beforeBytes = readBytes(path);
     const auto invalidValues = std::array{
@@ -685,9 +706,12 @@ TEST_CASE("Native SetField writes every audited PROJ EXPL HAZD FormLink slot") {
     };
 
     for (const auto& write : writes) {
+        const auto beforeSave = readBytes(path);
         REQUIRE(backend.setFieldValue(nlohmann::json::array({
             "Patch.esp", write.key, write.path, write.target
         })).has_value());
+        CHECK(readBytes(path) == beforeSave);
+        savePlugin(backend);
         const auto disk = fo4::read_plugin_file(path);
         const auto* record = fo4::find_record(disk, fo4::FormKey::parse(write.key));
         REQUIRE(record != nullptr);
@@ -718,6 +742,7 @@ TEST_CASE("Native PROJ FormLink SetField preserves neighbors, NULL, grid, and re
             nlohmann::json{{"editorId", "FormLinkRoundTrip"}, {"light", "000800:Patch.esp"}}
         })));
     REQUIRE(created.at("formKey") == "000801:Patch.esp");
+    savePlugin(backend);
     const auto key = fo4::FormKey::parse("000801:Patch.esp");
     const auto before = fo4::read_plugin_file(path);
     const auto* beforeRecord = fo4::find_record(before, key);
@@ -799,9 +824,13 @@ TEST_CASE("Native EXPL and HAZD FormLink SetField replace same-plugin targets") 
             })));
         const auto explosionKey = explosion.at("formKey").get<std::string>();
         REQUIRE(second.at("formKey") == "000802:Patch.esp");
+        savePlugin(backend);
+        const auto beforeSet = readBytes(path);
         REQUIRE(backend.setFieldValue(nlohmann::json::array({
             "Patch.esp", explosionKey, "EXPL\\SpawnProjectile", "000802:Patch.esp"
         })).has_value());
+        CHECK(readBytes(path) == beforeSet);
+        savePlugin(backend);
         CHECK(fo4::forms::decode_explosion(
                   fo4::read_plugin_file(path), fo4::FormKey::parse(explosionKey)).spawn_projectile ==
               fo4::FormKey::parse("000802:Patch.esp"));
@@ -821,12 +850,17 @@ TEST_CASE("Native EXPL and HAZD FormLink SetField replace same-plugin targets") 
                            {"spell", "000800:Patch.esp"}}
         })));
     const auto hazardKey = hazard.at("formKey").get<std::string>();
+    savePlugin(backend);
     REQUIRE(backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", hazardKey, "HAZD\\Spell", "NULL"
     })).has_value());
+    savePlugin(backend);
+    const auto beforeRestore = readBytes(path);
     REQUIRE(backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", hazardKey, "HAZD\\Spell", "000800:Patch.esp"
     })).has_value());
+    CHECK(readBytes(path) == beforeRestore);
+    savePlugin(backend);
     CHECK(fo4::forms::decode_hazard(
               fo4::read_plugin_file(path), fo4::FormKey::parse(hazardKey)).spell ==
           fo4::FormKey::parse("000800:Patch.esp"));
@@ -879,10 +913,14 @@ TEST_CASE("Native FormLink SetField adds an external master and remaps the owner
         "CreateRecord",
         nlohmann::json::array({"Patch.esp", "PROJ", nlohmann::json{{"editorId", "External"}}})));
     REQUIRE(created.at("formKey") == "000811:Patch.esp");
+    savePlugin(backend);
 
+    const auto beforeSet = readBytes(patchPath);
     REQUIRE(backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", "000811:Patch.esp", "PROJ\\Light", "000800:Master.esm"
     })).has_value());
+    CHECK(readBytes(patchPath) == beforeSet);
+    savePlugin(backend);
     const auto disk = fo4::read_plugin_file(patchPath);
     REQUIRE(disk.header.masters.size() == 1);
     CHECK(disk.header.masters[0].key.filename() == "Master.esm");
