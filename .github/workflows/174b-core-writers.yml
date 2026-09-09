@@ -18,7 +18,4 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - name: Prove and commit remaining writer GREEN
-        run: |
-          sed -i 's/old = '\''        message += \\" Written to disk.\\";\\n'\''/old = '\''    message += \\" Written to disk.\\";\\n'\''/' .github/174b-final-writers-green.sh
-          sed -i 's/new = '\''        message += \\" SavePlugin to persist.\\";\\n'\''/new = '\''    message += \\" SavePlugin to persist.\\";\\n'\''/' .github/174b-final-writers-green.sh
-          bash .github/174b-final-writers-green.sh
+        run: bash .github/174b-final-writers-green.sh
