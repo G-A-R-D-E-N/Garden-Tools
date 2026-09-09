@@ -1,0 +1,55 @@
+name: issue-174b-list-implementation
+on:
+  push:
+    branches:
+      - work/174b-deferred-mutations
+permissions:
+  contents: write
+jobs:
+  implement-list-deferred-save:
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+      - name: Load Ponytail rules
+        run: |
+          rm -rf /tmp/ponytail-174b-list
+          git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-list
+          test -f /tmp/ponytail-174b-list/AGENTS.md
+      - name: Defer remaining list mutations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp")
+          text = path.read_text()
+          old = '''        fo4::write_plugin_file(mutated, loaded->path);\n        loaded->plugin = std::move(mutated);\n        {\n            std::error_code ec;\n            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);\n        }\n        rebuildGraphLocked();\n'''
+          new = '''        stagePluginMutationLocked(*loaded, std::move(mutated));\n'''
+          if text.count(old) != 4:
+              raise SystemExit(f"expected four remaining list write-through blocks, found {text.count(old)}")
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+      - name: Build focused list tests
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-list -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-list --target fo4ide_test_plugin_backend
+      - name: Prove deferred list persistence
+        run: |
+          for test in \
+            "PluginEditTool edits generated indexed RACE FormLink list field" \
+            "PluginEditTool inserts generated FormLink list element between neighbors" \
+            "PluginEditTool removes generated FormLink list element" \
+            "PluginEditTool add_list_item appends to a populated FLST" \
+            "PluginEditTool remove_list_item drops the matching FormLink" \
+            "PluginEditTool refuses empty-list insertion without a schema anchor"; do
+            build/fo4ide-174b-list/bin/fo4ide_test_plugin_backend "$test"
+          done
+      - name: Commit implementation
+        run: |
+          git rm .github/workflows/174b-list-implementation.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp
+          git commit -m "feat: defer list persistence until SavePlugin"
+          git push origin HEAD:work/174b-deferred-mutations
