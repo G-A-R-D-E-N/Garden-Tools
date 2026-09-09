@@ -14,6 +14,7 @@ test -f /tmp/ponytail-174b-quest-red-more/AGENTS.md
 
 python3 - <<'PY'
 from pathlib import Path
+import re
 
 path = Path("PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp")
 text = path.read_text()
@@ -40,16 +41,17 @@ for name in tests:
     end = len(text) if next_test == -1 else next_test
     block = text[start:end]
     path_var = "patchPath" if "const auto patchPath =" in block else "path"
-    invoke_marker = '    const auto result = backend.invokeBackend(\n'
-    invoke_pos = block.find(invoke_marker)
-    if invoke_pos == -1:
-        raise SystemExit(f"missing result invocation in {name}")
+    match = re.search(r'    const auto ([A-Za-z_][A-Za-z0-9_]*) = backend\.invokeBackend\(\n', block)
+    if match is None:
+        raise SystemExit(f"missing backend invocation in {name}")
+    result_var = match.group(1)
+    invoke_pos = match.start()
     before = f'    const auto beforeSave = readBytes({path_var});\n'
     block = block[:invoke_pos] + before + block[invoke_pos:]
-    require_marker = '    REQUIRE(result.has_value());\n'
+    require_marker = f'    REQUIRE({result_var}.has_value());\n'
     require_pos = block.find(require_marker, invoke_pos + len(before))
     if require_pos == -1:
-        raise SystemExit(f"missing success requirement in {name}")
+        raise SystemExit(f"missing success requirement for {result_var} in {name}")
     after_pos = require_pos + len(require_marker)
     save = (
         f'    CHECK(readBytes({path_var}) == beforeSave);\n'
