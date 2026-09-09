@@ -110,6 +110,7 @@ nlohmann::json localizedQuestContext(const std::filesystem::path& root,
 
 std::filesystem::path staleLocalizationSibling;
 fo4::localization::StringTableKind staleLocalizationKind;
+bool staleLocalizationMutationPending = false;
 
 void mutateStaleLocalizationSibling() {
     const auto table = fo4::localization::read_string_table_file(
@@ -120,9 +121,17 @@ void mutateStaleLocalizationSibling() {
         {staleLocalizationKind, std::move(entries)}, staleLocalizationSibling);
 }
 
+void mutateStaleLocalizationSiblingAfterTableParse() {
+    if (!staleLocalizationMutationPending) return;
+    staleLocalizationMutationPending = false;
+    mutateStaleLocalizationSibling();
+}
+
 struct LocalizedQuestHookCleanup {
     ~LocalizedQuestHookCleanup() {
         fo4ide::plugin::setLocalizedQuestBeforeCommitHook(nullptr);
+        fo4ide::plugin::setLocalizedQuestAfterTableParseHook(nullptr);
+        staleLocalizationMutationPending = false;
     }
 };
 
@@ -1050,6 +1059,50 @@ TEST_CASE("Native SetQuestStages refuses stale localized allocation participants
     SECTION("ILSTRINGS") {
         run(fo4::localization::StringTableKind::ilstrings, ".ILSTRINGS");
     }
+}
+
+TEST_CASE("Native SetQuestStages keeps localization parsing and snapshots coherent") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
+    writeLocalizationSet(
+        root,
+        {{100, rawBytes("Other")}},
+        {},
+        {{200, rawBytes("Other")} });
+    const auto pluginBefore = readBytes(path);
+    const auto dlstringsPath = root / "Strings" / "Patch_en.DLSTRINGS";
+    const auto dlstringsBefore = readBytes(dlstringsPath);
+    staleLocalizationSibling = root / "Strings" / "Patch_en.ILSTRINGS";
+    staleLocalizationKind = fo4::localization::StringTableKind::ilstrings;
+    staleLocalizationMutationPending = true;
+
+    LocalizedQuestHookCleanup hookCleanup;
+    fo4ide::plugin::setLocalizedQuestAfterTableParseHook(
+        &mutateStaleLocalizationSiblingAfterTableParse);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
+            localizedQuestContext(root)
+        }));
+    if (result.has_value()) {
+        const auto table = fo4::localization::read_string_table_file(
+            dlstringsPath, fo4::localization::StringTableKind::dlstrings);
+        CHECK(fo4::localization::find_string(table, 201u) != nullptr);
+        CHECK(readBytes(dlstringsPath) != dlstringsBefore);
+        CHECK(readBytes(path) != pluginBefore);
+    }
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "LocalizedSidecarChangedOnDisk");
+    CHECK(readBytes(path) == pluginBefore);
+    CHECK(readBytes(dlstringsPath) == dlstringsBefore);
 }
 
 TEST_CASE("Native SetQuestStages refuses an untrusted localized sidecar root") {

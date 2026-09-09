@@ -41,10 +41,15 @@ namespace fo4ide::plugin {
 #ifdef FO4IDE_TEST_HOOKS
 namespace {
 LocalizedQuestBeforeCommitHook localizedQuestBeforeCommitHook = nullptr;
+LocalizedQuestAfterTableParseHook localizedQuestAfterTableParseHook = nullptr;
 }
 
 void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook) {
     localizedQuestBeforeCommitHook = hook;
+}
+
+void setLocalizedQuestAfterTableParseHook(LocalizedQuestAfterTableParseHook hook) {
+    localizedQuestAfterTableParseHook = hook;
 }
 #endif
 
@@ -2140,15 +2145,14 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
             };
         }
         try {
-            table = fo4::localization::read_string_table_file(path, kind);
-        } catch (const std::exception& error) {
-            return Error{
-                "LocalizedLogTableInvalid",
-                "could not read localized sibling table " + path.string() + ": " + error.what()
-            };
-        }
-        try {
             const auto originalBytes = readLocalizedFileBytes(path);
+            table = fo4::localization::read_string_table(originalBytes, kind);
+#ifdef FO4IDE_TEST_HOOKS
+            if (kind == fo4::localization::StringTableKind::ilstrings &&
+                localizedQuestAfterTableParseHook != nullptr) {
+                localizedQuestAfterTableParseHook();
+            }
+#endif
             if (kind == fo4::localization::StringTableKind::strings) {
                 result.stringsPath = path;
                 result.originalStringsBytes = originalBytes;
@@ -2162,7 +2166,7 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
         } catch (const std::exception& error) {
             return Error{
                 "LocalizedLogTableInvalid",
-                "could not snapshot localized sibling table " + path.string() + ": " +
+                "could not read or snapshot localized sibling table " + path.string() + ": " +
                     error.what()
             };
         }

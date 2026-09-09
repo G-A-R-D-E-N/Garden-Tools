@@ -181,3 +181,7 @@ Localized QUST CNAM writes in `PluginEditTool/native/src/plugin/RadiclePluginQue
 ## PluginEditTool/native/src/plugin/RadiclePluginBackend.cpp:RadiclePluginBackend::allowedLocalizationDirectory — sidecar path trust
 
 Sidecar roots are canonicalized and accepted only beneath a trusted editable plugin root and outside the protected game Data directory.
+
+## PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp:mutateStaleLocalizationSiblingAfterTableParse
+
+The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp:mutateStaleLocalizationSiblingAfterTableParse` mutates ILSTRINGS after its parse, deterministically proving that the parsed table and retained freshness bytes come from the same read.

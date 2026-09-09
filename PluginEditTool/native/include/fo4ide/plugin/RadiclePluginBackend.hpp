@@ -17,6 +17,8 @@ namespace fo4ide::plugin {
 #ifdef FO4IDE_TEST_HOOKS
 using LocalizedQuestBeforeCommitHook = void (*)();
 void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook);
+using LocalizedQuestAfterTableParseHook = void (*)();
+void setLocalizedQuestAfterTableParseHook(LocalizedQuestAfterTableParseHook hook);
 #endif
 
 class RadiclePluginBackend final : public IPluginBackend {
