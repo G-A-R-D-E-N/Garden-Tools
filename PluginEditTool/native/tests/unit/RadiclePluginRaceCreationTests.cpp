@@ -113,6 +113,8 @@ TEST_CASE("PluginEditTool creates current-format RACE with required base skeleto
         "CreateRecord", nlohmann::json::array({"Patch.esp", "RACE", payload})));
     REQUIRE(created.at("formKey") == "000800:Patch.esp");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto key = fo4::FormKey::parse("000800:Patch.esp");
     const auto model = fo4::forms::decode_race(disk, key);

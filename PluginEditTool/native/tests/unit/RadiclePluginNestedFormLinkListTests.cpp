@@ -181,6 +181,8 @@ TEST_CASE("PluginEditTool edits indexed nested RACE subgraph FormLink") {
     }));
     REQUIRE(result.has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* race = fo4::find_record(
         disk, fo4::FormKey::parse("000803:Patch.esp"));
@@ -209,6 +211,8 @@ TEST_CASE("PluginEditTool inserts into empty nested RACE subgraph list") {
         }));
     REQUIRE(result.has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* race = fo4::find_record(
         disk, fo4::FormKey::parse("000803:Patch.esp"));
@@ -236,6 +240,8 @@ TEST_CASE("PluginEditTool removes nested RACE subgraph FormLink") {
         }));
     REQUIRE(result.has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* race = fo4::find_record(
         disk, fo4::FormKey::parse("000803:Patch.esp"));

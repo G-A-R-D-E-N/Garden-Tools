@@ -133,6 +133,8 @@ TEST_CASE("Native EYES SetField persists FULL ICON and DATA while preserving rec
         }));
     REQUIRE(flags.has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"EyesPatch.esp"})).has_value());
     const auto reloaded = fo4::read_plugin_file(path);
     const auto model = fo4::forms::decode_eyes(
         reloaded, fo4::FormKey::parse("000800:EyesPatch.esp"));

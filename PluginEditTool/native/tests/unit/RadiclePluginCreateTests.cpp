@@ -73,6 +73,8 @@ TEST_CASE("Native CreatePlugin writes validates registers and immediately suppor
         }));
     REQUIRE(record.has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"FreshPatch.esp"})).has_value());
     const auto after = fo4::read_plugin_file(path);
     CHECK(fo4::find_record(
         after, fo4::FormKey::parse("000800:FreshPatch.esp")) != nullptr);
@@ -161,6 +163,8 @@ TEST_CASE("Native created-plugin rollback deletes only unchanged empty plugins")
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "CreatedPluginNotEmpty");
     CHECK(std::filesystem::exists(nonEmptyPath));
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"NonEmptyRollback.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(nonEmptyPath);
     CHECK(fo4::find_record(
         disk, fo4::FormKey::parse("000800:NonEmptyRollback.esp")) != nullptr);

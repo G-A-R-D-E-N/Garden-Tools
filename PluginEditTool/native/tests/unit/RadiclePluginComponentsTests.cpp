@@ -171,6 +171,8 @@ TEST_CASE("PluginEditTool set_components writes FVPA and no CDIX on a COBJ") {
     CHECK(result->get<std::string>() ==
           "Set 1 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk.");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* cobj = fo4::find_record(disk, fo4::FormKey::parse("000A00:Patch.esp"));
     REQUIRE(cobj != nullptr);
@@ -196,6 +198,8 @@ TEST_CASE("PluginEditTool set_components skips a non-CMPO component on a MISC") 
           "Set 1 component(s) on 000900:Patch.esp in Patch.esp. "
           "Skipped 1: 000B00:Patch.esp: WEAP is not a CMPO component. Written to disk.");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* misc = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
     REQUIRE(misc != nullptr);
@@ -265,6 +269,8 @@ TEST_CASE("PluginEditTool set_components accepts broad item types on a COBJ") {
     CHECK(result->get<std::string>() ==
           "Set 2 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk.");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* cobj = fo4::find_record(disk, fo4::FormKey::parse("000A00:Patch.esp"));
     REQUIRE(cobj != nullptr);
@@ -329,6 +335,8 @@ TEST_CASE("PluginEditTool set_components accepts a COBJ as a recipe component") 
     CHECK(result->get<std::string>() ==
           "Set 1 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk.");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* cobj = fo4::find_record(disk, fo4::FormKey::parse("000A00:Patch.esp"));
     REQUIRE(cobj != nullptr);
