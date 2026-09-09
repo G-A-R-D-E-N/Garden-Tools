@@ -4,192 +4,114 @@ set -euo pipefail
 base=4f2bae7
 
 git cat-file -e "${base}^{commit}"
-rm -rf /tmp/ponytail-174b-final-green
-git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-final-green
-test -f /tmp/ponytail-174b-final-green/AGENTS.md
+rm -rf /tmp/ponytail-174b-wording-align
+git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-wording-align
+test -f /tmp/ponytail-174b-wording-align/AGENTS.md
 
 python3 - <<'PY'
 from pathlib import Path
 
-path = Path("PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp")
-text = path.read_text()
-old = '''        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
-        fo4::write_plugin_file(remapped, loaded->path);
-        loaded->plugin = std::move(remapped);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
-        return nlohmann::json("Wrote " + name + " with reordered masters.");
-'''
-new = '''        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
-        stagePluginMutationLocked(*loaded, std::move(remapped));
-        return nlohmann::json(
-            "Reordered masters in " + name + ". SavePlugin to persist.");
-'''
-if text.count(old) != 1:
-    raise SystemExit(f"masters reorder tail count {text.count(old)}")
-path.write_text(text.replace(old, new, 1))
-
-path = Path("PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp")
-text = path.read_text()
-old = '''        fo4::rekey_form_links(mutated, fromKey, toKey);
-        fo4::write_plugin_file(mutated, patch->path);
-        patch->plugin = std::move(mutated);
-        std::error_code ec;
-        patch->loadedTime = std::filesystem::last_write_time(patch->path, ec);
-        rebuildGraphLocked();
-
-        return nlohmann::json(
-            "Repointed " + std::to_string(work.size()) + " of " +
-            std::to_string(unique.size()) + " referencing record(s) from " +
-            fromKey.to_string() + " to " + toKey.to_string() + " in " + patchName +
-            ". Ensure " + patchName +
-            " loads after the plugins it copied from, then save it.");
-'''
-new = '''        fo4::rekey_form_links(mutated, fromKey, toKey);
-        stagePluginMutationLocked(*patch, std::move(mutated));
-
-        return nlohmann::json(
-            "Repointed " + std::to_string(work.size()) + " of " +
-            std::to_string(unique.size()) + " referencing record(s) from " +
-            fromKey.to_string() + " to " + toKey.to_string() + " in " + patchName +
-            ". Ensure " + patchName +
-            " loads after the plugins it copied from. SavePlugin to persist.");
-'''
-if text.count(old) != 1:
-    raise SystemExit(f"reference remap tail count {text.count(old)}")
-path.write_text(text.replace(old, new, 1))
-
-path = Path("PluginEditTool/native/src/plugin/RadiclePluginRenumber.cpp")
-text = path.read_text()
-old = '''        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        std::error_code ec;
-        loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        rebuildGraphLocked();
-        return nlohmann::json(
-            "Renumbered " + std::to_string(changed) + " record(s) in " + pluginName +
-            " into " + localHex(start) + "-" +
-            localHex(static_cast<std::uint32_t>(end64)) +
-            " and repointed every supported in-plugin reference. References from other plugins "
-            "into this one now dangle until patched.");
-'''
-new = '''        stagePluginMutationLocked(*loaded, std::move(mutated));
-        return nlohmann::json(
-            "Renumbered " + std::to_string(changed) + " record(s) in " + pluginName +
-            " into " + localHex(start) + "-" +
-            localHex(static_cast<std::uint32_t>(end64)) +
-            " and repointed every supported in-plugin reference. References from other plugins "
-            "into this one now dangle until patched. SavePlugin to persist.");
-'''
-if text.count(old) != 1:
-    raise SystemExit(f"renumber tail count {text.count(old)}")
-path.write_text(text.replace(old, new, 1))
-
-path = Path("PluginEditTool/native/src/plugin/RadiclePluginComponents.cpp")
-text = path.read_text()
-old = '        message += " Written to disk.";\n'
-new = '        message += " SavePlugin to persist.";\n'
-if text.count(old) != 1:
-    raise SystemExit(f"components wording count {text.count(old)}")
-path.write_text(text.replace(old, new, 1))
-
-path = Path("PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp")
-text = path.read_text()
-set_conditions_old = '''    if (!failures.empty()) {
-        message += " Skipped " + std::to_string(failures.size()) + ": ";
-        for (std::size_t i = 0; i < failures.size(); ++i) {
-            if (i > 0) message += "; ";
-            message += failures[i];
-        }
-        message += ".";
-    }
-    return nlohmann::json(std::move(message));
+replacements = {
+    "PluginEditTool/native/tests/unit/RadiclePluginComponentsTests.cpp": [
+        (
+            '"Set 2 component(s) on 000900:Patch.esp in Patch.esp. Written to disk."',
+            '"Set 2 component(s) on 000900:Patch.esp in Patch.esp. SavePlugin to persist."'
+        ),
+        (
+            '"Skipped 1: 000B00:Patch.esp: WEAP is not a CMPO component. Written to disk."',
+            '"Skipped 1: 000B00:Patch.esp: WEAP is not a CMPO component. SavePlugin to persist."'
+        ),
+        (
+            '"Set 0 component(s) on 000900:Patch.esp in Patch.esp. Written to disk."',
+            '"Set 0 component(s) on 000900:Patch.esp in Patch.esp. SavePlugin to persist."'
+        ),
+        (
+            '"Set 2 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk."',
+            '"Set 2 component(s) on 000A00:Patch.esp in Patch.esp. SavePlugin to persist."'
+        ),
+        (
+            '"Skipped 1: 000C00:Patch.esp: QUST is not a valid recipe item. Written to disk."',
+            '"Skipped 1: 000C00:Patch.esp: QUST is not a valid recipe item. SavePlugin to persist."'
+        ),
+        (
+            '"000802:Patch.esp: count must be 1..4294967295. Written to disk."',
+            '"000802:Patch.esp: count must be 1..4294967295. SavePlugin to persist."'
+        ),
+        (
+            '"Set 1 component(s) on 000A00:Patch.esp in Patch.esp. Written to disk."',
+            '"Set 1 component(s) on 000A00:Patch.esp in Patch.esp. SavePlugin to persist."'
+        ),
+    ],
+    "PluginEditTool/native/tests/unit/RadiclePluginListItemTests.cpp": [
+        (
+            '"000811:Patch.esp. Written to disk."',
+            '"000811:Patch.esp. SavePlugin to persist."'
+        ),
+        (
+            '"000900:Patch.esp. Written to disk."',
+            '"000900:Patch.esp. SavePlugin to persist."'
+        ),
+    ],
+    "PluginEditTool/native/tests/unit/ConditionBackendTests.cpp": [
+        (
+            'CHECK(text.find("Written to disk.") != std::string::npos);',
+            'CHECK(text.find("SavePlugin to persist.") != std::string::npos);'
+        ),
+    ],
 }
 
-Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
-'''
-set_conditions_new = '''    if (!failures.empty()) {
-        message += " Skipped " + std::to_string(failures.size()) + ": ";
-        for (std::size_t i = 0; i < failures.size(); ++i) {
-            if (i > 0) message += "; ";
-            message += failures[i];
-        }
-        message += ".";
-    }
-    message += " SavePlugin to persist.";
-    return nlohmann::json(std::move(message));
-}
-
-Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
-'''
-if text.count(set_conditions_old) != 1:
-    raise SystemExit(f"SetConditions response block count {text.count(set_conditions_old)}")
-text = text.replace(set_conditions_old, set_conditions_new, 1)
-old = '    message += " Written to disk.";\n'
-new = '    message += " SavePlugin to persist.";\n'
-if text.count(old) != 1:
-    raise SystemExit(f"SetConditionsAtPath wording count {text.count(old)}")
-path.write_text(text.replace(old, new, 1))
-
-path = Path("PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp")
-text = path.read_text()
-old = '''        return nlohmann::json(
-            "Removed " + std::to_string(removed) + " entr(y/ies) matching " + value +
-            " from " + field + " (now " + std::to_string(newSize) + ") on " +
-            recordText + ". Written to disk.");
-'''
-new = '''        return nlohmann::json(
-            "Removed " + std::to_string(removed) + " entr(y/ies) matching " + value +
-            " from " + field + " (now " + std::to_string(newSize) + ") on " +
-            recordText + ". SavePlugin to persist.");
-'''
-if text.count(old) != 1:
-    raise SystemExit(f"list removal wording count {text.count(old)}")
-path.write_text(text.replace(old, new, 1))
+for filename, pairs in replacements.items():
+    path = Path(filename)
+    text = path.read_text()
+    for old, new in pairs:
+        if text.count(old) != 1:
+            raise SystemExit(f"{filename}: expected one occurrence of {old!r}, got {text.count(old)}")
+        text = text.replace(old, new, 1)
+    path.write_text(text)
 PY
 
 git diff --check
-grep -F 'SavePlugin to persist.' PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp
-test "$(grep -c 'Written to disk' PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp || true)" -eq 0
 actual="$(git diff --name-only | sort)"
 expected="$(printf '%s\n' \
-  PluginEditTool/native/src/plugin/RadiclePluginComponents.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginRenumber.cpp | sort)"
+  PluginEditTool/native/tests/unit/ConditionBackendTests.cpp \
+  PluginEditTool/native/tests/unit/RadiclePluginComponentsTests.cpp \
+  PluginEditTool/native/tests/unit/RadiclePluginListItemTests.cpp | sort)"
 test "$actual" = "$expected"
 
-cmake -S PluginEditTool/native -B build/fo4ide-174b-final-green -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
-cmake --build build/fo4ide-174b-final-green --target fo4ide_test_plugin_backend fo4ide_test_quest_authoring
-backend=build/fo4ide-174b-final-green/bin/fo4ide_test_plugin_backend
-quest=build/fo4ide-174b-final-green/bin/fo4ide_test_quest_authoring
+cmake -S PluginEditTool/native -B build/fo4ide-174b-wording-align -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+cmake --build build/fo4ide-174b-wording-align --target fo4ide_test_plugin_backend
+binary=build/fo4ide-174b-wording-align/bin/fo4ide_test_plugin_backend
 
-"$backend" "Masters reorder writes immediately and preserves logical FormLinks"
-"$backend" "Native ChangeReferencingRecords copies winners adds target master and remaps links"
-"$backend" "Native RenumberPluginFormIds vacates overlapping targets before rekeying dependents"
-"$backend" "PluginEditTool set_components writes FVPA and no CDIX on a COBJ"
-"$backend" "condition backend: SetConditions replaces the list and round-trips"
-"$backend" "PluginEditTool remove_list_item matches the field name case-insensitively"
-"$backend"
-"$quest"
-
-printf '\n=== final persistence inventory ===\n'
-grep -RInE 'write_plugin_file|write_plugin\(|write_file_pair|atomic_write|std::ofstream|last_write_time|Written to disk|Saved |save it|SavePlugin' PluginEditTool/native/src/plugin || true
+filters=(
+  "PluginEditTool set_components writes CVPA and identity CDIX on a MISC"
+  "condition backend: SetConditionsAt replaces one effect scope and round-trips"
+  "PluginEditTool set_components skips negative and oversized counts"
+  "PluginEditTool set_components accepts broad item types on a COBJ"
+  "PluginEditTool set_components skips a non-CMPO component on a MISC"
+  "PluginEditTool set_components accepts a COBJ as a recipe component"
+  "PluginEditTool remove_list_item drops the last keyword and its KSIZ/KWDA block"
+  "PluginEditTool remove_list_item drops the matching FormLink"
+  "PluginEditTool set_components skips a non-item component on a COBJ"
+  "PluginEditTool set_components clears CVPA and CDIX on an empty list"
+)
+for filter in "${filters[@]}"; do
+  slug=$(printf '%s' "$filter" | tr -cs 'A-Za-z0-9' '_' | cut -c1-80)
+  set +e
+  "$binary" "$filter" > "/tmp/${slug}.txt" 2>&1
+  status=$?
+  set -e
+  cat "/tmp/${slug}.txt"
+  test "$status" -ne 0
+  grep -F 'SavePlugin' "/tmp/${slug}.txt"
+  grep -F 'FAILED:' "/tmp/${slug}.txt"
+done
 
 git rm .github/workflows/174b-core-writers.yml .github/174b-final-writers-green.sh
 git config user.name "NomadsReach"
 git config user.email "144523850+NomadsReach@users.noreply.github.com"
 git add \
-  PluginEditTool/native/src/plugin/RadiclePluginComponents.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp \
-  PluginEditTool/native/src/plugin/RadiclePluginRenumber.cpp
-git commit -m "feat: defer remaining plugin writers"
+  PluginEditTool/native/tests/unit/ConditionBackendTests.cpp \
+  PluginEditTool/native/tests/unit/RadiclePluginComponentsTests.cpp \
+  PluginEditTool/native/tests/unit/RadiclePluginListItemTests.cpp
+git commit -m "test: align deferred persistence messages"
 git push origin HEAD:work/174b-deferred-mutations
