@@ -3036,7 +3036,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             });
         }
         if (const auto error = loadLocalizedQuestTables(
-                arguments, loaded->path, allowedDirectory.value_or({}), *localizedTables)) {
+                arguments, loaded->path,
+                allowedDirectory.value_or(std::filesystem::path{}), *localizedTables)) {
             return std::unexpected(*error);
         }
         try {
