@@ -1,0 +1,88 @@
+name: issue-174b-formlink-implementation
+on:
+  push:
+    branches:
+      - work/174b-deferred-mutations
+permissions:
+  contents: write
+jobs:
+  implement-formlink-deferred-save:
+    runs-on: [self-hosted, Linux, X64, garden]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/174b-deferred-mutations
+      - name: Load Ponytail rules
+        run: |
+          rm -rf /tmp/ponytail-174b-formlink
+          git clone --depth=1 https://github.com/DietrichGebert/ponytail.git /tmp/ponytail-174b-formlink
+          test -f /tmp/ponytail-174b-formlink/AGENTS.md
+      - name: Implement shared pending mutation path
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected one match in {path}, found {text.count(old)}")
+              p.write_text(text.replace(old, new, 1))
+
+          header = "PluginEditTool/native/include/fo4ide/plugin/RadiclePluginBackend.hpp"
+          replace_once(
+              header,
+              "    Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);\n\n",
+              "    Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);\n    void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);\n\n"
+          )
+
+          cmake = "PluginEditTool/native/src/CMakeLists.txt"
+          replace_once(
+              cmake,
+              "    plugin/RadiclePluginBackend.cpp\n    plugin/RadiclePluginAnalysis.cpp\n",
+              "    plugin/RadiclePluginBackend.cpp\n    plugin/RadiclePluginPending.cpp\n    plugin/RadiclePluginAnalysis.cpp\n"
+          )
+
+          pending = Path("PluginEditTool/native/src/plugin/RadiclePluginPending.cpp")
+          if pending.exists():
+              raise SystemExit("pending mutation source already exists")
+          pending.write_text('''#include <fo4ide/plugin/RadiclePluginBackend.hpp>\n\n#include <utility>\n\nnamespace fo4ide::plugin {\n\nvoid RadiclePluginBackend::stagePluginMutationLocked(LoadedPlugin& loaded,\n                                                     fo4::Plugin mutated) {\n    if (!loaded.dirty) loaded.originalPlugin = loaded.plugin;\n    loaded.plugin = std::move(mutated);\n    loaded.dirty = true;\n    rebuildGraphLocked();\n}\n\n}\n''')
+
+          scalar = "PluginEditTool/native/src/plugin/RadiclePluginScalar.cpp"
+          replace_once(
+              scalar,
+              '''        if (status == fo4::ScalarMutationStatus::updated) {\n            if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;\n            loaded->plugin = std::move(mutated);\n            loaded->dirty = true;\n            rebuildGraphLocked();\n        }\n''',
+              '''        if (status == fo4::ScalarMutationStatus::updated) {\n            stagePluginMutationLocked(*loaded, std::move(mutated));\n        }\n'''
+          )
+          replace_once(
+              scalar,
+              '''        if (status == fo4::FormLinkFieldMutationStatus::updated) {\n            fo4::write_plugin_file(mutated, loaded->path);\n            loaded->plugin = std::move(mutated);\n            {\n                std::error_code ec;\n                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);\n            }\n            rebuildGraphLocked();\n        }\n''',
+              '''        if (status == fo4::FormLinkFieldMutationStatus::updated) {\n            stagePluginMutationLocked(*loaded, std::move(mutated));\n        }\n'''
+          )
+
+          lists = "PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp"
+          replace_once(
+              lists,
+              '''        fo4::write_plugin_file(mutated, loaded->path);\n        loaded->plugin = std::move(mutated);\n        {\n            std::error_code ec;\n            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);\n        }\n        rebuildGraphLocked();\n        return nlohmann::json(\n            "Updated " + fieldPath + " for " + formKeyText + " in " +\n            pluginName + ".");\n''',
+              '''        stagePluginMutationLocked(*loaded, std::move(mutated));\n        return nlohmann::json(\n            "Updated " + fieldPath + " for " + formKeyText + " in " +\n            pluginName + ".");\n'''
+          )
+          PY
+          git diff --check
+      - name: Build focused backend tests
+        run: |
+          cmake -S PluginEditTool/native -B build/fo4ide-174b-formlink -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=OFF
+          cmake --build build/fo4ide-174b-formlink --target fo4ide_test_plugin_backend fo4ide_test_proj_expl_hazd
+      - name: Prove deferred FormLink persistence
+        run: |
+          build/fo4ide-174b-formlink/bin/fo4ide_test_plugin_backend "PluginEditTool edits generated indexed RACE FormLink list field"
+          build/fo4ide-174b-formlink/bin/fo4ide_test_proj_expl_hazd "Native PROJ FormLink SetField preserves neighbors*"
+          build/fo4ide-174b-formlink/bin/fo4ide_test_plugin_backend "Native schema SetField defers*"
+          build/fo4ide-174b-formlink/bin/fo4ide_test_plugin_backend "Native schema SavePlugin failure preserves pending scalar state"
+      - name: Commit implementation
+        run: |
+          git rm .github/workflows/174b-formlink-implementation.yml
+          git config user.name "NomadsReach"
+          git config user.email "144523850+NomadsReach@users.noreply.github.com"
+          git add PluginEditTool/native/include/fo4ide/plugin/RadiclePluginBackend.hpp PluginEditTool/native/src/CMakeLists.txt PluginEditTool/native/src/plugin/RadiclePluginPending.cpp PluginEditTool/native/src/plugin/RadiclePluginScalar.cpp PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp
+          git commit -m "feat: defer FormLink persistence until SavePlugin"
+          git push origin HEAD:work/174b-deferred-mutations
