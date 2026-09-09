@@ -132,7 +132,7 @@ std::size_t columnIndex(const nlohmann::json& value, std::string_view column) {
 
 }
 
-TEST_CASE("Native schema SetField writes REFR XHLT as human percentage points") {
+TEST_CASE("Native schema SetField defers REFR XHLT persistence until SavePlugin") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -145,6 +145,16 @@ TEST_CASE("Native schema SetField writes REFR XHLT as human percentage points") 
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
     }));
     REQUIRE(result.has_value());
+    CHECK(readScalar(path, fo4::Signature::from_string("XHLT")) == "50");
+
+    const auto pending = grid(backend);
+    const auto health = columnIndex(pending, "REFR\\HealthPercent");
+    REQUIRE(pending.at("rows").size() == 1);
+    CHECK(pending.at("rows")[0].at("cells")[health] == "75");
+
+    const auto saved = backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(saved.has_value());
     CHECK(readScalar(path, fo4::Signature::from_string("XHLT")) == "75");
 }
 
