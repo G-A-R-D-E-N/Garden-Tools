@@ -517,7 +517,7 @@ TEST_CASE("condition backend: SetConditionsAt replaces one effect scope and roun
     REQUIRE(message.has_value());
     const auto text = message->get<std::string>();
     CHECK(text.find("Set 2 condition(s) at Effects[0].Conditions on 000800:SpellEdit.esp in SpellEdit.esp.") == 0);
-    CHECK(text.find("Written to disk.") != std::string::npos);
+    CHECK(text.find("SavePlugin to persist.") != std::string::npos);
 
     const auto first = parseStringResult(
         backend.invoke("backend.GetConditionsAtPath",

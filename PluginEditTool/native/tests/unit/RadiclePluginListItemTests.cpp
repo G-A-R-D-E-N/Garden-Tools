@@ -373,7 +373,7 @@ TEST_CASE("PluginEditTool remove_list_item drops the matching FormLink") {
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>() ==
           "Removed 1 entr(y/ies) matching 000800:Patch.esp from Items (now 0) on "
-          "000811:Patch.esp. Written to disk.");
+          "000811:Patch.esp. SavePlugin to persist.");
 
     const auto beforeSave = fo4::read_plugin_file(path);
     const auto* beforeSaveFlst = fo4::find_record(
@@ -532,7 +532,7 @@ TEST_CASE("PluginEditTool remove_list_item drops the last keyword and its KSIZ/K
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>() ==
           "Removed 1 entr(y/ies) matching 000801:Patch.esp from Keywords (now 0) on "
-          "000900:Patch.esp. Written to disk.");
+          "000900:Patch.esp. SavePlugin to persist.");
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
