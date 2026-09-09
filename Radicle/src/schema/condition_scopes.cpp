@@ -58,7 +58,20 @@ bool iequals(std::string_view a, std::string_view b) {
   return true;
 }
 
+bool is_whitespace(char ch) {
+  return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' ||
+         ch == '\f' || ch == '\v';
+}
+
+std::string_view trim_whitespace(std::string_view text) noexcept {
+  while (!text.empty() && is_whitespace(text.front())) text.remove_prefix(1);
+  while (!text.empty() && is_whitespace(text.back())) text.remove_suffix(1);
+  return text;
+}
+
 bool parse_index(std::string_view text, std::size_t& value) noexcept {
+  text = trim_whitespace(text);
+  if (text.empty()) return false;
   if (text.empty()) return false;
   const auto* begin = text.data();
   const auto* end = begin + text.size();
@@ -68,23 +81,30 @@ bool parse_index(std::string_view text, std::size_t& value) noexcept {
 
 std::optional<ScopedConditionPath> parse_scoped_path(
     Signature record, std::string_view path) noexcept {
+  const auto separator = path.find('.');
+  if (separator == std::string_view::npos ||
+      path.find('.', separator + 1) != std::string_view::npos) {
+    return std::nullopt;
+  }
+  const auto container_path = trim_whitespace(path.substr(0, separator));
+  const auto member_path = trim_whitespace(path.substr(separator + 1));
+  const auto open = container_path.find('[');
+  if (open == std::string_view::npos) return std::nullopt;
+  const auto close = container_path.find(']', open + 1);
+  if (close == std::string_view::npos || close + 1 != container_path.size()) {
+    return std::nullopt;
+  }
+
   for (const auto& descriptor : k_generated_condition_scopes) {
     if (descriptor.record != record) continue;
-    if (path.size() < descriptor.container.size()) continue;
-    if (!iequals(path.substr(0, descriptor.container.size()), descriptor.container)) {
-      continue;
-    }
-    auto cursor = descriptor.container.size();
-    if (cursor >= path.size() || path[cursor] != '[') continue;
-    const auto close = path.find(']', cursor + 1);
-    if (close == std::string_view::npos) continue;
+    if (!iequals(container_path.substr(0, open), descriptor.container)) continue;
 
     std::size_t container_index = 0;
-    if (!parse_index(path.substr(cursor + 1, close - cursor - 1), container_index)) {
+    if (!parse_index(container_path.substr(open + 1, close - open - 1),
+                     container_index)) {
       continue;
     }
-    if (close + 1 >= path.size() || path[close + 1] != '.') continue;
-    if (!iequals(path.substr(close + 2), descriptor.member)) continue;
+    if (!iequals(member_path, descriptor.member)) continue;
     return ScopedConditionPath{descriptor, container_index};
   }
   return std::nullopt;

@@ -232,6 +232,14 @@ TEST(ConditionScopes, ResolvesEffectPathForKnownRecords) {
       fo4::Signature::from_string("SPEL"), "effects[1].conditions");
   ASSERT_TRUE(lower.has_value());
   EXPECT_EQ(lower->container_index, 1u);
+
+  for (const auto path : {" Effects[0].Conditions ", "Effects[ 0 ].Conditions",
+                          "Effects[0] . Conditions", "Effects[0]. Conditions "}) {
+    const auto spaced = fo4::schema::scoped_condition_path(
+        fo4::Signature::from_string("SPEL"), path);
+    ASSERT_TRUE(spaced.has_value()) << path;
+    EXPECT_EQ(spaced->container_index, 0u);
+  }
 }
 
 TEST(ConditionScopes, RejectsUnknownRecordsAndMalformedPaths) {
@@ -244,6 +252,12 @@ TEST(ConditionScopes, RejectsUnknownRecordsAndMalformedPaths) {
   EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects[0]").has_value());
   EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects.Conditions").has_value());
   EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects[x].Conditions").has_value());
+  EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects [0].Conditions").has_value());
+  EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects[-1].Conditions").has_value());
+  EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects[0.Conditions").has_value());
+  EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects[0]].Conditions").has_value());
+  EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects[0].Conditions.more").has_value());
+  EXPECT_FALSE(fo4::schema::scoped_condition_path(spel, "Effects[0]..Conditions").has_value());
 }
 
 TEST(ConditionScopes, ReadsScopedConditionsPerEffect) {
