@@ -247,11 +247,19 @@ TEST_CASE("CreateMergedPatch forwards the winning version into the patch") {
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().starts_with("Merged patch Patch.esp: forwarded 1 of 1"));
+    CHECK(result->get<std::string>().find("SavePlugin to persist") != std::string::npos);
+    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(fixture.patchPath);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Base.esm")) == nullptr);
+
+    REQUIRE(fixture.backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(fixture.patchPath);
     const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));
     REQUIRE(record != nullptr);
-    CHECK(readEdid(*record) == "WidgetB");  // highest selected plugin in load order wins
+    CHECK(readEdid(*record) == "WidgetB");
 }
 
 TEST_CASE("CreateMergedPatch refuses to overwrite an existing patch override") {
@@ -314,11 +322,19 @@ TEST_CASE("RevertOverrides restores the prior version into the patch") {
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>().starts_with(
         "Reverted 1 record(s) that ModB.esp was overriding, into Patch.esp."));
+    CHECK(result->get<std::string>().find("SavePlugin to persist") != std::string::npos);
+    CHECK(result->get<std::string>().find("Saved Patch.esp") == std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(fixture.patchPath);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Base.esm")) == nullptr);
+
+    REQUIRE(fixture.backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(fixture.patchPath);
     const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esm"));
     REQUIRE(record != nullptr);
-    CHECK(readEdid(*record) == "WidgetA");  // ModB's override reverted to ModA's version
+    CHECK(readEdid(*record) == "WidgetA");
 }
 
 TEST_CASE("RevertOverrides preserves an existing patch override instead of replacing it") {
