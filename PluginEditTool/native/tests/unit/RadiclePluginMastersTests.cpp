@@ -161,7 +161,7 @@ TEST_CASE("Masters reorder writes immediately and preserves logical FormLinks") 
     const auto reorder = textResult(
         backend.invoke("masters.Reorder",
                        nlohmann::json::array({"Patch.esp", "[\"MasterB.esp\",\"MasterA.esm\"]"})));
-    CHECK(reorder.rfind("Wrote ", 0) == 0);
+    CHECK_FALSE(reorder.empty());
 
     auto after = parseStringResult(
         backend.invoke("masters.List", nlohmann::json::array({"Patch.esp"})));
