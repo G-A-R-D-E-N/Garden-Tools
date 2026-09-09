@@ -66,6 +66,7 @@ private:
 
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
+    void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
 
     Result<nlohmann::json> loadEnvironment(const nlohmann::json& arguments);
     Result<nlohmann::json> getPlugins() const;

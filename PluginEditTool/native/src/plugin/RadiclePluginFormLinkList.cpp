@@ -225,13 +225,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkListField(
                 break;
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Updated " + fieldPath + " for " + formKeyText + " in " +
             pluginName + ".");
