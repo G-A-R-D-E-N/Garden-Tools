@@ -302,11 +302,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                         "Could not set EditorID on the duplicated record"});
                 }
 
-                fo4::write_plugin_file(mutated, target->path);
-                target->plugin = std::move(mutated);
-                std::error_code ec;
-                target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-                rebuildGraphLocked();
+                stagePluginMutationLocked(*target, std::move(mutated));
                 return nlohmann::json(
                     "Copied " + sourceKey.to_string() + " into " + targetPluginName +
                     " as NEW record " + newKey.to_string() +
@@ -372,11 +368,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 });
             }
 
-            fo4::write_plugin_file(mutated, target->path);
-            target->plugin = std::move(mutated);
-            std::error_code ec;
-            target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-            rebuildGraphLocked();
+            stagePluginMutationLocked(*target, std::move(mutated));
             return nlohmann::json(
                 "Copied " + sourceKey.to_string() + " into " + targetPluginName +
                 " as NEW record " + newKey.to_string() +
@@ -417,11 +409,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 return nlohmann::json("Cleaned " + pluginName + ": undeleted + disabled 0 record(s).");
             }
             mutated.original_range.clear();
-            fo4::write_plugin_file(mutated, loaded->path);
-            loaded->plugin = std::move(mutated);
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            rebuildGraphLocked();
+            stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json(
                 "Cleaned " + pluginName + ": undeleted + disabled " +
                 std::to_string(undeleted) + " record(s).");
@@ -532,11 +520,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 if (eraseTopLevelRecord(mutated, item.key)) ++removed;
             }
             if (removed != 0) {
-                fo4::write_plugin_file(mutated, loaded->path);
-                loaded->plugin = std::move(mutated);
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-                rebuildGraphLocked();
+                stagePluginMutationLocked(*loaded, std::move(mutated));
             }
             return nlohmann::json(
                 "Removed " + std::to_string(removed) +
