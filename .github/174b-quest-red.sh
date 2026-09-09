@@ -17,30 +17,38 @@ from pathlib import Path
 path = Path("PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp")
 text = path.read_text()
 
-old_alias_setup = '''    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin());
 
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
+def replace_in_case(name, old, new):
+    global text
+    marker = f'TEST_CASE("{name}")'
+    start = text.index(marker)
+    end = text.find('TEST_CASE("', start + len(marker))
+    if end == -1:
+        end = len(text)
+    segment = text[start:end]
+    if segment.count(old) != 1:
+        raise SystemExit(f"{name}: expected one anchor, found {segment.count(old)}")
+    segment = segment.replace(old, new, 1)
+    text = text[:start] + segment + text[end:]
 
-    const nlohmann::json aliases = nlohmann::json::array({'''
-new_alias_setup = '''    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin());
+
+alias_name = "Native SetQuestAliases replaces reference location and collection aliases"
+replace_in_case(
+    alias_name,
+    '''    writeBytes(path, questPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;''',
+    '''    writeBytes(path, questPlugin());
     const auto before = readBytes(path);
 
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-
-    const nlohmann::json aliases = nlohmann::json::array({'''
-if text.count(old_alias_setup) < 1:
-    raise SystemExit("alias setup not found")
-text = text.replace(old_alias_setup, new_alias_setup, 1)
-
-old_alias_tail = '''    REQUIRE(result.has_value());
+    fo4ide::plugin::RadiclePluginBackend backend;''')
+replace_in_case(
+    alias_name,
+    '''    REQUIRE(result.has_value());
     CHECK(result->get<std::string>().find("Set 3 quest alias(es)") == 0);
 
-    const auto disk = fo4::read_plugin_file(path);'''
-new_alias_tail = '''    REQUIRE(result.has_value());
+    const auto disk = fo4::read_plugin_file(path);''',
+    '''    REQUIRE(result.has_value());
     CHECK(result->get<std::string>().find("Set 3 quest alias(es)") == 0);
     CHECK(readBytes(path) == before);
     CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
@@ -48,40 +56,24 @@ new_alias_tail = '''    REQUIRE(result.has_value());
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto disk = fo4::read_plugin_file(path);'''
-if text.count(old_alias_tail) != 1:
-    raise SystemExit(f"alias tail count {text.count(old_alias_tail)}")
-text = text.replace(old_alias_tail, new_alias_tail, 1)
+    const auto disk = fo4::read_plugin_file(path);''')
 
-old_stage_setup = '''TEST_CASE("Native SetQuestStages writes multiple log entries with note and log text") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin());
+stage_name = "Native SetQuestStages writes multiple log entries with note and log text"
+replace_in_case(
+    stage_name,
+    '''    writeBytes(path, questPlugin());
 
-    fo4ide::plugin::RadiclePluginBackend backend;'''
-new_stage_setup = '''TEST_CASE("Native SetQuestStages writes multiple log entries with note and log text") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;''',
+    '''    writeBytes(path, questPlugin());
     const auto before = readBytes(path);
 
-    fo4ide::plugin::RadiclePluginBackend backend;'''
-if text.count(old_stage_setup) != 1:
-    raise SystemExit("stage setup not found")
-text = text.replace(old_stage_setup, new_stage_setup, 1)
+    fo4ide::plugin::RadiclePluginBackend backend;''')
+replace_in_case(
+    stage_name,
+    '''    REQUIRE(result.has_value());
 
-old_stage_tail = '''    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages}));
-    REQUIRE(result.has_value());
-
-    const auto disk = fo4::read_plugin_file(path);'''
-new_stage_tail = '''    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages}));
-    REQUIRE(result.has_value());
+    const auto disk = fo4::read_plugin_file(path);''',
+    '''    REQUIRE(result.has_value());
     CHECK(readBytes(path) == before);
 
     const auto aliasResult = backend.invokeBackend(
@@ -101,51 +93,31 @@ new_stage_tail = '''    const auto result = backend.invokeBackend(
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto disk = fo4::read_plugin_file(path);'''
-if text.count(old_stage_tail) != 1:
-    raise SystemExit("stage tail not found")
-text = text.replace(old_stage_tail, new_stage_tail, 1)
+    const auto disk = fo4::read_plugin_file(path);''')
+replace_in_case(
+    stage_name,
+    '''    REQUIRE_FALSE(aliases.aliases.empty());''',
+    '''    REQUIRE(aliases.aliases.size() == 1u);
+    CHECK(aliases.aliases[0].name == std::optional<std::string>{"AfterStage"});''')
 
-old_stage_alias_check = '''    const auto aliases = fo4::forms::decode_quest_aliases(
-        disk, fo4::FormKey::parse("000800:Patch.esp"));
-    REQUIRE_FALSE(aliases.aliases.empty());
-}'''
-new_stage_alias_check = '''    const auto aliases = fo4::forms::decode_quest_aliases(
-        disk, fo4::FormKey::parse("000800:Patch.esp"));
-    REQUIRE(aliases.aliases.size() == 1u);
-    CHECK(aliases.aliases[0].name == std::optional<std::string>{"AfterStage"});
-}'''
-if text.count(old_stage_alias_check) != 1:
-    raise SystemExit("stage alias check not found")
-text = text.replace(old_stage_alias_check, new_stage_alias_check, 1)
-
-old_master_setup = '''TEST_CASE("Native SetQuestAliases adds a loaded uniqueActor master and remaps the fill") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto masterPath = root / "Master.esm";
-    const auto patchPath = root / "Patch.esp";
-    writeBytes(masterPath, npcMasterPlugin());
+master_name = "Native SetQuestAliases adds a loaded uniqueActor master and remaps the fill"
+replace_in_case(
+    master_name,
+    '''    writeBytes(masterPath, npcMasterPlugin());
     writeBytes(patchPath, questPlugin());
 
-    fo4ide::plugin::RadiclePluginBackend backend;'''
-new_master_setup = '''TEST_CASE("Native SetQuestAliases adds a loaded uniqueActor master and remaps the fill") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto masterPath = root / "Master.esm";
-    const auto patchPath = root / "Patch.esp";
-    writeBytes(masterPath, npcMasterPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;''',
+    '''    writeBytes(masterPath, npcMasterPlugin());
     writeBytes(patchPath, questPlugin());
     const auto before = readBytes(patchPath);
 
-    fo4ide::plugin::RadiclePluginBackend backend;'''
-if text.count(old_master_setup) != 1:
-    raise SystemExit("master setup not found")
-text = text.replace(old_master_setup, new_master_setup, 1)
+    fo4ide::plugin::RadiclePluginBackend backend;''')
+replace_in_case(
+    master_name,
+    '''    REQUIRE(result.has_value());
 
-old_master_tail = '''    REQUIRE(result.has_value());
-
-    const auto disk = fo4::read_plugin_file(patchPath);'''
-new_master_tail = '''    REQUIRE(result.has_value());
+    const auto disk = fo4::read_plugin_file(patchPath);''',
+    '''    REQUIRE(result.has_value());
 
     const auto pendingMastersRaw = backend.invoke(
         "masters.List", nlohmann::json::array({"Patch.esp"}));
@@ -158,14 +130,7 @@ new_master_tail = '''    REQUIRE(result.has_value());
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto disk = fo4::read_plugin_file(patchPath);'''
-if text.count(old_master_tail) < 1:
-    raise SystemExit("master tail not found")
-anchor = text.index('TEST_CASE("Native SetQuestAliases adds a loaded uniqueActor master and remaps the fill")')
-tail_pos = text.find(old_master_tail, anchor)
-if tail_pos == -1:
-    raise SystemExit("scoped master tail not found")
-text = text[:tail_pos] + text[tail_pos:].replace(old_master_tail, new_master_tail, 1)
+    const auto disk = fo4::read_plugin_file(patchPath);''')
 
 path.write_text(text)
 PY
