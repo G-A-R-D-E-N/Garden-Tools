@@ -98,8 +98,8 @@ path.write_text(text.replace(old, new, 1))
 
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp")
 text = path.read_text()
-old = '        message += " Written to disk.";\n'
-new = '        message += " SavePlugin to persist.";\n'
+old = '    message += " Written to disk.";\n'
+new = '    message += " SavePlugin to persist.";\n'
 if text.count(old) != 1:
     raise SystemExit(f"conditions wording count {text.count(old)}")
 path.write_text(text.replace(old, new, 1))
@@ -107,13 +107,13 @@ path.write_text(text.replace(old, new, 1))
 path = Path("PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp")
 text = path.read_text()
 old = '''        return nlohmann::json(
-            "Removed " + std::to_string(removed) + " entr(y/ies) matching " + valueText +
-            " from " + fieldName + " (now " + std::to_string(newSize) + ") on " +
+            "Removed " + std::to_string(removed) + " entr(y/ies) matching " + value +
+            " from " + field + " (now " + std::to_string(newSize) + ") on " +
             recordText + ". Written to disk.");
 '''
 new = '''        return nlohmann::json(
-            "Removed " + std::to_string(removed) + " entr(y/ies) matching " + valueText +
-            " from " + fieldName + " (now " + std::to_string(newSize) + ") on " +
+            "Removed " + std::to_string(removed) + " entr(y/ies) matching " + value +
+            " from " + field + " (now " + std::to_string(newSize) + ") on " +
             recordText + ". SavePlugin to persist.");
 '''
 if text.count(old) != 1:
