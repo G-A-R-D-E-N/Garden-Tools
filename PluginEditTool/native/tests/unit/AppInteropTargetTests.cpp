@@ -60,14 +60,24 @@ public:
 class FakePluginBackend : public fo4ide::plugin::IPluginBackend {
 public:
     std::vector<std::pair<std::string, nlohmann::json>> calls;
+    std::filesystem::path trustedRoot;
+    bool failLoadMo2{false};
 
     fo4ide::plugin::Capabilities capabilities() const noexcept override {
         return {.available = true, .readPlugins = true};
     }
 
+    fo4ide::Result<void> setTrustedNewPluginRoot(const std::filesystem::path& root) override {
+        trustedRoot = root;
+        return {};
+    }
+
     fo4ide::Result<nlohmann::json> invoke(std::string_view operation,
                                           const nlohmann::json& arguments) override {
         calls.emplace_back(std::string(operation), arguments);
+        if (operation == "environment.LoadMo2" && failLoadMo2) {
+            return std::unexpected(fo4ide::Error{"LoadMo2Failed", "deliberate backend load failure"});
+        }
         if (operation == "appInterop.GetPlugins") {
             return nlohmann::json(R"([{"Key":"Native.esp","ConflictStatus":0,"IsRecordNode":false,"HasChildren":true,"Pending":false}])");
         }
@@ -587,4 +597,49 @@ TEST_CASE("AppInterop keeps the old snapshot when reload is blocked by pending e
     loaded = target.snapshot();
     REQUIRE(loaded.has_value());
     CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp", "Second.esp"});
+}
+
+TEST_CASE("AppInterop failed reload does not commit settings or trusted output root") {
+    const auto first = tempRoot();
+    Cleanup firstCleanup{first};
+    makeProfile(first);
+    const auto second = tempRoot();
+    Cleanup secondCleanup{second};
+    makeProfile(second);
+    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
+
+    fo4ide::settings::Store store(first / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    FakePluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
+
+    const auto firstInstance = settings.mo2InstancePath;
+    const auto firstData = settings.dataFolder;
+    const auto firstRoot = plugins.trustedRoot;
+    REQUIRE_FALSE(firstInstance.empty());
+    REQUIRE_FALSE(firstRoot.empty());
+    auto persisted = store.load();
+    REQUIRE(persisted.has_value());
+    CHECK(persisted->mo2InstancePath == firstInstance);
+
+    plugins.failLoadMo2 = true;
+    plugins.calls.clear();
+    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
+    REQUIRE_FALSE(failed.has_value());
+    CHECK(failed.error().type == "LoadMo2Failed");
+    CHECK(loadMo2Call(plugins.calls) != nullptr);
+
+    CHECK(settings.mo2InstancePath == firstInstance);
+    CHECK(settings.dataFolder == firstData);
+    CHECK(plugins.trustedRoot == firstRoot);
+    auto loaded = target.snapshot();
+    REQUIRE(loaded.has_value());
+    CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp"});
+    persisted = store.load();
+    REQUIRE(persisted.has_value());
+    CHECK(persisted->mo2InstancePath == firstInstance);
+    CHECK(persisted->dataFolder == firstData);
 }

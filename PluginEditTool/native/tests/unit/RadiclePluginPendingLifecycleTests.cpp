@@ -3,7 +3,9 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <latch>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -421,4 +423,127 @@ TEST_CASE("LoadMo2 refuses to replace pending plugins unless discardPending is s
     CHECK_FALSE(pluginPending(activePlugins(backend), "Patch.esp"));
     CHECK(healthOnDisk(path, "000800:Patch.esp") == 50u);
     CHECK(readBytes(path) == pluginBefore);
+}
+
+#ifdef FO4IDE_TEST_HOOKS
+std::latch* loadMo2AfterCheckLatch = nullptr;
+std::latch* loadMo2ResumeLatch = nullptr;
+
+void loadMo2BarrierHook() {
+    if (loadMo2AfterCheckLatch) loadMo2AfterCheckLatch->count_down();
+    if (loadMo2ResumeLatch) loadMo2ResumeLatch->wait();
+}
+
+struct LoadMo2Barrier {
+    std::latch afterCheck{1};
+    std::latch resume{1};
+
+    LoadMo2Barrier() {
+        loadMo2AfterCheckLatch = &afterCheck;
+        loadMo2ResumeLatch = &resume;
+        fo4ide::plugin::setLoadMo2AfterPendingCheckHook(&loadMo2BarrierHook);
+    }
+
+    ~LoadMo2Barrier() {
+        fo4ide::plugin::setLoadMo2AfterPendingCheckHook(nullptr);
+        loadMo2AfterCheckLatch = nullptr;
+        loadMo2ResumeLatch = nullptr;
+    }
+
+    void release() {
+        if (!resume.try_wait()) resume.count_down();
+    }
+};
+
+struct JoinReload {
+    std::thread& thread;
+    LoadMo2Barrier& barrier;
+    ~JoinReload() {
+        barrier.release();
+        if (thread.joinable()) thread.join();
+    }
+};
+#endif
+
+TEST_CASE("LoadMo2 fails closed if a plugin becomes pending after the first check") {
+#ifdef FO4IDE_TEST_HOOKS
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeLocalizedPlugin());
+    writeLocalizationSet(root);
+    const auto pluginBefore = readBytes(path);
+    const auto environment = nlohmann::json{{"plugins", nlohmann::json::array({
+        {{"name", "Patch.esp"}, {"path", path.string()}, {"source", "PendingLifecycle"}, {"resolved", true}}
+    })}};
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    CHECK_FALSE(pluginPending(activePlugins(backend), "Patch.esp"));
+
+    LoadMo2Barrier barrier;
+    fo4ide::Result<nlohmann::json> reloadResult = nlohmann::json(nullptr);
+    std::thread reloader([&] {
+        reloadResult = backend.invoke("environment.LoadMo2", environment);
+    });
+    JoinReload join{reloader, barrier};
+    barrier.afterCheck.wait();
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
+    })).has_value());
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+    barrier.release();
+    if (reloader.joinable()) reloader.join();
+
+    REQUIRE_FALSE(reloadResult.has_value());
+    CHECK(reloadResult.error().type == "PluginHasPendingChanges");
+    CHECK(reloadResult.error().message.find("Patch.esp") != std::string::npos);
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+    CHECK(readBytes(path) == pluginBefore);
+    CHECK(healthOnDisk(path, "000800:Patch.esp") == 50u);
+#else
+    SUCCEED("FO4IDE_TEST_HOOKS is required for the LoadMo2 pending-check race");
+#endif
+}
+
+TEST_CASE("LoadMo2 discardPending does not drop an edit created after consent") {
+#ifdef FO4IDE_TEST_HOOKS
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeLocalizedPlugin());
+    writeLocalizationSet(root);
+    const auto pluginBefore = readBytes(path);
+    const auto environment = nlohmann::json{{"plugins", nlohmann::json::array({
+        {{"name", "Patch.esp"}, {"path", path.string()}, {"source", "PendingLifecycle"}, {"resolved", true}}
+    })}};
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "60"
+    })).has_value());
+
+    auto discarding = environment;
+    discarding["discardPending"] = true;
+    LoadMo2Barrier barrier;
+    fo4ide::Result<nlohmann::json> reloadResult = nlohmann::json(nullptr);
+    std::thread reloader([&] {
+        reloadResult = backend.invoke("environment.LoadMo2", discarding);
+    });
+    JoinReload join{reloader, barrier};
+    barrier.afterCheck.wait();
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
+    })).has_value());
+    barrier.release();
+    if (reloader.joinable()) reloader.join();
+
+    REQUIRE_FALSE(reloadResult.has_value());
+    CHECK(reloadResult.error().type == "PluginHasPendingChanges");
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+    CHECK(readBytes(path) == pluginBefore);
+#else
+    SUCCEED("FO4IDE_TEST_HOOKS is required for the LoadMo2 discard consent race");
+#endif
 }

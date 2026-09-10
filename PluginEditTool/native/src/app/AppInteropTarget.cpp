@@ -126,19 +126,21 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
     auto loaded = mo2::readProfile(instancePath);
     if (!loaded) return std::unexpected(loaded.error());
 
-    settings_.mo2InstancePath = loaded->instance.instancePath;
-    if (!loaded->instance.gameDataFolder.empty()) settings_.dataFolder = loaded->instance.gameDataFolder;
-    auto saved = store_.save(settings_);
-    if (!saved) return std::unexpected(saved.error());
-
     if (plugins_.capabilities().available) {
-        auto clearedRoot = plugins_.setTrustedNewPluginRoot({});
-        if (!clearedRoot) return std::unexpected(clearedRoot.error());
-        auto outputRoot = plugins_.setTrustedNewPluginRoot(loaded->instance.overwriteFolder);
-        if (!outputRoot) return std::unexpected(outputRoot.error());
         auto backendLoad = plugins_.invoke(
             "environment.LoadMo2", backendEnvironment(*loaded, discardPending));
         if (!backendLoad) return std::unexpected(backendLoad.error());
+        auto outputRoot = plugins_.setTrustedNewPluginRoot(loaded->instance.overwriteFolder);
+        if (!outputRoot) return std::unexpected(outputRoot.error());
+    }
+
+    const auto previousSettings = settings_;
+    settings_.mo2InstancePath = loaded->instance.instancePath;
+    if (!loaded->instance.gameDataFolder.empty()) settings_.dataFolder = loaded->instance.gameDataFolder;
+    auto saved = store_.save(settings_);
+    if (!saved) {
+        settings_ = previousSettings;
+        return std::unexpected(saved.error());
     }
 
     auto watched = captureWatchFiles(*loaded);
