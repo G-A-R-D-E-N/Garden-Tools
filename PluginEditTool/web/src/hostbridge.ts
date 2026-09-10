@@ -67,4 +67,4 @@ function install() {
   };
 }
 
-if (!(window as any).chrome?.webview) install();
+if (window.location.protocol === 'http:' || !(window as any).chrome?.webview) install();
