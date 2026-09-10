@@ -140,7 +140,7 @@ std::uint32_t healthValue(const std::filesystem::path& path) {
 
 }
 
-TEST_CASE("Localized quest persistence refuses to flush unrelated pending edits") {
+TEST_CASE("Localized quest persistence stages alongside unrelated pending edits") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -176,13 +176,16 @@ TEST_CASE("Localized quest persistence refuses to flush unrelated pending edits"
                 {"stringsDirectory", (root / "Strings").string()}
             }
         }));
-    REQUIRE_FALSE(localized.has_value());
-    CHECK(localized.error().type == "PluginHasPendingChanges");
+    REQUIRE(localized.has_value());
+    CHECK(localized->get<std::string>().find("SavePlugin") != std::string::npos);
     CHECK(readBytes(path) == pluginBefore);
     CHECK(readBytes(dlstringsPath) == dlstringsBefore);
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(healthValue(path) == 75u);
-    CHECK(readBytes(dlstringsPath) == dlstringsBefore);
+    const auto table = fo4::localization::read_string_table_file(
+        dlstringsPath, fo4::localization::StringTableKind::dlstrings);
+    REQUIRE(fo4::localization::find_string(table, 42u) != nullptr);
+    REQUIRE(fo4::localization::find_string(table, 201u) != nullptr);
 }

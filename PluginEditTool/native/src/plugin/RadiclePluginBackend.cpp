@@ -367,6 +367,7 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "appInterop.ScanBrokenRefs") return scanBrokenRefs();
     if (operation == "backend.OpenPlugin") return openPlugin(arguments);
     if (operation == "backend.SavePlugin") return savePlugin(arguments);
+    if (operation == "backend.DiscardPlugin") return discardPlugin(arguments);
     // Scalar-schema aware on every entry path; setFieldValue falls back to
     // setField for non-schema fields.
     if (operation == "backend.SetField") return setFieldValue(arguments);
@@ -436,6 +437,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                 .plugin = std::move(plugin),
                 .originalPlugin = std::nullopt,
                 .dirty = false,
+                .stagedLocalization = std::nullopt,
             });
         } catch (const std::exception& error) {
             errors.push_back({{"plugin", name}, {"path", path}, {"error", error.what()}});
@@ -621,10 +623,11 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             existing->loadedTime = loadedTime;
             existing->plugin = std::move(plugin);
             existing->originalPlugin.reset();
+            existing->stagedLocalization.reset();
             existing->dirty = false;
         } else {
             plugins_.push_back({
-                name, filePath, {}, loadedTime, false, std::move(plugin), std::nullopt, false
+                name, filePath, {}, loadedTime, false, std::move(plugin), std::nullopt, false, std::nullopt
             });
         }
 
@@ -682,17 +685,34 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
         }
         output = *allowedOutput;
     }
-    try {
-        fo4::write_plugin_file(loaded->plugin, output);
-        loaded->path = output;
-        std::error_code ec;
-        loaded->loadedTime = std::filesystem::last_write_time(output, ec);
-        loaded->originalPlugin.reset();
-        loaded->dirty = false;
-        return nlohmann::json{{"ok", true}, {"plugin", name}, {"path", output.string()}}.dump();
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"PluginWriteFailed", error.what()});
+    if (const auto persisted = persistPluginLocked(*loaded, output); !persisted) {
+        return std::unexpected(persisted.error());
     }
+    return nlohmann::json{{"ok", true}, {"plugin", name}, {"path", loaded->path.string()}}.dump();
+}
+
+Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    if (!loaded->dirty) {
+        return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
+    }
+    if (!loaded->originalPlugin.has_value()) {
+        return std::unexpected(Error{
+            "PendingStateMissing",
+            "Plugin is dirty but has no recoverable original snapshot: " + name
+        });
+    }
+    loaded->plugin = *loaded->originalPlugin;
+    loaded->originalPlugin.reset();
+    loaded->stagedLocalization.reset();
+    loaded->dirty = false;
+    rebuildGraphLocked();
+    return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getEditablePlugins() const {
@@ -714,6 +734,7 @@ Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
             {"Kind", pluginKind(loaded.plugin)},
             {"LoadOrder", index},
             {"Editable", isEditable(loaded)},
+            {"Pending", loaded.dirty},
             {"Size", fo4::plugin_original_bytes(loaded.plugin).size()}
         });
     }

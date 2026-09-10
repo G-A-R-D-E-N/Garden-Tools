@@ -2200,6 +2200,7 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
     return std::nullopt;
 }
 
+
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                                                    const fo4::FormKey& quest,
                                                    const fo4::ConflictGraph& graph,
@@ -3054,6 +3055,45 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 allowedDirectory.value_or(std::filesystem::path{}), *localizedTables)) {
             return std::unexpected(*error);
         }
+        if (loaded->stagedLocalization.has_value()) {
+            const auto& staged = *loaded->stagedLocalization;
+            if (staged.dlstringsPath != localizedTables->dlstringsPath ||
+                staged.stringsPath != localizedTables->stringsPath ||
+                staged.ilstringsPath != localizedTables->ilstringsPath) {
+                return std::unexpected(Error{
+                    "LocalizedSidecarPathNotAllowed",
+                    "pending localization sidecars do not match the requested stringsDirectory"
+                });
+            }
+            try {
+                localizedTables->dlstrings = fo4::localization::read_string_table(
+                    staged.dlstringsBytes,
+                    fo4::localization::StringTableKind::dlstrings);
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{
+                    "LocalizedLogTableInvalid",
+                    "could not parse staged DLSTRINGS: " + std::string(error.what())
+                });
+            }
+            localizedTables->originalStringsBytes = staged.originalStringsBytes;
+            localizedTables->originalDlstringsBytes = staged.originalDlstringsBytes;
+            localizedTables->originalIlstringsBytes = staged.originalIlstringsBytes;
+            std::uint32_t maximum = 0;
+            for (const auto* table : {&localizedTables->strings,
+                                      &localizedTables->dlstrings,
+                                      &localizedTables->ilstrings}) {
+                for (const auto& entry : table->entries) {
+                    maximum = std::max(maximum, entry.id);
+                }
+            }
+            if (maximum == std::numeric_limits<std::uint32_t>::max()) {
+                return std::unexpected(Error{
+                    "LocalizedLogTableFull",
+                    "localized string-table ID space is exhausted"
+                });
+            }
+            localizedTables->nextId = maximum + 1;
+        }
     }
     try {
         previousStages = fo4::forms::decode_quest_stages(loaded->plugin, questKey);
@@ -3370,7 +3410,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         }
         fo4::forms::write_quest_stages(mutated, questKey, stages);
         if (localizedTableChanged) {
-            const auto pluginBytes = fo4::write_plugin(mutated);
 #ifdef FO4IDE_TEST_HOOKS
             if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
 #endif
@@ -3389,26 +3428,23 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             } catch (const std::exception& error) {
                 return std::unexpected(Error{
                     "LocalizedLogTableInvalid",
-                    "could not re-read localized DLSTRINGS before writing: " +
+                    "could not re-read localized DLSTRINGS before staging: " +
                         std::string(error.what())
                 });
             }
-            const auto tableBytes = fo4::localization::write_string_table(
-                localizedTables->dlstrings);
-            fo4::io::write_file_pair_dependency_first(
+            stageLocalizationMutationLocked(*loaded, StagedLocalization{
                 localizedTables->dlstringsPath,
-                tableBytes,
-                loaded->path,
-                pluginBytes);
-            loaded->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            }
-            rebuildGraphLocked();
+                fo4::localization::write_string_table(localizedTables->dlstrings),
+                localizedTables->originalDlstringsBytes,
+                localizedTables->stringsPath,
+                localizedTables->originalStringsBytes,
+                localizedTables->ilstringsPath,
+                localizedTables->originalIlstringsBytes,
+            });
+            stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json(
                 "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
-                recordText + " in " + pluginName + ". Written to disk.");
+                recordText + " in " + pluginName + ". SavePlugin to persist.");
         }
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(

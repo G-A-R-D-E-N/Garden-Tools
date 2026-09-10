@@ -852,6 +852,8 @@ TEST_CASE("Native SetQuestStages allocates changed localized CNAM from the full 
             localizedQuestContext(root)
         }));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(path);
     const auto decoded = fo4::forms::decode_quest_stages(
@@ -925,6 +927,8 @@ TEST_CASE("Native SetQuestStages writes English CNAM text as CP1252") {
             localizedQuestContext(root)
         }));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto table = fo4::localization::read_string_table_file(
         root / "Strings" / "Patch_en.DLSTRINGS",
         fo4::localization::StringTableKind::dlstrings);
@@ -987,6 +991,8 @@ TEST_CASE("Native SetQuestStages writes supported non-English CNAM text as UTF-8
             localizedQuestContext(root, "de")
         }));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto table = fo4::localization::read_string_table_file(
         root / "Strings" / "Patch_de.DLSTRINGS",
         fo4::localization::StringTableKind::dlstrings);
@@ -1044,6 +1050,8 @@ TEST_CASE("Native SetQuestStages allocates a brand-new localized CNAM") {
             localizedQuestContext(root)
         }));
     REQUIRE(result.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto table = fo4::localization::read_string_table_file(
         root / "Strings" / "Patch_en.DLSTRINGS",
         fo4::localization::StringTableKind::dlstrings);

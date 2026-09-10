@@ -153,6 +153,7 @@ add_executable(
     fo4ide_test_quest_authoring
     unit/RadiclePluginQuestAuthoringTests.cpp
     unit/RadiclePluginDeferredLocalizationTests.cpp
+    unit/RadiclePluginPendingLifecycleTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
