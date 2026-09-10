@@ -222,6 +222,12 @@ TEST_CASE("Localized CNAM stages sidecars until SavePlugin") {
     CHECK(readBytes(path) == pluginBefore);
     CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == dlBefore);
     CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+    const auto treeRaw = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(treeRaw.has_value());
+    const auto tree = nlohmann::json::parse(treeRaw->get<std::string>());
+    REQUIRE(tree.size() == 1u);
+    CHECK(tree[0].at("Key") == "Patch.esp");
+    CHECK(tree[0].at("Pending").get<bool>());
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -18,14 +19,15 @@ bool boolArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<bool>();
 }
 
-nlohmann::json pendingPluginRows(const nlohmann::json& raw) {
+std::optional<nlohmann::json> pendingPluginRows(const nlohmann::json& raw) {
     if (raw.is_array()) return raw;
-    if (!raw.is_string()) return nlohmann::json::array();
+    if (!raw.is_string()) return std::nullopt;
     try {
         auto parsed = nlohmann::json::parse(raw.get<std::string>());
-        return parsed.is_array() ? parsed : nlohmann::json::array();
+        if (!parsed.is_array()) return std::nullopt;
+        return parsed;
     } catch (const nlohmann::json::exception&) {
-        return nlohmann::json::array();
+        return std::nullopt;
     }
 }
 
@@ -90,12 +92,20 @@ Result<nlohmann::json> AppInteropTarget::loadEnvironment(const nlohmann::json& a
 
 Result<void> AppInteropTarget::rejectPendingReloadUnlessDiscarded(bool discardPending) const {
     if (discardPending || !plugins_.capabilities().available) return {};
-    auto raw = plugins_.invoke("backend.GetActivePlugins", nlohmann::json::array());
-    if (!raw) return {};
+    auto raw = plugins_.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    if (!raw) return std::unexpected(raw.error());
+    auto rows = pendingPluginRows(*raw);
+    if (!rows) {
+        return std::unexpected(Error{
+            "PendingStatusUnavailable",
+            "Could not inspect pending plugin edits before reloading the MO2 profile"
+        });
+    }
     std::string pendingList;
-    for (const auto& row : pendingPluginRows(*raw)) {
+    for (const auto& row : *rows) {
         if (!row.is_object() || !row.value("Pending", false)) continue;
-        const auto name = row.value("Name", std::string{});
+        auto name = row.value("Key", std::string{});
+        if (name.empty()) name = row.value("Name", std::string{});
         if (name.empty()) continue;
         if (!pendingList.empty()) pendingList += ", ";
         pendingList += name;
@@ -156,7 +166,8 @@ Result<nlohmann::json> AppInteropTarget::getPlugins() const {
             {"ConflictStatus", 0},
             {"IsRecordNode", false},
             {"HasChildren", plugins_.capabilities().available},
-            {"FilePath", plugin.resolved ? plugin.path.string() : std::string{}}
+            {"FilePath", plugin.resolved ? plugin.path.string() : std::string{}},
+            {"Pending", false}
         });
     }
     return rows.dump();
@@ -173,11 +184,15 @@ Result<nlohmann::json> AppInteropTarget::getMo2Status() const {
         loadedAt = loadedAt_;
     }
 
+    auto pending = pendingPluginNames();
     if (!current) {
         return nlohmann::json{
             {"loaded", false},
             {"configuredInstance", settings_.mo2InstancePath.string()},
-            {"stale", false}
+            {"stale", false},
+            {"staleConfig", false},
+            {"staleLoadOrder", false},
+            {"pendingPlugins", std::move(pending)}
         };
     }
 
@@ -193,8 +208,27 @@ Result<nlohmann::json> AppInteropTarget::getMo2Status() const {
         {"missingPluginCount", current->missingPlugins.size()},
         {"loadedAtUnixMs", loadedAtMs},
         {"stale", isSnapshotStale(watched)},
-        {"nativePluginBackend", plugins_.capabilities().available}
+        {"staleConfig", isWatchKindStale(watched, WatchKind::config)},
+        {"staleLoadOrder", isWatchKindStale(watched, WatchKind::loadOrder)},
+        {"nativePluginBackend", plugins_.capabilities().available},
+        {"pendingPlugins", std::move(pending)}
     };
+}
+
+nlohmann::json AppInteropTarget::pendingPluginNames() const {
+    nlohmann::json names = nlohmann::json::array();
+    if (!plugins_.capabilities().available) return names;
+    auto raw = plugins_.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    if (!raw) return names;
+    auto rows = pendingPluginRows(*raw);
+    if (!rows) return names;
+    for (const auto& row : *rows) {
+        if (!row.is_object() || !row.value("Pending", false)) continue;
+        auto name = row.value("Key", std::string{});
+        if (name.empty()) name = row.value("Name", std::string{});
+        if (!name.empty()) names.push_back(name);
+    }
+    return names;
 }
 
 Result<nlohmann::json> AppInteropTarget::reloadMo2Profile(const nlohmann::json& args) {
@@ -262,22 +296,24 @@ nlohmann::json AppInteropTarget::backendEnvironment(const mo2::ProfileSnapshot& 
 std::vector<AppInteropTarget::WatchedFile> AppInteropTarget::captureWatchFiles(
     const mo2::ProfileSnapshot& snapshot) const {
     const auto profileRoot = snapshot.instance.instancePath / "profiles" / snapshot.instance.profile;
-    const std::vector<std::filesystem::path> paths{
-        snapshot.instance.instancePath / "ModOrganizer.ini",
-        profileRoot / "plugins.txt",
-        profileRoot / "modlist.txt",
-        profileRoot / "loadorder.txt"
+    return {
+        {snapshot.instance.instancePath / "ModOrganizer.ini",
+         fileStamp(snapshot.instance.instancePath / "ModOrganizer.ini"),
+         WatchKind::config},
+        {profileRoot / "plugins.txt", fileStamp(profileRoot / "plugins.txt"), WatchKind::loadOrder},
+        {profileRoot / "modlist.txt", fileStamp(profileRoot / "modlist.txt"), WatchKind::loadOrder},
+        {profileRoot / "loadorder.txt", fileStamp(profileRoot / "loadorder.txt"), WatchKind::loadOrder},
     };
-
-    std::vector<WatchedFile> watched;
-    watched.reserve(paths.size());
-    for (const auto& path : paths) watched.emplace_back(path, fileStamp(path));
-    return watched;
 }
 
 bool AppInteropTarget::isSnapshotStale(const std::vector<WatchedFile>& files) const {
-    for (const auto& [path, stamp] : files) {
-        if (fileStamp(path) != stamp) return true;
+    return isWatchKindStale(files, WatchKind::config) ||
+           isWatchKindStale(files, WatchKind::loadOrder);
+}
+
+bool AppInteropTarget::isWatchKindStale(const std::vector<WatchedFile>& files, WatchKind kind) const {
+    for (const auto& file : files) {
+        if (file.kind == kind && fileStamp(file.path) != file.stamp) return true;
     }
     return false;
 }

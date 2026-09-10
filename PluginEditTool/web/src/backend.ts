@@ -105,10 +105,21 @@ export interface LoadOrderSummary {
 }
 
 
+export interface Mo2Status {
+  loaded: boolean;
+  stale: boolean;
+  staleConfig?: boolean;
+  staleLoadOrder?: boolean;
+  pendingPlugins?: string[];
+  profile?: string;
+}
+
 export interface AppInterop {
   BrowseForMo2Folder(): Promise<string>;
   OpenMo2Profile(instancePath: string, discardPending?: boolean): Promise<void>;
   LoadEnvironment(discardPending?: boolean): Promise<void>;
+  GetMo2Status(): Promise<Mo2Status | string>;
+  ReloadMo2Profile(discardPending?: boolean): Promise<Mo2Status | string>;
   ScanConflicts(): Promise<string>;
   ScanBrokenRefs(): Promise<string>;
   RefreshTree(): Promise<string>;

@@ -60,7 +60,9 @@ return a "not configured" message instead of silently failing.
 ### Confirming it connected
 
 Restart the client, or in Claude Code run `/mcp reconnect`. Then ask it to call `list_plugins` -- if
-you get your load order back, it works. (`ping` is a JSON-RPC method the client uses for its own
+you get your load order back, it works. Each row includes `Pending` for unsaved in-memory edits.
+Call `list_plugins` or `get_mo2_status` (`pendingPlugins`) before `save_plugin`, `discard_plugin`, or
+`reload_mo2_profile`. (`ping` is a JSON-RPC method the client uses for its own
 health checks, not a tool; asking the AI to "call ping" will not work.)
 
 > **After you rebuild the exe, the running server is the old code.** Stop every `FO4RecordEditor.exe`
@@ -74,6 +76,11 @@ health checks, not a tool; asking the AI to "call ping" will not work.)
 ### Plugin lifecycle
 `open_plugin` · `create_plugin` · `save_plugin` · `reload_plugin` · `backup_plugin` · `list_plugins`
 · `check_plugin` · `clean_plugin` · `strip_masters_clean` · `list_masters` · `reorder_masters`
+
+`get_mo2_status` reports whether the loaded profile is current or stale. `staleConfig` means
+`ModOrganizer.ini` changed; `staleLoadOrder` means `plugins.txt`, `modlist.txt`, or `loadorder.txt`
+changed; `stale` is either. `pendingPlugins` lists dirty plugins. Call it before `reload_mo2_profile`.
+Reload fails closed unless `discard_pending` is true.
 
 ### Reading and analysis
 `get_record` · `get_winning_record` · `list_records` · `list_records_summary` · `list_record_types` ·

@@ -28,7 +28,12 @@ public:
     std::optional<mo2::ProfileSnapshot> snapshot() const;
 
 private:
-    using WatchedFile = std::pair<std::filesystem::path, std::filesystem::file_time_type>;
+    enum class WatchKind { config, loadOrder };
+    struct WatchedFile {
+        std::filesystem::path path;
+        std::filesystem::file_time_type stamp{};
+        WatchKind kind{WatchKind::loadOrder};
+    };
 
     Result<nlohmann::json> browseForMo2Folder();
     Result<nlohmann::json> openMo2Profile(const nlohmann::json& args);
@@ -44,8 +49,10 @@ private:
 
     nlohmann::json backendEnvironment(const mo2::ProfileSnapshot& snapshot,
                                       bool discardPending) const;
+    nlohmann::json pendingPluginNames() const;
     std::vector<WatchedFile> captureWatchFiles(const mo2::ProfileSnapshot& snapshot) const;
     bool isSnapshotStale(const std::vector<WatchedFile>& files) const;
+    bool isWatchKindStale(const std::vector<WatchedFile>& files, WatchKind kind) const;
 
     settings::Store& store_;
     settings::Settings& settings_;

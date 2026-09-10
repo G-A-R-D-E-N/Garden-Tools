@@ -519,7 +519,8 @@ Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
             {"ConflictStatus", 0},
             {"IsRecordNode", false},
             {"HasChildren", !loaded.plugin.groups.empty()},
-            {"FilePath", loaded.path.string()}
+            {"FilePath", loaded.path.string()},
+            {"Pending", loaded.dirty}
         });
     }
     return nlohmann::json(rows.dump());

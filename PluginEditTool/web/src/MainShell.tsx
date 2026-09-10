@@ -33,7 +33,7 @@ import TopBar, { type ShellTab } from './Shell/TopBar';
 import DetailRail from './Shell/DetailRail';
 import StatusBar from './Shell/StatusBar';
 import type {
-  ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary,
+  ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
 } from './backend';
 import type { RecordTab } from './RecordView';
 
@@ -196,6 +196,7 @@ export default function MainShell() {
 
 
   const [envLoading, setEnvLoading] = useState(false);
+  const [mo2Status, setMo2Status] = useState<Mo2Status | null>(null);
 
 
 
@@ -364,6 +365,50 @@ export default function MainShell() {
   }, []);
 
 
+  const parseMo2Status = (raw: unknown): Mo2Status | null => {
+    try {
+      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!value || typeof value !== 'object') return null;
+      return value as Mo2Status;
+    } catch {
+      return null;
+    }
+  };
+
+  const refreshMo2Status = async () => {
+    const b = window.chrome?.webview?.hostObjects?.appInterop as
+      | { GetMo2Status?: () => Promise<unknown> }
+      | undefined;
+    if (!b?.GetMo2Status) return;
+    try {
+      setMo2Status(parseMo2Status(await b.GetMo2Status()));
+    } catch {
+      setMo2Status(null);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      const b = window.chrome?.webview?.hostObjects?.appInterop as
+        | { GetMo2Status?: () => Promise<unknown> }
+        | undefined;
+      if (!b?.GetMo2Status) return;
+      try {
+        const next = parseMo2Status(await b.GetMo2Status());
+        if (!cancelled) setMo2Status(next);
+      } catch {
+        if (!cancelled) setMo2Status(null);
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [backend]);
+
   const refreshPlugins = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;
     if (!b) return;
@@ -372,6 +417,7 @@ export default function MainShell() {
     setErrorStr("");
 
     await refreshNavigator();
+    await refreshMo2Status();
   };
 
   const isPendingReloadError = (err: unknown) =>
@@ -1024,6 +1070,11 @@ export default function MainShell() {
         visibleCount={recordTypes.reduce((n, t) => n + t.Count, 0)}
         selectedCount={openRecord ? 1 : 0}
         loadOrder={loadOrderSummary?.Plugins ?? plugins.map(p => p.Key)}
+        mo2Loaded={Boolean(mo2Status?.loaded)}
+        mo2Stale={Boolean(mo2Status?.loaded && mo2Status.stale)}
+        mo2StaleConfig={Boolean(mo2Status?.staleConfig)}
+        mo2StaleLoadOrder={Boolean(mo2Status?.staleLoadOrder)}
+        mo2Profile={mo2Status?.profile}
       />
 
       {brokenRefsReport !== null && (
