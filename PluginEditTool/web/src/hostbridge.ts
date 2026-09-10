@@ -27,7 +27,10 @@ async function call(target: string, method: string, args: unknown[]): Promise<un
   });
   if (!res.ok) throw new Error(`${target}.${method}: HTTP ${res.status} ${res.statusText}`);
   const body = await res.json();
-  if (!body.ok) throw new Error(`${target}.${method}: ${body.error ?? 'unknown error'}`);
+  if (!body.ok) {
+    const type = typeof body.type === 'string' && body.type ? `${body.type}: ` : '';
+    throw new Error(`${target}.${method}: ${type}${body.error ?? 'unknown error'}`);
+  }
   return body.value;
 }
 

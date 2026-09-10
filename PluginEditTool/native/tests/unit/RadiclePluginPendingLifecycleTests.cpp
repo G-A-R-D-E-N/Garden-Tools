@@ -383,3 +383,36 @@ TEST_CASE("DiscardPlugin is scoped to one plugin") {
     CHECK(healthOnDisk(secondPath, "000800:Other.esp") == 20u);
     CHECK(healthOnDisk(firstPath, "000800:Patch.esp") == 50u);
 }
+
+TEST_CASE("LoadMo2 refuses to replace pending plugins unless discardPending is set") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeLocalizedPlugin());
+    writeLocalizationSet(root);
+    const auto pluginBefore = readBytes(path);
+    const auto environment = nlohmann::json{{"plugins", nlohmann::json::array({
+        {{"name", "Patch.esp"}, {"path", path.string()}, {"source", "PendingLifecycle"}, {"resolved", true}}
+    })}};
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
+    })).has_value());
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+
+    const auto blocked = backend.invoke("environment.LoadMo2", environment);
+    REQUIRE_FALSE(blocked.has_value());
+    CHECK(blocked.error().type == "PluginHasPendingChanges");
+    CHECK(blocked.error().message.find("Patch.esp") != std::string::npos);
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+    CHECK(readBytes(path) == pluginBefore);
+
+    auto discarding = environment;
+    discarding["discardPending"] = true;
+    REQUIRE(backend.invoke("environment.LoadMo2", discarding).has_value());
+    CHECK_FALSE(pluginPending(activePlugins(backend), "Patch.esp"));
+    CHECK(healthOnDisk(path, "000800:Patch.esp") == 50u);
+    CHECK(readBytes(path) == pluginBefore);
+}

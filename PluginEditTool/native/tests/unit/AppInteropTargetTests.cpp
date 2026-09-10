@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -56,7 +57,7 @@ public:
     }
 };
 
-class FakePluginBackend final : public fo4ide::plugin::IPluginBackend {
+class FakePluginBackend : public fo4ide::plugin::IPluginBackend {
 public:
     std::vector<std::pair<std::string, nlohmann::json>> calls;
 
@@ -159,8 +160,11 @@ TEST_CASE("AppInterop sends one normalized MO2 environment to the native plugin 
 
     REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()})).has_value());
     REQUIRE_FALSE(plugins.calls.empty());
-    CHECK(plugins.calls.front().first == "environment.LoadMo2");
-    const auto& environment = plugins.calls.front().second;
+    const auto load = std::find_if(
+        plugins.calls.begin(), plugins.calls.end(),
+        [](const auto& call) { return call.first == "environment.LoadMo2"; });
+    REQUIRE(load != plugins.calls.end());
+    const auto& environment = load->second;
     CHECK(environment.at("profile") == "Test");
     CHECK(environment.at("dataFolder") == (root / "Game" / "Data").string());
     CHECK(environment.at("plugins").is_array());
@@ -199,4 +203,52 @@ TEST_CASE("AppInterop reports MO2 profile staleness and reload clears it") {
     auto reloaded = target.invoke("ReloadMo2Profile", nlohmann::json::array());
     REQUIRE(reloaded.has_value());
     CHECK_FALSE(reloaded->at("stale").get<bool>());
+}
+
+TEST_CASE("AppInterop refuses profile reload while plugins have pending edits") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    makeProfile(root);
+
+    class PendingPluginBackend final : public FakePluginBackend {
+    public:
+        bool pending{false};
+
+        fo4ide::Result<nlohmann::json> invoke(std::string_view operation,
+                                              const nlohmann::json& arguments) override {
+            calls.emplace_back(std::string(operation), arguments);
+            if (operation == "backend.GetActivePlugins") {
+                return nlohmann::json(pending
+                    ? std::string{R"([{"Name":"Patch.esp","Pending":true}])"}
+                    : std::string{R"([{"Name":"Patch.esp","Pending":false}])"});
+            }
+            return nlohmann::json(nullptr);
+        }
+    };
+
+    fo4ide::settings::Store store(root / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    PendingPluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()})).has_value());
+    plugins.pending = true;
+    plugins.calls.clear();
+
+    auto blocked = target.invoke("ReloadMo2Profile", nlohmann::json::array());
+    REQUIRE_FALSE(blocked.has_value());
+    CHECK(blocked.error().type == "PluginHasPendingChanges");
+    CHECK(blocked.error().message.find("Patch.esp") != std::string::npos);
+    CHECK(std::none_of(
+        plugins.calls.begin(), plugins.calls.end(),
+        [](const auto& call) { return call.first == "environment.LoadMo2"; }));
+
+    auto discarded = target.invoke("ReloadMo2Profile", nlohmann::json::array({true}));
+    REQUIRE(discarded.has_value());
+    const auto load = std::find_if(
+        plugins.calls.begin(), plugins.calls.end(),
+        [](const auto& call) { return call.first == "environment.LoadMo2"; });
+    REQUIRE(load != plugins.calls.end());
+    CHECK(load->second.at("discardPending").get<bool>());
 }

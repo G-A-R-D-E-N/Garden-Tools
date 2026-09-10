@@ -18,8 +18,8 @@ No behavior changes are implied by this matrix; it is the pre-change inventory.
 | `discardCreatedPlugin` | create-target rollback | destructive discard (disk delete) | Only empty auto-created overwrite plugins. Not a general pending discard. |
 | Same-path `OpenPlugin` while dirty | `openPlugin` | fail-closed | `PluginHasPendingChanges`; message mentions discard, but no general discard API exists. |
 | Same-path `OpenPlugin` while clean | `openPlugin` | destructive reload | Replaces in-memory plugin from disk. |
-| `environment.LoadMo2` / MCP `reload_mo2_profile` | `loadEnvironment` | destructive reload/discard | Replaces entire `plugins_` from disk; silently drops all pending. MCP text discloses discard. |
-| Profile open (`OpenMo2Profile` then LoadMo2) | same | destructive reload/discard | Same wipe. |
+| `environment.LoadMo2` / MCP `reload_mo2_profile` | `PluginEditTool/native/src/plugin/RadiclePluginBackend.cpp:loadEnvironment` | fail-closed reload; explicit discard | Replaces entire `plugins_` from disk. Default refuses `PluginHasPendingChanges`. `discardPending` / MCP `discard_pending=true` is the explicit destructive path. |
+| Profile open (`OpenMo2Profile` then LoadMo2) | `PluginEditTool/native/src/app/AppInteropTarget.cpp:loadProfile` | fail-closed reload; explicit discard | Same policy; UI confirms before `discardPending`. |
 | Per-plugin pending status for UI/MCP | `getActivePlugins` / `GetPlugins` | missing | `dirty` is internal only; not exposed. |
 | Explicit per-plugin discard of pending edits | none | missing | No `DiscardPlugin`. Only profile reload or created-plugin delete. |
 | Close/unload single plugin | none | absent | No dedicated close API; unload only via full environment reload. |
@@ -43,3 +43,7 @@ No behavior changes are implied by this matrix; it is the pre-change inventory.
 ## Post-#274 blocker fix
 
 Repeated localized CNAM edits before `SavePlugin` must consume `stagedLocalization.dlstringsBytes` as the working DLSTRINGS table. Disk-only reloads miss newly allocated pending IDs and fail with `LocalizedLogTableInvalid`. Freshness baselines remain the original on-disk sibling bytes captured at first stage.
+
+## Post-#274 MO2 reload policy
+
+`PluginEditTool/native/src/plugin/RadiclePluginBackend.cpp:loadEnvironment` refuses to replace `plugins_` while any loaded plugin is dirty unless `discardPending` is true. `PluginEditTool/native/src/app/AppInteropTarget.cpp:loadProfile` checks `backend.GetActivePlugins` first so a blocked reload does not rewrite settings or trusted save roots. MCP `PluginEditTool/native/apps/fo4ide/McpTools.cpp:registerNativeMcpTools` `reload_mo2_profile` defaults to that fail-closed path; `discard_pending=true` is the explicit destructive reload. Desktop `PluginEditTool/web/src/MainShell.tsx:handleLoadEnv` / `handleLoadMo2` confirm before retrying with discard.

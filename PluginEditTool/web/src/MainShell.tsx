@@ -374,12 +374,29 @@ export default function MainShell() {
     await refreshNavigator();
   };
 
+  const isPendingReloadError = (err: unknown) =>
+    String((err as { message?: string })?.message ?? err ?? '').includes('PluginHasPendingChanges');
+
+  const confirmDiscardPendingReload = async () => askConfirm({
+    title: 'Discard pending edits?',
+    message: 'Reloading the MO2 profile replaces every loaded plugin from disk and will discard unsaved edits. Save those plugins first, or discard them to continue.',
+    confirmLabel: 'Discard and reload',
+    cancelLabel: 'Cancel',
+    danger: true,
+  });
+
   const handleLoadEnv = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;
     if (!b) return;
     setEnvLoading(true);
     try {
-      await b.LoadEnvironment();
+      try {
+        await b.LoadEnvironment();
+      } catch (err: any) {
+        if (!isPendingReloadError(err)) throw err;
+        if (!(await confirmDiscardPendingReload())) return;
+        await b.LoadEnvironment(true);
+      }
       await refreshPlugins();
     } catch (err: any) {
       setErrorStr(err?.message || JSON.stringify(err));
@@ -396,7 +413,13 @@ export default function MainShell() {
       const path = await b.BrowseForMo2Folder();
       if (!path) return;
       setEnvLoading(true);
-      await b.OpenMo2Profile(path);
+      try {
+        await b.OpenMo2Profile(path);
+      } catch (err: any) {
+        if (!isPendingReloadError(err)) throw err;
+        if (!(await confirmDiscardPendingReload())) return;
+        await b.OpenMo2Profile(path, true);
+      }
       await refreshPlugins();
     } catch (err: any) {
       setErrorStr(err?.message || JSON.stringify(err));

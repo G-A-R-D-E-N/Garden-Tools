@@ -28,6 +28,27 @@ it.each([true, false])('uses HTTP RPC on loopback with WebView2 present: %s', as
   });
 });
 
+it('includes RPC error type in thrown host-object failures', async () => {
+  vi.stubGlobal('window', {
+    location: new URL('http://127.0.0.1:49152/#/main'),
+    chrome: undefined,
+  });
+  vi.stubGlobal('EventSource', vi.fn(class {}));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      ok: false,
+      type: 'PluginHasPendingChanges',
+      error: 'Pending plugin edits would be discarded',
+    }),
+  }));
+
+  await import('./hostbridge');
+
+  await expect(window.chrome?.webview?.hostObjects?.appInterop?.LoadEnvironment())
+    .rejects.toThrow('appInterop.LoadEnvironment: PluginHasPendingChanges: Pending plugin edits would be discarded');
+});
+
 it('preserves the legacy host objects on app.local', async () => {
   const legacyWebview = { hostObjects: {} };
   vi.stubGlobal('window', {

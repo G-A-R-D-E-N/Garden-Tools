@@ -415,6 +415,28 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         return std::unexpected(Error{"InvalidEnvironment", "MO2 environment is missing its plugin list"});
     }
 
+    const bool discardPending = arguments.contains("discardPending") &&
+                                arguments["discardPending"].is_boolean() &&
+                                arguments["discardPending"].get<bool>();
+    if (!discardPending) {
+        std::string pendingList;
+        {
+            std::scoped_lock lock(mutex_);
+            for (const auto& item : plugins_) {
+                if (!item.dirty) continue;
+                if (!pendingList.empty()) pendingList += ", ";
+                pendingList += item.name;
+            }
+        }
+        if (!pendingList.empty()) {
+            return std::unexpected(Error{
+                "PluginHasPendingChanges",
+                "Pending plugin edits would be discarded by reloading the MO2 profile; "
+                "save or discard them first: " + pendingList
+            });
+        }
+    }
+
     std::vector<LoadedPlugin> loaded;
     nlohmann::json errors = nlohmann::json::array();
 

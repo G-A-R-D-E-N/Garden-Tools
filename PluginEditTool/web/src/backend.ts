@@ -107,8 +107,8 @@ export interface LoadOrderSummary {
 
 export interface AppInterop {
   BrowseForMo2Folder(): Promise<string>;
-  OpenMo2Profile(instancePath: string): Promise<void>;
-  LoadEnvironment(): Promise<void>;
+  OpenMo2Profile(instancePath: string, discardPending?: boolean): Promise<void>;
+  LoadEnvironment(discardPending?: boolean): Promise<void>;
   ScanConflicts(): Promise<string>;
   ScanBrokenRefs(): Promise<string>;
   RefreshTree(): Promise<string>;

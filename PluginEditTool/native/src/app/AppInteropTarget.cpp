@@ -13,6 +13,22 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
+bool boolArgument(const nlohmann::json& args, std::size_t index) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
+    return args[index].get<bool>();
+}
+
+nlohmann::json pendingPluginRows(const nlohmann::json& raw) {
+    if (raw.is_array()) return raw;
+    if (!raw.is_string()) return nlohmann::json::array();
+    try {
+        auto parsed = nlohmann::json::parse(raw.get<std::string>());
+        return parsed.is_array() ? parsed : nlohmann::json::array();
+    } catch (const nlohmann::json::exception&) {
+        return nlohmann::json::array();
+    }
+}
+
 std::filesystem::file_time_type fileStamp(const std::filesystem::path& path) {
     std::error_code ec;
     const auto stamp = std::filesystem::last_write_time(path, ec);
@@ -31,10 +47,10 @@ Result<nlohmann::json> AppInteropTarget::invoke(std::string_view method,
                                                  const nlohmann::json& args) {
     if (method == "BrowseForMo2Folder") return browseForMo2Folder();
     if (method == "OpenMo2Profile") return openMo2Profile(args);
-    if (method == "LoadEnvironment") return loadEnvironment();
+    if (method == "LoadEnvironment") return loadEnvironment(args);
     if (method == "RefreshTree" || method == "GetPlugins") return getPlugins();
     if (method == "GetMo2Status") return getMo2Status();
-    if (method == "ReloadMo2Profile") return reloadMo2Profile();
+    if (method == "ReloadMo2Profile") return reloadMo2Profile(args);
     if (method == "GetChildren") return pluginOperation(method, args, nlohmann::json("[]"));
     if (method == "OpenRecord") return pluginOperation(method, args, nlohmann::json(""));
     if (method == "ScanConflicts") return pluginOperation(method, args, nlohmann::json("Native plugin backend is not connected yet."));
@@ -58,21 +74,45 @@ Result<nlohmann::json> AppInteropTarget::browseForMo2Folder() {
 Result<nlohmann::json> AppInteropTarget::openMo2Profile(const nlohmann::json& args) {
     const auto instance = std::filesystem::path(stringArgument(args, 0));
     if (instance.empty()) return std::unexpected(Error{"Mo2InstanceMissing", "MO2 instance path is empty"});
-    auto loaded = loadProfile(instance);
+    auto loaded = loadProfile(instance, boolArgument(args, 1));
     if (!loaded) return std::unexpected(loaded.error());
     return nlohmann::json(nullptr);
 }
 
-Result<nlohmann::json> AppInteropTarget::loadEnvironment() {
+Result<nlohmann::json> AppInteropTarget::loadEnvironment(const nlohmann::json& args) {
     if (settings_.mo2InstancePath.empty()) {
         return std::unexpected(Error{"EnvironmentUnavailable", "No MO2 instance is configured"});
     }
-    auto loaded = loadProfile(settings_.mo2InstancePath);
+    auto loaded = loadProfile(settings_.mo2InstancePath, boolArgument(args, 0));
     if (!loaded) return std::unexpected(loaded.error());
     return nlohmann::json(nullptr);
 }
 
-Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instancePath) {
+Result<void> AppInteropTarget::rejectPendingReloadUnlessDiscarded(bool discardPending) const {
+    if (discardPending || !plugins_.capabilities().available) return {};
+    auto raw = plugins_.invoke("backend.GetActivePlugins", nlohmann::json::array());
+    if (!raw) return {};
+    std::string pendingList;
+    for (const auto& row : pendingPluginRows(*raw)) {
+        if (!row.is_object() || !row.value("Pending", false)) continue;
+        const auto name = row.value("Name", std::string{});
+        if (name.empty()) continue;
+        if (!pendingList.empty()) pendingList += ", ";
+        pendingList += name;
+    }
+    if (pendingList.empty()) return {};
+    return std::unexpected(Error{
+        "PluginHasPendingChanges",
+        "Pending plugin edits would be discarded by reloading the MO2 profile; "
+        "save or discard them first: " + pendingList
+    });
+}
+
+Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instancePath,
+                                           bool discardPending) {
+    auto blocked = rejectPendingReloadUnlessDiscarded(discardPending);
+    if (!blocked) return std::unexpected(blocked.error());
+
     auto loaded = mo2::readProfile(instancePath);
     if (!loaded) return std::unexpected(loaded.error());
 
@@ -86,7 +126,8 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
         if (!clearedRoot) return std::unexpected(clearedRoot.error());
         auto outputRoot = plugins_.setTrustedNewPluginRoot(loaded->instance.overwriteFolder);
         if (!outputRoot) return std::unexpected(outputRoot.error());
-        auto backendLoad = plugins_.invoke("environment.LoadMo2", backendEnvironment(*loaded));
+        auto backendLoad = plugins_.invoke(
+            "environment.LoadMo2", backendEnvironment(*loaded, discardPending));
         if (!backendLoad) return std::unexpected(backendLoad.error());
     }
 
@@ -156,7 +197,7 @@ Result<nlohmann::json> AppInteropTarget::getMo2Status() const {
     };
 }
 
-Result<nlohmann::json> AppInteropTarget::reloadMo2Profile() {
+Result<nlohmann::json> AppInteropTarget::reloadMo2Profile(const nlohmann::json& args) {
     std::filesystem::path instance;
     {
         std::scoped_lock lock(mutex_);
@@ -167,7 +208,7 @@ Result<nlohmann::json> AppInteropTarget::reloadMo2Profile() {
         return std::unexpected(Error{"Mo2InstanceMissing", "No MO2 instance is configured"});
     }
 
-    auto loaded = loadProfile(instance);
+    auto loaded = loadProfile(instance, boolArgument(args, 0));
     if (!loaded) return std::unexpected(loaded.error());
     return getMo2Status();
 }
@@ -179,7 +220,8 @@ Result<nlohmann::json> AppInteropTarget::pluginOperation(std::string_view method
     return plugins_.invoke("appInterop." + std::string(method), args);
 }
 
-nlohmann::json AppInteropTarget::backendEnvironment(const mo2::ProfileSnapshot& snapshot) const {
+nlohmann::json AppInteropTarget::backendEnvironment(const mo2::ProfileSnapshot& snapshot,
+                                                     bool discardPending) const {
     nlohmann::json plugins = nlohmann::json::array();
     for (const auto& plugin : snapshot.plugins) {
         plugins.push_back({
@@ -212,7 +254,8 @@ nlohmann::json AppInteropTarget::backendEnvironment(const mo2::ProfileSnapshot& 
         {"enabledModsHighToLow", std::move(mods)},
         {"plugins", std::move(plugins)},
         {"missingPlugins", snapshot.missingPlugins},
-        {"assetRootsLowToHigh", std::move(assetRoots)}
+        {"assetRootsLowToHigh", std::move(assetRoots)},
+        {"discardPending", discardPending}
     };
 }
 

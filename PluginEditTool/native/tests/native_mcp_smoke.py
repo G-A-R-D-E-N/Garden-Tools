@@ -89,7 +89,10 @@ def main(executable):
                 call("open_plugin", {"path": str(path)}, failed=True)
                 assert read_record() == "Open Guard Eyes"
                 assert path.read_bytes() == saved
-                call("reload_mo2_profile")
+                call("reload_mo2_profile", failed=True)
+                assert read_record() == "Open Guard Eyes"
+                assert path.read_bytes() == saved
+                call("reload_mo2_profile", {"discard_pending": True})
                 assert read_record() == "Saved Eyes"
                 call("set_field", dict(edit, value="Discard These Eyes"))
                 assert read_record() == "Discard These Eyes"

@@ -32,16 +32,18 @@ private:
 
     Result<nlohmann::json> browseForMo2Folder();
     Result<nlohmann::json> openMo2Profile(const nlohmann::json& args);
-    Result<nlohmann::json> loadEnvironment();
+    Result<nlohmann::json> loadEnvironment(const nlohmann::json& args);
     Result<nlohmann::json> getPlugins() const;
     Result<nlohmann::json> getMo2Status() const;
-    Result<nlohmann::json> reloadMo2Profile();
-    Result<void> loadProfile(const std::filesystem::path& instancePath);
+    Result<nlohmann::json> reloadMo2Profile(const nlohmann::json& args);
+    Result<void> rejectPendingReloadUnlessDiscarded(bool discardPending) const;
+    Result<void> loadProfile(const std::filesystem::path& instancePath, bool discardPending);
     Result<nlohmann::json> pluginOperation(std::string_view method,
                                            const nlohmann::json& args,
                                            nlohmann::json fallback) const;
 
-    nlohmann::json backendEnvironment(const mo2::ProfileSnapshot& snapshot) const;
+    nlohmann::json backendEnvironment(const mo2::ProfileSnapshot& snapshot,
+                                      bool discardPending) const;
     std::vector<WatchedFile> captureWatchFiles(const mo2::ProfileSnapshot& snapshot) const;
     bool isSnapshotStale(const std::vector<WatchedFile>& files) const;
 

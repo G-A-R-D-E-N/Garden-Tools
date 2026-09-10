@@ -137,8 +137,16 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
              "app", "GetHealth")) return false;
     if (!add({"get_mo2_status", "Report the loaded MO2 instance/profile and whether its files changed on disk", emptySchema},
              "appInterop", "GetMo2Status")) return false;
-    if (!add({"reload_mo2_profile", "Discard pending edits and reload enabled plugins from the currently configured MO2 profile", emptySchema},
-             "appInterop", "ReloadMo2Profile")) return false;
+    if (!add({"reload_mo2_profile",
+              "Reload enabled plugins from the currently configured MO2 profile. Fails if any plugin has pending edits unless discard_pending is true",
+              objectSchema({
+                  {"discard_pending",
+                   {{"type", "boolean"},
+                    {"description",
+                     "Discard all pending in-memory plugin edits before reloading. Defaults to false."}}}
+              })},
+             "appInterop", "ReloadMo2Profile",
+             {"discard_pending"})) return false;
     if (!add({"get_settings", "Return the current FO4IDE settings", emptySchema},
              "settings", "GetSettings")) return false;
 
