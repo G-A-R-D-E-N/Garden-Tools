@@ -164,18 +164,10 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
         });
     }
 
-    try {
-        fo4::write_plugin_file(loaded->plugin, loaded->path);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        loaded->originalPlugin.reset();
-        loaded->dirty = false;
-        return nlohmann::json("Saved " + name + ".");
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"PluginWriteFailed", error.what()});
+    if (const auto persisted = persistPluginLocked(*loaded, loaded->path); !persisted) {
+        return std::unexpected(persisted.error());
     }
+    return nlohmann::json("Saved " + name + ".");
 }
 
 }

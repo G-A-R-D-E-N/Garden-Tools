@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <mutex>
 #include <optional>
@@ -53,6 +54,16 @@ public:
     void setDataDirectory(std::filesystem::path dataDirectory);
 
 private:
+    struct StagedLocalization {
+        std::filesystem::path dlstringsPath;
+        std::vector<std::byte> dlstringsBytes;
+        std::vector<std::byte> originalDlstringsBytes;
+        std::filesystem::path stringsPath;
+        std::vector<std::byte> originalStringsBytes;
+        std::filesystem::path ilstringsPath;
+        std::vector<std::byte> originalIlstringsBytes;
+    };
+
     struct LoadedPlugin {
         std::string name;
         std::filesystem::path path;
@@ -62,11 +73,15 @@ private:
         fo4::Plugin plugin;
         std::optional<fo4::Plugin> originalPlugin;
         bool dirty{false};
+        std::optional<StagedLocalization> stagedLocalization;
     };
 
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
+    void stageLocalizationMutationLocked(LoadedPlugin& loaded, StagedLocalization staged);
+    Result<void> persistPluginLocked(LoadedPlugin& loaded, const std::filesystem::path& output);
+    Result<nlohmann::json> discardPlugin(const nlohmann::json& arguments);
 
     Result<nlohmann::json> loadEnvironment(const nlohmann::json& arguments);
     Result<nlohmann::json> getPlugins() const;

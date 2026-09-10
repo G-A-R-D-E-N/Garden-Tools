@@ -16,13 +16,9 @@ The worker pool uses `std::jthread`, not `std::thread`, and the spawn loop is wr
 
 The niftool `geo` output is embedded as-is when it is a JSON object (mirrors the C# `JRaw` path); otherwise it is surfaced as an error entry. Unlike the C#, the parse is validated (`parse(..., nullptr, false)` + `is_discarded()`) so a malformed but `{`-leading output cannot corrupt the whole batch payload.
 
-## Native write model — eager persistence (intentional divergence from the C# oracle)
+## Native write model — deferred persistence (#174)
 
-The native backend is **write-through**: a record-edit RPC (`CreateMergedPatch`, `RevertOverrides`, `AddListItem`, `RemoveListItem`, the FormLink-list ops, …) mutates a copy of the plugin and calls `fo4::write_plugin_file` before returning. The C# oracle instead mutates an in-memory Mutagen mod and defers persistence to a later `SavePlugin`. This is a deliberate architectural difference in the port.
-
-Because of it, native response strings must **not** claim a save is still pending. Where the C# message ends in "save_plugin to persist" / "then save it", the native message states the truth ("Written to disk.") rather than copying the oracle text for string parity. Load-order advice that is still accurate (e.g. "Ensure X loads last") is kept. `RevertOverrides` already embeds a real save result in both the oracle and the native port, so its message needed no change.
-
-The proper long-term fix — give the native backend an in-memory dirty-state model and make `SavePlugin` the only thing that touches disk, restoring full oracle semantics — is tracked as separate future work, not done in these PRs.
+Ordinary record-edit RPCs stage in-memory dirty state via `stagePluginMutationLocked` and require `SavePlugin` to persist. Localized QUST CNAM table changes stage DLSTRINGS through `stagedLocalization` and flush on the same explicit save path (`persistPluginLocked` + dependency-first write). `DiscardPlugin` restores the last persisted snapshot without writing disk. See `docs/code-notes/174c-pending-lifecycle-audit.md` and the `#174C pending lifecycle` note below.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginOverridePatch.cpp:createMergedPatch — overwrite
 
@@ -229,3 +225,7 @@ The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePlug
 - `PluginEditTool/native/apps/fo4ide/main.cpp:main` loads an explicitly requested MO2 instance through the existing `appInterop.OpenMo2Profile` route before serving requests. Invalid arguments or load failures stop startup.
 - `PluginEditTool/native/apps/fo4ide/McpTools.cpp:registerPluginTools` exposes existing native plugin operations. `save_plugin` uses the existing in-place SavePatch route. `reload_mo2_profile` discards pending changes and rebuilds the session from the active profile. Desktop and stdio sessions have separate pending state; reload after another session saves. Record creation retains the backend's supported-type and payload restrictions. `get_record` returns the existing record matrix; `list_records_summary` supplies decoded grid values and editable column paths.
 - `PluginEditTool/native/include/fo4ide/graph/NodeDefinition.hpp:NodeDefinition::pin` and `PluginEditTool/native/src/graph/GraphDocument.cpp:GraphDocument::node` use distinct parameter names to avoid member-shadowing errors in the MSVC build.
+
+## PluginEditTool/native/src/plugin/RadiclePluginPending.cpp — #174C pending lifecycle
+
+`stagePluginMutationLocked` keeps ordinary edits in memory. Localized QUST CNAM table changes stage DLSTRINGS bytes on `LoadedPlugin::stagedLocalization` and mark the plugin dirty; `SavePlugin`/`masters.SavePlugin` flush through `persistPluginLocked`, which rechecks STRINGS/DLSTRINGS/ILSTRINGS freshness then uses `write_file_pair_dependency_first`. `DiscardPlugin` restores `originalPlugin`, clears staged sidecars, and writes nothing. `GetActivePlugins` exposes `Pending`. MCP `discard_plugin` maps to `backend.DiscardPlugin`.

@@ -3370,7 +3370,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         }
         fo4::forms::write_quest_stages(mutated, questKey, stages);
         if (localizedTableChanged) {
-            const auto pluginBytes = fo4::write_plugin(mutated);
 #ifdef FO4IDE_TEST_HOOKS
             if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
 #endif
@@ -3389,26 +3388,23 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             } catch (const std::exception& error) {
                 return std::unexpected(Error{
                     "LocalizedLogTableInvalid",
-                    "could not re-read localized DLSTRINGS before writing: " +
+                    "could not re-read localized DLSTRINGS before staging: " +
                         std::string(error.what())
                 });
             }
-            const auto tableBytes = fo4::localization::write_string_table(
-                localizedTables->dlstrings);
-            fo4::io::write_file_pair_dependency_first(
+            stageLocalizationMutationLocked(*loaded, StagedLocalization{
                 localizedTables->dlstringsPath,
-                tableBytes,
-                loaded->path,
-                pluginBytes);
-            loaded->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            }
-            rebuildGraphLocked();
+                fo4::localization::write_string_table(localizedTables->dlstrings),
+                localizedTables->originalDlstringsBytes,
+                localizedTables->stringsPath,
+                localizedTables->originalStringsBytes,
+                localizedTables->ilstringsPath,
+                localizedTables->originalIlstringsBytes,
+            });
+            stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json(
                 "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
-                recordText + " in " + pluginName + ". Written to disk.");
+                recordText + " in " + pluginName + ". SavePlugin to persist.");
         }
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(

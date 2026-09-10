@@ -105,6 +105,8 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}, {"path", "string"}, {"value", "string"}})) return false;
     if (!add("save_plugin", "Save pending changes to the plugin's existing disk path", "backend", "SavePatch",
              {{"plugin", "string"}})) return false;
+    if (!add("discard_plugin", "Discard pending in-memory edits for one plugin without writing disk", "backend", "DiscardPlugin",
+             {{"plugin", "string"}})) return false;
     if (!add("list_masters", "List a plugin's declared masters", "masters", "List",
              {{"plugin", "string"}})) return false;
     return true;
