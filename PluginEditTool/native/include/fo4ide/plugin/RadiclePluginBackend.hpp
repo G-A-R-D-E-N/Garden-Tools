@@ -60,10 +60,13 @@ private:
         std::filesystem::file_time_type loadedTime{};
         bool trusted{false};
         fo4::Plugin plugin;
+        std::optional<fo4::Plugin> originalPlugin;
+        bool dirty{false};
     };
 
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
+    void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
 
     Result<nlohmann::json> loadEnvironment(const nlohmann::json& arguments);
     Result<nlohmann::json> getPlugins() const;

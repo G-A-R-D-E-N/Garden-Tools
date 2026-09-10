@@ -218,9 +218,9 @@ TEST_CASE("condition functions: index<->name lookups match the Mutagen enum") {
     CHECK(functionName(4672).empty());
     CHECK(functionName(9999).empty());
 
-    CHECK(functionIndex("GetDistance") == std::optional<std::uint16_t>{1});
-    CHECK(functionIndex("getdistance") == std::optional<std::uint16_t>{1});  // ignoreCase
-    CHECK(functionIndex("GetAngle") == std::optional<std::uint16_t>{8});
+    CHECK(functionIndex("GetDistance") == std::optional<std::uint16_t>{std::uint16_t{1}});
+    CHECK(functionIndex("getdistance") == std::optional<std::uint16_t>{std::uint16_t{1}});
+    CHECK(functionIndex("GetAngle") == std::optional<std::uint16_t>{std::uint16_t{8}});
     CHECK(functionIndex("NotAFunction") == std::nullopt);
 
     // The 5 names the 474-count list was missing are present and resolvable.

@@ -205,13 +205,7 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
             mutated, recordKey,
             std::span<const fo4::forms::ComponentEntry>{entries});
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
 
         std::string message = "Set " + std::to_string(written) + " component(s) on " +
                               recordText + " in " + pluginName + ".";
@@ -223,7 +217,7 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
             }
             message += ".";
         }
-        message += " Written to disk.";
+        message += " SavePlugin to persist.";
         return nlohmann::json(std::move(message));
     } catch (const fo4::forms::ComponentError& error) {
         return std::unexpected(Error{"SetComponentsFailed", error.what()});

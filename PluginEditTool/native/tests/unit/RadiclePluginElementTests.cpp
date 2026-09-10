@@ -135,13 +135,13 @@ TEST_CASE("Native ElementService handles the current raw conflict-matrix FormLin
         "Patch.esp", "000802:Patch.esp", "Subrecords\\AHCM[0]", "FormLink<CLFM>"
     }));
     REQUIRE(added.has_value());
-    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0u, 0x00000800u, 0x00000801u});
+    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});
 
     const auto moved = elementBackend.moveElement(nlohmann::json::array({
         "Patch.esp", "000802:Patch.esp", "Subrecords\\AHCM[0]", 1
     }));
     REQUIRE(moved.has_value());
-    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0u, 0x00000801u});
+    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});
 
     const auto removed = elementBackend.removeElement(nlohmann::json::array({
         "Patch.esp", "000802:Patch.esp", "Subrecords\\AHCM[1]"
@@ -153,6 +153,10 @@ TEST_CASE("Native ElementService handles the current raw conflict-matrix FormLin
         "Patch.esp", "000802:Patch.esp", "RACE\\MaleHairColors"
     }));
     REQUIRE(cleared.has_value());
+    CHECK(rawLinks(path) == std::vector<std::uint32_t>{0x00000800u, 0x00000801u});
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(rawLinks(path).empty());
 }
 

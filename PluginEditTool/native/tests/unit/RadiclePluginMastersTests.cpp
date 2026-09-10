@@ -156,10 +156,12 @@ TEST_CASE("Masters reorder writes immediately and preserves logical FormLinks") 
     REQUIRE(depsBefore.size() == 1);
     CHECK(depsBefore[0].at("FormKey") == "000800:MasterB.esp");
 
+    const auto beforeSave = fo4::test::original_bytes(fo4::read_plugin_file(patch));
+
     const auto reorder = textResult(
         backend.invoke("masters.Reorder",
                        nlohmann::json::array({"Patch.esp", "[\"MasterB.esp\",\"MasterA.esm\"]"})));
-    CHECK(reorder.rfind("Wrote ", 0) == 0);
+    CHECK_FALSE(reorder.empty());
 
     auto after = parseStringResult(
         backend.invoke("masters.List", nlohmann::json::array({"Patch.esp"})));
@@ -175,6 +177,9 @@ TEST_CASE("Masters reorder writes immediately and preserves logical FormLinks") 
     REQUIRE(depsAfter.size() == 1);
     CHECK(depsAfter[0].at("FormKey") == "000800:MasterB.esp");
 
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(patch)) == beforeSave);
+    CHECK(reorder.find("SavePlugin") != std::string::npos);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto reloaded = fo4::read_plugin_file(patch);
     REQUIRE(reloaded.header.masters.size() == 2);
     CHECK(reloaded.header.masters[0].key.filename() == "MasterB.esp");

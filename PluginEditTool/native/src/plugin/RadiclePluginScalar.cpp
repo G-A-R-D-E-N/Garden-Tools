@@ -126,13 +126,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
         }
 
         if (status == fo4::ScalarMutationStatus::updated) {
-            fo4::write_plugin_file(mutated, loaded->path);
-            loaded->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            }
-            rebuildGraphLocked();
+            stagePluginMutationLocked(*loaded, std::move(mutated));
         }
         return nlohmann::json(
             "Updated " + std::string(field->path) + " for " + formKeyText +
@@ -266,13 +260,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
         }
 
         if (status == fo4::FormLinkFieldMutationStatus::updated) {
-            fo4::write_plugin_file(mutated, loaded->path);
-            loaded->plugin = std::move(mutated);
-            {
-                std::error_code ec;
-                loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-            }
-            rebuildGraphLocked();
+            stagePluginMutationLocked(*loaded, std::move(mutated));
         }
         return nlohmann::json(
             "Updated " + std::string(field->path) + " for " + formKeyText +

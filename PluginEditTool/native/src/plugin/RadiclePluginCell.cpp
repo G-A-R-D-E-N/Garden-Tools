@@ -409,13 +409,7 @@ Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
                 "Placed reference is not present in " + patchName + ": " + formKeyText
             });
         }
-        fo4::write_plugin_file(mutated, patch->path);
-        patch->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            patch->loadedTime = std::filesystem::last_write_time(patch->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*patch, std::move(mutated));
 
         auto message = "Moved " + formKeyText + " in " + patchName + ".";
         if (!copiedFrom.empty()) {

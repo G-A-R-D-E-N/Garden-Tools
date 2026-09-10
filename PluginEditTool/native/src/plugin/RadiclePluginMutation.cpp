@@ -171,7 +171,22 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "RemoveListItem") return removeListItem(arguments);
     if (method == "SetComponents") return setComponents(arguments);
     if (method == "SetQuestAliases") return setQuestAliases(arguments);
-    if (method == "SetQuestStages") return setQuestStages(arguments);
+    if (method == "SetQuestStages") {
+        if (arguments.is_array() && arguments.size() > 3 && arguments[3].is_object()) {
+            const auto pluginName = stringArgument(arguments, 0);
+            std::scoped_lock lock(mutex_);
+            const auto* loaded = findPlugin(pluginName);
+            if (loaded != nullptr && loaded->dirty &&
+                loaded->plugin.header.tes4_flags.is_localized()) {
+                return std::unexpected(Error{
+                    "PluginHasPendingChanges",
+                    "Plugin has pending changes; save or discard them before localized quest authoring: " +
+                        pluginName
+                });
+            }
+        }
+        return setQuestStages(arguments);
+    }
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "AddMasters") return addMasters(arguments);
@@ -307,13 +322,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 "Record '" + recordId + "' has no editable Conditions list."
             });
         }
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetConditionsFailed", error.what()});
     }
@@ -328,6 +337,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
         }
         message += ".";
     }
+    message += " SavePlugin to persist.";
     return nlohmann::json(std::move(message));
 }
 
@@ -481,13 +491,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
                 "Record '" + recordId + "' has a malformed alias array for path '" + path + "'"
             });
         }
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetConditionsFailed", error.what()});
     }
@@ -503,7 +507,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
         }
         message += ".";
     }
-    message += " Written to disk.";
+    message += " SavePlugin to persist.";
     return nlohmann::json(std::move(message));
 }
 
@@ -676,13 +680,7 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
             status = "Updated " + field + " for " + formKeyText + " in " + pluginName + ".";
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(std::move(status));
     } catch (const fo4::forms::EyesError& error) {
         return std::unexpected(Error{"EyesWriteFailed", error.what()});
@@ -772,13 +770,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
                 break;
         }
 
-        fo4::write_plugin_file(mutated, target->path);
-        target->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*target, std::move(mutated));
 
         return nlohmann::json(
             std::string(status == fo4::RecordCopyStatus::replaced ? "Replaced " : "Copied ") +

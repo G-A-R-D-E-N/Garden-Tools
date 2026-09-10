@@ -136,6 +136,8 @@ TEST_CASE("PluginEditTool creates ARMO male and female model icon structures") {
         "CreateRecord", nlohmann::json::array({"Patch.esp", "ARMO", payload})));
     REQUIRE(created.at("formKey") == "000800:Patch.esp");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto model = fo4::forms::decode_armor(
         disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -182,6 +184,8 @@ TEST_CASE("PluginEditTool creates ARMA biped and first-person gendered models") 
         "CreateRecord", nlohmann::json::array({"Patch.esp", "ARMA", payload})));
     REQUIRE(created.at("formKey") == "000800:Patch.esp");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto model = fo4::forms::decode_armor_addon(
         disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -210,6 +214,8 @@ TEST_CASE("PluginEditTool fills missing ARMO gendered fields after creation") {
         "CreateRecord",
         nlohmann::json::array({"Patch.esp", "ARMO", nlohmann::json::object()})));
     const auto key = created.at("formKey").get<std::string>();
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     REQUIRE(backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", key, "ARMO\\MaleWorldModel", "Meshes\\Armor\\Male.nif"
@@ -224,6 +230,16 @@ TEST_CASE("PluginEditTool fills missing ARMO gendered fields after creation") {
         "Patch.esp", key, "ARMO\\FemaleIcon", "Textures\\Female.dds"
     })).has_value());
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto beforeModel = fo4::forms::decode_armor(
+        beforeSave, fo4::FormKey::parse(key));
+    CHECK_FALSE(beforeModel.male_world_model.has_value());
+    CHECK_FALSE(beforeModel.male_icon.has_value());
+    CHECK_FALSE(beforeModel.female_world_model.has_value());
+    CHECK_FALSE(beforeModel.female_icon.has_value());
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto model = fo4::forms::decode_armor(
         disk, fo4::FormKey::parse(key));
@@ -263,6 +279,8 @@ TEST_CASE("PluginEditTool fills missing ARMA biped and first-person models") {
         "Patch.esp", key, "ARMA\\FemaleFirstPersonModel", "Meshes\\Armor\\FemaleFirst.nif"
     })).has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto model = fo4::forms::decode_armor_addon(
         disk, fo4::FormKey::parse(key));

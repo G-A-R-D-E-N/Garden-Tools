@@ -256,7 +256,7 @@ void bc7(std::span<const std::uint8_t> block, std::span<std::uint8_t> texels) {
     int mode = 0;
     while (mode < 8 && bits.readBit() == 0) ++mode;
     if (mode >= 8) {
-        std::fill(texels.begin(), texels.end(), 0);
+        std::fill(texels.begin(), texels.end(), std::uint8_t{0});
         return;
     }
 

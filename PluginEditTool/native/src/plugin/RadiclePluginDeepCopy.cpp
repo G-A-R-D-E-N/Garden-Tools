@@ -307,18 +307,14 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             }
         }
 
-        fo4::write_plugin_file(mutated, target->path);
-        target->plugin = std::move(mutated);
-        std::error_code ec;
-        target->loadedTime = std::filesystem::last_write_time(target->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*target, std::move(mutated));
 
         return nlohmann::json(
             "Deep-copied " + std::to_string(copied) + " of " +
             std::to_string(toCopy.size()) + " record(s) rooted at " +
             rootKey.to_string() + " into " + targetName +
             ". Ensure " + targetName +
-            " loads after the conflicting plugins, then save it.");
+            " loads after the conflicting plugins. SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"DeepCopyFailed", error.what()});
     }

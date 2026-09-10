@@ -131,6 +131,15 @@ TEST_CASE("Native CopyAsOverrideMany copies selected conflicts in one transactio
     CHECK(result.at("failed") == 0);
     CHECK(result.at("requiresOverwrite") == false);
 
+    const auto beforeSave = fo4::read_plugin_file(target);
+    CHECK(beforeSave.header.masters.empty());
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Master.esm")) == nullptr);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000802:Master.esm")) == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto reloaded = fo4::read_plugin_file(target);
     REQUIRE(reloaded.header.masters.size() == 1);
     CHECK(reloaded.header.masters[0].key.filename() == "Master.esm");
@@ -169,7 +178,11 @@ TEST_CASE("Native CopyAsOverrideMany preflights overwrite conflicts without writ
         "CopyAsOverrideMany",
         nlohmann::json::array({items.dump(), "Patch.esp", false}))).at("ok") == 2);
 
-    const auto before = fo4::test::original_bytes(fo4::read_plugin_file(target));
+    const auto beforePlugin = fo4::read_plugin_file(target);
+    CHECK(beforePlugin.header.masters.empty());
+    CHECK(fo4::find_record(
+        beforePlugin, fo4::FormKey::parse("000800:Master.esm")) == nullptr);
+    const auto before = fo4::test::original_bytes(beforePlugin);
     const auto preflight = parseResult(backend.invokeBackend(
         "CopyAsOverrideMany",
         nlohmann::json::array({items.dump(), "Patch.esp", false})));
@@ -184,6 +197,15 @@ TEST_CASE("Native CopyAsOverrideMany preflights overwrite conflicts without writ
     CHECK(overwrite.at("requiresOverwrite") == false);
     CHECK(overwrite.at("ok") == 2);
     CHECK(overwrite.at("failed") == 0);
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(target)) == before);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto saved = fo4::read_plugin_file(target);
+    CHECK(fo4::find_record(
+        saved, fo4::FormKey::parse("000800:Master.esm")) != nullptr);
+    CHECK(fo4::find_record(
+        saved, fo4::FormKey::parse("000802:Master.esm")) != nullptr);
 }
 
 TEST_CASE("Native CopyAsOverrideMany reports per-item failures and commits successes") {
@@ -217,6 +239,12 @@ TEST_CASE("Native CopyAsOverrideMany reports per-item failures and commits succe
     REQUIRE(result.at("failures").size() == 1);
     CHECK(result.at("failures")[0].at("source") == "Missing.esp");
 
+    const auto beforeSave = fo4::read_plugin_file(target);
+    CHECK(fo4::find_record(beforeSave, fo4::FormKey::parse("000800:Master.esm")) == nullptr);
+    CHECK(fo4::find_record(beforeSave, fo4::FormKey::parse("000802:Master.esm")) == nullptr);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto reloaded = fo4::read_plugin_file(target);
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm")) != nullptr);
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000802:Master.esm")) == nullptr);

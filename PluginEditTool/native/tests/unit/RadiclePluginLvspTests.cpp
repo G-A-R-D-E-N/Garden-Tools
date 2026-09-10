@@ -169,6 +169,8 @@ TEST_CASE("Native SetField edits LVSP scalar settings transactionally") {
         "Patch.esp", "000800:Patch.esp", "LVSP\\Flags", "7"
     })).has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto list = readList(patchPath);
     CHECK(list.chance_none == 42u);
     CHECK(list.max_count == 0u);
@@ -200,6 +202,8 @@ TEST_CASE("Native SetField edits LVSP entry level count chance and spell") {
         "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[0]\\Spell", "000810:Patch.esp"
     })).has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto list = readList(patchPath);
     REQUIRE(list.entries.size() == 2u);
     CHECK(list.entries[0].level == 25u);

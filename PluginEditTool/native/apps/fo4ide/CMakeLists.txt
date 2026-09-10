@@ -1,4 +1,4 @@
-add_executable(fo4ide main.cpp)
+add_executable(fo4ide main.cpp McpTools.cpp)
 
 target_link_libraries(
     fo4ide

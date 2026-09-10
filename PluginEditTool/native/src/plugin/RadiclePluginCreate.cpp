@@ -273,6 +273,8 @@ Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::createPluginLo
             .loadedTime = loadedTime,
             .trusted = true,
             .plugin = std::move(verified),
+            .originalPlugin = std::nullopt,
+            .dirty = false,
         });
         try {
             rebuildGraphLocked();

@@ -65,8 +65,8 @@ Result<std::vector<std::uint8_t>> deflate(std::span<const std::uint8_t> rgba,
                     raw.begin() + static_cast<size_t>(y) * (stride + 1) + 1);
     }
 
-    std::vector<std::uint8_t> compressed(compressBound(static_cast<uLong>(raw.size())));
-    uLongf compressedSize = compressed.size();
+    uLongf compressedSize = compressBound(static_cast<uLong>(raw.size()));
+    std::vector<std::uint8_t> compressed(compressedSize);
     const auto result = compress2(compressed.data(), &compressedSize, raw.data(),
                                   static_cast<uLong>(raw.size()), Z_BEST_SPEED);
     if (result != Z_OK) {

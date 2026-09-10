@@ -207,17 +207,13 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
             ++changed;
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        std::error_code ec;
-        loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Renumbered " + std::to_string(changed) + " record(s) in " + pluginName +
             " into " + localHex(start) + "-" +
             localHex(static_cast<std::uint32_t>(end64)) +
             " and repointed every supported in-plugin reference. References from other plugins "
-            "into this one now dangle until patched.");
+            "into this one now dangle until patched. SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"RenumberPluginFailed", error.what()});
     }

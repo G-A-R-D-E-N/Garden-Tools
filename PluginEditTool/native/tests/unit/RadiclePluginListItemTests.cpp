@@ -244,6 +244,8 @@ TEST_CASE("PluginEditTool add_list_item appends a FormLink to an empty FLST") {
     CHECK(result->get<std::string>() ==
           "Added 000800:Patch.esp to Items on 000810:Patch.esp in Patch.esp (now 1 item(s)).");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000810:Patch.esp"));
     REQUIRE(flst != nullptr);
@@ -267,6 +269,15 @@ TEST_CASE("PluginEditTool add_list_item appends to a populated FLST") {
     CHECK(result->get<std::string>() ==
           "Added 000801:Patch.esp to Items on 000811:Patch.esp in Patch.esp (now 2 item(s)).");
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveFlst = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000811:Patch.esp"));
+    REQUIRE(beforeSaveFlst != nullptr);
+    REQUIRE(countSubrecords(*beforeSaveFlst, "LNAM") == 1u);
+    CHECK(nthRaw(*beforeSaveFlst, "LNAM", 0) == 0x00000800u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
     REQUIRE(flst != nullptr);
@@ -291,6 +302,8 @@ TEST_CASE("PluginEditTool add_list_item resolves an EditorID value") {
     CHECK(result->get<std::string>() ==
           "Added MyKeyword to Items on 000810:Patch.esp in Patch.esp (now 1 item(s)).");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000810:Patch.esp"));
     REQUIRE(flst != nullptr);
@@ -313,6 +326,8 @@ TEST_CASE("PluginEditTool add_list_item matches the field name case-insensitivel
     CHECK(result->get<std::string>() ==
           "Added 000800:Patch.esp to items on 000810:Patch.esp in Patch.esp (now 1 item(s)).");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000810:Patch.esp"));
     REQUIRE(flst != nullptr);
@@ -332,10 +347,11 @@ TEST_CASE("PluginEditTool remove_list_item matches the field name case-insensiti
         nlohmann::json::array({
             "Patch.esp", "000811:Patch.esp", "ITEMS", "000800:Patch.esp"}));
     REQUIRE(result.has_value());
-    CHECK(result->get<std::string>() ==
-          "Removed 1 entr(y/ies) matching 000800:Patch.esp from ITEMS (now 0) on "
-          "000811:Patch.esp. Written to disk.");
+    CHECK(result->get<std::string>().find("Written to disk") == std::string::npos);
+    CHECK(result->get<std::string>().find("SavePlugin") != std::string::npos);
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
     REQUIRE(flst != nullptr);
@@ -357,8 +373,16 @@ TEST_CASE("PluginEditTool remove_list_item drops the matching FormLink") {
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>() ==
           "Removed 1 entr(y/ies) matching 000800:Patch.esp from Items (now 0) on "
-          "000811:Patch.esp. Written to disk.");
+          "000811:Patch.esp. SavePlugin to persist.");
 
+    const auto beforeSave = fo4::read_plugin_file(path);
+    const auto* beforeSaveFlst = fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000811:Patch.esp"));
+    REQUIRE(beforeSaveFlst != nullptr);
+    CHECK(countSubrecords(*beforeSaveFlst, "LNAM") == 1u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* flst = fo4::find_record(disk, fo4::FormKey::parse("000811:Patch.esp"));
     REQUIRE(flst != nullptr);
@@ -423,6 +447,8 @@ TEST_CASE("PluginEditTool add_list_item declares an external target's owner mast
     CHECK(result->get<std::string>() ==
           "Added 000800:OtherMod.esp to Items on 000810:Patch.esp in Patch.esp (now 1 item(s)).");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(patchPath);
     bool declaresOtherMod = false;
     for (const auto& master : disk.header.masters) {
@@ -451,6 +477,8 @@ TEST_CASE("PluginEditTool add_list_item appends a keyword into a packed KWDA arr
     CHECK(result->get<std::string>() ==
           "Added 000802:Patch.esp to Keywords on 000900:Patch.esp in Patch.esp (now 2 item(s)).");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* weap = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
     REQUIRE(weap != nullptr);
@@ -478,6 +506,8 @@ TEST_CASE("PluginEditTool add_list_item creates the KSIZ/KWDA block when a recor
     CHECK(result->get<std::string>() ==
           "Added 000801:Patch.esp to Keywords on 000901:Patch.esp in Patch.esp (now 1 item(s)).");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* weap = fo4::find_record(disk, fo4::FormKey::parse("000901:Patch.esp"));
     REQUIRE(weap != nullptr);
@@ -502,8 +532,10 @@ TEST_CASE("PluginEditTool remove_list_item drops the last keyword and its KSIZ/K
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>() ==
           "Removed 1 entr(y/ies) matching 000801:Patch.esp from Keywords (now 0) on "
-          "000900:Patch.esp. Written to disk.");
+          "000900:Patch.esp. SavePlugin to persist.");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     const auto* weap = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
     REQUIRE(weap != nullptr);

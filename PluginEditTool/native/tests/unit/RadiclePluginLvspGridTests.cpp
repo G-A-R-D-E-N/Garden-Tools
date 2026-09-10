@@ -182,6 +182,8 @@ TEST_CASE("LVSP spreadsheet column name round-trips through SetField") {
         nlohmann::json::array({"Patch.esp", "LVSP", 200, 0})));
     CHECK(grid.at("rows")[0].at("cells")[5] == "44");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto reloaded = fo4::read_plugin_file(path);
     const auto model = fo4::forms::decode_leveled_spell(
         reloaded, fo4::FormKey::parse("000800:Patch.esp"));

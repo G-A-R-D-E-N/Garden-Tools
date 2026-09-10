@@ -153,13 +153,8 @@ TEST_CASE("Native lifecycle creates renumbers and deletes a persisted typed reco
     REQUIRE(created.at("formKey") == "000900:Patch.esp");
 
     auto disk = fo4::read_plugin_file(pluginPath);
-    const auto createdKey = fo4::FormKey::parse("000900:Patch.esp");
-    REQUIRE(fo4::find_record(disk, createdKey) != nullptr);
-    CHECK(disk.header.next_form_id == 0x901u);
-    const auto eyes = fo4::forms::decode_eyes(disk, createdKey);
-    REQUIRE(eyes.editor_id.has_value());
-    CHECK(*eyes.editor_id == "CreatedEyes");
-    CHECK(eyes.full_text == std::optional<std::string>{"Created Eyes"});
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);
+    CHECK(disk.header.next_form_id == 0x900u);
 
     const auto renumbered = parseStringResult(backend.invokeBackend(
         "RenumberRecord",
@@ -168,13 +163,19 @@ TEST_CASE("Native lifecycle creates renumbers and deletes a persisted typed reco
 
     disk = fo4::read_plugin_file(pluginPath);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);
-    REQUIRE(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) != nullptr);
-    CHECK(disk.header.next_form_id == 0x951u);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) == nullptr);
+    CHECK(disk.header.next_form_id == 0x900u);
 
     const auto deleted = parseStringResult(backend.invokeBackend(
         "DeleteRecord", nlohmann::json::array({"Patch.esp", "000950:Patch.esp"})));
     CHECK(deleted.at("deleted") == "000950:Patch.esp");
 
+    disk = fo4::read_plugin_file(pluginPath);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) == nullptr);
+    CHECK(disk.header.next_form_id == 0x900u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     disk = fo4::read_plugin_file(pluginPath);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) == nullptr);
     CHECK(disk.header.next_form_id == 0x951u);
@@ -212,8 +213,14 @@ TEST_CASE("Native lifecycle creates LVSP with validated initial entries") {
         "CreateRecord", nlohmann::json::array({"Patch.esp", "LVSP", payload})));
     REQUIRE(created.at("formKey") == "000900:Patch.esp");
 
-    const auto disk = fo4::read_plugin_file(pluginPath);
     const auto key = fo4::FormKey::parse("000900:Patch.esp");
+    const auto beforeSave = fo4::read_plugin_file(pluginPath);
+    CHECK(fo4::find_record(beforeSave, key) == nullptr);
+    CHECK(beforeSave.header.next_form_id == 0x900u);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(pluginPath);
     const auto list = fo4::forms::decode_leveled_spell(disk, key);
     CHECK(list.chance_none == 20u);
     CHECK(list.max_count == 2u);

@@ -143,7 +143,25 @@ TEST_CASE("Native DeepCopyAsOverride previews copies dependencies and prompts on
     REQUIRE(applied.has_value());
     REQUIRE(applied->is_string());
     CHECK(applied->get<std::string>().find("Deep-copied 2 of 2 record(s)") != std::string::npos);
+    CHECK(applied->get<std::string>().find("SavePlugin to persist") != std::string::npos);
 
+    const auto beforeSave = fo4::read_plugin_file(patchPath);
+    CHECK(beforeSave.header.masters.empty());
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000800:Base.esm")) == nullptr);
+    CHECK(fo4::find_record(
+        beforeSave, fo4::FormKey::parse("000801:Base.esm")) == nullptr);
+
+    const auto collision = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200
+    }));
+    REQUIRE(collision.has_value());
+    REQUIRE(collision->is_string());
+    CHECK(collision->get<std::string>().starts_with("EXISTS:"));
+    CHECK(collision->get<std::string>().find("2 of the 2 record(s)") != std::string::npos);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto patch = fo4::read_plugin_file(patchPath);
     REQUIRE(patch.header.masters.size() == 1);
     CHECK(patch.header.masters[0].key.filename() == "Base.esm");
@@ -158,14 +176,6 @@ TEST_CASE("Native DeepCopyAsOverride previews copies dependencies and prompts on
     REQUIRE(race != nullptr);
     CHECK(race->header.signature == fo4::Signature::from_string("RACE"));
     CHECK(deepRawSubrecord(*race, "AHCM") == 0x00000800u);
-
-    const auto collision = backend.deepCopyAsOverride(nlohmann::json::array({
-        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200
-    }));
-    REQUIRE(collision.has_value());
-    REQUIRE(collision->is_string());
-    CHECK(collision->get<std::string>().starts_with("EXISTS:"));
-    CHECK(collision->get<std::string>().find("2 of the 2 record(s)") != std::string::npos);
 }
 
 TEST_CASE("Native DeepCopyAsOverride previews a brand-new target without creating it") {

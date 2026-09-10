@@ -95,14 +95,9 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
 
     try {
         auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(requested));
-        fo4::write_plugin_file(remapped, loaded->path);
-        loaded->plugin = std::move(remapped);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
-        return nlohmann::json("Wrote " + name + " with reordered masters.");
+        stagePluginMutationLocked(*loaded, std::move(remapped));
+        return nlohmann::json(
+            "Reordered masters in " + name + ". SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"MasterReorderFailed", error.what()});
     }
@@ -125,7 +120,9 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
 
     try {
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
+        if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;
         loaded->plugin = std::move(mutated);
+        loaded->dirty = true;
 
         std::vector<fo4::MasterDescriptor> known;
         known.reserve(plugins_.size());
@@ -173,6 +170,8 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
             std::error_code ec;
             loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
         }
+        loaded->originalPlugin.reset();
+        loaded->dirty = false;
         return nlohmann::json("Saved " + name + ".");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginWriteFailed", error.what()});

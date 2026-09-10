@@ -149,6 +149,8 @@ TEST_CASE("Master target copies top-level override and rebuilds ONAM") {
         }));
     REQUIRE(copied.has_value());
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esm"})).has_value());
     auto disk = fo4::read_plugin_file(targetPath);
     REQUIRE(disk.header.tes4_flags.is_master());
     REQUIRE(disk.header.masters.size() == 1u);
@@ -164,6 +166,8 @@ TEST_CASE("Master target copies top-level override and rebuilds ONAM") {
             "Source.esp", "000800:Base.esm", "Patch.esm", true
         }));
     REQUIRE(replaced.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esm"})).has_value());
     disk = fo4::read_plugin_file(targetPath);
     REQUIRE(disk.header.overrides.size() == 1u);
     CHECK(disk.header.overrides[0] == fo4::RawFormId{0x00000800u});

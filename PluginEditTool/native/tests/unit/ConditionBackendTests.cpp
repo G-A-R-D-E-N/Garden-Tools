@@ -258,6 +258,8 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
                                                                replacement.dump()}));
     REQUIRE(message.has_value());
     CHECK(message->get<std::string>().find("Set 2 condition(s)") == 0);
+    CHECK(message->get<std::string>().find("Written to disk") == std::string::npos);
+    CHECK(message->get<std::string>().find("SavePlugin") != std::string::npos);
 
     const auto conditions = parseStringResult(
         backend.invoke("backend.GetConditions",
@@ -279,7 +281,20 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
     CHECK(conditions[1].at("reference") == "000801:CondEdit.esp");
     CHECK(conditions[1].at("flags") == "OR");
 
-    // The record persists on disk with the new list.
+    auto beforeSave = fo4ide::plugin::RadiclePluginBackend{};
+    REQUIRE(beforeSave.invoke("environment.LoadMo2",
+                              nlohmann::json{{"plugins", nlohmann::json::array(
+                                                             {pluginEntry("CondEdit.esp", pluginPath, "Override")})}})
+                .has_value());
+    const auto beforeSaveConditions = parseStringResult(
+        beforeSave.invoke("backend.GetConditions",
+                          nlohmann::json::array({"CondEdit.esp", "000800:CondEdit.esp"})));
+    REQUIRE(beforeSaveConditions.size() == 2);
+    CHECK(beforeSaveConditions[0].at("function") == "GetDistance");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"CondEdit.esp"})).has_value());
+
     auto onDisk = fo4ide::plugin::RadiclePluginBackend{};
     REQUIRE(onDisk.invoke("environment.LoadMo2",
                           nlohmann::json{{"plugins", nlohmann::json::array(
@@ -502,7 +517,7 @@ TEST_CASE("condition backend: SetConditionsAt replaces one effect scope and roun
     REQUIRE(message.has_value());
     const auto text = message->get<std::string>();
     CHECK(text.find("Set 2 condition(s) at Effects[0].Conditions on 000800:SpellEdit.esp in SpellEdit.esp.") == 0);
-    CHECK(text.find("Written to disk.") != std::string::npos);
+    CHECK(text.find("SavePlugin to persist.") != std::string::npos);
 
     const auto first = parseStringResult(
         backend.invoke("backend.GetConditionsAtPath",
@@ -517,6 +532,32 @@ TEST_CASE("condition backend: SetConditionsAt replaces one effect scope and roun
                        nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
                                               "Effects[1].Conditions"})));
     REQUIRE(second.size() == 2);
+
+    auto beforeSave = fo4ide::plugin::RadiclePluginBackend{};
+    REQUIRE(beforeSave.invoke("environment.LoadMo2",
+                              nlohmann::json{{"plugins", nlohmann::json::array(
+                                                             {pluginEntry("SpellEdit.esp", pluginPath, "Override")})}})
+                .has_value());
+    const auto beforeSaveFirst = parseStringResult(
+        beforeSave.invoke("backend.GetConditionsAtPath",
+                          nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
+                                                 "Effects[0].Conditions"})));
+    REQUIRE(beforeSaveFirst.size() == 1);
+    CHECK(beforeSaveFirst[0].at("function") == "GetAngle");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"SpellEdit.esp"})).has_value());
+    auto onDisk = fo4ide::plugin::RadiclePluginBackend{};
+    REQUIRE(onDisk.invoke("environment.LoadMo2",
+                          nlohmann::json{{"plugins", nlohmann::json::array(
+                                                         {pluginEntry("SpellEdit.esp", pluginPath, "Override")})}})
+                .has_value());
+    const auto persisted = parseStringResult(
+        onDisk.invoke("backend.GetConditionsAtPath",
+                      nlohmann::json::array({"SpellEdit.esp", "000800:SpellEdit.esp",
+                                             "Effects[0].Conditions"})));
+    REQUIRE(persisted.size() == 2);
+    CHECK(persisted[0].at("function") == "GetStage");
 }
 
 TEST_CASE("condition backend: SetConditionsAt clears one effect scope without touching siblings") {

@@ -397,11 +397,7 @@ Result<nlohmann::json> RadiclePluginBackend::addElement(
             return nlohmann::json("No change for " + resolved->basePath + " in " + pluginName + ".");
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        std::error_code ec;
-        loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Added a FormLink at " + resolved->basePath + "[" +
             std::to_string(insertion) + "] in " + pluginName + ".");
@@ -447,11 +443,7 @@ Result<nlohmann::json> RadiclePluginBackend::removeElement(
             return nlohmann::json("No change for " + resolved->basePath + " in " + pluginName + ".");
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        std::error_code ec;
-        loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Removed " + requestedPath + " from " + recordText + " in " + pluginName + ".");
     } catch (const std::exception& error) {
@@ -520,11 +512,7 @@ Result<nlohmann::json> RadiclePluginBackend::moveElement(
             return nlohmann::json("No change for " + resolved->basePath + " in " + pluginName + ".");
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        std::error_code ec;
-        loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Moved " + requestedPath + " to index " + std::to_string(to) +
             " in " + pluginName + ".");
@@ -570,11 +558,7 @@ Result<nlohmann::json> RadiclePluginBackend::clearElement(
             return nlohmann::json("No change for " + resolved->basePath + " in " + pluginName + ".");
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        std::error_code ec;
-        loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Cleared " + resolved->basePath + " on " + recordText + " in " + pluginName +
             " (" + std::to_string(*before) + " item(s) removed).");

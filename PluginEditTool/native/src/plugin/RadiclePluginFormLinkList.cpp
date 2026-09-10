@@ -225,13 +225,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkListField(
                 break;
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Updated " + fieldPath + " for " + formKeyText + " in " +
             pluginName + ".");
@@ -356,13 +350,7 @@ Result<nlohmann::json> RadiclePluginBackend::insertFormLinkListElement(
             case fo4::schema::FormLinkListMutationStatus::unchanged:
                 return nlohmann::json("No change for " + basePath + " in " + pluginName + ".");
         }
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Inserted element into " + basePath + " in " + pluginName + ".");
     } catch (const fo4::schema::FormLinkListError& error) {
@@ -464,13 +452,7 @@ Result<nlohmann::json> RadiclePluginBackend::removeFormLinkListElement(
             case fo4::schema::FormLinkListMutationStatus::unchanged:
                 return nlohmann::json("No change for " + basePath + " in " + pluginName + ".");
         }
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Removed element from " + basePath + " in " + pluginName + ".");
     } catch (const fo4::schema::FormLinkListError& error) {
@@ -625,13 +607,7 @@ Result<nlohmann::json> RadiclePluginBackend::addListItem(
                 return nlohmann::json("No change for " + field + " in " + pluginName + ".");
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         const auto count = *currentSize + 1;
         return nlohmann::json(
             "Added " + value + " to " + field + " on " + recordText + " in " +
@@ -721,20 +697,14 @@ Result<nlohmann::json> RadiclePluginBackend::removeListItem(
                     std::to_string(size) + " item(s))."});
         }
 
-        fo4::write_plugin_file(mutated, loaded->path);
-        loaded->plugin = std::move(mutated);
-        {
-            std::error_code ec;
-            loaded->loadedTime = std::filesystem::last_write_time(loaded->path, ec);
-        }
-        rebuildGraphLocked();
+        stagePluginMutationLocked(*loaded, std::move(mutated));
         const auto newSize =
             fo4::schema::record_formlink_list_size(loaded->plugin, recordKey, *descriptor)
                 .value_or(0);
         return nlohmann::json(
             "Removed " + std::to_string(removed) + " entr(y/ies) matching " + value +
             " from " + field + " (now " + std::to_string(newSize) + ") on " +
-            recordText + ". Written to disk.");
+            recordText + ". SavePlugin to persist.");
     } catch (const fo4::schema::FormLinkListError& error) {
         return std::unexpected(Error{"FormLinkListWriteFailed", error.what()});
     } catch (const fo4::FormIdError& error) {

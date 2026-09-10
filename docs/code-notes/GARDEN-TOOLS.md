@@ -219,3 +219,13 @@ Sidecar roots are canonicalized and accepted only beneath a trusted editable plu
 ## PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp:mutateStaleLocalizationSiblingAfterTableParse
 
 The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp:mutateStaleLocalizationSiblingAfterTableParse` mutates ILSTRINGS after its parse, deterministically proving that the parsed table and retained freshness bytes come from the same read.
+
+# Native Windows launch
+
+- `PluginEditTool/web/src/hostbridge.ts:install` supplies the existing HTTP transport for the native host's loopback HTTP page, including when WebView2 exposes its default `chrome.webview` object. The legacy C# host serves `https://app.local` and retains its registered host objects. `PluginEditTool/web/src/hostbridge.test.ts` covers both transports.
+
+- `PluginEditTool/native/tests/native_mcp_smoke.py:main` exercises the executable with an isolated MO2 profile and settings directory. It checks plugin discovery, pending edits, failed-edit preservation, explicit save, reload, discard, and invalid startup arguments. Pass `--build-dir` and optionally `--cmake` to include the Release host build.
+- `PluginEditTool/native/src/textures/BcnDecoder.cpp:bc7`, `PluginEditTool/native/src/textures/PngWriter.cpp:deflate`, and `PluginEditTool/native/src/papyrus/Pex.cpp:Reader::u16` retain their existing byte values while making integer types explicit for the MSVC warnings-as-errors build.
+- `PluginEditTool/native/apps/fo4ide/main.cpp:main` loads an explicitly requested MO2 instance through the existing `appInterop.OpenMo2Profile` route before serving requests. Invalid arguments or load failures stop startup.
+- `PluginEditTool/native/apps/fo4ide/McpTools.cpp:registerPluginTools` exposes existing native plugin operations. `save_plugin` uses the existing in-place SavePatch route. `reload_mo2_profile` discards pending changes and rebuilds the session from the active profile. Desktop and stdio sessions have separate pending state; reload after another session saves. Record creation retains the backend's supported-type and payload restrictions. `get_record` returns the existing record matrix; `list_records_summary` supplies decoded grid values and editable column paths.
+- `PluginEditTool/native/include/fo4ide/graph/NodeDefinition.hpp:NodeDefinition::pin` and `PluginEditTool/native/src/graph/GraphDocument.cpp:GraphDocument::node` use distinct parameter names to avoid member-shadowing errors in the MSVC build.

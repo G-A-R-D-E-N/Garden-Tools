@@ -115,6 +115,8 @@ TEST_CASE("PluginEditTool creates a new exterior CELL in the WRLD hierarchy") {
     CHECK(created.at("signature") == "CELL");
     CHECK(created.at("formKey") == "000900:Patch.esp");
 
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     CHECK(disk.header.next_form_id == 0x901u);
     CHECK(disk.header.record_count == 6u);

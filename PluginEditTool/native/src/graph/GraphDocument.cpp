@@ -105,15 +105,15 @@ void GraphDocument::buildIndex() const {
     }
 }
 
-const GraphNode* GraphDocument::node(const std::string& id) const {
-    if (id.empty()) return nullptr;
+const GraphNode* GraphDocument::node(const std::string& nodeId) const {
+    if (nodeId.empty()) return nullptr;
     if (byId_.empty()) buildIndex();
-    const auto it = byId_.find(id);
+    const auto it = byId_.find(nodeId);
     return it == byId_.end() ? nullptr : it->second;
 }
 
-GraphNode* GraphDocument::node(const std::string& id) {
-    return const_cast<GraphNode*>(static_cast<const GraphDocument&>(*this).node(id));
+GraphNode* GraphDocument::node(const std::string& nodeId) {
+    return const_cast<GraphNode*>(static_cast<const GraphDocument&>(*this).node(nodeId));
 }
 
 void GraphDocument::invalidate() { byId_.clear(); }
