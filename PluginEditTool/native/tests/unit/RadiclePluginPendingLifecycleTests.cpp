@@ -234,6 +234,70 @@ TEST_CASE("Localized CNAM stages sidecars until SavePlugin") {
     CHECK_FALSE(pluginPending(activePlugins(backend), "Patch.esp"));
 }
 
+TEST_CASE("Repeated localized CNAM edits accumulate in staged sidecars until SavePlugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeLocalizedPlugin());
+    writeLocalizationSet(root);
+    const auto pluginBefore = readBytes(path);
+    const auto dlBefore = readBytes(root / "Strings" / "Patch_en.DLSTRINGS");
+    const auto context = nlohmann::json{
+        {"language", "en"},
+        {"stringsDirectory", (root / "Strings").string()}
+    };
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadEnvironment(backend, {{"Patch.esp", path}});
+
+    const auto first = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000801:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "First"}}}),
+            context
+        }));
+    REQUIRE(first.has_value());
+    CHECK(readBytes(path) == pluginBefore);
+    CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == dlBefore);
+
+    const auto second = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000801:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "Second"}}}),
+            context
+        }));
+    REQUIRE(second.has_value());
+    CHECK(second->get<std::string>().find("SavePlugin") != std::string::npos);
+    CHECK(readBytes(path) == pluginBefore);
+    CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == dlBefore);
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto table = fo4::localization::read_string_table_file(
+        root / "Strings" / "Patch_en.DLSTRINGS",
+        fo4::localization::StringTableKind::dlstrings);
+    REQUIRE(fo4::localization::find_string(table, 42u) != nullptr);
+    const auto* firstEntry = fo4::localization::find_string(table, 201u);
+    const auto* secondEntry = fo4::localization::find_string(table, 202u);
+    REQUIRE(firstEntry != nullptr);
+    REQUIRE(secondEntry != nullptr);
+    CHECK(firstEntry->text == rawBytes("First"));
+    CHECK(secondEntry->text == rawBytes("Second"));
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto decoded = fo4::forms::decode_quest_stages(
+        disk, fo4::FormKey::parse("000801:Patch.esp"));
+    REQUIRE(decoded.stages.size() == 1u);
+    REQUIRE(decoded.stages[0].log_entries.size() == 1u);
+    REQUIRE(decoded.stages[0].log_entries[0].log_text.has_value());
+    CHECK(decoded.stages[0].log_entries[0].log_text->id == 202u);
+}
+
 TEST_CASE("DiscardPlugin restores persisted state without writing disk") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

@@ -2200,6 +2200,7 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
     return std::nullopt;
 }
 
+
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                                                    const fo4::FormKey& quest,
                                                    const fo4::ConflictGraph& graph,
@@ -3053,6 +3054,45 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 arguments, loaded->path,
                 allowedDirectory.value_or(std::filesystem::path{}), *localizedTables)) {
             return std::unexpected(*error);
+        }
+        if (loaded->stagedLocalization.has_value()) {
+            const auto& staged = *loaded->stagedLocalization;
+            if (staged.dlstringsPath != localizedTables->dlstringsPath ||
+                staged.stringsPath != localizedTables->stringsPath ||
+                staged.ilstringsPath != localizedTables->ilstringsPath) {
+                return std::unexpected(Error{
+                    "LocalizedSidecarPathNotAllowed",
+                    "pending localization sidecars do not match the requested stringsDirectory"
+                });
+            }
+            try {
+                localizedTables->dlstrings = fo4::localization::read_string_table(
+                    staged.dlstringsBytes,
+                    fo4::localization::StringTableKind::dlstrings);
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{
+                    "LocalizedLogTableInvalid",
+                    "could not parse staged DLSTRINGS: " + std::string(error.what())
+                });
+            }
+            localizedTables->originalStringsBytes = staged.originalStringsBytes;
+            localizedTables->originalDlstringsBytes = staged.originalDlstringsBytes;
+            localizedTables->originalIlstringsBytes = staged.originalIlstringsBytes;
+            std::uint32_t maximum = 0;
+            for (const auto* table : {&localizedTables->strings,
+                                      &localizedTables->dlstrings,
+                                      &localizedTables->ilstrings}) {
+                for (const auto& entry : table->entries) {
+                    maximum = std::max(maximum, entry.id);
+                }
+            }
+            if (maximum == std::numeric_limits<std::uint32_t>::max()) {
+                return std::unexpected(Error{
+                    "LocalizedLogTableFull",
+                    "localized string-table ID space is exhausted"
+                });
+            }
+            localizedTables->nextId = maximum + 1;
         }
     }
     try {

@@ -39,3 +39,7 @@ No behavior changes are implied by this matrix; it is the pre-change inventory.
 - FO4IDE UI redesign
 - New record editing features
 - Unrelated helper-tool changes
+
+## Post-#274 blocker fix
+
+Repeated localized CNAM edits before `SavePlugin` must consume `stagedLocalization.dlstringsBytes` as the working DLSTRINGS table. Disk-only reloads miss newly allocated pending IDs and fail with `LocalizedLogTableInvalid`. Freshness baselines remain the original on-disk sibling bytes captured at first stage.
