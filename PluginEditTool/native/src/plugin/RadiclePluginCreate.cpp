@@ -275,6 +275,7 @@ Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::createPluginLo
             .plugin = std::move(verified),
             .originalPlugin = std::nullopt,
             .dirty = false,
+            .stagedLocalization = std::nullopt,
         });
         try {
             rebuildGraphLocked();

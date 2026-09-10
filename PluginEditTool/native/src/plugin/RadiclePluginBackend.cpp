@@ -437,6 +437,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                 .plugin = std::move(plugin),
                 .originalPlugin = std::nullopt,
                 .dirty = false,
+                .stagedLocalization = std::nullopt,
             });
         } catch (const std::exception& error) {
             errors.push_back({{"plugin", name}, {"path", path}, {"error", error.what()}});
