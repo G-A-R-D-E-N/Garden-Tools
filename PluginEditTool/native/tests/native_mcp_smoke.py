@@ -1,0 +1,110 @@
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import threading
+
+
+def main(executable):
+    with tempfile.TemporaryDirectory(prefix="fo4ide-mcp-") as temporary:
+        root = Path(temporary)
+        profile = root / "profiles" / "Smoke"
+        for folder in (profile, root / "mods", root / "overwrite", root / "Stock Folder" / "Data"):
+            folder.mkdir(parents=True)
+        (root / "ModOrganizer.ini").write_text("selected_profile=Smoke\n", encoding="utf-8")
+        (profile / "plugins.txt").write_text("", encoding="utf-8")
+        (profile / "modlist.txt").write_text("", encoding="utf-8")
+        environment = dict(os.environ, APPDATA=str(root / "config"), XDG_CONFIG_HOME=str(root / "config"))
+        with (root / "stderr.log").open("w+", encoding="utf-8") as errors:
+            process = subprocess.Popen(
+                [executable, "--mcp", "--mo2", str(root)],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors,
+                text=True, encoding="utf-8", env=environment, cwd=root,
+            )
+            deadline = threading.Timer(60, process.kill)
+            deadline.start()
+            request_id = 0
+
+            def rpc(method, params=None):
+                nonlocal request_id
+                request_id += 1
+                process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}}) + "\n")
+                process.stdin.flush()
+                line = process.stdout.readline()
+                assert line, "Native MCP exited or timed out before responding"
+                response = json.loads(line)
+                assert response["id"] == request_id, response
+                assert "error" not in response, response
+                return response["result"]
+
+            def call(name, arguments=None, failed=False):
+                result = rpc("tools/call", {"name": name, "arguments": arguments or {}})
+                assert result.get("isError", False) == failed, result
+                return result["content"][0]["text"]
+
+            try:
+                assert rpc("initialize")["serverInfo"]["name"] == "fo4editor"
+                names = {tool["name"] for tool in rpc("tools/list")["tools"]}
+                required = {"list_plugins", "open_plugin", "create_plugin", "create_record", "get_record", "set_field", "save_plugin", "list_record_types", "list_records"}
+                assert required <= names, f"Missing native plugin tools: {sorted(required - names)}"
+                status = json.loads(call("get_mo2_status"))
+                assert status["loaded"] and status["profile"] == "Smoke", status
+                plugin = "NativeMcpSmoke.esp"
+                call("create_plugin", {"plugin": plugin})
+                path = root / "overwrite" / plugin
+                baseline = path.read_bytes()
+                assert plugin in call("list_plugins")
+                created = call("create_record", {"plugin": plugin, "type": "EYES", "payload": {"editorId": "McpSmokeEyes", "fullText": "Original Eyes", "icon": "Textures\\Eyes\\smoke.dds"}})
+                form_key = json.loads(created)["formKey"]
+                assert path.read_bytes() == baseline
+                assert "EYES" in call("list_record_types", {"plugin": plugin})
+                assert "McpSmokeEyes" in call("list_records", {"type": "EYES"})
+                record = {"form_key": form_key}
+                assert "Original Eyes" in call("get_record", record)
+                edit = {"plugin": plugin, "form_key": form_key, "path": "EYES\\Full", "value": "Saved Eyes"}
+                call("set_field", edit)
+                pending = call("get_record", record)
+                assert "Saved Eyes" in pending and path.read_bytes() == baseline
+                call("set_field", dict(edit, value=123), failed=True)
+                assert call("get_record", record) == pending and path.read_bytes() == baseline
+                call("set_field", dict(edit, path="EYES\\MissingField"), failed=True)
+                assert call("get_record", record) == pending and path.read_bytes() == baseline
+                call("save_plugin", {"plugin": plugin})
+                saved = path.read_bytes()
+                assert saved != baseline
+                (profile / "plugins.txt").write_text("*" + plugin + "\n", encoding="utf-8")
+                call("reload_mo2_profile")
+                assert "Saved Eyes" in call("get_record", record)
+                call("set_field", dict(edit, value="Discard These Eyes"))
+                assert "Discard These Eyes" in call("get_record", record)
+                assert path.read_bytes() == saved
+                call("reload_mo2_profile")
+                assert "Saved Eyes" in call("get_record", record)
+                assert "Discard These Eyes" not in call("get_record", record)
+                assert path.read_bytes() == saved
+            finally:
+                deadline.cancel()
+                process.stdin.close()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                process.stdout.close()
+        for arguments in (["--mo2"], ["--mo2", str(root / "missing")]):
+            result = subprocess.run([executable, "--mcp", *arguments], input="", capture_output=True, text=True, env=environment, cwd=root, timeout=30)
+            assert result.returncode != 0, f"Invalid MO2 startup succeeded: {arguments}"
+        print("PASS: native MCP startup, tools, memory-only edits, rejected edits, save, reload and discard")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("executable")
+    parser.add_argument("--build-dir")
+    parser.add_argument("--cmake", default="cmake")
+    arguments = parser.parse_args()
+    if arguments.build_dir:
+        subprocess.run([arguments.cmake, "--build", arguments.build_dir, "--config", "Release", "--target", "fo4ide", "--parallel", "8"], check=True)
+    main(str(Path(arguments.executable).resolve()))
