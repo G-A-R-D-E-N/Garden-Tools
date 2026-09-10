@@ -83,6 +83,14 @@ def main(executable):
                 (profile / "plugins.txt").write_text("*" + plugin + "\n", encoding="utf-8")
                 call("reload_mo2_profile")
                 assert read_record() == "Saved Eyes"
+                call("set_field", dict(edit, value="Open Guard Eyes"))
+                assert read_record() == "Open Guard Eyes"
+                assert path.read_bytes() == saved
+                call("open_plugin", {"path": str(path)}, failed=True)
+                assert read_record() == "Open Guard Eyes"
+                assert path.read_bytes() == saved
+                call("reload_mo2_profile")
+                assert read_record() == "Saved Eyes"
                 call("set_field", dict(edit, value="Discard These Eyes"))
                 assert read_record() == "Discard These Eyes"
                 assert path.read_bytes() == saved
@@ -101,7 +109,7 @@ def main(executable):
         for arguments in (["--mo2"], ["--mo2", str(root / "missing")]):
             result = subprocess.run([executable, "--mcp", *arguments], input="", capture_output=True, text=True, env=environment, cwd=root, timeout=30)
             assert result.returncode != 0, f"Invalid MO2 startup succeeded: {arguments}"
-        print("PASS: native MCP startup, tools, memory-only edits, rejected edits, save, reload and discard")
+        print("PASS: native MCP startup, tools, memory-only edits, dirty-open guard, rejected edits, save, reload and discard")
 
 
 if __name__ == "__main__":
