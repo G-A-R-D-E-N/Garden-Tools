@@ -171,7 +171,22 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "RemoveListItem") return removeListItem(arguments);
     if (method == "SetComponents") return setComponents(arguments);
     if (method == "SetQuestAliases") return setQuestAliases(arguments);
-    if (method == "SetQuestStages") return setQuestStages(arguments);
+    if (method == "SetQuestStages") {
+        if (arguments.is_array() && arguments.size() > 3 && arguments[3].is_object()) {
+            const auto pluginName = stringArgument(arguments, 0);
+            std::scoped_lock lock(mutex_);
+            const auto* loaded = findPlugin(pluginName);
+            if (loaded != nullptr && loaded->dirty &&
+                loaded->plugin.header.tes4_flags.is_localized()) {
+                return std::unexpected(Error{
+                    "PluginHasPendingChanges",
+                    "Plugin has pending changes; save or discard them before localized quest authoring: " +
+                        pluginName
+                });
+            }
+        }
+        return setQuestStages(arguments);
+    }
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "AddMasters") return addMasters(arguments);
