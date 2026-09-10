@@ -43,6 +43,8 @@ private:
     Result<nlohmann::json> reloadMo2Profile(const nlohmann::json& args);
     Result<void> rejectPendingReloadUnlessDiscarded(bool discardPending) const;
     Result<void> loadProfile(const std::filesystem::path& instancePath, bool discardPending);
+    Result<void> restoreLoadedProfile(const std::optional<mo2::ProfileSnapshot>& previous,
+                                      const std::filesystem::path& previousRoot);
     Result<nlohmann::json> pluginOperation(std::string_view method,
                                            const nlohmann::json& args,
                                            nlohmann::json fallback) const;

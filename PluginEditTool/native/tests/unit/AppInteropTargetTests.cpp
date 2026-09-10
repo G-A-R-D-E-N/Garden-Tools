@@ -61,13 +61,21 @@ class FakePluginBackend : public fo4ide::plugin::IPluginBackend {
 public:
     std::vector<std::pair<std::string, nlohmann::json>> calls;
     std::filesystem::path trustedRoot;
+    std::filesystem::path loadedInstance;
     bool failLoadMo2{false};
+    bool failTrustedRoot{false};
 
     fo4ide::plugin::Capabilities capabilities() const noexcept override {
         return {.available = true, .readPlugins = true};
     }
 
     fo4ide::Result<void> setTrustedNewPluginRoot(const std::filesystem::path& root) override {
+        if (failTrustedRoot) {
+            return std::unexpected(fo4ide::Error{
+                "NewPluginRootInvalid",
+                "deliberate trusted-root failure"
+            });
+        }
         trustedRoot = root;
         return {};
     }
@@ -75,8 +83,12 @@ public:
     fo4ide::Result<nlohmann::json> invoke(std::string_view operation,
                                           const nlohmann::json& arguments) override {
         calls.emplace_back(std::string(operation), arguments);
-        if (operation == "environment.LoadMo2" && failLoadMo2) {
-            return std::unexpected(fo4ide::Error{"LoadMo2Failed", "deliberate backend load failure"});
+        if (operation == "environment.LoadMo2") {
+            if (failLoadMo2) {
+                return std::unexpected(fo4ide::Error{"LoadMo2Failed", "deliberate backend load failure"});
+            }
+            loadedInstance = arguments.value("instancePath", std::string{});
+            return nlohmann::json(nullptr);
         }
         if (operation == "appInterop.GetPlugins") {
             return nlohmann::json(R"([{"Key":"Native.esp","ConflictStatus":0,"IsRecordNode":false,"HasChildren":true,"Pending":false}])");
@@ -635,6 +647,7 @@ TEST_CASE("AppInterop failed reload does not commit settings or trusted output r
     CHECK(settings.mo2InstancePath == firstInstance);
     CHECK(settings.dataFolder == firstData);
     CHECK(plugins.trustedRoot == firstRoot);
+    CHECK(plugins.loadedInstance == firstInstance);
     auto loaded = target.snapshot();
     REQUIRE(loaded.has_value());
     CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp"});
@@ -642,4 +655,123 @@ TEST_CASE("AppInterop failed reload does not commit settings or trusted output r
     REQUIRE(persisted.has_value());
     CHECK(persisted->mo2InstancePath == firstInstance);
     CHECK(persisted->dataFolder == firstData);
+}
+
+TEST_CASE("AppInterop trusted-root failure after LoadMo2 restores the previous backend") {
+    const auto first = tempRoot();
+    Cleanup firstCleanup{first};
+    makeProfile(first);
+    const auto second = tempRoot();
+    Cleanup secondCleanup{second};
+    makeProfile(second);
+    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
+
+    fo4ide::settings::Store store(first / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    FakePluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
+
+    const auto firstInstance = settings.mo2InstancePath;
+    const auto firstData = settings.dataFolder;
+    const auto firstRoot = plugins.trustedRoot;
+    const auto firstLoaded = plugins.loadedInstance;
+    REQUIRE_FALSE(firstInstance.empty());
+    REQUIRE_FALSE(firstRoot.empty());
+    auto beforeStatus = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(beforeStatus.has_value());
+    const auto loadedAt = beforeStatus->at("loadedAtUnixMs").get<long long>();
+    const auto pluginsTxt = first / "profiles" / "Test" / "plugins.txt";
+    const auto watchStamp = std::filesystem::last_write_time(pluginsTxt);
+    auto persisted = store.load();
+    REQUIRE(persisted.has_value());
+    CHECK(persisted->mo2InstancePath == firstInstance);
+
+    plugins.failTrustedRoot = true;
+    plugins.calls.clear();
+    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
+    REQUIRE_FALSE(failed.has_value());
+    CHECK(failed.error().type == "NewPluginRootInvalid");
+    CHECK(loadMo2Call(plugins.calls) != nullptr);
+
+    CHECK(settings.mo2InstancePath == firstInstance);
+    CHECK(settings.dataFolder == firstData);
+    CHECK(plugins.trustedRoot == firstRoot);
+    CHECK(plugins.loadedInstance == firstLoaded);
+    auto loaded = target.snapshot();
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->instance.instancePath == firstInstance);
+    CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp"});
+    persisted = store.load();
+    REQUIRE(persisted.has_value());
+    CHECK(persisted->mo2InstancePath == firstInstance);
+    CHECK(persisted->dataFolder == firstData);
+    CHECK(std::filesystem::last_write_time(pluginsTxt) == watchStamp);
+    auto afterStatus = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(afterStatus.has_value());
+    CHECK(afterStatus->at("instancePath").get<std::string>() == firstInstance.string());
+    CHECK(afterStatus->at("pluginCount").get<std::size_t>() == 2);
+    CHECK(afterStatus->at("loadedAtUnixMs").get<long long>() == loadedAt);
+    CHECK_FALSE(afterStatus->at("stale").get<bool>());
+}
+
+TEST_CASE("AppInterop settings-store failure after LoadMo2 restores the previous backend") {
+    const auto first = tempRoot();
+    Cleanup firstCleanup{first};
+    makeProfile(first);
+    const auto second = tempRoot();
+    Cleanup secondCleanup{second};
+    makeProfile(second);
+    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
+
+    fo4ide::settings::Store store(first / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    FakePluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
+
+    const auto firstInstance = settings.mo2InstancePath;
+    const auto firstData = settings.dataFolder;
+    const auto firstRoot = plugins.trustedRoot;
+    const auto firstLoaded = plugins.loadedInstance;
+    auto beforeStatus = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(beforeStatus.has_value());
+    const auto loadedAt = beforeStatus->at("loadedAtUnixMs").get<long long>();
+    const auto pluginsTxt = first / "profiles" / "Test" / "plugins.txt";
+    const auto watchStamp = std::filesystem::last_write_time(pluginsTxt);
+    auto persisted = store.load();
+    REQUIRE(persisted.has_value());
+    CHECK(persisted->mo2InstancePath == firstInstance);
+
+    const auto blocker = std::filesystem::path(store.path().string() + ".tmp");
+    std::filesystem::create_directory(blocker);
+    plugins.calls.clear();
+    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
+    REQUIRE_FALSE(failed.has_value());
+    CHECK(failed.error().type == "SettingsWriteFailed");
+    CHECK(loadMo2Call(plugins.calls) != nullptr);
+
+    CHECK(settings.mo2InstancePath == firstInstance);
+    CHECK(settings.dataFolder == firstData);
+    CHECK(plugins.trustedRoot == firstRoot);
+    CHECK(plugins.loadedInstance == firstLoaded);
+    auto loaded = target.snapshot();
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->instance.instancePath == firstInstance);
+    CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp"});
+    persisted = store.load();
+    REQUIRE(persisted.has_value());
+    CHECK(persisted->mo2InstancePath == firstInstance);
+    CHECK(persisted->dataFolder == firstData);
+    CHECK(std::filesystem::last_write_time(pluginsTxt) == watchStamp);
+    auto afterStatus = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(afterStatus.has_value());
+    CHECK(afterStatus->at("instancePath").get<std::string>() == firstInstance.string());
+    CHECK(afterStatus->at("pluginCount").get<std::size_t>() == 2);
+    CHECK(afterStatus->at("loadedAtUnixMs").get<long long>() == loadedAt);
+    CHECK_FALSE(afterStatus->at("stale").get<bool>());
 }

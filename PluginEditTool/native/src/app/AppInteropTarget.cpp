@@ -118,6 +118,28 @@ Result<void> AppInteropTarget::rejectPendingReloadUnlessDiscarded(bool discardPe
     });
 }
 
+Result<void> AppInteropTarget::restoreLoadedProfile(
+    const std::optional<mo2::ProfileSnapshot>& previous,
+    const std::filesystem::path& previousRoot) {
+    if (!plugins_.capabilities().available) return {};
+    if (previous) {
+        auto restored = plugins_.invoke(
+            "environment.LoadMo2", backendEnvironment(*previous, true));
+        if (!restored) return std::unexpected(restored.error());
+    } else {
+        auto restored = plugins_.invoke(
+            "environment.LoadMo2",
+            nlohmann::json{
+                {"plugins", nlohmann::json::array()},
+                {"discardPending", true}
+            });
+        if (!restored) return std::unexpected(restored.error());
+    }
+    auto root = plugins_.setTrustedNewPluginRoot(previousRoot);
+    if (!root) return std::unexpected(root.error());
+    return {};
+}
+
 Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instancePath,
                                            bool discardPending) {
     auto blocked = rejectPendingReloadUnlessDiscarded(discardPending);
@@ -126,20 +148,32 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
     auto loaded = mo2::readProfile(instancePath);
     if (!loaded) return std::unexpected(loaded.error());
 
+    std::optional<mo2::ProfileSnapshot> previous;
+    {
+        std::scoped_lock lock(mutex_);
+        previous = snapshot_;
+    }
+    const auto previousSettings = settings_;
+    const auto previousRoot = previous ? previous->instance.overwriteFolder
+                                       : std::filesystem::path{};
+
     if (plugins_.capabilities().available) {
         auto backendLoad = plugins_.invoke(
             "environment.LoadMo2", backendEnvironment(*loaded, discardPending));
         if (!backendLoad) return std::unexpected(backendLoad.error());
         auto outputRoot = plugins_.setTrustedNewPluginRoot(loaded->instance.overwriteFolder);
-        if (!outputRoot) return std::unexpected(outputRoot.error());
+        if (!outputRoot) {
+            (void)restoreLoadedProfile(previous, previousRoot);
+            return std::unexpected(outputRoot.error());
+        }
     }
 
-    const auto previousSettings = settings_;
     settings_.mo2InstancePath = loaded->instance.instancePath;
     if (!loaded->instance.gameDataFolder.empty()) settings_.dataFolder = loaded->instance.gameDataFolder;
     auto saved = store_.save(settings_);
     if (!saved) {
         settings_ = previousSettings;
+        if (plugins_.capabilities().available) (void)restoreLoadedProfile(previous, previousRoot);
         return std::unexpected(saved.error());
     }
 
