@@ -1,5 +1,10 @@
 include(Catch)
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME fo4ide_native_mcp_smoke
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/native_mcp_smoke.py" "$<TARGET_FILE:fo4ide>")
+set_tests_properties(fo4ide_native_mcp_smoke PROPERTIES TIMEOUT 120)
+
 function(fo4ide_add_test name source library)
     add_executable(${name} ${source})
     target_link_libraries(${name} PRIVATE ${library} Catch2::Catch2WithMain)

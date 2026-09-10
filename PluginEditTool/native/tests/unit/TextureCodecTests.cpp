@@ -291,7 +291,7 @@ TEST_CASE("PngWriter produces a valid PNG that round-trips") {
                                              static_cast<std::ptrdiff_t>(idatLength));
 
     std::vector<std::uint8_t> raw(2 * (2 * 4 + 1));
-    uLongf rawSize = raw.size();
+    uLongf rawSize = static_cast<uLongf>(raw.size());
     const auto result = uncompress(raw.data(), &rawSize, idat.data(), static_cast<uLong>(idat.size()));
     REQUIRE(result == Z_OK);
     REQUIRE(rawSize == 18);

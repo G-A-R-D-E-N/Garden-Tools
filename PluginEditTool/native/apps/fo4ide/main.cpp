@@ -1,3 +1,5 @@
+#include "McpTools.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -189,243 +191,6 @@ bool registerTarget(fo4ide::rpc::Dispatcher& rpc,
     return false;
 }
 
-bool registerMcpTool(fo4ide::mcp::Registry& registry,
-                     std::shared_ptr<fo4ide::mcp::Tool> tool,
-                     const std::shared_ptr<spdlog::logger>& log) {
-    auto registered = registry.registerTool(std::move(tool));
-    if (registered) return true;
-    log->error("MCP setup failed: {}", registered.error().message);
-    return false;
-}
-
-nlohmann::json objectSchema(nlohmann::json properties,
-                            nlohmann::json required = nlohmann::json::array()) {
-    nlohmann::json schema{{"type", "object"}, {"properties", std::move(properties)}};
-    if (!required.empty()) schema["required"] = std::move(required);
-    schema["additionalProperties"] = false;
-    return schema;
-}
-
-fo4ide::mcp::ToolResult rpcToolText(const fo4ide::rpc::Response& response) {
-    if (!response.ok) {
-        const auto prefix = response.type.empty() ? std::string{} : response.type + ": ";
-        return {prefix + response.error, true};
-    }
-    if (response.value.is_string()) return {response.value.get<std::string>(), false};
-    if (response.value.is_null()) return {"", false};
-    return {response.value.dump(), false};
-}
-
-bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
-                            const fo4ide::rpc::Dispatcher& rpc,
-                            const std::shared_ptr<spdlog::logger>& log) {
-    using fo4ide::mcp::FunctionTool;
-    using fo4ide::mcp::RpcTool;
-    using fo4ide::mcp::ToolDefinition;
-
-    const auto add = [&](ToolDefinition definition,
-                         std::string target,
-                         std::string method,
-                         std::vector<std::string> argumentOrder = {}) {
-        return registerMcpTool(
-            registry,
-            std::make_shared<RpcTool>(
-                std::move(definition), rpc, std::move(target), std::move(method), std::move(argumentOrder)),
-            log);
-    };
-
-    const auto emptySchema = objectSchema(nlohmann::json::object());
-    if (!add({"native_status", "Report the native FO4IDE host and backend capability status", emptySchema},
-             "app", "GetHealth")) return false;
-    if (!add({"get_mo2_status", "Report the loaded MO2 instance/profile and whether its files changed on disk", emptySchema},
-             "appInterop", "GetMo2Status")) return false;
-    if (!add({"reload_mo2_profile", "Reload the currently configured MO2 profile from disk", emptySchema},
-             "appInterop", "ReloadMo2Profile")) return false;
-    if (!add({"get_settings", "Return the current FO4IDE settings", emptySchema},
-             "settings", "GetSettings")) return false;
-
-    const auto papyrusCompileSchema = objectSchema(
-        {
-            {"source", {{"type", "string"},
-                        {"description", "A .psc file path, or a folder of scripts (with all=true)."}}},
-            {"output", {{"type", "string"}, {"description", "Output dir for .pex (default: the source folder)."}}},
-            {"imports", {{"type", "string"}, {"description", "Extra import roots, semicolon-separated."}}},
-            {"flags", {{"type", "string"}, {"description", "Flags file (default Institute_Papyrus_Flags.flg)."}}},
-            {"all", {{"type", "boolean"}, {"description", "Compile every .psc in the source folder."}}},
-            {"optimize", {{"type", "boolean"}, {"description", "Optimize (-op). Creation Kit engine only."}}},
-            {"release", {{"type", "boolean"}, {"description", "Release build: strips DebugOnly/BetaOnly calls."}}},
-            {"engine", {{"type", "string"},
-                        {"description", "'auto' (default), 'builtin', or 'creationkit'."}}},
-            {"debug_info", {{"type", "boolean"}, {"description", "Emit line numbers and property groups (default true)."}}},
-            {"compiler_path", {{"type", "string"}, {"description", "Override path to PapyrusCompiler.exe."}}}
-        },
-        nlohmann::json::array({"source"}));
-    if (!add({
-            "compile_papyrus",
-            "Compile Papyrus source .psc -> .pex with the built-in engine (auto-detects a single file "
-            "or a folder; 'creationkit' shells out to PapyrusCompiler.exe). Returns a 'RESULT: X "
-            "succeeded, Y failed' summary.",
-            papyrusCompileSchema},
-            "papyrus", "Compile",
-            {"source", "output", "imports", "flags", "all", "optimize", "release",
-             "compiler_path", "engine", "debug_info"})) return false;
-    if (!add({
-            "decompile_papyrus",
-            "Decompile compiled Papyrus .pex -> source .psc with the built-in decompiler (single file "
-            "or folder; assembly=true emits a bytecode listing). Namespaced scripts are written into "
-            "namespace subfolders so they recompile as-is.",
-            objectSchema({
-                {"source", {{"type", "string"}, {"description", "A .pex file, or a folder of .pex files."}}},
-                {"output", {{"type", "string"}, {"description", "Output dir when writing."}}},
-                {"assembly", {{"type", "boolean"}, {"description", "Emit bytecode disassembly instead of source."}}},
-                {"write", {{"type", "boolean"}, {"description", "Write .psc/.pas files instead of returning text inline."}}}
-            }, nlohmann::json::array({"source"}))},
-            "papyrus", "Decompile", {"source", "output", "assembly", "write"})) return false;
-    if (!add({
-            "papyrus_check",
-            "Check Papyrus SOURCE (.psc) with the built-in front end (no Creation Kit): syntax, then "
-            "name resolution and type checking. Reports 'file(line,col): error CODE: message' per "
-            "problem; files whose parent/import/type is not on the roots are counted separately.",
-            objectSchema({
-                {"source", {{"type", "string"}, {"description", "A .psc file path, or a folder of scripts."}}},
-                {"semantic", {{"type", "boolean"}, {"description", "Resolve names and check types too (default true)."}}},
-                {"imports", {{"type", "string"}, {"description", "Extra source roots, semicolon-separated."}}}
-            }, nlohmann::json::array({"source"}))},
-            "papyrus", "Check", {"source", "semantic", "imports"})) return false;
-    if (!add({
-            "papyrus_function_lookup",
-            "Look up a Papyrus function in the offline Creation Kit Wiki mirror.",
-            objectSchema({
-                {"function", {{"type", "string"}, {"description", "Function name, e.g. 'GetBaseObject'."}}},
-                {"script", {{"type", "string"}, {"description", "Owning script (optional but disambiguates)."}}}
-            }, nlohmann::json::array({"function"}))},
-            "papyrus", "LookupFunction", {"script", "function"})) return false;
-    if (!add({
-            "papyrus_script_info",
-            "Get a Papyrus script's overview (Extends, Global/Member Functions, Events) from the "
-            "offline Creation Kit Wiki mirror.",
-            objectSchema({{"script", {{"type", "string"},
-                                         {"description", "Script name, e.g. 'ObjectReference' or 'Actor'."}}}},
-                         nlohmann::json::array({"script"}))},
-            "papyrus", "LookupScriptInfo", {"script"})) return false;
-
-    const auto nifPathSchema = objectSchema(
-        {{"path", {{"type", "string"}, {"description", "Path to the NIF file"}}}},
-        nlohmann::json::array({"path"}));
-    if (!add({"nif_inspect", "Inspect a NIF through the native niftool wrapper", nifPathSchema},
-             "nif", "Inspect", {"path"})) return false;
-    if (!add({"nif_verify", "Verify a NIF through the native niftool wrapper", nifPathSchema},
-             "nif", "Verify", {"path"})) return false;
-    if (!add({"nif_tree", "Return the NIF block tree through the native niftool wrapper", nifPathSchema},
-             "nif", "Tree", {"path"})) return false;
-    if (!add({"nif_geometry", "Return geometry data through the native niftool wrapper", nifPathSchema},
-             "nif", "Geo", {"path"})) return false;
-
-    if (!add({
-            "audio_convert_to_xwm",
-            "Convert one audio/video file or a folder to Fallout 4 XWM",
-            objectSchema({
-                {"source", {{"type", "string"}}},
-                {"output", {{"type", "string"}}},
-                {"bitrateBps", {{"type", "integer"}, {"minimum", 1}}}
-            }, nlohmann::json::array({"source"}))},
-            "audio", "ConvertToXwm", {"source", "output", "bitrateBps"})) return false;
-    if (!add({
-            "audio_convert_from_xwm",
-            "Decode an XWM file to WAV or another ffmpeg-supported format",
-            objectSchema({
-                {"source", {{"type", "string"}}},
-                {"output", {{"type", "string"}}},
-                {"targetExt", {{"type", "string"}, {"default", "wav"}}}
-            }, nlohmann::json::array({"source"}))},
-            "audio", "ConvertFromXwm", {"source", "output", "targetExt"})) return false;
-    if (!add({
-            "audio_make_fuz",
-            "Create a Fallout 4 FUZ package from audio/XWM and an optional LIP file",
-            objectSchema({
-                {"audioSource", {{"type", "string"}}},
-                {"lipPath", {{"type", "string"}}},
-                {"fuzOutput", {{"type", "string"}}},
-                {"noLip", {{"type", "boolean"}, {"default", false}}}
-            }, nlohmann::json::array({"audioSource", "fuzOutput"}))},
-            "audio", "MakeFuz", {"audioSource", "lipPath", "fuzOutput", "noLip"})) return false;
-    if (!add({
-            "audio_extract_fuz",
-            "Extract XWM/LIP data from a Fallout 4 FUZ package",
-            objectSchema({
-                {"fuzPath", {{"type", "string"}}},
-                {"xwmOutput", {{"type", "string"}}},
-                {"lipOutput", {{"type", "string"}}},
-                {"alsoWav", {{"type", "boolean"}, {"default", false}}}
-            }, nlohmann::json::array({"fuzPath"}))},
-            "audio", "ExtractFuz", {"fuzPath", "xwmOutput", "lipOutput", "alsoWav"})) return false;
-
-    if (!add({
-            "material_inspect",
-            "Inspect a Fallout 4 BGSM or BGEM material through the native codec",
-            objectSchema({{"path", {{"type", "string"}}}}, nlohmann::json::array({"path"}))},
-            "material", "Inspect", {"path"})) return false;
-
-    ToolDefinition materialSet{
-        .name = "material_set_fields",
-        .description = "Set one or more named BGSM/BGEM material fields through the native codec",
-        .inputSchema = objectSchema({
-            {"path", {{"type", "string"}}},
-            {"fields", {{"type", "object"}, {"additionalProperties", {{"type", "string"}}}}},
-            {"output", {{"type", "string"}}}
-        }, nlohmann::json::array({"path", "fields"}))
-    };
-    if (!registerMcpTool(
-            registry,
-            std::make_shared<FunctionTool>(std::move(materialSet), [&rpc](const nlohmann::json& args) {
-                if (!args.is_object() || !args.contains("path") || !args.at("path").is_string() ||
-                    !args.contains("fields") || !args.at("fields").is_object()) {
-                    return fo4ide::mcp::ToolResult{"path and fields are required", true};
-                }
-                const auto output = args.value("output", std::string{});
-                const auto response = rpc.invoke({
-                    "material",
-                    "SetFields",
-                    nlohmann::json::array({args.at("path"), args.at("fields").dump(), output})
-                });
-                return rpcToolText(response);
-            }),
-            log)) return false;
-
-    ToolDefinition archivePack{
-        .name = "archive_pack",
-        .description = "Pack folders into a Fallout 4 BA2 through Archive2.exe",
-        .inputSchema = objectSchema({
-            {"sources", {{"type", "array"}, {"items", {{"type", "string"}}}, {"minItems", 1}}},
-            {"output", {{"type", "string"}}},
-            {"format", {{"type", "string"}, {"enum", nlohmann::json::array({"General", "DDS"})}}},
-            {"rootDir", {{"type", "string"}}},
-            {"compress", {{"type", "boolean"}, {"default", true}}}
-        }, nlohmann::json::array({"sources", "output", "rootDir"}))
-    };
-    if (!registerMcpTool(
-            registry,
-            std::make_shared<FunctionTool>(std::move(archivePack), [&rpc](const nlohmann::json& args) {
-                if (!args.is_object() || !args.contains("sources") || !args.at("sources").is_array()) {
-                    return fo4ide::mcp::ToolResult{"sources is required", true};
-                }
-                const auto response = rpc.invoke({
-                    "archive",
-                    "Pack",
-                    nlohmann::json::array({
-                        args.at("sources").dump(),
-                        args.value("output", std::string{}),
-                        args.value("format", std::string("General")),
-                        args.value("rootDir", std::string{}),
-                        args.value("compress", true)
-                    })
-                });
-                return rpcToolText(response);
-            }),
-            log)) return false;
-
-    return true;
-}
 
 }
 
@@ -498,6 +263,7 @@ int main(int argc, char** argv) {
     bool openWindow = false;
     bool runMcp = false;
     int requestedPort = 0;
+    std::string mo2Instance;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--health") printHealth = true;
@@ -505,7 +271,29 @@ int main(int argc, char** argv) {
         if (arg == "--browser") { runServer = true; openBrowser = true; }
         if (arg == "--window") { runServer = true; openWindow = true; }
         if (arg == "--mcp") runMcp = true;
+        if (arg == "--mo2") {
+            if (i + 1 >= argc || std::string_view(argv[i + 1]).starts_with("--")) {
+                std::cerr << "--mo2 requires an instance folder\n";
+                fo4ide::logging::shutdown();
+                return 6;
+            }
+            mo2Instance = argv[++i];
+            if (mo2Instance.empty()) {
+                std::cerr << "--mo2 requires a nonempty instance folder\n";
+                fo4ide::logging::shutdown();
+                return 6;
+            }
+        }
         if (arg == "--port" && i + 1 < argc) requestedPort = std::stoi(argv[++i]);
+    }
+
+    if (!mo2Instance.empty()) {
+        const auto loaded = rpc.invoke({"appInterop", "OpenMo2Profile", nlohmann::json::array({mo2Instance})});
+        if (!loaded.ok) {
+            std::cerr << "MO2 load failed: " << loaded.error << '\n';
+            fo4ide::logging::shutdown();
+            return 6;
+        }
     }
 
     if (!printHealth && !runMcp && !runServer) {

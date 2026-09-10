@@ -150,10 +150,10 @@ struct NodeDefinition {
     }
 
     // First pin whose id equals (case-insensitively) `id`; null for a null id.
-    const PinDefinition* pin(std::string_view id) const {
-        if (id.empty()) return nullptr;
+    const PinDefinition* pin(std::string_view pinId) const {
+        if (pinId.empty()) return nullptr;
         for (const auto& p : pins) {
-            if (equalsIgnoreCase(p.id, id)) return &p;
+            if (equalsIgnoreCase(p.id, pinId)) return &p;
         }
         return nullptr;
     }

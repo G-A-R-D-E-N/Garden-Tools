@@ -223,15 +223,15 @@ void checkEquivalent(const PexFile& a, const PexFile& b) {
                 }
                 REQUIRE(fa.locals.size() == fb.locals.size());
                 REQUIRE(fa.instructions.size() == fb.instructions.size());
-                for (std::size_t i = 0; i < fa.instructions.size(); ++i) {
-                    CHECK(fa.instructions[i].opCode == fb.instructions[i].opCode);
-                    REQUIRE(fa.instructions[i].args.size() == fb.instructions[i].args.size());
-                    for (std::size_t aa = 0; aa < fa.instructions[i].args.size(); ++aa) {
-                        CHECK(static_cast<std::uint8_t>(fa.instructions[i].args[aa].type) ==
-                              static_cast<std::uint8_t>(fb.instructions[i].args[aa].type));
-                        CHECK(fa.instructions[i].args[aa].str == fb.instructions[i].args[aa].str);
-                        CHECK(fa.instructions[i].args[aa].int_ == fb.instructions[i].args[aa].int_);
-                        CHECK(fa.instructions[i].args[aa].bool_ == fb.instructions[i].args[aa].bool_);
+                for (std::size_t instruction = 0; instruction < fa.instructions.size(); ++instruction) {
+                    CHECK(fa.instructions[instruction].opCode == fb.instructions[instruction].opCode);
+                    REQUIRE(fa.instructions[instruction].args.size() == fb.instructions[instruction].args.size());
+                    for (std::size_t aa = 0; aa < fa.instructions[instruction].args.size(); ++aa) {
+                        CHECK(static_cast<std::uint8_t>(fa.instructions[instruction].args[aa].type) ==
+                              static_cast<std::uint8_t>(fb.instructions[instruction].args[aa].type));
+                        CHECK(fa.instructions[instruction].args[aa].str == fb.instructions[instruction].args[aa].str);
+                        CHECK(fa.instructions[instruction].args[aa].int_ == fb.instructions[instruction].args[aa].int_);
+                        CHECK(fa.instructions[instruction].args[aa].bool_ == fb.instructions[instruction].args[aa].bool_);
                     }
                 }
             }

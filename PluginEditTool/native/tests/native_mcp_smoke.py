@@ -62,27 +62,32 @@ def main(executable):
                 assert "EYES" in call("list_record_types", {"plugin": plugin})
                 assert "McpSmokeEyes" in call("list_records", {"type": "EYES"})
                 record = {"form_key": form_key}
-                assert "Original Eyes" in call("get_record", record)
+                def read_record():
+                    matrix = json.loads(call("get_record", record))
+                    full = next(row for row in matrix["Rows"] if row["Field"] == "Subrecords\\FULL[0]")["Values"][-1]
+                    return bytes.fromhex(full.split(": ", 1)[1]).rstrip(b"\x00").decode("utf-8")
+
+                assert read_record() == "Original Eyes"
+                assert "Original Eyes" in call("list_records_summary", {"plugin": plugin, "type": "EYES"})
                 edit = {"plugin": plugin, "form_key": form_key, "path": "EYES\\Full", "value": "Saved Eyes"}
                 call("set_field", edit)
-                pending = call("get_record", record)
+                pending = read_record()
                 assert "Saved Eyes" in pending and path.read_bytes() == baseline
                 call("set_field", dict(edit, value=123), failed=True)
-                assert call("get_record", record) == pending and path.read_bytes() == baseline
+                assert read_record() == pending and path.read_bytes() == baseline
                 call("set_field", dict(edit, path="EYES\\MissingField"), failed=True)
-                assert call("get_record", record) == pending and path.read_bytes() == baseline
+                assert read_record() == pending and path.read_bytes() == baseline
                 call("save_plugin", {"plugin": plugin})
                 saved = path.read_bytes()
                 assert saved != baseline
                 (profile / "plugins.txt").write_text("*" + plugin + "\n", encoding="utf-8")
                 call("reload_mo2_profile")
-                assert "Saved Eyes" in call("get_record", record)
+                assert read_record() == "Saved Eyes"
                 call("set_field", dict(edit, value="Discard These Eyes"))
-                assert "Discard These Eyes" in call("get_record", record)
+                assert read_record() == "Discard These Eyes"
                 assert path.read_bytes() == saved
                 call("reload_mo2_profile")
-                assert "Saved Eyes" in call("get_record", record)
-                assert "Discard These Eyes" not in call("get_record", record)
+                assert read_record() == "Saved Eyes"
                 assert path.read_bytes() == saved
             finally:
                 deadline.cancel()

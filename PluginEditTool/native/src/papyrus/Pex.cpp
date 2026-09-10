@@ -28,7 +28,7 @@ public:
         const auto value = static_cast<std::uint16_t>(bytes_[pos_]) |
                            static_cast<std::uint16_t>(bytes_[pos_ + 1]) << 8;
         pos_ += 2;
-        return value;
+        return static_cast<std::uint16_t>(value);
     }
 
     std::uint32_t u32() {

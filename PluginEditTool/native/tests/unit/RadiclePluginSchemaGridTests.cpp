@@ -113,7 +113,7 @@ TEST_CASE("Spreadsheet scalar columns come from generated record descriptors") {
     REQUIRE(grid.at("columns").size() == fields.size() + 1);
     CHECK(grid.at("columns")[0] == "EDID");
     for (std::size_t index = 0; index < fields.size(); ++index) {
-        CHECK(grid.at("columns")[index + 1] == fields[index].path);
+        CHECK(grid.at("columns")[index + 1].get<std::string>() == fields[index].path);
     }
 
     REQUIRE(grid.at("rows").size() == 1);
