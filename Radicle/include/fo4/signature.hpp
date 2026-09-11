@@ -80,6 +80,7 @@ inline constexpr Signature sig_perk = Signature::from_string("PERK");
 inline constexpr Signature sig_pack = Signature::from_string("PACK");
 inline constexpr Signature sig_scen = Signature::from_string("SCEN");
 inline constexpr Signature sig_info = Signature::from_string("INFO");
+inline constexpr Signature sig_term = Signature::from_string("TERM");
 inline constexpr Signature sig_cnto = Signature::from_string("CNTO");
 inline constexpr Signature sig_lvlo = Signature::from_string("LVLO");
 inline constexpr Signature sig_xtel = Signature::from_string("XTEL");

@@ -1,13 +1,16 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "fo4/schema/vmad.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <cstring>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -73,6 +76,62 @@ fo4::Plugin remap_drop_dlc(std::vector<std::byte> bytes, std::string_view name) 
   return fo4::remap_plugin_masters(
       std::move(plugin), {fo4::PluginKey::from_filename("Fallout4.esm"),
                           fo4::PluginKey::from_filename("RadiationOverhaul.esp")});
+}
+
+std::vector<std::byte> plugin_with_vmad_record(std::string_view signature,
+                                               std::uint32_t form_id,
+                                               const fo4::test::ByteWriter& vmad) {
+  auto out = plugin_with_masters();
+  const auto grup = fo4::test::begin_group(out, signature, 0);
+  const auto rec = fo4::test::begin_record(out, signature, 0, form_id);
+  fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+  return out.bytes;
+}
+
+void expect_master_remap_refused(const std::vector<std::byte>& bytes) {
+  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(
+      fo4::remap_plugin_masters(
+          plugin, {fo4::PluginKey::from_filename("Fallout4.esm"),
+                   fo4::PluginKey::from_filename("RadiationOverhaul.esp")}),
+      fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+std::vector<fo4::FormLinkHit> vmad_hits(const fo4::Plugin& plugin,
+                                       const fo4::FormKey& key) {
+  std::vector<fo4::FormLinkHit> result;
+  for (const auto& link : fo4::collect_form_links(plugin)) {
+    if (link.record == key && link.subrecord.to_string() == "VMAD") {
+      result.push_back(link);
+    }
+  }
+  return result;
+}
+
+fo4::test::ByteWriter term_vmad_with_fragments(std::uint32_t fragment_form_id) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(0);
+  vmad.u8(3);
+  wstring(vmad, "QF_Term");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "LinkedRef");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, fragment_form_id);
+  vmad.u16(1);
+  vmad.u16(1);
+  vmad.u16(0);
+  vmad.u8(0);
+  wstring(vmad, "QF_Term");
+  wstring(vmad, "Fragment_1");
+  return vmad;
 }
 
 }  // namespace
@@ -359,7 +418,7 @@ TEST(Vmad, InspectQuestExtrasReportsAliasAndFragmentOffsets) {
   EXPECT_EQ(fragment_layout.fragments[0].stage_index, 0);
 }
 
-TEST(Vmad, TruncatedPayloadDoesNotThrow) {
+TEST(Vmad, TruncatedPayloadFailsClosedForMasterRemap) {
   fo4::test::ByteWriter vmad;
   vmad.u16(5);
   vmad.u16(2);
@@ -367,18 +426,136 @@ TEST(Vmad, TruncatedPayloadDoesNotThrow) {
   vmad.u16(20);  // claims a long name
   vmad.raw(std::string_view{"x"});
 
-  auto out = plugin_with_masters();
-  const auto grup = fo4::test::begin_group(out, "ACTI", 0);
-  const auto rec = fo4::test::begin_record(out, "ACTI", 0, 0x03000800);
-  fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
-  fo4::test::end_record(out, rec);
-  fo4::test::end_group(out, grup);
+  expect_master_remap_refused(plugin_with_vmad_record("ACTI", 0x03000800, vmad));
+}
 
-  EXPECT_NO_THROW({
-    auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-    plugin = fo4::remap_plugin_masters(
-        std::move(plugin), {fo4::PluginKey::from_filename("Fallout4.esm"),
-                            fo4::PluginKey::from_filename("RadiationOverhaul.esp")});
-    (void)fo4::write_plugin(plugin);
-  });
+TEST(Vmad, TrailingBytesFailClosedForMasterRemap) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "DemoScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "LinkedRef");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+  vmad.u32(0x0200009B);
+  vmad.u32(0x0200009C);
+
+  expect_master_remap_refused(plugin_with_vmad_record("ACTI", 0x03000800, vmad));
+}
+
+TEST(Vmad, PartialParseFailureAfterDiscoveredFormIdRefusesWholeRemap) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(2);
+  wstring(vmad, "DemoScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "LinkedRef");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+  wstring(vmad, "SecondScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "BrokenRef");
+  vmad.u8(1);
+  vmad.u8(1);
+  vmad.u16(40);
+  vmad.raw(std::string_view{"x"});
+
+  const auto bytes = plugin_with_vmad_record("ACTI", 0x03000800, vmad);
+  EXPECT_TRUE(vmad_hits(fo4::read_plugin(bytes, "Patch.esp"),
+                        fo4::FormKey::parse("000800:Patch.esp"))
+                  .empty());
+  expect_master_remap_refused(bytes);
+}
+
+TEST(Vmad, TermFragmentsRemapAndConsumeTheWholePayload) {
+  const auto vmad = term_vmad_with_fragments(0x0200009A);
+  const auto bytes = plugin_with_vmad_record("TERM", 0x03000820, vmad);
+  const auto key = fo4::FormKey::parse("000820:Patch.esp");
+
+  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  const auto hits = vmad_hits(plugin, key);
+  ASSERT_EQ(hits.size(), 1u);
+  EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
+
+  const auto reread = fo4::read_plugin(
+      fo4::write_plugin(remap_drop_dlc(bytes, "Patch.esp")), "Patch.esp");
+  const auto* sub = find_vmad(reread, key);
+  ASSERT_NE(sub, nullptr);
+  EXPECT_EQ(sub->data.size(), vmad.bytes.size());
+  EXPECT_EQ(read_u32(sub->data, hits[0].offset), 0x0100009Au);
+}
+
+TEST(Vmad, MalformedTermFragmentsFailClosedForMasterRemap) {
+  auto vmad = term_vmad_with_fragments(0x0200009A);
+  vmad.bytes.resize(vmad.bytes.size() - 5);
+
+  expect_master_remap_refused(plugin_with_vmad_record("TERM", 0x03000820, vmad));
+}
+
+TEST(Vmad, TruncatedPayloadIsCaveatedInDetailedCollection) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  vmad.u16(20);
+  vmad.raw(std::string_view{"x"});
+
+  const auto plugin = fo4::read_plugin(
+      plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
+  const auto collection = fo4::collect_form_links_detailed(plugin);
+  EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
+  EXPECT_TRUE(vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp")).empty());
+}
+
+TEST(Vmad, TrailingDataKeepsPartialLinksButIsCaveated) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "DemoScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "LinkedRef");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+  vmad.u32(0x0200009B);
+  vmad.u32(0x0200009C);
+
+  const auto plugin = fo4::read_plugin(
+      plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000800:Patch.esp");
+  const auto collection = fo4::collect_form_links_detailed(plugin);
+  EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
+  const auto hits = vmad_hits(plugin, key);
+  ASSERT_EQ(hits.size(), 1u);
+  EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
+}
+
+TEST(Vmad, CompletePayloadIsNotCaveated) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "DemoScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "LinkedRef");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+
+  const auto plugin = fo4::read_plugin(
+      plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
+  const auto collection = fo4::collect_form_links_detailed(plugin);
+  EXPECT_EQ(collection.records_with_incomplete_vmad, 0u);
+  EXPECT_EQ(vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp")).size(), 1u);
 }

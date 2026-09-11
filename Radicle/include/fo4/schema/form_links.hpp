@@ -34,13 +34,9 @@ void rekey_form_links(Plugin& plugin,
                       const FormKey& old_key,
                       const FormKey& new_key);
 
-// Collected links plus coverage caveats. records_with_unsupported_vmad counts
-// records whose VMAD script data uses property types Radicle cannot scan; no
-// links from those records are included, so consumers must surface the gap
-// rather than presenting `links` as complete.
 struct FormLinkCollection {
   std::vector<FormLinkHit> links;
-  std::size_t records_with_unsupported_vmad{0};
+  std::size_t records_with_incomplete_vmad{0};
 };
 
 std::vector<FormLinkHit> collect_form_links(const Plugin& plugin);
