@@ -1,5 +1,4 @@
 using OpenCommonwealth.Services.Hkx;
-using OpenCommonwealth.Services.Hkx.Packfile;
 using Xunit;
 
 namespace BehaviourStudio.Tests;
