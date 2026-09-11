@@ -73,130 +73,24 @@ public static class HavokPhysicsExtractor
             int index = skeletonId - NativeGraphModel.FirstId;
             if (index >= 0 && index < objects.Instances.Count &&
                 objects.Instances[index].ClassName == "hkaSkeleton" &&
-                Skeleton(objects, objects.Instances[index]) is { } skeleton)
+                SkeletonMapperReader.ReadSkeleton(objects, objects.Instances[index]) is { } skeleton)
                 model.Skeleton = skeleton;
 
             if (model.Skeleton != null)
-                foreach (var mapper in objects.Instances.Where(i => i.ClassName == MapperClass))
-                    if (Mapper(objects, skeletonId, mapper, out var mappings, out var animation))
-                    {
-                        model.Mappings.AddRange(mappings);
-                        model.AnimationSkeleton = animation;
-                        break;
-                    }
+            {
+                var mapper = SkeletonMapperReader.Read(objects).FirstOrDefault(candidate =>
+                    candidate.SkeletonBObjectId == skeletonId &&
+                    candidate.MappingType == 0 &&
+                    candidate.SimpleMappings.Count > 0);
+                if (mapper != null)
+                {
+                    model.Mappings.AddRange(mapper.SimpleMappings);
+                    model.AnimationSkeleton = mapper.SkeletonA;
+                }
+            }
         }
 
         return model;
-    }
-
-    private static bool Mapper(PackfileObjects objects, int ragdollSkeletonId,
-                               PackfileObjects.Instance instance,
-                               out List<HavokRagdollMapping> mappings,
-                               out HavokRagdollSkeleton? animation)
-    {
-        mappings = new List<HavokRagdollMapping>();
-        animation = null;
-
-        var mapperLayout = LayoutWalker.Active(HavokClassTypes.Shipped, MapperClass, objects.PointerWidth);
-        int? mappingAt = mapperLayout?.OffsetOf("mapping") is { } offset ? instance.Offset + offset : null;
-        if (mappingAt == null) return false;
-
-        var dataLayout = LayoutWalker.Active(HavokClassTypes.Shipped, "hkaSkeletonMapperData", objects.PointerWidth);
-        if (dataLayout == null ||
-            dataLayout.OffsetOf("skeletonA") is not { } skeletonAOffset ||
-            dataLayout.OffsetOf("skeletonB") is not { } skeletonBOffset ||
-            dataLayout.OffsetOf("simpleMappings") is not { } rowsOffset ||
-            dataLayout.OffsetOf("mappingType") is not { } typeOffset)
-            return false;
-
-        var skeletonA = objects.ReadRefAt(mappingAt.Value + skeletonAOffset, out _);
-        var skeletonB = objects.ReadRefAt(mappingAt.Value + skeletonBOffset, out _);
-        if (skeletonA == null || skeletonB == null) return false;
-        if (objects.IndexOf(skeletonB) + NativeGraphModel.FirstId != ragdollSkeletonId) return false;
-
-        int mappingType = objects.ReadNarrowAt(mappingAt.Value + typeOffset, 4) ?? 1;
-        if (mappingType != 0) return false;
-
-        var simpleLayout = LayoutWalker.Active(
-            HavokClassTypes.Shipped, "hkaSkeletonMapperDataSimpleMapping", objects.PointerWidth);
-        if (simpleLayout == null || simpleLayout.Size <= 0 ||
-            simpleLayout.OffsetOf("boneA") is not { } boneAOffset ||
-            simpleLayout.OffsetOf("boneB") is not { } boneBOffset ||
-            simpleLayout.OffsetOf("aFromBTransform") is not { } transformOffset)
-            return false;
-
-        var rows = objects.ArrayAt(mappingAt.Value + rowsOffset, simpleLayout.Size);
-        if (rows == null || rows.Count == 0) return false;
-
-        for (int i = 0; i < rows.Count; i++)
-        {
-            int row = rows.At + i * simpleLayout.Size;
-            int? boneA = objects.ReadNarrowAt(row + boneAOffset, 2);
-            int? boneB = objects.ReadNarrowAt(row + boneBOffset, 2);
-            float[]? values = objects.ReadFloatsAt(row + transformOffset, 12);
-            if (boneA == null || boneB == null || values == null) return false;
-
-            var translation = new Vector3(values[0], values[1], values[2]);
-            var rotation = new Quaternion(values[4], values[5], values[6], values[7]);
-            if (!Finite(translation) || !Finite(rotation) || rotation.LengthSquared() < 1e-10f)
-                return false;
-
-            mappings.Add(new HavokRagdollMapping(
-                unchecked((short)boneA.Value),
-                unchecked((short)boneB.Value),
-                translation,
-                Quaternion.Normalize(rotation)));
-        }
-
-        if (skeletonA.ClassName != "hkaSkeleton") return false;
-        animation = Skeleton(objects, skeletonA);
-        return animation != null;
-    }
-
-    private static HavokRagdollSkeleton? Skeleton(PackfileObjects objects, PackfileObjects.Instance instance)
-    {
-        const string className = "hkaSkeleton";
-        var reader = new MemberReader(objects);
-
-        string name = "";
-        if (reader.At(instance.Offset, className, "name") is { } nameAt)
-            name = objects.ReadStringAt(nameAt) ?? "";
-
-        var skeleton = new HavokRagdollSkeleton { Name = name };
-
-        if (reader.At(instance.Offset, className, "parentIndices") is { } parentsAt &&
-            objects.ArrayAt(parentsAt, 2) is { } parents)
-            for (int i = 0; i < parents.Count; i++)
-            {
-                int? raw = objects.ReadNarrowAt(parents.At + i * 2, 2);
-                if (raw == null) return null;
-                skeleton.ParentIndices.Add(unchecked((short)raw.Value));
-            }
-
-        if (reader.At(instance.Offset, className, "bones") is { } bonesAt &&
-            objects.ArrayAt(bonesAt, 16) is { } bones)
-            for (int i = 0; i < bones.Count; i++)
-            {
-                string? boneName = objects.ReadStringAt(bones.At + i * 16);
-                if (boneName == null) return null;
-                skeleton.BoneNames.Add(boneName);
-            }
-
-        if (skeleton.BoneNames.Count == 0) return null;
-
-        if (reader.At(instance.Offset, className, "referencePose") is { } poseAt &&
-            objects.ArrayAt(poseAt, 48) is { } poses)
-            for (int i = 0; i < poses.Count; i++)
-            {
-                float[]? row = objects.ReadFloatsAt(poses.At + i * 48, 12);
-                if (row == null) return null;
-                skeleton.ReferencePose.Add(new HkxBonePose(
-                    new Vector3(row[0], row[1], row[2]),
-                    new Quaternion(row[4], row[5], row[6], row[7]),
-                    new Vector3(row[8], row[9], row[10])));
-            }
-
-        return skeleton;
     }
 
     private static int? MemberAt(PackfileObjects objects, PackfileObjects.Instance instance, string member)
@@ -501,11 +395,4 @@ public static class HavokPhysicsExtractor
         value = new Vector4(floats[0], floats[1], floats[2], floats[3]);
         return true;
     }
-
-    private static bool Finite(Vector3 value) =>
-        float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
-
-    private static bool Finite(Quaternion value) =>
-        float.IsFinite(value.X) && float.IsFinite(value.Y) &&
-        float.IsFinite(value.Z) && float.IsFinite(value.W);
 }
