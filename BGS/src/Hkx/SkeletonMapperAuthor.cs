@@ -37,8 +37,8 @@ public static class SkeletonMapperAuthor
         var refusals = Refusals(skeletonA, skeletonB, pairs);
         if (refusals.Count > 0) throw new ArgumentException(string.Join("; ", refusals), nameof(pairs));
 
-        var framesA = skeletonA.WorldReferenceFrames();
-        var framesB = skeletonB.WorldReferenceFrames();
+        var framesA = CheckedWorldFrames(skeletonA);
+        var framesB = CheckedWorldFrames(skeletonB);
 
         var rows = new List<HavokRagdollMapping>(pairs.Count);
         for (int i = 0; i < pairs.Count; i++)
@@ -171,6 +171,35 @@ public static class SkeletonMapperAuthor
         return refusals;
     }
 
+    private static HavokBoneFrame[] CheckedWorldFrames(HavokRagdollSkeleton skeleton)
+    {
+        var frames = new HavokBoneFrame[skeleton.ReferencePose.Count];
+        for (int i = 0; i < frames.Length; i++)
+        {
+            var pose = skeleton.ReferencePose[i];
+            var local = new HavokBoneFrame(pose.Translation, pose.Rotation);
+            int parent = skeleton.ParentIndices[i];
+
+            if (parent < 0)
+            {
+                if (!Usable(local.Position, local.Rotation))
+                    throw new ArgumentException(
+                        $"bone {i} ('{Name(skeleton, i)}') of {Describe(skeleton)} has a reference transform " +
+                        "that is not a usable unit rotation", nameof(skeleton));
+                frames[i] = new HavokBoneFrame(local.Position, Unit(local.Rotation));
+                continue;
+            }
+
+            if (!TryCompose(frames[parent], local, out var composed))
+                throw new ArgumentException(
+                    $"bone {i} ('{Name(skeleton, i)}') of {Describe(skeleton)} accumulates a reference " +
+                    "transform that is not a usable unit rotation", nameof(skeleton));
+
+            frames[i] = composed;
+        }
+        return frames;
+    }
+
     private static bool Usable(Vector3 translation, Quaternion rotation) =>
         Finite(translation) && Finite(rotation) && MathF.Abs(rotation.Length() - 1f) <= UnitTolerance;
 
@@ -190,8 +219,14 @@ public static class SkeletonMapperAuthor
         if (!Finite(translation) || !Finite(rotation) || MathF.Abs(rotation.Length() - 1f) > UnitTolerance)
             return false;
 
-        composed = new HavokBoneFrame(translation, rotation);
+        composed = new HavokBoneFrame(translation, Unit(rotation));
         return true;
+    }
+
+    private static Quaternion Unit(Quaternion rotation)
+    {
+        float length = rotation.Length();
+        return MathF.Abs(length - 1f) <= UnitTolerance ? Quaternion.Normalize(rotation) : rotation;
     }
 
     private static HavokBoneFrame Invert(HavokBoneFrame frame)

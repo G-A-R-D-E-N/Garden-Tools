@@ -219,18 +219,32 @@ public class SkeletonMapperAuthorTests
     public void ShippedReferenceScaleIsWithinTheAuthoringTolerance()
     {
         var (forward, reverse) = Vanilla();
-        float worst = 0f;
+        float worstComponent = 0f;
+        float worstDistance = 0f;
 
         foreach (var skeleton in new[] { forward.SkeletonA, forward.SkeletonB, reverse.SkeletonA, reverse.SkeletonB })
+        {
+            float component = 0f;
             foreach (var pose in skeleton.ReferencePose)
-                worst = MathF.Max(worst, MathF.Max(MathF.Abs(pose.Scale.X - 1f),
-                                   MathF.Max(MathF.Abs(pose.Scale.Y - 1f), MathF.Abs(pose.Scale.Z - 1f))));
+                component = MathF.Max(component, MathF.Max(MathF.Abs(pose.Scale.X - 1f),
+                                         MathF.Max(MathF.Abs(pose.Scale.Y - 1f), MathF.Abs(pose.Scale.Z - 1f))));
 
-        _out.WriteLine($"worst shipped reference scale deviation {worst:0.####e+0}");
+            float distance = skeleton.ReferencePose.Select(pose => Vector3.Distance(pose.Scale, Vector3.One))
+                                                   .DefaultIfEmpty(0f).Max();
 
-        Assert.True(worst > 0f, "the shipped reference poses are expected to carry quantisation noise");
-        Assert.True(worst < SkeletonMapperAuthor.ScaleTolerance,
-                    $"shipped scale deviation {worst} exceeds the authoring tolerance " +
+            _out.WriteLine($"{skeleton.Name} ({skeleton.BoneNames.Count} bones): worst component deviation " +
+                           $"{component:0.####e+0}, worst distance from unit scale {distance:0.####e+0}");
+
+            worstComponent = MathF.Max(worstComponent, component);
+            worstDistance = MathF.Max(worstDistance, distance);
+        }
+
+        _out.WriteLine($"worst shipped reference scale deviation {worstComponent:0.####e+0} " +
+                       $"(distance {worstDistance:0.####e+0})");
+
+        Assert.InRange(worstComponent, 1.9e-4f, 2.1e-4f);
+        Assert.True(worstComponent < SkeletonMapperAuthor.ScaleTolerance,
+                    $"shipped scale deviation {worstComponent} exceeds the authoring tolerance " +
                     $"{SkeletonMapperAuthor.ScaleTolerance}; the shipped rig would be refused");
     }
 

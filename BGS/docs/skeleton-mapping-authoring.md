@@ -31,12 +31,15 @@ wrong by up to 13.3 units and 2 radians, which is why model space is the one
 implemented.
 
 The row scale lane is not used and not interpreted. The shipped reference poses
-are unit-scaled only to within quantisation: across the skeletons of both
-shipped mappers the worst per-component deviation from one is `1.99e-4`. That is
-why the refusal threshold for reference scale is `ScaleTolerance = 1e-3` - looser
-than the quantisation noise in real shipped data, and still far below any
-deliberate scale. A rig scaled by one percent is refused rather than answered
-with a row whose scale lane is a guess.
+are unit-scaled only to within quantisation, and the two rigs differ: the
+ragdoll skeleton is unit to `5.96e-8`, the animation skeleton only to `1.99e-4`
+(worst per-component deviation from one; doc 63 §3). That is why the refusal
+threshold for reference scale is `ScaleTolerance = 1e-3` - looser than the
+quantisation noise in real shipped data, and still far below any deliberate
+scale. A rig scaled by one percent is refused rather than answered with a row
+whose scale lane is a guess. The `1e-4` tolerance the physics model uses is a
+*warning* threshold and is deliberately not used here, because it would refuse
+the shipped animation skeleton.
 
 ## Direction
 
@@ -50,14 +53,38 @@ which is tighter than recomputing it from the reference poses the way the
 offline generator does (`4.7e-5`). Both are within float noise of the shipped
 bytes.
 
+## Rotation normalisation
+
+The module never substitutes a plausible value for an unusable one: a degenerate
+or non-finite rotation is refused, not replaced with the identity. It does
+normalise a rotation whose length is already within `UnitTolerance` of one, and
+that is a deliberate, measured contract rather than incidental cleanup.
+
+The measurement: composing the reference frames from the **raw** stored
+rotations reproduces the shipped rows to `6.9e-5` / `8.8e-5`, while normalising
+each rotation that is already within `UnitTolerance` reproduces them to
+`4.1e-5` / `4.7e-5`. The shipped rows are therefore consistent with arithmetic
+over unit rotations, which the stored poses are only to within quantisation. So
+`UnitTolerance` is the fail-closed boundary - outside it, refuse - and inside it,
+normalise.
+
+This is why the author has its own `CheckedWorldFrames` rather than calling
+`HavokRagdollSkeleton.WorldReferenceFrames()`. That method is the runtime
+preview's composition and it silently treats an unreadable parent as a root and
+normalises unconditionally. The author's copy composes the same proven product
+but refuses on drift, so no input can reach it that the validation did not
+already accept.
+
 ## Refusals
 
 The engine's generator refuses a candidate pair when either bone is already
-mapped, and nothing else. Fallout 4 performs no validation at load time on the
-traced paths - the only mapping checks observed in the game are debug-build
-warnings that the release runtime never reaches. So an authoring surface is the
-last place a malformed mapper can be stopped, and `Refusals` covers the
-conditions a mapper can fail on before it is written:
+mapped. Within candidate pairing that duplicate rule is the only one observed -
+partition agreement is a separate, earlier precondition (doc 63 §6). Fallout 4
+performs no validation at load time on the traced paths - the only mapping
+checks observed in the game are debug-build warnings that the release runtime
+never reaches. So an authoring surface is the last place a malformed mapper can
+be stopped, and `Refusals` covers the conditions a mapper can fail on before it
+is written:
 
 * a bone index outside either skeleton;
 * a bone of either side mapped more than once;
@@ -73,7 +100,7 @@ read safely, rather than repairing them:
   implementation constraint of this module, not a claim about Havok itself;
 * a non-finite translation or rotation component;
 * a rotation whose length is not one within `UnitTolerance`, including a zero
-  quaternion. Nothing is normalised on the way into a row;
+  quaternion, which is refused rather than replaced with the identity;
 * a reference scale that is not identity within `ScaleTolerance` (`1e-3`),
   because the row scale lane is not yet understood. The shipped vanilla rig
   passes this at `1.99e-4`, so the threshold is not merely theoretical;
