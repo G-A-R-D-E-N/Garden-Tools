@@ -31,3 +31,7 @@ Whole-array replace remaps fragment Stage by INDX identity or unique body match,
 ## src/forms/placed_reference_copy.cpp:copy_info_as_new
 
 The contained copy validates its ancestry on a working copy before committing changes.
+
+## form_links.cpp :: visit_link_offsets (WTHR)
+
+WTHR reuses FormID signatures for floats (VNAM/WNAM), bitfields (NAM1), opaque LNAM, color/speed arrays, and mixed SNAM/UNAM payloads. Remap only proven FormLink slots from WTHR_FORMID_SLOTS.md before the global signature table; otherwise float 1.0 (0x3F800000) becomes master index 63.

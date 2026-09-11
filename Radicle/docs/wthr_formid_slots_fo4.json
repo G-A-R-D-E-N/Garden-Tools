@@ -1,0 +1,1618 @@
+{
+  "scope": "Fallout4.esm WTHR resolved against Fallout4.esm FormID index only",
+  "indexed_forms": 1549276,
+  "wthr_records": 71,
+  "slots": {
+    "GNAM": {
+      "values": 18,
+      "nulls": 0,
+      "unresolved": 0,
+      "target_sigs": {
+        "LENS": 18
+      },
+      "samples": [
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B88E1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "LENS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SunFlare_Clear"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B88E1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "LENS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SunFlare_Clear"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B88E1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "LENS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SunFlare_Clear"
+        },
+        {
+          "wthr": "CommonwealthMistyBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B88E1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "LENS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SunFlare_Clear"
+        },
+        {
+          "wthr": "CommonwealthClear2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B88E1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "LENS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SunFlare_Clear"
+        },
+        {
+          "wthr": "CommonwealthDarkSkies2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B88E1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "LENS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SunFlare_Clear"
+        }
+      ]
+    },
+    "IMSP+00": {
+      "values": 71,
+      "nulls": 2,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 69
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE4C",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastDAWN_May8"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224587",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormDAWN_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE54",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastDAWN_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D1",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAWN"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D1",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAWN"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "00082809",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "IS_CW_DistantStormDAWN"
+        }
+      ]
+    },
+    "IMSP+04": {
+      "values": 71,
+      "nulls": 2,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 69
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00226229",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastDAY_May30"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224586",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormDAY_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE57",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastDAY_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A9C",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAY_MAY19"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A9C",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAY_MAY19"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "00195CBF",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_PreW_SH_ClearDAY"
+        }
+      ]
+    },
+    "IMSP+08": {
+      "values": 71,
+      "nulls": 2,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 69
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE50",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastDUSK_May8"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022458B",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormDUSK_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE58",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastDUSK_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955CF",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDUSK"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955CF",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDUSK"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "0005C29E",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "IS_CW_DistantStormDUSK"
+        }
+      ]
+    },
+    "IMSP+0C": {
+      "values": 71,
+      "nulls": 5,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 66
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE53",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastNIGHT_May8"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022458C",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormNIGHT_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE5B",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastNIGHT_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D0",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearNIGHT"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D0",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearNIGHT"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "0005C29D",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "IS_CW_DistantStormNIGHT"
+        }
+      ]
+    },
+    "IMSP+10": {
+      "values": 67,
+      "nulls": 2,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 65
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE4D",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastDAWN_E_May8"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224589",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormDAWN_E_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE55",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastDAWN_E_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001C8576",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAWN_E_NEW"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001C8576",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAWN_E_NEW"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "00082809",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "IS_CW_DistantStormDAWN"
+        }
+      ]
+    },
+    "IMSP+14": {
+      "values": 67,
+      "nulls": 2,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 65
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE4E",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastDAWN_L_May8"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224588",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormDAWN_L_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE56",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastDAWN_L_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D3",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAWN_L"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D3",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDAWN_L"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "00195CBF",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_PreW_SH_ClearDAY"
+        }
+      ]
+    },
+    "IMSP+18": {
+      "values": 67,
+      "nulls": 2,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 65
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE52",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastDUSK_E_May8"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022458A",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormDUSK_E_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE59",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastDUSK_E_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D4",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDUSK_E"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D4",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDUSK_E"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "0005C29E",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "IS_CW_DistantStormDUSK"
+        }
+      ]
+    },
+    "IMSP+1C": {
+      "values": 67,
+      "nulls": 3,
+      "unresolved": 0,
+      "target_sigs": {
+        "IMGS": 64
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE51",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_GS_OvercastDUSK_L_May8"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224593",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_RadStormDUSK_L_NEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0020CE5A",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_OvercastDUSK_L_May8"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D5",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDUSK_L"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001955D5",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CW_ClearDUSK_L"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "0005C29E",
+          "imsp_size": 32,
+          "null": false,
+          "resolved": true,
+          "target_sig": "IMGS",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "IS_CW_DistantStormDUSK"
+        }
+      ]
+    },
+    "MNAM": {
+      "values": 71,
+      "nulls": 67,
+      "unresolved": 0,
+      "target_sigs": {
+        "SPGD": 4
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        }
+      ]
+    },
+    "NNAM": {
+      "values": 71,
+      "nulls": 27,
+      "unresolved": 0,
+      "target_sigs": {
+        "RFCT": 44
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0002AE7A",
+          "null": false,
+          "resolved": true,
+          "target_sig": "RFCT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CameraMist01"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0002AE7A",
+          "null": false,
+          "resolved": true,
+          "target_sig": "RFCT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CameraMist01"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "0002AE7A",
+          "null": false,
+          "resolved": true,
+          "target_sig": "RFCT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CameraMist01"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "0002AE7A",
+          "null": false,
+          "resolved": true,
+          "target_sig": "RFCT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CameraMist01"
+        }
+      ]
+    },
+    "SNAM+00": {
+      "values": 52,
+      "nulls": 1,
+      "unresolved": 0,
+      "target_sigs": {
+        "SNDR": 51
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022C1CC",
+          "snam_u32_at_4": 0,
+          "null": false,
+          "resolved": true,
+          "target_sig": "SNDR",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "AMBExtWindBedGlowingSeaA01"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022C1CC",
+          "snam_u32_at_4": 0,
+          "null": false,
+          "resolved": true,
+          "target_sig": "SNDR",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "AMBExtWindBedGlowingSeaA01"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "002301D3",
+          "snam_u32_at_4": 3,
+          "null": false,
+          "resolved": true,
+          "target_sig": "SNDR",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "AMBWeatherThunderDistantRadStorm"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022C1CA",
+          "snam_u32_at_4": 0,
+          "null": false,
+          "resolved": true,
+          "target_sig": "SNDR",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "AMBExtWindBedDarkA01LP"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022C1C9",
+          "snam_u32_at_4": 0,
+          "null": false,
+          "resolved": true,
+          "target_sig": "SNDR",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "AMBExtWindBedClearA01LP"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022C1C9",
+          "snam_u32_at_4": 0,
+          "null": false,
+          "resolved": true,
+          "target_sig": "SNDR",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "AMBExtWindBedClearA01LP"
+        }
+      ]
+    },
+    "TNAM": {
+      "values": 1908,
+      "nulls": 0,
+      "unresolved": 0,
+      "target_sigs": {
+        "STAT": 1908
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00017520",
+          "null": false,
+          "resolved": true,
+          "target_sig": "STAT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CloudDistant04"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0002744C",
+          "null": false,
+          "resolved": true,
+          "target_sig": "STAT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CloudDistant04_25"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00027447",
+          "null": false,
+          "resolved": true,
+          "target_sig": "STAT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CloudDistant04_50"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0002743B",
+          "null": false,
+          "resolved": true,
+          "target_sig": "STAT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CloudDistant04_O"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0002743A",
+          "null": false,
+          "resolved": true,
+          "target_sig": "STAT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CloudDistant04_O_25"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00027437",
+          "null": false,
+          "resolved": true,
+          "target_sig": "STAT",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "CloudDistant04_O_50"
+        }
+      ]
+    },
+    "UNAM+00": {
+      "values": 63,
+      "nulls": 58,
+      "unresolved": 0,
+      "target_sigs": {
+        "SPEL": 5
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        }
+      ]
+    },
+    "UNAM+08": {
+      "values": 63,
+      "nulls": 58,
+      "unresolved": 0,
+      "target_sigs": {
+        "SPEL": 5
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0023EC93",
+          "null": false,
+          "resolved": true,
+          "target_sig": "SPEL",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "GlowingSeaPlayerRadiationOvercast"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0023EC91",
+          "null": false,
+          "resolved": true,
+          "target_sig": "SPEL",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "GlowingSeaPlayerRadiationRadStorm"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "00000000",
+          "null": true,
+          "resolved": true
+        }
+      ]
+    },
+    "WGDR+00": {
+      "values": 63,
+      "nulls": 23,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 40
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224590",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormSunriseEarlyRaysNEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E6",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays"
+        }
+      ]
+    },
+    "WGDR+04": {
+      "values": 63,
+      "nulls": 23,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 40
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00225AE2",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "GSDayRays_MAY28"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224A94",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormDayRaysNEW5"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001C855D",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "OvercastDayRays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A92",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays_MAY19"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A92",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays_MAY19"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001C355E",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SurizeRaysPreWar"
+        }
+      ]
+    },
+    "WGDR+08": {
+      "values": 63,
+      "nulls": 24,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 39
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224590",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormSunriseEarlyRaysNEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001C4480",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearSunSetRays_NEW"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001C4480",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearSunSetRays_NEW"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E6",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays"
+        }
+      ]
+    },
+    "WGDR+0C": {
+      "values": 63,
+      "nulls": 23,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 40
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022458F",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormNightRaysNEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E6",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays"
+        }
+      ]
+    },
+    "WGDR+10": {
+      "values": 63,
+      "nulls": 23,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 40
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022458F",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormNightRaysNEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E6",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays"
+        }
+      ]
+    },
+    "WGDR+14": {
+      "values": 63,
+      "nulls": 23,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 40
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00225AE1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "GSSunSetRays_MAY28"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224592",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormSunriseRaysNEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A93",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearSunriseRays_MAY19"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A93",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearSunriseRays_MAY19"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001C355E",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "SurizeRaysPreWar"
+        }
+      ]
+    },
+    "WGDR+18": {
+      "values": 63,
+      "nulls": 24,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 39
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00225AE1",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "GSSunSetRays_MAY28"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "00224591",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormSunsetRaysNEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A94",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearSunsetEarlyRays_MAY19"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "00216A94",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearSunsetEarlyRays_MAY19"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E6",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays"
+        }
+      ]
+    },
+    "WGDR+1C": {
+      "values": 63,
+      "nulls": 23,
+      "unresolved": 0,
+      "target_sigs": {
+        "GDRY": 40
+      },
+      "samples": [
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSOvercastNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "VRWorkshopShared_CommonwealthGSRadstormNoHazard",
+          "plugin": "Fallout4.esm",
+          "form_id": "0022458F",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "RadStormNightRaysNEW"
+        },
+        {
+          "wthr": "CommonwealthOvercast_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClear_VBFog",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthClearBackup2",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E8",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "None_Rays"
+        },
+        {
+          "wthr": "CommonwealthSanctuaryClearBackup",
+          "plugin": "Fallout4.esm",
+          "form_id": "001B40E6",
+          "null": false,
+          "resolved": true,
+          "target_sig": "GDRY",
+          "target_plugin": "Fallout4.esm",
+          "target_edid": "ClearDayRays"
+        }
+      ]
+    }
+  },
+  "note": "Multi-plugin flat FormID indexes collide across DLC master indexes; use load-order remapping for DLC proof."
+}

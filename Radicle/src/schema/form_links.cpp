@@ -106,6 +106,16 @@ constexpr auto k_incc = Signature::from_string("INCC");
 constexpr auto k_wzmd = Signature::from_string("WZMD");
 constexpr auto k_cis1 = Signature::from_string("CIS1");
 constexpr auto k_cis2 = Signature::from_string("CIS2");
+constexpr auto k_wthr = Signature::from_string("WTHR");
+constexpr auto k_imsp = Signature::from_string("IMSP");
+constexpr auto k_wgdr = Signature::from_string("WGDR");
+constexpr auto k_unam = Signature::from_string("UNAM");
+constexpr auto k_vnam = Signature::from_string("VNAM");
+constexpr auto k_wnam = Signature::from_string("WNAM");
+constexpr auto k_dalc = Signature::from_string("DALC");
+constexpr auto k_jnam = Signature::from_string("JNAM");
+constexpr auto k_qnam = Signature::from_string("QNAM");
+constexpr auto k_data = Signature::from_string("DATA");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -673,6 +683,68 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     if (qust_non_formid_signature(sub.signature)) {
       return;
     }
+  }
+  if (record.header.signature == k_wthr) {
+    const auto sig = sub.signature;
+    const auto size = sub.data.size();
+    auto fail_malformed = [&](const char* message) {
+      if (strict_remap) {
+        throw FormIdError(message);
+      }
+    };
+    if (sig == k_mnam || sig == k_nnam || sig == k_gnam || sig == k_tnam) {
+      if (size != 4) {
+        fail_malformed("cannot safely remap malformed WTHR FormLink payload");
+        return;
+      }
+      fn(0);
+      return;
+    }
+    if (sig == k_imsp) {
+      if (size != 16 && size != 32) {
+        fail_malformed("cannot safely remap malformed WTHR IMSP payload");
+        return;
+      }
+      for (std::size_t offset = 0; offset < size; offset += 4) fn(offset);
+      return;
+    }
+    if (sig == k_wgdr) {
+      if (size != 32) {
+        fail_malformed("cannot safely remap malformed WTHR WGDR payload");
+        return;
+      }
+      for (std::size_t offset = 0; offset < size; offset += 4) fn(offset);
+      return;
+    }
+    if (sig == k_snam) {
+      if (size != 8) {
+        fail_malformed("cannot safely remap malformed WTHR SNAM payload");
+        return;
+      }
+      fn(0);
+      return;
+    }
+    if (sig == k_unam) {
+      if (size != 12 && size != 24) {
+        fail_malformed("cannot safely remap malformed WTHR UNAM payload");
+        return;
+      }
+      fn(0);
+      fn(8);
+      return;
+    }
+    if (sig == k_vnam || sig == k_wnam || sig == k_lnam || sig == k_nam1 ||
+        sig == k_pnam || sig == k_jnam || sig == k_nam0 || sig == k_nam4 ||
+        sig == k_fnam || sig == k_rnam || sig == k_qnam || sig == k_dalc ||
+        sig == k_data || sig == k_edid) {
+      return;
+    }
+    if (is_listed_formid_signature(sig) && size == 4) {
+      fail_malformed(
+          "cannot safely remap unknown WTHR FormID-listed subrecord");
+      return;
+    }
+    return;
   }
   // OBTS is the BGSMod::Template body: a variable-length header whose keyword
   // and include FormIDs sit at offsets derived from two counts, so it cannot

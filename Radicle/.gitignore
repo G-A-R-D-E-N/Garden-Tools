@@ -14,3 +14,5 @@ compile_commands.json
 task_plan.md
 findings.md
 progress.md
+
+docs/re-private/*.json

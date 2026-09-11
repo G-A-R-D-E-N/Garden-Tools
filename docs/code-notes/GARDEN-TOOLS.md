@@ -233,3 +233,15 @@ The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePlug
 ## PluginEditTool/native/src/app/AppInteropTarget.cpp:captureWatchFiles — #54 MO2 freshness/reload
 
 `AppInteropTarget.cpp:captureWatchFiles` stamps `ModOrganizer.ini` as `WatchKind::config` and `plugins.txt` / `modlist.txt` / `loadorder.txt` as `WatchKind::loadOrder`. `getMo2Status` reports `staleConfig`, `staleLoadOrder`, `stale` (either), and `pendingPlugins` from the same GetPlugins list. Mutating those files does not replace `snapshot_`; only `reloadMo2Profile` / `loadProfile` re-reads the profile and sends `environment.LoadMo2`. A blocked or failed reload, including trusted-root or settings-store failure after `LoadMo2`, leaves the previous snapshot, watch stamps, persisted settings, backend profile, and trusted create-plugin root in place.
+
+## Radicle/tools/corpus/wthr_corpus_inventory.py
+
+Proof-first WTHR corpus scanner for Issue #284. Walks top-level `WTHR` GRUPs in Fallout4.esm + DLC masters, records every observed subrecord signature/order/cardinality/payload size, and writes markdown+JSON evidence under `Radicle/docs/`. Does not infer field semantics from names; FormID-looking slots are observations only until target type/nullability/remap are proven separately.
+
+## Radicle/tools/corpus/wthr_formid_resolve.py
+
+Companion to the WTHR corpus inventory for Issue #284. Resolves packed `u32` values at fixed offsets in `MNAM`/`NNAM`/`GNAM`/`TNAM`/`IMSP`/`WGDR`/`SNAM`/`UNAM` against the master FormID index. Emits hit counts only; does not assign semantic field names without a runtime citation.
+
+## Radicle/include/fo4/forms/weather_concept.hpp + weather_concept.cpp
+
+Issue #284 WTHR read-only decode and MNAM mutation. Named `weather_concept` because the Cursor RE gate required a concept-level filename until f4-re-mcp verification was recorded under `Radicle/docs/re-private/`. Field names stay subrecord-mechanical (`mnam`/`nnam`/...) while docs cite `TESWeather` members. Runtime proof: f4-re-mcp `TESWeather::Load` RVA `0x48c2f0` id 731579; corpus + FO4-only FormID resolution in `Radicle/docs/WTHR_*.md`.

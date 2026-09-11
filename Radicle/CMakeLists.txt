@@ -106,6 +106,7 @@ add_library(fo4
   src/forms/placed_reference_copy.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
+  src/forms/weather_concept.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/proj_expl_hazd.cpp
@@ -301,6 +302,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_armor_edit.cpp
     tests/test_eyes.cpp
     tests/test_eyes_creation.cpp
+    tests/test_weather_concept.cpp
     tests/test_lvsp.cpp
     tests/test_lvsp_creation.cpp
     tests/test_race_creation.cpp
@@ -321,7 +323,9 @@ if(RADICLE_BUILD_TESTS)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
     FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+    _CRT_SECURE_NO_WARNINGS
   )
+  target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
   fo4_apply_warnings(fo4_tests)
   fo4_apply_sanitizers(fo4_tests)
 
