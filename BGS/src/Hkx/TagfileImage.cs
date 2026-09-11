@@ -111,47 +111,48 @@ public sealed record TagfileImage
         return image with { Layouts = ReadLayouts(bytes, root.Find("TBOD"), image.FieldNames, name) };
     }
 
-    public static uint Packed(byte[] bytes, ref int at)
+    public static uint Packed(byte[] bytes, ref int at) =>
+        Packed(bytes, ref at, bytes.Length, "packed data");
+
+    private static uint Packed(byte[] bytes, ref int at, int end, string scope)
     {
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        if (at < 0 || end < 0 || end > bytes.Length || at >= end)
+            throw new InvalidDataException(
+                $"{scope}: packed integer at {at} does not fit inside its allowed byte range");
+
         byte lead = bytes[at];
+        int width =
+            (lead & 0x80) == 0 ? 1 :
+            (lead & 0xC0) == 0x80 ? 2 :
+            (lead & 0xE0) == 0xC0 ? 3 :
+            (lead & 0xF8) == 0xE0 ? 4 :
+            (lead & 0xF8) == 0xE8 ? 5 :
+            0;
 
-        if ((lead & 0x80) == 0)
+        if (width == 0)
+            throw new InvalidDataException(
+                $"{scope}: packed integer at {at} leads with 0x{lead:x2}, which is not a form this reads");
+
+        if (end - at < width)
+            throw new InvalidDataException(
+                $"{scope}: packed integer at {at} needs {width} bytes, but only {end - at} remain " +
+                "inside its section");
+
+        uint value = width switch
         {
-            at += 1;
-            return lead;
-        }
+            1 => lead,
+            2 => (uint)(((lead & 0x3F) << 8) | bytes[at + 1]),
+            3 => (uint)(((lead & 0x1F) << 16) | (bytes[at + 1] << 8) | bytes[at + 2]),
+            4 => (uint)(((lead & 0x07) << 24) | (bytes[at + 1] << 16) |
+                        (bytes[at + 2] << 8) | bytes[at + 3]),
+            5 => BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(at + 1, 4)),
+            _ => throw new InvalidDataException($"{scope}: unsupported packed integer width {width}"),
+        };
 
-        if ((lead & 0xC0) == 0x80)
-        {
-            uint value = (uint)(((lead & 0x3F) << 8) | bytes[at + 1]);
-            at += 2;
-            return value;
-        }
-
-        if ((lead & 0xE0) == 0xC0)
-        {
-            uint value = (uint)(((lead & 0x1F) << 16) | (bytes[at + 1] << 8) | bytes[at + 2]);
-            at += 3;
-            return value;
-        }
-
-        if ((lead & 0xF8) == 0xE0)
-        {
-            uint value = (uint)(((lead & 0x07) << 24) | (bytes[at + 1] << 16) |
-                                (bytes[at + 2] << 8) | bytes[at + 3]);
-            at += 4;
-            return value;
-        }
-
-        if ((lead & 0xF8) == 0xE8)
-        {
-            uint value = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(at + 1, 4));
-            at += 5;
-            return value;
-        }
-
-        throw new InvalidDataException(
-            $"a packed integer at {at} leads with 0x{lead:x2}, which is not a form this reads");
+        at += width;
+        return value;
     }
 
     private static IReadOnlyList<TagType> ReadTypes(
@@ -164,7 +165,8 @@ public sealed record TagfileImage
 
         int at = tnam.BodyAt;
         int end = tnam.BodyAt + tnam.BodyLength;
-        uint count = Packed(bytes, ref at);
+        string scope = $"{file}: TNAM";
+        uint count = Packed(bytes, ref at, end, scope);
         var types = new List<TagType>(Math.Max(0, (int)count - 1));
 
         for (uint i = 1; i < count; i++)
@@ -173,14 +175,14 @@ public sealed record TagfileImage
                 throw new InvalidDataException(
                     $"{file}: TNAM says it holds {count} types and ran out of section at {i}");
 
-            uint name = Packed(bytes, ref at);
-            uint parameters = Packed(bytes, ref at);
+            uint name = Packed(bytes, ref at, end, scope);
+            uint parameters = Packed(bytes, ref at, end, scope);
             var arguments = new List<TagTemplate>((int)parameters);
 
             for (uint p = 0; p < parameters; p++)
             {
-                uint argument = Packed(bytes, ref at);
-                uint value = Packed(bytes, ref at);
+                uint argument = Packed(bytes, ref at, end, scope);
+                uint value = Packed(bytes, ref at, end, scope);
                 arguments.Add(new TagTemplate(Named(names, argument), value));
             }
 
@@ -200,36 +202,37 @@ public sealed record TagfileImage
 
         int at = tbod.BodyAt;
         int end = tbod.BodyAt + tbod.BodyLength;
+        string scope = $"{file}: TBOD";
         var layouts = new List<TagLayout>();
 
         while (at < end)
         {
             if (Padding(bytes, at, end)) break;
 
-            uint type = Packed(bytes, ref at);
+            uint type = Packed(bytes, ref at, end, scope);
             if (type == 0) break;
 
-            uint parent = Packed(bytes, ref at);
-            uint flags = Packed(bytes, ref at);
+            uint parent = Packed(bytes, ref at, end, scope);
+            uint flags = Packed(bytes, ref at, end, scope);
 
-            if ((flags & HasFormat) != 0) Packed(bytes, ref at);
-            if ((flags & HasSubType) != 0) Packed(bytes, ref at);
-            if ((flags & HasVersion) != 0) Packed(bytes, ref at);
+            if ((flags & HasFormat) != 0) Packed(bytes, ref at, end, scope);
+            if ((flags & HasSubType) != 0) Packed(bytes, ref at, end, scope);
+            if ((flags & HasVersion) != 0) Packed(bytes, ref at, end, scope);
 
             uint size = 0;
             uint alignment = 0;
             if ((flags & HasSize) != 0)
             {
-                size = Packed(bytes, ref at);
-                alignment = Packed(bytes, ref at);
+                size = Packed(bytes, ref at, end, scope);
+                alignment = Packed(bytes, ref at, end, scope);
             }
 
-            if ((flags & HasAbstract) != 0) Packed(bytes, ref at);
+            if ((flags & HasAbstract) != 0) Packed(bytes, ref at, end, scope);
 
             var members = new List<TagMember>();
             if ((flags & HasMembers) != 0)
             {
-                uint count = Packed(bytes, ref at);
+                uint count = Packed(bytes, ref at, end, scope);
                 for (uint m = 0; m < count; m++)
                 {
                     if (at >= end)
@@ -238,15 +241,15 @@ public sealed record TagfileImage
                             $"after {m}, so the record shape does not fit this file and reading on would " +
                             "be reading noise");
 
-                    uint name = Packed(bytes, ref at);
-                    uint memberFlags = Packed(bytes, ref at);
-                    uint offset = Packed(bytes, ref at);
-                    uint memberType = Packed(bytes, ref at);
+                    uint name = Packed(bytes, ref at, end, scope);
+                    uint memberFlags = Packed(bytes, ref at, end, scope);
+                    uint offset = Packed(bytes, ref at, end, scope);
+                    uint memberType = Packed(bytes, ref at, end, scope);
                     members.Add(new TagMember(Named(fields, name), memberFlags, offset, memberType));
                 }
             }
 
-            if ((flags & HasInterface) != 0) Packed(bytes, ref at);
+            if ((flags & HasInterface) != 0) Packed(bytes, ref at, end, scope);
 
             if (at > end)
                 throw new InvalidDataException(
