@@ -1028,8 +1028,8 @@ Result<nlohmann::json> RadiclePluginBackend::scanBrokenRefs() const {
         report << "NOTE: " << recordsWithIncompleteVmad
                << " record(s) contain VMAD script data Radicle could not fully scan"
                << " (unsupported property types, a parse failure, trailing bytes, or an"
-               << " unconsumed remainder); FormLinks inside those records may be"
-               << " incomplete and are NOT included below.\n\n";
+               << " unconsumed remainder); FormLinks from those records may be"
+               << " incomplete, so the results below are not exhaustive.\n\n";
     }
 
     if (missing.empty()) {
