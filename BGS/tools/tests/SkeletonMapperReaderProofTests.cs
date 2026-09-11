@@ -29,6 +29,7 @@ public class SkeletonMapperReaderProofTests
         return Path.Combine(
             AppContext.BaseDirectory,
             "fixtures",
+            "vanilla",
             "Meshes",
             "Actors",
             "Character",
