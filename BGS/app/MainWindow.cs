@@ -128,8 +128,19 @@ public class MainWindow : Window
     private readonly TextBlock _playbackSummary =
         new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _frameLabel = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
+    private readonly TextBlock _scaleStatus = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
+    private Control? _scalePill;
+
+    // The last SetPlaybackSummary text and brush, so the constraint-inspection line can put
+    // the summary back exactly when the hover/pin selection ends.
+    private string _summaryBaseText = "";
+    private IBrush _summaryBaseBrush = Ux.MetaBrush;
+
     private readonly Slider _scrub = new() { Minimum = 0, Maximum = 0, SmallChange = 1, LargeChange = 5 };
     private Button _playButton = Ux.Secondary("Play");
+    private readonly Button _dropButton = Ux.Secondary("Drop");
+    private readonly DispatcherTimer _dropClock =
+        new() { Interval = TimeSpan.FromMilliseconds(16) };
     private HkxSkeleton? _poseSkeleton;
     private HkxAnimationData? _poseAnimation;
     private string _poseSource = "";
@@ -137,6 +148,8 @@ public class MainWindow : Window
     private RootMotion.Motion _poseMotion = new();
     private bool _followTravel;
     private HavokRagdollModel? _ragdoll;
+    private string? _ragdollSourceName;
+    private string? _ragdollSourceNote;
     private readonly CheckBox _bodiesToggle = new()
     {
         Content = "Bodies",
@@ -161,6 +174,20 @@ public class MainWindow : Window
     private readonly CheckBox _physicsSkeletonToggle = new()
     {
         Content = "Physics skeleton",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+    private readonly CheckBox _framesToggle = new()
+    {
+        Content = "Body frames",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+    private readonly CheckBox _engineerToggle = new()
+    {
+        Content = "Frames only",
         Foreground = Ux.MetaBrush,
         FontSize = 12,
         VerticalAlignment = VerticalAlignment.Center,
@@ -2252,6 +2279,22 @@ public class MainWindow : Window
     public int RedoStepsForTest => _redo.Count;
     public void UndoForTest() => Undo();
     public string StatusForTest => _status.Text ?? "";
+
+    public string ScaleStatusForTest => _scaleStatus.Text ?? "";
+
+    public bool ScaleStatusVisibleForTest => _scalePill?.IsVisible == true;
+
+    // The ragdoll scale readout reports the small set of view-computed numbers: the fitted
+    // body half-extent and the frame-axis stub length, in the file's own units. Refreshed on
+    // every load so opening another file swaps the numbers (or hides the pill entirely).
+    private void UpdateScaleStatus()
+    {
+        if (_scalePill == null) return;
+        string text = _skeleton.ScaleStatusText;
+        _scaleStatus.Text = text;
+        _scaleStatus.Foreground = Ux.MetaBrush;
+        _scalePill.IsVisible = text.Length > 0;
+    }
     public string PathFieldForTest => _pathField.Text ?? "";
 
     private Control BuildAnimationTab()
@@ -2643,17 +2686,29 @@ public class MainWindow : Window
                       .Colour(0, Ux.MutedBrush).Colour(1, Ux.DisabledBrush);
     }
 
-    private static HkxSkeleton? SiblingSkeleton(string primaryPath, string? fallbackPath = null)
+    // The sibling skeleton file: the first *.hkx under the sibling CharacterAssets folder
+    // that reads as a skeleton, or null. The ragdoll fallback uses the exact same file the
+    // pose pipeline poses with, so the mapper's skeletonA always matches the rig being
+    // played.
+    internal static string? SiblingSkeletonPath(string primaryPath, string? fallbackPath = null)
     {
         string? assets = FindPoseSkeletonFolder(primaryPath, fallbackPath);
         if (assets == null) return null;
 
         foreach (string file in Directory.EnumerateFiles(assets, "*.hkx").OrderBy(f => f))
         {
-            try { return new HkxBinaryReader().ReadSkeleton(file); }
+            try { new HkxBinaryReader().ReadSkeleton(file); return file; }
             catch { }
         }
         return null;
+    }
+
+    private static HkxSkeleton? SiblingSkeleton(string primaryPath, string? fallbackPath = null)
+    {
+        string? file = SiblingSkeletonPath(primaryPath, fallbackPath);
+        if (file == null) return null;
+        try { return new HkxBinaryReader().ReadSkeleton(file); }
+        catch { return null; }
     }
 
     internal static string? FindSiblingSkeletonFolder(string animationPath)
@@ -2709,6 +2764,34 @@ public class MainWindow : Window
 
         var fit = Ux.Secondary("Fit");
         fit.Click += (_, _) => _skeleton.Frame();
+
+        _dropButton.IsEnabled = false;
+        ToolTip.SetTip(_dropButton, "Release the current ragdoll pose (or the playing frame) and watch a " +
+                                    "gravity-settled approximation of how it would drop - no solver. " +
+                                    "Click again to return to the mapped pose.");
+        _dropClock.Tick += (_, _) =>
+        {
+            _skeleton.AdvanceDrop(0.016f);
+            if (_skeleton.DropResting) _dropClock.Stop();
+        };
+        _dropButton.Click += (_, _) =>
+        {
+            if (_skeleton.IsDropped)
+            {
+                _skeleton.ClearDrop();
+                _dropClock.Stop();
+            }
+            else
+            {
+                _skeleton.StartDrop();
+                if (_skeleton.IsDropped)
+                {
+                    Stop();
+                    _dropClock.Start();
+                }
+            }
+            _dropButton.Content = _skeleton.IsDropped ? "Recover" : "Drop";
+        };
 
         var reference = new CheckBox
         {
@@ -2770,6 +2853,31 @@ public class MainWindow : Window
             _skeleton.InvalidateVisual();
         };
 
+        _framesToggle.IsEnabled = false;
+        ToolTip.SetTip(_framesToggle, "Draw each rigid body's measured local frame (body cinfo position and " +
+                                      "orientation) as an axis triad, plus a marker at its measured world-space " +
+                                      "center of mass (motionCinfos centerOfMassWorld).");
+        _framesToggle.IsCheckedChanged += (_, _) =>
+        {
+            _skeleton.ShowFrames = _framesToggle.IsChecked == true;
+            _skeleton.InvalidateVisual();
+        };
+
+        _engineerToggle.IsEnabled = false;
+        ToolTip.SetTip(_engineerToggle, "Engineering view: draw only the measured body frames (axis triads + " +
+                                        "center-of-mass markers) over the ground grid - no skeleton, hulls, " +
+                                        "constraints or bindings - and never auto-frame the camera. Fit still " +
+                                        "frames the bodies.");
+        _engineerToggle.IsCheckedChanged += (_, _) =>
+        {
+            _skeleton.EngineeringFrames = _engineerToggle.IsChecked == true;
+            if (_engineerToggle.IsChecked == true)
+                foreach (var other in new[]
+                         { _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle })
+                    other.IsChecked = false;
+            _skeleton.InvalidateVisual();
+        };
+
         ToolTip.SetTip(travel, "Move the character along the path the clip carries, instead of " +
                                "playing it on the spot the way the file stores it.");
         travel.IsCheckedChanged += (_, _) =>
@@ -2795,16 +2903,22 @@ public class MainWindow : Window
         };
 
         _skeleton.BoneHovered += _ => _skeleton.InvalidateVisual();
+        _skeleton.ConstraintSelectionChanged += ShowConstraintInspection;
 
         var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         foreach (var control in new Control[]
-                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, reload, mesh, clearMesh })
+                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle, _dropButton, reload, mesh, clearMesh })
             transport.Children.Add(control);
 
         var bar = Bar(Ux.Pill(_playbackSummary), transport);
         bar.Margin = new Thickness(0, 0, 0, 8);
 
-        var scrubRow = Bar(_scrub, Ux.Pill(_frameLabel));
+        // The ragdoll scale readout lives on the viewport's status row and is only shown
+        // once a file with rigid bodies is open (see TryLoadRagdoll -> UpdateScaleStatus).
+        _scalePill = Ux.Pill(_scaleStatus);
+        _scalePill.IsVisible = false;
+
+        var scrubRow = Bar(_scrub, Ux.Pill(_frameLabel), _scalePill);
         scrubRow.Margin = new Thickness(0, 8, 0, 0);
 
         var panel = new DockPanel();
@@ -2830,6 +2944,29 @@ public class MainWindow : Window
 
         _ragdoll = HavokPhysicsExtractor.TryExtract(raw);
         bool any = _ragdoll is { Bodies.Count: > 0 };
+        string? ragdollSource = null;
+        if (!any)
+        {
+            // An animation file carries no ragdoll of its own; the character's sibling
+            // skeleton (the same rig the clip poses) does, including the mapper that lets
+            // the overlay follow the clip.
+            string? sibling = SiblingSkeletonPath(path);
+            if (sibling != null)
+            {
+                try
+                {
+                    var siblingModel = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(sibling));
+                    if (siblingModel is { Bodies.Count: > 0 })
+                    {
+                        _ragdoll = siblingModel;
+                        any = true;
+                        ragdollSource = sibling;
+                    }
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        _ragdollSourceName = ragdollSource == null ? null : Path.GetFileName(ragdollSource);
         _bodiesToggle.IsEnabled = any;
         _bodiesToggle.IsChecked = any;
         _constraintsToggle.IsEnabled = any;
@@ -2840,14 +2977,34 @@ public class MainWindow : Window
         bool physicsSkeleton = any && _ragdoll is { Skeleton: { ParentIndices.Count: > 0, ReferencePose.Count: > 0 } };
         _physicsSkeletonToggle.IsEnabled = physicsSkeleton;
         _physicsSkeletonToggle.IsChecked = physicsSkeleton;
+        _framesToggle.IsEnabled = any;
+        _framesToggle.IsChecked = any;
+        _engineerToggle.IsEnabled = any;
+        _dropButton.IsEnabled = any;
+        if (!any && _skeleton.IsDropped) _skeleton.ClearDrop();
         _skeleton.SetBodies(any ? _ragdoll : null);
+        UpdateScaleStatus();
         if (!any) return;
 
+        bool mappings = any && _ragdoll is { Mappings.Count: > 0, AnimationSkeleton: { BoneNames.Count: > 0 } };
+        string source = ragdollSource == null
+            ? "measured from this file"
+            : $"measured from the sibling skeleton {Path.GetFileName(ragdollSource)}";
         SetPlaybackSummary(
             $"{_ragdoll!.Bodies.Count} rigid bodies, {_ragdoll.Shapes.Count} shapes, " +
-            $"{_ragdoll.Constraints.Count} constraints and {_ragdoll.BoneBindings.Count} bone bindings " +
-            "measured from this file. Bodies, Constraints, Bone labels and Physics skeleton draw " +
-            "them as a static file-space overlay; it is not physics yet.", Ux.MetaBrush);
+            $"{_ragdoll.Constraints.Count} constraints, {_ragdoll.BoneBindings.Count} bone bindings " +
+            $"and {_ragdoll.Mappings.Count} animation-to-ragdoll bone mappings {source}. " +
+            "Bodies, Constraints, Bone labels, Physics skeleton and Body frames draw them as a " +
+            (mappings
+                ? "file-space overlay that follows the playing animation through the measured mapper; it is not physics yet."
+                : "static file-space overlay; it is not physics yet."), Ux.MetaBrush);
+
+        // For an animation file the ragdoll summary above is replaced by the clip summary a
+        // moment later, so the sibling-sourced ragdoll gets its note appended there instead.
+        _ragdollSourceNote = ragdollSource == null
+            ? null
+            : $"{_ragdoll.Bodies.Count} rigid bodies and {_ragdoll.Mappings.Count} bone mappings " +
+              $"loaded from the sibling skeleton {_ragdollSourceName}; the ragdoll overlay follows this clip.";
 
         HkxSkeleton? skeleton = null;
         try { skeleton = new HkxBinaryReader().ReadSkeleton(path); }
@@ -3176,6 +3333,19 @@ public class MainWindow : Window
         _poseSource = "";
         _playback.Clear();
 
+        _ragdoll = null;
+        _ragdollSourceName = null;
+        _ragdollSourceNote = null;
+
+        foreach (var toggle in new[]
+                 { _bodiesToggle, _constraintsToggle, _bindingsToggle,
+                   _physicsSkeletonToggle, _framesToggle, _engineerToggle })
+        {
+            toggle.IsChecked = false;
+            toggle.IsEnabled = false;
+        }
+        _dropButton.IsEnabled = false;
+
         _poseMotion = new RootMotion.Motion();
         _cachedSkeleton = null;
         _cachedSkeletonFor = "";
@@ -3183,8 +3353,11 @@ public class MainWindow : Window
         _scrub.Maximum = 0;
         _scrub.Value = 0;
         _scrubbing = false;
-        _skeleton.Reset();
+        _dropClock.Stop();
+        _dropButton.Content = "Drop";
         _frameLabel.Text = "";
+        _skeleton.Reset();
+        UpdateScaleStatus();
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
                            "the skeleton; use Mesh... to hang a model on it.", Ux.MutedBrush);
@@ -3355,8 +3528,19 @@ public class MainWindow : Window
 
     private void SetPlaybackSummary(string text, IBrush brush)
     {
+        _summaryBaseText = text;
+        _summaryBaseBrush = brush;
         _playbackSummary.Text = text;
         _playbackSummary.Foreground = brush;
+    }
+
+    // The Playback summary line carries per-constraint limit inspection while a constraint
+    // is hovered or pinned (amber, like the constraint overlay), and restores the previous
+    // summary text and colour when the selection clears.
+    private void ShowConstraintInspection(string? line)
+    {
+        _playbackSummary.Text = line ?? _summaryBaseText;
+        _playbackSummary.Foreground = line == null ? _summaryBaseBrush : Ux.WarnBrush;
     }
 
     public SkeletonView Viewport => _skeleton;
@@ -4123,7 +4307,11 @@ public class MainWindow : Window
 
             BuildClipList(new BehaviourGraphModel());
 
-            if (_animationData != null) LoadPose(path, Path.GetFileName(path));
+            if (_animationData != null)
+            {
+                LoadPose(path, Path.GetFileName(path));
+                AppendRagdollSourceNote();
+            }
             return;
         }
 
@@ -4182,8 +4370,20 @@ public class MainWindow : Window
                                   RememberSetting("last_folder", Path.GetDirectoryName(path) ?? "", "The file opened");
         PrepareEditing();
 
-        if (_animationData != null) LoadPose(path, Path.GetFileName(path));
+        if (_animationData != null)
+        {
+            LoadPose(path, Path.GetFileName(path));
+            AppendRagdollSourceNote();
+        }
         if (settingsWarning != null) SetStatus(settingsWarning, Ux.WarnBrush);
+    }
+
+    // After an animation file loads its clip summary, append the sibling-sourced ragdoll
+    // note so the overlay's origin and follow behaviour stay visible on the summary line.
+    private void AppendRagdollSourceNote()
+    {
+        if (_ragdollSourceNote == null) return;
+        SetPlaybackSummary(_summaryBaseText + "  |  " + _ragdollSourceNote, Ux.MetaBrush);
     }
 
     // Returns the file's pointer width when it is a readable packfile that is not 8-byte, or null

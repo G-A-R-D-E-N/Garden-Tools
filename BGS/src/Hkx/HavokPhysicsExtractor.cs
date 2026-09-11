@@ -18,6 +18,7 @@ public static class HavokPhysicsExtractor
 {
     public const string RagdollDataClass = "hknpRagdollData";
     public const string CapsuleShapeClass = "hknpCapsuleShape";
+    public const string MapperClass = "hkaSkeletonMapper";
 
     public static HavokRagdollModel? TryExtract(byte[]? hkx)
     {
@@ -49,9 +50,11 @@ public static class HavokPhysicsExtractor
             if (Shape(objects, instance) is { } shape)
                 model.Shapes.Add(shape);
 
+        ragdoll.StructLists.TryGetValue("motionCinfos", out var motions);
+
         if (ragdoll.StructLists.TryGetValue("bodyCinfos", out var cinfos))
             for (int i = 0; i < cinfos.Count; i++)
-                if (Body(graph, i, cinfos[i]) is { } body)
+                if (Body(graph, i, cinfos[i], motions) is { } body)
                     model.Bodies.Add(body);
 
         if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
@@ -72,15 +75,84 @@ public static class HavokPhysicsExtractor
                 objects.Instances[index].ClassName == "hkaSkeleton" &&
                 Skeleton(objects, objects.Instances[index]) is { } skeleton)
                 model.Skeleton = skeleton;
+
+            if (model.Skeleton != null)
+                foreach (var mapper in objects.Instances.Where(i => i.ClassName == MapperClass))
+                    if (Mapper(objects, skeletonId, mapper, out var mappings, out var animation))
+                    {
+                        model.Mappings.AddRange(mappings);
+                        model.AnimationSkeleton = animation;
+                        break;
+                    }
         }
 
         return model;
     }
 
-    // The physics skeleton hknpRagdollData references, read through the measured type table
-    // exactly like the byte-backed XML: name string, int16 parent array, hkaBone name array
-    // (each record is a string pointer followed by a lockTranslation bool) and the 48-byte
-    // hkQsTransform reference poses (translation vector4, rotation quaternion, scale vector4).
+    private static bool Mapper(PackfileObjects objects, int ragdollSkeletonId,
+                               PackfileObjects.Instance instance,
+                               out List<HavokRagdollMapping> mappings,
+                               out HavokRagdollSkeleton? animation)
+    {
+        mappings = new List<HavokRagdollMapping>();
+        animation = null;
+
+        var mapperLayout = LayoutWalker.Active(HavokClassTypes.Shipped, MapperClass, objects.PointerWidth);
+        int? mappingAt = mapperLayout?.OffsetOf("mapping") is { } offset ? instance.Offset + offset : null;
+        if (mappingAt == null) return false;
+
+        var dataLayout = LayoutWalker.Active(HavokClassTypes.Shipped, "hkaSkeletonMapperData", objects.PointerWidth);
+        if (dataLayout == null ||
+            dataLayout.OffsetOf("skeletonA") is not { } skeletonAOffset ||
+            dataLayout.OffsetOf("skeletonB") is not { } skeletonBOffset ||
+            dataLayout.OffsetOf("simpleMappings") is not { } rowsOffset ||
+            dataLayout.OffsetOf("mappingType") is not { } typeOffset)
+            return false;
+
+        var skeletonA = objects.ReadRefAt(mappingAt.Value + skeletonAOffset, out _);
+        var skeletonB = objects.ReadRefAt(mappingAt.Value + skeletonBOffset, out _);
+        if (skeletonA == null || skeletonB == null) return false;
+        if (objects.IndexOf(skeletonB) + NativeGraphModel.FirstId != ragdollSkeletonId) return false;
+
+        int mappingType = objects.ReadNarrowAt(mappingAt.Value + typeOffset, 4) ?? 1;
+        if (mappingType != 0) return false;
+
+        var simpleLayout = LayoutWalker.Active(
+            HavokClassTypes.Shipped, "hkaSkeletonMapperDataSimpleMapping", objects.PointerWidth);
+        if (simpleLayout == null || simpleLayout.Size <= 0 ||
+            simpleLayout.OffsetOf("boneA") is not { } boneAOffset ||
+            simpleLayout.OffsetOf("boneB") is not { } boneBOffset ||
+            simpleLayout.OffsetOf("aFromBTransform") is not { } transformOffset)
+            return false;
+
+        var rows = objects.ArrayAt(mappingAt.Value + rowsOffset, simpleLayout.Size);
+        if (rows == null || rows.Count == 0) return false;
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            int row = rows.At + i * simpleLayout.Size;
+            int? boneA = objects.ReadNarrowAt(row + boneAOffset, 2);
+            int? boneB = objects.ReadNarrowAt(row + boneBOffset, 2);
+            float[]? values = objects.ReadFloatsAt(row + transformOffset, 12);
+            if (boneA == null || boneB == null || values == null) return false;
+
+            var translation = new Vector3(values[0], values[1], values[2]);
+            var rotation = new Quaternion(values[4], values[5], values[6], values[7]);
+            if (!Finite(translation) || !Finite(rotation) || rotation.LengthSquared() < 1e-10f)
+                return false;
+
+            mappings.Add(new HavokRagdollMapping(
+                unchecked((short)boneA.Value),
+                unchecked((short)boneB.Value),
+                translation,
+                Quaternion.Normalize(rotation)));
+        }
+
+        if (skeletonA.ClassName != "hkaSkeleton") return false;
+        animation = Skeleton(objects, skeletonA);
+        return animation != null;
+    }
+
     private static HavokRagdollSkeleton? Skeleton(PackfileObjects objects, PackfileObjects.Instance instance)
     {
         const string className = "hkaSkeleton";
@@ -110,8 +182,6 @@ public static class HavokPhysicsExtractor
                 skeleton.BoneNames.Add(boneName);
             }
 
-        // Without the bone names the skeleton cannot label anything; a readable skeleton
-        // always carries them, so fail closed rather than expose a half-read object.
         if (skeleton.BoneNames.Count == 0) return null;
 
         if (reader.At(instance.Offset, className, "referencePose") is { } poseAt &&
@@ -129,9 +199,6 @@ public static class HavokPhysicsExtractor
         return skeleton;
     }
 
-    // A member offset through the same flattened parent-chain layout the byte-backed XML
-    // writer uses (editor-write tables only carry the declared members of a class, not its
-    // ancestors), so the read and the XML always agree on where a field lives.
     private static int? MemberAt(PackfileObjects objects, PackfileObjects.Instance instance, string member)
     {
         var layout = LayoutWalker.Active(HavokClassTypes.Shipped, instance.ClassName, objects.PointerWidth);
@@ -203,7 +270,8 @@ public static class HavokPhysicsExtractor
         return values;
     }
 
-    private static HavokRigidBody? Body(BehaviourGraphModel graph, int id, IReadOnlyDictionary<string, string> cinfo)
+    private static HavokRigidBody? Body(BehaviourGraphModel graph, int id, IReadOnlyDictionary<string, string> cinfo,
+                                       IReadOnlyList<IReadOnlyDictionary<string, string>>? motions)
     {
         string position = cinfo.TryGetValue("position", out var p) ? p : "";
         string orientation = cinfo.TryGetValue("orientation", out var o) ? o : "";
@@ -213,6 +281,13 @@ public static class HavokPhysicsExtractor
             ? RefId(shape)
             : -1;
 
+        Vector3 com = Vector3.Zero;
+        int motionId = Int(cinfo, "motionId");
+        if (motions != null && motionId >= 0 && motionId < motions.Count &&
+            motions[motionId].TryGetValue("centerOfMassWorld", out var comText) &&
+            Vector4(comText, out var comVec))
+            com = new Vector3(comVec.X, comVec.Y, comVec.Z);
+
         return new HavokRigidBody
         {
             Id = id,
@@ -220,6 +295,7 @@ public static class HavokPhysicsExtractor
             ShapeId = shapeId,
             Position = new Vector3(frame.X, frame.Y, frame.Z),
             Rotation = new Quaternion(quat.X, quat.Y, quat.Z, quat.W),
+            CenterOfMass = com,
         };
     }
 
@@ -280,9 +356,6 @@ public static class HavokPhysicsExtractor
         float MinAngle,
         float MaxAngle);
 
-    // Walks the constraint atoms through the measured type table: every offset comes from the
-    // flattened parent-chain layout of the class that owns the member, exactly like the
-    // byte-backed XML writer resolves them.
     private static ConstraintMeasured MeasureConstraint(PackfileObjects objects, PackfileObjects.Instance instance)
     {
         var reader = new MemberReader(objects);
@@ -429,4 +502,10 @@ public static class HavokPhysicsExtractor
         return true;
     }
 
+    private static bool Finite(Vector3 value) =>
+        float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
+
+    private static bool Finite(Quaternion value) =>
+        float.IsFinite(value.X) && float.IsFinite(value.Y) &&
+        float.IsFinite(value.Z) && float.IsFinite(value.W);
 }

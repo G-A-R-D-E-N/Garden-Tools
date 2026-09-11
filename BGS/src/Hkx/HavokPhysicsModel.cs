@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-
 namespace OpenCommonwealth.Services.Hkx;
 
 public enum HavokPhysicsShapeKind
@@ -39,13 +38,31 @@ public sealed class HavokRigidBody
     public int ShapeId { get; init; }
     public int BoneIndex { get; init; } = -1;
     public float Mass { get; init; }
+
+    // World-space center of mass, measured from the body's hknpMotionCinfo
+    // (motionCinfos[motionId].centerOfMassWorld). Zero when the file carries no measured COM
+    // for the body, so renderers can tell a real origin from a missing one.
     public Vector3 CenterOfMass { get; init; }
 
-    // The body frame origin (hknp body cinfo position) and orientation (hknp body cinfo
-    // orientation, an (x, y, z, w) quaternion). Newer-Havok ragdoll data carries the full
-    // frame this way; legacy hkp bodies express the same idea through CenterOfMass/Rotation.
+    // The body frame origin and orientation measured from hknpBodyCinfo.
     public Vector3 Position { get; init; }
     public Quaternion Rotation { get; init; } = Quaternion.Identity;
+
+    // CenterOfMass is authored in the reference world frame, not body-local space. Convert
+    // that reference-world offset back through the measured body orientation before applying
+    // a posed body frame, otherwise a non-identity reference rotation is applied twice.
+    public Vector3 PosedCenterOfMass(Vector3 posedPosition, Quaternion posedRotation)
+    {
+        if (CenterOfMass == Vector3.Zero) return Vector3.Zero;
+        var referenceRotation = Rotation.LengthSquared() > 1e-10f
+            ? Quaternion.Normalize(Rotation)
+            : Quaternion.Identity;
+        var targetRotation = posedRotation.LengthSquared() > 1e-10f
+            ? Quaternion.Normalize(posedRotation)
+            : Quaternion.Identity;
+        var localOffset = Vector3.Transform(CenterOfMass - Position, Quaternion.Inverse(referenceRotation));
+        return posedPosition + Vector3.Transform(localOffset, targetRotation);
+    }
 }
 
 public enum HavokConstraintKind
@@ -65,61 +82,42 @@ public sealed class HavokConstraint
     public int BodyA { get; init; }
     public int BodyB { get; init; }
 
-    // The hinge-style joint limit (hkpLimitedHingeConstraintData angLimit atom). Zero when the
-    // file carries no such limit for this constraint.
     public float MinAngle { get; init; }
     public float MaxAngle { get; init; }
 
-    // Ragdoll twist limit (hkpTwistLimitConstraintAtom) and cone half-angle
-    // (hkpConeLimitConstraintAtom), measured from the constraint atoms. Null when absent.
     public float? TwistMinAngle { get; init; }
     public float? TwistMaxAngle { get; init; }
     public float? ConeMaxAngle { get; init; }
 
-    // Axis/ref column indices into the measured constraint frames: the twist limit is measured
-    // around frame-A column TwistAxis from frame-A column TwistRefAxis; the cone around
-    // frame-A column ConeTwistAxis from frame-B column ConeRefAxis; the hinge limit around
-    // frame-A column LimitAxis.
     public int TwistAxis { get; init; }
     public int TwistRefAxis { get; init; } = 1;
     public int ConeTwistAxis { get; init; }
     public int ConeRefAxis { get; init; }
     public int LimitAxis { get; init; }
 
-    // The measured local frames (transformA/transformB of the constraint atoms), each sixteen
-    // column-major floats exactly as the file stores them: columns 0-2 are the basis, column 3
-    // is the translation (the pivot in the owning body's local frame). Null when the constraint
-    // data carried no transforms atom or could not be read.
     public float[]? FrameA { get; init; }
     public float[]? FrameB { get; init; }
 }
 
 public sealed record HavokRagdollBoneBinding(int BoneIndex, int BodyId);
 
-// The physics skeleton hknpRagdollData references (hkaSkeleton). boneToBodyMap indexes
-// this bone list, so its names label each bound rigid body in the preview.
+public sealed record HavokRagdollMapping(int BoneA, int BoneB, Vector3 AFromBTranslation, Quaternion AFromBRotation);
+
+public readonly record struct HavokBoneFrame(Vector3 Position, Quaternion Rotation);
+
 public sealed class HavokRagdollSkeleton
 {
     public string Name { get; init; } = "";
     public List<string> BoneNames { get; } = new();
     public List<int> ParentIndices { get; } = new();
-
-    // Local-space reference pose: the measured hkQsTransform array (translation vector4,
-    // rotation quaternion, scale vector4). Scale is identity in every measured file so far;
-    // composition below applies translation and rotation only and the validator warns when a
-    // file ever carries non-identity scale rather than silently mis-render it.
     public List<HkxBonePose> ReferencePose { get; } = new();
 
-    // The reference pose composed down the parent chain into file space, so the physics
-    // skeleton can be drawn as a bone chain over the bodies. A parent is only applied when it
-    // precedes its child (valid Havok skeletons are topologically ordered); anything else is
-    // treated as a root so a broken file still composes deterministically.
-    public IReadOnlyList<Vector3> WorldReferencePositions()
+    // Compose the complete reference transform, not just translation. Keeping this as one
+    // source of truth prevents mapper fallbacks and release previews from losing rotation.
+    public IReadOnlyList<HavokBoneFrame> WorldReferenceFrames()
     {
         int count = ReferencePose.Count;
-        var positions = new Vector3[count];
-        var rotations = new Quaternion[count];
-
+        var frames = new HavokBoneFrame[count];
         for (int i = 0; i < count; i++)
         {
             var pose = ReferencePose[i];
@@ -129,19 +127,21 @@ public sealed class HavokRagdollSkeleton
 
             if (parent < 0)
             {
-                positions[i] = pose.Translation;
-                rotations[i] = pose.Rotation;
+                frames[i] = new HavokBoneFrame(pose.Translation, Quaternion.Normalize(pose.Rotation));
             }
             else
             {
-                positions[i] = positions[parent] +
-                               Vector3.Transform(pose.Translation, rotations[parent]);
-                rotations[i] = Quaternion.Normalize(rotations[parent] * pose.Rotation);
+                var parentFrame = frames[parent];
+                frames[i] = new HavokBoneFrame(
+                    parentFrame.Position + Vector3.Transform(pose.Translation, parentFrame.Rotation),
+                    Quaternion.Normalize(parentFrame.Rotation * pose.Rotation));
             }
         }
-
-        return positions;
+        return frames;
     }
+
+    public IReadOnlyList<Vector3> WorldReferencePositions() =>
+        WorldReferenceFrames().Select(frame => frame.Position).ToArray();
 }
 
 public sealed class HavokRagdollModel
@@ -151,6 +151,35 @@ public sealed class HavokRagdollModel
     public List<HavokConstraint> Constraints { get; } = new();
     public List<HavokRagdollBoneBinding> BoneBindings { get; } = new();
     public HavokRagdollSkeleton? Skeleton { get; set; }
+    public List<HavokRagdollMapping> Mappings { get; } = new();
+    public HavokRagdollSkeleton? AnimationSkeleton { get; set; }
+
+    public HavokBoneFrame[]? MapPose(IReadOnlyList<HavokBoneFrame>? animationWorld)
+    {
+        if (animationWorld == null || Mappings.Count == 0 || Skeleton == null) return null;
+
+        var reference = Skeleton.WorldReferenceFrames();
+        var frames = new HavokBoneFrame[reference.Count];
+        var covered = new bool[reference.Count];
+
+        foreach (var mapping in Mappings)
+        {
+            if (mapping.BoneA < 0 || mapping.BoneA >= animationWorld.Count) return null;
+            if (mapping.BoneB < 0 || mapping.BoneB >= frames.Length) return null;
+
+            var a = animationWorld[mapping.BoneA];
+            frames[mapping.BoneB] = new HavokBoneFrame(
+                a.Position + Vector3.Transform(mapping.AFromBTranslation, a.Rotation),
+                Quaternion.Normalize(a.Rotation * mapping.AFromBRotation));
+            covered[mapping.BoneB] = true;
+        }
+
+        for (int i = 0; i < reference.Count; i++)
+            if (!covered[i])
+                frames[i] = reference[i];
+
+        return frames;
+    }
 }
 
 public enum HavokPhysicsValidationLevel
@@ -194,20 +223,14 @@ public static class HavokPhysicsValidator
             foreach (var ring in shape.FaceRings)
                 foreach (int index in ring)
                     if (index < 0 || index >= shape.Vertices.Count)
-                        // The authored file is authoritative: vanilla capsule polytopes can
-                        // reference a corner the vertex list leaves out. The preview skips the
-                        // dangling edges; this merely notes the inconsistency for future physics
-                        // work rather than pretending the shape is complete.
                         findings.Add(new HavokPhysicsValidationFinding(
                             HavokPhysicsValidationLevel.Warning,
                             $"shape {shape.Id}",
                             $"face references missing polytope vertex {index}"));
 
             foreach (int child in shape.Children)
-            {
                 if (!shapes.ContainsKey(child))
                     findings.Add(Error($"shape {shape.Id}", $"references missing child shape {child}"));
-            }
         }
 
         CheckShapeCycles(shapes, findings);
@@ -325,9 +348,6 @@ public static class HavokPhysicsValidator
                 var pose = skeleton.ReferencePose[i];
                 if (!Finite(pose.Translation) || !Finite(pose.Rotation))
                     findings.Add(Error($"bone {i}", "reference pose must contain only finite values"));
-
-                // Scale is not composed (identity in every measured file); flag it rather
-                // than silently drawing a scaled chain as if it were unit scale.
                 if (Vector3.Distance(pose.Scale, Vector3.One) > ScaleTolerance)
                     findings.Add(new HavokPhysicsValidationFinding(
                         HavokPhysicsValidationLevel.Warning,
@@ -336,23 +356,64 @@ public static class HavokPhysicsValidator
             }
         }
 
+        if (model.AnimationSkeleton is { } animation)
+        {
+            int animBoneCount = animation.BoneNames.Count;
+            if (animation.ParentIndices.Count != animBoneCount)
+                findings.Add(Error("animation skeleton",
+                    $"has {animBoneCount} bone names but {animation.ParentIndices.Count} parent indices"));
+            if (animation.ReferencePose.Count != animBoneCount)
+                findings.Add(Error("animation skeleton",
+                    $"has {animBoneCount} bone names but {animation.ReferencePose.Count} reference poses"));
+        }
+
+        var mappedPhysicsBones = new HashSet<int>();
+        for (int i = 0; i < model.Mappings.Count; i++)
+        {
+            var mapping = model.Mappings[i];
+            string where = $"mapping {i}";
+            if (mapping.BoneA < 0 || (model.AnimationSkeleton is { } animated &&
+                                      mapping.BoneA >= animated.BoneNames.Count))
+                findings.Add(Error(where, $"animation bone {mapping.BoneA} is outside the animation skeleton"));
+            if (mapping.BoneB < 0 || (model.Skeleton is { } physics &&
+                                      mapping.BoneB >= physics.BoneNames.Count))
+                findings.Add(Error(where, $"physics bone {mapping.BoneB} is outside the physics skeleton"));
+
+            if (!Finite(mapping.AFromBTranslation))
+                findings.Add(Error(where, "aFromB translation must contain only finite values"));
+            if (!Finite(mapping.AFromBRotation))
+                findings.Add(Error(where, "aFromB rotation must contain only finite values"));
+            else
+            {
+                float norm = MathF.Sqrt(
+                    mapping.AFromBRotation.X * mapping.AFromBRotation.X +
+                    mapping.AFromBRotation.Y * mapping.AFromBRotation.Y +
+                    mapping.AFromBRotation.Z * mapping.AFromBRotation.Z +
+                    mapping.AFromBRotation.W * mapping.AFromBRotation.W);
+                if (norm < RotationNormEpsilon)
+                    findings.Add(Error(where, "aFromB rotation is degenerate (its length is effectively zero)"));
+            }
+
+            if (!mappedPhysicsBones.Add(mapping.BoneB))
+                findings.Add(Error(where, $"physics bone {mapping.BoneB} is mapped more than once"));
+        }
+
+        if (model.Mappings.Count > 0 && model.Skeleton is { } mappedPhysics &&
+            model.AnimationSkeleton != null)
+            for (int bone = 0; bone < mappedPhysics.BoneNames.Count; bone++)
+                if (!mappedPhysicsBones.Contains(bone))
+                    findings.Add(new HavokPhysicsValidationFinding(
+                        HavokPhysicsValidationLevel.Warning,
+                        $"bone {bone}",
+                        "is not covered by any animation mapping and stays at its reference frame"));
+
         return findings;
     }
 
-    // A unit quaternion has length 1. Authored rotations are allowed a small slack for
-    // float round-trips, but a near-zero length is a degenerate rotation, not slack.
     private const float RotationNormTolerance = 1e-3f;
     private const float RotationNormEpsilon = 1e-4f;
-
-    // Reference-pose scale is composed nowhere in the preview; any file that is not unit
-    // scale is flagged so the omission is visible rather than silent.
     private const float ScaleTolerance = 1e-4f;
 
-    // A compound shape may reference child shapes, which may themselves be compounds.
-    // Direct self-reference is only the simplest cycle; an indirect cycle (A -> B -> A)
-    // would make any recursive traversal of the compound tree loop forever. Walk the
-    // whole containment graph with a depth-first colouring and report the first cycle
-    // reachable from each shape.
     private static void CheckShapeCycles(
         IReadOnlyDictionary<int, HavokPhysicsShape> shapes,
         List<HavokPhysicsValidationFinding> findings)
@@ -408,8 +469,6 @@ public static class HavokPhysicsValidator
             findings.Add(Error($"{kind} {duplicate.Key}", $"duplicate {kind} id"));
     }
 
-    // A constraint frame is sixteen measured column-major floats; the translation column must
-    // be finite and the basis columns must be usable unit-ish directions.
     private static void CheckFrame(float[]? frame, string where, string label,
                                    List<HavokPhysicsValidationFinding> findings)
     {
