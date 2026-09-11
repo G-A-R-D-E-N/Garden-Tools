@@ -27,6 +27,17 @@
 #include <fo4/schema/form_links.hpp>
 
 namespace fo4ide::plugin {
+
+#ifdef FO4IDE_TEST_HOOKS
+namespace {
+LoadMo2AfterPendingCheckHook loadMo2AfterPendingCheckHook = nullptr;
+}
+
+void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook) {
+    loadMo2AfterPendingCheckHook = hook;
+}
+#endif
+
 namespace {
 
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
@@ -410,10 +421,42 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     });
 }
 
+std::string RadiclePluginBackend::dirtyPluginListLocked() const {
+    std::string pendingList;
+    for (const auto& item : plugins_) {
+        if (!item.dirty) continue;
+        if (!pendingList.empty()) pendingList += ", ";
+        pendingList += item.name;
+    }
+    return pendingList;
+}
+
 Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::json& arguments) {
     if (!arguments.is_object() || !arguments.contains("plugins") || !arguments["plugins"].is_array()) {
         return std::unexpected(Error{"InvalidEnvironment", "MO2 environment is missing its plugin list"});
     }
+
+    const bool discardPending = arguments.contains("discardPending") &&
+                                arguments["discardPending"].is_boolean() &&
+                                arguments["discardPending"].get<bool>();
+    std::uint64_t consentEpoch = 0;
+    {
+        std::scoped_lock lock(mutex_);
+        consentEpoch = mutationEpoch_;
+        if (!discardPending) {
+            const auto pendingList = dirtyPluginListLocked();
+            if (!pendingList.empty()) {
+                return std::unexpected(Error{
+                    "PluginHasPendingChanges",
+                    "Pending plugin edits would be discarded by reloading the MO2 profile; "
+                    "save or discard them first: " + pendingList
+                });
+            }
+        }
+    }
+#ifdef FO4IDE_TEST_HOOKS
+    if (loadMo2AfterPendingCheckHook) loadMo2AfterPendingCheckHook();
+#endif
 
     std::vector<LoadedPlugin> loaded;
     nlohmann::json errors = nlohmann::json::array();
@@ -475,6 +518,17 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             if (uniqueRoots.insert(root).second) roots.push_back(root);
         }
         std::scoped_lock lock(mutex_);
+        const bool consentStale = mutationEpoch_ != consentEpoch;
+        const auto pendingList = dirtyPluginListLocked();
+        if (consentStale || (!discardPending && !pendingList.empty())) {
+            return std::unexpected(Error{
+                "PluginHasPendingChanges",
+                pendingList.empty()
+                    ? "A plugin was edited after reload consent; save or discard those edits first"
+                    : "Pending plugin edits would be discarded by reloading the MO2 profile; "
+                      "save or discard them first: " + pendingList
+            });
+        }
         plugins_ = std::move(loaded);
         trustedSaveRoots_ = std::move(roots);
         rebuildGraphLocked();
@@ -497,7 +551,8 @@ Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
             {"ConflictStatus", 0},
             {"IsRecordNode", false},
             {"HasChildren", !loaded.plugin.groups.empty()},
-            {"FilePath", loaded.path.string()}
+            {"FilePath", loaded.path.string()},
+            {"Pending", loaded.dirty}
         });
     }
     return nlohmann::json(rows.dump());

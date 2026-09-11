@@ -33,6 +33,7 @@ void RadiclePluginBackend::stagePluginMutationLocked(LoadedPlugin& loaded,
     if (!loaded.dirty) loaded.originalPlugin = loaded.plugin;
     loaded.plugin = std::move(mutated);
     loaded.dirty = true;
+    ++mutationEpoch_;
     rebuildGraphLocked();
 }
 
@@ -41,6 +42,7 @@ void RadiclePluginBackend::stageLocalizationMutationLocked(
     if (!loaded.dirty) loaded.originalPlugin = loaded.plugin;
     loaded.stagedLocalization = std::move(staged);
     loaded.dirty = true;
+    ++mutationEpoch_;
 }
 
 Result<void> RadiclePluginBackend::persistPluginLocked(

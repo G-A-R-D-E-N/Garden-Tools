@@ -82,7 +82,9 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
                 return bridge->call(args);
             }), log);
     };
-    if (!add("list_plugins", "List the plugins loaded in this native session", "appInterop", "GetPlugins", {})) return false;
+    if (!add("list_plugins",
+             "List loaded plugins. Pending=true means unsaved in-memory edits; check this before save_plugin, discard_plugin, or reload_mo2_profile",
+             "appInterop", "GetPlugins", {})) return false;
     if (!add("open_plugin", "Open an existing plugin by absolute path", "backend", "OpenPlugin",
              {{"path", "string"}})) return false;
     if (!add("create_plugin", "Create an empty ESP in the trusted MO2 overwrite folder; later edits require save_plugin", "backend", "CreatePlugin",
@@ -103,9 +105,9 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"query", "string"}, {"type", "string", true}})) return false;
     if (!add("set_field", "Set a field in memory using an editable column path from list_records_summary; value is text. Call save_plugin to persist", "backend", "SetField",
              {{"plugin", "string"}, {"form_key", "string"}, {"path", "string"}, {"value", "string"}})) return false;
-    if (!add("save_plugin", "Save pending changes to the plugin's existing disk path", "backend", "SavePatch",
+    if (!add("save_plugin", "Save pending changes to the plugin's existing disk path. Use list_plugins Pending to see which plugins are dirty first", "backend", "SavePatch",
              {{"plugin", "string"}})) return false;
-    if (!add("discard_plugin", "Discard pending in-memory edits for one plugin without writing disk", "backend", "DiscardPlugin",
+    if (!add("discard_plugin", "Discard pending in-memory edits for one plugin without writing disk. Use list_plugins Pending to see which plugins are dirty first", "backend", "DiscardPlugin",
              {{"plugin", "string"}})) return false;
     if (!add("list_masters", "List a plugin's declared masters", "masters", "List",
              {{"plugin", "string"}})) return false;
@@ -135,10 +137,20 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
     const auto emptySchema = objectSchema(nlohmann::json::object());
     if (!add({"native_status", "Report the native FO4IDE host and backend capability status", emptySchema},
              "app", "GetHealth")) return false;
-    if (!add({"get_mo2_status", "Report the loaded MO2 instance/profile and whether its files changed on disk", emptySchema},
+    if (!add({"get_mo2_status",
+              "Report the loaded MO2 instance/profile. pendingPlugins lists dirty plugins. staleConfig=true if ModOrganizer.ini changed; staleLoadOrder=true if plugins.txt, modlist.txt, or loadorder.txt changed; stale is either. Check pendingPlugins before reload_mo2_profile",
+              emptySchema},
              "appInterop", "GetMo2Status")) return false;
-    if (!add({"reload_mo2_profile", "Discard pending edits and reload enabled plugins from the currently configured MO2 profile", emptySchema},
-             "appInterop", "ReloadMo2Profile")) return false;
+    if (!add({"reload_mo2_profile",
+              "Reload enabled plugins from the currently configured MO2 profile. Check list_plugins or get_mo2_status pendingPlugins first. Fails if any plugin has pending edits unless discard_pending is true",
+              objectSchema({
+                  {"discard_pending",
+                   {{"type", "boolean"},
+                    {"description",
+                     "Discard all pending in-memory plugin edits before reloading. Defaults to false."}}}
+              })},
+             "appInterop", "ReloadMo2Profile",
+             {"discard_pending"})) return false;
     if (!add({"get_settings", "Return the current FO4IDE settings", emptySchema},
              "settings", "GetSettings")) return false;
 

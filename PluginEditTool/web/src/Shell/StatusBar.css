@@ -32,6 +32,14 @@
   flex: 0 0 auto;
 }
 
+.status-mo2-stale {
+  color: #d7ba7d;
+}
+
+.status-mo2-current {
+  color: var(--text-muted);
+}
+
 .status-loadorder {
   flex: 1 1 auto;
   min-width: 0;

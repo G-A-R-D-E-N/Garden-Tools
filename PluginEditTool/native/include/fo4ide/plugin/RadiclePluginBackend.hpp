@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <mutex>
 #include <optional>
@@ -20,6 +21,8 @@ using LocalizedQuestBeforeCommitHook = void (*)();
 void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook);
 using LocalizedQuestAfterTableParseHook = void (*)();
 void setLocalizedQuestAfterTableParseHook(LocalizedQuestAfterTableParseHook hook);
+using LoadMo2AfterPendingCheckHook = void (*)();
+void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
 #endif
 
 class RadiclePluginBackend final : public IPluginBackend {
@@ -159,9 +162,11 @@ private:
     std::optional<std::filesystem::path> allowedLocalizationDirectory(
         const std::filesystem::path& path) const;
     void rebuildGraphLocked();
+    std::string dirtyPluginListLocked() const;
 
     mutable std::mutex mutex_;
     std::vector<LoadedPlugin> plugins_;
+    std::uint64_t mutationEpoch_{0};
     fo4::ConflictGraph graph_;
     std::filesystem::path dataDirectory_;
     std::filesystem::path trustedNewPluginRoot_;

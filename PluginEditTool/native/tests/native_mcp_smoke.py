@@ -52,10 +52,13 @@ def main(executable):
                 status = json.loads(call("get_mo2_status"))
                 assert status["loaded"] and status["profile"] == "Smoke", status
                 plugin = "NativeMcpSmoke.esp"
+                def listed():
+                    rows = json.loads(call("list_plugins"))
+                    return next(row for row in rows if row.get("Key") == plugin or row.get("Name") == plugin)
                 call("create_plugin", {"plugin": plugin})
                 path = root / "overwrite" / plugin
                 baseline = path.read_bytes()
-                assert plugin in call("list_plugins")
+                assert listed()["Pending"] is False
                 created = call("create_record", {"plugin": plugin, "type": "EYES", "payload": {"editorId": "McpSmokeEyes", "fullText": "Original Eyes", "icon": "Textures\\Eyes\\smoke.dds"}})
                 form_key = json.loads(created)["formKey"]
                 assert path.read_bytes() == baseline
@@ -73,6 +76,9 @@ def main(executable):
                 call("set_field", edit)
                 pending = read_record()
                 assert "Saved Eyes" in pending and path.read_bytes() == baseline
+                assert listed()["Pending"] is True
+                dirty = json.loads(call("get_mo2_status"))
+                assert plugin in dirty.get("pendingPlugins", []), dirty
                 call("set_field", dict(edit, value=123), failed=True)
                 assert read_record() == pending and path.read_bytes() == baseline
                 call("set_field", dict(edit, path="EYES\\MissingField"), failed=True)
@@ -80,8 +86,25 @@ def main(executable):
                 call("save_plugin", {"plugin": plugin})
                 saved = path.read_bytes()
                 assert saved != baseline
-                (profile / "plugins.txt").write_text("*" + plugin + "\n", encoding="utf-8")
+                assert listed()["Pending"] is False
+                clean = json.loads(call("get_mo2_status"))
+                assert plugin not in clean.get("pendingPlugins", []), clean
+                before = json.loads(call("get_mo2_status"))
+                plugins_txt = profile / "plugins.txt"
+                plugins_txt.write_text("*" + plugin + "\n", encoding="utf-8")
+                later = plugins_txt.stat().st_mtime + 2
+                os.utime(plugins_txt, (later, later))
+                stale = json.loads(call("get_mo2_status"))
+                assert stale["stale"] is True, stale
+                assert stale["staleLoadOrder"] is True, stale
+                assert stale.get("staleConfig") is not True, stale
+                assert stale["pluginCount"] == before["pluginCount"], stale
                 call("reload_mo2_profile")
+                after = json.loads(call("get_mo2_status"))
+                assert after["stale"] is False, after
+                assert after.get("staleLoadOrder") is not True, after
+                assert after["pluginCount"] == before["pluginCount"] + 1, after
+                assert plugin in call("list_plugins")
                 assert read_record() == "Saved Eyes"
                 call("set_field", dict(edit, value="Open Guard Eyes"))
                 assert read_record() == "Open Guard Eyes"
@@ -89,14 +112,23 @@ def main(executable):
                 call("open_plugin", {"path": str(path)}, failed=True)
                 assert read_record() == "Open Guard Eyes"
                 assert path.read_bytes() == saved
-                call("reload_mo2_profile")
+                call("reload_mo2_profile", failed=True)
+                assert read_record() == "Open Guard Eyes"
+                assert path.read_bytes() == saved
+                blocked = json.loads(call("get_mo2_status"))
+                assert blocked["pluginCount"] == after["pluginCount"], blocked
+                assert blocked["stale"] is False, blocked
+                assert plugin in blocked.get("pendingPlugins", []), blocked
+                call("reload_mo2_profile", {"discard_pending": True})
                 assert read_record() == "Saved Eyes"
                 call("set_field", dict(edit, value="Discard These Eyes"))
                 assert read_record() == "Discard These Eyes"
                 assert path.read_bytes() == saved
+                assert listed()["Pending"] is True
                 call("discard_plugin", {"plugin": plugin})
                 assert read_record() == "Saved Eyes"
                 assert path.read_bytes() == saved
+                assert listed()["Pending"] is False
             finally:
                 deadline.cancel()
                 process.stdin.close()
