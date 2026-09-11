@@ -14,6 +14,8 @@ public static class SkeletonMapperAuthor
 
     public const float UnitTolerance = 1e-3f;
 
+    public const float ScaleTolerance = 1e-3f;
+
     public static HavokSkeletonMappingPair Reciprocal(
         HavokRagdollSkeleton skeletonA,
         HavokRagdollSkeleton skeletonB,
@@ -144,9 +146,9 @@ public static class SkeletonMapperAuthor
                 refusals.Add($"bone {i} ('{Name(skeleton, i)}') has a reference rotation of length {rotationLength:0.######}, " +
                              "which is not a unit quaternion");
 
-            if (MathF.Abs(pose.Scale.X - 1f) > UnitTolerance ||
-                MathF.Abs(pose.Scale.Y - 1f) > UnitTolerance ||
-                MathF.Abs(pose.Scale.Z - 1f) > UnitTolerance)
+            if (MathF.Abs(pose.Scale.X - 1f) > ScaleTolerance ||
+                MathF.Abs(pose.Scale.Y - 1f) > ScaleTolerance ||
+                MathF.Abs(pose.Scale.Z - 1f) > ScaleTolerance)
                 refusals.Add($"bone {i} ('{Name(skeleton, i)}') has a reference scale of " +
                              $"({pose.Scale.X:0.######}, {pose.Scale.Y:0.######}, {pose.Scale.Z:0.######}); " +
                              "non-identity reference scale is not supported");

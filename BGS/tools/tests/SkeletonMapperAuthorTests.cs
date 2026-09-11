@@ -196,6 +196,30 @@ public class SkeletonMapperAuthorTests
         a.ReferencePose[1] = new HkxBonePose(Vector3.Zero, Quaternion.Identity, new Vector3(1f, 2f, 1f));
         Assert.Contains(SkeletonMapperAuthor.Refusals(a),
                         refusal => refusal.Contains("non-identity reference scale", StringComparison.Ordinal));
+
+        var onePercent = Rig("b", 2);
+        onePercent.ReferencePose[1] = new HkxBonePose(Vector3.Zero, Quaternion.Identity, new Vector3(1.01f, 1f, 1f));
+        Assert.Contains(SkeletonMapperAuthor.Refusals(onePercent),
+                        refusal => refusal.Contains("non-identity reference scale", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShippedReferenceScaleIsWithinTheAuthoringTolerance()
+    {
+        var (forward, reverse) = Vanilla();
+        float worst = 0f;
+
+        foreach (var skeleton in new[] { forward.SkeletonA, forward.SkeletonB, reverse.SkeletonA, reverse.SkeletonB })
+            foreach (var pose in skeleton.ReferencePose)
+                worst = MathF.Max(worst, MathF.Max(MathF.Abs(pose.Scale.X - 1f),
+                                   MathF.Max(MathF.Abs(pose.Scale.Y - 1f), MathF.Abs(pose.Scale.Z - 1f))));
+
+        _out.WriteLine($"worst shipped reference scale deviation {worst:0.####e+0}");
+
+        Assert.True(worst > 0f, "the shipped reference poses are expected to carry quantisation noise");
+        Assert.True(worst < SkeletonMapperAuthor.ScaleTolerance,
+                    $"shipped scale deviation {worst} exceeds the authoring tolerance " +
+                    $"{SkeletonMapperAuthor.ScaleTolerance}; the shipped rig would be refused");
     }
 
     [Fact]

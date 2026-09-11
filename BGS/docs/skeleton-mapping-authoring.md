@@ -25,13 +25,18 @@ compose(a, b):  t = a.t + rotate(a.q, b.t)
 That is the whole computation. It was confirmed by measuring all 18 rows of both
 mappers shipped in `Meshes/Actors/Character/CharacterAssets/skeleton.hkx`
 against the same expression built from the reference poses: worst translation
-error `3.8e-5` at unit scale, rotations exact. Reading the same expression in
-local space is wrong by up to 13.3 units and 2 radians, which is why model space
-is the one implemented.
+error `4.1e-5` in the animation-to-ragdoll direction and `4.7e-5` in the reverse
+direction, with rotations exact. Reading the same expression in local space is
+wrong by up to 13.3 units and 2 radians, which is why model space is the one
+implemented.
 
-Reference-pose scale is not used. Everything shipped is unit-scaled, so a
-non-unit rig cannot be validated against the game yet, and the row scale lane is
-deliberately left alone rather than guessed.
+The row scale lane is not used and not interpreted. The shipped reference poses
+are unit-scaled only to within quantisation: across the skeletons of both
+shipped mappers the worst per-component deviation from one is `1.99e-4`. That is
+why the refusal threshold for reference scale is `ScaleTolerance = 1e-3` - looser
+than the quantisation noise in real shipped data, and still far below any
+deliberate scale. A rig scaled by one percent is refused rather than answered
+with a row whose scale lane is a guess.
 
 ## Direction
 
@@ -42,7 +47,7 @@ needs both directions needs both mapper objects; one cannot serve the other.
 forward rows with the two bone indices swapped and each transform inverted.
 That reproduces the shipped reciprocal mapper to `2.3e-5` with exact rotations,
 which is tighter than recomputing it from the reference poses the way the
-offline generator does (`4.4e-5`). Both are within float noise of the shipped
+offline generator does (`4.7e-5`). Both are within float noise of the shipped
 bytes.
 
 ## Refusals
@@ -69,8 +74,9 @@ read safely, rather than repairing them:
 * a non-finite translation or rotation component;
 * a rotation whose length is not one within `UnitTolerance`, including a zero
   quaternion. Nothing is normalised on the way into a row;
-* a reference scale that is not identity within `UnitTolerance`, because the row
-  scale lane is not yet understood;
+* a reference scale that is not identity within `ScaleTolerance` (`1e-3`),
+  because the row scale lane is not yet understood. The shipped vanilla rig
+  passes this at `1.99e-4`, so the threshold is not merely theoretical;
 * a composed transform that fails any of the above, and any row handed to
   `Reverse` whose values cannot be inverted.
 
