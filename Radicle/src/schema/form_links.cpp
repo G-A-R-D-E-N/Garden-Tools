@@ -233,6 +233,11 @@ bool record_specific_formid_array(const Record& record, const Subrecord& sub) {
   return record.header.signature == k_navm && sub.signature == sig_onam;
 }
 
+bool navm_vertex_index_signature(const Record& record, const Subrecord& sub) {
+  return record.header.signature == k_navm &&
+         (sub.signature == k_pnam || sub.signature == k_nnam);
+}
+
 bool qust_non_formid_signature(Signature signature) {
   // xEdit FO4 QUST reuses several signatures that are FormIDs in other record
   // types. Within QUST they are scalar/string data and must never be sent
@@ -792,6 +797,9 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);
     }
+    return;
+  }
+  if (navm_vertex_index_signature(record, sub)) {
     return;
   }
   if (record_specific_formid_array(record, sub) && sub.data.size() % 4 == 0) {

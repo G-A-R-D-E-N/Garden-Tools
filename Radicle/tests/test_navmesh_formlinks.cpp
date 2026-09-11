@@ -104,6 +104,46 @@ std::vector<std::byte> make_plugin() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_four_byte_vertex_index_plugin() {
+  fo4::test::ByteWriter out;
+  write_common_header(out);
+
+  const auto group = fo4::test::begin_group(out, "NAVM", 0);
+  const auto record = fo4::test::begin_record(out, "NAVM", 0, 0x03000800);
+
+  fo4::test::ByteWriter onam;
+  onam.u32(0x02000812u);
+  fo4::test::write_subrecord(out, "ONAM", onam.bytes);
+
+  fo4::test::ByteWriter pnam;
+  pnam.u32(0x02000813u);
+  fo4::test::write_subrecord(out, "PNAM", pnam.bytes);
+
+  fo4::test::ByteWriter nnam;
+  nnam.u32(0x02000814u);
+  fo4::test::write_subrecord(out, "NNAM", nnam.bytes);
+
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+std::vector<std::byte> make_four_byte_pnam_plugin(std::string_view signature) {
+  fo4::test::ByteWriter out;
+  write_common_header(out);
+
+  const auto group = fo4::test::begin_group(out, signature, 0);
+  const auto record = fo4::test::begin_record(out, signature, 0, 0x03000800);
+
+  fo4::test::ByteWriter pnam;
+  pnam.u32(0x02000812u);
+  fo4::test::write_subrecord(out, "PNAM", pnam.bytes);
+
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 fo4::test::ByteWriter make_nvnm(bool malformed = false) {
   fo4::test::ByteWriter nvnm;
   nvnm.u32(15);           // Version
@@ -449,4 +489,75 @@ TEST(FormLink, MalformedMnamFailsClosedInsteadOfScanningTriangleIndexes) {
           {fo4::PluginKey::from_filename("Fallout4.esm"),
            fo4::PluginKey::from_filename("KeepMe.esm")}),
       fo4::FormIdError);
+}
+
+TEST(FormLink, NavmFourByteVertexIndexArraysSurviveMasterRemapByteForByte) {
+  auto plugin = fo4::read_plugin(
+      make_four_byte_vertex_index_plugin(), "NavmeshPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:NavmeshPatch.esp");
+
+  const auto* before_record = fo4::find_record(plugin, key);
+  ASSERT_NE(before_record, nullptr);
+  const auto* before_onam = find_sub(*before_record, "ONAM");
+  const auto* before_pnam = find_sub(*before_record, "PNAM");
+  const auto* before_nnam = find_sub(*before_record, "NNAM");
+  ASSERT_NE(before_onam, nullptr);
+  ASSERT_NE(before_pnam, nullptr);
+  ASSERT_NE(before_nnam, nullptr);
+  ASSERT_EQ(before_onam->data.size(), 4u);
+  ASSERT_EQ(before_pnam->data.size(), 4u);
+  ASSERT_EQ(before_nnam->data.size(), 4u);
+  EXPECT_EQ(read_u32(before_onam->data, 0), 0x02000812u);
+  EXPECT_EQ(read_u32(before_pnam->data, 0), 0x02000813u);
+  EXPECT_EQ(read_u32(before_nnam->data, 0), 0x02000814u);
+  const auto pnam_bytes = before_pnam->data;
+  const auto nnam_bytes = before_nnam->data;
+  EXPECT_TRUE(hits_for(plugin, key, "PNAM").empty());
+  EXPECT_TRUE(hits_for(plugin, key, "NNAM").empty());
+
+  plugin = fo4::remap_plugin_masters(
+      std::move(plugin),
+      {fo4::PluginKey::from_filename("Fallout4.esm"),
+       fo4::PluginKey::from_filename("KeepMe.esm")});
+  const auto reread = fo4::read_plugin(
+      fo4::write_plugin(plugin), "NavmeshPatch.esp");
+
+  const auto after_onam = hits_for(reread, key, "ONAM");
+  ASSERT_EQ(after_onam.size(), 1u);
+  EXPECT_EQ(after_onam[0].raw, fo4::RawFormId{0x01000812u});
+
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* pnam = find_sub(*record, "PNAM");
+  const auto* nnam = find_sub(*record, "NNAM");
+  ASSERT_NE(pnam, nullptr);
+  ASSERT_NE(nnam, nullptr);
+  ASSERT_EQ(pnam->data.size(), pnam_bytes.size());
+  ASSERT_EQ(nnam->data.size(), nnam_bytes.size());
+  EXPECT_EQ(std::memcmp(pnam->data.data(), pnam_bytes.data(), pnam_bytes.size()), 0);
+  EXPECT_EQ(std::memcmp(nnam->data.data(), nnam_bytes.data(), nnam_bytes.size()), 0);
+  EXPECT_EQ(read_u32(pnam->data, 0), 0x02000813u);
+  EXPECT_EQ(read_u32(nnam->data, 0), 0x02000814u);
+}
+
+TEST(FormLink, NpcFourBytePnamStillRemapsAsAHeadPartFormLink) {
+  auto plugin = fo4::read_plugin(
+      make_four_byte_pnam_plugin("NPC_"), "NpcPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:NpcPatch.esp");
+
+  const auto before = hits_for(plugin, key, "PNAM");
+  ASSERT_EQ(before.size(), 1u);
+  EXPECT_EQ(before[0].offset, 0u);
+  EXPECT_EQ(before[0].raw, fo4::RawFormId{0x02000812u});
+
+  plugin = fo4::remap_plugin_masters(
+      std::move(plugin),
+      {fo4::PluginKey::from_filename("Fallout4.esm"),
+       fo4::PluginKey::from_filename("KeepMe.esm")});
+  const auto reread = fo4::read_plugin(
+      fo4::write_plugin(plugin), "NpcPatch.esp");
+
+  const auto after = hits_for(reread, key, "PNAM");
+  ASSERT_EQ(after.size(), 1u);
+  EXPECT_EQ(after[0].raw, fo4::RawFormId{0x01000812u});
 }
