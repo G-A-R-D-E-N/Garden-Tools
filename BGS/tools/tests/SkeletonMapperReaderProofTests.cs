@@ -9,7 +9,9 @@ public class SkeletonMapperReaderProofTests
     public void VanillaSkeletonMapperIsAvailableThroughReusableCoreReader()
     {
         var objects = new PackfileObjects(PackfileImage.Read(FixturePath()));
-        var mapper = Assert.Single(SkeletonMapperReader.Read(objects));
+        var mapper = Assert.Single(
+            SkeletonMapperReader.Read(objects),
+            candidate => candidate.SkeletonA.BoneNames.Count == 95 && candidate.SkeletonB.BoneNames.Count == 18);
 
         Assert.Equal(0, mapper.MappingType);
         Assert.Equal(95, mapper.SkeletonA.BoneNames.Count);
