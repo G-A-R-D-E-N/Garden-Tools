@@ -109,6 +109,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     if (line.includes('✗') && sidebarTab !== 'log') setHasUnseenError(true);
   };
 
+  const gizmoPatchRef = useRef<string | null>(null);
+
 
 
   const onTextureStats = useCallback((s: CellTextureStats) => {
@@ -202,6 +204,15 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     await runLoad(() => cell.GetPlacedReferences(id));
   };
 
+  const resolveWorldspaceFormKey = (wsOverride?: string): string | null => {
+    const ws = (wsOverride ?? worldspace).trim();
+    if (!ws) return null;
+    if (ws.includes(':')) return ws;
+    const hit = (wsMatches ?? []).find(h =>
+      (h.EditorID && h.EditorID === ws) || h.FormKey === ws);
+    return hit?.FormKey ?? null;
+  };
+
   const loadGrid = async (wsOverride?: string) => {
     const ws = (wsOverride ?? worldspace).trim();
     const x = Number.parseInt(gridX, 10);
@@ -211,6 +222,59 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setLS('gridX', String(x));
     setLS('gridY', String(y));
     await runLoad(() => cell.GetPlacedReferencesAtGrid(ws, x, y));
+  };
+
+  const createExteriorCell = async () => {
+    const backend = getBackend();
+    if (!backend || !cell) return;
+    const formKey = resolveWorldspaceFormKey();
+    const x = Number.parseInt(gridX, 10);
+    const y = Number.parseInt(gridY, 10);
+    if (!formKey || Number.isNaN(x) || Number.isNaN(y)) {
+      const msg = !formKey
+        ? 'Pick a worldspace from the list (Create Record needs its FormKey).'
+        : 'Grid X and Y must be integers.';
+      setStatus(msg);
+      appendLog('✗ ' + msg);
+      return;
+    }
+    const picked = await askForTarget({
+      title: 'Create exterior CELL into',
+      description: `New exterior CELL at (${x}, ${y}) in ${formKey}.`,
+      confirmLabel: 'Create',
+      defaultTarget: LS('gizmoPatch', 'CellEdits.esp'),
+      extraField: { label: 'EditorID (optional)', defaultValue: '', placeholder: 'MyNewCell' },
+    });
+    if (!picked) {
+      appendLog('x create cancelled -- no target plugin chosen.');
+      return;
+    }
+    setBusy(true);
+    setStatus('Creating exterior CELL…');
+    try {
+      const payload: Record<string, unknown> = { worldspace: formKey, x, y };
+      if (picked.extra) payload.editorId = picked.extra;
+      const raw = await backend.CreateRecord(picked.target, 'CELL', payload);
+      const created = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!created?.formKey) throw new Error(typeof raw === 'string' ? raw : JSON.stringify(raw));
+      const saveMsg = await backend.SavePlugin(picked.target, '');
+      if (/error|fail/i.test(saveMsg)) {
+        appendLog(`• created ${created.formKey} in memory; save: ${saveMsg}`);
+        setStatus(`Created ${created.formKey}, but save reported: ${saveMsg}`);
+      } else {
+        appendLog(`• created exterior CELL ${created.formKey} at (${x}, ${y}) -> ${picked.target}`);
+        setStatus(`Created ${created.formKey} at (${x}, ${y}).`);
+        setLS('gizmoPatch', picked.target);
+        gizmoPatchRef.current = picked.target;
+        await loadGrid(formKey);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setStatus('Create failed: ' + msg);
+      appendLog('✗ create exterior CELL: ' + msg);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const runLoad = async (fetchReferences: () => Promise<string>) => {
@@ -325,7 +389,6 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
 
 
-  const gizmoPatchRef = useRef<string | null>(null);
   const moveEnd = useCallback(async (ref: CellPlacedReference) => {
     const c = getCell();
     const backend = getBackend();
@@ -438,8 +501,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                           wsMatches.map((h, i) => (
                             <div
                               key={`${h.FormKey}:${i}`}
-                              className={`cell-suggest-row${worldspace.trim() === (h.EditorID || h.FormKey) ? ' selected' : ''}`}
-                              onClick={() => setWorldspace(h.EditorID || h.FormKey)}
+                              className={`cell-suggest-row${worldspace.trim() === h.FormKey ? ' selected' : ''}`}
+                              onClick={() => setWorldspace(h.FormKey)}
                             >
                               <span className="cell-suggest-id">{h.EditorID || h.FormKey}</span>
                               {h.Name && <span className="cell-suggest-name">"{h.Name}"</span>}
@@ -472,6 +535,15 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                         || Number.isNaN(Number.parseInt(gridX, 10)) || Number.isNaN(Number.parseInt(gridY, 10))}
                     >
                       <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
+                    </button>
+                    <button
+                      className="papyrus-run cell-load-btn"
+                      onClick={() => void createExteriorCell()}
+                      disabled={busy || unavailable || noEnv || !worldspace.trim()
+                        || Number.isNaN(Number.parseInt(gridX, 10)) || Number.isNaN(Number.parseInt(gridY, 10))}
+                      title="Create a new exterior CELL via CreateRecord with worldspace FormKey, x, and y"
+                    >
+                      <Play size={14} /> {busy ? 'Working…' : 'Create exterior CELL'}
                     </button>
                   </>
                 )}

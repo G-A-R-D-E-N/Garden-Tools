@@ -15,6 +15,7 @@ export interface Backend {
 
   OpenPlugin(plugin: string): Promise<string>;
   CreatePlugin(name: string): Promise<string>;
+  CreateRecord(plugin: string, type: string, payload: Record<string, unknown>): Promise<string>;
   SetField(plugin: string, record: string, field: string, value: string): Promise<string>;
   SetComponents(plugin: string, record: string, componentsJson: string): Promise<string>;
   SetQuestAliases(plugin: string, record: string, aliasesJson: string): Promise<string>;
