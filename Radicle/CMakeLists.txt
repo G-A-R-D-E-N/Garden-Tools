@@ -303,6 +303,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_eyes.cpp
     tests/test_eyes_creation.cpp
     tests/test_weather_concept.cpp
+    tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp
     tests/test_lvsp_creation.cpp
     tests/test_race_creation.cpp

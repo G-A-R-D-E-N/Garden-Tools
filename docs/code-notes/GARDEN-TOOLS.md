@@ -6,6 +6,12 @@ Implementation details for the current INFO copy work are recorded in `docs/code
 
 Explanation and rationale that would otherwise clutter source comments, anchored to `file:symbol`.
 
+## Radicle/src/schema/form_links.cpp:visit_link_offsets — WTHR record-qualified FormLinks
+
+WTHR reuses subrecord signatures that are FormID-typed elsewhere in the schema. `LNAM`, `VNAM`, `WNAM`, `NAM1`, `PNAM`, `JNAM`, `NAM0`, `NAM4`, `FNAM`, `RNAM`, `QNAM`, `DALC`, `MNAM`, `NNAM`, `GNAM`, `TNAM`, `SNAM`, `IMSP`, `WGDR`, `DATA`, and `EDID` are all in the generated `wbFormIDCk` signature list, so a signature-only lookup would rewrite WTHR's own fields. The WTHR branch therefore runs before any generic path and decides from WTHR's layout: `MNAM`, `NNAM`, `GNAM`, and `TNAM` are one FormID only at exactly 4 bytes; `IMSP` visits every 4-byte slot at 16 or 32 bytes; `WGDR` does the same at exactly 32; `SNAM` is `{ FormID, SoundType }` so only `+0` moves at exactly 8; `UNAM` visits `+0` and `+8` at 12 or 24. The quarantined signatures never contribute offsets because they are floats, indices, or colour and alpha pairs in WTHR. A proven link given any other size fails closed: strict remap throws, and non-strict collection returns no link for it rather than guessing. An unknown FormID-listed 4-byte signature inside WTHR also fails closed instead of being remapped.
+
+`Radicle/tests/test_weather_formlinks.cpp` pins both halves of that contract. Its fixture has three masters (`Fallout4.esm`, `DropMe.esm`, `KeepMe.esm`) and remaps to `{Fallout4.esm, KeepMe.esm}`, so `KeepMe.esm` moves from index 2 to index 1 and every proven slot must change its index byte while the quarantined payloads stay byte-identical. `PNAM` is deliberately FormID-shaped (`u16{0x0200, 0x0812}`, which reads as `0x02000812` when the two vertex indexes are mistaken for one FormID) so the preservation assertions cannot pass by accident. `ZNAM` covers the unknown-but-listed case, and the well-formed control repeats the same signatures at their proven sizes so a failure can only come from payload size rather than the signature.
+
 ## PluginEditTool/native/src/app/ServiceTargets.cpp:CellTarget::geometryBatch — processOne
 
 Each unique model path is resolved and handed to `niftool geo` on a bounded pool of `std::jthread` workers, writing only its own result slot (so `results` needs no lock; only the work index and progress counters are atomic).
