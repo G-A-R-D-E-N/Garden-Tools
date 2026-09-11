@@ -8,7 +8,7 @@ public class SkeletonMapperReaderProofTests
     [Fact]
     public void VanillaSkeletonMapperIsAvailableThroughReusableCoreReader()
     {
-        var objects = new PackfileObjects(PackfileImage.ReadFile(FixturePath()));
+        var objects = new PackfileObjects(PackfileImage.Read(FixturePath()));
         var mapper = Assert.Single(SkeletonMapperReader.Read(objects));
 
         Assert.Equal(0, mapper.MappingType);
