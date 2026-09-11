@@ -168,10 +168,22 @@ public class SkeletonMapperAuthorTests
         Assert.Contains(SkeletonMapperAuthor.Refusals(translation),
                         refusal => refusal.Contains("non-finite reference transform", StringComparison.Ordinal));
 
+        var infinite = Rig("a", 2);
+        infinite.ReferencePose[1] = new HkxBonePose(new Vector3(0f, float.PositiveInfinity, 0f),
+                                                    Quaternion.Identity, Vector3.One);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(infinite),
+                        refusal => refusal.Contains("non-finite reference transform", StringComparison.Ordinal));
+
         var rotation = Rig("a", 2);
         rotation.ReferencePose[1] = new HkxBonePose(Vector3.Zero,
                                                     new Quaternion(float.PositiveInfinity, 0f, 0f, 1f), Vector3.One);
         Assert.Contains(SkeletonMapperAuthor.Refusals(rotation),
+                        refusal => refusal.Contains("non-finite reference transform", StringComparison.Ordinal));
+
+        var nanRotation = Rig("a", 2);
+        nanRotation.ReferencePose[1] = new HkxBonePose(Vector3.Zero,
+                                                       new Quaternion(0f, 0f, float.NaN, 1f), Vector3.One);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(nanRotation),
                         refusal => refusal.Contains("non-finite reference transform", StringComparison.Ordinal));
     }
 
