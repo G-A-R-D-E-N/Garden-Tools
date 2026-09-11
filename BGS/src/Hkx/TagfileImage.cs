@@ -167,7 +167,13 @@ public sealed record TagfileImage
         int end = tnam.BodyAt + tnam.BodyLength;
         string scope = $"{file}: TNAM";
         uint count = Packed(bytes, ref at, end, scope);
-        var types = new List<TagType>(Math.Max(0, (int)count - 1));
+        uint typeRecords = count > 0 ? count - 1 : 0;
+        if (typeRecords > (uint)((end - at) / 2))
+            throw new InvalidDataException(
+                $"{file}: TNAM says it holds {typeRecords} type records, but only {end - at} bytes remain " +
+                "and every record needs at least two packed integers");
+
+        var types = new List<TagType>();
 
         for (uint i = 1; i < count; i++)
         {
@@ -177,7 +183,12 @@ public sealed record TagfileImage
 
             uint name = Packed(bytes, ref at, end, scope);
             uint parameters = Packed(bytes, ref at, end, scope);
-            var arguments = new List<TagTemplate>((int)parameters);
+            if (parameters > (uint)((end - at) / 2))
+                throw new InvalidDataException(
+                    $"{file}: TNAM type {i} says it has {parameters} template arguments, but only " +
+                    $"{end - at} bytes remain and every argument needs two packed integers");
+
+            var arguments = new List<TagTemplate>();
 
             for (uint p = 0; p < parameters; p++)
             {
