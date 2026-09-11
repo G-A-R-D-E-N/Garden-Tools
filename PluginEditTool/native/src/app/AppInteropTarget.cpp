@@ -37,6 +37,22 @@ std::filesystem::file_time_type fileStamp(const std::filesystem::path& path) {
     return ec ? std::filesystem::file_time_type::min() : stamp;
 }
 
+Error withRollback(const Error& original, const Result<void>& restored) {
+    if (restored) return original;
+    return Error{
+        original.type,
+        original.message + "; rollback failed: " + restored.error().type + ": " +
+            restored.error().message
+    };
+}
+
+Error combinedRestoreError(const Error& backend, const Error& root) {
+    return Error{
+        backend.type,
+        backend.message + "; trusted-root restore failed: " + root.type + ": " + root.message
+    };
+}
+
 }
 
 AppInteropTarget::AppInteropTarget(settings::Store& store,
@@ -122,22 +138,26 @@ Result<void> AppInteropTarget::restoreLoadedProfile(
     const std::optional<mo2::ProfileSnapshot>& previous,
     const std::filesystem::path& previousRoot) {
     if (!plugins_.capabilities().available) return {};
+
+    Result<nlohmann::json> restoredBackend = nlohmann::json(nullptr);
     if (previous) {
-        auto restored = plugins_.invoke(
+        restoredBackend = plugins_.invoke(
             "environment.LoadMo2", backendEnvironment(*previous, true));
-        if (!restored) return std::unexpected(restored.error());
     } else {
-        auto restored = plugins_.invoke(
+        restoredBackend = plugins_.invoke(
             "environment.LoadMo2",
             nlohmann::json{
                 {"plugins", nlohmann::json::array()},
                 {"discardPending", true}
             });
-        if (!restored) return std::unexpected(restored.error());
     }
-    auto root = plugins_.setTrustedNewPluginRoot(previousRoot);
-    if (!root) return std::unexpected(root.error());
-    return {};
+    auto restoredRoot = plugins_.setTrustedNewPluginRoot(previousRoot);
+    if (restoredBackend && restoredRoot) return {};
+    if (!restoredBackend && !restoredRoot) {
+        return std::unexpected(combinedRestoreError(restoredBackend.error(), restoredRoot.error()));
+    }
+    if (!restoredBackend) return std::unexpected(restoredBackend.error());
+    return std::unexpected(restoredRoot.error());
 }
 
 Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instancePath,
@@ -163,8 +183,8 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
         if (!backendLoad) return std::unexpected(backendLoad.error());
         auto outputRoot = plugins_.setTrustedNewPluginRoot(loaded->instance.overwriteFolder);
         if (!outputRoot) {
-            (void)restoreLoadedProfile(previous, previousRoot);
-            return std::unexpected(outputRoot.error());
+            return std::unexpected(
+                withRollback(outputRoot.error(), restoreLoadedProfile(previous, previousRoot)));
         }
     }
 
@@ -173,8 +193,9 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
     auto saved = store_.save(settings_);
     if (!saved) {
         settings_ = previousSettings;
-        if (plugins_.capabilities().available) (void)restoreLoadedProfile(previous, previousRoot);
-        return std::unexpected(saved.error());
+        if (!plugins_.capabilities().available) return std::unexpected(saved.error());
+        return std::unexpected(
+            withRollback(saved.error(), restoreLoadedProfile(previous, previousRoot)));
     }
 
     auto watched = captureWatchFiles(*loaded);

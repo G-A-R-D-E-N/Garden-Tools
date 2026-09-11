@@ -2,6 +2,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -62,15 +63,20 @@ public:
     std::vector<std::pair<std::string, nlohmann::json>> calls;
     std::filesystem::path trustedRoot;
     std::filesystem::path loadedInstance;
+    std::size_t loadMo2Calls{0};
+    std::size_t trustedRootCalls{0};
     bool failLoadMo2{false};
     bool failTrustedRoot{false};
+    std::optional<std::size_t> failLoadMo2At;
+    std::optional<std::size_t> failTrustedRootAt;
 
     fo4ide::plugin::Capabilities capabilities() const noexcept override {
         return {.available = true, .readPlugins = true};
     }
 
     fo4ide::Result<void> setTrustedNewPluginRoot(const std::filesystem::path& root) override {
-        if (failTrustedRoot) {
+        const auto index = trustedRootCalls++;
+        if (failTrustedRoot || failTrustedRootAt == index) {
             return std::unexpected(fo4ide::Error{
                 "NewPluginRootInvalid",
                 "deliberate trusted-root failure"
@@ -84,7 +90,8 @@ public:
                                           const nlohmann::json& arguments) override {
         calls.emplace_back(std::string(operation), arguments);
         if (operation == "environment.LoadMo2") {
-            if (failLoadMo2) {
+            const auto index = loadMo2Calls++;
+            if (failLoadMo2 || failLoadMo2At == index) {
                 return std::unexpected(fo4ide::Error{"LoadMo2Failed", "deliberate backend load failure"});
             }
             loadedInstance = arguments.value("instancePath", std::string{});
@@ -774,4 +781,96 @@ TEST_CASE("AppInterop settings-store failure after LoadMo2 restores the previous
     CHECK(afterStatus->at("pluginCount").get<std::size_t>() == 2);
     CHECK(afterStatus->at("loadedAtUnixMs").get<long long>() == loadedAt);
     CHECK_FALSE(afterStatus->at("stale").get<bool>());
+}
+
+TEST_CASE("AppInterop surfaces rollback LoadMo2 failure and still restores the trusted root") {
+    const auto first = tempRoot();
+    Cleanup firstCleanup{first};
+    makeProfile(first);
+    const auto second = tempRoot();
+    Cleanup secondCleanup{second};
+    makeProfile(second);
+    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
+
+    fo4ide::settings::Store store(first / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    FakePluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
+
+    const auto firstInstance = settings.mo2InstancePath;
+    const auto firstData = settings.dataFolder;
+    const auto firstRoot = plugins.trustedRoot;
+    const auto loadsBefore = plugins.loadMo2Calls;
+    const auto rootsBefore = plugins.trustedRootCalls;
+    REQUIRE(loadsBefore == 1);
+    REQUIRE(rootsBefore == 1);
+
+    const auto blocker = std::filesystem::path(store.path().string() + ".tmp");
+    std::filesystem::create_directory(blocker);
+    plugins.failLoadMo2At = loadsBefore + 1;
+    plugins.calls.clear();
+    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
+    REQUIRE_FALSE(failed.has_value());
+    CHECK(failed.error().type == "SettingsWriteFailed");
+    CHECK(failed.error().message.find("rollback failed") != std::string::npos);
+    CHECK(failed.error().message.find("LoadMo2Failed") != std::string::npos);
+    CHECK(plugins.loadMo2Calls == loadsBefore + 2);
+    CHECK(plugins.trustedRootCalls == rootsBefore + 2);
+    CHECK(plugins.trustedRoot == firstRoot);
+    CHECK(plugins.loadedInstance != firstInstance.string());
+    CHECK(settings.mo2InstancePath == firstInstance);
+    CHECK(settings.dataFolder == firstData);
+    auto rolled = target.snapshot();
+    REQUIRE(rolled.has_value());
+    CHECK(rolled->instance.instancePath == firstInstance);
+    auto persistedAfter = store.load();
+    REQUIRE(persistedAfter.has_value());
+    CHECK(persistedAfter->mo2InstancePath == firstInstance);
+}
+
+TEST_CASE("AppInterop surfaces rollback trusted-root failure after backend restore") {
+    const auto first = tempRoot();
+    Cleanup firstCleanup{first};
+    makeProfile(first);
+    const auto second = tempRoot();
+    Cleanup secondCleanup{second};
+    makeProfile(second);
+    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
+
+    fo4ide::settings::Store store(first / "settings.json");
+    fo4ide::settings::Settings settings;
+    FakePlatform platform;
+    FakePluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
+
+    const auto firstInstance = settings.mo2InstancePath;
+    const auto firstData = settings.dataFolder;
+    const auto firstLoaded = plugins.loadedInstance;
+    const auto firstRoot = plugins.trustedRoot;
+    const auto loadsBefore = plugins.loadMo2Calls;
+    const auto rootsBefore = plugins.trustedRootCalls;
+
+    const auto blocker = std::filesystem::path(store.path().string() + ".tmp");
+    std::filesystem::create_directory(blocker);
+    plugins.failTrustedRootAt = rootsBefore + 1;
+    plugins.calls.clear();
+    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
+    REQUIRE_FALSE(failed.has_value());
+    CHECK(failed.error().type == "SettingsWriteFailed");
+    CHECK(failed.error().message.find("rollback failed") != std::string::npos);
+    CHECK(failed.error().message.find("NewPluginRootInvalid") != std::string::npos);
+    CHECK(plugins.loadMo2Calls == loadsBefore + 2);
+    CHECK(plugins.trustedRootCalls == rootsBefore + 2);
+    CHECK(plugins.loadedInstance == firstLoaded);
+    CHECK(plugins.trustedRoot != firstRoot);
+    CHECK(settings.mo2InstancePath == firstInstance);
+    CHECK(settings.dataFolder == firstData);
+    auto rolled = target.snapshot();
+    REQUIRE(rolled.has_value());
+    CHECK(rolled->instance.instancePath == firstInstance);
 }
