@@ -128,6 +128,119 @@ public class SkeletonMapperAuthorTests
             SkeletonMapperAuthor.FromReferencePose(forward.SkeletonA, forward.SkeletonB, Array.Empty<(int, int)>()));
     }
 
+    [Fact]
+    public void ASkeletonWithABoneCountMismatchIsRefused()
+    {
+        var parents = Rig("a", 3);
+        parents.ParentIndices.RemoveAt(2);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(parents),
+                        refusal => refusal.Contains("3 bones and 2 parent indices", StringComparison.Ordinal));
+
+        var poses = Rig("b", 3);
+        poses.ReferencePose.RemoveAt(2);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(poses),
+                        refusal => refusal.Contains("3 bones and 2 reference-pose transforms", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnInvalidParentIndexIsRefused()
+    {
+        var a = Rig("a", 3);
+        a.ParentIndices[1] = 3;
+        Assert.Contains(SkeletonMapperAuthor.Refusals(a),
+                        refusal => refusal.Contains("parent 3", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnOutOfOrderParentIsRefusedRatherThanTreatedAsARoot()
+    {
+        var a = Rig("a", 3);
+        a.ParentIndices[1] = 2;
+        Assert.Contains(SkeletonMapperAuthor.Refusals(a),
+                        refusal => refusal.Contains("stored at or after it", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ANonFiniteReferenceTransformIsRefused()
+    {
+        var translation = Rig("a", 2);
+        translation.ReferencePose[1] = new HkxBonePose(new Vector3(float.NaN, 0f, 0f), Quaternion.Identity, Vector3.One);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(translation),
+                        refusal => refusal.Contains("non-finite reference transform", StringComparison.Ordinal));
+
+        var rotation = Rig("a", 2);
+        rotation.ReferencePose[1] = new HkxBonePose(Vector3.Zero,
+                                                    new Quaternion(float.PositiveInfinity, 0f, 0f, 1f), Vector3.One);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(rotation),
+                        refusal => refusal.Contains("non-finite reference transform", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AReferenceRotationThatIsNotUnitLengthIsRefused()
+    {
+        var zero = Rig("a", 2);
+        zero.ReferencePose[1] = new HkxBonePose(Vector3.Zero, new Quaternion(0f, 0f, 0f, 0f), Vector3.One);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(zero),
+                        refusal => refusal.Contains("not a unit quaternion", StringComparison.Ordinal));
+
+        var scaled = Rig("a", 2);
+        scaled.ReferencePose[1] = new HkxBonePose(Vector3.Zero, new Quaternion(2f, 1f, 0f, 0f), Vector3.One);
+        Assert.Contains(SkeletonMapperAuthor.Refusals(scaled),
+                        refusal => refusal.Contains("not a unit quaternion", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ANonIdentityReferenceScaleIsRefused()
+    {
+        var a = Rig("a", 2);
+        a.ReferencePose[1] = new HkxBonePose(Vector3.Zero, Quaternion.Identity, new Vector3(1f, 2f, 1f));
+        Assert.Contains(SkeletonMapperAuthor.Refusals(a),
+                        refusal => refusal.Contains("non-identity reference scale", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AuthoringRefusesAMalformedSkeletonInsteadOfComputingFromIt()
+    {
+        var a = Rig("a", 3);
+        var b = Rig("b", 2);
+        a.ReferencePose[2] = new HkxBonePose(Vector3.Zero, new Quaternion(1f, 2f, 0f, 0f), Vector3.One);
+
+        Assert.Throws<ArgumentException>(() => SkeletonMapperAuthor.FromReferencePose(a, b, new[] { (0, 0) }));
+    }
+
+    [Fact]
+    public void ReverseRefusesAMalformedRowInsteadOfInvertingIt()
+    {
+        Assert.Contains(SkeletonMapperAuthor.Refusals(new[]
+                        {
+                            new HavokRagdollMapping(0, 0, new Vector3(float.NaN, 0f, 0f), Quaternion.Identity),
+                        }),
+                        refusal => refusal.Contains("cannot be inverted", StringComparison.Ordinal));
+
+        Assert.Contains(SkeletonMapperAuthor.Refusals(new[]
+                        {
+                            new HavokRagdollMapping(0, 0, Vector3.Zero, new Quaternion(0f, 0f, 0f, 0f)),
+                        }),
+                        refusal => refusal.Contains("cannot be inverted", StringComparison.Ordinal));
+
+        Assert.Throws<ArgumentException>(() => SkeletonMapperAuthor.Reverse(new[]
+        {
+            new HavokRagdollMapping(0, 0, Vector3.Zero, new Quaternion(0f, 0f, 0f, 0f)),
+        }));
+    }
+
+    private static HavokRagdollSkeleton Rig(string name, int bones)
+    {
+        var skeleton = new HavokRagdollSkeleton { Name = name };
+        for (int i = 0; i < bones; i++)
+        {
+            skeleton.BoneNames.Add($"bone{i}");
+            skeleton.ParentIndices.Add(i - 1);
+            skeleton.ReferencePose.Add(new HkxBonePose(new Vector3(i, 0f, 0f), Quaternion.Identity, Vector3.One));
+        }
+        return skeleton;
+    }
+
     private void Compare(IReadOnlyList<HavokRagdollMapping> shipped, IReadOnlyList<HavokRagdollMapping> authored)
     {
         float worstTranslation = 0f;

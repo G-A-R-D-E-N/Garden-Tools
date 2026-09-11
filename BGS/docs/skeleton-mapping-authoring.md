@@ -48,15 +48,34 @@ bytes.
 ## Refusals
 
 The engine's generator refuses a candidate pair when either bone is already
-mapped, and nothing else. Fallout 4 performs no validation at load time at all -
-the only mapping checks in the game are debug-build warnings that the release
-runtime never reaches. So an authoring surface is the last place a malformed
-mapper can be stopped, and `Refusals` covers the conditions a mapper can fail on
-before it is written:
+mapped, and nothing else. Fallout 4 performs no validation at load time on the
+traced paths - the only mapping checks observed in the game are debug-build
+warnings that the release runtime never reaches. So an authoring surface is the
+last place a malformed mapper can be stopped, and `Refusals` covers the
+conditions a mapper can fail on before it is written:
 
 * a bone index outside either skeleton;
 * a bone of either side mapped more than once;
 * an empty pair list.
+
+`FromReferencePose` additionally refuses the inputs its own arithmetic cannot
+read safely, rather than repairing them:
+
+* a skeleton whose bone, parent and reference-pose counts disagree;
+* a parent index that is not `-1` or a bone of that skeleton;
+* a parent stored at or after its child. Model-space composition is done in
+  array order, so this primitive needs parents before children; that is an
+  implementation constraint of this module, not a claim about Havok itself;
+* a non-finite translation or rotation component;
+* a rotation whose length is not one within `UnitTolerance`, including a zero
+  quaternion. Nothing is normalised on the way into a row;
+* a reference scale that is not identity within `UnitTolerance`, because the row
+  scale lane is not yet understood;
+* a composed transform that fails any of the above, and any row handed to
+  `Reverse` whose values cannot be inverted.
+
+`FromReferencePose` throws on the first refusal set instead of writing a
+plausible-looking wrong mapper.
 
 ## What is not here
 
