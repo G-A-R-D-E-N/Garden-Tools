@@ -162,7 +162,19 @@ public sealed class GameData : IDisposable
     /// root, the archive's file name when it is packed, or null when it is absent everywhere.
     /// </summary>
     public string? ResolveAnimation(string projectRoot, string declared) =>
-        ReadAnimation(projectRoot, declared)?.Source;
+        ResolveSource(projectRoot, declared);
+
+    private string? ResolveSource(string projectRoot, string declared)
+    {
+        string loose = ResolveLoose(projectRoot, declared);
+        string? rel = DataRelativePath(loose);
+        if (rel != null && ModLooseIndex().ContainsKey(Normalize(rel))) return "loose";
+        if (CaseInsensitivePath(loose) != null ||
+            CaseInsensitivePath(Path.ChangeExtension(loose, ".hkx")) != null)
+            return "loose";
+        var (archive, entry) = FindEntry(projectRoot, declared);
+        return entry == null ? null : Path.GetFileName(archive.Path);
+    }
 
     /// <summary>A declared animation that resolves somewhere: its bytes and where they came from.</summary>
     public sealed record AnimationRead(byte[] Bytes, string Source, string? EntryName);
@@ -479,6 +491,26 @@ public sealed class GameData : IDisposable
         archive = Ba2.Open(archivePath);
         _opened[archivePath] = archive;
         return archive;
+    }
+
+    public bool TryArchiveEntries(string archivePath, out IReadOnlyList<Ba2.Entry> entries, out string? warning)
+    {
+        entries = Array.Empty<Ba2.Entry>();
+        warning = null;
+        try
+        {
+            entries = Open(archivePath).Entries;
+            return true;
+        }
+        catch (InvalidDataException e) when (e.Message.Contains("DX10", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            warning = $"{Path.GetFileName(archivePath)}: {e.Message.Split('\n')[0].Trim()}";
+            return false;
+        }
     }
 
     private static bool IsUnder(string path, string root)

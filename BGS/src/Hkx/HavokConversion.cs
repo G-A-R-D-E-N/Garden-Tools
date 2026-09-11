@@ -401,11 +401,18 @@ public static class HavokSemanticConverter
 
         // A reference must point at an object of the declared target class.
         if (value is HavokIntermediateValue.ReferenceValue reference && reference.TargetId is long id &&
-            member.TargetType != null && target.Get(id) is { } referenced &&
-            !string.Equals(referenced.TypeName, member.TargetType, StringComparison.Ordinal))
-            diagnostics.Add(new HavokConversionDiagnostic(
-                HavokConversionDiagnosticLevel.Error, objId, path,
-                $"member {path} references a {referenced.TypeName} but target type declares {member.TargetType}"));
+            member.TargetType != null)
+        {
+            var referenced = target.Get(id);
+            if (referenced == null)
+                diagnostics.Add(new HavokConversionDiagnostic(
+                    HavokConversionDiagnosticLevel.Error, objId, path,
+                    $"member {path} references object {id}, which does not exist in the converted document"));
+            else if (!string.Equals(referenced.TypeName, member.TargetType, StringComparison.Ordinal))
+                diagnostics.Add(new HavokConversionDiagnostic(
+                    HavokConversionDiagnosticLevel.Error, objId, path,
+                    $"member {path} references a {referenced.TypeName} but target type declares {member.TargetType}"));
+        }
 
         // Recurse into a struct member whose element type is itself declared.
         if (value is HavokIntermediateValue.StructValue structure && member.TargetType != null &&

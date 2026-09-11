@@ -16,6 +16,7 @@ public class App : Application
     {
         var window = new MainWindow();
         NativeAuthoringUi.Attach(window);
+        BuildInfoUi.Attach(window);
         return window;
     }
 
@@ -50,8 +51,12 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Contains("--version")) { Console.WriteLine(Version()); return 0; }
+        if (args.Contains("--version")) { Console.WriteLine(BuildInfo.Report); return 0; }
         if (args.Contains("--probe-havok")) return ProbeHavok(args);
+        if (args.Contains("--scan-archives")) return ModlistScan.Run(args);
+        if (args.Contains("--scan-modlist")) return ModlistScan.ScanModlist(args);
+        if (args.Contains("--scan-clips")) return ModlistScan.ScanClips(args);
+        if (args.Contains("--extract")) return ModlistScan.Extract(args);
         if (args.Contains("--headless")) return Headless.Run(args);
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
@@ -61,13 +66,6 @@ public static class Program
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
         .UsePlatformDetect()
         .LogToTrace();
-
-    private static string Version()
-    {
-        var name = typeof(Program).Assembly.GetName();
-        return $"Behaviour Graph Studio {name.Version?.ToString(3)} " +
-               $"({System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier})";
-    }
 
     private static int ProbeHavok(string[] args)
     {

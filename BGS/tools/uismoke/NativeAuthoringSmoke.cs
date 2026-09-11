@@ -18,6 +18,7 @@ internal static class NativeAuthoringSmoke
     {
         StripAttachesOnceOnTheProductionPath();
         BatchAuthoringListsTheMachinesInTheDocument();
+        QueueRemovalUsesTheRealUi();
         ApplyIsOneUndoStepAndTouchesNoFile();
         ADocumentChangeInvalidatesAPendingPreview();
         ReopeningTheSourceInvalidatesAPendingPreview();
@@ -36,6 +37,10 @@ internal static class NativeAuthoringSmoke
                     Smoke.Find<NativeAuthoringStrip>(window).Count);
         Smoke.CheckTrue("and the batch authoring button is reachable from it",
                         Smoke.Find<Button>(window).Any(b => b.Content?.ToString() == "Batch authoring"));
+        Smoke.Check("the production shell also carries one build-info affordance", 1,
+                    Smoke.Find<BuildInfoStrip>(window).Count);
+        Smoke.CheckTrue("and About is reachable from that shared shell",
+                        Smoke.Find<Button>(window).Any(b => b.Content?.ToString() == "About"));
 
         NativeAuthoringUi.Attach(window);
         Dispatcher.UIThread.RunJobs();
@@ -69,6 +74,50 @@ internal static class NativeAuthoringSmoke
                         batch.MachineNamesForTest.Count);
             Smoke.Check("named from the object it came from", "hkbStateMachine",
                         batch.MachineNamesForTest[0]);
+            batch.Close();
+        });
+    }
+
+    private static void QueueRemovalUsesTheRealUi()
+    {
+        Console.WriteLine("\nnative authoring removes queued animations and variables through the real controls");
+        WithFixture(GraphBytes(), (window, path) =>
+        {
+            window.Open(path);
+            Dispatcher.UIThread.RunJobs();
+
+            var batch = Queue(window,
+                ("Idle", "Animations\\Idle.hkx"),
+                ("Walk", "Animations\\Walk.hkx"));
+            batch.QueueVariableForTest("Speed", "real", "1.5");
+            Dispatcher.UIThread.RunJobs();
+
+            Smoke.Check("two animations start in the batch", 2, batch.QueuedForTest);
+            Smoke.Check("one variable starts in the batch", 1, batch.QueuedVariablesForTest);
+
+            var grids = Smoke.Find<HkGrid>(batch);
+            var animationQueue = grids.Single(grid => grid.RowCount == 2);
+            var variableQueue = grids.Single(grid => grid.RowCount == 1);
+
+            Smoke.CheckTrue("the first queued animation can be selected", animationQueue.SelectByTag(0));
+            Smoke.Click(Smoke.Find<Button>(batch)
+                .Single(button => button.Content?.ToString() == "Remove selected"));
+            Dispatcher.UIThread.RunJobs();
+
+            Smoke.Check("Remove selected removes exactly one animation", 1, batch.QueuedForTest);
+            Smoke.Check("the animation grid redraws with one row", 1, animationQueue.RowCount);
+            Smoke.CheckTrue("the removal is reported in the authoring status",
+                            batch.SummaryForTest.Contains("Removed", StringComparison.Ordinal));
+
+            Smoke.CheckTrue("the queued variable can be selected", variableQueue.SelectByTag(0));
+            Smoke.Click(Smoke.Find<Button>(batch)
+                .Single(button => button.Content?.ToString() == "Remove variable"));
+            Dispatcher.UIThread.RunJobs();
+
+            Smoke.Check("Remove variable removes the selected variable", 0, batch.QueuedVariablesForTest);
+            Smoke.Check("the variable grid redraws empty", 0, variableQueue.RowCount);
+            Smoke.CheckTrue("the variable removal is reported in the authoring status",
+                            batch.SummaryForTest.Contains("Removed variable", StringComparison.Ordinal));
             batch.Close();
         });
     }

@@ -39,6 +39,22 @@ file unchanged.
 
 Files opened from a `.ba2` are read-only copies. Copy one to a folder you control before editing it.
 
+## Scan a load order from the command line
+
+Behaviour Graph Studio can also scan a whole load order without opening the window — to vet a mod or
+gate a build in CI:
+
+```bash
+BehaviourGraphStudio.exe --scan-archives "D:\Mods\MyAnimationMod"
+BehaviourGraphStudio.exe --scan-clips  "C:\MO2\Instances\Fallout 4"
+```
+
+`--scan-archives` finds corrupt behaviour files, `--scan-modlist` finds missing declared
+animations, and `--scan-clips` finds clips whose animation is absent from the merged load order.
+These are static findings rather than a reproduction of the game's runtime load path. Each mode
+returns an exit code (`0`/`1`/`2`) and takes `--json` for a
+machine-readable report. See the [Headless scanning guide](guide/scan/README.md).
+
 ## Requirements
 
 - Windows 64-bit or Linux x64.
@@ -55,7 +71,11 @@ dotnet test tools/tests/BehaviourGraph.Tests.csproj
 dotnet publish app/BehaviourStudio.csproj -c Release -r linux-x64 -o out
 ```
 
+For the pinned SDK, locked restores, the full three-part test surface, CI-parity commands, and both
+Windows/Linux publish flows, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Help and feedback
 
 - Read the [public guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing or packaging BGS.
 - Report reproducible problems through [GitHub Issues](https://github.com/G-A-R-D-E-N/BGS/issues).

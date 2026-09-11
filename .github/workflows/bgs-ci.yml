@@ -42,6 +42,10 @@ jobs:
     name: BGS build and test (${{ matrix.rid }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
+    env:
+      # Identify the exact commit checked out for this workflow. On pull_request
+      # that is GitHub's synthetic merge commit; on push/dispatch it is the branch commit.
+      BUILD_COMMIT: ${{ github.sha }}
     strategy:
       fail-fast: false
       matrix:
@@ -50,10 +54,12 @@ jobs:
             rid: linux-x64
             shell: bash
             executable: ./publish-check/BehaviourGraphStudio
+            strip: find publish-check -name '*.pdb' -delete
           - runner: [self-hosted, Windows, X64, garden]
             rid: win-x64
             shell: cmd
             executable: .\publish-check\BehaviourGraphStudio.exe
+            strip: del /s /q publish-check\*.pdb
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -103,11 +109,45 @@ jobs:
       - name: Run UI smoke harness
         run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore
 
+      # Suppress symbol files for the whole build graph so referenced projects
+      # (BehaviourGraph.Core et al.) do not drop portable PDBs into the package.
+      # This override also disables the app's own embedded symbols (the csproj
+      # sets DebugType=embedded). The publish output is used only as a runtime
+      # verification target in CI, but keeping it release-shaped catches package
+      # regressions without retaining anything in Actions storage.
       - name: Publish platform package
         run: >
           dotnet publish app/BehaviourStudio.csproj --configuration Release
           --runtime ${{ matrix.rid }} --self-contained true --no-restore
-          --output publish-check
+          --output publish-check -p:DebugType=none -p:DebugSymbols=false
+          -p:BuildCommit=${{ env.BUILD_COMMIT }}
+
+      # The publish flags above only suppress managed symbols. Avalonia's Skia /
+      # HarfBuzz NuGet packages ship native PDBs (libSkiaSharp.pdb is ~80 MB on
+      # Windows) that otherwise land in publish-check. Strip those too so CI
+      # validates the same lean release-shaped output on both platforms.
+      - name: Strip debug symbols from the package
+        run: ${{ matrix.strip }}
 
       - name: Verify published executable
         run: ${{ matrix.executable }} --version
+
+      # Assert that the commit metadata made it into the actual package, not
+      # merely into MSBuild inputs. github-script keeps this cross-platform and
+      # avoids the runner-specific shell constraints documented above.
+      - name: Verify published build identity
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execFileSync } = require('node:child_process');
+            const path = require('node:path');
+            const executable = process.platform === 'win32'
+              ? path.join(process.cwd(), 'BGS', 'publish-check', 'BehaviourGraphStudio.exe')
+              : path.join(process.cwd(), 'BGS', 'publish-check', 'BehaviourGraphStudio');
+            const output = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim();
+            const expected = (process.env.BUILD_COMMIT || '').slice(0, 12);
+            if (!expected || !output.includes(`build ${expected}`)) {
+              core.setFailed(`Published build identity mismatch: expected ${expected}, got '${output}'`);
+              return;
+            }
+            core.info(output);
