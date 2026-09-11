@@ -102,6 +102,19 @@ public sealed class TagfileImageTests
     }
 
     [Fact]
+    public void TemplateArgumentCountMustFitTnamSection()
+    {
+        var file = Tagfile(
+            Holder("TYPE",
+                Leaf("TSTR", Strings("hkRootLevelContainer")),
+                Leaf("TNAM", new byte[] { 2, 0, 0xE8, 0x80, 0, 0, 0 })));
+
+        var error = Assert.Throws<InvalidDataException>(() => TagfileImage.Read(file, "count.hkx"));
+        Assert.Contains("TNAM", error.Message);
+        Assert.Contains("template", error.Message);
+    }
+
+    [Fact]
     public void TypeCarriesTemplateArguments()
     {
         var file = Tagfile(
