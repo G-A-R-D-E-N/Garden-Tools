@@ -1,30 +1,39 @@
-using System;
-using System.IO;
-using System.Linq;
 using OpenCommonwealth.Services.Hkx;
+using OpenCommonwealth.Services.Hkx.Packfile;
 using Xunit;
 
 namespace BehaviourStudio.Tests;
 
-public sealed class SkeletonMapperReaderProofTests
+public class SkeletonMapperReaderProofTests
 {
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
-    private const string Skeleton =
-        "Meshes/Actors/Character/CharacterAssets/skeleton.hkx";
-
     [Fact]
-    public void VanillaSkeletonMapperNeedsAReusableCoreReader()
+    public void VanillaSkeletonMapperIsAvailableThroughReusableCoreReader()
     {
-        var image = PackfileImage.Read(File.ReadAllBytes(Fixture(Skeleton)));
-        var objects = new PackfileObjects(image);
+        var objects = new PackfileObjects(PackfileImage.ReadFile(FixturePath()));
+        var mapper = Assert.Single(SkeletonMapperReader.Read(objects));
 
-        Assert.NotEmpty(objects.Instances.Where(instance => instance.ClassName == "hkaSkeletonMapper"));
+        Assert.Equal(0, mapper.MappingType);
+        Assert.Equal(95, mapper.SkeletonA.BoneNames.Count);
+        Assert.Equal(18, mapper.SkeletonB.BoneNames.Count);
+        Assert.Equal(18, mapper.SimpleMappings.Count);
+        Assert.NotEqual(mapper.SkeletonAObjectId, mapper.SkeletonBObjectId);
 
-        var reader = typeof(PackfileImage).Assembly.GetType(
-            "OpenCommonwealth.Services.Hkx.SkeletonMapperReader");
-        Assert.NotNull(reader);
+        foreach (var row in mapper.SimpleMappings)
+        {
+            Assert.InRange(row.BoneA, 0, mapper.SkeletonA.BoneNames.Count - 1);
+            Assert.InRange(row.BoneB, 0, mapper.SkeletonB.BoneNames.Count - 1);
+        }
+    }
+
+    private static string FixturePath()
+    {
+        return Path.Combine(
+            AppContext.BaseDirectory,
+            "fixtures",
+            "Meshes",
+            "Actors",
+            "Character",
+            "CharacterAssets",
+            "skeleton.hkx");
     }
 }
