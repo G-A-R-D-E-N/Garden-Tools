@@ -249,6 +249,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_hedr_count.cpp
     tests/test_formlinks.cpp
     tests/test_clmt_formlinks.cpp
+    tests/test_ipds_formlinks.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
     tests/test_formlink_lists.cpp
