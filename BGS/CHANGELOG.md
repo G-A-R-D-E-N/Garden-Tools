@@ -8,6 +8,9 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 August 27, 2026
 
+The complete user-facing summary, authoring boundaries, compatibility notes, and known limitations
+are in the [Behaviour Graph Studio 1.1.0 release notes](RELEASE-NOTES.md).
+
 <details>
 <summary><strong>Headless Load-Order Scanning</strong></summary>
 <br>

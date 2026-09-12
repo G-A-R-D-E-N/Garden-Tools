@@ -39,6 +39,26 @@ file unchanged.
 
 Files opened from a `.ba2` are read-only copies. Copy one to a folder you control before editing it.
 
+## Known limitations and experimental features
+
+BGS is conservative about unsupported formats and edits. Areas that are not fully reduced or
+validated are read-only, refused, or clearly marked in the application:
+
+- Skeleton-mapper serialization/write-back and chain-mapper authoring are not complete. Shipped
+  Fallout 4 files do contain chain and unmapped-bone data; automatic bone pairing is not proven.
+- Reciprocal mapper generation is a construction tool based on the measured human fixture. It does
+  not claim that every shipped mapper pair is symmetrical.
+- Ragdoll and physics tools are primarily inspection and engineering previews. Drop/Recover is a
+  constrained preview, not a full Havok solver; body-to-body collision simulation and full ragdoll
+  authoring are not implemented.
+- Some physics and cloth systems remain inspection-only. Havok 2018 support is incomplete; current
+  Fallout 76 evidence covers Havok 2015.1.0, not a completed Havok 2018 implementation.
+- Unsupported Havok layouts, classes, and conversion paths fail closed. BGS does not write guessed
+  data; an unsupported operation leaves the source unchanged and reports why.
+
+These boundaries are intentional for 1.1.0. See [RELEASE-NOTES.md](RELEASE-NOTES.md) and the
+specialist notes under `docs/` for the measured scope of the experimental tools.
+
 ## Scan a load order from the command line
 
 Behaviour Graph Studio can also scan a whole load order without opening the window — to vet a mod or
