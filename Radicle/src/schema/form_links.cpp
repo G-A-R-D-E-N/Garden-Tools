@@ -118,6 +118,7 @@ constexpr auto k_qnam = Signature::from_string("QNAM");
 constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_clmt = Signature::from_string("CLMT");
 constexpr auto k_wlst = Signature::from_string("WLST");
+constexpr auto k_ipds = Signature::from_string("IPDS");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -654,6 +655,17 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       visit_info_link_offsets(sub, strict_remap, fn);
       return;
     }
+  }
+  if (record.header.signature == k_ipds && sub.signature == k_pnam) {
+    if (sub.data.size() != 8) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed IPDS PNAM payload");
+      }
+      return;
+    }
+    fn(0);
+    fn(4);
+    return;
   }
   if (sub.data.empty()) {
     return;
