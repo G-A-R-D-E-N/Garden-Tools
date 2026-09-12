@@ -44,12 +44,24 @@ fo4::test::ByteWriter plugin_header() {
   return out;
 }
 
-void append_record(fo4::test::ByteWriter& out,
-                   std::string_view signature,
-                   std::uint32_t form_id,
-                   std::vector<std::byte> pnam) {
-  const auto group = fo4::test::begin_group(out, signature, 0);
-  const auto record = fo4::test::begin_record(out, signature, 0, form_id);
+void append_ipds_record(fo4::test::ByteWriter& out,
+                        std::uint32_t form_id,
+                        const std::vector<std::vector<std::byte>>& pnams) {
+  const auto group = fo4::test::begin_group(out, "IPDS", 0);
+  const auto record = fo4::test::begin_record(out, "IPDS", 0, form_id);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Record\0", 7});
+  for (const auto& pnam : pnams) {
+    fo4::test::write_subrecord(out, "PNAM", pnam);
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+}
+
+void append_misc_record(fo4::test::ByteWriter& out,
+                        std::uint32_t form_id,
+                        std::vector<std::byte> pnam) {
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  const auto record = fo4::test::begin_record(out, "MISC", 0, form_id);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Record\0", 7});
   fo4::test::write_subrecord(out, "PNAM", std::move(pnam));
   fo4::test::end_record(out, record);
@@ -69,21 +81,20 @@ void append_refr_record(fo4::test::ByteWriter& out,
   fo4::test::end_group(out, group);
 }
 
-fo4::test::ByteWriter make_plugin(std::vector<std::byte> ipds_pnam,
-                                  std::vector<std::byte> control_pnam = {}) {
-  auto out = plugin_header();
-  append_record(out, "IPDS", 0x03000800, std::move(ipds_pnam));
-  if (!control_pnam.empty()) {
-    append_record(out, "MISC", 0x03000801, std::move(control_pnam));
-  }
-  return out;
-}
-
 const fo4::Subrecord* find_sub(const fo4::Record& record, std::string_view signature) {
   for (const auto& sub : record.subrecords) {
     if (sub.signature.to_string() == signature) return &sub;
   }
   return nullptr;
+}
+
+std::vector<const fo4::Subrecord*> find_all_subs(const fo4::Record& record,
+                                                 std::string_view signature) {
+  std::vector<const fo4::Subrecord*> result;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature.to_string() == signature) result.push_back(&sub);
+  }
+  return result;
 }
 
 std::vector<fo4::PluginKey> reordered_masters() {
@@ -94,38 +105,51 @@ std::vector<fo4::PluginKey> reordered_masters() {
 }
 
 TEST(FormLink, IpdsPnamRemapsMaterialAndImpactLanes) {
-  fo4::test::ByteWriter pnam;
-  pnam.u32(0x02000042);
-  pnam.u32(0x00000099);
-  pnam.u32(0x02000043);
-  pnam.u32(0x0000009A);
-  const auto original_pnam = pnam.bytes;
+  fo4::test::ByteWriter pnam0;
+  pnam0.u32(0x02000042);
+  pnam0.u32(0x00000099);
+
+  fo4::test::ByteWriter pnam1;
+  pnam1.u32(0x02000043);
+  pnam1.u32(0x0000009A);
 
   fo4::test::ByteWriter control;
   control.u32(0x02000052);
   control.u32(0x0000009B);
 
-  auto plugin = fo4::read_plugin(make_plugin(pnam.bytes, control.bytes).bytes, "Patch.esp");
+  auto out = plugin_header();
+  append_ipds_record(out, 0x03000800, {pnam0.bytes, pnam1.bytes});
+  append_misc_record(out, 0x03000801, control.bytes);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
 
   const auto* ipds = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
   ASSERT_NE(ipds, nullptr);
-  const auto* ipds_pnam = find_sub(*ipds, "PNAM");
-  ASSERT_NE(ipds_pnam, nullptr);
-  auto expected = original_pnam;
-  write_u32(expected, 0, 0x00000042);
-  write_u32(expected, 4, 0x01000099);
-  write_u32(expected, 8, 0x00000043);
-  write_u32(expected, 12, 0x0100009A);
-  EXPECT_EQ(ipds_pnam->data, expected);
+  const auto ipds_pnams = find_all_subs(*ipds, "PNAM");
+  ASSERT_EQ(ipds_pnams.size(), 2);
+
+  auto expected0 = pnam0.bytes;
+  write_u32(expected0, 0, 0x00000042);
+  write_u32(expected0, 4, 0x01000099);
+  EXPECT_EQ(ipds_pnams[0]->data, expected0);
+
+  auto expected1 = pnam1.bytes;
+  write_u32(expected1, 0, 0x00000043);
+  write_u32(expected1, 4, 0x0100009A);
+  EXPECT_EQ(ipds_pnams[1]->data, expected1);
 
   const auto links = fo4::collect_form_links(reread);
   ASSERT_EQ(links.size(), 4);
+  EXPECT_EQ(links[0].subrecord_ordinal, 0);
   EXPECT_EQ(links[0].offset, 0);
+  EXPECT_EQ(links[1].subrecord_ordinal, 0);
   EXPECT_EQ(links[1].offset, 4);
-  EXPECT_EQ(links[2].offset, 8);
-  EXPECT_EQ(links[3].offset, 12);
+  EXPECT_EQ(links[2].subrecord_ordinal, 1);
+  EXPECT_EQ(links[2].offset, 0);
+  EXPECT_EQ(links[3].subrecord_ordinal, 1);
+  EXPECT_EQ(links[3].offset, 4);
 
   const auto* misc = fo4::find_record(reread, fo4::FormKey::parse("000801:Patch.esp"));
   ASSERT_NE(misc, nullptr);
@@ -139,7 +163,25 @@ TEST(FormLink, IpdsPnamMalformedPayloadFailsClosedWithoutMutation) {
   for (std::size_t i = 0; i < malformed.size(); ++i) {
     malformed[i] = std::byte{static_cast<std::uint8_t>(i)};
   }
-  auto plugin = fo4::read_plugin(make_plugin(std::move(malformed)).bytes, "Patch.esp");
+  auto out = plugin_header();
+  append_ipds_record(out, 0x03000800, {malformed});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(
+      (void)fo4::remap_plugin_masters(plugin, reordered_masters()),
+      fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(FormLink, IpdsPnamSixteenBytePayloadFailsClosedInStrictRemap) {
+  std::vector<std::byte> sixteen_bytes(16);
+  for (std::size_t i = 0; i < sixteen_bytes.size(); ++i) {
+    sixteen_bytes[i] = std::byte{static_cast<std::uint8_t>(i)};
+  }
+  auto out = plugin_header();
+  append_ipds_record(out, 0x03000800, {sixteen_bytes});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto before = fo4::write_plugin(plugin);
 
   EXPECT_THROW(
@@ -199,7 +241,10 @@ TEST(FormLink, IpdsPnamDirectRekeyPersistsThroughWriter) {
   pnam.u32(0x02000042);
   pnam.u32(0x00000099);
 
-  auto plugin = fo4::read_plugin(make_plugin(pnam.bytes).bytes, "Patch.esp");
+  auto out = plugin_header();
+  append_ipds_record(out, 0x03000800, {pnam.bytes});
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto old_key = fo4::FormKey::parse("000042:RadiationOverhaul.esp");
   const auto new_key = fo4::FormKey::parse("000043:RadiationOverhaul.esp");
 
@@ -217,30 +262,46 @@ TEST(FormLink, IpdsPnamDirectRekeyPersistsThroughWriter) {
 }
 
 TEST(FormLink, IpdsPnamCollectionPreservesTraversalOrder) {
-  fo4::test::ByteWriter pnam;
-  pnam.u32(0x02000042);
-  pnam.u32(0x00000099);
+  fo4::test::ByteWriter pnam0;
+  pnam0.u32(0x02000042);
+  pnam0.u32(0x00000099);
+
+  fo4::test::ByteWriter pnam1;
+  pnam1.u32(0x02000043);
+  pnam1.u32(0x0000009A);
 
   auto out = plugin_header();
   append_refr_record(out, 0x03000799, 0x00000042);
-  append_record(out, "IPDS", 0x03000800, std::move(pnam.bytes));
+  append_ipds_record(out, 0x03000800, {pnam0.bytes, pnam1.bytes});
   append_refr_record(out, 0x03000802, 0x00000043);
 
   const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto links = fo4::collect_form_links(plugin);
-  ASSERT_EQ(links.size(), 4);
+  ASSERT_EQ(links.size(), 6);
 
   EXPECT_EQ(links[0].record, fo4::FormKey::parse("000799:Patch.esp"));
   EXPECT_EQ(links[0].subrecord.to_string(), "NAME");
 
   EXPECT_EQ(links[1].record, fo4::FormKey::parse("000800:Patch.esp"));
   EXPECT_EQ(links[1].subrecord.to_string(), "PNAM");
+  EXPECT_EQ(links[1].subrecord_ordinal, 0);
   EXPECT_EQ(links[1].offset, 0);
 
   EXPECT_EQ(links[2].record, fo4::FormKey::parse("000800:Patch.esp"));
   EXPECT_EQ(links[2].subrecord.to_string(), "PNAM");
+  EXPECT_EQ(links[2].subrecord_ordinal, 0);
   EXPECT_EQ(links[2].offset, 4);
 
-  EXPECT_EQ(links[3].record, fo4::FormKey::parse("000802:Patch.esp"));
-  EXPECT_EQ(links[3].subrecord.to_string(), "NAME");
+  EXPECT_EQ(links[3].record, fo4::FormKey::parse("000800:Patch.esp"));
+  EXPECT_EQ(links[3].subrecord.to_string(), "PNAM");
+  EXPECT_EQ(links[3].subrecord_ordinal, 1);
+  EXPECT_EQ(links[3].offset, 0);
+
+  EXPECT_EQ(links[4].record, fo4::FormKey::parse("000800:Patch.esp"));
+  EXPECT_EQ(links[4].subrecord.to_string(), "PNAM");
+  EXPECT_EQ(links[4].subrecord_ordinal, 1);
+  EXPECT_EQ(links[4].offset, 4);
+
+  EXPECT_EQ(links[5].record, fo4::FormKey::parse("000802:Patch.esp"));
+  EXPECT_EQ(links[5].subrecord.to_string(), "NAME");
 }

@@ -768,16 +768,14 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     return;
   }
   if (record.header.signature == k_ipds && sub.signature == k_pnam) {
-    if (sub.data.size() % 8 != 0) {
+    if (sub.data.size() != 8) {
       if (strict_remap) {
         throw FormIdError("cannot safely remap malformed IPDS PNAM payload");
       }
       return;
     }
-    for (std::size_t offset = 0; offset < sub.data.size(); offset += 8) {
-      fn(offset);
-      fn(offset + 4);
-    }
+    fn(0);
+    fn(4);
     return;
   }
   // OBTS is the BGSMod::Template body: a variable-length header whose keyword
