@@ -233,6 +233,11 @@ bool record_specific_formid_array(const Record& record, const Subrecord& sub) {
   return record.header.signature == k_navm && sub.signature == sig_onam;
 }
 
+bool navm_vertex_index_signature(const Record& record, const Subrecord& sub) {
+  return record.header.signature == k_navm &&
+         (sub.signature == k_pnam || sub.signature == k_nnam);
+}
+
 bool qust_non_formid_signature(Signature signature) {
   // xEdit FO4 QUST reuses several signatures that are FormIDs in other record
   // types. Within QUST they are scalar/string data and must never be sent
@@ -794,6 +799,9 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     return;
   }
+  if (navm_vertex_index_signature(record, sub)) {
+    return;
+  }
   if (record_specific_formid_array(record, sub) && sub.data.size() % 4 == 0) {
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);
@@ -829,7 +837,8 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       auto offsets = vmad_formid_offsets_for_remap(sub.data, record.header.signature);
       if (!offsets.has_value()) {
         throw FormIdError(
-            "cannot safely remap VMAD containing unsupported Variable/Variable Array property types");
+            "cannot safely remap incomplete VMAD: unsupported property types or "
+            "an unparsed remainder would leave stale FormIDs behind");
       }
       for (const auto offset : *offsets) {
         fn(offset);
@@ -948,15 +957,15 @@ std::vector<FormLinkHit> collect_form_links(const Plugin& plugin) {
 FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
   FormLinkCollection result;
   auto& hits = result.links;
-  bool current_record_unsupported = false;
+  bool current_record_incomplete = false;
   const auto context = plugin_form_id_context(plugin);
   visit_records(plugin, [&](const Record& record) {
-    current_record_unsupported = false;
+    current_record_incomplete = false;
     std::map<std::uint32_t, std::size_t> ordinals;
     for (const auto& sub : record.subrecords) {
       if (sub.signature == sig_vmad &&
-          vmad_has_unsupported_properties(sub.data, record.header.signature)) {
-        current_record_unsupported = true;
+          !vmad_coverage(sub.data, record.header.signature).complete()) {
+        current_record_incomplete = true;
       }
       const auto ordinal = ordinals[sub.signature.packed()]++;
       visit_link_offsets(record, sub, false, &plugin, &context, [&](std::size_t offset) {
@@ -978,8 +987,8 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
         hits.push_back(std::move(hit));
       });
     }
-    if (current_record_unsupported) {
-      ++result.records_with_unsupported_vmad;
+    if (current_record_incomplete) {
+      ++result.records_with_incomplete_vmad;
     }
   });
   return result;

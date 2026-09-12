@@ -254,8 +254,8 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
   }
 }
 
-void walk_perk_extra(Slice& slice, std::int16_t object_format,
-                     std::vector<std::size_t>& offsets) {
+void walk_indexed_fragments(Slice& slice, std::int16_t object_format,
+                            std::vector<std::size_t>& offsets) {
   slice.u8();
   walk_script_entry(slice, object_format, offsets);
   const auto n = slice.u16();
@@ -315,8 +315,8 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
     if (!slice.at_end()) {
       if (record_signature == sig_qust) {
         walk_quest_extra(slice, object_format, result);
-      } else if (record_signature == sig_perk) {
-        walk_perk_extra(slice, object_format, result.offsets);
+      } else if (record_signature == sig_perk || record_signature == sig_term) {
+        walk_indexed_fragments(slice, object_format, result.offsets);
       } else if (record_signature == sig_pack || record_signature == sig_info) {
         walk_flagged_fragments(slice, object_format, result.offsets, false);
       } else if (record_signature == sig_scen) {
@@ -347,16 +347,28 @@ std::vector<std::size_t> vmad_formid_offsets(std::span<const std::byte> data,
   return scan_vmad(data, record_signature).offsets;
 }
 
+VmadCoverage vmad_coverage(std::span<const std::byte> data,
+                           Signature record_signature) {
+  const auto scan = scan_vmad(data, record_signature);
+  VmadCoverage coverage;
+  coverage.unsupported = scan.unsupported;
+  coverage.failed = scan.failed;
+  coverage.trailing_data = scan.trailing_data;
+  coverage.fully_consumed = scan.fully_consumed;
+  return coverage;
+}
+
 bool vmad_has_unsupported_properties(std::span<const std::byte> data,
-                                      Signature record_signature) {
-  return scan_vmad(data, record_signature).unsupported;
+                                     Signature record_signature) {
+  return vmad_coverage(data, record_signature).unsupported;
 }
 
 std::optional<std::vector<std::size_t>> vmad_formid_offsets_for_remap(
     std::span<const std::byte> data,
     Signature record_signature) {
   auto scan = scan_vmad(data, record_signature);
-  if (scan.unsupported) {
+  if (scan.unsupported || scan.failed || scan.trailing_data ||
+      !scan.fully_consumed) {
     return std::nullopt;
   }
   return std::move(scan.offsets);

@@ -1005,10 +1005,10 @@ Result<nlohmann::json> RadiclePluginBackend::scanBrokenRefs() const {
     }
 
     std::set<std::string> missing;
-    std::size_t recordsWithUnsupportedVmad = 0;
+    std::size_t recordsWithIncompleteVmad = 0;
     for (const auto& loaded : plugins_) {
         const auto collection = fo4::collect_form_links_detailed(loaded.plugin);
-        recordsWithUnsupportedVmad += collection.records_with_unsupported_vmad;
+        recordsWithIncompleteVmad += collection.records_with_incomplete_vmad;
         for (const auto& link : collection.links) {
             if (link.key.owner().empty() || knownRecords.contains(link.key)) continue;
             const auto source = link.record.owner().empty()
@@ -1024,10 +1024,12 @@ Result<nlohmann::json> RadiclePluginBackend::scanBrokenRefs() const {
     report << "Loaded plugins: " << plugins_.size() << '\n';
     report << "Indexed records: " << knownRecords.size() << '\n';
     report << "Dangling FormLinks: " << missing.size() << "\n\n";
-    if (recordsWithUnsupportedVmad != 0) {
-        report << "NOTE: " << recordsWithUnsupportedVmad
-               << " record(s) contain VMAD script data using property types Radicle cannot"
-               << " scan yet; FormLinks inside those records are NOT included below.\n\n";
+    if (recordsWithIncompleteVmad != 0) {
+        report << "NOTE: " << recordsWithIncompleteVmad
+               << " record(s) contain VMAD script data Radicle could not fully scan"
+               << " (unsupported property types, a parse failure, trailing bytes, or an"
+               << " unconsumed remainder); FormLinks from those records may be"
+               << " incomplete, so the results below are not exhaustive.\n\n";
     }
 
     if (missing.empty()) {
@@ -1073,7 +1075,7 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
             usedMasters.insert(std::string(record->form_key.owner().filename()));
         }
     }
-    if (collection.records_with_unsupported_vmad != 0) {
+    if (collection.records_with_incomplete_vmad != 0) {
         for (const auto& master : loaded->plugin.header.masters) {
             usedMasters.insert(std::string(master.key.filename()));
         }
