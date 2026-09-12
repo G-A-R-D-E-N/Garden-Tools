@@ -146,9 +146,11 @@ public static class SkeletonMapperAuthor
                 refusals.Add($"bone {i} ('{Name(skeleton, i)}') has a reference rotation of length {rotationLength:0.######}, " +
                              "which is not a unit quaternion");
 
-            if (MathF.Abs(pose.Scale.X - 1f) > ScaleTolerance ||
-                MathF.Abs(pose.Scale.Y - 1f) > ScaleTolerance ||
-                MathF.Abs(pose.Scale.Z - 1f) > ScaleTolerance)
+            if (!Finite(pose.Scale))
+                refusals.Add($"bone {i} ('{Name(skeleton, i)}') has a non-finite reference scale");
+            else if (MathF.Abs(pose.Scale.X - 1f) > ScaleTolerance ||
+                     MathF.Abs(pose.Scale.Y - 1f) > ScaleTolerance ||
+                     MathF.Abs(pose.Scale.Z - 1f) > ScaleTolerance)
                 refusals.Add($"bone {i} ('{Name(skeleton, i)}') has a reference scale of " +
                              $"({pose.Scale.X:0.######}, {pose.Scale.Y:0.######}, {pose.Scale.Z:0.######}); " +
                              "non-identity reference scale is not supported");

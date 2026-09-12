@@ -50,7 +50,8 @@ needs both directions needs both mapper objects; one cannot serve the other.
 forward rows with the two bone indices swapped and each transform inverted.
 That reproduces the shipped reciprocal mapper to `2.3e-5` with exact rotations,
 which is tighter than recomputing it from the reference poses the way the
-offline generator does (`4.7e-5`). Both are within float noise of the shipped
+identified mapper-generation algorithm does when it recomputes the second
+direction (`4.7e-5`). Both are within float noise of the shipped
 bytes.
 
 ## Rotation normalisation

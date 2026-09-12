@@ -216,6 +216,29 @@ public class SkeletonMapperAuthorTests
     }
 
     [Fact]
+    public void ANonFiniteReferenceScaleIsRefused()
+    {
+        foreach (var scale in new[]
+                 {
+                     new Vector3(float.NaN, 1f, 1f),
+                     new Vector3(1f, float.NaN, 1f),
+                     new Vector3(1f, 1f, float.NaN),
+                     new Vector3(float.PositiveInfinity, 1f, 1f),
+                     new Vector3(1f, float.NegativeInfinity, 1f),
+                     new Vector3(1f, 1f, float.PositiveInfinity),
+                 })
+        {
+            var a = Rig("a", 2);
+            a.ReferencePose[1] = new HkxBonePose(Vector3.Zero, Quaternion.Identity, scale);
+            var b = Rig("b", 2);
+
+            Assert.Contains(SkeletonMapperAuthor.Refusals(a),
+                            refusal => refusal.Contains("non-finite reference scale", StringComparison.Ordinal));
+            Assert.Throws<ArgumentException>(() => SkeletonMapperAuthor.FromReferencePose(a, b, new[] { (0, 0) }));
+        }
+    }
+
+    [Fact]
     public void ShippedReferenceScaleIsWithinTheAuthoringTolerance()
     {
         var (forward, reverse) = Vanilla();
