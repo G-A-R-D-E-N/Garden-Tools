@@ -27,6 +27,9 @@ struct VmadCoverage {
 VmadCoverage vmad_coverage(std::span<const std::byte> data,
                            Signature record_signature);
 
+bool vmad_has_unsupported_properties(std::span<const std::byte> data,
+                                     Signature record_signature);
+
 std::optional<std::vector<std::size_t>> vmad_formid_offsets_for_remap(
     std::span<const std::byte> data,
     Signature record_signature);

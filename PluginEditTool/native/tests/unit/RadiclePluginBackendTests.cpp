@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -94,7 +95,8 @@ void wstring(fo4::test::ByteWriter& out, std::string_view text) {
     out.raw(text);
 }
 
-std::vector<std::byte> makeTrailingVmadPlugin(std::string_view master,
+std::vector<std::byte> makeTrailingVmadPlugin(
+                                              std::initializer_list<std::string_view> masters,
                                               std::string_view signature,
                                               std::uint32_t formId,
                                               std::uint32_t linkFormId) {
@@ -106,18 +108,20 @@ std::vector<std::byte> makeTrailingVmadPlugin(std::string_view master,
     hedr.u32(0x800);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
 
-    std::vector<std::byte> masterName;
-    masterName.reserve(master.size() + 1);
-    for (const char ch : master) {
-        masterName.push_back(std::byte{static_cast<std::uint8_t>(ch)});
-    }
-    masterName.push_back(std::byte{0});
-    fo4::test::write_subrecord(out, "MAST", masterName);
+    for (const auto master : masters) {
+        std::vector<std::byte> masterName;
+        masterName.reserve(master.size() + 1);
+        for (const char ch : master) {
+            masterName.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+        }
+        masterName.push_back(std::byte{0});
+        fo4::test::write_subrecord(out, "MAST", masterName);
 
-    fo4::test::ByteWriter data;
-    data.u32(0);
-    data.u32(0);
-    fo4::test::write_subrecord(out, "DATA", data.bytes);
+        fo4::test::ByteWriter data;
+        data.u32(0);
+        data.u32(0);
+        fo4::test::write_subrecord(out, "DATA", data.bytes);
+    }
     fo4::test::end_record(out, tes4);
 
     const auto group = fo4::test::begin_group(out, signature, 0);
@@ -316,7 +320,7 @@ TEST_CASE("Radicle plugin backend caveats partial VMAD coverage as non-exhaustiv
     const auto patchPath = root / "Patch.esp";
     writeBytes(basePath, makePlugin({}, "WEAP", 0x00000800, "BaseWeapon"));
     writeBytes(patchPath,
-               makeTrailingVmadPlugin("Base.esp", "ACTI", 0x01000801, 0x0000009A));
+               makeTrailingVmadPlugin({"Base.esp"}, "ACTI", 0x01000801, 0x0000009A));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
@@ -338,6 +342,32 @@ TEST_CASE("Radicle plugin backend caveats partial VMAD coverage as non-exhaustiv
 
     CHECK(text.find("Dangling FormLinks: 1") != std::string::npos);
     CHECK(text.find("00009A:Base.esp") != std::string::npos);
+}
+
+TEST_CASE("Radicle masters list keeps every master used when VMAD is incomplete") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(patchPath,
+               makeTrailingVmadPlugin({"Base.esp", "Other.esm"}, "ACTI",
+                                      0x01000801, 0x0000009A));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", patchPath, "Patch")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto masters = parseStringResult(
+        backend.invoke("masters.List", nlohmann::json::array({"Patch.esp"})));
+    REQUIRE(masters.at("masters").size() == 2);
+    CHECK(masters.at("masters")[0].at("name") == "Base.esp");
+    CHECK(masters.at("masters")[0].at("used") == true);
+    CHECK(masters.at("masters")[1].at("name") == "Other.esm");
+    CHECK(masters.at("masters")[1].at("used") == true);
 }
 
 TEST_CASE("Radicle plugin backend refreshes the cached graph when the environment changes") {
