@@ -116,6 +116,8 @@ constexpr auto k_dalc = Signature::from_string("DALC");
 constexpr auto k_jnam = Signature::from_string("JNAM");
 constexpr auto k_qnam = Signature::from_string("QNAM");
 constexpr auto k_data = Signature::from_string("DATA");
+constexpr auto k_clmt = Signature::from_string("CLMT");
+constexpr auto k_wlst = Signature::from_string("WLST");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -748,6 +750,19 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       fail_malformed(
           "cannot safely remap unknown WTHR FormID-listed subrecord");
       return;
+    }
+    return;
+  }
+  if (record.header.signature == k_clmt && sub.signature == k_wlst) {
+    if (sub.data.size() % 12 != 0) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed CLMT WLST payload");
+      }
+      return;
+    }
+    for (std::size_t offset = 0; offset < sub.data.size(); offset += 12) {
+      fn(offset);
+      fn(offset + 8);
     }
     return;
   }
