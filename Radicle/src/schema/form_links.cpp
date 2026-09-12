@@ -656,6 +656,17 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       return;
     }
   }
+  if (record.header.signature == k_ipds && sub.signature == k_pnam) {
+    if (sub.data.size() != 8) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed IPDS PNAM payload");
+      }
+      return;
+    }
+    fn(0);
+    fn(4);
+    return;
+  }
   if (sub.data.empty()) {
     return;
   }
@@ -765,17 +776,6 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       fn(offset);
       fn(offset + 8);
     }
-    return;
-  }
-  if (record.header.signature == k_ipds && sub.signature == k_pnam) {
-    if (sub.data.size() != 8) {
-      if (strict_remap) {
-        throw FormIdError("cannot safely remap malformed IPDS PNAM payload");
-      }
-      return;
-    }
-    fn(0);
-    fn(4);
     return;
   }
   // OBTS is the BGSMod::Template body: a variable-length header whose keyword

@@ -190,6 +190,18 @@ TEST(FormLink, IpdsPnamSixteenBytePayloadFailsClosedInStrictRemap) {
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
+TEST(FormLink, IpdsPnamEmptyPayloadFailsClosedInStrictRemap) {
+  auto out = plugin_header();
+  append_ipds_record(out, 0x03000800, {std::vector<std::byte>{}});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(
+      (void)fo4::remap_plugin_masters(plugin, reordered_masters()),
+      fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 TEST(FormLink, IpdsPnamCollisionControlsPreserveNavmAndRemapNpc) {
   auto out = plugin_header();
 
