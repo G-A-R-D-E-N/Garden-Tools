@@ -75,7 +75,9 @@ TEST(FormLink, DobjDnamPackedRowsRemapOnlyObjectsAndPreserveBytes) {
   ASSERT_EQ(record->subrecords.size(), original_subs.size());
   for (std::size_t i = 0; i < original_subs.size(); ++i) {
     EXPECT_EQ(record->subrecords[i].signature, original_subs[i].signature);
-    if (i != 1) EXPECT_EQ(record->subrecords[i].data, original_subs[i].data);
+    if (i != 1) {
+      EXPECT_EQ(record->subrecords[i].data, original_subs[i].data);
+    }
   }
   EXPECT_EQ(record->subrecords[1].data,
             words({0x50535757, 0x00000042, 0x02000042, 0x01000099,
