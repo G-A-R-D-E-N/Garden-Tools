@@ -48,11 +48,13 @@ so a mapper's direction is a statement about which rig is the output. A rig that
 needs both directions needs both mapper objects; one cannot serve the other.
 `SkeletonMapperAuthor.Reciprocal` returns both, and the reverse rows are the
 forward rows with the two bone indices swapped and each transform inverted.
-That reproduces the shipped reciprocal mapper to `2.3e-5` with exact rotations,
-which is tighter than recomputing it from the reference poses the way the
-identified mapper-generation algorithm does when it recomputes the second
-direction (`4.7e-5`). Both are within float noise of the shipped
-bytes.
+On the human fixture, that reproduces the shipped reciprocal mapper to `2.3e-5`
+with exact rotations, which is tighter than recomputing it from the reference
+poses the way the identified mapper-generation algorithm does when it
+recomputes the second direction (`4.7e-5`). Both are within float noise of the
+shipped bytes. The wider corpus shows that this mirrored construction is not a
+description of every shipped reverse mapper: some rigs have different row
+counts or pairing decisions in the two directions.
 
 ## Rotation normalisation
 
@@ -80,7 +82,9 @@ already accept.
 
 The engine's generator refuses a candidate pair when either bone is already
 mapped. Within candidate pairing that duplicate rule is the only one observed -
-partition agreement is a separate, earlier precondition (doc 63 §6). Fallout 4
+partition agreement is a separate, earlier precondition (doc 63 §6). Shipped
+assets nevertheless contain exact duplicate rows, so this is a conservative
+authoring policy rather than a format or loader limitation. Fallout 4
 performs no validation at load time on the traced paths - the only mapping
 checks observed in the game are debug-build warnings that the release runtime
 never reaches. So an authoring surface is the last place a malformed mapper can
@@ -119,9 +123,9 @@ match between the animation rig and the ragdoll rig (`LArm_UpperArm` against
 shipped rows and it is not known which of the generator's matching modes
 produced them. Callers supply the pairing.
 
-Chain mappings are not implemented or interpreted. No vanilla ragdoll mapper
-contains one, and the consumer's chain blend has not been reduced to an
-equation.
+Shipped Fallout 4 mappers do contain chain mappings. This authoring slice
+deliberately does not create them because the consumer's interior weighting and
+complete chain semantics have not yet been reduced.
 
 Writing the rows back into a packfile is not implemented. This module computes
 and validates mapping data; it does not yet serialise it.
