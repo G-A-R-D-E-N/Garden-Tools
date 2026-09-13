@@ -17,6 +17,7 @@ fail closed instead of writing guessed data.
 ## Authoring
 
 - Supported behaviour and animation edits continue to use the verified native save pipeline.
+- Structure authoring supports expression transition conditions, enter/exit notify events, global events, and non-empty state-machine creation and attachment, with save/reopen verification.
 - Native graph authoring, templates, variables, transitions, symbols, and supported arrays are
   covered by validation and save/reopen checks.
 - Skeleton editing and validation, skin-weight editing, and NIF skin-weight persistence are included.
