@@ -119,6 +119,7 @@ constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_clmt = Signature::from_string("CLMT");
 constexpr auto k_wlst = Signature::from_string("WLST");
 constexpr auto k_ipds = Signature::from_string("IPDS");
+constexpr auto k_dobj = Signature::from_string("DOBJ");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -665,6 +666,20 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     fn(0);
     fn(4);
+    return;
+  }
+  if (record.header.signature == k_dobj && sub.signature == k_dnam) {
+    if (sub.data.size() % 8 != 0 ||
+        std::count_if(record.subrecords.begin(), record.subrecords.end(),
+                      [](const Subrecord& item) { return item.signature == k_dnam; }) != 1) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed DOBJ DNAM payload or cardinality");
+      }
+      return;
+    }
+    for (std::size_t offset = 4; offset < sub.data.size(); offset += 8) {
+      fn(offset);
+    }
     return;
   }
   if (sub.data.empty()) {

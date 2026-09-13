@@ -1,5 +1,143 @@
 # GARDEN-TOOLS code notes
 
+## Radicle/src/schema/form_links.cpp:visit_link_offsets — DOBJ/DNAM proof (#287)
+
+The layout below is verified from the documentation and open-source schema:
+TES5Edit/TES5Edit `dev-4.1.6`, pinned at
+`9fb016884bec138ea6c7b872cec831537d464c3e`,
+[`Core/wbDefinitionsFO4.pas:8618-8627`](https://github.com/TES5Edit/TES5Edit/blob/9fb016884bec138ea6c7b872cec831537d464c3e/Core/wbDefinitionsFO4.pas#L8618-L8627):
+
+```pascal
+wbRecord(DOBJ, 'Default Object Manager', [
+  wbEDID,
+  wbArrayS(DNAM, 'Objects',
+    wbStructSK([0], 'Object', [
+      wbInteger('Use', itU32, wbEnum([], c), cpNormalIgnoreEmpty),
+      wbFormID('Object ID', cpNormalIgnoreEmpty)
+    ]), 0, cpNormalIgnoreEmpty
+  ).SetAfterLoad(wbDOBJObjectsAfterLoad)
+   .SetRequired
+]);
+```
+
+`Core/wbInterface.pas:8539-8559` explicitly wraps one `wbSubRecord`
+around a `TwbArrayDef`; this is not `wbRArrayS`. The signed DNAM occurs
+once and is required by the schema. It contains zero or more packed 8-byte
+rows with no count prefix: `Use` is an unsigned 4-byte value at row +0;
+`Object ID` is a 4-byte FormID at row +4. `wbStructSK([0], ...)` selects
+the first member as a sort key without adding bytes. Integer sizing and
+sequential struct sizing are in `wbInterface.pas:12761-12773,14078-14143`;
+the Object ID overload is `wbInteger(..., itU32, wbFormID, ...)` at
+`9078-9084`. The uncounted array parser consumes the enclosing payload.
+`Core/wbImplementation.pas:22515-22559` sets the uncounted reader bound to
+`High(Integer)` and stops at the payload end, including the empty case.
+
+Present empty DNAM is a valid zero-row array. The callback
+`Core/wbDefinitionsCommon.pas:951-974` iterates existing rows and removes
+rows whose Use is zero; an empty array executes no iterations. Radicle's
+remapper preserves every row and its Use bytes, including unknown and
+zero selectors, rather than adopting xEdit cleanup or sorting.
+`wbFormID` is unrestricted at this schema layer (`wbInterface.pas:9010-9025`),
+unlike `wbFormIDCk`: no target signature list or Use-dependent type check
+is specified. Null Object IDs are supported and preserved.
+
+Corpus cross-check on 2026-09-12, using
+`Radicle/tools/corpus/wthr_corpus_inventory.py:collect_records`:
+installed Fallout4.esm SHA-256
+`a3fa1e66d75f80f33f864bf471d25b27f48c1cdbb97acb55c4df83b64ccee1d9`
+contains one uncompressed DOBJ (`00000800`), one DNAM, 3168 bytes = 396
+rows. The six official DLC masters contain no DOBJ. Local raw inventory:
+`E:/Tools/FO4IDE/dobj-evidence/corpus.json`; no game payload is committed.
+
+Baseline `8d4c6685aa76a65e2a8e9ed408472769dc6aa3d9` trace:
+`formid_subrecords.inc` globally lists DNAM, but `visit_link_offsets` only
+uses that list for 4-byte payloads. Valid DOBJ rows are skipped; malformed
+4-byte DNAM falls through to offset +0. QUST's `qust_non_formid_signature`
+excludes DNAM, INFO has a dedicated single-FormID route, and PROJ/HAZD
+use `struct_payload_formid_offsets`. `remap_record_form_links`,
+`rekey_form_links`, and `collect_form_links_detailed` all share this dispatch.
+`Radicle/src/plugin/writer.cpp:remap_plugin_masters` works on a by-value
+plugin, and `rekey_form_links` copies before traversal, protecting callers
+from partially applied strict failures.
+
+Active DNAM uses inventoried across the pinned FO4 definition: ALCH, AMMO,
+ARMA, BOOK, EFSH, KYWD, AACT, TXST, PROJ, HAZD, IMGS, IMAD, BPTD, ADDN,
+VTYP, IPCT, MESG, DOBJ, SMBN, SMQN, SMEN, DLBR, MUST, DLVW, SCEN, ARTO,
+MATO, SNDR, IDLE, INFO, MGEF, NPC_, QUST, STAT, AECH, AMDL, BNDS, DMGT,
+KSSM, LENS, NOTE, WATR, WEAP. RACE's DNAM definition is commented out.
+These include text, flags, floats, mixed structures, unions and FormIDs;
+this tranche does not claim to correct their legacy signature-only handling.
+Collision controls use QUST General data (`10691`), INFO Shared INFO
+(`9727`) and IPCT Texture Set `[TXST]` (`8005`).
+The QUST control includes both the schema's 12-byte General payload and
+a short 4-byte payload specifically exercising the existing early
+exclusion before the global signature table.
+
+Regression evidence for `Radicle/tests/test_dobj_formlinks.cpp:FormLink`:
+the initial seven DOBJ tests were built and run against unchanged
+`Radicle/src` at the baseline above. Six failed; the empty-array test
+passed. Object bytes stayed stale, collection omitted the packed lanes,
+direct rekey left its original serialization cache intact, malformed
+payloads were accepted, and 4-byte DNAM was collected as offset +0.
+Raw local output: `E:/Tools/FO4IDE/dobj-evidence/baseline-failing.txt`.
+
+Parity boundary for `visit_link_offsets` and issue #43, using the schema
+verified from the documentation above:
+
+| Surface | DOBJ/DNAM scope |
+| --- | --- |
+| READ | Generic lossless payload read; Object lane collection is this tranche |
+| WRITE | Generic lossless serialization and persistence of remapped Object lanes |
+| ADD / REMOVE / CREATE | No typed DOBJ authoring support claimed or added |
+| REMAP | Object at 4 + 8*n only; Use remains opaque and unchanged |
+| VALIDATE | Whole rows and single DNAM; strict rejection, non-strict omission |
+| Targets | Unrestricted FormID at the xEdit definition layer; null preserved |
+| Opaque data | Use bytes, unknown subrecords and ordering preserved |
+
+The traversal only sees present subrecords; this remap tranche does not
+enforce required-DNAM presence for an otherwise empty/deleted DOBJ.
+It does not validate selector membership or resolve target record types.
+CLMT/WLST and DOBJ/DNAM are packed mixed arrays; IPDS/PNAM is repeated
+fixed-size subrecords. Together they justify a separate descriptor design
+review under #43, with representation/cardinality kept explicit. They do
+not justify an abstraction or authoring-parity claim in this patch.
+
+Validation of `Radicle/src/schema/form_links.cpp:visit_link_offsets`
+against the schema from the documentation above on 2026-09-12 (Windows
+x64, MSVC 19.44, Release): the record-qualified route adds 15 production
+lines before the generic empty/signature checks. Strict traversal rejects
+lengths not divisible by 8 and duplicate DNAM subrecords before visiting
+any Object lane in that payload. Non-strict collection omits those
+unsupported layouts. Empty DNAM remains present.
+
+`Radicle/tests/test_dobj_formlinks.cpp` adds seven regressions:
+
+- `DobjDnamPackedRowsRemapOnlyObjectsAndPreserveBytes`: packed rows,
+  null Object, zero/unknown/FormID-like Use bytes, opaque subrecords,
+  save/reload, exact Object collection lanes and ordinal zero.
+- `DobjDnamTruncatedPayloadsFailClosedWithoutMutation`: lengths
+  1/4/7/9/12/15/17, strict master/rekey failure after an earlier remappable
+  record, caller byte equality, non-strict omission.
+- `DobjDnamSeparateSubrecordsFailClosed`: rejects repeated DNAM instead
+  of interpreting it as IPDS-style storage.
+- `DobjDnamEmptyArrayRemainsEmpty`: accepts and preserves zero rows.
+- `DobjDnamCollisionControlsPreserveQuestAndRemapIpctAndInfo`: QUST
+  exclusion and both generic/dedicated legitimate DNAM link routes.
+- `DobjDnamDirectRekeyPersistsAndPreservesAllOtherBytes`: DOBJ-only
+  target mutation, plugin cache invalidation and full serialized-byte
+  equality against a fixture differing only in the intended Object lane.
+- `DobjDnamCollectionPreservesDocumentOrder`: neighboring IPCT/INFO
+  records around the packed DOBJ lanes, with offsets and ordinals.
+
+Focused filter `FormLink.DobjDnam*:FormLink.IpdsPnam*:FormLink.ClmtWlst*`:
+18/18 passed. Full `ctest --test-dir Radicle/build -C Release --output-on-failure`:
+549 discovered, 528 passed, 21 optional corpus tests skipped, zero failures.
+The corpus layout cross-check above ran separately against installed game
+data. Local logs are `E:/Tools/FO4IDE/dobj-evidence/focused-passing.txt`
+and `full-radicle.txt`. `git diff --check` passed. No generic descriptor,
+selector cleanup/sorting, typed DOBJ authoring, or other parity family
+is included.
+
 ## Radicle/src/schema/form_links.cpp:visit_link_offsets
 
 Implementation details for the current INFO copy work are recorded in `docs/code-notes/info-copy.md`.
