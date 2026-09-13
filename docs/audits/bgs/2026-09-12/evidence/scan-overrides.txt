@@ -1,0 +1,6 @@
+2 enabled mod folder(s)
+indexed 0 archive(s) + 2 loose .hkx
+MISSING CLIP ANIMATIONS  meshes/actors/audit/behaviors/graph.hkx  [loose:Low]  (1 clip(s))
+    clip 'B' plays 'b.hkx' — resolves nowhere
+done  2 loaded behaviour(s) checked, 1 with unresolved clip animations, 1 clip(s) total
+Exit code: 1

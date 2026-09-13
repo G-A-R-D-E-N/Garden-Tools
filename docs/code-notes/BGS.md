@@ -153,3 +153,7 @@ and reserves the `no difference` row for an actually identical unfiltered compar
 
 Focused coverage checks no-filter, kind, class, combined, and empty filters plus deterministic JSON
 and text output ordering.
+
+## `docs/audits/bgs/2026-09-12/repro/Program.cs:Audit` — historical audit reproduction
+
+The version-bound harness records seven failures at `d2ae05ba1959bf7d8fa2d640ad07cab3ea6c1958`; its assertions expect the historical failing behavior. `Audit:Main` uses an isolated temporary directory and preferences, `Audit:PendingClose` focuses the real headless property control, and `Audit:ModlistScans` creates synthetic mod-manager inputs. Fixture object IDs come from the existing BGS test builders; this evidence makes no additional closed-engine layout or runtime claims. The companion `Audit.csproj` references the audited checkout through `AuditSourceRoot`, independently of the documentation branch's production code. See `docs/audits/bgs/2026-09-12/README.md` for reproduction and provenance limits.

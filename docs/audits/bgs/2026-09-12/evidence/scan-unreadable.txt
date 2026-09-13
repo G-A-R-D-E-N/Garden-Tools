@@ -1,0 +1,5 @@
+1 enabled mod(s); data folder (absent)
+indexing 0 .ba2 archive(s)…
+indexed 1 loose .hkx path(s)
+done  0 character file(s) resolved, 0 with missing animations, 0 missing reference(s) total
+Exit code: 0

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RequiredAuditSourceCommit>d2ae05ba1959bf7d8fa2d640ad07cab3ea6c1958</RequiredAuditSourceCommit>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(AuditSourceRoot)/BGS/tools/uismoke/uismoke.csproj" />
+    <ProjectReference Include="$(AuditSourceRoot)/BGS/tools/tests/BehaviourGraph.Tests.csproj" />
+  </ItemGroup>
+  <Target Name="VerifyAuditSourceCommit" BeforeTargets="ResolvePackageAssets;ResolveProjectReferences">
+    <Exec Command="git -C &quot;$(AuditSourceRoot)&quot; rev-parse HEAD" ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="AuditSourceCommit" />
+    </Exec>
+    <Error Condition="'$(AuditSourceCommit)' != '$(RequiredAuditSourceCommit)'" Text="AuditSourceRoot must be checked out at $(RequiredAuditSourceCommit); found $(AuditSourceCommit)." />
+    <Exec Command="git -C &quot;$(AuditSourceRoot)&quot; status --porcelain --untracked-files=all" ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="AuditSourceStatus" />
+    </Exec>
+    <Error Condition="'$(AuditSourceStatus)' != ''" Text="AuditSourceRoot must have a clean working tree; found $(AuditSourceStatus)." />
+  </Target>
+</Project>

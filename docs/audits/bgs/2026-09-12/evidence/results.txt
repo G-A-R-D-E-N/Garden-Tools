@@ -1,0 +1,16 @@
+CSC : warning CS9057: The analyzer assembly '<nuget-cache>\avalonia\12.1.1\analyzers\dotnet\cs\Avalonia.Analyzers.CSharp.dll' references version '4.14.0.0' of the compiler, which is newer than the currently running version '4.11.0.0'. [<audit-repro>\Audit.csproj]
+CSC : warning CS9057: The analyzer assembly '<nuget-cache>\avalonia\12.1.1\analyzers\dotnet\cs\Avalonia.Generators.dll' references version '4.14.0.0' of the compiler, which is newer than the currently running version '4.11.0.0'. [<audit-repro>\Audit.csproj]
+settings retention smoke passed
+REPRODUCED: toolbar refuses duplicate state IDs
+REPRODUCED: Save and continue commits the same duplicate state IDs and closes
+animation open: xml=2312, frames=5
+REPRODUCED: animation fixture has editable frame
+REPRODUCED: animation frame and metadata can both be dirty
+REPRODUCED: Save and continue keeps metadata but loses the edited animation frame
+REPRODUCED: editable property textbox receives focus
+REPRODUCED: close does not flush registered pending fields or consult discard decision
+REPRODUCED: 480-byte skeleton produces 100000 bones from an invalid count
+Holding #91 hkbClipGenerator from copy-snapshot.hkx: 1 object(s). Open the file to paste it into, or paste it here.
+copied snapshot properties: Path, Tree
+REPRODUCED: Copy subtree takes saved speed 2.5 instead of visible unsaved speed 0.75
+REPRODUCED: clipboard changes after source is modified: paste uses 1.25 instead of copied 2.5
