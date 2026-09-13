@@ -130,6 +130,9 @@ public class MainWindow : Window
     private readonly TextBlock _frameLabel = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
     private readonly TextBlock _scaleStatus = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
     private Control? _scalePill;
+    private readonly Button _clearFrameDistanceButton = Ux.Secondary("Clear measure");
+    private readonly TextBlock _frameDistanceStatus = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
+    private Control? _frameDistancePill;
 
     // The last SetPlaybackSummary text and brush, so the constraint-inspection line can put
     // the summary back exactly when the hover/pin selection ends.
@@ -2284,6 +2287,10 @@ public class MainWindow : Window
 
     public bool ScaleStatusVisibleForTest => _scalePill?.IsVisible == true;
 
+    public string FrameDistanceStatusForTest => _frameDistanceStatus.Text ?? "";
+
+    public bool FrameDistanceVisibleForTest => _frameDistancePill?.IsVisible == true;
+
     // The ragdoll scale readout reports the small set of view-computed numbers: the fitted
     // body half-extent and the frame-axis stub length, in the file's own units. Refreshed on
     // every load so opening another file swaps the numbers (or hides the pill entirely).
@@ -2294,6 +2301,14 @@ public class MainWindow : Window
         _scaleStatus.Text = text;
         _scaleStatus.Foreground = Ux.MetaBrush;
         _scalePill.IsVisible = text.Length > 0;
+    }
+
+    private void ShowFrameDistance(string? text)
+    {
+        _frameDistanceStatus.Text = text ?? "";
+        _frameDistanceStatus.Foreground = Ux.MetaBrush;
+        if (_frameDistancePill != null) _frameDistancePill.IsVisible = text?.Length > 0;
+        _clearFrameDistanceButton.IsEnabled = text?.Length > 0;
     }
     public string PathFieldForTest => _pathField.Text ?? "";
 
@@ -2904,10 +2919,13 @@ public class MainWindow : Window
 
         _skeleton.BoneHovered += _ => _skeleton.InvalidateVisual();
         _skeleton.ConstraintSelectionChanged += ShowConstraintInspection;
+        _skeleton.FrameDistanceChanged += ShowFrameDistance;
+        _clearFrameDistanceButton.IsEnabled = false;
+        _clearFrameDistanceButton.Click += (_, _) => _skeleton.ClearFrameDistance();
 
         var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         foreach (var control in new Control[]
-                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle, _dropButton, reload, mesh, clearMesh })
+                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle, _clearFrameDistanceButton, _dropButton, reload, mesh, clearMesh })
             transport.Children.Add(control);
 
         var bar = Bar(Ux.Pill(_playbackSummary), transport);
@@ -2917,8 +2935,10 @@ public class MainWindow : Window
         // once a file with rigid bodies is open (see TryLoadRagdoll -> UpdateScaleStatus).
         _scalePill = Ux.Pill(_scaleStatus);
         _scalePill.IsVisible = false;
+        _frameDistancePill = Ux.Pill(_frameDistanceStatus);
+        _frameDistancePill.IsVisible = false;
 
-        var scrubRow = Bar(_scrub, Ux.Pill(_frameLabel), _scalePill);
+        var scrubRow = Bar(_scrub, Ux.Pill(_frameLabel), _scalePill, _frameDistancePill);
         scrubRow.Margin = new Thickness(0, 8, 0, 0);
 
         var panel = new DockPanel();

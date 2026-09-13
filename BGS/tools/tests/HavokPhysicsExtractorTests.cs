@@ -968,6 +968,34 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void BodyFrameDistanceUsesTwoPickedFramesAndCanBeReplacedOrCleared()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        var view = new SkeletonView();
+        view.SetBodies(model);
+        view.EngineeringFrames = true;
+        view.ToggleBodyPinForTest(0);
+        Assert.Equal("", view.FrameDistanceText);
+
+        view.ToggleBodyPinForTest(1);
+        Assert.Equal((0, 1), view.FrameDistanceBodies);
+        var first = model!.Bodies.Single(b => b.Id == 0);
+        var second = model.Bodies.Single(b => b.Id == 1);
+        float firstDistance = Vector3.Distance(first.Position, second.Position);
+        Assert.Equal($"distance {first.Name} to {second.Name}  {firstDistance:0.00} file units",
+                     view.FrameDistanceText);
+
+        view.ToggleBodyPinForTest(2);
+        Assert.Equal((1, 2), view.FrameDistanceBodies);
+
+        view.ClearFrameDistance();
+        Assert.Null(view.FrameDistanceBodies);
+        Assert.Equal("", view.FrameDistanceText);
+    }
+
+    [Fact]
     public void ConstraintHoverLabelShowsMeasuredLimits()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));

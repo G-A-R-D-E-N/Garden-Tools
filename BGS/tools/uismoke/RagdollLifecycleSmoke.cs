@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -50,6 +51,19 @@ public static class LifecycleSmoke
                 window.PlaybackSummary.Contains("loaded from the sibling skeleton", StringComparison.Ordinal),
                 ref failed);
             Check("Drop is enabled for the sibling ragdoll", drop.IsEnabled, ref failed);
+
+            window.Viewport.ToggleBodyPinForTest(model!.Bodies[0].Id);
+            window.Viewport.ToggleBodyPinForTest(model.Bodies[1].Id);
+            Dispatcher.UIThread.RunJobs();
+            Check("production body-frame distance is surfaced",
+                window.FrameDistanceStatusForTest.Contains("file units", StringComparison.Ordinal), ref failed);
+            Check("body-frame distance stays visible until cleared",
+                window.FrameDistanceVisibleForTest, ref failed);
+            Smoke.SelectTab(window, "Playback");
+            Smoke.Click(Smoke.Find<Button>(window)
+                .Single(button => button.Content?.ToString() == "Clear measure"));
+            Check("clearing body-frame distance removes the production status",
+                window.FrameDistanceStatusForTest.Length == 0 && !window.FrameDistanceVisibleForTest, ref failed);
 
             Smoke.Click(play);
             Check("animation playback starts before Drop", window.IsPlaying, ref failed);

@@ -37,6 +37,7 @@ public class SkeletonView : Control
     public string HoveredBone { get; private set; } = "";
     public Action<string>? BoneHovered;
     public Action<string?>? ConstraintSelectionChanged;
+    public Action<string?>? FrameDistanceChanged;
 
     public bool ShowReference { get; set; }
     public bool ShowBodies { get; set; }
@@ -92,11 +93,28 @@ public class SkeletonView : Control
     private int _hoveredConstraint = -1;
     private int _pinnedConstraint = -1;
     private readonly HashSet<int> _pinnedBodies = new();
+    private (int First, int Second)? _frameDistanceBodies;
 
     public int HoveredConstraintId => _hoveredConstraint;
     public int HoveredBodyId => _hoveredBody;
     public int PinnedConstraintId => _pinnedConstraint;
     public IReadOnlyCollection<int> PinnedBodyIds => _pinnedBodies;
+    public (int First, int Second)? FrameDistanceBodies => _frameDistanceBodies;
+
+    public string FrameDistanceText
+    {
+        get
+        {
+            if (_bodies == null || _frameDistanceBodies is not { } selected) return "";
+            var first = _bodies.Bodies.FirstOrDefault(body => body.Id == selected.First);
+            var second = _bodies.Bodies.FirstOrDefault(body => body.Id == selected.Second);
+            if (first == null || second == null) return "";
+
+            float distance = Vector3.Distance(BodyFrame(_bodies, first).Position,
+                                              BodyFrame(_bodies, second).Position);
+            return $"distance {BodyName(first)} to {BodyName(second)}  {distance.ToString("0.00", CultureInfo.InvariantCulture)} file units";
+        }
+    }
 
     public void HoverBodyForTest(int bodyId)
     {
@@ -106,7 +124,14 @@ public class SkeletonView : Control
 
     public void ToggleBodyPinForTest(int bodyId)
     {
-        if (!_pinnedBodies.Remove(bodyId)) _pinnedBodies.Add(bodyId);
+        ToggleBodyPin(bodyId);
+    }
+
+    public void ClearFrameDistance()
+    {
+        if (_frameDistanceBodies == null) return;
+        _frameDistanceBodies = null;
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
@@ -196,6 +221,7 @@ public class SkeletonView : Control
             _fit = pose.Radius;
         }
         UpdatePhysicsPose();
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
@@ -203,6 +229,7 @@ public class SkeletonView : Control
     {
         _pose = pose;
         UpdatePhysicsPose();
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
@@ -224,20 +251,25 @@ public class SkeletonView : Control
         _hoveredConstraint = -1;
         _pinnedConstraint = -1;
         _pinnedBodies.Clear();
+        _frameDistanceBodies = null;
         _physicsPose = null;
         ClearDrop();
         _yaw = 0.6;
         _pitch = 0.25;
         _zoom = 1;
         _pan = default;
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
     public void SetBodies(HavokRagdollModel? model)
     {
         _bodies = model;
+        _pinnedBodies.Clear();
+        _frameDistanceBodies = null;
         UpdatePhysicsPose();
         FitBodies();
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
@@ -334,6 +366,7 @@ public class SkeletonView : Control
 
         _dropAccumulator = 0;
         _dropResting = false;
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
@@ -351,6 +384,7 @@ public class SkeletonView : Control
         _dropAccumulator = 0;
         _dropTotal = 0;
         _dropResting = false;
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
@@ -369,6 +403,7 @@ public class SkeletonView : Control
                 _dropPositions, _dropRotations!, _dropVelocities, _dropPivotOffsets,
                 DropSubstep, DropIterations);
         }
+        NotifyFrameDistance();
         InvalidateVisual();
     }
 
@@ -713,6 +748,7 @@ public class SkeletonView : Control
         {
             DrawGround(ctx);
             DrawFrames(ctx, _bodies);
+            DrawFrameDistance(ctx, _bodies);
             return;
         }
 
@@ -782,6 +818,7 @@ public class SkeletonView : Control
             DrawBindings(ctx, _bodies);
         if (physicsSkeleton) DrawPhysicsSkeleton(ctx, _bodies!);
         if (ShowFrames && _bodies is { Bodies.Count: > 0 }) DrawFrames(ctx, _bodies);
+        if (_bodies is { Bodies.Count: > 0 }) DrawFrameDistance(ctx, _bodies);
 
         if (ShowConstraints && _bodies is { Constraints.Count: > 0 })
         {
@@ -897,6 +934,21 @@ public class SkeletonView : Control
                      c.Y.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
                      c.Z.ToString("0.00", CultureInfo.InvariantCulture);
         return "COM (" + com + ")  stub " + stub;
+    }
+
+    private void DrawFrameDistance(DrawingContext ctx, HavokRagdollModel model)
+    {
+        if (_frameDistanceBodies is not { } selected) return;
+        var first = model.Bodies.FirstOrDefault(body => body.Id == selected.First);
+        var second = model.Bodies.FirstOrDefault(body => body.Id == selected.Second);
+        if (first == null || second == null) return;
+
+        var a = Project(BodyFrame(model, first).Position);
+        var b = Project(BodyFrame(model, second).Position);
+        ctx.DrawLine(new Pen(new SolidColorBrush(Ux.TextTitle, 0.95), 1.7), a, b);
+        var text = new FormattedText(FrameDistanceText, CultureInfo.InvariantCulture,
+                                     FlowDirection.LeftToRight, Typeface.Default, 11, Ux.TitleBrush);
+        ctx.DrawText(text, new Point((a.X + b.X) / 2 + 10, (a.Y + b.Y) / 2 - 22));
     }
 
     private void DrawBindings(DrawingContext ctx, HavokRagdollModel model)
@@ -1168,12 +1220,14 @@ public class SkeletonView : Control
     {
         int found = PickBodyUnder(at);
         if (!ShowBindings && !ShowFrames && !EngineeringFrames && _pinnedBodies.Count > 0)
+        {
             _pinnedBodies.Clear();
+            if (_frameDistanceBodies is { Second: < 0 }) { _frameDistanceBodies = null; NotifyFrameDistance(); }
+        }
         if (found == _hoveredBody) return;
         _hoveredBody = found;
         InvalidateVisual();
     }
-
     private int PickBodyUnder(Point at)
     {
         if ((!ShowBindings && !ShowFrames && !EngineeringFrames) ||
@@ -1263,10 +1317,7 @@ public class SkeletonView : Control
 
             int bodyPicked = PickBodyUnder(released);
             if (bodyPicked >= 0)
-            {
-                if (!_pinnedBodies.Remove(bodyPicked)) _pinnedBodies.Add(bodyPicked);
-                InvalidateVisual();
-            }
+                ToggleBodyPin(bodyPicked);
         }
     }
 
@@ -1296,4 +1347,31 @@ public class SkeletonView : Control
         BoneHovered?.Invoke(found);
         InvalidateVisual();
     }
+
+    private void ToggleBodyPin(int bodyId)
+    {
+        if (_pinnedBodies.Remove(bodyId))
+        {
+            if (_frameDistanceBodies is { } selected &&
+                (selected.First == bodyId || selected.Second == bodyId))
+                _frameDistanceBodies = null;
+        }
+        else
+        {
+            _pinnedBodies.Add(bodyId);
+            if (_frameDistanceBodies is not { } selected)
+                _frameDistanceBodies = (bodyId, -1);
+            else
+                _frameDistanceBodies = selected.Second < 0 ? (selected.First, bodyId) : selected.First == bodyId || selected.Second == bodyId ? selected : (selected.Second, bodyId);
+        }
+
+        NotifyFrameDistance();
+        InvalidateVisual();
+    }
+
+    private void NotifyFrameDistance() =>
+        FrameDistanceChanged?.Invoke(FrameDistanceText.Length > 0 ? FrameDistanceText : null);
+
+    private static string BodyName(HavokRigidBody body) =>
+        body.Name.Length > 0 ? body.Name : "body " + body.Id;
 }
