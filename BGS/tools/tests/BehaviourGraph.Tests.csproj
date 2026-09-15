@@ -27,6 +27,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../symrm/symrm.csproj" />
+    <ProjectReference Include="../mcp/BehaviourGraph.Mcp.csproj" />
     <ProjectReference Include="../../app/BehaviourStudio.csproj" />
   </ItemGroup>
   <ItemGroup>

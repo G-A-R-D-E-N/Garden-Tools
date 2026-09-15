@@ -74,6 +74,7 @@ public partial class MainWindow : Window
     private readonly Button _bridgeRedo = Ux.Secondary("Redo");
     private const int RecentCount = 6;
     private readonly TourOverlay _tour = new();
+    private AssistantUi? _assistantUi;
     private readonly List<(Border Card, string Title, string What, string Where)> _tourStations = new();
     private bool _tourStarted;
     private TextBlock? _bridgeTitle;
@@ -423,7 +424,19 @@ public partial class MainWindow : Window
             Ux.Wrap(Ux.Pill(_summary), _undoButton, _redoButton, checkProject, check, _saveButton)));
         _shell = new EditorShell(command, _tabs, Ux.Pill(_status));
         _shell.Navigate += GoToTab;
-        Content = new Grid { Children = { _shell, _tour } };
+        var root = new Grid();
+        root.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        Grid.SetColumn(_shell, 0);
+        Grid.SetColumn(_tour, 0);
+        root.Children.Add(_shell);
+        root.Children.Add(_tour);
+        Avalonia.Input.DragDrop.SetAllowDrop(root, true);
+        root.AddHandler(Avalonia.Input.DragDrop.DragEnterEvent, BridgeTabDragOver);
+        root.AddHandler(Avalonia.Input.DragDrop.DragOverEvent, BridgeTabDragOver);
+        root.AddHandler(Avalonia.Input.DragDrop.DragLeaveEvent, BridgeTabDragLeave);
+        root.AddHandler(Avalonia.Input.DragDrop.DropEvent, BridgeTabDrop);
+        _assistantUi = new AssistantUi(this, root, _shell);
+        Content = root;
 
         if (Settings.Get("last_tab") is { } lastTab && lastTab.Length > 0)
             GoToTab(lastTab);

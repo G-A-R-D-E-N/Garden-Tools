@@ -31,6 +31,14 @@ public static class LifecycleSmoke
             }
         }
 
+        if (args.Length > 0 && args[0] == "--assistant")
+        {
+            AppBuilder.Configure<HeadlessApp>()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+                .SetupWithoutStarting();
+            AssistantLifecycleSmoke.Run();
+            return 0;
+        }
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
         int workspace = WorkspaceSmoke.Run();
