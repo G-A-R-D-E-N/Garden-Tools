@@ -14,6 +14,11 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 * Assistant clip changes require explicit UI approval and remain bound to the exact active-document revision, object, old value, and new value; normal undo and verified save behavior remain in force.
 * External MCP has no write-capable tool, shell/process access, arbitrary filesystem write, or caller-controlled approval path.
 * Bridge layout and drag-and-drop handling are platform-safe alongside the Assistant drawer, with deterministic mounted-turret mesh auto-resolution.
+* Structure authoring now covers supported transition conditions, enter/exit notify events, global events, and non-empty state-machine creation and attachment through the verified save/reopen path.
+* Playback resolves adjacent skeletons and matching mounted-turret meshes deterministically, including platform-safe single-file and multi-file Bridge drops.
+* The ragdoll inspector exposes measured body frames, centres of mass, pivots, limits, engineering labels, and animation-to-ragdoll mapping; pinned body-frame distance measurement refuses self-pairs and stale selections.
+* Drop/Recover remains a constrained engineering preview with lifecycle reset and stale-state protections rather than a full physics simulation.
+* The workspace shell groups existing tools under Home, Graph, Inspect, Animation, and Project activities, keeps contextual secondary views reachable, and keeps command controls accessible at narrow widths.
 
 ## 1.1.0
 

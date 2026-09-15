@@ -18,12 +18,18 @@ fail closed instead of writing guessed data.
   explicit approval for revision-bound clip changes.
 - A platform-safe Bridge layout with drag-and-drop handling that remains available alongside the
   Assistant drawer, including deterministic mounted-turret mesh resolution.
+- A workspace shell with Home, Graph, Inspect, Animation, and Project activities, contextual
+  secondary views, grouped command controls, and horizontally aligned grid headers.
+- Measured ragdoll body-frame and centre-of-mass inspection, frame-distance measurement, and
+  constrained Drop/Recover preview controls with lifecycle and stale-state protection.
+- Verified structure-authoring save/reopen coverage for supported graph data, with explicit refusal
+  of unsupported or unverified writes.
 - Self-contained Windows and Linux packages with build identity shown by `--version` and About.
 
 ## Authoring
 
 - Supported behaviour and animation edits continue to use the verified native save pipeline.
-- Structure authoring supports expression transition conditions, enter/exit notify events, global events, and non-empty state-machine creation and attachment, with save/reopen verification.
+- Structure authoring supports expression transition conditions, enter/exit notify events, global events, and non-empty state-machine creation and attachment, with verified save/reopen coverage.
 - Native graph authoring, templates, variables, transitions, symbols, and supported arrays are
   covered by validation and save/reopen checks.
 - Skeleton editing and validation, skin-weight editing, and NIF skin-weight persistence are included.
@@ -49,6 +55,8 @@ fail closed instead of writing guessed data.
 
 - Read-only physics and cloth inspection, including bodies, shapes, constraints, body frames, centre
   of mass, pivots, limits, engineering labels, and animation-to-ragdoll mapping.
+- Pin two body frames to inspect their measured distance, with self-pair refusal and state that
+  remains stable while inspecting constraints or hovering the viewport.
 - Engineering frame mode and constrained Drop/Recover preview for measured ragdoll data.
 
 The Drop/Recover control is an engineering preview and is explicitly not a full Havok simulation.
@@ -61,6 +69,8 @@ The Drop/Recover control is an engineering preview and is explicitly not a full 
   separate verified action with normal undo, backup, and source-stamp guarantees.
 - External MCP remains read-only: it has no write-capable tool, shell access, arbitrary filesystem
   writes, or caller-controlled approval path.
+- Playback can resolve adjacent skeletons and matching mounted-turret meshes deterministically, and
+  Bridge file drops accept the platform's single-file and multi-file storage payloads.
 - Round-trip and save-fidelity coverage protects unknown data and existing file structure where the
   current reader/writer can prove preservation.
 - Fallout 4 packfiles are the primary supported Havok target. Self-contained packages target Windows
