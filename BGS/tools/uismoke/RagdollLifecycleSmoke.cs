@@ -15,8 +15,9 @@ public static class LifecycleSmoke
     {
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
+        int workspace = WorkspaceSmoke.Run();
         int lifecycle = RagdollLifecycle();
-        return existing == 0 && lifecycle == 0 ? 0 : 1;
+        return existing == 0 && workspace == 0 && lifecycle == 0 ? 0 : 1;
     }
 
     private static int RagdollLifecycle()

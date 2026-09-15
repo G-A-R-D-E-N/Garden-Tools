@@ -15,14 +15,23 @@ public static class AdvancedAuthoringUi
     public static void Attach(MainWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        if (window.Content is not DockPanel shell) return;
-        var native = shell.Children.OfType<NativeAuthoringStrip>().FirstOrDefault();
+        var native = NativeStrip(window.Content as Control);
         if (native?.Child is not Panel row || row.Children.OfType<Button>().Any(b => b.Content?.ToString() == "Structure authoring")) return;
 
         var open = Ux.Secondary("Structure authoring");
         ToolTip.SetTip(open, "Author verified transition conditions, notify events, and state machines.");
         open.Click += (_, _) => new BehaviourStructureWindow(window).Present();
         row.Children.Insert(Math.Max(0, row.Children.Count - 1), open);
+    }
+
+    private static NativeAuthoringStrip? NativeStrip(Control? content)
+    {
+        var shell = EditorShell.Find(content);
+        if (shell != null)
+            return shell.Tools.Children.OfType<NativeAuthoringStrip>().FirstOrDefault();
+        return content is DockPanel panel
+            ? panel.Children.OfType<NativeAuthoringStrip>().FirstOrDefault()
+            : null;
     }
 
     public static BehaviourStructureWindow OpenForTest(MainWindow window)

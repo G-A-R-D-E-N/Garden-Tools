@@ -154,6 +154,90 @@ and reserves the `no difference` row for an actually identical unfiltered compar
 Focused coverage checks no-filter, kind, class, combined, and empty filters plus deterministic JSON
 and text output ordering.
 
+## `BGS/app/EditorShell.cs:EditorShell` — workspace chrome
+
+The nine existing TabControl pages stay as the real views. The tab strip is hidden (`EditorShell.HideStrip` only hides the TabControl's own TabStrip, not nested drawer strips). A left activity rail maps:
+
+- Home → Bridge
+- Graph → Graph
+- Inspect → Tree, Symbols
+- Animation → Animation, Playback
+- Project → Project search, Chain, Compare
+
+`last_tab` still stores the original tab header so existing persistence and `GoToTab("Tree")` keep working. Command chrome (Open/Save/Undo/Redo/Check) lives in the shell command bar; Expand all / Collapse all / the object filter stay on Inspect → Tree. Graph search is a separate field on the Graph toolbar (`_graphFilter`). `MainWindow.Filter(string)` still sets both, which is the API the existing uismoke battery uses.
+
+`NativeAuthoringUi.Attach` / `BuildInfoUi.Attach` add Batch authoring and About into `EditorShell.Tools` when an `EditorShell` is present. They no longer wrap the window in a second top `DockPanel` strip on the production `App.CreateMainWindow()` path. The wrap remains only as a fallback for a window whose content is not an `EditorShell`.
+
+## `BGS/app/AdvancedAuthoringUi.cs:AdvancedAuthoringUi.Attach`
+
+Structure authoring is inserted into the same native strip. Lookup is `EditorShell.Tools` (or a fallback `DockPanel` child), not `window.Content as DockPanel`. That DockPanel check is what left the button missing after the shell stopped wrapping the window.
+
+Tree-only typing must not call `GraphView.Filter`. Otherwise Inspect → Tree search leaves Graph dimmed with no visible find field.
+
+## `BGS/app/MainWindow.Document.cs:MainWindow.OnClosed`
+
+Dispose `_gameData` here. `BuildChain` replaces the previous `GameData` while the window lives, but closing used to leak archive file handles for the process lifetime. `OnClosing` can still be cancelled, so dispose belongs on `OnClosed`.
+
+## `BGS/app/MainWindow.Open.cs:MainWindow.Load`
+
+BGS edits the 8-byte FO4 packfile layout. A readable 4-byte file is refused before a graph is shown, and the previous document model is fully replaced so the path cannot name a file that was never loaded. `NonEightByteLayout` returns the pointer width for a readable non-8-byte packfile, otherwise null.
+
+## `BGS/app/MainWindow.Open.cs:MainWindow.AppendRagdollSourceNote`
+
+After an animation file loads its clip summary, append the sibling-sourced ragdoll note so the overlay origin stays on the playback summary line.
+
+## `BGS/app/MainWindow.Bridge.cs:MainWindow.HasDroppedFiles`
+
+Avalonia 12 has a single file format, `DataFormat.File`. `DroppedPaths` keeps only items with a local path so a virtual/remote drop reports zero files instead of a bogus path.
+
+## `BGS/app/MainWindow.Templates.cs:MainWindow.RefreshPasteSlots`
+
+Paste stays disabled unless `_bytes` is loaded. A rejected (for example 4-byte) open nulls `_bytes` even when the path is remembered.
+
+## `BGS/app/MainWindow.GraphApi.cs:MainWindow.UpdateScaleStatus`
+
+The ragdoll scale readout is the fitted body half-extent and frame-axis stub length in the file's units. Refreshing on every load swaps the numbers or hides the pill.
+
+## `BGS/app/NativeAuthoringUi.cs:BatchAuthoringWindow.Invalidate`
+
+Any change to either authoring queue drops a pending preview so Apply cannot run against a batch it no longer describes.
+
+## `BGS/app/NativeAuthoringUi.cs:BatchAuthoringWindow`
+
+Variables are written first on their own verified pass so the clip/state pass sees a graph that already declares them. Each pass byte-verifies and graph-validates its own output.
+
+## `BGS/app/HkGrid.cs:HkGrid` — header/body horizontal scroll
+
+Before: the header Grid was `Dock.Top` on the outer DockPanel, and only the TreeView sat in a ScrollViewer with `HorizontalScrollBarVisibility.Auto`. Wide rows could scroll horizontally while column titles stayed put.
+
+After: one horizontal ScrollViewer owns a sheet that contains the header and a vertical-only body scroller. Pixel columns keep a `MinWidth` so the sheet can actually overflow. Proof: `BGS/tools/uismoke/WorkspaceSmoke.cs:HkGridHeaderScrollsWithRows`.
+
 ## `docs/audits/bgs/2026-09-12/repro/Program.cs:Audit` — historical audit reproduction
 
 The version-bound harness records seven failures at `d2ae05ba1959bf7d8fa2d640ad07cab3ea6c1958`; its assertions expect the historical failing behavior. `Audit:Main` uses an isolated temporary directory and preferences, `Audit:PendingClose` focuses the real headless property control, and `Audit:ModlistScans` creates synthetic mod-manager inputs. Fixture object IDs come from the existing BGS test builders; this evidence makes no additional closed-engine layout or runtime claims. The companion `Audit.csproj` references the audited checkout through `AuditSourceRoot`, independently of the documentation branch's production code. See `docs/audits/bgs/2026-09-12/README.md` for reproduction and provenance limits.
+
+## `BGS/app/MainWindow.Document.cs` — PR #300 findings 1–3 on current main
+
+Current main still routed toolbar `Save` through `GraphValidator.SaveRefusal` while close/open “Save and continue” called `SavePendingChanges` → `SaveCurrent` without that check. Combined document+animation dirty saves called only `SaveCurrent`, whose `Load()` reset in-memory animation edits. `OnClosing` inspected dirty flags without `CommitPendingFields`.
+
+`MainWindow.Document.cs:WriteDocument` is the shared document write: it refuses with `GraphValidator.SaveRefusal` before `DocumentSaveTransaction.Commit`. `SavePendingChanges` writes the document then the animation against the refreshed source stamp, then reloads once. `OnClosing` and `CloseAfterDecision` flush `_fieldCommits` before discard handling.
+
+`AuditLifecycleSmoke.cs:ClosingRunsPendingFieldCommitsBeforeDiscard` proves that contract through `MainWindow.Document.cs:QueuePendingFieldCommitForTest`, without selecting a property textbox. Setting `TextBox.Text` and then `UpdateTarget` with `UpdateSourceTrigger=Explicit` can restore the old source value and is not a valid pending-edit. `AuditLifecycleSmoke.cs:CombinedSaveKeepsAnimationEdits` materializes the editable fixture with `AnimationSaveTransaction.Commit` over a spline stub (`NativeAnimation.SplineClass`). A lossless stub becomes interleaved on that first commit; `NativeAnimation.Interleave` then cannot save the edited frames because nothing still points at the leftover compressed object. Spline stays recompressible, which is the path `AnimationSaveTransactionTests.cs:AnimationScope` uses for `spline: true`.
+
+## `BGS/src/Hkx/HkxBinaryReader.Skeleton.cs:ParseSkeleton` — PR #300 finding 4
+
+`HkxBinaryReader.Skeleton.cs:ParseSkeleton` trusted `hkaSkeleton.bones` count and synthesized `Bone_i` names when a per-bone name fixup was missing, so a tiny malformed file could request 100,000 names. Bounding against `data.Length` still accepted a count whose `count * 0x10` payload crossed `__data__` `HkxBinaryReader.cs:SectionInfo.End` into later file bytes. That `End` is already `absoluteDataStart + end` from the packfile section header, the exclusive bound of the owning section. `ParseSkeleton` now takes that end from `HkxBinaryReader.cs:ParseHkx`. Annotation and lossless `ReadFloats` count paths stay unchanged without a current proven failing case. `HkxSkeletonCountTests.cs:DeclaredBoneCountThatExceedsTheSectionIsRejected` and `DeclaredBoneCountThatCrossesTheOwningSectionIsRejected` are the regressions.
+
+## `BGS/app/MainWindow.Animation.cs:SiblingSkeletonPath` — sibling rig resolution
+
+The sibling skeleton file is the first `*.hkx` under the sibling `CharacterAssets` folder that reads as a skeleton, or null. The ragdoll fallback uses the exact same file the pose pipeline poses with, so the mapper's `skeletonA` always matches the rig being played.
+
+## `BGS/app/MainWindow.Playback.cs` — ragdoll scale readout and animation overlay
+
+The ragdoll scale readout lives on the viewport's status row and is only shown once a file with rigid bodies is open (`TryLoadRagdoll` -> `UpdateScaleStatus`).
+
+An animation file carries no ragdoll of its own; the character's sibling skeleton (the same rig the clip poses) does, including the mapper that lets the overlay follow the clip. For an animation file, the ragdoll summary is replaced by the clip summary a moment later, so the sibling-sourced ragdoll gets its note appended there instead.
+
+## `BGS/app/MainWindow.Pose.cs:ShowConstraintInspection` — constraint limit readout
+
+The Playback summary line carries per-constraint limit inspection while a constraint is hovered or pinned (amber, like the constraint overlay), and restores the previous summary text and colour when the selection clears.
