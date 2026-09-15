@@ -2,7 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Threading;
 using BehaviourStudio.App;
 using OpenCommonwealth.Services.Hkx;
@@ -13,6 +15,22 @@ public static class LifecycleSmoke
 {
     public static int Main(string[] args)
     {
+        if (args.Contains("--layout-smoke"))
+        {
+            AppBuilder.Configure<HeadlessApp>()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+                .SetupWithoutStarting();
+            Settings.SettingsPathForTest =
+                Path.Combine(Path.GetTempPath(), $"bgs-layout-{Guid.NewGuid():N}.cfg");
+            Settings.TrySet("tour_done", "1", out _);
+            try { return WorkspaceSmoke.LayoutRun(); }
+            finally
+            {
+                File.Delete(Settings.SettingsPathForTest);
+                Settings.SettingsPathForTest = null;
+            }
+        }
+
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
         int workspace = WorkspaceSmoke.Run();

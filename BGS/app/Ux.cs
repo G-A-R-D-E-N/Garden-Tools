@@ -14,7 +14,6 @@ public static class Ux
     public const double ControlHeight = 28;
     public const double Radius = 4;
     public const double Space = 8;
-
     public static readonly Color Base = Color.Parse("#151515");
     public static readonly Color Rail = Color.Parse("#101010");
     public static readonly Color Card = Color.Parse("#222222");
@@ -62,6 +61,7 @@ public static class Ux
         CornerRadius = new CornerRadius(Radius),
         Padding = new Thickness(8, 5),
         FontSize = FontBody,
+        VerticalContentAlignment = VerticalAlignment.Center,
     };
 
     public static Button Primary(string text) => Style(new Button { Content = text }, AccentBrush, Brushes.White);
@@ -78,6 +78,8 @@ public static class Ux
         button.Padding = new Thickness(12, 5);
         button.MinHeight = ControlHeight;
         button.FontSize = FontMeta;
+        button.MinWidth = 84;
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalAlignment = VerticalAlignment.Center;
         return button;
     }
@@ -90,6 +92,38 @@ public static class Ux
         FontWeight = FontWeight.Bold,
         Margin = new Thickness(1, 2, 0, 2),
     };
+
+    public static Border Group(string title, params Control[] rows)
+    {
+        var body = new StackPanel { Spacing = Space };
+        body.Children.Add(SectionTitle(title));
+        foreach (var row in rows) body.Children.Add(row);
+        return new Border
+        {
+            Background = CardBrush,
+            BorderBrush = BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Radius),
+            Padding = new Thickness(10),
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = body,
+        };
+    }
+
+    public static WrapPanel Wrap(params Control[] controls)
+    {
+        var panel = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        foreach (var control in controls)
+        {
+            control.Margin = new Thickness(0, 0, Space, Space);
+            panel.Children.Add(control);
+        }
+        return panel;
+    }
 
     public static TextBlock Label(string text) => new()
     {

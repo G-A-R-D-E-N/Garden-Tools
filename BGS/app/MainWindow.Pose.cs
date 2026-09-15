@@ -257,17 +257,21 @@ public partial class MainWindow : Window
 
     private void FindMeshForFile()
     {
+        if (_meshPath.Length > 0) return;
+
         var found = MeshLookup.Find(_hkxPath, _projectChain?.Root, _projectChain?.SkeletonPath);
         if (!found.Found)
         {
-            SetPlaybackSummary("Select a clip to see what it plays. " + found.Reason, Ux.MutedBrush);
+            if (_poseAnimation == null)
+                SetPlaybackSummary("Select a clip to see what it plays. " + found.Reason, Ux.MutedBrush);
             return;
         }
 
         if (!LoadMesh(found.Path!)) return;
 
-        SetPlaybackSummary($"Select a clip to see what it plays, on {Path.GetFileName(found.Path!)}.",
-                           Ux.MutedBrush);
+        if (_poseAnimation == null)
+            SetPlaybackSummary($"Select a clip to see what it plays, on {Path.GetFileName(found.Path!)}.",
+                               Ux.MutedBrush);
     }
 
     private void BuildClipList(BehaviourGraphModel model)

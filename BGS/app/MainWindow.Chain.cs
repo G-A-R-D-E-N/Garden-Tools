@@ -30,7 +30,7 @@ public partial class MainWindow : Window
         browse.Click += async (_, _) => await PickGameDataFolder();
 
         _dataSummary.Text = "no game data attached";
-        var bar = Bar(_dataField, browse, Ux.Pill(_dataSummary));
+        var bar = Ux.Group("Game data", Ux.Wrap(_dataField, browse), Ux.Wrap(Ux.Pill(_dataSummary)));
 
         _modsField.Text = Settings.Get("gameModsFolder");
         _modsField.KeyDown += (_, e) =>
@@ -41,7 +41,8 @@ public partial class MainWindow : Window
         modsBrowse.Click += async (_, _) => await PickModsFolder();
         ToolTip.SetTip(modsBrowse, "The Mod Organizer 2 instance root (holds mods/, profiles/, overwrite/)");
         _modsSummary.Text = "no mods layered";
-        var modsBar = Bar(_modsField, modsBrowse, Ux.Pill(_modsSummary));
+        var modsBar = Ux.Group("Mod Organizer layer", Ux.Wrap(_modsField, modsBrowse),
+            Ux.Wrap(Ux.Pill(_modsSummary)));
 
         _crashField.KeyDown += (_, e) =>
         {
@@ -50,27 +51,19 @@ public partial class MainWindow : Window
         var resolve = Ux.Secondary("Resolve");
         resolve.Click += (_, _) => ResolveCrashHash();
         _crashSummary.Text = "paste a hash and press Resolve";
-        var crashBar = Bar(_crashField, resolve, Ux.Pill(_crashSummary));
+        var crashBar = Ux.Group("Crash hash", Ux.Wrap(_crashField, resolve), Ux.Wrap(Ux.Pill(_crashSummary)));
 
         var sweep = Ux.Secondary("Sweep all subgraphs");
         sweep.Click += (_, _) => RunSweep();
         ToolTip.SetTip(sweep, "Run the whole-load-order per-weapon check across every AnimationFileData manifest");
         _sweepSummary.Text = "one-click whole-load-order per-weapon check";
-        var sweepBar = Bar(sweep, Ux.Pill(_sweepSummary));
+        var sweepBar = Ux.Group("Project sweep", Ux.Wrap(sweep), Ux.Wrap(Ux.Pill(_sweepSummary)));
 
         var panel = new DockPanel();
-        DockPanel.SetDock(bar, Dock.Top);
-        bar.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(modsBar, Dock.Top);
-        modsBar.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(crashBar, Dock.Top);
-        crashBar.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(sweepBar, Dock.Top);
-        sweepBar.Margin = new Thickness(0, 0, 0, 8);
-        panel.Children.Add(sweepBar);
-        panel.Children.Add(crashBar);
-        panel.Children.Add(modsBar);
-        panel.Children.Add(bar);
+        AddTop(panel, sweepBar);
+        AddTop(panel, crashBar);
+        AddTop(panel, modsBar);
+        AddTop(panel, bar);
         panel.Children.Add(_chain);
         return panel;
     }
@@ -479,6 +472,7 @@ public partial class MainWindow : Window
             _chain.Add(null, "problem", problem).Colour(0, Ux.BadBrush).Colour(1, Ux.BadBrush);
 
         AddWeaponGaps(chain);
+        FindMeshForFile();
     }
 
 }

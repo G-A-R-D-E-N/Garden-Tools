@@ -179,37 +179,45 @@ public partial class MainWindow : Window
         _clearFrameDistanceButton.IsEnabled = false;
         _clearFrameDistanceButton.Click += (_, _) => _skeleton.ClearFrameDistance();
 
-        var transport = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        foreach (var control in new Control[]
-                 { _playButton, first, back, forward, last, fit, reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle, _clearFrameDistanceButton, _dropButton, reload, mesh, clearMesh })
-            transport.Children.Add(control);
-
-        var transportScroll = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
-            Content = transport,
-        };
-        var bar = Bar(Ux.Pill(_playbackSummary), transportScroll);
-        bar.Margin = new Thickness(0, 0, 0, 8);
-
         _scalePill = Ux.Pill(_scaleStatus);
         _scalePill.IsVisible = false;
         _frameDistancePill = Ux.Pill(_frameDistanceStatus);
         _frameDistancePill.IsVisible = false;
 
-        var scrubRow = Bar(_scrub, Ux.Pill(_frameLabel), _scalePill, _frameDistancePill);
-        scrubRow.Margin = new Thickness(0, 8, 0, 0);
+        var panel = new Grid();
+        panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        panel.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
+        panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
-        var panel = new DockPanel();
-        DockPanel.SetDock(bar, Dock.Top);
-        DockPanel.SetDock(scrubRow, Dock.Bottom);
-        panel.Children.Add(bar);
-        panel.Children.Add(scrubRow);
+        var summary = Ux.Pill(_playbackSummary);
+        summary.Margin = new Thickness(0, 0, 0, Ux.Space);
+        Grid.SetRow(summary, 0);
+        panel.Children.Add(summary);
+
+        var controls = Ux.Wrap(
+            Ux.Group("Playback controls", ControlStrip(_playButton, first, back, forward, last, fit)),
+            Ux.Group("Viewport overlays",
+                ControlStrip(reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle,
+                             _physicsSkeletonToggle, _framesToggle, _engineerToggle)),
+            Ux.Group("Scene tools",
+                ControlStrip(_clearFrameDistanceButton, _dropButton, reload, mesh, clearMesh)));
+        controls.Margin = new Thickness(0, 0, 0, Ux.Space);
+        Grid.SetRow(controls, 1);
+        panel.Children.Add(controls);
+
         _skeleton.ClipToBounds = true;
         _playbackViewportHost = Framed(_skeleton);
         _playbackViewportHost.ClipToBounds = true;
-        panel.Children.Add(WithClipPicker(_playbackViewportHost));
+        var viewport = WithClipPicker(_playbackViewportHost);
+        Grid.SetRow(viewport, 2);
+        panel.Children.Add(viewport);
+
+        var timeline = Ux.Group("Timeline", _scrub,
+            Ux.Wrap(Ux.Pill(_frameLabel), _scalePill, _frameDistancePill));
+        timeline.Margin = new Thickness(0, Ux.Space, 0, 0);
+        Grid.SetRow(timeline, 3);
+        panel.Children.Add(timeline);
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
                            "the skeleton; use Mesh... to hang a model on it.", Ux.MutedBrush);

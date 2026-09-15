@@ -367,7 +367,6 @@ public partial class MainWindow : Window
         BuildSymbols(model);
         BuildClipList(model);
         BuildChain();
-        FindMeshForFile();
         StartRun();
 
         string source = reading != null ? "read from the file itself" : "read by the internal developer fallback";

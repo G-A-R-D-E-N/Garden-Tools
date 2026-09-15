@@ -25,6 +25,8 @@
   <ItemGroup>
     <!-- Genuine Fallout 4 samples shared with symrm, used by the packed-playback smoke. -->
     <None Include="../../tools/symrm/samples/TurretStandingSkeleton.hkx" Link="samples/TurretStandingSkeleton.hkx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../tools/symrm/samples/TurretMountedSkeleton.hkx" Link="samples/TurretMountedSkeleton.hkx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/symrm/samples/TurretIdleWeapReady.hkx" Link="samples/TurretIdleWeapReady.hkx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../tools/symrm/samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" Link="samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

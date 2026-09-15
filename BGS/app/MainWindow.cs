@@ -22,7 +22,7 @@ public partial class MainWindow : Window
     private const int MaxTreeRows = 4000;
     private const int FramesPerPage = 300;
 
-    private readonly TextBox _pathField = Ux.Field("absolute path to a .hkx behaviour, character or project file");
+    private readonly TextBox _pathField = Ux.Field("absolute path to a .hkx behaviour, character or project file", 420);
     private readonly TextBox _filter = Ux.Field("filter objects by name, class or animation");
     private readonly TextBox _graphFilter = Ux.Field("filter graph by name, class or animation", 220);
     private readonly TextBlock _summary = new() { Foreground = Ux.MutedBrush, FontSize = 12 };
@@ -403,6 +403,11 @@ public partial class MainWindow : Window
         _bridgeRedo.Click += (_, _) => Redo();
 
         EditorShell.HideStrip(_tabs);
+        Avalonia.Input.DragDrop.SetAllowDrop(_tabs, true);
+        _tabs.AddHandler(Avalonia.Input.DragDrop.DragEnterEvent, BridgeTabDragOver);
+        _tabs.AddHandler(Avalonia.Input.DragDrop.DragOverEvent, BridgeTabDragOver);
+        _tabs.AddHandler(Avalonia.Input.DragDrop.DragLeaveEvent, BridgeTabDragLeave);
+        _tabs.AddHandler(Avalonia.Input.DragDrop.DropEvent, BridgeTabDrop);
         _tabs.SelectionChanged += (_, _) =>
         {
             if (_tabs.SelectedItem is TabItem tab && tab.Header?.ToString() is { } header && header.Length > 0)
@@ -412,9 +417,10 @@ public partial class MainWindow : Window
             }
         };
 
-        var command = Rows(
-            (Bar(_pathField, browse, archive, open), false),
-            (Bar(Ux.Pill(_summary), _undoButton, _redoButton, checkProject, check, _saveButton), false));
+        var command = new StackPanel { Spacing = Ux.Space };
+        command.Children.Add(Ux.Group("Open behaviour", Ux.Wrap(_pathField, browse, archive, open)));
+        command.Children.Add(Ux.Group("Document actions",
+            Ux.Wrap(Ux.Pill(_summary), _undoButton, _redoButton, checkProject, check, _saveButton)));
         _shell = new EditorShell(command, _tabs, Ux.Pill(_status));
         _shell.Navigate += GoToTab;
         Content = new Grid { Children = { _shell, _tour } };

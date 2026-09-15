@@ -19,9 +19,74 @@ internal static class WorkspaceSmoke
         _failed = 0;
         ActivityRailSelectsExistingTabs();
         ProductionChromeLivesInTheShell();
+        LayoutAndHandlersRemainConnected();
+        StandaloneSampleResolvesAdjacentSkeleton();
         TreeFilterDoesNotSilentlyDimTheGraph();
         HkGridHeaderScrollsWithRows();
         return _failed;
+    }
+
+    internal static int LayoutRun()
+    {
+        _failed = 0;
+        LayoutAndHandlersRemainConnected();
+        StandaloneSampleResolvesAdjacentSkeleton();
+        return _failed;
+    }
+
+    private static void StandaloneSampleResolvesAdjacentSkeleton()
+    {
+        string samples = Path.Combine(AppContext.BaseDirectory, "samples");
+        string animation = Path.Combine(samples, "TurretIdleWeapReady.hkx");
+        string skeleton = Path.Combine(samples, "TurretMountedSkeleton.hkx");
+        if (!File.Exists(animation) || !File.Exists(skeleton)) return;
+
+        Check("the standalone sample finds its adjacent skeleton", skeleton,
+              MainWindow.SiblingSkeletonPath(animation) ?? "");
+
+        string mesh = Path.Combine(samples, "Meshes", "Actors", "Turret", "CharacterAssets",
+                                   "TurretMounted.nif");
+        Check("the standalone sample finds its matching vanilla mesh", mesh,
+              OpenCommonwealth.Services.Hkx.MeshLookup.Find(animation, null, skeleton).Path ?? "");
+    }
+
+    private static void LayoutAndHandlersRemainConnected()
+    {
+        Console.WriteLine("\nBGS control groups are owned by their views and keep their handlers");
+        var window = new MainWindow();
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var shell = EditorShell.Find(window.Content as Control);
+        CheckTrue("the command area groups file and document actions",
+            shell != null && Smoke.Find<TextBlock>(shell).Any(text => text.Text == "OPEN BEHAVIOUR") &&
+            Smoke.Find<TextBlock>(shell).Any(text => text.Text == "DOCUMENT ACTIONS"));
+        CheckTrue("the status footer remains in the shell",
+            shell != null && shell.Children.OfType<Border>().Any(child =>
+                Grid.GetRow(child) == 3 && child.Child is Border));
+
+        Smoke.SelectTab(window, "Playback");
+        foreach (string section in new[] { "PLAYBACK CONTROLS", "VIEWPORT OVERLAYS", "SCENE TOOLS", "TIMELINE" })
+            CheckTrue($"Playback has the {section.ToLowerInvariant()} section",
+                Smoke.Find<TextBlock>(window).Any(text => text.Text == section));
+        Smoke.Click(Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Play"));
+        CheckTrue("the Playback Play handler still reports the empty state",
+            window.PlaybackSummary.StartsWith("Nothing loaded to play", StringComparison.Ordinal));
+
+        Smoke.SelectTab(window, "Animation");
+        foreach (string section in new[] { "FRAME NAVIGATION", "FIND A FRAME", "EDIT SELECTED FRAME" })
+            CheckTrue($"Animation has the {section.ToLowerInvariant()} section",
+                Smoke.Find<TextBlock>(window).Any(text => text.Text == section));
+
+        Smoke.SelectTab(window, "Chain");
+        foreach (string section in new[] { "PROJECT SWEEP", "CRASH HASH", "MOD ORGANIZER LAYER", "GAME DATA" })
+            CheckTrue($"Chain has the {section.ToLowerInvariant()} section",
+                Smoke.Find<TextBlock>(window).Any(text => text.Text == section));
+
+        Smoke.SelectTab(window, "Bridge");
+        Smoke.Click(Smoke.Find<Button>(window).First(button => button.Content?.ToString() == "Check graph"));
+        Check("the command Check graph handler still runs", "Nothing loaded to check.", window.StatusForTest);
+        Smoke.CloseForTest(window);
     }
 
     private static void Check(string what, object expected, object? actual)

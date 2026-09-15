@@ -128,7 +128,7 @@ public partial class MainWindow : Window
         (text ?? "").Contains(needle, StringComparison.OrdinalIgnoreCase);
 
     private static bool HasDroppedFiles(Avalonia.Input.IDataTransfer data) =>
-        Avalonia.Input.DataTransferExtensions.Contains(data, Avalonia.Input.DataFormat.File);
+        DroppedPaths(data).Count > 0;
 
     private void BridgeDragOver(object? sender, Avalonia.Input.DragEventArgs e)
     {
@@ -139,12 +139,28 @@ public partial class MainWindow : Window
         else HideDropHint();
     }
 
-    private static List<string> DroppedPaths(Avalonia.Input.IDataTransfer data) =>
-        (Avalonia.Input.DataTransferExtensions.TryGetFiles(data) ?? Array.Empty<IStorageItem>())
-        .Select(item => item.TryGetLocalPath())
-        .Where(path => !string.IsNullOrEmpty(path))
-        .Select(path => path!)
-        .ToList();
+    private void BridgeTabDragOver(object? sender, Avalonia.Input.DragEventArgs e)
+    {
+        if (_tabs.SelectedItem is TabItem { Header: "Bridge" })
+            BridgeDragOver(sender, e);
+    }
+
+    private void BridgeTabDragLeave(object? sender, Avalonia.Input.DragEventArgs e)
+    {
+        HideDropHint();
+    }
+
+    private static List<string> DroppedPaths(Avalonia.Input.IDataTransfer data)
+    {
+        var files = Avalonia.Input.DataTransferExtensions.TryGetFiles(data);
+        if (files is not { Length: > 0 } && Avalonia.Input.DataTransferExtensions.TryGetFile(data) is { } file)
+            files = new[] { file };
+        return (files ?? Array.Empty<IStorageItem>())
+            .Select(item => item.TryGetLocalPath())
+            .Where(path => !string.IsNullOrEmpty(path))
+            .Select(path => path!)
+            .ToList();
+    }
 
     private void BridgeDrop(object? sender, Avalonia.Input.DragEventArgs e)
     {
@@ -159,6 +175,12 @@ public partial class MainWindow : Window
         if (files.Count > 1)
             SetStatus($"Dropped {files.Count} files — opened the first. Open the rest from the " +
                       "path bar or the recent row.", Ux.MetaBrush);
+    }
+
+    private void BridgeTabDrop(object? sender, Avalonia.Input.DragEventArgs e)
+    {
+        if (_tabs.SelectedItem is TabItem { Header: "Bridge" })
+            BridgeDrop(sender, e);
     }
 
     private static string? FirstDroppedFileName(Avalonia.Input.IDataTransfer data)

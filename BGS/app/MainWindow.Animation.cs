@@ -31,15 +31,8 @@ public partial class MainWindow : Window
         last.Click += (_, _) => PageFrames(int.MaxValue);
 
         var panel = new DockPanel();
-        var header = Ux.Pill(_animationSummary);
-        header.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(header, Dock.Top);
-        panel.Children.Add(header);
-
-        var bar = Bar(Ux.Pill(_framePage), first, earlier, later, last);
-        bar.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(bar, Dock.Top);
-        panel.Children.Add(bar);
+        AddTop(panel, Ux.Pill(_animationSummary));
+        AddTop(panel, Ux.Group("Frame navigation", Ux.Wrap(Ux.Pill(_framePage), first, earlier, later, last)));
 
         var aim = Ux.Secondary("Find frame");
         aim.Click += (_, _) => AimAtFraction();
@@ -49,10 +42,7 @@ public partial class MainWindow : Window
             if (e.Property == TextBox.TextProperty) ShowAnimationFrames();
         };
 
-        var tools = Bar(Ux.Pill(_fractionAnswer), _boneFilter, _fraction, aim);
-        tools.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(tools, Dock.Top);
-        panel.Children.Add(tools);
+        AddTop(panel, Ux.Group("Find a frame", Ux.Wrap(Ux.Pill(_fractionAnswer), _boneFilter, _fraction, aim)));
 
         var apply = Ux.Secondary("Set frame");
         apply.Click += (_, _) => SetFrame();
@@ -64,11 +54,8 @@ public partial class MainWindow : Window
 
         _animation.SelectionChanged += ShowSelectedFrame;
 
-        var editing = Bar(_framePosition, _frameRotation, _frameScale, apply, write,
-                          Ux.Pill(_frameEditAnswer));
-        editing.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(editing, Dock.Top);
-        panel.Children.Add(editing);
+        AddTop(panel, Ux.Group("Edit selected frame",
+            Ux.Wrap(_framePosition, _frameRotation, _frameScale, apply, write, Ux.Pill(_frameEditAnswer))));
 
         panel.Children.Add(_animation);
         return panel;
@@ -364,10 +351,20 @@ public partial class MainWindow : Window
     internal static string? SiblingSkeletonPath(string primaryPath, string? fallbackPath = null)
     {
         string? assets = FindPoseSkeletonFolder(primaryPath, fallbackPath);
-        if (assets == null) return null;
-
-        foreach (string file in Directory.EnumerateFiles(assets, "*.hkx").OrderBy(f => f))
+        if (assets != null)
         {
+            foreach (string file in Directory.EnumerateFiles(assets, "*.hkx").OrderBy(f => f))
+            {
+                try { new HkxBinaryReader().ReadSkeleton(file); return file; }
+                catch { }
+            }
+        }
+
+        string folder = Path.GetDirectoryName(Path.GetFullPath(primaryPath)) ?? "";
+        foreach (string file in Directory.EnumerateFiles(folder, "*.hkx").OrderBy(f => f))
+        {
+            if (string.Equals(Path.GetFullPath(file), Path.GetFullPath(primaryPath),
+                              StringComparison.OrdinalIgnoreCase)) continue;
             try { new HkxBinaryReader().ReadSkeleton(file); return file; }
             catch { }
         }

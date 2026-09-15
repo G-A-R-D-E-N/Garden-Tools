@@ -80,4 +80,23 @@ public partial class MainWindow : Window
         }
         return grid;
     }
+
+    private static void AddTop(DockPanel panel, Control control)
+    {
+        control.Margin = new Thickness(0, 0, 0, Ux.Space);
+        DockPanel.SetDock(control, Dock.Top);
+        panel.Children.Add(control);
+    }
+
+    private static ScrollViewer ControlStrip(params Control[] controls)
+    {
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        foreach (var control in controls) strip.Children.Add(control);
+        return new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
+            Content = strip,
+        };
+    }
 }

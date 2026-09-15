@@ -153,6 +153,7 @@ public partial class MainWindow : Window
         BuildMachineNavigator(new BehaviourGraphModel());
         SetMachineNavigatorActive(Array.Empty<string>());
         ClearPose();
+        ClearMesh();
         ClearProjectSearch();
         ResetHistory();
         _readOnly = false;
@@ -204,6 +205,7 @@ public partial class MainWindow : Window
             if (_animationData != null)
             {
                 LoadPose(path, Path.GetFileName(path));
+                FindMeshForFile();
                 AppendRagdollSourceNote();
             }
             return;

@@ -37,12 +37,11 @@ public sealed class EditorShell : Grid
         Spacing = 6,
     };
     private readonly Border _secondaryHost;
-    private readonly StackPanel _tools = new()
+    private readonly WrapPanel _tools = new()
     {
         Orientation = Orientation.Horizontal,
-        Spacing = 8,
         VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(12, 0, 0, 0),
+        HorizontalAlignment = HorizontalAlignment.Stretch,
     };
 
     public EditorShell(Control command, Control workspace, Control status)
@@ -87,10 +86,9 @@ public sealed class EditorShell : Grid
         SetRowSpan(railHost, 4);
         Children.Add(railHost);
 
-        var commandBand = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(_tools, Dock.Right);
-        commandBand.Children.Add(_tools);
+        var commandBand = new StackPanel { Spacing = Ux.Space };
         commandBand.Children.Add(command);
+        commandBand.Children.Add(_tools);
         var commandHost = new Border
         {
             Background = Ux.BaseBrush,
