@@ -748,6 +748,7 @@ public class SkeletonView : Control
         {
             DrawGround(ctx);
             DrawFrames(ctx, _bodies);
+            DrawFrameTable(ctx, _bodies);
             DrawFrameDistance(ctx, _bodies);
             return;
         }
@@ -934,6 +935,47 @@ public class SkeletonView : Control
                      c.Y.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
                      c.Z.ToString("0.00", CultureInfo.InvariantCulture);
         return "COM (" + com + ")  stub " + stub;
+    }
+
+    public static string FrameTableRow(HavokRigidBody body)
+    {
+        string name = body.Name.Length > 0 ? body.Name : "body " + body.Id;
+        var p = body.Position;
+        string origin = p.X.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+                        p.Y.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+                        p.Z.ToString("0.00", CultureInfo.InvariantCulture);
+        string com = body.CenterOfMass == Vector3.Zero ? "no measured COM"
+            : "(" + body.CenterOfMass.X.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+              body.CenterOfMass.Y.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+              body.CenterOfMass.Z.ToString("0.00", CultureInfo.InvariantCulture) + ")";
+        return $"{body.Id,3}  {name,-16}  frame ({origin})  COM {com}";
+    }
+
+    private void DrawFrameTable(DrawingContext ctx, HavokRagdollModel model)
+    {
+        const float lineHeight = 15f;
+        const float pad = 10f;
+        var rows = model.Bodies.Select(FrameTableRow).ToList();
+        if (rows.Count == 0) return;
+
+        float width = rows.Max(r =>
+        {
+            var text = new FormattedText(r, CultureInfo.InvariantCulture,
+                                         FlowDirection.LeftToRight, Typeface.Default, 11,
+                                         Ux.TitleBrush);
+            return (float)text.Width;
+        });
+
+        var panel = new Rect(8, 8, width + pad * 2, rows.Count * lineHeight + pad * 2);
+        ctx.FillRectangle(new SolidColorBrush(Ux.Card, 0.92), panel);
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var text = new FormattedText(rows[i], CultureInfo.InvariantCulture,
+                                         FlowDirection.LeftToRight, Typeface.Default, 11,
+                                         i % 2 == 0 ? Ux.TitleBrush : Ux.MetaBrush);
+            ctx.DrawText(text, new Point(8 + pad, 8 + pad + i * lineHeight));
+        }
     }
 
     private void DrawFrameDistance(DrawingContext ctx, HavokRagdollModel model)

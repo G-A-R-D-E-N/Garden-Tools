@@ -935,6 +935,28 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
+    public void FrameTableReadsEveryBodysOriginAndCom()
+    {
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        Assert.NotNull(model);
+
+        Assert.Equal(18, model!.Bodies.Count);
+        var rows = model.Bodies.Select(SkeletonView.FrameTableRow).ToList();
+        Assert.Equal(model.Bodies.Count, rows.Count);
+
+        Assert.Equal("  0  Ragdoll_NPC COM   frame (-0.00, 0.00, 68.91)  COM (0.02, -0.05, 69.19)",
+                     rows[0]);
+        Assert.Equal("  1  Ragdoll_NPC L Thigh  frame (-6.62, 0.00, 68.91)  COM (-8.43, -0.53, 53.23)",
+                     rows[1]);
+        Assert.Equal(" 16  Ragdoll_NPC L Hand  frame (-38.12, 7.71, 83.98)  COM (-39.39, 11.19, 80.34)",
+                     rows[16]);
+
+        var bare = new HavokRigidBody { Id = 42 };
+        Assert.Equal(" 42  body 42           frame (0.00, 0.00, 0.00)  COM no measured COM",
+                     SkeletonView.FrameTableRow(bare));
+    }
+
+    [Fact]
     public void BodyFramePinsPersistTogetherAndClear()
     {
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));

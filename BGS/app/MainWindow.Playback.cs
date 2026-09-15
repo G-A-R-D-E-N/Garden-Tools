@@ -136,8 +136,9 @@ public partial class MainWindow : Window
         _engineerToggle.IsEnabled = false;
         ToolTip.SetTip(_engineerToggle, "Engineering view: draw only the measured body frames (axis triads + " +
                                         "center-of-mass markers) over the ground grid - no skeleton, hulls, " +
-                                        "constraints or bindings - and never auto-frame the camera. Fit still " +
-                                        "frames the bodies.");
+                                        "constraints or bindings - and never auto-frame the camera. A pinned " +
+                                        "readout table lists every body's measured frame origin and COM so all " +
+                                        "of them can be compared at once. Fit still frames the bodies.");
         _engineerToggle.IsCheckedChanged += (_, _) =>
         {
             _skeleton.EngineeringFrames = _engineerToggle.IsChecked == true;
