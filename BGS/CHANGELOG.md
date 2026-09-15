@@ -9,6 +9,11 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 * Editor workspace: a left activity rail (Home, Graph, Inspect, Animation, Project) with contextual secondary views, and one command bar for Open, Save, Undo, Redo and validation. Tree expand/collapse and the object filter live on Inspect → Tree. Graph find is a separate field on the Graph toolbar.
 * Batch authoring and About sit in the command bar on the production window path, not on a second top strip.
 * Tree/grid column headers now scroll horizontally with their rows.
+* Added a bounded read-only stdio MCP server for behavior, object, animation, project-chain, project-search, and project-check inspection, plus a side-effect-free clip-animation preview.
+* Added an optional in-app Assistant drawer with an OpenAI-compatible provider boundary, bounded editor context, cancellation, and sequential tool execution.
+* Assistant clip changes require explicit UI approval and remain bound to the exact active-document revision, object, old value, and new value; normal undo and verified save behavior remain in force.
+* External MCP has no write-capable tool, shell/process access, arbitrary filesystem write, or caller-controlled approval path.
+* Bridge layout and drag-and-drop handling are platform-safe alongside the Assistant drawer, with deterministic mounted-turret mesh auto-resolution.
 
 ## 1.1.0
 

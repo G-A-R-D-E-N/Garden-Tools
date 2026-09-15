@@ -12,6 +12,12 @@ fail closed instead of writing guessed data.
 - Crash-analysis helpers for AnimTextData subgraphs and missing animation coverage.
 - Round-trip diagnostics, save-fidelity fixtures, packfile conversion checks, and stronger save
   transaction safety.
+- A read-only stdio MCP server with bounded behavior, object, animation, project, and search
+  inspection, plus a side-effect-free clip-animation preview.
+- An optional in-app Assistant drawer with provider integration, bounded editor context, and
+  explicit approval for revision-bound clip changes.
+- A platform-safe Bridge layout with drag-and-drop handling that remains available alongside the
+  Assistant drawer, including deterministic mounted-turret mesh resolution.
 - Self-contained Windows and Linux packages with build identity shown by `--version` and About.
 
 ## Authoring
@@ -51,6 +57,10 @@ The Drop/Recover control is an engineering preview and is explicitly not a full 
 
 - Supported saves retain backup and recovery behavior, verify output before publication, and refuse
   unsafe or unverified writes without modifying the source.
+- Assistant clip changes stay in the active document until explicit UI approval; saving remains a
+  separate verified action with normal undo, backup, and source-stamp guarantees.
+- External MCP remains read-only: it has no write-capable tool, shell access, arbitrary filesystem
+  writes, or caller-controlled approval path.
 - Round-trip and save-fidelity coverage protects unknown data and existing file structure where the
   current reader/writer can prove preservation.
 - Fallout 4 packfiles are the primary supported Havok target. Self-contained packages target Windows
