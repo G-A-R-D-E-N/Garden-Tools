@@ -85,7 +85,14 @@ The Drop/Recover control is an engineering preview and is explicitly not a full 
 - Reciprocal mapper generation is a construction tool. The measured human fixture reproduces its
   shipped reciprocal, but shipped mapper pairs are not universally mirror-symmetric.
 - Full ragdoll authoring, body-to-body collision simulation, and a full Havok physics solver are not
-  implemented. Some physics and cloth systems remain inspection-only.
+  implemented. Current ragdoll support extracts measured bodies, shapes, constraints, bone
+  bindings, frames, and animation mappings for inspection and a constrained preview; it does not
+  write ragdoll data or run a complete physics simulation.
+- Cloth support is inspection and validation only. BGS can read bounded cloth shapes, particles,
+  buffers, collidables, constraints, operators, states, and simulation-cloth references, but it
+  does not simulate cloth, deform meshes, author cloth data, or save cloth changes.
+- The Drop/Recover control is a static engineering preview that follows measured poses; it is not
+  Havok dynamics, body collision, cloth interaction, or a replacement for in-game validation.
 - Havok 2018 support is incomplete. Current Fallout 76 evidence reflects Havok 2015.1.0, not a
   completed Havok 2018 implementation.
 - Unsupported Havok layouts/classes and conversion paths remain read-only or are refused. BGS never

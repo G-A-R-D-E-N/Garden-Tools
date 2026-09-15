@@ -20,6 +20,14 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 * Drop/Recover remains a constrained engineering preview with lifecycle reset and stale-state protections rather than a full physics simulation.
 * The workspace shell groups existing tools under Home, Graph, Inspect, Animation, and Project activities, keeps contextual secondary views reachable, and keeps command controls accessible at narrow widths.
 
+### Current release boundaries
+
+* Ragdoll support is inspection and constrained preview only: measured bodies, shapes, constraints, bone bindings, frames, and animation mappings are displayed, but ragdoll authoring, body collision solving, and full Havok dynamics are not implemented.
+* Cloth support is inspection and validation only: bounded cloth structures and references can be read and checked, but cloth simulation, mesh deformation, cloth authoring, and cloth save/write-back are not implemented.
+* Drop/Recover follows measured poses as an engineering preview; it is not a Havok solver, body-collision simulation, cloth interaction, or in-game behavior substitute.
+* Skeleton-mapper serialization/write-back and chain mapper authoring remain incomplete; automatic bone pairing is not proven.
+* Havok 2018 support remains incomplete, and unsupported layouts or conversions remain read-only or are refused.
+
 ## 1.1.0
 
 August 27, 2026
