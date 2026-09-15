@@ -130,6 +130,7 @@ add_library(fo4
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
+  src/schema/form_link_mixed.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
   src/schema/nested_formlink_lists.cpp
@@ -251,6 +252,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_clmt_formlinks.cpp
     tests/test_ipds_formlinks.cpp
     tests/test_dobj_formlinks.cpp
+    tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
     tests/test_formlink_lists.cpp

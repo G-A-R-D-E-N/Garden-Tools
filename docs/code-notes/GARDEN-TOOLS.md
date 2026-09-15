@@ -1,5 +1,9 @@
 # GARDEN-TOOLS code notes
 
+## Radicle/src/schema/form_link_mixed.cpp:struct_payload_formid_offsets
+
+Concept-level validation note: recognized payloads with unsupported extents must fail closed before FormID discovery or remapping. This note does not assert a new runtime or file-layout fact.
+
 ## Radicle/src/schema/form_links.cpp:visit_link_offsets — DOBJ/DNAM proof (#287)
 
 The layout below is verified from the documentation and open-source schema:
@@ -405,3 +409,22 @@ Companion to the WTHR corpus inventory for Issue #284. Resolves packed `u32` val
 ## Radicle/include/fo4/forms/weather_concept.hpp + weather_concept.cpp
 
 Issue #284 WTHR read-only decode and MNAM mutation. Named `weather_concept` because the Cursor RE gate required a concept-level filename until f4-re-mcp verification was recorded under `Radicle/docs/re-private/`. Field names stay subrecord-mechanical (`mnam`/`nnam`/...) while docs cite `TESWeather` members. Runtime proof: f4-re-mcp `TESWeather::Load` RVA `0x48c2f0` id 731579; corpus + FO4-only FormID resolution in `Radicle/docs/WTHR_*.md`.
+
+## Radicle/src/schema/form_link_mixed.cpp:packed_formid_array_offsets — #287 packed FormID arrays
+
+xEdit FO4 (`TES5Edit/TES5Edit` pin `9fb016884bec138ea6c7b872cec831537d464c3e`):
+
+- `Core/wbDefinitionsFO4.pas:12539` `wbArray(MNAM, 'Target OMOD Keywords', wbFormIDCk('Keyword', [KYWD]))`
+- `:12540` `wbArray(FNAM, 'Filter Keywords', wbFormIDCk('Keyword', [KYWD]))`
+- `:8837` `wbArray(PNAM, 'Slot Parents', wbFormIDCk('Parent', [EQUP]))`
+- `:8683` `wbArray(TNAM, 'Music Tracks', wbFormIDCk('Track', [MUST, NULL]))`
+
+These are uncounted `wbArray` members inside one subrecord, not `wbRArray`. Mutagen writes the same packed shape (`AObjectModification_Generated.cs:2767` `TargetOmodKeywords`/`MNAM`, `:2777` `FilterKeywords`/`FNAM`; `EquipType_Generated.cs:1511` `SlotParents`/`PNAM`; `MusicType_Generated.cs:1614` `Tracks`/`TNAM`).
+
+Fallout4.esm (`D:\Fallout4Backup\Fallout 4\Data\Fallout4.esm`) uncompressed top-level groups, 2026-09-13: OMOD 2409 / MNAM present 1615 (1326×4, 144×8, 145×12) / FNAM present 70 (67×4, 2×8, 1×12); EQUP 38 / PNAM present 23 (3×4, 17×8, 3×12); MUSC 111 / TNAM present 111 (4 through 108). Every present payload is one subrecord and `size % 4 == 0`. Multi-entry arrays are skipped by `formid_subrecords.inc` (4-byte only).
+
+`Radicle/src/schema/form_links.cpp:visit_link_offsets` dispatches `packed_formid_array_offsets` after IPDS/DOBJ and before the empty/global signature table. Foreign uses of the same signatures stay on their existing routes (NAVM PNAM vertices, QUST FNAM flags, MUST FNAM floats, NPC_ PNAM 4-byte listed FormID). Mixed NAVM/PROJ/EXPL/HAZD/OBTS/PERK helpers moved with this dispatch into `form_link_mixed.cpp` so `form_links.cpp` stays under the translation-unit size limit.
+
+`Radicle/tests/test_packed_formlink_arrays.cpp` covers remap, fail-closed odd lengths, empty arrays, collision controls, rekey cache invalidation, and document order.
+
+For `Radicle/src/schema/form_link_mixed.cpp:packed_formid_array_offsets`, the local commonlib_NonVR reference confirms the distinct runtime form types for OMOD, EQUP, and MUSC. Runtime member shape does not independently prove plugin subrecord serialization, xEdit definitions, or quoted RVAs; those claims remain concept-level here and are not shipped as runtime offset evidence.

@@ -1,4 +1,5 @@
 #include "fo4/schema/form_links.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
@@ -53,15 +54,7 @@ constexpr std::size_t k_ctda_reference = 24;
 constexpr std::uint32_t k_run_on_reference = 2;
 
 constexpr auto k_navm = Signature::from_string("NAVM");
-constexpr auto k_navi = Signature::from_string("NAVI");
-constexpr auto k_nvnm = Signature::from_string("NVNM");
-constexpr auto k_nvmi = Signature::from_string("NVMI");
-constexpr auto k_nvpp = Signature::from_string("NVPP");
-constexpr auto k_nvsi = Signature::from_string("NVSI");
 constexpr auto k_mnam = Signature::from_string("MNAM");
-constexpr auto k_proj = Signature::from_string("PROJ");
-constexpr auto k_expl = Signature::from_string("EXPL");
-constexpr auto k_hazd = Signature::from_string("HAZD");
 constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_race = Signature::from_string("RACE");
 constexpr auto k_info = Signature::from_string("INFO");
@@ -258,219 +251,6 @@ bool qust_non_formid_signature(Signature signature) {
          signature == k_snam;
 }
 
-bool consume_counted_fixed(std::span<const std::byte> data,
-                           std::size_t& cursor,
-                           std::size_t element_size,
-                           auto&& visit_element) {
-  if (cursor > data.size() || data.size() - cursor < 4 || element_size == 0) {
-    return false;
-  }
-  const auto count = static_cast<std::size_t>(read_u32(data, cursor));
-  cursor += 4;
-  if (count > (data.size() - cursor) / element_size) return false;
-  for (std::size_t index = 0; index < count; ++index) {
-    visit_element(cursor + index * element_size);
-  }
-  cursor += count * element_size;
-  return true;
-}
-
-std::optional<std::vector<std::size_t>> nvnm_formid_offsets(
-    std::span<const std::byte> data) {
-  // xEdit FO4 wbNVNM (pinned 93cc0bc5):
-  //   u32 version
-  //   Pathing Cell { u32 CRC, FormID Parent World, union[coords|Parent Cell] }
-  //   u32-counted vertices[12], triangles[21], edge-links[11], door-links[10],
-  //   cover[8], cover-triangle-map[4], waypoints[18]
-  //   Navmesh Grid { u32 divisor, vec2 grid-size, 2*vec3 bounds,
-  //                  divisor^2 cells, each a u32-counted u16 triangle array }
-  if (data.size() < 16) return std::nullopt;
-
-  std::vector<std::size_t> offsets;
-  offsets.push_back(8);  // Parent World
-  if (read_u32(data, 8) == 0) offsets.push_back(12);  // Parent Cell union arm
-
-  std::size_t cursor = 16;
-  const auto skip = [](std::size_t) {};
-  if (!consume_counted_fixed(data, cursor, 12, skip)) return std::nullopt;
-  if (!consume_counted_fixed(data, cursor, 21, skip)) return std::nullopt;
-  if (!consume_counted_fixed(data, cursor, 11, [&](std::size_t base) {
-        offsets.push_back(base + 4);  // Edge Link.Navmesh
-      })) {
-    return std::nullopt;
-  }
-  if (!consume_counted_fixed(data, cursor, 10, [&](std::size_t base) {
-        offsets.push_back(base + 6);  // Door Link.Door Ref
-      })) {
-    return std::nullopt;
-  }
-  if (!consume_counted_fixed(data, cursor, 8, skip)) return std::nullopt;
-  if (!consume_counted_fixed(data, cursor, 4, skip)) return std::nullopt;
-  if (!consume_counted_fixed(data, cursor, 18, skip)) return std::nullopt;
-
-  // Grid header: divisor + vec2 + min/max vec3 = 36 bytes.
-  if (cursor > data.size() || data.size() - cursor < 36) return std::nullopt;
-  const auto divisor = static_cast<std::size_t>(read_u32(data, cursor));
-  if (divisor > 12) return std::nullopt;  // mirrors wbNavmeshGridCounter
-  cursor += 36;
-
-  const auto cell_count = divisor * divisor;
-  for (std::size_t cell = 0; cell < cell_count; ++cell) {
-    if (!consume_counted_fixed(data, cursor, 2, skip)) return std::nullopt;
-  }
-  if (cursor != data.size()) return std::nullopt;
-  return offsets;
-}
-
-std::optional<std::vector<std::size_t>> nvmi_formid_offsets(
-    std::span<const std::byte> data) {
-  // xEdit FO4 NVMI:
-  //   FormID navmesh, u32 flags, vec3 approx-location, f32 preferred
-  //   u32-counted edge navmeshes, preferred edge navmeshes,
-  //   u32-counted door {u32 CRC, FormID ref},
-  //   u8 has-island + optional bounds/triangle/vertex arrays,
-  //   Pathing Cell {u32 CRC, FormID Parent World, union[coords|Parent Cell]}.
-  if (data.size() < 24) return std::nullopt;
-
-  std::vector<std::size_t> offsets{0};  // Navmesh
-  std::size_t cursor = 24;
-  if (!consume_counted_fixed(data, cursor, 4, [&](std::size_t base) {
-        offsets.push_back(base);
-      })) {
-    return std::nullopt;
-  }
-  if (!consume_counted_fixed(data, cursor, 4, [&](std::size_t base) {
-        offsets.push_back(base);
-      })) {
-    return std::nullopt;
-  }
-  if (!consume_counted_fixed(data, cursor, 8, [&](std::size_t base) {
-        offsets.push_back(base + 4);  // Door Ref after CRC
-      })) {
-    return std::nullopt;
-  }
-
-  if (cursor >= data.size()) return std::nullopt;
-  const auto has_island = std::to_integer<std::uint8_t>(data[cursor++]);
-  if (has_island > 1) return std::nullopt;
-  if (has_island != 0) {
-    if (cursor > data.size() || data.size() - cursor < 24) return std::nullopt;
-    cursor += 24;  // bounds
-    const auto skip = [](std::size_t) {};
-    if (!consume_counted_fixed(data, cursor, 6, skip)) return std::nullopt;
-    if (!consume_counted_fixed(data, cursor, 12, skip)) return std::nullopt;
-  }
-
-  if (cursor > data.size() || data.size() - cursor != 12) return std::nullopt;
-  offsets.push_back(cursor + 4);  // Parent World
-  if (read_u32(data, cursor + 4) == 0) offsets.push_back(cursor + 8);  // Parent Cell
-  cursor += 12;
-  if (cursor != data.size()) return std::nullopt;
-  return offsets;
-}
-
-std::optional<std::vector<std::size_t>> nvpp_formid_offsets(
-    std::span<const std::byte> data) {
-  // xEdit FO4 NVPP is two u32-counted structures:
-  //   Paths: u32 path-count, then each path is u32 count + FormID[NAVM][]
-  //   Road Marker Index: u32 count + {FormID NAVM, u32 index}[]
-  std::vector<std::size_t> offsets;
-  if (data.size() < 4) return std::nullopt;
-
-  std::size_t cursor = 0;
-  const auto path_count = static_cast<std::size_t>(read_u32(data, cursor));
-  cursor += 4;
-  // Every path consumes at least its four-byte nested count.
-  if (path_count > (data.size() - cursor) / 4) return std::nullopt;
-  for (std::size_t path = 0; path < path_count; ++path) {
-    if (!consume_counted_fixed(data, cursor, 4, [&](std::size_t base) {
-          offsets.push_back(base);
-        })) {
-      return std::nullopt;
-    }
-  }
-
-  if (!consume_counted_fixed(data, cursor, 8, [&](std::size_t base) {
-        offsets.push_back(base);  // Road Marker.Navmesh
-      })) {
-    return std::nullopt;
-  }
-  if (cursor != data.size()) return std::nullopt;
-  return offsets;
-}
-
-std::optional<std::vector<std::size_t>> mnam_formid_offsets(
-    std::span<const std::byte> data) {
-  // xEdit FO4 NAVM.MNAM PreCut Map Entries: the outer array consumes entries
-  // until the subrecord ends. Each entry is a FormID Reference followed by a
-  // -2 array, i.e. a u16 count and that many u16 triangle indexes.
-  std::vector<std::size_t> offsets;
-  std::size_t cursor = 0;
-  while (cursor < data.size()) {
-    if (data.size() - cursor < 6) return std::nullopt;
-    offsets.push_back(cursor);  // Reference
-    cursor += 4;
-    const auto triangle_count = static_cast<std::size_t>(read_u16(data, cursor));
-    cursor += 2;
-    if (triangle_count > (data.size() - cursor) / 2) return std::nullopt;
-    cursor += triangle_count * 2;
-  }
-  return offsets;
-}
-
-std::optional<std::vector<std::size_t>> navmesh_mixed_formid_offsets(
-    const Record& record, const Subrecord& sub) {
-  if (record.header.signature == k_navm && sub.signature == k_nvnm) {
-    return nvnm_formid_offsets(sub.data);
-  }
-  if (record.header.signature == k_navm && sub.signature == k_mnam) {
-    return mnam_formid_offsets(sub.data);
-  }
-  if (record.header.signature == k_navi && sub.signature == k_nvmi) {
-    return nvmi_formid_offsets(sub.data);
-  }
-  if (record.header.signature == k_navi && sub.signature == k_nvpp) {
-    return nvpp_formid_offsets(sub.data);
-  }
-  if (record.header.signature == k_navi && sub.signature == k_nvsi) {
-    if (sub.data.size() % 4 != 0) return std::nullopt;
-    std::vector<std::size_t> offsets;
-    offsets.reserve(sub.data.size() / 4);
-    for (std::size_t offset = 0; offset < sub.data.size(); offset += 4) {
-      offsets.push_back(offset);
-    }
-    return offsets;
-  }
-  return std::vector<std::size_t>{};
-}
-
-bool is_navmesh_mixed_payload(const Record& record, const Subrecord& sub) {
-  return (record.header.signature == k_navm &&
-          (sub.signature == k_nvnm || sub.signature == k_mnam)) ||
-         (record.header.signature == k_navi &&
-          (sub.signature == k_nvmi || sub.signature == k_nvpp || sub.signature == k_nvsi));
-}
-
-bool perk_epfd_is_formid(const Record& record, const Subrecord& sub) {
-  if (record.header.signature != Signature::from_string("PERK") ||
-      sub.signature != Signature::from_string("EPFD") || sub.data.size() != 4) {
-    return false;
-  }
-
-  int function_type = -1;
-  for (const auto& candidate : record.subrecords) {
-    if (&candidate == &sub) {
-      break;
-    }
-    if (candidate.signature == Signature::from_string("EPFT") && !candidate.data.empty()) {
-      function_type = static_cast<int>(std::to_integer<std::uint8_t>(candidate.data.front()));
-    }
-  }
-
-  // xEdit FO4 wbPERK: EPFT 3 = LVLI, 4 = Add Activate Choice/SPEL,
-  // 5 = Select Spell/SPEL. Other EPFD variants are float/text/non-FormID.
-  return function_type == 3 || function_type == 4 || function_type == 5;
-}
 
 bool visit_tagged_formid_slot(const Subrecord& sub, auto&& fn) {
   if (sub.data.size() < 8) {
@@ -507,82 +287,6 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
   return matched;
 }
 
-// FormID slots inside the PROJ/EXPL/HAZD runtime-struct payloads.
-//
-// DATA and DNAM mean different things in different records, so these are keyed
-// on the record signature and can never go in the signature-only table.
-//
-// The field lists come from CommonLibF4's BGSProjectileData /
-// BGSExplosionData / BGSHazardData, but the *disk* offsets are measured, not
-// derived from those structs. Two places where the file disagrees with memory:
-//
-//   * PROJ DNAM is 93 bytes and ends [+88 u8 tracerFrequency]
-//     [+89 u32 vatsProjectile]. The FormID is UNALIGNED and it is the last
-//     field, the reverse of the in-memory order. An earlier note here claimed
-//     +88 was tracerFrequency followed by heap padding; the files say
-//     otherwise -- 25 vanilla and 453 corpus records carry a live PROJ FormID
-//     at +89 that a master remap was silently corrupting.
-//   * EXPL DATA serializes in a different field ORDER than BGSExplosionData
-//     holds in memory: the spawn-projectile vector, spread and count are the
-//     84-byte tail, not the middle. Only +20 spawnProjectile is a FormID
-//     beyond the leading five.
-//
-// See docs/FORMAT_NOTES.md for the full measured field tables. Every slot
-// below resolves to its stated record type in all 659 shipped PROJ/EXPL/HAZD
-// records and all 2,109 corpus records, with zero contradictions.
-std::optional<std::vector<std::size_t>> struct_payload_formid_offsets(const Record& record,
-                                                                     const Subrecord& sub) {
-  const auto signature = record.header.signature;
-  const auto size = sub.data.size();
-  // EXPL DATA also ships truncated at 52/56/60/64 bytes, so gate each slot on
-  // its own extent rather than assuming the canonical 84.
-  auto within = [&](std::initializer_list<std::size_t> slots) {
-    std::vector<std::size_t> offsets;
-    for (const auto offset : slots) {
-      if (offset + 4 <= size) offsets.push_back(offset);
-    }
-    return offsets;
-  };
-
-  if (signature == k_expl && sub.signature == sig_data) {
-    // LIGH SNDR SNDR IPDS placed-object PROJ
-    return within({0, 4, 8, 12, 16, 20});
-  }
-  if (signature == k_proj && sub.signature == k_dnam) {
-    // LIGH LIGH EXPL SNDR SNDR SNDR WEAP TXST COLL PROJ(unaligned, +89)
-    return within({16, 20, 32, 36, 52, 56, 60, 80, 84, 89});
-  }
-  if (signature == k_hazd && sub.signature == k_dnam) {
-    // SPEL/ENCH LIGH IPDS SNDR
-    return within({24, 28, 32, 36});
-  }
-  return std::nullopt;
-}
-
-// Returns every FormID offset inside an OBTS body, or nullopt when the counts
-// do not describe the payload exactly -- which is the only safe signal that
-// the shape is not what we think it is.
-std::optional<std::vector<std::size_t>> obts_formid_offsets(const Subrecord& sub) {
-  constexpr std::size_t k_header = 0x12;
-  if (sub.data.size() < k_header) return std::nullopt;
-
-  const auto includes = read_u32(sub.data, 0x00);
-  const auto properties = read_u32(sub.data, 0x04);
-  const auto keywords = std::to_integer<std::uint8_t>(sub.data[0x0F]);
-
-  const auto expected = k_header + std::size_t{keywords} * 4 +
-                        std::size_t{includes} * 7 + std::size_t{properties} * 24;
-  if (expected != sub.data.size()) return std::nullopt;
-
-  std::vector<std::size_t> offsets;
-  offsets.reserve(std::size_t{keywords} + includes);
-  for (std::uint8_t i = 0; i < keywords; ++i) offsets.push_back(0x10 + std::size_t{i} * 4);
-  const auto include_base = k_header + std::size_t{keywords} * 4;
-  for (std::uint32_t i = 0; i < includes; ++i) {
-    offsets.push_back(include_base + std::size_t{i} * 7);
-  }
-  return offsets;
-}
 
 bool visit_coed_formids(const Subrecord& sub,
                         bool strict_remap,
@@ -680,6 +384,10 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     for (std::size_t offset = 4; offset < sub.data.size(); offset += 8) {
       fn(offset);
     }
+    return;
+  }
+  if (const auto packed = packed_formid_array_offsets(record, sub, strict_remap)) {
+    for (const auto offset : *packed) fn(offset);
     return;
   }
   if (sub.data.empty()) {
@@ -806,7 +514,7 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   // Layout validated on all 3,297 shipped OBTS bodies (ARMO, WEAP, NPC_ and
   // FURN): the computed size matches the payload exactly, zero mismatches,
   // and all 7,342 Fallout4.esm include FormIDs resolve to OMOD records.
-  if (const auto offsets = struct_payload_formid_offsets(record, sub)) {
+  if (const auto offsets = struct_payload_formid_offsets(record, sub, strict_remap)) {
     for (const auto offset : *offsets) fn(offset);
     return;
   }
