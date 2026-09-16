@@ -184,11 +184,15 @@ public sealed class CodexAssistantSession : IAssistantSession
         var parameters = new Dictionary<string, object?>
         {
             ["cwd"] = cwd,
+            ["runtimeWorkspaceRoots"] = Array.Empty<string>(),
             ["sandbox"] = "read-only",
             ["approvalPolicy"] = "never",
             ["ephemeral"] = true,
             ["baseInstructions"] = SystemInstructions,
             ["modelProvider"] = "openai",
+            ["threadSource"] = "system",
+            ["environments"] = Array.Empty<object>(),
+            ["selectedCapabilityRoots"] = Array.Empty<object>(),
             ["config"] = CodexIsolation.BuildThreadConfig(mcpServers),
         };
         AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
@@ -213,6 +217,7 @@ public sealed class CodexAssistantSession : IAssistantSession
             _connection.DynamicToolsAvailable = false;
         }
 
+        CodexIsolation.VerifyThreadStart(result);
         string threadId = CodexProtocol.String(CodexProtocol.Property(result, "thread"), "id");
         if (threadId.Length == 0)
             throw new CodexProtocolException("Codex did not return a thread for the assistant conversation.");
