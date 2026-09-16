@@ -91,7 +91,7 @@ public sealed class CodexSettingsTests
             Assert.Equal(native, executable!.Path);
             Assert.Equal("configured-npm", executable.Source);
             Assert.EndsWith("codex.exe", executable.Path, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotEndWith("codex.cmd", executable.Path, StringComparison.OrdinalIgnoreCase);
+            Assert.False(executable.Path.EndsWith("codex.cmd", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
