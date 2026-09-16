@@ -168,7 +168,8 @@ internal sealed class CodexTestServer : ICodexTransport
         "{\"thread\":{\"id\":\"" + id + "\",\"ephemeral\":true,\"preview\":\"\",\"modelProvider\":\"openai\"," +
         "\"cwd\":\"/scratch\",\"cliVersion\":\"0.154.0\",\"createdAt\":1,\"updatedAt\":1,\"projectId\":null," +
         "\"sessionId\":\"" + id + "\",\"source\":\"appServer\",\"status\":{\"type\":\"idle\"},\"turns\":[]}," +
-        "\"model\":\"test-model\",\"sandbox\":{\"type\":\"readOnly\",\"networkAccess\":false}," +
+        "\"model\":\"test-model\",\"modelProvider\":\"openai\",\"runtimeWorkspaceRoots\":[]," +
+        "\"sandbox\":{\"type\":\"readOnly\",\"networkAccess\":false}," +
         "\"approvalPolicy\":\"never\",\"cwd\":\"/scratch\"}";
 
     private string ConfigResult()
