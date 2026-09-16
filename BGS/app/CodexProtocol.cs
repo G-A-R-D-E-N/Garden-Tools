@@ -18,6 +18,7 @@ public static class CodexMethods
     public const string AccountUpdated = "account/updated";
     public const string AccountLoginCompleted = "account/login/completed";
     public const string ModelList = "model/list";
+    public const string ConfigRead = "config/read";
     public const string ThreadStart = "thread/start";
     public const string ThreadStarted = "thread/started";
     public const string TurnStart = "turn/start";
