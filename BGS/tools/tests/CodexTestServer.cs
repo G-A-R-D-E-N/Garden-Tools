@@ -20,6 +20,7 @@ internal sealed class CodexTestServer : ICodexTransport
         Handlers[CodexMethods.ModelList] = _ =>
             "{\"data\":[{\"id\":\"" + DefaultModel + "\",\"model\":\"" + DefaultModel +
             "\",\"displayName\":\"Test Model\",\"isDefault\":true,\"hidden\":false}]}";
+        Handlers[CodexMethods.ConfigRead] = _ => ConfigResult();
         Handlers[CodexMethods.AccountLoginStart] = root =>
             RequestType(root) == "chatgptDeviceCode"
                 ? "{\"type\":\"chatgptDeviceCode\",\"loginId\":\"login-device\"," +
@@ -46,14 +47,17 @@ internal sealed class CodexTestServer : ICodexTransport
     public string PlanType { get; set; } = "plus";
     public bool RequiresOpenaiAuth { get; set; } = true;
     public bool RejectDynamicTools { get; set; }
+    public bool RejectConfigRead { get; set; }
     public bool AutoCompleteTurns { get; set; } = true;
     public string DefaultModel { get; set; } = "test-model";
     public string FinalText { get; set; } = "ready";
     public string? FailMethodOnce { get; set; }
+    public string[] EffectiveMcpServers { get; set; } = Array.Empty<string>();
     public bool Interrupted { get; private set; }
     public int TurnStarts { get; private set; }
     public int ThreadStarts { get; private set; }
 
+    public JsonElement? LastConfigReadParams { get; private set; }
     public JsonElement? LastThreadStartParams { get; private set; }
     public JsonElement? LastTurnStartParams { get; private set; }
     public string LastToolArguments { get; private set; } = "";
@@ -95,7 +99,6 @@ internal sealed class CodexTestServer : ICodexTransport
             if (!root.TryGetProperty("method", out JsonElement methodElement)) return Task.CompletedTask;
             string method = methodElement.GetString() ?? "";
             bool hasId = root.TryGetProperty("id", out JsonElement id);
-
             if (!hasId) return Task.CompletedTask;
 
             if (FailMethodOnce == method)
@@ -103,6 +106,16 @@ internal sealed class CodexTestServer : ICodexTransport
                 FailMethodOnce = null;
                 Exit();
                 return Task.CompletedTask;
+            }
+
+            if (method == CodexMethods.ConfigRead)
+            {
+                RecordConfigRead(root);
+                if (RejectConfigRead)
+                {
+                    EmitRaw(ErrorLine(id, -32603, "config read unavailable"));
+                    return Task.CompletedTask;
+                }
             }
 
             if (method == CodexMethods.ThreadStart)
@@ -157,6 +170,19 @@ internal sealed class CodexTestServer : ICodexTransport
         "\"sessionId\":\"" + id + "\",\"source\":\"appServer\",\"status\":{\"type\":\"idle\"},\"turns\":[]}," +
         "\"model\":\"test-model\",\"sandbox\":{\"type\":\"readOnly\",\"networkAccess\":false}," +
         "\"approvalPolicy\":\"never\",\"cwd\":\"/scratch\"}";
+
+    private string ConfigResult()
+    {
+        var servers = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (string name in EffectiveMcpServers)
+            servers[name] = new { enabled = true };
+        var config = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["model_provider"] = "openai",
+            ["mcp_servers"] = servers,
+        };
+        return JsonSerializer.Serialize(new { config, origins = new { } });
+    }
 
     private string TurnStart()
     {
@@ -223,6 +249,12 @@ internal sealed class CodexTestServer : ICodexTransport
             : "{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"item\":{\"id\":\"" + id + "\",\"type\":\"" +
               type + "\",\"text\":" + JsonSerializer.Serialize(text) +
               ",\"phase\":\"final_answer\"}}";
+
+    internal void RecordConfigRead(JsonElement root)
+    {
+        if (root.TryGetProperty("params", out JsonElement parameters))
+            LastConfigReadParams = parameters.Clone();
+    }
 
     internal void RecordThreadStart(JsonElement root)
     {
