@@ -25,6 +25,23 @@ public sealed class CodexAuthTests
     }
 
     [Fact]
+    public async Task ApiKeyAuthCannotStartAChatGptSubscriptionTurn()
+    {
+        using var fixture = new CodexSessionFixture();
+        fixture.Server.AuthMode = "apiKey";
+
+        AssistantReply reply = await fixture.Session.SendAsync("hello", CodexSessionFixture.Context());
+
+        Assert.Equal("signed_out", reply.Status);
+        Assert.False(fixture.Connection.Account.SignedIn);
+        Assert.False(fixture.Connection.Account.IsChatGpt);
+        Assert.Equal("apiKey", fixture.Connection.Account.AuthMode);
+        Assert.DoesNotContain(fixture.Server.Sent,
+            line => line.Contains("thread/start", StringComparison.Ordinal) ||
+                    line.Contains("turn/start", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task HandshakeRunsInitializeThenInitializedBeforeAccountRead()
     {
         using var fixture = new CodexSessionFixture();
@@ -44,14 +61,21 @@ public sealed class CodexAuthTests
     }
 
     [Fact]
-    public async Task LaunchesOneStdioAppServerWithInheritedMcpServersDisabled()
+    public async Task LaunchesPinnedIsolatedStdioAppServer()
     {
         using var fixture = new CodexSessionFixture();
 
         await fixture.Connection.ConnectAsync();
 
-        Assert.Equal(new[] { "app-server", "--listen", "stdio://", "-c", "mcp_servers={}" },
-            fixture.Connection.LaunchArguments);
+        Assert.Equal(new[]
+        {
+            "app-server", "--listen", "stdio://",
+            "-c", "model_provider=\"openai\"",
+            "-c", "mcp_servers={}",
+            "-c", "features.shell_tool=false",
+            "-c", "features.unified_exec=false",
+            "-c", "web_search=\"disabled\"",
+        }, fixture.Connection.LaunchArguments);
     }
 
     [Fact]
@@ -93,6 +117,10 @@ public sealed class CodexAuthTests
 
         Assert.Equal("pro", fixture.Connection.Account.PlanType);
         Assert.True(fixture.Connection.Account.SignedIn);
+
+        fixture.Server.Notify("account/updated", "{\"authMode\":\"apikey\",\"planType\":null}");
+        Assert.False(fixture.Connection.Account.SignedIn);
+        Assert.Equal("apikey", fixture.Connection.Account.AuthMode);
 
         fixture.Server.Notify("account/updated", "{\"authMode\":null,\"planType\":null}");
         Assert.False(fixture.Connection.Account.SignedIn);
