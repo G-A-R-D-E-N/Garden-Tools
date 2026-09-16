@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using BehaviourStudio.App;
 using Microsoft.Extensions.AI;
@@ -67,6 +68,50 @@ public sealed class CodexSettingsTests
             CodexLocator.FileExistsForTest = previous;
             CodexLocator.CandidatePathsForTest = previousCandidates;
         }
+    }
+
+    [Fact]
+    public void WindowsNpmShimResolvesToNativeCodexWithoutShellExecution()
+    {
+        string npmBin = Path.Combine("C:", "Users", "someone", "AppData", "Roaming", "npm");
+        string shim = Path.Combine(npmBin, "codex.cmd");
+        System.Collections.Generic.IReadOnlyList<string> nativeCandidates =
+            CodexLocator.NpmNativeCandidates(npmBin, RuntimeInformation.ProcessArchitecture);
+        Assert.NotEmpty(nativeCandidates);
+        string native = nativeCandidates[0];
+
+        Func<string, bool> previous = CodexLocator.FileExistsForTest;
+        try
+        {
+            CodexLocator.FileExistsForTest = path =>
+                string.Equals(path, shim, StringComparison.Ordinal) ||
+                string.Equals(path, native, StringComparison.Ordinal);
+
+            Assert.True(CodexLocator.TryLocate(shim, out CodexExecutable? executable, out string error), error);
+            Assert.Equal(native, executable!.Path);
+            Assert.Equal("configured-npm", executable.Source);
+            Assert.EndsWith("codex.exe", executable.Path, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotEndWith("codex.cmd", executable.Path, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            CodexLocator.FileExistsForTest = previous;
+        }
+    }
+
+    [Fact]
+    public void NpmNativeLayoutMatchesOfficialPlatformPackageShape()
+    {
+        string npmBin = Path.Combine("root", "npm");
+        string x64 = CodexLocator.NpmNativeCandidates(npmBin, Architecture.X64)[0];
+        string arm64 = CodexLocator.NpmNativeCandidates(npmBin, Architecture.Arm64)[0];
+
+        Assert.Contains("codex-win32-x64", x64, StringComparison.Ordinal);
+        Assert.Contains("x86_64-pc-windows-msvc", x64, StringComparison.Ordinal);
+        Assert.Contains("codex-win32-arm64", arm64, StringComparison.Ordinal);
+        Assert.Contains("aarch64-pc-windows-msvc", arm64, StringComparison.Ordinal);
+        Assert.EndsWith(Path.Combine("bin", "codex.exe"), x64, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith(Path.Combine("bin", "codex.exe"), arm64, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
