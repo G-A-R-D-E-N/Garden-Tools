@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -64,7 +65,30 @@ internal static class AssistantLifecycleSmoke
             Smoke.CloseForTest(window);
         }
 
+        WindowOwnsCodexConnection();
         ActiveEditorApproval();
+    }
+
+    private static void WindowOwnsCodexConnection()
+    {
+        var window = new MainWindow();
+        var transport = new WindowTransport();
+        window.Show();
+        try
+        {
+            var options = new AssistantProviderOptions(
+                AssistantProviderOptions.CodexBackend, "", "codex-test-path");
+            CodexLocator.FileExistsForTest = _ => true;
+            CodexAssistantConnection connection = window.CreateCodexConnection(options, (_, _) => transport);
+            connection.ConnectAsync().GetAwaiter().GetResult();
+            Check("window-owned Codex connection starts", connection.IsConnected && transport.IsRunning);
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+            CodexLocator.FileExistsForTest = File.Exists;
+        }
+        Check("closing window disposes the Codex connection", transport.Disposed && !transport.IsRunning);
     }
 
     private static void ActiveEditorApproval()
@@ -116,6 +140,47 @@ internal static class AssistantLifecycleSmoke
     }
 
     private static void Check(string name, bool value) => Smoke.CheckTrue(name, value);
+
+    private sealed class WindowTransport : ICodexTransport
+    {
+        public event Action<string>? LineReceived;
+        public event Action<CodexProcessExit>? Exited;
+
+        public bool IsRunning { get; private set; }
+        internal bool Disposed { get; private set; }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            IsRunning = true;
+            return Task.CompletedTask;
+        }
+
+        public Task SendLineAsync(string line, CancellationToken cancellationToken)
+        {
+            using JsonDocument document = JsonDocument.Parse(line);
+            JsonElement root = document.RootElement;
+            if (!root.TryGetProperty("id", out JsonElement id) ||
+                !root.TryGetProperty("method", out JsonElement methodElement))
+                return Task.CompletedTask;
+
+            string method = methodElement.GetString() ?? "";
+            string result = method switch
+            {
+                "initialize" => "{\"userAgent\":\"behaviour_graph_studio/0.154.0\",\"platformFamily\":\"windows\",\"platformOs\":\"windows\"}",
+                "account/read" => "{\"account\":{\"type\":\"chatgpt\",\"email\":null,\"planType\":\"plus\"},\"requiresOpenaiAuth\":true}",
+                "model/list" => "{\"data\":[]}",
+                _ => "{}",
+            };
+            LineReceived?.Invoke("{\"id\":" + id.GetRawText() + ",\"result\":" + result + "}");
+            return Task.CompletedTask;
+        }
+
+        public void Dispose()
+        {
+            Disposed = true;
+            IsRunning = false;
+        }
+    }
 
     private sealed class FakeChatClient : IChatClient
     {
