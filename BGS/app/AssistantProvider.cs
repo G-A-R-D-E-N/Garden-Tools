@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace BehaviourStudio.App;
 
@@ -46,6 +47,18 @@ public static class CodexLocator
         if (!string.IsNullOrWhiteSpace(configured))
         {
             string explicitPath = configured.Trim();
+            if (IsWindowsCommandShim(explicitPath) && FileExistsForTest(explicitPath))
+            {
+                foreach (string candidate in NpmNativeCandidates(
+                    Path.GetDirectoryName(explicitPath) ?? "", RuntimeInformation.ProcessArchitecture))
+                {
+                    if (!FileExistsForTest(candidate)) continue;
+                    executable = new CodexExecutable(candidate, "configured-npm");
+                    return true;
+                }
+                error = "The configured npm Codex launcher was found, but its native Codex executable was not.";
+                return false;
+            }
             if (FileExistsForTest(explicitPath))
             {
                 executable = new CodexExecutable(explicitPath, "configured");
@@ -67,6 +80,32 @@ public static class CodexLocator
         return false;
     }
 
+    internal static IReadOnlyList<string> NpmNativeCandidates(string npmBinDirectory, Architecture architecture)
+    {
+        if (string.IsNullOrWhiteSpace(npmBinDirectory)) return Array.Empty<string>();
+        (string package, string target) = architecture switch
+        {
+            Architecture.X64 => ("codex-win32-x64", "x86_64-pc-windows-msvc"),
+            Architecture.Arm64 => ("codex-win32-arm64", "aarch64-pc-windows-msvc"),
+            _ => ("", ""),
+        };
+        if (package.Length == 0) return Array.Empty<string>();
+
+        string modules = Path.Combine(npmBinDirectory, "node_modules", "@openai");
+        string native = Path.Combine("vendor", target, "bin", "codex.exe");
+        return new[]
+        {
+            Path.Combine(modules, package, native),
+            Path.Combine(modules, "codex", "node_modules", "@openai", package, native),
+            Path.Combine(modules, "codex", native),
+        };
+    }
+
+    private static bool IsWindowsCommandShim(string path) =>
+        path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
+
     private static IReadOnlyList<string> DefaultCandidatePaths()
     {
         var candidates = new List<string>();
@@ -87,7 +126,10 @@ public static class CodexLocator
 
         string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         if (appData.Length > 0)
-            candidates.Add(Path.Combine(appData, "npm", "codex.exe"));
+        {
+            string npmBin = Path.Combine(appData, "npm");
+            candidates.AddRange(NpmNativeCandidates(npmBin, RuntimeInformation.ProcessArchitecture));
+        }
 
         string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (home.Length > 0)
