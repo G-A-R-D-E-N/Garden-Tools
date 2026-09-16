@@ -35,6 +35,7 @@ public sealed class CodexIsolationTests
         "features.view_image",
         "orchestrator.skills.enabled",
         "skills.include_instructions",
+        "token_budget.use_history_notes_extension",
         "tools.experimental_request_user_input.enabled",
         "tools.update_plan.enabled",
     };
@@ -58,6 +59,13 @@ public sealed class CodexIsolationTests
 
         JsonElement thread = fixture.Server.LastThreadStartParams!.Value;
         Assert.Equal("openai", thread.GetProperty("modelProvider").GetString());
+        Assert.Equal("read-only", thread.GetProperty("sandbox").GetString());
+        Assert.Equal("never", thread.GetProperty("approvalPolicy").GetString());
+        Assert.Equal("system", thread.GetProperty("threadSource").GetString());
+        Assert.Empty(thread.GetProperty("runtimeWorkspaceRoots").EnumerateArray());
+        Assert.Empty(thread.GetProperty("environments").EnumerateArray());
+        Assert.Empty(thread.GetProperty("selectedCapabilityRoots").EnumerateArray());
+
         JsonElement config = thread.GetProperty("config");
         foreach (string feature in DisabledFeatures)
         {
@@ -99,5 +107,34 @@ public sealed class CodexIsolationTests
         Assert.Equal("provider_error", reply.Status);
         Assert.Contains("could not be verified", reply.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, fixture.Server.ThreadStarts);
+    }
+
+    [Theory]
+    [InlineData("modelProvider", "other")]
+    [InlineData("approvalPolicy", "on-request")]
+    [InlineData("sandbox", "workspaceWrite")]
+    public async Task UnsafeThreadStartResponseFailsBeforeTurnStart(string field, string value)
+    {
+        using var fixture = new CodexSessionFixture();
+        fixture.Server.Handlers[CodexMethods.ThreadStart] = _ => field switch
+        {
+            "modelProvider" => fixture.Server.ThreadResult("thread-1").Replace(
+                "\"modelProvider\":\"openai\"", "\"modelProvider\":\"" + value + "\"",
+                StringComparison.Ordinal),
+            "approvalPolicy" => fixture.Server.ThreadResult("thread-1").Replace(
+                "\"approvalPolicy\":\"never\"", "\"approvalPolicy\":\"" + value + "\"",
+                StringComparison.Ordinal),
+            _ => fixture.Server.ThreadResult("thread-1").Replace(
+                "\"type\":\"readOnly\"", "\"type\":\"" + value + "\"",
+                StringComparison.Ordinal),
+        };
+
+        AssistantReply reply = await fixture.Session.SendAsync("Check it.", CodexSessionFixture.Context());
+
+        Assert.Equal("provider_error", reply.Status);
+        Assert.Contains("could not be verified", reply.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fixture.Server.TurnStarts);
+        Assert.DoesNotContain(fixture.Server.Sent,
+            line => CodexSessionFixture.Method(line) == CodexMethods.TurnStart);
     }
 }
