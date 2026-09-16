@@ -76,9 +76,10 @@ internal static class AssistantLifecycleSmoke
         window.Show();
         try
         {
+            string executable = Environment.ProcessPath
+                ?? throw new InvalidOperationException("the smoke process path is unavailable");
             var options = new AssistantProviderOptions(
-                AssistantProviderOptions.CodexBackend, "", "codex-test-path");
-            CodexLocator.FileExistsForTest = _ => true;
+                AssistantProviderOptions.CodexBackend, "", executable);
             CodexAssistantConnection connection = window.CreateCodexConnection(options, (_, _) => transport);
             connection.ConnectAsync().GetAwaiter().GetResult();
             Check("window-owned Codex connection starts", connection.IsConnected && transport.IsRunning);
@@ -86,7 +87,6 @@ internal static class AssistantLifecycleSmoke
         finally
         {
             Smoke.CloseForTest(window);
-            CodexLocator.FileExistsForTest = File.Exists;
         }
         Check("closing window disposes the Codex connection", transport.Disposed && !transport.IsRunning);
     }
