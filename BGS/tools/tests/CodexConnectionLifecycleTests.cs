@@ -68,6 +68,29 @@ public sealed class CodexConnectionLifecycleTests
         Assert.False(transports[0].IsRunning);
     }
 
+    [Fact]
+    public async Task DisposeDuringHandshakeLeavesConnectionDisposalAuthoritative()
+    {
+        string executable = Environment.ProcessPath
+            ?? throw new InvalidOperationException("the test process path is unavailable");
+        var transport = new BlockingTransport();
+        var connection = new CodexAssistantConnection(
+            new AssistantProviderOptions(AssistantProviderOptions.CodexBackend, "", executable),
+            (_, _) => transport);
+
+        Task<CodexAccount> connecting = connection.ConnectAsync();
+        await transport.InitializeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        connection.Dispose();
+        transport.ReleaseInitialize();
+
+        ObjectDisposedException exception = await Assert.ThrowsAsync<ObjectDisposedException>(() => connecting);
+
+        Assert.Equal(typeof(CodexAssistantConnection).FullName, exception.ObjectName);
+        Assert.True(transport.Disposed);
+        Assert.False(transport.IsRunning);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => connection.ConnectAsync());
+    }
+
     private static CodexAssistantConnection Connection(
         List<CountingTransport> transports, bool failFirstInitialize = false)
     {
@@ -122,6 +145,52 @@ public sealed class CodexConnectionLifecycleTests
         {
             DisposeCount++;
             Server.Dispose();
+        }
+    }
+
+    private sealed class BlockingTransport : ICodexTransport
+    {
+        private readonly CodexTestServer _server = new();
+        private readonly TaskCompletionSource<bool> _releaseInitialize =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource<bool> InitializeStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal bool Disposed { get; private set; }
+
+        public event Action<string>? LineReceived
+        {
+            add => _server.LineReceived += value;
+            remove => _server.LineReceived -= value;
+        }
+
+        public event Action<CodexProcessExit>? Exited
+        {
+            add => _server.Exited += value;
+            remove => _server.Exited -= value;
+        }
+
+        public bool IsRunning => _server.IsRunning;
+
+        public Task StartAsync(CancellationToken cancellationToken) =>
+            _server.StartAsync(cancellationToken);
+
+        public async Task SendLineAsync(string line, CancellationToken cancellationToken)
+        {
+            if (line.Contains("\"method\":\"initialize\"", StringComparison.Ordinal))
+            {
+                InitializeStarted.TrySetResult(true);
+                await _releaseInitialize.Task.WaitAsync(cancellationToken);
+            }
+            await _server.SendLineAsync(line, cancellationToken);
+        }
+
+        internal void ReleaseInitialize() => _releaseInitialize.TrySetResult(true);
+
+        public void Dispose()
+        {
+            Disposed = true;
+            _server.Dispose();
         }
     }
 }
