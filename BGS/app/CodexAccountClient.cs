@@ -9,7 +9,7 @@ public sealed record CodexAccount(string AuthMode, string PlanType, bool SignedI
 {
     public static readonly CodexAccount SignedOut = new("", "", false);
 
-    public bool IsChatGpt => string.Equals(AuthMode, "chatgpt", StringComparison.Ordinal);
+    public bool IsChatGpt => string.Equals(AuthMode, "chatgpt", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record CodexLoginChallenge(
@@ -42,10 +42,11 @@ public sealed class CodexAccountClient
             return CodexAccount.SignedOut;
 
         string authMode = CodexProtocol.String(account, "type");
+        bool chatGpt = string.Equals(authMode, "chatgpt", StringComparison.OrdinalIgnoreCase);
         return new CodexAccount(
             authMode,
-            CodexProtocol.Scrub(CodexProtocol.String(account, "planType"), 32),
-            authMode.Length > 0);
+            chatGpt ? CodexProtocol.Scrub(CodexProtocol.String(account, "planType"), 32) : "",
+            chatGpt);
     }
 
     public Task<CodexLoginChallenge> StartChatGptLoginAsync(CancellationToken cancellationToken = default) =>
