@@ -25,8 +25,10 @@ internal static class AssistantLifecycleSmoke
             Check("assistant starts closed", !window.AssistantDrawerOpen);
             Check("assistant toggle exists once", Smoke.Find<Button>(window)
                 .Count(button => button.Content?.ToString() == "Assistant") == 1);
-            Check("assistant advertises provider state without a request",
-                window.AssistantUiForTest.ProviderStatus.Contains("OpenAI-compatible", StringComparison.Ordinal));
+            Check("assistant advertises the ChatGPT subscription boundary without a request",
+                window.AssistantUiForTest.ProviderStatus.Contains("ChatGPT via Codex", StringComparison.Ordinal));
+            Check("assistant starts signed out and offers sign in",
+                window.AssistantUiForTest.AccountStatus == "Signed out" && window.AssistantUiForTest.SignInVisible);
 
             string activity = window.SelectedActivity;
             var fake = new FakeChatClient(
@@ -37,8 +39,13 @@ internal static class AssistantLifecycleSmoke
             Check("opening assistant shows the drawer", window.AssistantDrawerOpen);
             Check("opening assistant preserves active activity", activity == window.SelectedActivity);
             Check("opening assistant makes no provider request", fake.CallCount == 0);
+            Check("opening assistant leaves the account signed out",
+                window.AssistantUiForTest.AccountStatus == "Signed out" &&
+                window.AssistantUiForTest.SignInVisible);
 
-            window.AssistantUiForTest.SetClientForTest(fake);
+            AssistantTools smokeTools = window.CreateAssistantTools();
+            window.AssistantUiForTest.SetSessionForTest(
+                window.CreateAssistantSession(fake, smokeTools), smokeTools);
             window.AssistantUiForTest.Pane.Composer.Text = "Say hello.";
             Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Send")
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -84,7 +91,9 @@ internal static class AssistantLifecycleSmoke
                 })),
                 new ChatResponse(new ChatMessage(ChatRole.Assistant,
                     "The preview is ready for your approval.")));
-            window.AssistantUiForTest.SetClientForTest(fake);
+            AssistantTools approvalTools = window.CreateAssistantTools();
+            window.AssistantUiForTest.SetSessionForTest(
+                window.CreateAssistantSession(fake, approvalTools), approvalTools);
             window.AssistantUiForTest.Pane.Composer.Text = "Update the selected clip.";
             Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Send")
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

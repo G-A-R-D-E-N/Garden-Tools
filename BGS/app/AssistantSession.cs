@@ -8,16 +8,7 @@ using Microsoft.Extensions.AI;
 
 namespace BehaviourStudio.App;
 
-public sealed record AssistantToolActivity(string Name, bool RequiresApproval);
-
-public sealed record AssistantReply(
-    string Status,
-    string Text,
-    int Iterations,
-    IReadOnlyList<AssistantToolActivity> Tools,
-    bool AwaitingApproval);
-
-public sealed class AssistantSession : IDisposable
+public sealed class AssistantSession : IAssistantSession
 {
     public const int MaximumIterationsPerRequest = 6;
     public const int MaximumHistoryTurns = 8;

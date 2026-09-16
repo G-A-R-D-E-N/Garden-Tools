@@ -1,18 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Microsoft.Extensions.AI;
+using Avalonia.Threading;
 
 namespace BehaviourStudio.App;
 
 internal sealed class AssistantPane : Border
 {
     private readonly TextBlock _provider = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _account = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _deviceInfo = new() { TextWrapping = TextWrapping.Wrap, IsVisible = false };
     private readonly StackPanel _messages = new() { Spacing = 6 };
     private readonly TextBox _composer = new()
     {
@@ -21,12 +24,17 @@ internal sealed class AssistantPane : Border
         MinHeight = 70,
         MaxHeight = 150,
     };
+    private readonly Button _signIn = Ux.Primary("Sign in with ChatGPT");
+    private readonly Button _deviceCode = Ux.Secondary("Use device code");
+    private readonly Button _signOut = Ux.Secondary("Sign out");
+    private readonly Button _openUrl = Ux.Secondary("Open sign-in page");
     private readonly Button _send = Ux.Primary("Send");
     private readonly Button _cancel = Ux.Secondary("Cancel");
     private readonly Border _approval = new();
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap };
     private readonly Button _approve = Ux.Primary("Apply approved edit");
     private readonly Button _reject = Ux.Secondary("Reject");
+    private string _pendingUrl = "";
     private int _messageCount;
 
     public AssistantPane()
@@ -54,13 +62,40 @@ internal sealed class AssistantPane : Border
         header.Children.Add(newChat);
         header.Children.Add(title);
 
-        _provider.Foreground = Ux.MetaBrush;
+        _provider.Foreground = Ux.TitleBrush;
         _provider.FontSize = Ux.FontSmall;
         _provider.Margin = new Thickness(0, 4, 0, 0);
 
+        _account.Foreground = Ux.MetaBrush;
+        _account.FontSize = Ux.FontSmall;
+        _account.Margin = new Thickness(0, 2, 0, 0);
+
+        _signIn.Click += (_, _) => SignInRequested?.Invoke();
+        _deviceCode.Click += (_, _) => DeviceCodeRequested?.Invoke();
+        _signOut.Click += (_, _) => SignOutRequested?.Invoke();
+        _openUrl.Click += (_, _) => OpenUrlRequested?.Invoke(_pendingUrl);
+        _signOut.IsVisible = false;
+        _openUrl.IsVisible = false;
+        var authRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        authRow.Children.Add(_signIn);
+        authRow.Children.Add(_deviceCode);
+        authRow.Children.Add(_openUrl);
+        authRow.Children.Add(_signOut);
+
+        _deviceInfo.Foreground = Ux.MetaBrush;
+        _deviceInfo.FontSize = Ux.FontSmall;
+        _deviceInfo.Margin = new Thickness(0, 4, 0, 0);
+
         var notice = new TextBlock
         {
-            Text = "Sends only your prompt, bounded editor context, and BGS tool results when you press Send. Opening this drawer makes no provider request.",
+            Text = "Sends only your prompt, bounded editor context, and BGS tool results when you press Send. " +
+                "Opening this drawer makes no model request. Codex owns ChatGPT sign-in and token refresh; " +
+                "BGS never stores your credentials.",
             Foreground = Ux.MutedBrush,
             FontSize = Ux.FontSmall,
             TextWrapping = TextWrapping.Wrap,
@@ -114,7 +149,7 @@ internal sealed class AssistantPane : Border
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         body.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var top = new StackPanel { Children = { header, _provider, notice } };
+        var top = new StackPanel { Children = { header, _provider, _account, authRow, _deviceInfo, notice } };
         Grid.SetRow(top, 0);
         Grid.SetRow(conversation, 1);
         var bottom = new StackPanel { Children = { _approval, _composer, composerButtons, _status } };
@@ -131,15 +166,51 @@ internal sealed class AssistantPane : Border
     public event Action? CloseRequested;
     public event Action? ApproveRequested;
     public event Action? RejectRequested;
+    public event Action? SignInRequested;
+    public event Action? DeviceCodeRequested;
+    public event Action? SignOutRequested;
+    public event Action<string>? OpenUrlRequested;
 
     public int MessageCount => _messageCount;
     public string ProviderStatus => _provider.Text ?? "";
+    public string AccountStatus => _account.Text ?? "";
+    public string DeviceInfo => _deviceInfo.Text ?? "";
     public string Status => _status.Text ?? "";
     public bool ApprovalVisible => _approval.IsVisible;
     public bool IsBusy => !_send.IsVisible;
+    public bool SignInVisible => _signIn.IsVisible;
+    public bool SignOutVisible => _signOut.IsVisible;
     public TextBox Composer => _composer;
 
     public void SetProvider(string text) => _provider.Text = text;
+
+    public void SetAccount(string text)
+    {
+        _account.Text = text;
+        bool signedIn = text.StartsWith("Connected", StringComparison.Ordinal);
+        _signIn.IsVisible = !signedIn;
+        _deviceCode.IsVisible = !signedIn;
+        _signOut.IsVisible = signedIn;
+    }
+
+    public void SetDeviceCode(string url, string userCode)
+    {
+        _pendingUrl = url;
+        bool hasCode = userCode.Length > 0;
+        _openUrl.IsVisible = url.Length > 0;
+        _deviceInfo.IsVisible = hasCode || url.Length > 0;
+        _deviceInfo.Text = hasCode
+            ? $"Enter this one-time code in the browser: {userCode}"
+            : (url.Length > 0 ? "Continue in the browser to finish signing in." : "");
+    }
+
+    public void ClearDeviceCode()
+    {
+        _pendingUrl = "";
+        _openUrl.IsVisible = false;
+        _deviceInfo.IsVisible = false;
+        _deviceInfo.Text = "";
+    }
 
     public void AddUser(string text) => AddMessage("You", text, Ux.CardBrush);
 
@@ -166,6 +237,13 @@ internal sealed class AssistantPane : Border
         _cancel.IsVisible = busy;
     }
 
+    public void SetAuthBusy(bool busy)
+    {
+        _signIn.IsEnabled = !busy;
+        _deviceCode.IsEnabled = !busy;
+        _signOut.IsEnabled = !busy;
+    }
+
     public void SetApproval(bool visible) => _approval.IsVisible = visible;
 
     public void Clear()
@@ -173,6 +251,7 @@ internal sealed class AssistantPane : Border
         _messages.Children.Clear();
         _messageCount = 0;
         SetApproval(false);
+        ClearDeviceCode();
         SetStatus("New chat.", Ux.MetaBrush);
     }
 
@@ -216,14 +295,19 @@ internal sealed class AssistantPane : Border
 internal sealed class AssistantUi
 {
     private const double DefaultWidth = 420;
+    private const double MinimumWidth = 320;
+    private const double MaximumWidth = 520;
+    private const string WidthSetting = "assistant.drawer_width";
+
     private readonly MainWindow _owner;
     private readonly AssistantPane _pane = new();
     private readonly ColumnDefinition _splitterColumn = new(new GridLength(0, GridUnitType.Pixel));
     private readonly ColumnDefinition _drawerColumn =
-        new(new GridLength(0, GridUnitType.Pixel)) { MinWidth = 0, MaxWidth = 520 };
+        new(new GridLength(0, GridUnitType.Pixel)) { MinWidth = 0, MaxWidth = MaximumWidth };
     private readonly GridSplitter _splitter;
     private AssistantTools? _tools;
-    private AssistantSession? _session;
+    private IAssistantSession? _session;
+    private CodexAssistantConnection? _connection;
     private CancellationTokenSource? _requestCancellation;
     private bool _open;
 
@@ -253,8 +337,16 @@ internal sealed class AssistantUi
         _pane.SendRequested += Send;
         _pane.ApproveRequested += Approve;
         _pane.RejectRequested += Reject;
-        _pane.SetProvider(ProviderText(AssistantProviderOptions.FromSettings()));
-        _pane.SetStatus("Ready. Opening the drawer makes no provider request.", Ux.MetaBrush);
+        _pane.SignInRequested += SignIn;
+        _pane.DeviceCodeRequested += DeviceCode;
+        _pane.SignOutRequested += SignOut;
+        _pane.OpenUrlRequested += OpenUrl;
+
+        AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
+        bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
+        _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
+        _pane.SetAccount("Signed out");
+        _pane.SetStatus("Ready. Opening the drawer makes no model request.", Ux.MetaBrush);
         SetOpen(false);
     }
 
@@ -262,21 +354,34 @@ internal sealed class AssistantUi
     public bool IsBusy => _pane.IsBusy;
     public int MessageCount => _pane.MessageCount;
     public string ProviderStatus => _pane.ProviderStatus;
+    public string AccountStatus => _pane.AccountStatus;
+    public string DeviceInfo => _pane.DeviceInfo;
     public string Status => _pane.Status;
     public bool ApprovalVisible => _pane.ApprovalVisible;
+    public bool SignInVisible => _pane.SignInVisible;
     public AssistantPane Pane => _pane;
 
-    internal void SetClientForTest(IChatClient client)
+    internal void SetSessionForTest(IAssistantSession session, AssistantTools? tools = null)
     {
+        if (tools != null) _tools = tools;
         _tools ??= _owner.CreateAssistantTools();
         _session?.Dispose();
-        _session = _owner.CreateAssistantSession(client, _tools);
+        _session = session;
     }
 
     private void SetOpen(bool open)
     {
+        if (open)
+        {
+            double stored = ReadStoredWidth();
+            _drawerColumn.Width = new GridLength(stored, GridUnitType.Pixel);
+        }
+        else
+        {
+            if (_open) StoreWidth(_drawerColumn.Width.Value);
+            _drawerColumn.Width = new GridLength(0, GridUnitType.Pixel);
+        }
         _open = open;
-        _drawerColumn.Width = new GridLength(open ? DefaultWidth : 0, GridUnitType.Pixel);
         _splitterColumn.Width = new GridLength(open ? 6 : 0, GridUnitType.Pixel);
         _pane.IsVisible = open;
         _splitter.IsVisible = open;
@@ -297,8 +402,9 @@ internal sealed class AssistantUi
             foreach (var tool in reply.Tools) _pane.AddTool(tool.Name, tool.RequiresApproval);
             _pane.AddAssistant(reply.Text);
             _pane.SetApproval(reply.AwaitingApproval);
-            _pane.SetStatus(reply.Status == "ok" ? "Ready." : reply.Text,
+            _pane.SetStatus(ReplyStatus(reply),
                 reply.Status == "ok" ? new SolidColorBrush(Ux.Good) : Ux.WarnBrush);
+            if (reply.Status == "signed_out") RefreshAccountText();
         }
         finally
         {
@@ -308,19 +414,161 @@ internal sealed class AssistantUi
         }
     }
 
+    private static string ReplyStatus(AssistantReply reply) =>
+        reply.Status == "ok" ? "Ready." : reply.Text;
+
     private bool EnsureSession()
     {
         if (_session != null) return true;
-        var options = AssistantProviderOptions.FromSettings();
-        if (!AssistantProvider.TryCreate(options, out IChatClient? client, out string error))
+        if (!EnsureCodex()) return false;
+        _tools = _owner.CreateAssistantTools();
+        _session = _owner.CreateCodexSession(_connection!, _tools);
+        return true;
+    }
+
+    private bool EnsureCodex()
+    {
+        if (_connection != null) return true;
+        AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
+        if (!AssistantProvider.TryResolveExecutable(options, out _, out string error))
         {
-            _pane.SetStatus("Disconnected: " + error, Ux.WarnBrush);
+            _pane.SetStatus(error, Ux.WarnBrush);
             return false;
         }
-        _tools = _owner.CreateAssistantTools();
-        _session = _owner.CreateAssistantSession(client!, _tools);
-        _pane.SetProvider(ProviderText(options));
+        _connection = _owner.CreateCodexConnection(options);
+        _connection.Changed += OnConnectionChanged;
         return true;
+    }
+
+    private void OnConnectionChanged() => Dispatcher.UIThread.Post(RefreshAccountText);
+
+    private async void SignIn()
+    {
+        _pane.SetAuthBusy(true);
+        try
+        {
+            if (!EnsureCodex()) return;
+            CodexAccount account = await _connection!.ConnectAsync().ConfigureAwait(true);
+            RefreshAccountText();
+            if (account.SignedIn)
+            {
+                _pane.SetStatus("Connected. Opening the assistant made no model request.", Ux.MetaBrush);
+                return;
+            }
+
+            CodexLoginChallenge challenge = await _connection.BeginChatGptLoginAsync().ConfigureAwait(true);
+            if (challenge.HasBrowserUrl)
+            {
+                OpenUrl(challenge.AuthUrl);
+                _pane.SetStatus("Waiting for browser sign-in to finish...", Ux.MetaBrush);
+            }
+            else
+            {
+                _pane.SetStatus("Waiting for sign-in to finish...", Ux.MetaBrush);
+            }
+        }
+        catch (CodexProtocolException exception)
+        {
+            _pane.SetStatus("Disconnected: " + exception.Message, Ux.WarnBrush);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or TimeoutException)
+        {
+            _pane.SetStatus("Disconnected: Codex sign-in could not be started.", Ux.WarnBrush);
+        }
+        finally
+        {
+            _pane.SetAuthBusy(false);
+        }
+    }
+
+    private async void DeviceCode()
+    {
+        _pane.SetAuthBusy(true);
+        try
+        {
+            if (!EnsureCodex()) return;
+            await _connection!.ConnectAsync().ConfigureAwait(true);
+            CodexLoginChallenge challenge = await _connection.BeginDeviceCodeLoginAsync().ConfigureAwait(true);
+            _pane.SetDeviceCode(challenge.VerificationUrl, challenge.UserCode);
+            OpenUrl(challenge.VerificationUrl);
+            _pane.SetStatus("Waiting for device-code sign-in to finish...", Ux.MetaBrush);
+        }
+        catch (CodexProtocolException exception)
+        {
+            _pane.SetStatus("Disconnected: " + exception.Message, Ux.WarnBrush);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or TimeoutException)
+        {
+            _pane.SetStatus("Disconnected: device-code sign-in could not be started.", Ux.WarnBrush);
+        }
+        finally
+        {
+            _pane.SetAuthBusy(false);
+        }
+    }
+
+    private async void SignOut()
+    {
+        _pane.SetAuthBusy(true);
+        try
+        {
+            if (_connection is null) return;
+            await _connection.SignOutAsync().ConfigureAwait(true);
+            _session?.ClearHistory();
+            RefreshAccountText();
+            _pane.SetStatus("Signed out. Codex owns the remaining credential state.", Ux.MetaBrush);
+        }
+        catch (CodexProtocolException exception)
+        {
+            _pane.SetStatus("Disconnected: " + exception.Message, Ux.WarnBrush);
+        }
+        finally
+        {
+            _pane.SetAuthBusy(false);
+        }
+    }
+
+    private void RefreshAccountText()
+    {
+        if (_connection is null || !_connection.IsConnected)
+        {
+            _pane.SetAccount("Signed out");
+            return;
+        }
+        CodexAccount account = _connection.Account;
+        if (!account.SignedIn)
+        {
+            _pane.SetAccount("Signed out");
+            return;
+        }
+
+        string plan = PlanLabel(account.PlanType);
+        string text = plan.Length > 0
+            ? $"Connected · ChatGPT {plan}"
+            : $"Connected · {account.AuthMode}";
+        if (_connection.ModelLabel.Length > 0) text += $"\nModel: {_connection.ModelLabel}";
+        _pane.SetAccount(text);
+    }
+
+    internal static string PlanLabel(string planType) =>
+        planType.Length == 0
+            ? ""
+            : char.ToUpperInvariant(planType[0]) + planType[1..].ToLowerInvariant();
+
+    private static void OpenUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+        }
     }
 
     private void Cancel() => _requestCancellation?.Cancel();
@@ -349,10 +597,18 @@ internal sealed class AssistantUi
         _pane.SetStatus("The proposed edit was rejected.", Ux.MetaBrush);
     }
 
-    private static string ProviderText(AssistantProviderOptions options)
+    private static double ReadStoredWidth()
     {
-        string location = Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out Uri? uri) &&
-                          uri.IsLoopback ? "local" : "remote";
-        return $"OpenAI-compatible · {options.Model} · {location} · {options.BaseUrl}";
+        string stored = Settings.Get(WidthSetting);
+        if (double.TryParse(stored, NumberStyles.Float, CultureInfo.InvariantCulture, out double width) &&
+            width >= MinimumWidth && width <= MaximumWidth)
+            return width;
+        return DefaultWidth;
+    }
+
+    private static void StoreWidth(double width)
+    {
+        if (width < MinimumWidth || width > MaximumWidth) return;
+        Settings.TrySet(WidthSetting, width.ToString("R", CultureInfo.InvariantCulture), out _);
     }
 }
