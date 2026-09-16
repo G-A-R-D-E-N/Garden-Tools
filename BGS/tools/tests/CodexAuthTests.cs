@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using BehaviourStudio.App;
 using Xunit;
@@ -76,6 +77,26 @@ public sealed class CodexAuthTests
             "-c", "features.unified_exec=false",
             "-c", "web_search=\"disabled\"",
         }, fixture.Connection.LaunchArguments);
+    }
+
+    [Fact]
+    public async Task ThreadPinsOpenAiAndDisablesAmbientCodexTools()
+    {
+        using var fixture = new CodexSessionFixture();
+
+        AssistantReply reply = await fixture.Session.SendAsync("hello", CodexSessionFixture.Context());
+
+        Assert.Equal("ok", reply.Status);
+        JsonElement parameters = fixture.Server.LastThreadStartParams!.Value;
+        Assert.Equal("openai", parameters.GetProperty("modelProvider").GetString());
+        JsonElement config = parameters.GetProperty("config");
+        Assert.False(config.GetProperty("features.shell_tool").GetBoolean());
+        Assert.False(config.GetProperty("features.unified_exec").GetBoolean());
+        Assert.False(config.GetProperty("features.standalone_web_search").GetBoolean());
+        Assert.False(config.GetProperty("features.plugins").GetBoolean());
+        Assert.False(config.GetProperty("features.apps").GetBoolean());
+        Assert.Equal("disabled", config.GetProperty("web_search").GetString());
+        Assert.Equal(0, config.GetProperty("mcp_servers").EnumerateObject().Count());
     }
 
     [Fact]
