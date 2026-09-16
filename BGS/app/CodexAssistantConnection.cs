@@ -57,24 +57,37 @@ public sealed class CodexAssistantConnection : IDisposable
         {
             if (_client is { IsConnected: true }) return _account;
 
+            ResetTransport();
             if (!AssistantProvider.TryResolveExecutable(_options, out CodexExecutable? executable, out string error))
                 throw new CodexProtocolException(error);
 
             var arguments = new List<string>
             {
-                "app-server", "--listen", "stdio://", "-c", "mcp_servers={}",
+                "app-server", "--listen", "stdio://",
+                "-c", "model_provider=\"openai\"",
+                "-c", "mcp_servers={}",
+                "-c", "features.shell_tool=false",
+                "-c", "features.unified_exec=false",
+                "-c", "web_search=\"disabled\"",
             };
             LaunchArguments = arguments;
             _process = _transportFactory(executable!.Path, arguments);
             _client = new CodexAppServerClient(_process);
             _client.Notification += OnNotification;
-            await _client.ConnectAsync(cancellationToken).ConfigureAwait(false);
-
-            _accounts = new CodexAccountClient(_client);
-            await RefreshAccountAsync(cancellationToken).ConfigureAwait(false);
-            _model = await ReadModelLabelAsync(cancellationToken).ConfigureAwait(false);
-            Changed?.Invoke();
-            return _account;
+            try
+            {
+                await _client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+                _accounts = new CodexAccountClient(_client);
+                await RefreshAccountAsync(cancellationToken).ConfigureAwait(false);
+                _model = await ReadModelLabelAsync(cancellationToken).ConfigureAwait(false);
+                Changed?.Invoke();
+                return _account;
+            }
+            catch
+            {
+                ResetTransport();
+                throw;
+            }
         }
         finally
         {
@@ -127,9 +140,7 @@ public sealed class CodexAssistantConnection : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        if (_client != null) _client.Notification -= OnNotification;
-        _client?.Dispose();
-        _process?.Dispose();
+        ResetTransport();
         _connectGate.Dispose();
     }
 
@@ -138,10 +149,13 @@ public sealed class CodexAssistantConnection : IDisposable
         if (method == CodexMethods.AccountUpdated)
         {
             string authMode = CodexProtocol.String(parameters, "authMode");
-            string planType = CodexProtocol.Scrub(CodexProtocol.String(parameters, "planType"), 32);
+            bool chatGpt = string.Equals(authMode, "chatgpt", StringComparison.OrdinalIgnoreCase);
+            string planType = chatGpt
+                ? CodexProtocol.Scrub(CodexProtocol.String(parameters, "planType"), 32)
+                : "";
             _account = authMode.Length == 0
                 ? CodexAccount.SignedOut
-                : new CodexAccount(authMode, planType, true);
+                : new CodexAccount(authMode, planType, chatGpt);
             Changed?.Invoke();
             return;
         }
@@ -172,5 +186,19 @@ public sealed class CodexAssistantConnection : IDisposable
         {
             return "";
         }
+    }
+
+    private void ResetTransport()
+    {
+        if (_client != null) _client.Notification -= OnNotification;
+        if (_client != null)
+            _client.Dispose();
+        else
+            _process?.Dispose();
+        _client = null;
+        _process = null;
+        _accounts = null;
+        _account = CodexAccount.SignedOut;
+        _model = "";
     }
 }
