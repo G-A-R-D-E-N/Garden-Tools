@@ -71,9 +71,11 @@ public sealed class CodexConnectionLifecycleTests
     private static CodexAssistantConnection Connection(
         List<CountingTransport> transports, bool failFirstInitialize = false)
     {
+        string executable = Environment.ProcessPath
+            ?? throw new InvalidOperationException("the test process path is unavailable");
         int created = 0;
         return new CodexAssistantConnection(
-            new AssistantProviderOptions(AssistantProviderOptions.CodexBackend, "", "codex-test-path"),
+            new AssistantProviderOptions(AssistantProviderOptions.CodexBackend, "", executable),
             (_, _) =>
             {
                 var transport = new CountingTransport();
