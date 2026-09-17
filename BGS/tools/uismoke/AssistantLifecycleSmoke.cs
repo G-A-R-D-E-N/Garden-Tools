@@ -211,20 +211,41 @@ internal static class AssistantLifecycleSmoke
             window.AssistantUiForTest.RefreshAccountForTest();
 
             AssistantPane pane = window.AssistantUiForTest.Pane;
-            Check("the model selector appears once the catalog is known", pane.ModelSelectorVisible);
-            Check("the model selector lists every catalog model", pane.ModelSelector.ItemCount == 3);
+            Check("the model control appears once the catalog is known", pane.ModelSelectorVisible);
+            Check("the model palette lists every catalog model", pane.ModelPicker.VisibleModels.Count == 3);
             Check("no model is forced before the user chooses", pane.SelectedModelItem is null);
             Check("the account line names the Codex config default",
                 window.AssistantUiForTest.AccountStatus.Contains("Codex config default", StringComparison.Ordinal));
 
-            AssistantModelItem astra = pane.ModelSelector.ItemsSource!.Cast<AssistantModelItem>()
-                .Single(item => item.WireModel == "gpt-6-astra");
-            pane.ModelSelector.SelectedItem = astra;
+            pane.ModelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Check("the model control opens the palette", pane.ModelPopupOpen);
+
+            Check("the palette groups models under their provider",
+                pane.ModelPicker.VisibleModels.Contains("gpt-6-astra"));
+            pane.ModelPicker.SetQuery("astra");
+            Check("the palette search filters the list",
+                pane.ModelPicker.VisibleModels.SequenceEqual(new[] { "gpt-6-astra" }));
+            pane.ModelPicker.SetQuery("nothing matches this");
+            Check("an empty result is reported rather than showing everything",
+                pane.ModelPicker.VisibleModels.Count == 0);
+            pane.ModelPicker.SetQuery("");
+
+            Check("choosing from the palette is applied", pane.ModelPicker.Choose("gpt-6-astra"));
             Dispatcher.UIThread.RunJobs();
             Check("choosing a model persists it", Settings.Get("assistant.model") == "gpt-6-astra");
             Check("choosing a model selects it on the connection", connection.SelectedModel == "gpt-6-astra");
             Check("choosing a model shows the chosen model", pane.SelectedModelItem == "gpt-6-astra");
             Check("choosing a model offers a reset", pane.ModelResetVisible);
+            Check("the model button names the chosen model",
+                pane.ModelButtonLabel.Contains("GPT-6-Astra", StringComparison.Ordinal));
+
+            Check("a model can be favourited", ToggleFavorite(pane, "gpt-6-astra"));
+            Check("the favourites section keeps it", AssistantModelPrefs.IsFavorite("gpt-6-astra"));
+            Check("toggling a favourite does not change the model",
+                Settings.Get("assistant.model") == "gpt-6-astra");
+            ToggleFavorite(pane, "gpt-6-astra");
+            Check("a favourite can be removed", !AssistantModelPrefs.IsFavorite("gpt-6-astra"));
 
             pane.InvokeModelResetRequested();
             Dispatcher.UIThread.RunJobs();
@@ -236,6 +257,14 @@ internal static class AssistantLifecycleSmoke
         {
             Smoke.CloseForTest(window);
         }
+    }
+
+    private static bool ToggleFavorite(AssistantPane pane, string model)
+    {
+        bool before = AssistantModelPrefs.IsFavorite(model);
+        pane.FavoriteForTest(model);
+        Dispatcher.UIThread.RunJobs();
+        return AssistantModelPrefs.IsFavorite(model) != before;
     }
 
     internal static void OpenChat(MainWindow window)
@@ -377,16 +406,14 @@ internal static class AssistantLifecycleSmoke
                 settings.AccountText.Contains("claude", StringComparison.OrdinalIgnoreCase));
 
             Check("Claude offers a real model list rather than free text",
-                pane.ModelSelector.ItemCount == 2);
-            string[] claudeModels = pane.ModelSelector.ItemsSource!
-                .Cast<AssistantModelItem>().Select(item => item.WireModel).ToArray();
+                pane.ModelPicker.VisibleModels.Count == 2);
             Check("the Claude list is the catalog's list",
-                claudeModels.SequenceEqual(new[] { "claude-opus-5", "claude-haiku-4-5-20251001" }));
+                pane.ModelPicker.VisibleModels.SequenceEqual(
+                    new[] { "claude-opus-5", "claude-haiku-4-5-20251001" }));
             Check("an unset Claude model names the CLI default",
-                pane.ModelSelector.PlaceholderText == "Claude CLI default");
+                pane.ModelButtonLabel.Contains("Claude CLI default", StringComparison.Ordinal));
 
-            pane.ModelSelector.SelectedItem = pane.ModelSelector.ItemsSource!
-                .Cast<AssistantModelItem>().Single(item => item.WireModel == "claude-opus-5");
+            Check("a Claude model can be chosen from the palette", pane.ModelPicker.Choose("claude-opus-5"));
             Dispatcher.UIThread.RunJobs();
             Check("a chosen Claude model is persisted",
                 Settings.Get(AssistantUi.ModelSettingKey(AssistantBackend.Claude)) == "claude-opus-5");

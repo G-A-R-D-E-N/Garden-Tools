@@ -206,8 +206,7 @@ internal sealed partial class AssistantUi
         {
             _providerModels = ClaudeModelCatalog.Read();
         }
-        AssistantModelSelector.Bind(_pane.ModelSelector, _pane, _providerModels,
-            Settings.Get(ModelSettingKey(_backend)), DefaultModelLabel());
+        _pane.SetModels(_providerModels, Settings.Get(ModelSettingKey(_backend)), DefaultModelLabel());
         RefreshSettingsWindow();
     }
 

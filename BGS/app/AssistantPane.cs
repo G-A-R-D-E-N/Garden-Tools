@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -21,7 +23,9 @@ internal sealed class AssistantPane : Border
         MinHeight = 54,
         MaxHeight = 140,
     };
-    private readonly ComboBox _modelSelect = new() { PlaceholderText = "Model", MinWidth = 150 };
+    private readonly Button _modelButton = Ux.Secondary("Model \u25BE");
+    private readonly AssistantModelPicker _picker = new();
+    private readonly Popup _modelPopup = new();
     private readonly Button _modelReset = Ux.Secondary("\u21BA");
     private readonly Button _send = Ux.Primary("Send");
     private readonly Button _cancel = Ux.Secondary("Cancel");
@@ -103,6 +107,26 @@ internal sealed class AssistantPane : Border
         _modelReset.Margin = new Thickness(4, 0, 0, 0);
         _modelReset.IsVisible = false;
         ToolTip.SetTip(_modelReset, "Use the provider's own default model");
+        _modelReset.Click += (_, _) => ModelResetRequested?.Invoke();
+
+        _modelButton.FontSize = Ux.FontSmall;
+        _modelButton.Padding = new Thickness(10, 3, 10, 3);
+        _modelButton.IsVisible = false;
+        ToolTip.SetTip(_modelButton, "Choose the model for the next request");
+        _modelPopup.PlacementTarget = _modelButton;
+        _modelPopup.Placement = PlacementMode.Top;
+        _modelPopup.IsLightDismissEnabled = true;
+        _modelPopup.Child = _picker;
+        _modelButton.Click += (_, _) =>
+        {
+            _modelPopup.IsOpen = !_modelPopup.IsOpen;
+            if (_modelPopup.IsOpen) _picker.FocusSearch();
+        };
+        _picker.Chosen += wireModel =>
+        {
+            _modelPopup.IsOpen = false;
+            ModelSelected?.Invoke(wireModel);
+        };
 
         _send.Click += (_, _) => SendComposer();
         _cancel.Click += (_, _) => CancelRequested?.Invoke();
@@ -112,11 +136,11 @@ internal sealed class AssistantPane : Border
         DockPanel.SetDock(_send, Dock.Right);
         DockPanel.SetDock(_cancel, Dock.Right);
         DockPanel.SetDock(_modelReset, Dock.Right);
-        DockPanel.SetDock(_modelSelect, Dock.Right);
+        DockPanel.SetDock(_modelButton, Dock.Right);
         toolbar.Children.Add(_send);
         toolbar.Children.Add(_cancel);
         toolbar.Children.Add(_modelReset);
-        toolbar.Children.Add(_modelSelect);
+        toolbar.Children.Add(_modelButton);
         toolbar.Children.Add(_status);
 
         var bottom = new StackPanel
@@ -149,17 +173,32 @@ internal sealed class AssistantPane : Border
 
     public int MessageCount => _messageCount;
     public bool IsBusy => !_send.IsVisible;
-    public bool ModelSelectorVisible => _modelSelect.IsVisible;
+    public bool ModelSelectorVisible => _modelButton.IsVisible;
     public bool ModelResetVisible
     {
         get => _modelReset.IsVisible;
         internal set => _modelReset.IsVisible = value;
     }
-    public string? SelectedModelItem => (_modelSelect.SelectedItem as AssistantModelItem)?.WireModel;
-    internal ComboBox ModelSelector => _modelSelect;
+    public string? SelectedModelItem => _picker.SelectedModel.Length > 0 ? _picker.SelectedModel : null;
+    public bool ModelPopupOpen => _modelPopup.IsOpen;
+    internal AssistantModelPicker ModelPicker => _picker;
+    internal Button ModelButton => _modelButton;
+    internal string ModelButtonLabel => _modelButton.Content?.ToString() ?? "";
+    internal void FavoriteForTest(string wireModel) => _picker.InvokeFavorite(wireModel);
     internal Button ModelReset => _modelReset;
+    internal void CloseModelPopup() => _modelPopup.IsOpen = false;
     internal void InvokeModelSelected(string wireModel) => ModelSelected?.Invoke(wireModel);
     internal void InvokeModelResetRequested() => ModelResetRequested?.Invoke();
+
+    public void SetModels(IReadOnlyList<CodexModel> models, string selected, string defaultLabel)
+    {
+        _picker.SetModels(models, selected);
+        _modelButton.IsVisible = models.Count > 0;
+        _modelReset.IsVisible = selected.Length > 0;
+        CodexModel? chosen = models.FirstOrDefault(model =>
+            string.Equals(model.WireModel, selected, StringComparison.Ordinal));
+        _modelButton.Content = (chosen?.DisplayName ?? defaultLabel) + " \u25BE";
+    }
     public TextBox Composer => _composer;
     public string ChatTitle
     {
@@ -184,7 +223,7 @@ internal sealed class AssistantPane : Border
         _composer.IsEnabled = !busy;
         _send.IsVisible = !busy;
         _cancel.IsVisible = busy;
-        _modelSelect.IsEnabled = !busy;
+        _modelButton.IsEnabled = !busy;
         _modelReset.IsEnabled = !busy;
     }
     public void SetApproval(bool visible) => _approval.IsVisible = visible;

@@ -27,6 +27,11 @@ public sealed record CodexLoginChallenge(
 public sealed record CodexModel(string Id, string DisplayName, bool IsDefault, string Model = "")
 {
     public string WireModel => Model.Length > 0 ? Model : Id;
+    public string Group { get; init; } = "";
+    public long ContextLimit { get; init; }
+    public bool Reasoning { get; init; }
+    public decimal InputCost { get; init; }
+    public decimal OutputCost { get; init; }
     public override string ToString() => DisplayName;
 }
 
@@ -95,7 +100,12 @@ public sealed class CodexAccountClient
                 if (string.IsNullOrWhiteSpace(slug) || slug.Any(char.IsControl) || !slugs.Add(slug)) continue;
                 string displayName = CodexProtocol.Scrub(CodexProtocol.String(entry, "displayName"), 120);
                 models.Add(new CodexModel(id, displayName.Length > 0 ? displayName : slug,
-                    CodexProtocol.Bool(entry, "isDefault"), slug));
+                    CodexProtocol.Bool(entry, "isDefault"), slug)
+                {
+                    Group = "Codex",
+                    Reasoning = CodexProtocol.Property(entry, "supportedReasoningEfforts") is
+                        { ValueKind: JsonValueKind.Array } efforts && efforts.GetArrayLength() > 0,
+                });
             }
             cursor = CodexProtocol.String(result, "nextCursor");
             if (cursor.Length > 0 && (!cursors.Add(cursor) || cursors.Count >= 100))

@@ -71,7 +71,6 @@ internal sealed partial class AssistantUi
         _pane.ApproveRequested += Approve;
         _pane.RejectRequested += Reject;
 
-        AssistantModelSelector.HookEvents(_pane);
         _pane.ModelSelected += SelectModel;
         _pane.ModelResetRequested += ResetModel;
 
