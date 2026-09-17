@@ -201,6 +201,22 @@ public sealed class BgsMcpBridgeTests
     }
 
     [Fact]
+    public async Task TheBridgeAlsoAcceptsItsTokenFromTheUrlSoAnyClientCanAuthenticate()
+    {
+        using BgsMcpBridge bridge = BgsMcpBridge.Start(BgsMcpProtocolTests.Tools());
+        using var client = new HttpClient();
+
+        using HttpResponseMessage accepted = await client.PostAsync(
+            bridge.TokenQueryUrl(), Json("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"));
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+
+        using HttpResponseMessage refused = await client.PostAsync(
+            bridge.Url + "?token=not-the-token",
+            Json("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}"));
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+    }
+
+    [Fact]
     public void EveryBridgeListensOnLoopbackAndUsesAFreshToken()
     {
         using BgsMcpBridge first = BgsMcpBridge.Start(BgsMcpProtocolTests.Tools());

@@ -129,7 +129,7 @@ public sealed class BgsMcpBridge : IDisposable
             await WriteAsync(stream, 405, "Method Not Allowed", "", false, cancellationToken).ConfigureAwait(false);
             return;
         }
-        if (!IsAuthorized(request.Authorization))
+        if (!IsAuthorized(request.Authorization, request.QueryToken))
         {
             await WriteAsync(stream, 401, "Unauthorized", "", false, cancellationToken).ConfigureAwait(false);
             return;
@@ -149,13 +149,18 @@ public sealed class BgsMcpBridge : IDisposable
         await WriteAsync(stream, 200, "OK", response, true, cancellationToken).ConfigureAwait(false);
     }
 
-    private bool IsAuthorized(string authorization)
+    private bool IsAuthorized(string authorization, string queryToken)
     {
         const string prefix = "Bearer ";
-        if (!authorization.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
-        string presented = authorization[prefix.Length..].Trim();
-        return FixedEquals(presented, Token);
+        if (authorization.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            string presented = authorization[prefix.Length..].Trim();
+            if (FixedEquals(presented, Token)) return true;
+        }
+        return queryToken.Length > 0 && FixedEquals(queryToken, Token);
     }
+
+    internal string TokenQueryUrl() => Url + "?token=" + Uri.EscapeDataString(Token);
 
     private static bool FixedEquals(string left, string right)
     {
@@ -200,14 +205,24 @@ public sealed class BgsMcpBridge : IDisposable
     }
 
     private readonly record struct Request(
-        string Method, string Path, string Authorization, int ContentLength, bool ExpectContinue);
+        string Method, string Path, string Authorization, string QueryToken, int ContentLength,
+        bool ExpectContinue);
 
     private static Request Parse(string header)
     {
         string[] lines = header.Split("\r\n");
         string[] parts = lines.Length > 0 ? lines[0].Split(' ') : Array.Empty<string>();
         string method = parts.Length > 0 ? parts[0] : "";
-        string path = parts.Length > 1 ? parts[1] : "";
+        string target = parts.Length > 1 ? parts[1] : "";
+
+        string path = target;
+        string queryToken = "";
+        int query = target.IndexOf('?');
+        if (query >= 0)
+        {
+            path = target[..query];
+            queryToken = QueryValue(target[(query + 1)..], "token");
+        }
 
         string authorization = "";
         int contentLength = 0;
@@ -228,9 +243,20 @@ public sealed class BgsMcpBridge : IDisposable
                 expectContinue = true;
         }
 
-        int query = path.IndexOf('?');
-        if (query >= 0) path = path[..query];
-        return new Request(method, path, authorization, contentLength, expectContinue);
+        return new Request(method, path, authorization, queryToken, contentLength, expectContinue);
+    }
+
+    private static string QueryValue(string query, string name)
+    {
+        foreach (string pair in query.Split('&'))
+        {
+            int separator = pair.IndexOf('=');
+            if (separator <= 0) continue;
+            if (!string.Equals(pair[..separator], name, StringComparison.Ordinal)) continue;
+            try { return Uri.UnescapeDataString(pair[(separator + 1)..]); }
+            catch (UriFormatException) { return ""; }
+        }
+        return "";
     }
 
     private static Task WriteAsync(
