@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,7 +24,11 @@ public sealed record CodexLoginChallenge(
     public bool HasBrowserUrl => AuthUrl.Length > 0;
 }
 
-public sealed record CodexModel(string Id, string DisplayName, bool IsDefault);
+public sealed record CodexModel(string Id, string DisplayName, bool IsDefault, string Model = "")
+{
+    public string WireModel => Model.Length > 0 ? Model : Id;
+    public override string ToString() => DisplayName;
+}
 
 public sealed class CodexAccountClient
 {
@@ -67,28 +73,41 @@ public sealed class CodexAccountClient
     public Task LogoutAsync(CancellationToken cancellationToken = default) =>
         _client.RequestAsync(CodexMethods.AccountLogout, new { }, cancellationToken);
 
+    public async Task<IReadOnlyList<CodexModel>> ReadModelsAsync(CancellationToken cancellationToken = default)
+    {
+        var models = new List<CodexModel>();
+        var slugs = new HashSet<string>(StringComparer.Ordinal);
+        var cursors = new HashSet<string>(StringComparer.Ordinal);
+        string? cursor = null;
+        do
+        {
+            JsonElement? result = await _client.RequestAsync(CodexMethods.ModelList,
+                new { cursor, limit = 100, includeHidden = false }, cancellationToken).ConfigureAwait(false);
+            JsonElement? data = CodexProtocol.Property(result, "data");
+            if (data is not { ValueKind: JsonValueKind.Array } list)
+                throw new CodexProtocolException("Codex returned an invalid model catalog.");
+            foreach (JsonElement entry in list.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object || CodexProtocol.Bool(entry, "hidden")) continue;
+                string id = CodexProtocol.String(entry, "id");
+                string slug = CodexProtocol.String(entry, "model");
+                if (slug.Length == 0) slug = id;
+                if (string.IsNullOrWhiteSpace(slug) || slug.Any(char.IsControl) || !slugs.Add(slug)) continue;
+                string displayName = CodexProtocol.Scrub(CodexProtocol.String(entry, "displayName"), 120);
+                models.Add(new CodexModel(id, displayName.Length > 0 ? displayName : slug,
+                    CodexProtocol.Bool(entry, "isDefault"), slug));
+            }
+            cursor = CodexProtocol.String(result, "nextCursor");
+            if (cursor.Length > 0 && (!cursors.Add(cursor) || cursors.Count >= 100))
+                throw new CodexProtocolException("Codex model pagination did not finish.");
+        } while (cursor.Length > 0);
+        return models.AsReadOnly();
+    }
+
     public async Task<CodexModel?> ReadDefaultModelAsync(CancellationToken cancellationToken = default)
     {
-        JsonElement? result = await _client
-            .RequestAsync(CodexMethods.ModelList, new { }, cancellationToken)
-            .ConfigureAwait(false);
-        JsonElement? data = CodexProtocol.Property(result, "data");
-        if (data is not { } list || list.ValueKind != JsonValueKind.Array) return null;
-
-        CodexModel? first = null;
-        foreach (JsonElement entry in list.EnumerateArray())
-        {
-            if (entry.ValueKind != JsonValueKind.Object) continue;
-            string id = CodexProtocol.String(entry, "id");
-            if (id.Length == 0) continue;
-            string displayName = CodexProtocol.String(entry, "displayName");
-            bool isDefault = CodexProtocol.Bool(entry, "isDefault");
-            bool hidden = CodexProtocol.Bool(entry, "hidden");
-            var model = new CodexModel(id, displayName.Length > 0 ? displayName : id, isDefault);
-            if (isDefault) return model;
-            if (!hidden && first is null) first = model;
-        }
-        return first;
+        IReadOnlyList<CodexModel> models = await ReadModelsAsync(cancellationToken).ConfigureAwait(false);
+        return models.FirstOrDefault(model => model.IsDefault) ?? models.FirstOrDefault();
     }
 
     private async Task<CodexLoginChallenge> StartLoginAsync(

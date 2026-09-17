@@ -105,6 +105,7 @@ internal static class AssistantLifecycleSmoke
         }
 
         WindowOwnsCodexConnection();
+        ModelSelectorListsCatalogAndPersistsChoice();
         ActiveEditorApproval();
         StaleApprovalIsNotReportedAsApplied();
     }
@@ -184,6 +185,52 @@ internal static class AssistantLifecycleSmoke
         Check("closing window disposes the Codex connection", transport.Disposed && !transport.IsRunning);
     }
 
+    private static void ModelSelectorListsCatalogAndPersistsChoice()
+    {
+        Settings.TrySet("assistant.model", "", out _);
+        var window = new MainWindow();
+        var transport = new WindowTransport();
+        window.Show();
+        try
+        {
+            string executable = Environment.ProcessPath
+                ?? throw new InvalidOperationException("the smoke process path is unavailable");
+            var options = new AssistantProviderOptions(
+                AssistantProviderOptions.CodexBackend, "", executable);
+            CodexAssistantConnection connection =
+                window.CreateCodexConnection(options, (_, _) => transport);
+            connection.ConnectAsync().GetAwaiter().GetResult();
+            window.AssistantUiForTest.SetConnectionForTest(connection);
+            window.AssistantUiForTest.RefreshAccountForTest();
+
+            AssistantPane pane = window.AssistantUiForTest.Pane;
+            Check("the model selector appears once the catalog is known", pane.ModelSelectorVisible);
+            Check("the model selector lists every catalog model", pane.ModelSelector.ItemCount == 3);
+            Check("no model is forced before the user chooses", pane.SelectedModelItem is null);
+            Check("the account line names the Codex config default",
+                window.AssistantUiForTest.AccountStatus.Contains("Codex config default", StringComparison.Ordinal));
+
+            AssistantModelItem astra = pane.ModelSelector.ItemsSource!.Cast<AssistantModelItem>()
+                .Single(item => item.WireModel == "gpt-6-astra");
+            pane.ModelSelector.SelectedItem = astra;
+            Dispatcher.UIThread.RunJobs();
+            Check("choosing a model persists it", Settings.Get("assistant.model") == "gpt-6-astra");
+            Check("choosing a model selects it on the connection", connection.SelectedModel == "gpt-6-astra");
+            Check("choosing a model shows the chosen model", pane.SelectedModelItem == "gpt-6-astra");
+            Check("choosing a model offers a reset", pane.ModelResetVisible);
+
+            pane.InvokeModelResetRequested();
+            Dispatcher.UIThread.RunJobs();
+            Check("resetting clears the choice", Settings.Get("assistant.model") == "");
+            Check("resetting returns to the Codex config default", connection.SelectedModel == "");
+            Check("resetting hides the reset control", !pane.ModelResetVisible);
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
+    }
+
     private static void ActiveEditorApproval()
     {
         var window = new MainWindow();
@@ -236,6 +283,13 @@ internal static class AssistantLifecycleSmoke
 
     private sealed class WindowTransport : ICodexTransport
     {
+        internal const string Catalog =
+            "{\"data\":[" +
+            "{\"id\":\"gpt-5.6-sol\",\"model\":\"gpt-5.6-sol\",\"displayName\":\"GPT-5.6-Sol\",\"isDefault\":true}," +
+            "{\"id\":\"gpt-6-astra\",\"model\":\"gpt-6-astra\",\"displayName\":\"GPT-6-Astra\"}," +
+            "{\"id\":\"gpt-5.5\",\"model\":\"gpt-5.5\",\"displayName\":\"GPT-5.5\"}" +
+            "],\"nextCursor\":null}";
+
         public event Action<string>? LineReceived;
         public event Action<CodexProcessExit>? Exited;
 
@@ -261,7 +315,7 @@ internal static class AssistantLifecycleSmoke
             {
                 "initialize" => "{\"userAgent\":\"behaviour_graph_studio/0.154.0\",\"platformFamily\":\"windows\",\"platformOs\":\"windows\"}",
                 "account/read" => "{\"account\":{\"type\":\"chatgpt\",\"email\":null,\"planType\":\"plus\"},\"requiresOpenaiAuth\":true}",
-                "model/list" => "{\"data\":[]}",
+                "model/list" => WindowTransport.Catalog,
                 _ => "{}",
             };
             LineReceived?.Invoke("{\"id\":" + id.GetRawText() + ",\"result\":" + result + "}");

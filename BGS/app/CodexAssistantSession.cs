@@ -10,7 +10,7 @@ using Microsoft.Extensions.AI;
 
 namespace BehaviourStudio.App;
 
-public sealed class CodexAssistantSession : IAssistantSession, IAssistantReplayAware
+public sealed partial class CodexAssistantSession : IAssistantSession, IAssistantReplayAware
 {
     public const int MaximumIterationsPerRequest = 6;
 
@@ -230,7 +230,9 @@ public sealed class CodexAssistantSession : IAssistantSession, IAssistantReplayA
             ["config"] = CodexIsolation.BuildThreadConfig(mcpServers),
         };
         AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
-        if (options.Model.Length > 0) parameters["model"] = options.Model;
+        string connectionModel = _connection.BeginModelRequest();
+        if (connectionModel.Length > 0) parameters["model"] = connectionModel;
+        else if (options.Model.Length > 0) parameters["model"] = options.Model;
 
         List<object> dynamicTools = BuildDynamicTools();
         bool requestedTools = dynamicTools.Count > 0;
@@ -249,6 +251,10 @@ public sealed class CodexAssistantSession : IAssistantSession, IAssistantReplayA
                 .ConfigureAwait(false);
             requestedTools = false;
             _connection.DynamicToolsAvailable = false;
+        }
+        finally
+        {
+            _connection.EndModelRequest();
         }
 
         CodexIsolation.VerifyThreadStart(result);
@@ -283,9 +289,19 @@ public sealed class CodexAssistantSession : IAssistantSession, IAssistantReplayA
             ["threadId"] = threadId,
             ["input"] = input,
         };
+        string turnModel = _connection.BeginModelRequest();
+        if (turnModel.Length > 0) parameters["model"] = turnModel;
 
-        JsonElement? result = await client.RequestAsync(CodexMethods.TurnStart, parameters, cancellationToken)
-            .ConfigureAwait(false);
+        JsonElement? result;
+        try
+        {
+            result = await client.RequestAsync(CodexMethods.TurnStart, parameters, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _connection.EndModelRequest();
+        }
         string turnId = CodexProtocol.String(CodexProtocol.Property(result, "turn"), "id");
         if (turnId.Length == 0)
             throw new CodexProtocolException("Codex did not start a turn for the assistant request.");

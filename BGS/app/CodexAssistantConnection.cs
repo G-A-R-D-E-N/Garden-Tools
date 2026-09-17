@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,9 @@ public sealed class CodexAssistantConnection : IDisposable
     private CodexAppServerClient? _client;
     private CodexAccountClient? _accounts;
     private CodexAccount _account = CodexAccount.SignedOut;
-    private string _model = "";
+    private IReadOnlyList<CodexModel> _models = Array.Empty<CodexModel>();
+    private string _selectedModel;
+    private int _activeRequests;
     private int _disposed;
 
     public IReadOnlyList<string> LaunchArguments { get; private set; } = Array.Empty<string>();
@@ -28,6 +31,7 @@ public sealed class CodexAssistantConnection : IDisposable
         AssistantProviderOptions options, CodexTransportFactory? transportFactory = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _selectedModel = options.Model;
         _transportFactory = transportFactory ?? DefaultTransportFactory;
     }
 
@@ -42,7 +46,59 @@ public sealed class CodexAssistantConnection : IDisposable
 
     public CodexServerInfo? ServerInfo => _client?.ServerInfo;
     public CodexAccount Account => _account;
-    public string ModelLabel => _model;
+    public IReadOnlyList<CodexModel> Models { get { lock (_transportGate) return _models; } }
+    public string SelectedModel { get { lock (_transportGate) return _selectedModel; } }
+    public string ModelLabel
+    {
+        get
+        {
+            lock (_transportGate)
+                return _selectedModel.Length == 0
+                    ? "Codex config default"
+                    : _models.FirstOrDefault(m => m.WireModel == _selectedModel)?.DisplayName ?? _selectedModel;
+        }
+    }
+
+    private CodexModel? DefaultModel() => _models.FirstOrDefault(m => m.IsDefault) ?? _models.FirstOrDefault();
+
+    public bool TrySelectModel(string model, out string failure)
+    {
+        lock (_transportGate)
+        {
+            failure = "";
+            if (IsDisposed || !IsConnected || !_account.SignedIn)
+                failure = "Connect with ChatGPT before selecting a model.";
+            else if (_activeRequests > 0)
+                failure = "Wait for the current request to finish before switching models.";
+            else if (model.Length > 0 && !_models.Any(m => m.WireModel == model))
+                failure = "That model is not available in the current Codex catalog.";
+            else if (model.Length == 0 && DefaultModel() is null)
+                failure = "The Codex default is unavailable. Reconnect before resetting the model.";
+            if (failure.Length > 0) return false;
+            if (!Settings.TrySet("assistant.model", model, out failure)) return false;
+            _selectedModel = model;
+        }
+        Changed?.Invoke();
+        return true;
+    }
+
+    internal string BeginModelRequest()
+    {
+        lock (_transportGate)
+        {
+            ThrowIfDisposed();
+            string model = _selectedModel;
+            if (model.Length > 0 && _models.Count > 0 && !_models.Any(m => m.WireModel == model))
+                throw new CodexProtocolException("The selected model is unavailable. Choose a model or reset to default.");
+            _activeRequests++;
+            return model;
+        }
+    }
+
+    internal void EndModelRequest()
+    {
+        lock (_transportGate) _activeRequests--;
+    }
     public bool IsConnected => _client?.IsConnected == true;
     public bool? DynamicToolsAvailable
     {
@@ -95,7 +151,7 @@ public sealed class CodexAssistantConnection : IDisposable
                 ThrowIfDisposed();
                 var accounts = new CodexAccountClient(client);
                 CodexAccount account = await ReadAccountAsync(accounts, cancellationToken).ConfigureAwait(false);
-                string model = await ReadModelLabelAsync(accounts, cancellationToken).ConfigureAwait(false);
+                IReadOnlyList<CodexModel> models = await ReadModelsAsync(accounts, cancellationToken).ConfigureAwait(false);
                 lock (_transportGate)
                 {
                     ThrowIfDisposed();
@@ -103,7 +159,7 @@ public sealed class CodexAssistantConnection : IDisposable
                         throw new CodexProtocolException("The Codex app server connection changed during startup.");
                     _accounts = accounts;
                     _account = account;
-                    _model = model;
+                    _models = models;
                 }
                 Changed?.Invoke();
                 return account;
@@ -128,10 +184,12 @@ public sealed class CodexAssistantConnection : IDisposable
         if (accounts is null) return CodexAccount.SignedOut;
 
         CodexAccount account = await ReadAccountAsync(accounts, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<CodexModel> models = await ReadModelsAsync(accounts, cancellationToken).ConfigureAwait(false);
         lock (_transportGate)
         {
             if (IsDisposed || !ReferenceEquals(_accounts, accounts)) return CodexAccount.SignedOut;
             _account = account;
+            _models = models;
         }
         Changed?.Invoke();
         return account;
@@ -240,17 +298,16 @@ public sealed class CodexAssistantConnection : IDisposable
         }
     }
 
-    private static async Task<string> ReadModelLabelAsync(
+    private static async Task<IReadOnlyList<CodexModel>> ReadModelsAsync(
         CodexAccountClient accounts, CancellationToken cancellationToken)
     {
         try
         {
-            CodexModel? model = await accounts.ReadDefaultModelAsync(cancellationToken).ConfigureAwait(false);
-            return model?.DisplayName ?? "";
+            return await accounts.ReadModelsAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (CodexProtocolException)
         {
-            return "";
+            return Array.Empty<CodexModel>();
         }
     }
 
@@ -266,7 +323,7 @@ public sealed class CodexAssistantConnection : IDisposable
             _process = null;
             _accounts = null;
             _account = CodexAccount.SignedOut;
-            _model = "";
+            _models = Array.Empty<CodexModel>();
         }
         if (client != null)
         {

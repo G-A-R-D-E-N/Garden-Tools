@@ -28,6 +28,8 @@ internal sealed class AssistantPane : Border
     private readonly Button _deviceCode = Ux.Secondary("Use device code");
     private readonly Button _signOut = Ux.Secondary("Sign out");
     private readonly Button _openUrl = Ux.Secondary("Open sign-in page");
+    private readonly ComboBox _modelSelect = new() { PlaceholderText = "Model" };
+    private readonly Button _modelReset = Ux.Secondary("Reset model");
     private readonly Button _send = Ux.Primary("Send");
     private readonly Button _cancel = Ux.Secondary("Cancel");
     private readonly Border _approval = new();
@@ -86,6 +88,19 @@ internal sealed class AssistantPane : Border
         authRow.Children.Add(_deviceCode);
         authRow.Children.Add(_openUrl);
         authRow.Children.Add(_signOut);
+
+        _modelSelect.IsVisible = false;
+        _modelSelect.MinWidth = 180;
+        _modelSelect.HorizontalAlignment = HorizontalAlignment.Left;
+        var modelRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        modelRow.Children.Add(_modelSelect);
+        modelRow.Children.Add(_modelReset);
+        _modelReset.IsVisible = false;
 
         _deviceInfo.Foreground = Ux.MetaBrush;
         _deviceInfo.FontSize = Ux.FontSmall;
@@ -149,7 +164,7 @@ internal sealed class AssistantPane : Border
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         body.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var top = new StackPanel { Children = { header, _chatHeader, _provider, _account, authRow, _deviceInfo, notice } };
+        var top = new StackPanel { Children = { header, _chatHeader, _provider, _account, authRow, modelRow, _deviceInfo, notice } };
         Grid.SetRow(top, 0);
         Grid.SetRow(conversation, 1);
         var bottom = new StackPanel { Children = { _approval, _composer, composerButtons, _status } };
@@ -170,6 +185,8 @@ internal sealed class AssistantPane : Border
     public event Action? DeviceCodeRequested;
     public event Action? SignOutRequested;
     public event Action<string>? OpenUrlRequested;
+    public event Action<string>? ModelSelected;
+    public event Action? ModelResetRequested;
 
     public int MessageCount => _messageCount;
     public string ProviderStatus => _provider.Text ?? "";
@@ -180,6 +197,18 @@ internal sealed class AssistantPane : Border
     public bool IsBusy => !_send.IsVisible;
     public bool SignInVisible => _signIn.IsVisible;
     public bool SignOutVisible => _signOut.IsVisible;
+    public bool ModelSelectorVisible => _modelSelect.IsVisible;
+    public bool ModelResetVisible
+    {
+        get => _modelReset.IsVisible;
+        internal set => _modelReset.IsVisible = value;
+    }
+    public string? SelectedModelItem =>
+        (_modelSelect.SelectedItem as AssistantModelItem)?.WireModel;
+    internal ComboBox ModelSelector => _modelSelect;
+    internal Button ModelReset => _modelReset;
+    internal void InvokeModelSelected(string wireModel) => ModelSelected?.Invoke(wireModel);
+    internal void InvokeModelResetRequested() => ModelResetRequested?.Invoke();
     public TextBox Composer => _composer;
     public string ChatTitle
     {
@@ -232,6 +261,8 @@ internal sealed class AssistantPane : Border
         _composer.IsEnabled = !busy;
         _send.IsVisible = !busy;
         _cancel.IsVisible = busy;
+        _modelSelect.IsEnabled = !busy;
+        _modelReset.IsEnabled = !busy;
     }
 
     public void SetAuthBusy(bool busy)
@@ -239,6 +270,8 @@ internal sealed class AssistantPane : Border
         _signIn.IsEnabled = !busy;
         _deviceCode.IsEnabled = !busy;
         _signOut.IsEnabled = !busy;
+        _modelSelect.IsEnabled = !busy;
+        _modelReset.IsEnabled = !busy;
     }
     public void SetApproval(bool visible) => _approval.IsVisible = visible;
     public void Clear()

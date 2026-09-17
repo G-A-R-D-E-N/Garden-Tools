@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
@@ -10,7 +8,7 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
-internal sealed class AssistantUi
+internal sealed partial class AssistantUi
 {
     private const double DefaultWidth = 760;
     private const double MinimumWidth = 520;
@@ -82,6 +80,9 @@ internal sealed class AssistantUi
         _pane.DeviceCodeRequested += DeviceCode;
         _pane.SignOutRequested += SignOut;
         _pane.OpenUrlRequested += OpenUrl;
+        AssistantModelSelector.HookEvents(_pane);
+        _pane.ModelSelected += SelectModel;
+        _pane.ModelResetRequested += ResetModel;
 
         AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
         bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
@@ -101,53 +102,6 @@ internal sealed class AssistantUi
     public bool ApprovalVisible => _pane.ApprovalVisible;
     public bool SignInVisible => _pane.SignInVisible;
     public AssistantPane Pane => _pane;
-
-    internal AssistantUi AssistantUiForTest => this;
-
-    internal void SetSessionForTest(IAssistantSession session, AssistantTools? tools = null)
-    {
-        if (tools != null)
-        {
-            _tools = tools;
-            _gate = null;
-        }
-        AssistantTools resolved = EnsureTools();
-        AssistantConversationEntry? entry = _controller?.Active;
-        if (entry is null) return;
-        entry.Session?.Dispose();
-        entry.Session = session;
-        entry.InvalidateSession();
-        entry.SessionPrimed = false;
-        entry.HasPendingApproval = () => resolved.HasPendingApproval;
-    }
-
-    internal IReadOnlyList<AssistantChatSummary> ChatListForTest =>
-        _controller?.List.Summaries() ?? Array.Empty<AssistantChatSummary>();
-
-    internal string? ActiveChatIdForTest => _controller?.List.ActiveChatId;
-    internal IAssistantSession? ActiveSessionForTest => _controller?.ActiveSession;
-
-    internal bool SidebarVisibleForTest => _sidebar.IsVisible;
-    internal int SidebarColumnIndexForTest => Grid.GetColumn(_sidebar);
-    internal int SplitterColumnIndexForTest => Grid.GetColumn(_splitter);
-    internal int PaneColumnIndexForTest => Grid.GetColumn(_pane);
-    internal double SidebarColumnWidthForTest => _sidebarColumn.Width.Value;
-    internal double SplitterColumnWidthForTest => _splitterColumn.Width.Value;
-    internal double PaneColumnWidthForTest => _drawerColumn.Width.Value;
-
-    internal void ApproveForTest() => Approve();
-    internal void RejectForTest() => Reject();
-    internal void ClearPendingMutationsForTest() => _controller?.RejectPendingMutations();
-    internal bool RealPendingMutationForTest => EnsureTools().HasPendingApproval;
-    internal void SetConnectionForTest(CodexAssistantConnection connection) => _connection = connection;
-    internal void SignOutForTest() => SignOut();
-
-    internal void SelectChatForTest(string chatId)
-    {
-        if (_controller is null) return;
-        if (_controller.List.IsBusy) return;
-        if (_controller.TrySelectById(chatId)) OnSelectionChanged(_controller.List.ActiveIndex);
-    }
 
     private void RestoreChats()
     {
@@ -556,7 +510,26 @@ internal sealed class AssistantUi
             : $"Connected · {account.AuthMode}";
         if (_connection.ModelLabel.Length > 0) text += $"\nModel: {_connection.ModelLabel}";
         _pane.SetAccount(text);
+        RefreshModelSelector();
     }
+
+    private void RefreshModelSelector()
+    {
+        if (_connection is null) return;
+        AssistantModelSelector.Bind(_pane.ModelSelector, _pane, _connection.Models, _connection.SelectedModel);
+    }
+
+    private void SelectModel(string wireModel)
+    {
+        if (_connection is null) return;
+        if (_connection.TrySelectModel(wireModel, out string failure))
+            _pane.SetStatus("Model set for the next request on every chat.", new Avalonia.Media.SolidColorBrush(Ux.Good));
+        else
+            _pane.SetStatus(failure, Ux.WarnBrush);
+        RefreshAccountText();
+    }
+
+    private void ResetModel() => SelectModel("");
 
     internal static string PlanLabel(string planType) =>
         planType.Length == 0
