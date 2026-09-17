@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace BehaviourStudio.App;
 
@@ -14,6 +16,8 @@ public sealed record OpencodeTurn(
 public static class OpencodeCli
 {
     public const int MaximumAnswerCharacters = 8000;
+    public const string ServerName = "bgs";
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
 
     internal static readonly string[] DeniedTools =
     {
@@ -23,26 +27,65 @@ public static class OpencodeCli
 
     private static readonly JsonSerializerOptions Wire = new(JsonSerializerDefaults.Web);
 
-    public static string BuildConfigJson(string bridgeUrl)
+    public static string BuildConfigJson(string bridgeUrl, IReadOnlyList<string> otherServers)
     {
         var permissions = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (string tool in DeniedTools) permissions[tool] = "deny";
         permissions["bgs*"] = "allow";
 
+        var servers = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (string name in otherServers)
+        {
+            if (name.Length == 0 || string.Equals(name, ServerName, StringComparison.Ordinal)) continue;
+            servers[name] = new Dictionary<string, object?>(StringComparer.Ordinal) { ["enabled"] = false };
+        }
+        servers[ServerName] = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["type"] = "remote",
+            ["url"] = bridgeUrl,
+            ["enabled"] = true,
+        };
+
         var config = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["permission"] = permissions,
-            ["mcp"] = new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                ["bgs"] = new Dictionary<string, object?>(StringComparer.Ordinal)
-                {
-                    ["type"] = "remote",
-                    ["url"] = bridgeUrl,
-                    ["enabled"] = true,
-                },
-            },
+            ["mcp"] = servers,
         };
         return JsonSerializer.Serialize(config, Wire);
+    }
+
+    public static IReadOnlyList<string> ParseConfiguredServers(string resolvedConfigJson)
+    {
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(resolvedConfigJson);
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<string>();
+        }
+
+        using (document)
+        {
+            JsonElement? servers = CodexProtocol.Property(document.RootElement, "mcp");
+            if (servers is not { ValueKind: JsonValueKind.Object } map) return Array.Empty<string>();
+            var names = new List<string>();
+            foreach (JsonProperty property in map.EnumerateObject())
+            {
+                string name = CodexProtocol.Scrub(property.Name, 120);
+                if (name.Length > 0) names.Add(name);
+            }
+            return names.AsReadOnly();
+        }
+    }
+
+    public static async Task<IReadOnlyList<string>> ReadConfiguredServersAsync(
+        AssistantCli cli, CancellationToken cancellationToken = default)
+    {
+        AssistantCommandResult result = await AssistantCommandRunner
+            .RunAsync(cli, new[] { "debug", "config" }, Timeout, cancellationToken).ConfigureAwait(false);
+        return result.Succeeded ? ParseConfiguredServers(result.StandardOutput) : Array.Empty<string>();
     }
 
     public static OpencodeTurn Parse(string output)

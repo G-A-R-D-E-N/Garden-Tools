@@ -220,12 +220,22 @@ public sealed class CodexAuthTests
     [Fact]
     public void ProviderOptionsDefaultToCodexAndCarryNoCredential()
     {
-        AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
+        string? previousPath = Settings.SettingsPathForTest;
+        Settings.SettingsPathForTest =
+            Path.Combine(Path.GetTempPath(), "bgs-provider-" + Guid.NewGuid().ToString("N") + ".cfg");
+        try
+        {
+            AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
 
-        Assert.True(options.IsCodex);
-        Assert.Equal("codex", options.Backend);
-        Assert.DoesNotContain("key", options.Model, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("http", options.CodexExecutableOverride, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("ChatGPT via Codex", AssistantProvider.DisplayName);
+            Assert.True(options.IsCodex);
+            Assert.Equal("codex", options.Backend);
+            Assert.DoesNotContain("key", options.Model, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("http", options.CodexExecutableOverride, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("ChatGPT via Codex", AssistantProvider.DisplayName);
+        }
+        finally
+        {
+            Settings.SettingsPathForTest = previousPath;
+        }
     }
 }

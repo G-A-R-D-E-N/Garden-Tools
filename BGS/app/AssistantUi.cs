@@ -83,7 +83,6 @@ internal sealed partial class AssistantUi
         _pane.ModelSelected += SelectModel;
         _pane.ModelResetRequested += ResetModel;
         _pane.ProviderSelected += SelectProvider;
-        _pane.ModelTextChanged += SelectModel;
 
         AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
         bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);

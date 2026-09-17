@@ -235,6 +235,15 @@ internal static class AssistantLifecycleSmoke
     private static void ProviderSelectionIsExplicitAndPersisted()
     {
         Settings.TrySet("assistant.backend", "", out _);
+        Func<string> previousRoot = ClaudeModelCatalog.ConfigRootForTest;
+        Func<string, IReadOnlyList<string>> previousFiles = ClaudeModelCatalog.FilesForTest;
+        Func<string, string?> previousRead = ClaudeModelCatalog.ReadFileForTest;
+        ClaudeModelCatalog.FilesForTest = _ => new[] { "catalog.json" };
+        ClaudeModelCatalog.ReadFileForTest = _ =>
+            "{\"catalog\":{\"config\":{\"models\":[" +
+            "{\"id\":\"claude-opus-5\",\"name\":\"Opus 5\"}," +
+            "{\"id\":\"claude-haiku-4-5-20251001\",\"name\":\"Haiku 4.5\"}]}}}";
+
         var window = new MainWindow();
         window.Show();
         try
@@ -246,7 +255,6 @@ internal static class AssistantLifecycleSmoke
             Check("every provider is offered exactly once",
                 offered.SequenceEqual(new[] { "codex", "claude", "opencode" }));
             Check("the assistant starts on Codex", pane.SelectedProvider == "codex");
-            Check("the Codex model stays a dropdown", !pane.ModelTextVisible);
 
             pane.InvokeProviderSelected("claude");
             Dispatcher.UIThread.RunJobs();
@@ -255,14 +263,23 @@ internal static class AssistantLifecycleSmoke
                 window.AssistantUiForTest.Status.Contains("Claude Code", StringComparison.Ordinal));
             Check("the provider description follows the choice",
                 window.AssistantUiForTest.ProviderStatus.Contains("Claude Code", StringComparison.Ordinal));
-            Check("Claude takes a free-text model", pane.ModelTextVisible);
             Check("Claude uses its own sign-in rather than BGS",
                 window.AssistantUiForTest.AccountStatus.Contains("claude", StringComparison.OrdinalIgnoreCase));
 
-            pane.InvokeModelTextChanged("claude-sonnet-4-5");
+            Check("Claude offers a real model list rather than free text",
+                pane.ModelSelector.ItemCount == 2);
+            string[] claudeModels = pane.ModelSelector.ItemsSource!
+                .Cast<AssistantModelItem>().Select(item => item.WireModel).ToArray();
+            Check("the Claude list is the catalog's list",
+                claudeModels.SequenceEqual(new[] { "claude-opus-5", "claude-haiku-4-5-20251001" }));
+            Check("an unset Claude model names the CLI default",
+                pane.ModelSelector.PlaceholderText == "Claude CLI default");
+
+            pane.ModelSelector.SelectedItem = pane.ModelSelector.ItemsSource!
+                .Cast<AssistantModelItem>().Single(item => item.WireModel == "claude-opus-5");
             Dispatcher.UIThread.RunJobs();
-            Check("a free-text model is persisted for Claude",
-                Settings.Get(AssistantUi.ModelSettingKey(AssistantBackend.Claude)) == "claude-sonnet-4-5");
+            Check("a chosen Claude model is persisted",
+                Settings.Get(AssistantUi.ModelSettingKey(AssistantBackend.Claude)) == "claude-opus-5");
             Check("each provider keeps its own model",
                 AssistantUi.ModelSettingKey(AssistantBackend.Claude) !=
                 AssistantUi.ModelSettingKey(AssistantBackend.Codex));
@@ -270,6 +287,9 @@ internal static class AssistantLifecycleSmoke
         finally
         {
             Smoke.CloseForTest(window);
+            ClaudeModelCatalog.ConfigRootForTest = previousRoot;
+            ClaudeModelCatalog.FilesForTest = previousFiles;
+            ClaudeModelCatalog.ReadFileForTest = previousRead;
         }
 
         var restored = new MainWindow();

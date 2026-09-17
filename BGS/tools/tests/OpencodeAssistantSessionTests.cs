@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using BehaviourStudio.App;
@@ -21,7 +22,10 @@ public sealed class OpencodeAssistantSessionTests
     {
         _previous = AssistantCommandRunner.RunForTest;
         AssistantCommandRunner.RunForTest = (_, arguments, environment, _, _) =>
-            handler(arguments, environment);
+            arguments.Contains("debug")
+                ? Task.FromResult(new AssistantCommandResult(0,
+                    "{\"mcp\":{\"f4-re-mcp\":{\"type\":\"local\"}}}", ""))
+                : handler(arguments, environment);
     }
 
     private static void Restore()
@@ -204,6 +208,32 @@ public sealed class OpencodeAssistantSessionTests
             AssistantReply reply = await session.SendAsync("   ", CodexSessionFixture.Context());
 
             Assert.Equal("error", reply.Status);
+        }
+        finally
+        {
+            Restore();
+        }
+    }
+
+    [Fact]
+    public async Task TheUsersOwnMcpServersAreDisabledInTheRunConfiguration()
+    {
+        using BgsMcpBridge bridge = BgsMcpBridge.Start(BgsMcpProtocolTests.Tools());
+        string captured = "";
+        Stub((_, environment) =>
+        {
+            captured = environment!["OPENCODE_CONFIG"];
+            return Task.FromResult(Text("ok"));
+        });
+        try
+        {
+            using var session = new OpencodeAssistantSession(Cli, bridge, "");
+            await session.SendAsync("hi", CodexSessionFixture.Context());
+
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(captured));
+            JsonElement servers = document.RootElement.GetProperty("mcp");
+            Assert.False(servers.GetProperty("f4-re-mcp").GetProperty("enabled").GetBoolean());
+            Assert.True(servers.GetProperty("bgs").GetProperty("enabled").GetBoolean());
         }
         finally
         {

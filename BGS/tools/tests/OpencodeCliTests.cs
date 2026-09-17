@@ -12,7 +12,8 @@ public sealed class OpencodeCliTests
     [Fact]
     public void TheConfigDeniesEveryBuiltInToolAndEnablesOnlyTheBridge()
     {
-        string json = OpencodeCli.BuildConfigJson("http://127.0.0.1:1234/mcp");
+        string json = OpencodeCli.BuildConfigJson("http://127.0.0.1:1234/mcp",
+            new[] { "f4-re-mcp", "prisma-mcp" });
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement root = document.RootElement;
 
@@ -20,10 +21,47 @@ public sealed class OpencodeCliTests
         foreach (string tool in OpencodeCli.DeniedTools)
             Assert.Equal("deny", permissions.GetProperty(tool).GetString());
 
-        JsonElement bridge = root.GetProperty("mcp").GetProperty("bgs");
+        JsonElement servers = root.GetProperty("mcp");
+        Assert.False(servers.GetProperty("f4-re-mcp").GetProperty("enabled").GetBoolean());
+        Assert.False(servers.GetProperty("prisma-mcp").GetProperty("enabled").GetBoolean());
+
+        JsonElement bridge = servers.GetProperty(OpencodeCli.ServerName);
         Assert.Equal("remote", bridge.GetProperty("type").GetString());
         Assert.Equal("http://127.0.0.1:1234/mcp", bridge.GetProperty("url").GetString());
         Assert.True(bridge.GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
+    public void TheBridgesOwnNameIsNeverDisabledByTheCallersList()
+    {
+        string json = OpencodeCli.BuildConfigJson("http://127.0.0.1:1/mcp",
+            new[] { OpencodeCli.ServerName, "other" });
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement bridge = document.RootElement.GetProperty("mcp").GetProperty(OpencodeCli.ServerName);
+
+        Assert.True(bridge.GetProperty("enabled").GetBoolean());
+        Assert.Equal("remote", bridge.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void ConfiguredServersAreReadFromTheResolvedConfiguration()
+    {
+        const string resolved =
+            "{\"$schema\":\"https://opencode.ai/config.json\",\"permission\":{\"*\":\"allow\"}," +
+            "\"model\":\"opencode/x\",\"mcp\":{\"ccassist\":{\"type\":\"remote\"}," +
+            "\"f4-re-mcp\":{\"type\":\"local\"},\"prisma-mcp\":{\"type\":\"local\"}}}";
+
+        IReadOnlyList<string> servers = OpencodeCli.ParseConfiguredServers(resolved);
+
+        Assert.Equal(new[] { "ccassist", "f4-re-mcp", "prisma-mcp" }, servers);
+    }
+
+    [Fact]
+    public void AConfigurationWithoutServersYieldsNoneRatherThanThrowing()
+    {
+        Assert.Empty(OpencodeCli.ParseConfiguredServers("{}"));
+        Assert.Empty(OpencodeCli.ParseConfiguredServers("not json"));
+        Assert.Empty(OpencodeCli.ParseConfiguredServers("{\"mcp\":[]}"));
     }
 
     [Fact]

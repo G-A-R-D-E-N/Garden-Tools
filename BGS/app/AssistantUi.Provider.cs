@@ -140,19 +140,42 @@ internal sealed partial class AssistantUi
             RefreshModelSelector();
             return;
         }
-        if (_backend == AssistantBackend.Claude)
-        {
-            _providerModels = Array.Empty<CodexModel>();
-            RefreshModelSelector();
-            return;
-        }
-        if (!EnsureCli()) return;
         AssistantBackend requested = _backend;
-        IReadOnlyList<CodexModel> models = await OpencodeModelCatalog.ReadAsync(_cli!).ConfigureAwait(true);
+        IReadOnlyList<CodexModel> models = _backend == AssistantBackend.Claude
+            ? await Task.Run(ClaudeModelCatalog.Read).ConfigureAwait(true)
+            : await ReadOpencodeModelsAsync().ConfigureAwait(true);
         if (_backend != requested) return;
         _providerModels = models;
         RefreshModelSelector();
     }
+
+    private async Task<IReadOnlyList<CodexModel>> ReadOpencodeModelsAsync()
+    {
+        if (!EnsureCli()) return Array.Empty<CodexModel>();
+        return await OpencodeModelCatalog.ReadAsync(_cli!).ConfigureAwait(true);
+    }
+
+    private void RefreshModelSelector()
+    {
+        if (_backend == AssistantBackend.Codex)
+        {
+            if (_connection is null) return;
+            _providerModels = _connection.Models;
+        }
+        else if (_backend == AssistantBackend.Claude && _connection is null && _providerModels.Count == 0)
+        {
+            _providerModels = ClaudeModelCatalog.Read();
+        }
+        AssistantModelSelector.Bind(_pane.ModelSelector, _pane, _providerModels,
+            Settings.Get(ModelSettingKey(_backend)), DefaultModelLabel());
+    }
+
+    private string DefaultModelLabel() => _backend switch
+    {
+        AssistantBackend.Claude => "Claude CLI default",
+        AssistantBackend.Opencode => "opencode default",
+        _ => "Codex config default",
+    };
 
     private async void SignIn()
     {
@@ -288,25 +311,6 @@ internal sealed partial class AssistantUi
         if (_connection.ModelLabel.Length > 0) text += $"\nModel: {_connection.ModelLabel}";
         _pane.SetAccount(text);
         RefreshModelSelector();
-    }
-
-    private void RefreshModelSelector()
-    {
-        if (_backend == AssistantBackend.Claude)
-        {
-            _pane.SetModelEntry(true, Settings.Get(ModelSettingKey(_backend)));
-            AssistantModelSelector.Bind(_pane.ModelSelector, _pane, Array.Empty<CodexModel>(), "", "");
-            return;
-        }
-        _pane.SetModelEntry(false, "");
-        if (_backend == AssistantBackend.Codex)
-        {
-            if (_connection is null) return;
-            _providerModels = _connection.Models;
-        }
-        AssistantModelSelector.Bind(_pane.ModelSelector, _pane, _providerModels,
-            Settings.Get(ModelSettingKey(_backend)),
-            _backend == AssistantBackend.Codex ? "Codex config default" : "opencode default");
     }
 
     private void SelectModel(string wireModel)

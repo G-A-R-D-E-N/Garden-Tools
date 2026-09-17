@@ -31,8 +31,6 @@ internal sealed class AssistantPane : Border
     private readonly ComboBox _modelSelect = new() { PlaceholderText = "Model" };
     private readonly Button _modelReset = Ux.Secondary("Reset model");
     private readonly ComboBox _providerSelect = new() { PlaceholderText = "Provider" };
-    private readonly TextBox _modelText = new() { PlaceholderText = "Model (blank uses the CLI default)" };
-    private bool _bindingModelText;
     private readonly Button _send = Ux.Primary("Send");
     private readonly Button _cancel = Ux.Secondary("Cancel");
     private readonly Border _approval = new();
@@ -118,13 +116,6 @@ internal sealed class AssistantPane : Border
             Spacing = 6,
             Margin = new Thickness(0, 6, 0, 0),
         };
-        _modelText.IsVisible = false;
-        _modelText.MinWidth = 220;
-        _modelText.TextChanged += (_, _) =>
-        {
-            if (!_bindingModelText) ModelTextChanged?.Invoke(_modelText.Text ?? "");
-        };
-        modelRow.Children.Add(_modelText);
         modelRow.Children.Add(_modelSelect);
         modelRow.Children.Add(_modelReset);
         _modelReset.IsVisible = false;
@@ -215,7 +206,6 @@ internal sealed class AssistantPane : Border
     public event Action<string>? ModelSelected;
     public event Action? ModelResetRequested;
     public event Action<string>? ProviderSelected;
-    public event Action<string>? ModelTextChanged;
 
     public int MessageCount => _messageCount;
     public string ProviderStatus => _provider.Text ?? "";
@@ -240,40 +230,9 @@ internal sealed class AssistantPane : Border
     internal void InvokeModelSelected(string wireModel) => ModelSelected?.Invoke(wireModel);
     internal void InvokeModelResetRequested() => ModelResetRequested?.Invoke();
     internal void InvokeProviderSelected(string backend) => ProviderSelected?.Invoke(backend);
-    internal void InvokeModelTextChanged(string text) => ModelTextChanged?.Invoke(text);
 
     public bool ProviderSelectorVisible => _providerSelect.IsVisible;
     public string? SelectedProvider => (_providerSelect.SelectedItem as AssistantProviderItem)?.Wire;
-    public bool ModelTextVisible => _modelText.IsVisible;
-
-    public void SetModelEntry(bool freeText, string value)
-    {
-        _modelSelect.IsVisible = !freeText;
-        _modelText.IsVisible = freeText;
-        if (!freeText) return;
-        _bindingModelText = true;
-        try
-        {
-            _modelText.Text = value;
-        }
-        finally
-        {
-            _bindingModelText = false;
-        }
-    }
-
-    public void SetModelText(string value)
-    {
-        _bindingModelText = true;
-        try
-        {
-            _modelText.Text = value;
-        }
-        finally
-        {
-            _bindingModelText = false;
-        }
-    }
     public TextBox Composer => _composer;
     public string ChatTitle
     {
@@ -329,7 +288,6 @@ internal sealed class AssistantPane : Border
         _modelSelect.IsEnabled = !busy;
         _modelReset.IsEnabled = !busy;
         _providerSelect.IsEnabled = !busy;
-        _modelText.IsEnabled = !busy;
     }
 
     public void SetAuthBusy(bool busy)
@@ -340,7 +298,6 @@ internal sealed class AssistantPane : Border
         _modelSelect.IsEnabled = !busy;
         _modelReset.IsEnabled = !busy;
         _providerSelect.IsEnabled = !busy;
-        _modelText.IsEnabled = !busy;
     }
     public void SetApproval(bool visible) => _approval.IsVisible = visible;
     public void Clear()
