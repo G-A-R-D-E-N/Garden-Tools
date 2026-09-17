@@ -21,7 +21,11 @@ public interface IAssistantSession : IDisposable
         string prompt, AssistantContext context, CancellationToken cancellationToken = default);
 
     void ClearHistory();
+}
 
-    Task<bool> PrepareForSendAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(false);
+public interface IAssistantReplayAware
+{
+    Task<AssistantReply> SendAsync(
+        string prompt, string replayPrompt, AssistantContext context,
+        CancellationToken cancellationToken = default);
 }

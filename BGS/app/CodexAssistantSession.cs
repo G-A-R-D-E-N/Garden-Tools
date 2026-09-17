@@ -10,7 +10,7 @@ using Microsoft.Extensions.AI;
 
 namespace BehaviourStudio.App;
 
-public sealed class CodexAssistantSession : IAssistantSession
+public sealed class CodexAssistantSession : IAssistantSession, IAssistantReplayAware
 {
     public const int MaximumIterationsPerRequest = 6;
 
@@ -71,8 +71,13 @@ public sealed class CodexAssistantSession : IAssistantSession
 
     public bool ToolsAvailable => _dynamicToolsAvailable;
 
+    public Task<AssistantReply> SendAsync(
+        string prompt, AssistantContext context, CancellationToken cancellationToken = default) =>
+        SendAsync(prompt, prompt, context, cancellationToken);
+
     public async Task<AssistantReply> SendAsync(
-        string prompt, AssistantContext context, CancellationToken cancellationToken = default)
+        string prompt, string replayPrompt, AssistantContext context,
+        CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (string.IsNullOrWhiteSpace(prompt))
@@ -81,7 +86,8 @@ public sealed class CodexAssistantSession : IAssistantSession
         await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await SendLockedAsync(prompt.Trim(), context, cancellationToken).ConfigureAwait(false);
+            return await SendLockedAsync(prompt.Trim(), replayPrompt, context, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -102,15 +108,6 @@ public sealed class CodexAssistantSession : IAssistantSession
         {
             _requestGate.Release();
         }
-    }
-
-    public async Task<bool> PrepareForSendAsync(CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        await _connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        CodexAppServerClient client = _connection.Client;
-        Subscribe(client);
-        lock (_stateGate) return _threadId.Length == 0;
     }
 
     public void ClearHistory()
@@ -166,7 +163,7 @@ public sealed class CodexAssistantSession : IAssistantSession
     }
 
     private async Task<AssistantReply> SendLockedAsync(
-        string prompt, AssistantContext context, CancellationToken cancellationToken)
+        string prompt, string replayPrompt, AssistantContext context, CancellationToken cancellationToken)
     {
         CodexAccount account = await _connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
         CodexAppServerClient client = _connection.Client;
@@ -176,8 +173,10 @@ public sealed class CodexAssistantSession : IAssistantSession
             return new("signed_out", "Sign in with ChatGPT to use the assistant.", 0,
                 Array.Empty<AssistantToolActivity>(), Pending());
 
-        string threadId = await EnsureThreadAsync(client, cancellationToken).ConfigureAwait(false);
+        (string threadId, bool freshThread) =
+            await EnsureThreadAsync(client, cancellationToken).ConfigureAwait(false);
         RegisterThread(client, threadId);
+        string turnText = freshThread && replayPrompt.Length > 0 ? replayPrompt : prompt;
         ResetTurnState();
         var completion = new TaskCompletionSource<CodexTurnOutcome>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -190,7 +189,7 @@ public sealed class CodexAssistantSession : IAssistantSession
         string turnId;
         try
         {
-            turnId = await StartTurnAsync(client, threadId, prompt, context, cancellationToken)
+            turnId = await StartTurnAsync(client, threadId, turnText, context, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch
@@ -205,12 +204,12 @@ public sealed class CodexAssistantSession : IAssistantSession
         return await AwaitTurnAsync(turnId, completion, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<string> EnsureThreadAsync(
+    private async Task<(string ThreadId, bool Created)> EnsureThreadAsync(
         CodexAppServerClient client, CancellationToken cancellationToken)
     {
         lock (_stateGate)
         {
-            if (_threadId.Length > 0) return _threadId;
+            if (_threadId.Length > 0) return (_threadId, false);
         }
 
         string cwd = ScratchDirectory();
@@ -259,8 +258,12 @@ public sealed class CodexAssistantSession : IAssistantSession
 
         _dynamicToolsAvailable = requestedTools;
         _connection.DynamicToolsAvailable = requestedTools;
-        lock (_stateGate) _threadId = threadId;
-        return threadId;
+        lock (_stateGate)
+        {
+            if (_threadId.Length > 0) return (_threadId, false);
+            _threadId = threadId;
+        }
+        return (threadId, true);
     }
 
     private async Task<string> StartTurnAsync(

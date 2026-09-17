@@ -126,6 +126,8 @@ public sealed class AssistantConversationController : IDisposable
                 $"The message is too long. BGS accepts up to {AssistantChatStore.MaxPromptCharacters} characters.",
                 0, Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
 
+        long generation = entry.SessionGeneration;
+
         IAssistantSession? session = entry.Session;
         if (session is null)
         {
@@ -137,30 +139,17 @@ public sealed class AssistantConversationController : IDisposable
             entry.SessionPrimed = false;
         }
 
-        bool replay = !entry.SessionPrimed;
-        try
-        {
-            replay = await session.PrepareForSendAsync(cancellationToken).ConfigureAwait(false) || replay;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return new("cancelled", "The request was cancelled.", 0,
-                Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-        }
-
-        string outgoing = replay ? ComposeReplay(entry.Chat, trimmed) : trimmed;
+        string replay = ComposeReplay(entry.Chat, trimmed);
         DateTime stamp = DateTime.UtcNow;
         AssistantChat updated = AppendUserMessage(entry.Chat, trimmed, stamp);
 
         AssistantReply reply;
         try
         {
-            reply = await session
-                .SendAsync(outgoing, context, cancellationToken)
-                .ConfigureAwait(false);
+            reply = session is IAssistantReplayAware replayAware
+                ? await replayAware.SendAsync(trimmed, replay, context, cancellationToken).ConfigureAwait(false)
+                : await session.SendAsync(entry.SessionPrimed ? trimmed : replay, context, cancellationToken)
+                    .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -168,28 +157,32 @@ public sealed class AssistantConversationController : IDisposable
                 Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
         }
 
-        return Persist(entry, reply, updated);
+        return Persist(entry, reply, updated, generation);
     }
 
-    private AssistantReply Persist(AssistantConversationEntry entry, AssistantReply reply, AssistantChat updated)
+    private AssistantReply Persist(
+        AssistantConversationEntry entry, AssistantReply reply, AssistantChat updated, long generation)
     {
         lock (entry.SaveGate)
         {
-            if (entry.Deleted) return reply;
+            if (entry.Deleted || entry.SessionGeneration != generation) return reply;
 
             entry.SessionPrimed = ThreadEngaged(reply);
 
-            DateTime replyStamp = DateTime.UtcNow;
-            updated = AssistantChatStore.AppendMessage(updated,
-                new AssistantChatMessage(AssistantChatRole.Assistant,
-                    ChatText.Cap(reply.Text), replyStamp));
-            foreach (AssistantToolActivity tool in reply.Tools)
+            if (PersistsAssistantMessage(reply.Status))
             {
-                string status = tool.RequiresApproval ? "pending approval" : "ran";
+                DateTime replyStamp = DateTime.UtcNow;
                 updated = AssistantChatStore.AppendMessage(updated,
-                    new AssistantChatMessage(AssistantChatRole.Tool,
-                        $"{tool.Name} ({status})", replyStamp,
-                        ToolName: tool.Name, ToolStatus: status, ToolRequiresApproval: tool.RequiresApproval));
+                    new AssistantChatMessage(AssistantChatRole.Assistant,
+                        ChatText.Cap(reply.Text), replyStamp));
+                foreach (AssistantToolActivity tool in reply.Tools)
+                {
+                    string status = tool.RequiresApproval ? "pending approval" : "ran";
+                    updated = AssistantChatStore.AppendMessage(updated,
+                        new AssistantChatMessage(AssistantChatRole.Tool,
+                            $"{tool.Name} ({status})", replyStamp,
+                            ToolName: tool.Name, ToolStatus: status, ToolRequiresApproval: tool.RequiresApproval));
+                }
             }
 
             if (reply.AwaitingApproval)
@@ -228,6 +221,7 @@ public sealed class AssistantConversationController : IDisposable
     public void Cancel(AssistantConversationEntry? entry)
     {
         if (entry is null) return;
+        entry.InvalidateSession();
         entry.Session?.Dispose();
         entry.Session = null;
         entry.SessionPrimed = false;
@@ -284,6 +278,9 @@ public sealed class AssistantConversationController : IDisposable
         "signed_out" or "provider_error" or "error" => false,
         _ => true,
     };
+
+    private static bool PersistsAssistantMessage(string status) =>
+        status is not ("signed_out" or "provider_error" or "error");
 
     private static AssistantReply BusyReply() => new(
         "busy",

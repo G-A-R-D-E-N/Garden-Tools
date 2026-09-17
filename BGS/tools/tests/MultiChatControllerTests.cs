@@ -217,11 +217,10 @@ public sealed class MultiChatControllerTests : IDisposable
                 "delete never reached the disk step");
 
             session.Complete();
-            AssistantReply reply = await pending;
-            Assert.Equal("ok", reply.Status);
-
             completionFinished.Set();
             AssistantConversationEntry? after = await deleting;
+            AssistantReply reply = await pending;
+            Assert.Equal("ok", reply.Status);
 
             Assert.NotNull(after);
             Assert.False(File.Exists(path),
@@ -259,6 +258,129 @@ public sealed class MultiChatControllerTests : IDisposable
             .ConfigureAwait(false);
         Assert.Equal("ok", reply.Status);
         Assert.True(AssistantChatStore.Exists(entry.Chat.Id));
+    }
+
+    [Fact]
+    public async Task CompletionDuringFailedDeleteIsRetained()
+    {
+        var session = new BlockingSession();
+        using var controller = new AssistantConversationController(_ => session);
+        AssistantConversationEntry entry = controller.Active!;
+
+        Task<AssistantReply> pending = controller.SendAsync("slow", CodexSessionFixture.Context());
+        await session.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var hookEntered = new ManualResetEventSlim(false);
+        var releaseHook = new ManualResetEventSlim(false);
+        AssistantChatStore.DeleteForTest = _ =>
+        {
+            hookEntered.Set();
+            releaseHook.Wait(TimeSpan.FromSeconds(10));
+            return false;
+        };
+        try
+        {
+            Task<AssistantConversationEntry?> deleting =
+                Task.Run(() => controller.Delete(controller.List.ActiveIndex));
+            Assert.True(hookEntered.Wait(TimeSpan.FromSeconds(10)),
+                "delete never reached the disk step");
+
+            session.Complete();
+            await Task.Delay(200);
+            bool completionWaited = !pending.IsCompleted;
+            releaseHook.Set();
+
+            AssistantConversationEntry? after = await deleting;
+            AssistantReply reply = await pending;
+
+            Assert.Null(after);
+            Assert.Equal(1, controller.List.Count);
+            Assert.True(completionWaited,
+                "a completion must wait for the failed delete before it can be dropped");
+            Assert.Equal("ok", reply.Status);
+            Assert.True(entry.SessionPrimed);
+            Assert.Contains(AssistantChatStore.Load(entry.Chat.Id)!.Messages,
+                m => m.Role == AssistantChatRole.Assistant);
+        }
+        finally
+        {
+            releaseHook.Set();
+            AssistantChatStore.DeleteForTest = null;
+        }
+    }
+
+    [Fact]
+    public async Task LateReplyAfterLogoutCannotMutateTheChat()
+    {
+        var session = new BlockingSession(awaitingApproval: true);
+        using var controller = new AssistantConversationController(_ => session);
+        var gate = new AssistantMutationGate(
+            () => false, () => { }, () => AssistantTools.NoPendingResult());
+        controller.Mutations = gate;
+        AssistantConversationEntry entry = controller.Active!;
+
+        Task<AssistantReply> pending = controller.SendAsync("slow", CodexSessionFixture.Context());
+        await session.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        controller.EndAllSessions();
+        session.Complete();
+        AssistantReply reply = await pending;
+
+        Assert.Equal("ok", reply.Status);
+        Assert.Empty(entry.Chat.Messages);
+        Assert.False(entry.SessionPrimed);
+        Assert.False(entry.PendingApproval);
+        Assert.False(entry.ApprovalActive);
+        Assert.Null(gate.OwnerChatId);
+        Assert.Empty(AssistantChatStore.Load(entry.Chat.Id)!.Messages);
+    }
+
+    [Fact]
+    public async Task AReplacedServerStillGetsTheReplayPrompt()
+    {
+        using var connection = new FakeConnection();
+        var session = new CodexAssistantSession(connection.Connection,
+            new[] { Microsoft.Extensions.AI.AIFunctionFactory.Create(
+                () => "ok", "bgs.inspect_behavior", "test") });
+        IAssistantReplayAware replayAware = session;
+
+        await session.SendAsync("first", CodexSessionFixture.Context()).ConfigureAwait(false);
+        string firstThread = connection.Server.LastThreadId;
+
+        connection.Server.Exit();
+
+        await replayAware.SendAsync("bare-second", "REPLAY-MARKER second",
+            CodexSessionFixture.Context()).ConfigureAwait(false);
+        string secondThread = connection.Server.LastThreadId;
+
+        Assert.NotEqual(firstThread, secondThread);
+        Assert.Contains("REPLAY-MARKER", TurnInput(connection.Server), StringComparison.Ordinal);
+
+        await replayAware.SendAsync("bare-third", "REPLAY-MARKER third",
+            CodexSessionFixture.Context()).ConfigureAwait(false);
+
+        Assert.Equal(secondThread, connection.Server.LastThreadId);
+        Assert.Contains("bare-third", TurnInput(connection.Server), StringComparison.Ordinal);
+        Assert.DoesNotContain("REPLAY-MARKER", TurnInput(connection.Server), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ProviderErrorMessageIsNotPersistedAsHistory()
+    {
+        using var controller = new AssistantConversationController(
+            _ => new FixedReplySession("boom", status: "provider_error"));
+        AssistantConversationEntry entry = controller.Active!;
+
+        AssistantReply reply = await controller.SendAsync("hello", CodexSessionFixture.Context())
+            .ConfigureAwait(false);
+
+        Assert.Equal("provider_error", reply.Status);
+        Assert.Contains(entry.Chat.Messages, m => m.Role == AssistantChatRole.User);
+        Assert.DoesNotContain(entry.Chat.Messages, m => m.Role == AssistantChatRole.Assistant);
+        Assert.DoesNotContain("boom",
+            AssistantConversationController.ComposeReplay(entry.Chat, "next"), StringComparison.Ordinal);
+        Assert.DoesNotContain(AssistantChatStore.Load(entry.Chat.Id)!.Messages,
+            m => m.Role == AssistantChatRole.Assistant);
     }
 
     [Fact]
@@ -660,17 +782,19 @@ public sealed class MultiChatControllerTests : IDisposable
     private sealed class FixedReplySession : IAssistantSession
     {
         public FixedReplySession(string text,
-            IReadOnlyList<AssistantToolActivity>? tools = null)
+            IReadOnlyList<AssistantToolActivity>? tools = null, string status = "ok")
         {
             Text = text;
             Tools = tools ?? Array.Empty<AssistantToolActivity>();
+            Status = status;
         }
 
         public string Text { get; }
         public IReadOnlyList<AssistantToolActivity> Tools { get; }
+        public string Status { get; }
 
         public Task<AssistantReply> SendAsync(string prompt, AssistantContext context, CancellationToken cancellationToken = default)
-            => Task.FromResult(new AssistantReply("ok", Text, 1, Tools, false));
+            => Task.FromResult(new AssistantReply(Status, Text, 1, Tools, false));
 
         public void ClearHistory() { }
 
@@ -708,6 +832,9 @@ public sealed class MultiChatControllerTests : IDisposable
     {
         private readonly TaskCompletionSource _release =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly bool _awaitingApproval;
+
+        public BlockingSession(bool awaitingApproval = false) => _awaitingApproval = awaitingApproval;
 
         public TaskCompletionSource Started { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -719,7 +846,7 @@ public sealed class MultiChatControllerTests : IDisposable
         {
             Started.TrySetResult();
             await _release.Task.ConfigureAwait(false);
-            return new AssistantReply("ok", "late reply", 1, Array.Empty<AssistantToolActivity>(), false);
+            return new AssistantReply("ok", "late reply", 1, Array.Empty<AssistantToolActivity>(), _awaitingApproval);
         }
 
         public void Complete() => _release.TrySetResult();

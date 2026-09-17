@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace BehaviourStudio.App;
 
@@ -19,6 +20,9 @@ public sealed class AssistantConversationEntry : IDisposable
     internal bool SessionPrimed { get; set; }
     internal bool Deleted { get; set; }
     internal object SaveGate { get; } = new();
+    internal long SessionGeneration => Interlocked.Read(ref _sessionGeneration);
+    internal void InvalidateSession() => Interlocked.Increment(ref _sessionGeneration);
+    private long _sessionGeneration;
 
     public void ClearPendingApproval() => PendingApproval = false;
     public void MarkPendingApproval() => PendingApproval = true;
@@ -144,6 +148,7 @@ public sealed class AssistantConversationList : IDisposable
     {
         foreach (AssistantConversationEntry entry in _entries)
         {
+            entry.InvalidateSession();
             entry.ClearPendingApproval();
             entry.Session?.Dispose();
             entry.Session = null;
@@ -160,22 +165,22 @@ public sealed class AssistantConversationList : IDisposable
         {
             entry.Deleted = true;
             entry.ClearPendingApproval();
-        }
 
-        bool removed;
-        try
-        {
-            removed = AssistantChatStore.Delete(entry.Chat.Id);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            removed = false;
-        }
+            bool removed;
+            try
+            {
+                removed = AssistantChatStore.Delete(entry.Chat.Id);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                removed = false;
+            }
 
-        if (!removed)
-        {
-            entry.Deleted = false;
-            return null;
+            if (!removed)
+            {
+                entry.Deleted = false;
+                return null;
+            }
         }
 
         entry.Dispose();

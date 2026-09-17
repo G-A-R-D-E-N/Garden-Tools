@@ -116,6 +116,7 @@ internal sealed class AssistantUi
         if (entry is null) return;
         entry.Session?.Dispose();
         entry.Session = session;
+        entry.InvalidateSession();
         entry.SessionPrimed = false;
         entry.HasPendingApproval = () => resolved.HasPendingApproval;
     }
@@ -296,12 +297,12 @@ internal sealed class AssistantUi
             _pane.SetStatus("BGS kept your existing chats (max reached). Try renaming instead.", Ux.MetaBrush);
             return;
         }
+        RefreshSidebar();
+        OnSelectionChanged(_controller.List.ActiveIndex);
         if (AssistantChatStore.Exists(entry.Chat.Id))
             _pane.SetStatus("Started a new chat. Type below to send.", Ux.MetaBrush);
         else
             _pane.SetStatus("Started a new chat, but BGS could not save it to disk yet.", Ux.WarnBrush);
-        RefreshSidebar();
-        OnSelectionChanged(_controller.List.ActiveIndex);
     }
 
     private void Select(string chatId)
@@ -365,7 +366,7 @@ internal sealed class AssistantUi
                 .SendAsync(prompt, _owner.AssistantContextSnapshot, _requestCancellation.Token)
                 .ConfigureAwait(true);
             OnSelectionChanged(_controller.List.ActiveIndex);
-            if (reply.PersistenceNotice.Length > 0)
+            if (reply.Status == "ok" && reply.PersistenceNotice.Length > 0)
             {
                 _pane.SetStatus(reply.PersistenceNotice, Ux.WarnBrush);
                 return;

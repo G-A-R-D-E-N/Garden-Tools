@@ -62,6 +62,23 @@ internal static class MultiChatSmoke
             Click(window, "Send");
             Dispatcher.UIThread.RunJobs();
             Check("the chat is still usable after a save failure", ui.MessageCount == 6);
+
+            AssistantChatStore.SaveFailureForTest = () => throw new IOException("simulated disk failure");
+            int chatsBefore = ui.ChatListForTest.Count;
+            Click(window, "+ New chat");
+            Dispatcher.UIThread.RunJobs();
+            Check("a failed New chat visibly reports it could not save",
+                ui.Status.Contains("could not save", StringComparison.OrdinalIgnoreCase));
+            Check("the new chat is still listed and usable",
+                ui.ChatListForTest.Count == chatsBefore + 1);
+
+            ui.SetSessionForTest(new CancelledSession());
+            ui.Pane.Composer.Text = "cancel this";
+            Click(window, "Send");
+            Dispatcher.UIThread.RunJobs();
+            Check("a cancelled reply keeps its status over a persistence notice",
+                ui.Status == "Cancelled.");
+            AssistantChatStore.SaveFailureForTest = null;
         }
         finally
         {
@@ -302,6 +319,18 @@ internal static class MultiChatSmoke
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static void Check(string name, bool value) => Smoke.CheckTrue(name, value);
+
+    private sealed class CancelledSession : IAssistantSession
+    {
+        public Task<AssistantReply> SendAsync(
+            string prompt, AssistantContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new AssistantReply(
+                "cancelled", "The request was cancelled.", 0,
+                Array.Empty<AssistantToolActivity>(), false));
+
+        public void ClearHistory() { }
+        public void Dispose() { }
+    }
 
     private sealed class FakeChatClient : IChatClient
     {
