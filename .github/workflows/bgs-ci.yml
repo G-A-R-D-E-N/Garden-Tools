@@ -109,6 +109,12 @@ jobs:
       - name: Run UI smoke harness
         run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore
 
+      - name: Run assistant lifecycle UI smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore -- --assistant
+
+      - name: Run multi-chat UI smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore -- --multichat
+
       # Suppress symbol files for the whole build graph so referenced projects
       # (BehaviourGraph.Core et al.) do not drop portable PDBs into the package.
       # This override also disables the app's own embedded symbols (the csproj

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
@@ -40,34 +41,82 @@ public sealed class AssistantConversationController : IDisposable
     }
 
     public AssistantConversationList List { get; }
+    public AssistantMutationGate? Mutations { get; set; }
     public AssistantConversationEntry? Active => List.Active;
     public bool IsBusy => List.IsBusy;
 
     public IAssistantSession? ActiveSession => List.Active?.Session;
 
-    public bool TrySelect(int index) => List.Select(index) != null;
-    public bool TrySelectById(string chatId) => List.TrySetActiveById(chatId);
+    public bool TrySelect(int index)
+    {
+        if (index < 0 || index >= List.Count) return false;
+        if (List.IsBusy) return false;
+        if (List.ActiveIndex == index) return true;
+        RejectPendingMutations();
+        return List.Select(index) != null;
+    }
 
-    public AssistantConversationEntry? NewChat() => List.NewChat();
+    public bool TrySelectById(string chatId)
+    {
+        int index = List.IndexOf(chatId);
+        return index >= 0 && TrySelect(index);
+    }
+
+    public AssistantConversationEntry? NewChat()
+    {
+        if (List.IsBusy) return null;
+        RejectPendingMutations();
+        return List.NewChat();
+    }
 
     public bool Rename(int index, string newTitle) => List.Rename(index, newTitle);
 
-    public AssistantConversationEntry? Delete(int index) => List.Delete(index);
+    public AssistantConversationEntry? Delete(int index)
+    {
+        if (index < 0 || index >= List.Count) return null;
+        RejectPendingMutations();
+        return List.Delete(index);
+    }
+
+    public void RejectPendingMutations()
+    {
+        foreach (AssistantConversationEntry entry in List.Entries) entry.ClearPendingApproval();
+        Mutations?.Reject();
+    }
+
+    public void RejectPending(AssistantConversationEntry? entry)
+    {
+        entry?.ClearPendingApproval();
+        Mutations?.Reject();
+    }
+
+    public ClipAnimationChangeResult ApproveActive(AssistantConversationEntry? entry)
+    {
+        if (entry is null || entry.Deleted) return AssistantTools.NoPendingResult();
+        ClipAnimationChangeResult result =
+            Mutations?.Approve(entry.Chat.Id) ?? AssistantTools.NoPendingResult();
+        entry.ClearPendingApproval();
+        return result;
+    }
 
     public async Task<AssistantReply> SendAsync(
         string prompt, AssistantContext context, CancellationToken cancellationToken = default)
     {
         AssistantConversationEntry? entry = List.Active;
-        if (entry is null) return BusyReply();
+        if (entry is null || entry.Deleted) return BusyReply();
 
-        if (string.IsNullOrWhiteSpace(prompt)) return new("error", "A message is required.",
-            0, Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
+        string trimmed = (prompt ?? "").Trim();
+        if (trimmed.Length == 0)
+            return new("error", "A message is required.", 0,
+                Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
+        if (trimmed.Length > AssistantChatStore.MaxPromptCharacters)
+            return new("error",
+                $"The message is too long. BGS accepts up to {AssistantChatStore.MaxPromptCharacters} characters.",
+                0, Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
 
-        string replayPrompt = ComposeReplay(entry.Chat, prompt);
+        string outgoing = entry.SessionPrimed ? trimmed : ComposeReplay(entry.Chat, trimmed);
         DateTime stamp = DateTime.UtcNow;
-        AssistantChat updated = AssistantChatStore.AppendMessage(entry.Chat,
-            new AssistantChatMessage(AssistantChatRole.User,
-                ChatText.Cap(prompt), stamp));
+        AssistantChat updated = AppendUserMessage(entry.Chat, trimmed, stamp);
 
         IAssistantSession? session = entry.Session;
         if (session is null)
@@ -77,13 +126,14 @@ public sealed class AssistantConversationController : IDisposable
                 "BGS could not start an assistant session. Sign in with ChatGPT and try again.",
                 0, Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
             entry.Session = session;
+            entry.SessionPrimed = false;
         }
 
         AssistantReply reply;
         try
         {
             reply = await session
-                .SendAsync(replayPrompt, context, cancellationToken)
+                .SendAsync(outgoing, context, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -91,6 +141,10 @@ public sealed class AssistantConversationController : IDisposable
             return new("cancelled", "The request was cancelled.", 0,
                 Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
         }
+
+        if (entry.Deleted) return reply;
+
+        entry.SessionPrimed = ThreadEngaged(reply);
 
         DateTime replyStamp = DateTime.UtcNow;
         updated = AssistantChatStore.AppendMessage(updated,
@@ -105,30 +159,28 @@ public sealed class AssistantConversationController : IDisposable
                     ToolName: tool.Name, ToolStatus: status, ToolRequiresApproval: tool.RequiresApproval));
         }
 
-        if (reply.AwaitingApproval) entry.MarkPendingApproval();
-        else entry.ClearPendingApproval();
+        if (reply.AwaitingApproval)
+        {
+            entry.MarkPendingApproval();
+            Mutations?.MarkOwner(entry.Chat.Id);
+        }
+        else
+        {
+            entry.ClearPendingApproval();
+        }
 
         entry.Chat = updated;
         AssistantChatStore.Save(updated);
         return reply;
     }
 
-    public void ApproveAndContinue(AssistantConversationEntry? entry)
-    {
-        if (entry is null) return;
-        entry.ClearPendingApproval();
-    }
-
-    public void RejectAndClear(AssistantConversationEntry? entry)
-    {
-        if (entry is null) return;
-        entry.ClearPendingApproval();
-    }
-
     public void Cancel(AssistantConversationEntry? entry)
     {
-        entry?.Session?.Dispose();
-        if (entry is not null) entry.Session = null;
+        if (entry is null) return;
+        entry.Session?.Dispose();
+        entry.Session = null;
+        entry.SessionPrimed = false;
+        entry.ClearPendingApproval();
     }
 
     public void Dispose() => List.Dispose();
@@ -165,6 +217,22 @@ public sealed class AssistantConversationController : IDisposable
         joined.Append(newUserPrompt);
         return joined.ToString();
     }
+
+    private static AssistantChat AppendUserMessage(AssistantChat chat, string text, DateTime stamp)
+    {
+        AssistantChat updated = AssistantChatStore.AppendMessage(chat,
+            new AssistantChatMessage(AssistantChatRole.User, ChatText.Cap(text), stamp));
+        bool firstUserMessage = updated.Messages.Count(m => m.Role == AssistantChatRole.User) == 1;
+        if (firstUserMessage && string.Equals(chat.Title, "New chat", StringComparison.Ordinal))
+            updated = updated.WithTitle(ChatText.DeriveTitleFromFirstMessage(text));
+        return updated;
+    }
+
+    private static bool ThreadEngaged(AssistantReply reply) => reply.Status switch
+    {
+        "signed_out" or "provider_error" or "error" => false,
+        _ => true,
+    };
 
     private static AssistantReply BusyReply() => new(
         "busy",

@@ -20,14 +20,18 @@ public static class AssistantChatStore
 
     private static readonly object WriteGate = new();
     private static readonly TimeSpan WriteLockTimeout = TimeSpan.FromSeconds(5);
+    private const int MinimumCredentialMaterialLength = 16;
+    private const int MinimumJwtHeaderBodyLength = 8;
+    private const int MinimumJwtSignatureLength = 4;
     private static readonly Regex[] ForbiddenCredentialPatterns =
     {
-        new(@"authorization\s*[:=]\s*bearer", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"\baccess_token\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"\brefresh_token\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"\bid_token\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"\bsk-[A-Za-z0-9_\-]{8,}", RegexOptions.Compiled),
-        new(@"auth\.json", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new($"authorization\\s*[:=]\\s*bearer\\s+[A-Za-z0-9._-]{{{MinimumCredentialMaterialLength},}}",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new($"\\bsk-[A-Za-z0-9_-]{{{MinimumCredentialMaterialLength},}}", RegexOptions.Compiled),
+        new($"\\beyJ[A-Za-z0-9_-]{{{MinimumJwtHeaderBodyLength},}}\\.[A-Za-z0-9_-]{{{MinimumJwtHeaderBodyLength},}}\\.[A-Za-z0-9_-]{{{MinimumJwtSignatureLength},}}",
+            RegexOptions.Compiled),
+        new($"\\b[\"']?(?:access|refresh|id)[_-]?token[\"']?\\s*[:=]\\s*[\"']?[A-Za-z0-9._-]{{{MinimumCredentialMaterialLength},}}[\"']?",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled),
     };
 
     public static string DefaultFolder { get; } = Path.Combine(
@@ -35,6 +39,8 @@ public static class AssistantChatStore
         "BehaviourGraphStudio", "assistant", "chats");
 
     public static string Folder { get; set; } = DefaultFolder;
+
+    internal static Func<string, bool>? DeleteForTest { get; set; }
 
     public static string CreateId()
     {
@@ -170,6 +176,7 @@ public static class AssistantChatStore
     public static bool Delete(string id)
     {
         if (!IsValidId(id)) return false;
+        if (DeleteForTest is { } hook) return hook(id);
         string path = FilePathFor(id);
         return TryDelete(path);
     }

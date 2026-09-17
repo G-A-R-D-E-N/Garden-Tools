@@ -15,12 +15,15 @@ public sealed class AssistantConversationEntry : IDisposable
     public IAssistantSession? Session { get; internal set; }
     public bool PendingApproval { get; set; }
     public Func<bool>? HasPendingApproval { get; internal set; }
+    internal bool SessionPrimed { get; set; }
+    internal bool Deleted { get; set; }
 
     public void ClearPendingApproval() => PendingApproval = false;
     public void MarkPendingApproval() => PendingApproval = true;
     public bool ApprovalActive =>
-        PendingApproval ||
-        (HasPendingApproval is { } probe && probe());
+        !Deleted &&
+        (PendingApproval ||
+        (HasPendingApproval is { } probe && probe()));
 
     public void Dispose()
     {
@@ -126,8 +129,10 @@ public sealed class AssistantConversationList : IDisposable
     {
         if (index < 0 || index >= _entries.Count) return null;
         var entry = _entries[index];
+        if (!AssistantChatStore.Delete(entry.Chat.Id)) return null;
+        entry.Deleted = true;
         entry.ClearPendingApproval();
-        AssistantChatStore.Delete(entry.Chat.Id);
+        entry.Dispose();
         _entries.RemoveAt(index);
         StructureChanged?.Invoke();
 
@@ -159,6 +164,7 @@ public sealed class AssistantConversationList : IDisposable
     public IReadOnlyList<AssistantChatSummary> Summaries() =>
         _entries
             .Select(e => new AssistantChatSummary(e.Chat.Id, e.Chat.Title, e.Chat.UpdatedUtc, e.Chat.Messages.Count))
+            .OrderByDescending(summary => summary.UpdatedUtc)
             .ToList();
 
     public void Dispose()

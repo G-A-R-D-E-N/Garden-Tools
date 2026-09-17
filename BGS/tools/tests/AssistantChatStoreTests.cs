@@ -212,6 +212,58 @@ public sealed class AssistantChatStoreTests : IDisposable
     }
 
     [Fact]
+    public void PersistedOversizedMessageTextIsBoundedOnLoad()
+    {
+        DateTime now = DateTime.UtcNow;
+        AssistantChat chat = new("boundedtext01", "New chat", now, now, new[]
+        {
+            new AssistantChatMessage(AssistantChatRole.User, new string('x', 20_000), now),
+        });
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, chat.Id + ".json"), AssistantChatStore.Serialize(chat));
+
+        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Single(loaded!.Messages);
+        Assert.Equal(ChatText.MaxMessageCharacters, loaded.Messages[0].Text.Length);
+    }
+
+    [Fact]
+    public void PersistedOversizedMessageCountIsBoundedOnLoad()
+    {
+        DateTime now = DateTime.UtcNow;
+        var messages = Enumerable.Range(0, AssistantChatStore.MaxMessagesPerChat + 60)
+            .Select(i => new AssistantChatMessage(AssistantChatRole.User, "m" + i, now))
+            .ToArray();
+        AssistantChat chat = new("boundedcount01", "New chat", now, now, messages);
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, chat.Id + ".json"), AssistantChatStore.Serialize(chat));
+
+        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(AssistantChatStore.MaxMessagesPerChat, loaded!.Messages.Count);
+        Assert.Equal("m60", loaded.Messages[0].Text);
+        Assert.Equal("m259", loaded.Messages[loaded.Messages.Count - 1].Text);
+    }
+
+    [Fact]
+    public void PersistedOversizedTitleIsBoundedOnLoad()
+    {
+        DateTime now = DateTime.UtcNow;
+        AssistantChat chat = new("boundedtitle01", new string('t', 200), now, now,
+            Array.Empty<AssistantChatMessage>());
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, chat.Id + ".json"), AssistantChatStore.Serialize(chat));
+
+        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
+
+        Assert.NotNull(loaded);
+        Assert.True(loaded!.Title.Length <= ChatText.MaxTitleLength + 1);
+    }
+
+    [Fact]
     public void SaveRefusesForbiddenCredentialContent()
     {
         AssistantChat chat = AssistantChatStore.CreateEmpty();
@@ -229,7 +281,7 @@ public sealed class AssistantChatStoreTests : IDisposable
         AssistantChat chat = AssistantChatStore.CreateEmpty();
         chat = chat.WithMessages(new[]
         {
-            new AssistantChatMessage(AssistantChatRole.User, "refresh_token=xyz", DateTime.UtcNow),
+            new AssistantChatMessage(AssistantChatRole.User, "refresh_token=0123456789abcdef0123456789abcdef", DateTime.UtcNow),
         }, DateTime.UtcNow);
 
         Assert.Throws<InvalidOperationException>(() => AssistantChatStore.Save(chat));
@@ -248,7 +300,7 @@ public sealed class AssistantChatStoreTests : IDisposable
     }
 
     [Fact]
-    public void SaveRefusesAuthJsonReference()
+    public void NormalAuthJsonMentionIsSaved()
     {
         AssistantChat chat = AssistantChatStore.CreateEmpty();
         chat = chat.WithMessages(new[]
@@ -256,7 +308,29 @@ public sealed class AssistantChatStoreTests : IDisposable
             new AssistantChatMessage(AssistantChatRole.User, "see auth.json for token", DateTime.UtcNow),
         }, DateTime.UtcNow);
 
-        Assert.Throws<InvalidOperationException>(() => AssistantChatStore.Save(chat));
+        AssistantChatStore.Save(chat);
+        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Single(loaded!.Messages);
+        Assert.Equal("see auth.json for token", loaded.Messages[0].Text);
+    }
+
+    [Fact]
+    public void NormalAccessTokenMentionIsSaved()
+    {
+        AssistantChat chat = AssistantChatStore.CreateEmpty();
+        chat = chat.WithMessages(new[]
+        {
+            new AssistantChatMessage(AssistantChatRole.User, "How do I refresh an access_token without logging in?", DateTime.UtcNow),
+        }, DateTime.UtcNow);
+
+        AssistantChatStore.Save(chat);
+        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Single(loaded!.Messages);
+        Assert.Equal("How do I refresh an access_token without logging in?", loaded.Messages[0].Text);
     }
 
     [Fact]

@@ -61,8 +61,6 @@ public sealed class CodexAppServerClient : IDisposable
     private readonly Dictionary<string, TaskCompletionSource<JsonElement?>> _pending = new(StringComparer.Ordinal);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Func<CodexToolCall, Task<CodexToolResult>>> _toolHandlers =
         new(StringComparer.Ordinal);
-    private Func<CodexToolCall, Task<CodexToolResult>>? _defaultToolHandler;
-    private readonly object _toolHandlerGate = new();
 
     private long _nextId;
     private bool _connected;
@@ -93,24 +91,6 @@ public sealed class CodexAppServerClient : IDisposable
 
     public bool? DynamicToolsAvailable { get; internal set; }
 
-    public Func<CodexToolCall, Task<CodexToolResult>>? ToolCallHandler
-    {
-        get => DefaultToolCallHandler;
-        set => DefaultToolCallHandler = value;
-    }
-
-    public Func<CodexToolCall, Task<CodexToolResult>>? DefaultToolCallHandler
-    {
-        get
-        {
-            lock (_toolHandlerGate) return _defaultToolHandler;
-        }
-        set
-        {
-            lock (_toolHandlerGate) _defaultToolHandler = value;
-        }
-    }
-
     public void RegisterToolHandler(string threadId, Func<CodexToolCall, Task<CodexToolResult>> handler)
     {
         if (handler is null) throw new ArgumentNullException(nameof(handler));
@@ -129,17 +109,8 @@ public sealed class CodexAppServerClient : IDisposable
     public bool TryRouteToolCall(CodexToolCall call, out Func<CodexToolCall, Task<CodexToolResult>>? routed)
     {
         routed = null;
-        if (call.ThreadId.Length > 0 &&
-            _toolHandlers.TryGetValue(call.ThreadId, out Func<CodexToolCall, Task<CodexToolResult>>? perThread))
-        {
-            routed = perThread;
-            return true;
-        }
-        lock (_toolHandlerGate)
-        {
-            routed = _defaultToolHandler;
-            return _defaultToolHandler != null;
-        }
+        if (call.ThreadId.Length == 0) return false;
+        return _toolHandlers.TryGetValue(call.ThreadId, out routed) && routed != null;
     }
 
     public async Task ConnectAsync(CancellationToken cancellationToken = default)

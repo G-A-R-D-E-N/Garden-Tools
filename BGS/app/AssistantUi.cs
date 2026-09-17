@@ -6,6 +6,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
@@ -15,6 +16,8 @@ internal sealed class AssistantUi
     private const double MinimumWidth = 520;
     private const double MaximumWidth = 1120;
     private const double SidebarWidth = 220;
+    private const double SidebarMinWidth = 160;
+    private const double SidebarMaxWidth = 280;
     private const string WidthSetting = "assistant.drawer_width";
     private const string ActiveChatSetting = "assistant.active_chat_id";
 
@@ -23,12 +26,13 @@ internal sealed class AssistantUi
     private readonly AssistantConversationSidebar _sidebar = new();
     private readonly ColumnDefinition _splitterColumn = new(new GridLength(0, GridUnitType.Pixel));
     private readonly ColumnDefinition _sidebarColumn =
-        new(new GridLength(SidebarWidth, GridUnitType.Pixel)) { MinWidth = 160, MaxWidth = 280 };
+        new(new GridLength(SidebarWidth, GridUnitType.Pixel)) { MinWidth = SidebarMinWidth, MaxWidth = SidebarMaxWidth };
     private readonly ColumnDefinition _drawerColumn =
         new(new GridLength(0, GridUnitType.Pixel)) { MinWidth = 0, MaxWidth = MaximumWidth };
     private readonly GridSplitter _splitter;
     private CodexAssistantConnection? _connection;
     private AssistantTools? _tools;
+    private AssistantMutationGate? _gate;
     private AssistantConversationController? _controller;
     private CancellationTokenSource? _requestCancellation;
     private bool _open;
@@ -45,12 +49,13 @@ internal sealed class AssistantUi
             Background = Avalonia.Media.Brushes.Transparent,
             IsVisible = false,
         };
-        Grid.SetColumn(_sidebar, 0);
-        Grid.SetColumn(_splitter, 1);
-        Grid.SetColumn(_pane, 2);
+        Grid.SetColumn(_sidebar, 1);
+        Grid.SetColumn(_splitter, 2);
+        Grid.SetColumn(_pane, 3);
         root.Children.Add(_sidebar);
         root.Children.Add(_splitter);
         root.Children.Add(_pane);
+        _sidebar.IsVisible = false;
 
         var chat = Ux.Primary("Chat");
         ToolTip.SetTip(chat, "Open your saved chat list and current conversation.");
@@ -101,13 +106,18 @@ internal sealed class AssistantUi
 
     internal void SetSessionForTest(IAssistantSession session, AssistantTools? tools = null)
     {
-        if (tools != null) _tools = tools;
-        _tools ??= _owner.CreateAssistantTools();
+        if (tools != null)
+        {
+            _tools = tools;
+            _gate = null;
+        }
+        AssistantTools resolved = EnsureTools();
         AssistantConversationEntry? entry = _controller?.Active;
         if (entry is null) return;
         entry.Session?.Dispose();
         entry.Session = session;
-        entry.HasPendingApproval = () => _tools!.HasPendingApproval;
+        entry.SessionPrimed = false;
+        entry.HasPendingApproval = () => resolved.HasPendingApproval;
     }
 
     internal IReadOnlyList<AssistantChatSummary> ChatListForTest =>
@@ -115,17 +125,26 @@ internal sealed class AssistantUi
 
     internal string? ActiveChatIdForTest => _controller?.List.ActiveChatId;
 
+    internal bool SidebarVisibleForTest => _sidebar.IsVisible;
+    internal int SidebarColumnIndexForTest => Grid.GetColumn(_sidebar);
+    internal int SplitterColumnIndexForTest => Grid.GetColumn(_splitter);
+    internal int PaneColumnIndexForTest => Grid.GetColumn(_pane);
+    internal double SidebarColumnWidthForTest => _sidebarColumn.Width.Value;
+    internal double SplitterColumnWidthForTest => _splitterColumn.Width.Value;
+    internal double PaneColumnWidthForTest => _drawerColumn.Width.Value;
+
+    internal void ApproveForTest() => Approve();
+    internal void RejectForTest() => Reject();
+    internal void ClearPendingMutationsForTest() => _controller?.RejectPendingMutations();
+    internal bool RealPendingMutationForTest => EnsureTools().HasPendingApproval;
+    internal void SetConnectionForTest(CodexAssistantConnection connection) => _connection = connection;
+    internal void SignOutForTest() => SignOut();
+
     internal void SelectChatForTest(string chatId)
     {
         if (_controller is null) return;
         if (_controller.List.IsBusy) return;
-        if (_controller.TrySelectById(chatId))
-        {
-            AssistantConversationEntry? previous = _controller.List.Entries
-                .FirstOrDefault(e => !ReferenceEquals(e, _controller.Active));
-            previous?.ClearPendingApproval();
-            OnSelectionChanged(_controller.List.ActiveIndex);
-        }
+        if (_controller.TrySelectById(chatId)) OnSelectionChanged(_controller.List.ActiveIndex);
     }
 
     private void RestoreChats()
@@ -143,6 +162,8 @@ internal sealed class AssistantUi
 
         var sessionFactory = new Func<string, IAssistantSession?>(chatId => CreateSessionForChat(chatId));
         _controller = new AssistantConversationController(sessionFactory, loaded, activeId);
+        EnsureTools();
+        _controller.Mutations = _gate;
         _controller.List.StructureChanged += RefreshSidebar;
         _controller.List.SelectionChanged += OnSelectionChanged;
         RefreshSidebar();
@@ -152,8 +173,23 @@ internal sealed class AssistantUi
     private IAssistantSession? CreateSessionForChat(string chatId)
     {
         if (!EnsureCodex()) return null;
+        AssistantTools tools = EnsureTools();
+        return new CodexAssistantSession(_connection!, tools.Functions, () => tools.HasPendingApproval);
+    }
+
+    private AssistantTools EnsureTools()
+    {
         AssistantTools tools = _tools ?? (_tools = _owner.CreateAssistantTools());
-        return new CodexAssistantSession(_connection!, tools.Functions, () => tools!.HasPendingApproval);
+        if (_gate is null)
+        {
+            AssistantTools captured = tools;
+            _gate = new AssistantMutationGate(
+                () => captured.HasPendingApproval,
+                captured.RejectPendingClipAnimation,
+                captured.ApprovePendingClipAnimation);
+        }
+        if (_controller is not null) _controller.Mutations = _gate;
+        return tools;
     }
 
     private void RefreshSidebar()
@@ -184,11 +220,12 @@ internal sealed class AssistantUi
                     case AssistantChatRole.Tool:
                         _pane.AddTool(
                             message.ToolName ?? "tool",
-                            message.ToolRequiresApproval ?? false);
+                            false,
+                            message.ToolStatus ?? "");
                         break;
                 }
             }
-            _pane.SetApproval(entry.PendingApproval);
+            _pane.SetApproval(entry.ApprovalActive);
         }
         else
         {
@@ -210,16 +247,23 @@ internal sealed class AssistantUi
         {
             double stored = ReadStoredWidth();
             _drawerColumn.Width = new GridLength(stored, GridUnitType.Pixel);
+            _sidebarColumn.MinWidth = SidebarMinWidth;
+            _sidebarColumn.MaxWidth = SidebarMaxWidth;
+            _sidebarColumn.Width = new GridLength(SidebarWidth, GridUnitType.Pixel);
         }
         else
         {
             if (_open) StoreWidth(_drawerColumn.Width.Value);
             _drawerColumn.Width = new GridLength(0, GridUnitType.Pixel);
+            _sidebarColumn.Width = new GridLength(0, GridUnitType.Pixel);
+            _sidebarColumn.MinWidth = 0;
+            _sidebarColumn.MaxWidth = 0;
         }
         _open = open;
         _splitterColumn.Width = new GridLength(open ? 6 : 0, GridUnitType.Pixel);
         _pane.IsVisible = open;
         _splitter.IsVisible = open;
+        _sidebar.IsVisible = open;
     }
 
     private void OpenAsChat()
@@ -265,9 +309,6 @@ internal sealed class AssistantUi
             return;
         }
         if (!_controller.TrySelectById(chatId)) return;
-        AssistantConversationEntry? previous = _controller.List.Entries
-            .FirstOrDefault(e => !ReferenceEquals(e, _controller.Active));
-        previous?.ClearPendingApproval();
         OnSelectionChanged(_controller.List.ActiveIndex);
     }
 
@@ -287,7 +328,13 @@ internal sealed class AssistantUi
         if (_controller is null) return;
         int idx = _controller.List.IndexOf(chatId);
         if (idx < 0) return;
-        _controller.Delete(idx);
+        if (_controller.List.IsBusy && _controller.List.ActiveChatId == chatId) _requestCancellation?.Cancel();
+        AssistantConversationEntry? after = _controller.Delete(idx);
+        if (after is null)
+        {
+            _pane.SetStatus("BGS could not delete that chat from disk, so it was kept.", Ux.WarnBrush);
+            return;
+        }
         RefreshSidebar();
         OnSelectionChanged(_controller.List.ActiveIndex);
     }
@@ -338,18 +385,27 @@ internal sealed class AssistantUi
 
     private void Approve()
     {
-        AssistantTools? tools = _tools ?? (_tools = _owner.CreateAssistantTools());
-        tools.ApprovePendingClipAnimation();
+        EnsureTools();
+        AssistantConversationEntry? entry = _controller?.Active;
+        ClipAnimationChangeResult result = _controller?.ApproveActive(entry)
+            ?? AssistantTools.NoPendingResult();
         _pane.SetApproval(false);
-        _pane.AddTool("bgs.set_clip_animation", false, "applied");
-        _pane.SetStatus("Applied in the editor; save remains explicit.",
-            new Avalonia.Media.SolidColorBrush(Ux.Good));
+        if (result.Applied)
+        {
+            _pane.AddTool("bgs.set_clip_animation", false, "applied");
+            _pane.SetStatus("Applied in the editor; save remains explicit.",
+                new Avalonia.Media.SolidColorBrush(Ux.Good));
+            return;
+        }
+        string detail = result.Code == "stale_approval" ? "not applied (stale preview)" : "not applied";
+        _pane.AddTool("bgs.set_clip_animation", false, detail);
+        _pane.SetStatus("The edit was not applied: " + result.Message, Ux.WarnBrush);
     }
 
     private void Reject()
     {
-        AssistantTools? tools = _tools ?? (_tools = _owner.CreateAssistantTools());
-        tools.RejectPendingClipAnimation();
+        EnsureTools();
+        _controller?.RejectPending(_controller.Active);
         _pane.SetApproval(false);
         _pane.SetStatus("The proposed edit was rejected.", Ux.MetaBrush);
     }
@@ -439,10 +495,10 @@ internal sealed class AssistantUi
         _pane.SetAuthBusy(true);
         try
         {
+            _controller?.RejectPendingMutations();
+            _pane.SetApproval(false);
             if (_connection is null) return;
             await _connection.SignOutAsync().ConfigureAwait(true);
-            foreach (AssistantConversationEntry entry in _controller!.List.Entries)
-                entry.ClearPendingApproval();
             RefreshAccountText();
             _pane.SetStatus("Signed out. Codex owns the remaining credential state.", Ux.MetaBrush);
         }

@@ -119,7 +119,7 @@ public sealed class AssistantChatSerializer
             if (dto is null) return null;
             if (dto.schemaVersion > CurrentSchemaVersion) return null;
             if (string.IsNullOrEmpty(dto.id) || string.IsNullOrWhiteSpace(dto.title)) return null;
-            var messages = new List<AssistantChatMessage>();
+            var messages = new Queue<AssistantChatMessage>(AssistantChatStore.MaxMessagesPerChat);
             if (dto.messages is not null)
             {
                 foreach (PersistedMessage? raw in dto.messages)
@@ -127,11 +127,13 @@ public sealed class AssistantChatSerializer
                     if (raw is null) continue;
                     if (!Enum.TryParse<AssistantChatRole>(raw.role, true, out AssistantChatRole role))
                         role = AssistantChatRole.Assistant;
-                    messages.Add(new AssistantChatMessage(
-                        role, raw.text ?? "", raw.timestampUtc, raw.toolName, raw.toolStatus, raw.toolRequiresApproval));
+                    messages.Enqueue(new AssistantChatMessage(
+                        role, ChatText.Cap(raw.text ?? ""), raw.timestampUtc, raw.toolName, raw.toolStatus, raw.toolRequiresApproval));
+                    if (messages.Count > AssistantChatStore.MaxMessagesPerChat) messages.Dequeue();
                 }
             }
-            return new AssistantChat(dto.id, dto.title, dto.createdUtc, dto.updatedUtc, messages);
+            return new AssistantChat(dto.id, ChatText.NormalizeTitle(dto.title, "New chat"),
+                dto.createdUtc, dto.updatedUtc, messages.ToArray());
         }
         catch (System.Text.Json.JsonException)
         {

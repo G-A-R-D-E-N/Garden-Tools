@@ -9,7 +9,7 @@ namespace BehaviourStudio.Tests;
 public sealed class CodexToolBoundaryTests
 {
     [Fact]
-    public async Task WrongThreadToolCallIsRejectedWithoutExecution()
+    public async Task UnknownThreadToolCallFailsClosedWithoutExecution()
     {
         int calls = 0;
         AIFunction tool = AIFunctionFactory.Create(
@@ -28,7 +28,10 @@ public sealed class CodexToolBoundaryTests
 
         Assert.Equal(0, calls);
         Assert.Contains("\"success\":false", fixture.Server.LastToolResponse, StringComparison.Ordinal);
-        Assert.Contains("active turn", fixture.Server.LastToolResponse, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not accepting tool calls", fixture.Server.LastToolResponse,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("active turn", fixture.Server.LastToolResponse,
+            StringComparison.OrdinalIgnoreCase);
 
         Complete(fixture);
         await pending;

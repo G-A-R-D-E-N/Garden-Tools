@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BehaviourStudio.App;
@@ -8,6 +9,7 @@ using Xunit;
 
 namespace BehaviourStudio.Tests;
 
+[Collection("AssistantChatStore")]
 public sealed class MultiChatControllerTests : IDisposable
 {
     private readonly string _folder;
@@ -20,7 +22,13 @@ public sealed class MultiChatControllerTests : IDisposable
         AssistantChatStore.Folder = _folder;
     }
 
-    public void Dispose() => AssistantChatStore.Folder = _previousFolder;
+    public void Dispose()
+    {
+        AssistantChatStore.DeleteForTest = null;
+        AssistantChatStore.Folder = _previousFolder;
+        try { if (Directory.Exists(_folder)) Directory.Delete(_folder, true); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+    }
 
     [Fact]
     public void ControllerSeedsInitialChatWhenNoneSaved()
@@ -133,6 +141,95 @@ public sealed class MultiChatControllerTests : IDisposable
     }
 
     [Fact]
+    public void DeleteDisposesTheRemovedSession()
+    {
+        var session = new TrackableSession("reply");
+        using var controller = new AssistantConversationController(_ => session);
+        AssistantConversationEntry entry = controller.Active!;
+        entry.Session = session;
+
+        AssistantConversationEntry? after = controller.Delete(controller.List.ActiveIndex);
+
+        Assert.NotNull(after);
+        Assert.True(session.Disposed, "deleting a chat must dispose its session");
+        Assert.Null(entry.Session);
+    }
+
+    [Fact]
+    public async Task DeletingAChatDisposesAndUnregistersItsRealCodexThread()
+    {
+        using var connection = new FakeConnection();
+        var session = new CodexAssistantSession(connection.Connection,
+            new[] { Microsoft.Extensions.AI.AIFunctionFactory.Create(
+                () => "ok", "bgs.inspect_behavior", "test") });
+        using var controller = new AssistantConversationController(_ => session);
+        AssistantConversationEntry entry = controller.Active!;
+
+        await controller.SendAsync("hello", CodexSessionFixture.Context()).ConfigureAwait(false);
+        string thread = connection.Server.LastThreadId;
+        Assert.False(string.IsNullOrEmpty(thread));
+        Assert.Equal("1", connection.Connection.Client.RegisteredToolThreadCount);
+
+        controller.Delete(controller.List.ActiveIndex);
+
+        Assert.Equal("0", connection.Connection.Client.RegisteredToolThreadCount);
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => session.SendAsync("again", CodexSessionFixture.Context()));
+
+        int expected = connection.Server.ToolResponses + 1;
+        connection.Server.EmitServerRequest(CodexMethods.DynamicToolCall, "\"s:700\"",
+            "{\"threadId\":\"" + thread +
+            "\",\"turnId\":\"turn-x\",\"callId\":\"c-x\",\"tool\":\"bgs_inspect_behavior\",\"arguments\":{}}");
+        for (int attempt = 0; attempt < 200 && connection.Server.ToolResponses < expected; attempt++)
+            await Task.Delay(10);
+        Assert.Equal(expected, connection.Server.ToolResponses);
+        Assert.Contains("\"success\":false", connection.Server.LastToolResponse,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeleteDuringActiveRequestCannotResurrectHistory()
+    {
+        var session = new BlockingSession();
+        using var controller = new AssistantConversationController(_ => session);
+        AssistantConversationEntry entry = controller.Active!;
+
+        Task<AssistantReply> pending = controller.SendAsync("slow", CodexSessionFixture.Context());
+        await session.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssistantConversationEntry? after = controller.Delete(controller.List.ActiveIndex);
+        session.Complete();
+        AssistantReply reply = await pending;
+
+        Assert.NotNull(after);
+        Assert.Equal("ok", reply.Status);
+        Assert.False(AssistantChatStore.Exists(entry.Chat.Id),
+            "a late completion must not recreate a deleted chat");
+    }
+
+    [Fact]
+    public void FailedDiskDeleteKeepsTheChatVisible()
+    {
+        using var controller = new AssistantConversationController(MakeFactory());
+        AssistantConversationEntry entry = controller.Active!;
+        AssistantChatStore.DeleteForTest = _ => false;
+        try
+        {
+            AssistantConversationEntry? after = controller.Delete(controller.List.ActiveIndex);
+
+            Assert.Null(after);
+            Assert.Equal(1, controller.List.Count);
+            Assert.Equal(entry.Chat.Id, controller.List.ActiveChatId);
+            Assert.True(AssistantChatStore.Exists(entry.Chat.Id));
+            Assert.False(entry.Deleted);
+        }
+        finally
+        {
+            AssistantChatStore.DeleteForTest = null;
+        }
+    }
+
+    [Fact]
     public void MaxConversationsIsEnforced()
     {
         var factory = MakeFactory();
@@ -177,7 +274,7 @@ public sealed class MultiChatControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task ReplayPromptContainsBoundedPriorConversation()
+    public async Task RestoredSessionReplaysBoundedHistoryExactlyOnce()
     {
         var recorded = new List<string>();
         var sessions = new Dictionary<string, IAssistantSession>();
@@ -207,13 +304,115 @@ public sealed class MultiChatControllerTests : IDisposable
 
         await controller.SendAsync("second question", CodexSessionFixture.Context())
             .ConfigureAwait(false);
+        await controller.SendAsync("third question", CodexSessionFixture.Context())
+            .ConfigureAwait(false);
+
+        Assert.Equal(2, recorded.Count);
+        Assert.Contains("first question", recorded[0]);
+        Assert.Contains("first answer", recorded[0]);
+        Assert.Contains("second question", recorded[0]);
+        Assert.DoesNotContain("tool", recorded[0], StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal("third question", recorded[1]);
+        Assert.DoesNotContain("first question", recorded[1]);
+    }
+
+    [Fact]
+    public async Task NewChatReplaysItsOwnHistoryOnceThenSendsBarePrompts()
+    {
+        var recorded = new List<string>();
+        var sessions = new Dictionary<string, IAssistantSession>();
+        Func<string, IAssistantSession?> factory = chatId =>
+        {
+            if (sessions.TryGetValue(chatId, out var session)) return session;
+            var created = new RecordingReplySession(replied =>
+            {
+                recorded.Add(replied);
+                return new AssistantReply("ok", "reply", 0, Array.Empty<AssistantToolActivity>(), false);
+            });
+            sessions[chatId] = created;
+            return created;
+        };
+
+        using var controller = new AssistantConversationController(factory);
+        await controller.SendAsync("one", CodexSessionFixture.Context()).ConfigureAwait(false);
 
         Assert.Single(recorded);
-        string prompt = recorded[0];
-        Assert.Contains("first question", prompt);
-        Assert.Contains("first answer", prompt);
-        Assert.Contains("second question", prompt);
-        Assert.DoesNotContain("tool", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("one", recorded[0]);
+
+        await controller.SendAsync("two", CodexSessionFixture.Context()).ConfigureAwait(false);
+        Assert.Equal(2, recorded.Count);
+        Assert.Equal("two", recorded[1]);
+    }
+
+    [Fact]
+    public void OversizedPromptIsRejectedBeforeAnySessionStarts()
+    {
+        int factoryCalls = 0;
+        Func<string, IAssistantSession?> factory = _ =>
+        {
+            factoryCalls++;
+            return new FixedReplySession("reply");
+        };
+        using var controller = new AssistantConversationController(factory);
+        AssistantConversationEntry entry = controller.Active!;
+
+        AssistantReply reply = controller
+            .SendAsync(new string('x', AssistantChatStore.MaxPromptCharacters + 1),
+                CodexSessionFixture.Context())
+            .GetAwaiter().GetResult();
+
+        Assert.Equal("error", reply.Status);
+        Assert.Equal(0, factoryCalls);
+        Assert.Empty(entry.Chat.Messages);
+    }
+
+    [Fact]
+    public async Task FirstUserMessageDerivesAndPersistsATitle()
+    {
+        using var controller = new AssistantConversationController(MakeFactory());
+        AssistantConversationEntry entry = controller.Active!;
+        Assert.Equal("New chat", entry.Chat.Title);
+
+        await controller.SendAsync("How do I fix a broken clip?", CodexSessionFixture.Context())
+            .ConfigureAwait(false);
+
+        Assert.Equal("How do I fix a broken clip?", entry.Chat.Title);
+        Assert.Equal(entry.Chat.Title, AssistantChatStore.Load(entry.Chat.Id)!.Title);
+    }
+
+    [Fact]
+    public async Task MostRecentlyUpdatedChatSortsToTheTop()
+    {
+        using var controller = new AssistantConversationController(MakeFactory());
+        AssistantConversationEntry a = controller.Active!;
+        await Task.Delay(50);
+        AssistantConversationEntry b = controller.NewChat()!;
+
+        Assert.Equal(b.Chat.Id, controller.List.Summaries()[0].Id);
+
+        await Task.Delay(50);
+        Assert.True(controller.TrySelectById(a.Chat.Id));
+        await controller.SendAsync("update a", CodexSessionFixture.Context()).ConfigureAwait(false);
+
+        Assert.Equal(a.Chat.Id, controller.List.Summaries()[0].Id);
+    }
+
+    [Fact]
+    public void RestoredToolRowsDoNotMarkTheChatAsPendingApproval()
+    {
+        AssistantChat chat = Build("tool-chat", "inspect it");
+        chat = AssistantChatStore.AppendMessage(chat, new AssistantChatMessage(
+            AssistantChatRole.Tool, "bgs.set_clip_animation (pending approval)", DateTime.UtcNow,
+            ToolName: "bgs.set_clip_animation", ToolStatus: "pending approval",
+            ToolRequiresApproval: true));
+        AssistantChatStore.Save(chat);
+
+        using var controller = new AssistantConversationController(MakeFactory(),
+            initialChats: new[] { chat }, activeChatId: chat.Id);
+
+        Assert.False(controller.Active!.PendingApproval);
+        Assert.False(controller.Active!.ApprovalActive);
     }
 
     [Fact]
@@ -237,7 +436,7 @@ public sealed class MultiChatControllerTests : IDisposable
         AssistantConversationEntry entry = controller.Active!;
         entry.MarkPendingApproval();
 
-        controller.ApproveAndContinue(entry);
+        controller.ApproveActive(entry);
         Assert.False(entry.ApprovalActive);
 
         entry = controller.NewChat()!;
@@ -248,7 +447,7 @@ public sealed class MultiChatControllerTests : IDisposable
     private static Func<string, IAssistantSession?> MakeFactory() =>
         _ => new FixedReplySession("hello world");
 
-    private AssistantChat Build(string title, string firstMessage)
+    private static AssistantChat Build(string title, string firstMessage)
     {
         AssistantChat chat = AssistantChatStore.CreateEmpty();
         chat = chat.WithTitle(title);
@@ -287,5 +486,45 @@ public sealed class MultiChatControllerTests : IDisposable
 
         public void ClearHistory() { }
         public void Dispose() { }
+    }
+
+    private sealed class TrackableSession : IAssistantSession
+    {
+        private readonly string _text;
+        public TrackableSession(string text) => _text = text;
+
+        public bool Disposed { get; private set; }
+
+        public Task<AssistantReply> SendAsync(string prompt, AssistantContext context, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AssistantReply("ok", _text, 1, Array.Empty<AssistantToolActivity>(), false));
+
+        public void ClearHistory() { }
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class BlockingSession : IAssistantSession
+    {
+        private readonly TaskCompletionSource _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Disposed { get; private set; }
+
+        public async Task<AssistantReply> SendAsync(
+            string prompt, AssistantContext context, CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            await _release.Task.ConfigureAwait(false);
+            return new AssistantReply("ok", "late reply", 1, Array.Empty<AssistantToolActivity>(), false);
+        }
+
+        public void Complete() => _release.TrySetResult();
+
+        public void ClearHistory() { }
+
+        public void Dispose() => Disposed = true;
     }
 }

@@ -69,22 +69,20 @@ public sealed class MultiChatIsolationTests
     }
 
     [Fact]
-    public void FallsBackToDefaultHandlerWhenThreadIdHasNoSpecificHandler()
+    public void UnknownThreadIdToolCallFailsClosed()
     {
         using var fixture = new FakeConnection();
-        int defaultCalls = 0;
-        fixture.Connection.Client.DefaultToolCallHandler = _ =>
-        {
-            defaultCalls++;
-            return Task.FromResult(new CodexToolResult(true, "ok-default"));
-        };
+        int threadACalls = 0;
+        fixture.Connection.Client.RegisterToolHandler("thread-A",
+            _ => { threadACalls++; return Task.FromResult(new CodexToolResult(true, "ok-a")); });
 
         fixture.Server.EmitServerRequest(
             CodexMethods.DynamicToolCall,
-            "\"s:99\"",
-            "{\"threadId\":\"orphan\",\"turnId\":\"turn-or\",\"callId\":\"c1\",\"tool\":\"bgs.inspect_behavior\",\"arguments\":{}}");
+            "\"s:100\"",
+            "{\"threadId\":\"thread-orphan\",\"turnId\":\"turn-or\",\"callId\":\"c1\",\"tool\":\"bgs.inspect_behavior\",\"arguments\":{}}");
 
-        Assert.Equal(1, defaultCalls);
+        Assert.Equal(0, threadACalls);
+        Assert.Contains("\"success\":false", fixture.Server.LastToolResponse, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

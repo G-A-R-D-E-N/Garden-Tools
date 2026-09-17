@@ -53,7 +53,8 @@ public sealed class CodexAssistantSession : IAssistantSession
     private int _toolCallsThisTurn;
     private bool _interruptRequested;
     private bool _dynamicToolsAvailable;
-    private bool _subscribed;
+    private readonly HashSet<string> _registeredThreads = new(StringComparer.Ordinal);
+    private CodexAppServerClient? _subscribedClient;
     private bool _disposed;
 
     public CodexAssistantSession(
@@ -107,6 +108,11 @@ public sealed class CodexAssistantSession : IAssistantSession
     {
         lock (_stateGate)
         {
+            CodexAppServerClient? client = _subscribedClient;
+            if (client is not null)
+                foreach (string threadId in _registeredThreads)
+                    client.UnregisterToolHandler(threadId);
+            _registeredThreads.Clear();
             _threadId = "";
             _activeTurn = "";
         }
@@ -118,44 +124,37 @@ public sealed class CodexAssistantSession : IAssistantSession
         _disposed = true;
         TaskCompletionSource<CodexTurnOutcome>? completion;
         string turnId;
-        string threadId;
         lock (_stateGate)
         {
             completion = _turnCompletion;
             turnId = _activeTurn;
-            threadId = _threadId;
             _turnCompletion = null;
         }
         completion?.TrySetResult(new CodexTurnOutcome("interrupted", ""));
         if (turnId.Length > 0) _ = InterruptAsync(turnId);
-        Unsubscribe(threadId);
-        _requestGate.Dispose();
-        _toolGate.Dispose();
+        Unsubscribe();
     }
 
-    private void Unsubscribe(string threadId)
+    private void Unsubscribe()
     {
-        if (!_subscribed) return;
-        try
+        CodexAppServerClient? client;
+        lock (_stateGate)
         {
-            CodexAppServerClient? client;
-            try { client = _connection.Client; }
-            catch (InvalidOperationException) { client = null; }
-            if (client != null)
+            client = _subscribedClient;
+            _subscribedClient = null;
+            if (client is not null)
+                foreach (string threadId in _registeredThreads)
+                    client.UnregisterToolHandler(threadId);
+            _registeredThreads.Clear();
+        }
+        if (client is not null)
+        {
+            try { client.Notification -= OnNotification; }
+            catch (Exception exception) when (exception is ObjectDisposedException or InvalidOperationException)
             {
-                client.Notification -= OnNotification;
-                if (threadId.Length > 0) client.UnregisterToolHandler(threadId);
-                else if (ToolCallRegistrationKey().Length > 0)
-                    client.UnregisterToolHandler(ToolCallRegistrationKey());
             }
         }
-        catch (Exception exception) when (exception is ObjectDisposedException or InvalidOperationException)
-        {
-        }
-        _subscribed = false;
     }
-
-    internal string ToolCallRegistrationKey() => Volatile.Read(ref _threadId);
 
     private async Task<AssistantReply> SendLockedAsync(
         string prompt, AssistantContext context, CancellationToken cancellationToken)
@@ -169,6 +168,7 @@ public sealed class CodexAssistantSession : IAssistantSession
                 Array.Empty<AssistantToolActivity>(), Pending());
 
         string threadId = await EnsureThreadAsync(client, cancellationToken).ConfigureAwait(false);
+        RegisterThread(client, threadId);
         ResetTurnState();
         var completion = new TaskCompletionSource<CodexTurnOutcome>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -529,14 +529,29 @@ public sealed class CodexAssistantSession : IAssistantSession
         }
     }
 
+    private void RegisterThread(CodexAppServerClient client, string threadId)
+    {
+        client.RegisterToolHandler(threadId, HandleToolCallAsync);
+        lock (_stateGate) _registeredThreads.Add(threadId);
+    }
+
     private void Subscribe(CodexAppServerClient client)
     {
-        if (_subscribed) return;
+        CodexAppServerClient? previous;
+        lock (_stateGate)
+        {
+            if (ReferenceEquals(_subscribedClient, client)) return;
+            previous = _subscribedClient;
+            _subscribedClient = client;
+            if (previous is not null)
+            {
+                foreach (string threadId in _registeredThreads)
+                    previous.UnregisterToolHandler(threadId);
+                _registeredThreads.Clear();
+            }
+        }
+        if (previous is not null) previous.Notification -= OnNotification;
         client.Notification += OnNotification;
-        string threadId = ToolCallRegistrationKey();
-        if (threadId.Length > 0) client.RegisterToolHandler(threadId, HandleToolCallAsync);
-        else client.DefaultToolCallHandler = HandleToolCallAsync;
-        _subscribed = true;
     }
 
     private List<object> BuildDynamicTools()

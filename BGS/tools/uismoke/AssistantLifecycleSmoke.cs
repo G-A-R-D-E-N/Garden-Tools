@@ -19,9 +19,13 @@ internal static class AssistantLifecycleSmoke
     internal static void Run()
     {
         string previousFolder = AssistantChatStore.Folder;
+        string? previousSettings = Settings.SettingsPathForTest;
         string tempFolder = Path.Combine(Path.GetTempPath(),
             "bgs-assistant-smoke-" + Guid.NewGuid().ToString("N"));
+        string settingsPath = Path.Combine(Path.GetTempPath(),
+            "bgs-assistant-settings-" + Guid.NewGuid().ToString("N") + ".cfg");
         AssistantChatStore.Folder = tempFolder;
+        Settings.SettingsPathForTest = settingsPath;
         try
         {
             RunInternal();
@@ -29,7 +33,10 @@ internal static class AssistantLifecycleSmoke
         finally
         {
             AssistantChatStore.Folder = previousFolder;
+            Settings.SettingsPathForTest = previousSettings;
             try { if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+            try { if (File.Exists(settingsPath)) File.Delete(settingsPath); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
         }
     }
@@ -99,6 +106,60 @@ internal static class AssistantLifecycleSmoke
 
         WindowOwnsCodexConnection();
         ActiveEditorApproval();
+        StaleApprovalIsNotReportedAsApplied();
+    }
+
+    private static void StaleApprovalIsNotReportedAsApplied()
+    {
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            string path = Path.Combine("tools", "tests", "fixtures", "vanilla", "Meshes", "Actors",
+                "Character", "Behaviors", "SingleAnimFurniture.hkx");
+            window.Open(path);
+            Dispatcher.UIThread.RunJobs();
+            string id = BehaviourGraphModel.Parse(window.LoadedXml).Objects
+                .First(objectInfo => objectInfo.Class == "hkbClipGenerator").Id;
+            var fake = new FakeChatClient(
+                new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+                {
+                    new FunctionCallContent("call-1", "bgs.set_clip_animation",
+                        new Dictionary<string, object?>
+                        {
+                            ["objectId"] = id,
+                            ["animationName"] = "Animations\\Assistant\\Approved.hkx",
+                        }),
+                })),
+                new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                    "The preview is ready for your approval.")));
+            AssistantTools tools = window.CreateAssistantTools();
+            window.AssistantUiForTest.SetSessionForTest(
+                window.CreateAssistantSession(fake, tools), tools);
+            window.AssistantUiForTest.Pane.Composer.Text = "Update the selected clip.";
+            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Send")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Check("stale scenario starts with a pending preview",
+                window.AssistantUiForTest.ApprovalVisible);
+
+            string advanced = HkxTextEdit.SetParam(
+                window.LoadedXml, id, "animationName", "Animations\\Assistant\\Other.hkx");
+            bool committed = ((IAssistantEditorDocument)window).TryCommit(advanced, out _);
+            Check("the active document advanced before approval", committed);
+
+            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Apply approved edit")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Check("a stale approval is reported as not applied",
+                window.AssistantUiForTest.Status.Contains("was not applied", StringComparison.Ordinal));
+            Check("a stale approval never reaches the document",
+                !window.LoadedXml.Contains("Approved.hkx", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
     }
 
     private static void WindowOwnsCodexConnection()
