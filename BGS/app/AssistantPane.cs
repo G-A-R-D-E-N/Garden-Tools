@@ -289,7 +289,7 @@ internal sealed class AssistantPane : Border
     public void AddUser(string text) => AddMessage("You", text, Ux.CardBrush);
     public void AddAssistant(string text)
     {
-        if (text.Length > 0) AddMessage("Assistant", text, Ux.BaseBrush);
+        if (text.Length > 0) AddMessage("Assistant", text, Ux.BaseBrush, markdown: true);
     }
     public void AddTool(string name, bool requiresApproval, string detail = "") =>
         AddMessage("BGS", $"{name}{(requiresApproval ? " (approval pending)" : "")}" +
@@ -338,7 +338,7 @@ internal sealed class AssistantPane : Border
     }
 
     private void AddMessage(string speaker, string text, IBrush background,
-                            IBrush? foreground = null, double? fontSize = null)
+                            IBrush? foreground = null, double? fontSize = null, bool markdown = false)
     {
         var label = new TextBlock
         {
@@ -347,13 +347,15 @@ internal sealed class AssistantPane : Border
             FontSize = Ux.FontSmall,
             FontWeight = FontWeight.SemiBold,
         };
-        var content = new TextBlock
-        {
-            Text = text,
-            Foreground = foreground ?? Ux.MetaBrush,
-            FontSize = fontSize ?? Ux.FontBody,
-            TextWrapping = TextWrapping.Wrap,
-        };
+        Control content = markdown
+            ? AssistantMarkdown.Render(text)
+            : new TextBlock
+            {
+                Text = text,
+                Foreground = foreground ?? Ux.MetaBrush,
+                FontSize = fontSize ?? Ux.FontBody,
+                TextWrapping = TextWrapping.Wrap,
+            };
         _messages.Children.Add(new Border
         {
             Background = background,

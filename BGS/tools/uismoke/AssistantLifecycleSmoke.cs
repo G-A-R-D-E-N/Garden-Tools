@@ -6,7 +6,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using BehaviourStudio.App;
 using Microsoft.Extensions.AI;
@@ -108,6 +110,7 @@ internal static class AssistantLifecycleSmoke
 
         WindowOwnsCodexConnection();
         TheGearOpensAssistantSettings();
+        AssistantRepliesRenderAsMarkdown();
         ModelSelectorListsCatalogAndPersistsChoice();
         ProviderSelectionIsExplicitAndPersisted();
         ActiveEditorApproval();
@@ -277,6 +280,46 @@ internal static class AssistantLifecycleSmoke
             Dispatcher.UIThread.RunJobs();
             Check("the chat icon above the gear opens the chat drawer", window.AssistantDrawerOpen);
             Check("the chat icon does not reopen settings", !settings.IsVisible);
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
+    }
+
+    private static void AssistantRepliesRenderAsMarkdown()
+    {
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            OpenChat(window);
+            var fake = new FakeChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                "**bgs_check_project** and `bgs_inspect_object`\n\n- first\n- second")));
+            AssistantTools tools = window.CreateAssistantTools();
+            window.AssistantUiForTest.SetSessionForTest(window.CreateAssistantSession(fake, tools), tools);
+            window.AssistantUiForTest.Pane.Composer.Text = "what can you do";
+            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Send")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            List<TextBlock> blocks = Smoke.Find<TextBlock>(window).ToList();
+            string shown = string.Concat(blocks.Select(Text));
+
+            static string Text(TextBlock block) =>
+                block.Text is { Length: > 0 } text ? text
+                : block.Inlines is null ? ""
+                : string.Concat(block.Inlines.OfType<Run>().Select(run => run.Text));
+            Check("a markdown reply shows no literal emphasis markers",
+                !shown.Contains("**", StringComparison.Ordinal));
+            Check("the bold tool name becomes a bold run",
+                blocks.Any(block => block.Inlines is not null && block.Inlines.OfType<Run>()
+                    .Any(run => run.Text == "bgs_check_project" && run.FontWeight == FontWeight.SemiBold)));
+            Check("inline code becomes a code run",
+                blocks.Any(block => block.Inlines is not null && block.Inlines.OfType<Run>()
+                    .Any(run => run.Text == "bgs_inspect_object" && run.FontFamily != null)));
+            Check("bullets are drawn as bullets", shown.Contains('\u2022', StringComparison.Ordinal));
+            Check("the bullet items are rendered", shown.Contains("first", StringComparison.Ordinal));
         }
         finally
         {
