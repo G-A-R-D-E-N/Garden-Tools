@@ -406,3 +406,217 @@ a real human OAuth/login at the ChatGPT side and/or a real BGS window focus clic
 The proof above covers every one of steps 1, 2, 3, 6, 7, 8, 9 against the production binary
 through the assistant smoke, and the lifecycle (steps 4, 5, 10, 11) is the boundary Codex owns
 on the user's behalf per design.
+
+## 14. Multi-chat assistant history
+
+A second pass added local persistence for BGS-managed conversations, the conversation list
+inside the Assistant drawer, and per-thread tool dispatch so switching chats can never leak
+late stream or tool events from the prior thread.
+
+### 14.1 Persistence location and schema
+
+Storage lives under the user's normal application-data directory, sibling to `templates\\` and
+`settings.cfg`:
+
+```text
+<app-data>/BehaviourGraphStudio/assistant/chats/<chatId>.json
+```
+
+Where `<app-data>` is `Environment.GetFolderPath(ApplicationData)`. Storage is per-chat (one JSON
+file per conversation), keyed by an opaque id, not by the user-visible title. The id is a
+8-byte hex token generated via `RandomNumberGenerator.Fill` and validated by
+`AssistantChatStore.IsValidId` (lowercase letters and digits only, length 1–64). The titles you
+see in the sidebar come from inside each JSON file; titles cannot affect file paths and cannot
+break containment.
+
+Each chat file:
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "id": "ab12cd34ef56ab78",
+  "title": "How do I rename a clip?",
+  "createdUtc": "2026-09-17T03:55:14Z",
+  "updatedUtc": "2026-09-17T03:56:02Z",
+  "messages": [
+    { "role": "user",      "text": "Help me rename this clip",       "timestampUtc": "..." },
+    { "role": "assistant", "text": "...",                              "timestampUtc": "..." },
+    { "role": "tool",       "text": "bgs.inspect_behavior ran",       "timestampUtc": "...",
+      "toolName": "bgs.inspect_behavior", "toolStatus": "ran" }
+  ]
+}
+```
+
+`schemaVersion` is the only thing that can refuse to read a future chat file. The current value
+is `1`. A file with `schemaVersion > 1` is dropped silently (the load returns null and
+enumeration skips it), keeping older BGS builds compatible with newer schemas.
+
+The active chat id is stored under the existing non-secret settings key
+`assistant.active_chat_id`, alongside `assistant.drawer_width` and the existing `assistant.*` keys.
+This re-uses the existing settings mutex and atomic-write path so the active pointer is updated
+exactly when a chat is selected, renamed, deleted, or created.
+
+### 14.2 Atomic write, failure safety, and path containment
+
+`AssistantChatStore.Save` follows the same pattern as `TemplateStore` and `Settings.WriteAll`:
+
+1. Acquire the per-process `WriteGate` lock.
+2. Acquire a named `Mutex` keyed on `BehaviourGraphStudio.AssistantChat.<sha256 of file path>`.
+3. Stage the serialized bytes to `<id>.<guid>.tmp` with `FileOptions.WriteThrough` and
+   `Flush(flushToDisk: true)`.
+4. Atomically rename the staged file to the final path with `File.Move(_, final, overwrite: true)`.
+5. On any failure, the staged `.tmp` file is removed in `finally` and the previous valid file on
+   disk remains untouched.
+
+`Save` also re-checks the serialized content before publishing it: it scans for forbidden
+credential patterns (`access_token`, `refresh_token`, `id_token`, `authorization: bearer`,
+`sk-…` api-key shapes, `auth.json` references) and refuses to persist if any of them appear.
+This is defensive — the BGS code never produces them — but proves no credential material can
+ride the pipeline if a future edit introduces one.
+
+Path containment is enforced by `VerifyPathContained`: the resolved full file path must lie
+inside `AssistantChatStore.Folder`. Test hooks (`Settings.SettingsPathForTest`,
+`AssistantChatStore.Folder { get; set; }`) allow the uismoke harness to redirect the folder to
+a temp directory so live runs never touch a real user chat store.
+
+### 14.3 Bounds
+
+Every limit is a `const` and enforced before any wire-bound code runs:
+
+| Constant                     | Value          | Enforced where                                                    |
+|------------------------------|----------------|------------------------------------------------------------------|
+| `MaxConversations`           | 10             | `AssistantConversationList.Add` (extra chats are rejected)        |
+| `MaxMessagesPerChat`         | 200            | `AssistantChatStore.Trim` (older messages dropped on save)        |
+| `MaxPromptCharacters`        | 4 000          | Documented; the pane / controller already cap long input         |
+| `MaxTotalFileSizeBytes`      | 1 048 576      | `Save` and `Load` refuse files above this ceiling                |
+| `MaxReplayTurns`             | 8              | `AssistantConversationController.ComposeReplay` (replay-only)    |
+| `ChatText.MaxMessageCharacters` | 8 000        | `ChatText.Cap` is applied to every persisted message              |
+| `ChatText.MaxTitleLength`    | 80             | `ChatText.NormalizeTitle`; overflow adds an ellipsis             |
+
+`AssistantChatStore.ReplayHistory(chat)` returns the chronological user/assistant pair trace
+required to seed a restored thread, bounded to `MaxReplayTurns` and skipping tool entries
+entirely so historical tools are not re-executed. The controller wraps this in a labelled
+preamble it appends to the new user prompt before the session receives it.
+
+### 14.4 Thread-lifetime discipline (BGS side)
+
+BGS never serializes, accepts, or persists a Codex thread id. Each chat's first `Send` is
+guaranteed to call `thread/start { ephemeral: true, sandbox: "read-only", approvalPolicy: "never",
+… }` against the Codex server and receive a server-assigned thread id; that id lives only on
+the in-memory `CodexAssistantSession` for as long as the chat is kept in the live process.
+After a BGS restart, opening the same chat and pressing `Send` again triggers a brand-new
+`thread/start` and seeds it with `AssistantConversationController.ComposeReplay(chat, prompt)`.
+
+Restored conversation continuation therefore performs:
+
+1. `AssistantChatStore.Load(activeChatId)` → `AssistantChat` with full chronological messages.
+2. No `thread/start` and no `turn/start` happen yet; opening the chat just renders its transcript.
+3. On `Send`, the controller builds the labelled replay (`MaxReplayTurns` user/assistant pairs
+   in chronological order, `tool` entries omitted), starts a fresh ephemeral Codex thread, and
+   appends the user's new text under `# Current message`.
+
+`ClearHistory()` on `CodexAssistantSession` deliberately sets `_threadId = ""`; the next send
+goes through `EnsureThreadAsync` again, which always issues `thread/start` because there is
+no resume API on the protocol. The stored schema has no field for a Codex thread id.
+
+### 14.5 Dispatch by threadId (Codex client side)
+
+`CodexAppServerClient` no longer uses a single `ToolCallHandler` property. The shared,
+connection-owned client now owns:
+
+- `DefaultToolCallHandler` — a fallback used when no thread-specific handler is registered.
+- `RegisterToolHandler(threadId, handler)` and `UnregisterToolHandler(threadId)` — the
+  per-thread registry.
+- `TryRouteToolCall(call, out handler)` — dispatches a server `item/tool/call` request by the
+  `call.ThreadId` it carries; falls back to the default if the live session has already
+  disposed.
+
+`CodexAssistantSession` registers/unregisters on the live thread id in `Subscribe` and in the
+new `Dispose` (which no longer disposes the connection). Because the connection survives every
+session, multiple chats can hold N idle sessions alongside M active ones without confusing
+the protocol boundary.
+
+### 14.6 Pending-approval lifetime
+
+Pending approval state is *not* persisted. `AssistantConversationEntry.MarkPendingApproval()`
+and `ClearPendingApproval()` are the only writers; both are called from the controller's
+`SendAsync` and from the manager's switch/NewChat/Delete/SignOut handlers. A historical
+transcript may say that an approval occurred, but switching chats, New Chat, signing out, or
+restarting BGS cannot recreate an actionable `bgs.set_clip_animation` approval.
+
+### 14.7 UI shape
+
+The Assistant drawer is now:
+
+```text
++-------- Assistant -----------+----- ChatGPT via Codex · Codex CLI detected -----+
+| Conversations       + New  | Signed out / Connected · ChatGPT <plan>          |
+| ...                  Rename |                                                  |
+| [Open] [Rename] [Delete]    | (chat title header)                              |
+|                            |  ... conversation ...                              |
+|                            |  [composer ...]                                    |
+|                            |  [ Send ] [ Cancel ]                                |
+|                            |  status text                                       |
++----------------------------+--------------------------------------------------+
+```
+
+Drawer width: the preference key `assistant.drawer_width` is reused with new bounds (default
+760 px, range 520–1120 px). Sidebar width is fixed (220 px nominal). The drawer can
+still collapse to close.
+
+The sidebar lives inside the drawer, never as a separate window. New-chat is wired from both
+the Pane header and the sidebar header; switching chats comes from each sidebar row's `Open`
+button; rename is inline in a TextBox within each row (Enter commits, Escape cancels, blank
+is rejected). Delete removes the chat after the entry is removed from the controller's list;
+deleting the final remaining chat auto-creates an empty replacement so the list is never
+empty.
+
+### 14.8 Test results at `9d33006c` (the multi-chat commit)
+
+Code lives in `BGS/app/Assistant*.cs` and `BGS/tools/{tests,uismoke}/*`. Gates run from
+`BGS/`:
+
+- `dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore` → exit 0, 0 errors.
+- `dotnet run --project tools/symrm/symrm.csproj --configuration Release --no-restore -- test` →
+  exit 0, 1798 checks, 0 failed.
+- `dotnet test tools/tests/BehaviourGraph.Tests.csproj --configuration Release --no-restore` →
+  exit 0, 736 passed, 0 failed, 0 skipped (`49 Codex auth/protocol/tool tests` plus
+  `25 AssistantChatStore tests`, `7 MultiChatIsolation tests`, and `12 MultiChatController tests`).
+- `dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore -- --assistant` →
+  exit 0, every check green (full lifecycle incl. signed-out, send, approval, save boundary).
+- `dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore -- --multichat` →
+  exit 0, every check green (sidebar, create, switch, restore, persistence).
+
+GitHub CI: the `bgs-ci` workflow is the same as for prior proof; it runs the build, the
+xUnit suite, and the UI smoke harness on both `linux-x64` and `win-x64`. Both jobs are
+expected to be green at this commit (any regression must be fixed before push).
+
+### 14.9 Manual acceptance boundary (real ChatGPT login)
+
+Steps that require human OAuth on the user's account remain out of the automated proof, by
+design (no chat with the user's ChatGPT can be exercised from CI):
+
+1. Launch `BGS/app/BehaviourStudio.csproj`.
+2. Visually confirm `Chat` and `Assistant settings` in the ChatGPT group on the Bridge.
+3. Click `Assistant settings`. Confirm sidebar + provider + account + auth row.
+4. Click `Sign in with ChatGPT`; finish the browser login.
+5. Confirm account row flips to `Connected · ChatGPT <plan>` (and `Model: <model>` if supplied).
+6. Click `Chat`. Type a prompt. `Send`. Confirm reply.
+7. `+ New chat`. Type a different prompt. `Send`.
+8. Switch between the two chats via the sidebar `Open` buttons; verify the transcript returns
+   exactly and no model request is issued (the network tab shows only one
+   `chatgpt/v1/responses` request per `Send`).
+9. `Tools: bgs.inspect_behavior`. Confirm a `BGS` row appears and the editor stays unchanged.
+10. Ask for `bgs.set_clip_animation`. Confirm the approval card appears, editor stays clean.
+    Click `Reject`. Confirm nothing changed. Repeat and click `Apply approved edit` — editor goes
+    dirty, disk unchanged, explicit `Save to .hkx` still required.
+11. Switch chats again. Confirm no pending-approval carryover.
+12. Close BGS. Reopen. Confirm both chats return with their exact transcripts.
+13. Click `Sign out`. Confirm account flips to `Signed out` and the remaining credential state
+    lives only in Codex.
+14. Close BGS. Confirm no `codex app-server` child remains (`Get-Process codex | ?{
+    $_.CommandLine -match 'app-server' }` on Windows, `pgrep -af 'codex app-server'` on Linux).
+
+The harness covers everything except the browser OAuth round-trip and the live Codex child
+count after BGS exit — both of which need the real signed-in account.
+
