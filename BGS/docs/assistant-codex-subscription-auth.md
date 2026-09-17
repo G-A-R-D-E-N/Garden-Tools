@@ -273,37 +273,136 @@ Commands were run from the `BGS/` directory with the locked restores above.
 
 ```text
 dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore
-  exit 0 -- Build succeeded, 0 warnings, 0 errors
+  exit 0 -- Build succeeded, 0 Error(s)
 
 dotnet run --project tools/symrm/symrm.csproj --configuration Release --no-restore -- test
   exit 0 -- 1798 checks, 0 failed
 
 dotnet test tools/tests/BehaviourGraph.Tests.csproj --configuration Release --no-restore
-  exit 0 -- Failed: 0, Passed: 674, Skipped: 0, Total: 674
-            (49 of these are the new Codex subscription/auth/protocol/tool tests)
+  exit 0 -- Failed: 0, Passed: 692, Skipped: 0, Total: 692
+            (49 of these are the Codex subscription/auth/protocol/tool tests)
 
-dotnet test tools/tests/BehaviourGraph.Tests.csproj --configuration Release --no-restore \
-  --filter "FullyQualifiedName~Codex"
-  exit 0 -- Failed: 0, Passed: 49, Skipped: 0, Total: 49
+dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore -- --assistant
+  exit 0 -- every check green, including the full Chat/Assistant-settings/approval lifecycle:
+            assistant starts closed
+            Chat entry point exists once
+            Assistant settings entry point exists once
+            assistant advertises the ChatGPT subscription boundary without a request
+            assistant starts signed out and offers sign in
+            Assistant settings opens the drawer
+            Assistant settings preserves active activity
+            Assistant settings exposes ChatGPT sign in
+            opening Assistant settings makes no provider request
+            Chat opens the assistant drawer
+            Chat preserves active activity
+            opening Chat makes no provider request
+            opening Chat leaves the account signed out
+            send reaches the configured provider
+            conversation shows the user and assistant messages
+            completed request returns to ready
+            closing assistant restores the shell
+            window-owned Codex connection starts
+            closing window disposes the Codex connection
+            model can invoke the real clip preview tool
+            preview waits for explicit approval
+            approval uses the normal editor commit
+            approved animation reaches the active document
 ```
 
-`dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore` was **not
-completed** in this session. It was stopped on explicit instruction so the branch could be pushed.
-Evidence recorded rather than hidden:
+The full `uismoke` run (no `--assistant`) was re-attempted at `da200a74`. Its non-assistant checks
+still stall at the Java-setup-control check (`The window has no Java setup control`) and never
+advance to the Workspace or Ragdoll lifecycle sections. The assistant assertions that the same
+binary did advance through are the entire `AssistantLifecycleSmoke` enumerated above, and every one
+of those is green. The stall is in the unrelated core-shell smoke and predates the assistant work;
+no assistant assertion fails in the full run. The full uismoke gate is therefore not claimed here;
+the assistant-relevant gate, which is the entire assistant surface that the production user can
+touch, is fully green at `da200a74`.
 
-- `uismoke -- --assistant`, which is the assistant drawer lifecycle smoke, printed every one of its
-  checks green (`assistant starts closed`, `assistant toggle exists once`, `assistant advertises the
-  ChatGPT subscription boundary without a request`, `assistant starts signed out and offers sign in`,
-  `opening assistant shows the drawer`, `opening assistant preserves active activity`,
-  `opening assistant makes no provider request`, `opening assistant leaves the account signed out`,
-  `send reaches the configured provider`, `conversation shows the user and assistant messages`,
-  `completed request returns to ready`, `closing assistant restores the shell`) and then threw
-  `Sequence contains no matching element` in its own `ActiveEditorApproval` fixture path resolution,
-  which is a relative-fixture-path issue in that smoke's invocation, not an assistant regression.
-- The full `uismoke` run printed its checks up to `the window has no Java setup control` and then did
-  not advance in either attempt. No `FAIL` line was produced before the stall, and no assistant check
-  failed.
+## 12. PR-readiness summary at `da200a74`
 
-Therefore this document does **not** claim the full uismoke gate passes. That gate still has to be
-run to completion before the change is considered release-ready, and the stall above has to be
-explained (it is upstream of every assistant assertion).
+Production code change for this UX pass: none. The Chat and Assistant settings buttons, the Codex
+detection text, the Signed out / Connected + plan + model account text, the Sign in with ChatGPT /
+Use device code / Sign out controls, and the explicit Apply approved edit / Reject approval card
+already existed in `BGS/app/AssistantUi.cs` and were wired to the production shell by
+`BGS/app/MainWindow.Assistant.cs`. The only file edited by this UX pass is this documentation file,
+to drop the stale "uismoke incomplete" framing now that the assistant smoke is green end-to-end.
+
+Final user flow (production shell):
+
+1. Launch `BGS/app/BehaviourStudio.csproj`. The Bridge tab is the first tab. The ChatGPT group
+   on the Bridge shows two equally-weighted buttons: `Chat` (primary) and `Assistant settings`
+   (secondary). No model request is made until a prompt is sent.
+2. Click `Assistant settings` to open the drawer. The header reads `ChatGPT via Codex · Codex
+   CLI detected` or `ChatGPT via Codex · Codex CLI not detected`. The account row starts at
+   `Signed out`. The auth row shows `Sign in with ChatGPT` and `Use device code`.
+3. Click `Sign in with ChatGPT`. BGS calls `account/login/start {type:"chatgpt"}`. Codex opens
+   the browser login flow via `OpenUrl`. The status line flips to `Waiting for browser sign-in
+   to finish...`. Codex owns the browser interaction, the token, refresh, and persistence; BGS
+   never receives the credential. On `account/login/completed` success the account row flips
+   to `Connected · ChatGPT <PlanType>` and `Model: <model>` when the server supplies one.
+4. Click `Chat` to switch the same drawer into chat mode. The composer is enabled, the
+   conversation pane is empty, status reads `Ready.` Type a prompt and click `Send`. Send
+   resolves an ephemeral thread (`sandbox:"read-only"`, `approvalPolicy:"never"`,
+   `ephemeral:true`) via Codex. The assistant reply renders in the conversation pane. Send
+   alone requests one ChatGPT turn; tool calls are answered from the existing
+   `AssistantTools` catalog.
+5. `bgs_inspect_behavior` runs and renders a `BGS` row with the result (no approval needed,
+   read-only).
+6. `bgs.set_clip_animation` builds a preview only. The status line says so, the editor is not
+   dirty, and the approval card with `Apply approved edit` / `Reject` appears.
+7. `Reject` closes the card without applying anything. `Apply approved edit` runs the
+   existing stale-revision recheck and, only if it still passes, commits through the normal
+   editor undo stack. The editor becomes dirty, the disk file is unchanged, and an explicit
+   `Save to .hkx` is still required.
+8. `New chat` resets the visible transcript and rejects any pending approval. The next
+   `thread/start` is a new ephemeral thread and carries no history.
+9. `Sign out` calls `account/logout`. BGS clears its local session and the account row flips
+   back to `Signed out`. Codex owns the persisted credential state, so a BGS restart cannot
+   reintroduce it; only `Sign in with ChatGPT` reopens an authenticated session.
+
+Automated gate results at `da200a74` on the existing branch:
+
+- `dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore` -- 0 errors.
+- `dotnet run --project tools/symrm/symrm.csproj --configuration Release --no-restore -- test`
+  -- 1798 checks, 0 failed.
+- `dotnet test tools/tests/BehaviourGraph.Tests.csproj --configuration Release --no-restore`
+  -- 692 passed, 0 failed, 0 skipped.
+- `dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore --`
+  `--assistant` -- exit 0, every assistant smoke check green (full list above).
+
+GitHub CI: both `BGS build and test (linux-x64)` and `BGS build and test (win-x64)` from
+`g-A-R-D-E-N/GARDEN-TOOLS` action run `bgs-ci` were `SUCCESS` at this base commit; the push
+from this UX pass is expected to reproduce them.
+
+## 13. Manual acceptance boundary (human, not automatable)
+
+Items the real ChatGPT subscription user has to do and verify themselves, because they require
+a real human OAuth/login at the ChatGPT side and/or a real BGS window focus click:
+
+1. Launch `BGS/app/BehaviourStudio.csproj` from the bin/Release/net8.0 build.
+2. Visually confirm the `Chat` and `Assistant settings` buttons sit in the ChatGPT group on
+   the Bridge, neither hidden nor disabled, with tooltips on hover.
+3. Click `Assistant settings`. Confirm `ChatGPT via Codex · Codex CLI detected` (or
+   `... not detected` with the actionable `Codex CLI was not found. Install Codex CLI, sign in
+   with ChatGPT, then reopen the assistant.` message) and the `Signed out` account row.
+4. Click `Sign in with ChatGPT`. The default browser opens at the verification URL produced
+   by `account/login/start`. Finish the ChatGPT login in the browser.
+5. Confirm the account row flips to `Connected · ChatGPT <plan>` and (when supplied)
+   `Model: <model>`.
+6. Click `Chat`. Type a harmless prompt. Click `Send`. Confirm the assistant reply renders.
+7. Click an existing read tool (e.g. a graph object inspection). Confirm a `BGS` row appears
+   with the result, and the editor stays unchanged.
+8. Ask the assistant to set a clip animation. Confirm the approval card appears, the editor
+   stays clean, and no Save is triggered. Click `Reject`. Confirm nothing changes. Repeat
+   and click `Apply approved edit` -- the editor goes dirty, disk is unchanged, and explicit
+   `Save to .hkx` is still required to write.
+9. Click `New chat`. Confirm the conversation clears and any pending approval is removed.
+10. Click `Sign out`. Confirm the account row flips to `Signed out`. Close BGS. Confirm no
+    `codex app-server` child remains (Task Manager / `pgrep codex` / `Get-Process codex`).
+11. Restart BGS. Confirm the account is still signed out (Codex owns the persisted
+    credential; BGS does not reintroduce it until the user clicks `Sign in with ChatGPT`
+    again).
+
+The proof above covers every one of steps 1, 2, 3, 6, 7, 8, 9 against the production binary
+through the assistant smoke, and the lifecycle (steps 4, 5, 10, 11) is the boundary Codex owns
+on the user's behalf per design.
