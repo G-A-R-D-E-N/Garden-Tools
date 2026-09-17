@@ -28,7 +28,6 @@ internal sealed partial class AssistantUi
     private readonly ColumnDefinition _drawerColumn =
         new(new GridLength(0, GridUnitType.Pixel)) { MinWidth = 0, MaxWidth = MaximumWidth };
     private readonly GridSplitter _splitter;
-    private CodexAssistantConnection? _connection;
     private AssistantTools? _tools;
     private AssistantMutationGate? _gate;
     private AssistantConversationController? _controller;
@@ -83,12 +82,15 @@ internal sealed partial class AssistantUi
         AssistantModelSelector.HookEvents(_pane);
         _pane.ModelSelected += SelectModel;
         _pane.ModelResetRequested += ResetModel;
+        _pane.ProviderSelected += SelectProvider;
+        _pane.ModelTextChanged += SelectModel;
 
         AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
         bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
         _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
         _pane.SetAccount("Signed out");
         _pane.SetStatus("Pick a chat or click + New chat to start.", Ux.MetaBrush);
+        InitializeProvider();
         SetOpen(false);
     }
 
@@ -124,13 +126,6 @@ internal sealed partial class AssistantUi
         _controller.List.SelectionChanged += OnSelectionChanged;
         RefreshSidebar();
         OnSelectionChanged(_controller.List.ActiveIndex);
-    }
-
-    private IAssistantSession? CreateSessionForChat(string chatId)
-    {
-        if (!EnsureCodex()) return null;
-        AssistantTools tools = EnsureTools();
-        return new CodexAssistantSession(_connection!, tools.Functions, () => tools.HasPendingApproval);
     }
 
     private AssistantTools EnsureTools()
@@ -382,174 +377,6 @@ internal sealed partial class AssistantUi
         _controller?.RejectPending(_controller.Active);
         _pane.SetApproval(false);
         _pane.SetStatus("The proposed edit was rejected.", Ux.MetaBrush);
-    }
-
-    private bool EnsureCodex()
-    {
-        if (_connection != null) return true;
-        AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
-        if (!AssistantProvider.TryResolveExecutable(options, out _, out string error))
-        {
-            _pane.SetStatus(error, Ux.WarnBrush);
-            return false;
-        }
-        _connection = _owner.CreateCodexConnection(options);
-        _connection.Changed += OnConnectionChanged;
-        return true;
-    }
-
-    private void OnConnectionChanged() => Dispatcher.UIThread.Post(RefreshAccountText);
-
-    private async void SignIn()
-    {
-        _pane.SetAuthBusy(true);
-        try
-        {
-            if (!EnsureCodex()) return;
-            CodexAccount account = await _connection!.ConnectAsync().ConfigureAwait(true);
-            RefreshAccountText();
-            if (account.SignedIn)
-            {
-                _pane.SetStatus("Connected. Opening the assistant made no model request.", Ux.MetaBrush);
-                return;
-            }
-            CodexLoginChallenge challenge = await _connection.BeginChatGptLoginAsync().ConfigureAwait(true);
-            if (challenge.HasBrowserUrl)
-            {
-                OpenUrl(challenge.AuthUrl);
-                _pane.SetStatus("Waiting for browser sign-in to finish...", Ux.MetaBrush);
-            }
-            else
-            {
-                _pane.SetStatus("Waiting for sign-in to finish...", Ux.MetaBrush);
-            }
-        }
-        catch (CodexProtocolException exception)
-        {
-            _pane.SetStatus("Disconnected: " + exception.Message, Ux.WarnBrush);
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or TimeoutException)
-        {
-            _pane.SetStatus("Disconnected: Codex sign-in could not be started.", Ux.WarnBrush);
-        }
-        finally
-        {
-            _pane.SetAuthBusy(false);
-        }
-    }
-
-    private async void DeviceCode()
-    {
-        _pane.SetAuthBusy(true);
-        try
-        {
-            if (!EnsureCodex()) return;
-            await _connection!.ConnectAsync().ConfigureAwait(true);
-            CodexLoginChallenge challenge = await _connection.BeginDeviceCodeLoginAsync().ConfigureAwait(true);
-            _pane.SetDeviceCode(challenge.VerificationUrl, challenge.UserCode);
-            OpenUrl(challenge.VerificationUrl);
-            _pane.SetStatus("Waiting for device-code sign-in to finish...", Ux.MetaBrush);
-        }
-        catch (CodexProtocolException exception)
-        {
-            _pane.SetStatus("Disconnected: " + exception.Message, Ux.WarnBrush);
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or TimeoutException)
-        {
-            _pane.SetStatus("Disconnected: device-code sign-in could not be started.", Ux.WarnBrush);
-        }
-        finally
-        {
-            _pane.SetAuthBusy(false);
-        }
-    }
-
-    private async void SignOut()
-    {
-        _pane.SetAuthBusy(true);
-        try
-        {
-            _requestCancellation?.Cancel();
-            _controller?.EndAllSessions();
-            _pane.SetApproval(false);
-            if (_connection is null) return;
-            await _connection.SignOutAsync().ConfigureAwait(true);
-            RefreshAccountText();
-            _pane.SetStatus(
-                "Signed out. Every chat will start a fresh ephemeral thread after you sign in again.",
-                Ux.MetaBrush);
-        }
-        catch (CodexProtocolException exception)
-        {
-            _pane.SetStatus("Disconnected: " + exception.Message, Ux.WarnBrush);
-        }
-        finally
-        {
-            _pane.SetAuthBusy(false);
-        }
-    }
-
-    private void RefreshAccountText()
-    {
-        if (_controller is null) return;
-        if (_connection is null || !_connection.IsConnected)
-        {
-            _pane.SetAccount("Signed out");
-            return;
-        }
-        CodexAccount account = _connection.Account;
-        if (!account.SignedIn)
-        {
-            _pane.SetAccount("Signed out");
-            return;
-        }
-
-        string plan = PlanLabel(account.PlanType);
-        string text = plan.Length > 0
-            ? $"Connected · ChatGPT {plan}"
-            : $"Connected · {account.AuthMode}";
-        if (_connection.ModelLabel.Length > 0) text += $"\nModel: {_connection.ModelLabel}";
-        _pane.SetAccount(text);
-        RefreshModelSelector();
-    }
-
-    private void RefreshModelSelector()
-    {
-        if (_connection is null) return;
-        AssistantModelSelector.Bind(_pane.ModelSelector, _pane, _connection.Models, _connection.SelectedModel);
-    }
-
-    private void SelectModel(string wireModel)
-    {
-        if (_connection is null) return;
-        if (_connection.TrySelectModel(wireModel, out string failure))
-            _pane.SetStatus("Model set for the next request on every chat.", new Avalonia.Media.SolidColorBrush(Ux.Good));
-        else
-            _pane.SetStatus(failure, Ux.WarnBrush);
-        RefreshAccountText();
-    }
-
-    private void ResetModel() => SelectModel("");
-
-    internal static string PlanLabel(string planType) =>
-        planType.Length == 0
-            ? ""
-            : char.ToUpperInvariant(planType[0]) + planType[1..].ToLowerInvariant();
-
-    private static void OpenUrl(string url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-        }
     }
 
     private void SetApproval(bool visible) => _pane.SetApproval(visible);

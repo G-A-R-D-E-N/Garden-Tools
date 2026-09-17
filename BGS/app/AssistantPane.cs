@@ -30,6 +30,9 @@ internal sealed class AssistantPane : Border
     private readonly Button _openUrl = Ux.Secondary("Open sign-in page");
     private readonly ComboBox _modelSelect = new() { PlaceholderText = "Model" };
     private readonly Button _modelReset = Ux.Secondary("Reset model");
+    private readonly ComboBox _providerSelect = new() { PlaceholderText = "Provider" };
+    private readonly TextBox _modelText = new() { PlaceholderText = "Model (blank uses the CLI default)" };
+    private bool _bindingModelText;
     private readonly Button _send = Ux.Primary("Send");
     private readonly Button _cancel = Ux.Secondary("Cancel");
     private readonly Border _approval = new();
@@ -92,12 +95,36 @@ internal sealed class AssistantPane : Border
         _modelSelect.IsVisible = false;
         _modelSelect.MinWidth = 180;
         _modelSelect.HorizontalAlignment = HorizontalAlignment.Left;
+        var providerRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        providerRow.Children.Add(new TextBlock
+        {
+            Text = "Provider",
+            Foreground = Ux.MetaBrush,
+            FontSize = Ux.FontSmall,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        _providerSelect.MinWidth = 180;
+        _providerSelect.HorizontalAlignment = HorizontalAlignment.Left;
+        providerRow.Children.Add(_providerSelect);
+
         var modelRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 6,
             Margin = new Thickness(0, 6, 0, 0),
         };
+        _modelText.IsVisible = false;
+        _modelText.MinWidth = 220;
+        _modelText.TextChanged += (_, _) =>
+        {
+            if (!_bindingModelText) ModelTextChanged?.Invoke(_modelText.Text ?? "");
+        };
+        modelRow.Children.Add(_modelText);
         modelRow.Children.Add(_modelSelect);
         modelRow.Children.Add(_modelReset);
         _modelReset.IsVisible = false;
@@ -164,7 +191,7 @@ internal sealed class AssistantPane : Border
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         body.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var top = new StackPanel { Children = { header, _chatHeader, _provider, _account, authRow, modelRow, _deviceInfo, notice } };
+        var top = new StackPanel { Children = { header, _chatHeader, _provider, _account, authRow, providerRow, modelRow, _deviceInfo, notice } };
         Grid.SetRow(top, 0);
         Grid.SetRow(conversation, 1);
         var bottom = new StackPanel { Children = { _approval, _composer, composerButtons, _status } };
@@ -187,6 +214,8 @@ internal sealed class AssistantPane : Border
     public event Action<string>? OpenUrlRequested;
     public event Action<string>? ModelSelected;
     public event Action? ModelResetRequested;
+    public event Action<string>? ProviderSelected;
+    public event Action<string>? ModelTextChanged;
 
     public int MessageCount => _messageCount;
     public string ProviderStatus => _provider.Text ?? "";
@@ -207,8 +236,44 @@ internal sealed class AssistantPane : Border
         (_modelSelect.SelectedItem as AssistantModelItem)?.WireModel;
     internal ComboBox ModelSelector => _modelSelect;
     internal Button ModelReset => _modelReset;
+    internal ComboBox ProviderSelector => _providerSelect;
     internal void InvokeModelSelected(string wireModel) => ModelSelected?.Invoke(wireModel);
     internal void InvokeModelResetRequested() => ModelResetRequested?.Invoke();
+    internal void InvokeProviderSelected(string backend) => ProviderSelected?.Invoke(backend);
+    internal void InvokeModelTextChanged(string text) => ModelTextChanged?.Invoke(text);
+
+    public bool ProviderSelectorVisible => _providerSelect.IsVisible;
+    public string? SelectedProvider => (_providerSelect.SelectedItem as AssistantProviderItem)?.Wire;
+    public bool ModelTextVisible => _modelText.IsVisible;
+
+    public void SetModelEntry(bool freeText, string value)
+    {
+        _modelSelect.IsVisible = !freeText;
+        _modelText.IsVisible = freeText;
+        if (!freeText) return;
+        _bindingModelText = true;
+        try
+        {
+            _modelText.Text = value;
+        }
+        finally
+        {
+            _bindingModelText = false;
+        }
+    }
+
+    public void SetModelText(string value)
+    {
+        _bindingModelText = true;
+        try
+        {
+            _modelText.Text = value;
+        }
+        finally
+        {
+            _bindingModelText = false;
+        }
+    }
     public TextBox Composer => _composer;
     public string ChatTitle
     {
@@ -263,6 +328,8 @@ internal sealed class AssistantPane : Border
         _cancel.IsVisible = busy;
         _modelSelect.IsEnabled = !busy;
         _modelReset.IsEnabled = !busy;
+        _providerSelect.IsEnabled = !busy;
+        _modelText.IsEnabled = !busy;
     }
 
     public void SetAuthBusy(bool busy)
@@ -272,6 +339,8 @@ internal sealed class AssistantPane : Border
         _signOut.IsEnabled = !busy;
         _modelSelect.IsEnabled = !busy;
         _modelReset.IsEnabled = !busy;
+        _providerSelect.IsEnabled = !busy;
+        _modelText.IsEnabled = !busy;
     }
     public void SetApproval(bool visible) => _approval.IsVisible = visible;
     public void Clear()

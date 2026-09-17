@@ -106,6 +106,7 @@ internal static class AssistantLifecycleSmoke
 
         WindowOwnsCodexConnection();
         ModelSelectorListsCatalogAndPersistsChoice();
+        ProviderSelectionIsExplicitAndPersisted();
         ActiveEditorApproval();
         StaleApprovalIsNotReportedAsApplied();
     }
@@ -228,6 +229,61 @@ internal static class AssistantLifecycleSmoke
         finally
         {
             Smoke.CloseForTest(window);
+        }
+    }
+
+    private static void ProviderSelectionIsExplicitAndPersisted()
+    {
+        Settings.TrySet("assistant.backend", "", out _);
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            AssistantPane pane = window.AssistantUiForTest.Pane;
+            Check("the provider selector is present", pane.ProviderSelectorVisible);
+            string[] offered = pane.ProviderSelector.ItemsSource!.Cast<AssistantProviderItem>()
+                .Select(item => item.Wire).ToArray();
+            Check("every provider is offered exactly once",
+                offered.SequenceEqual(new[] { "codex", "claude", "opencode" }));
+            Check("the assistant starts on Codex", pane.SelectedProvider == "codex");
+            Check("the Codex model stays a dropdown", !pane.ModelTextVisible);
+
+            pane.InvokeProviderSelected("claude");
+            Dispatcher.UIThread.RunJobs();
+            Check("choosing a provider persists it", Settings.Get("assistant.backend") == "claude");
+            Check("choosing a provider is reported",
+                window.AssistantUiForTest.Status.Contains("Claude Code", StringComparison.Ordinal));
+            Check("the provider description follows the choice",
+                window.AssistantUiForTest.ProviderStatus.Contains("Claude Code", StringComparison.Ordinal));
+            Check("Claude takes a free-text model", pane.ModelTextVisible);
+            Check("Claude uses its own sign-in rather than BGS",
+                window.AssistantUiForTest.AccountStatus.Contains("claude", StringComparison.OrdinalIgnoreCase));
+
+            pane.InvokeModelTextChanged("claude-sonnet-4-5");
+            Dispatcher.UIThread.RunJobs();
+            Check("a free-text model is persisted for Claude",
+                Settings.Get(AssistantUi.ModelSettingKey(AssistantBackend.Claude)) == "claude-sonnet-4-5");
+            Check("each provider keeps its own model",
+                AssistantUi.ModelSettingKey(AssistantBackend.Claude) !=
+                AssistantUi.ModelSettingKey(AssistantBackend.Codex));
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
+
+        var restored = new MainWindow();
+        restored.Show();
+        try
+        {
+            Check("the chosen provider is restored on the next window",
+                restored.AssistantUiForTest.Pane.SelectedProvider == "claude");
+        }
+        finally
+        {
+            Smoke.CloseForTest(restored);
+            Settings.TrySet("assistant.backend", "", out _);
+            Settings.TrySet(AssistantUi.ModelSettingKey(AssistantBackend.Claude), "", out _);
         }
     }
 
