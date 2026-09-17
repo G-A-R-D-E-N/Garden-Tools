@@ -161,7 +161,6 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
 
     private async Task EnsureServersAsync(CancellationToken cancellationToken)
     {
-        if (_discovery is not null) return;
         _discovery = await OpencodeCli.ReadConfiguredServersAsync(_cli, cancellationToken)
             .ConfigureAwait(false);
     }
