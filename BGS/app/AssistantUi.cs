@@ -58,8 +58,8 @@ internal sealed partial class AssistantUi
         ToolTip.SetTip(chat, "Open your saved chat list and current conversation.");
         chat.Click += (_, _) => OpenAsChat();
         var settings = Ux.Secondary("Assistant settings");
-        ToolTip.SetTip(settings, "Open ChatGPT account and Codex connection settings.");
-        settings.Click += (_, _) => OpenAsSettings();
+        ToolTip.SetTip(settings, "Open the assistant settings window: provider, model and sign-in.");
+        settings.Click += (_, _) => OpenSettings();
         shell.Tools.Children.Add(Ux.Group("ChatGPT", Ux.Wrap(chat, settings)));
 
         RestoreChats();
@@ -222,16 +222,6 @@ internal sealed partial class AssistantUi
         _pane.SetStatus("Ready. Type below to send to the selected chat.", Ux.MetaBrush);
         Dispatcher.UIThread.Post(() => _pane.Composer.Focus());
     }
-
-    private void OpenAsSettings()
-    {
-        SetOpen(true);
-        _pane.SetStatus(
-            "Assistant settings. Sign in with ChatGPT above, use a device code, or sign out. Credentials are never entered into BGS.",
-            Ux.MetaBrush);
-    }
-
-    internal void OpenSettings() => OpenAsSettings();
 
     private void NewChatInternal()
     {

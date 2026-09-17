@@ -15,6 +15,42 @@ internal sealed partial class AssistantUi
     private AssistantCli? _cli;
     private AssistantBackend _backend = AssistantBackend.Codex;
     private IReadOnlyList<CodexModel> _providerModels = Array.Empty<CodexModel>();
+    private AssistantSettingsWindow? _settingsWindow;
+    private readonly AssistantSettingsState _settingsState = new();
+
+    internal void OpenSettings()
+    {
+        _settingsState.ChooseProvider = SelectProvider;
+        _settingsState.ChooseModel = SelectModel;
+        _settingsState.ResetModel = ResetModel;
+        _settingsState.SignIn = SignIn;
+        _settingsState.DeviceCode = DeviceCode;
+        _settingsState.SignOut = SignOut;
+        if (_settingsWindow is null || !_settingsWindow.IsVisible)
+        {
+            _settingsWindow?.Close();
+            _settingsWindow = new AssistantSettingsWindow(_settingsState);
+        }
+        RefreshSettingsWindow();
+        _settingsWindow.Present(_owner);
+    }
+
+    internal AssistantSettingsWindow? SettingsWindowForTest => _settingsWindow;
+
+    private void RefreshSettingsWindow()
+    {
+        if (_settingsWindow is null) return;
+        _settingsState.SelectedBackend = AssistantCliLocator.CommandName(_backend);
+        _settingsState.Description = _pane.ProviderStatus;
+        _settingsState.Account = _pane.AccountStatus;
+        _settingsState.CodexManaged = _backend == AssistantBackend.Codex;
+        _settingsState.SignedIn = _backend == AssistantBackend.Codex &&
+                                  _connection?.Account.SignedIn == true;
+        _settingsState.Models = _providerModels;
+        _settingsState.SelectedModel = Settings.Get(ModelSettingKey(_backend));
+        _settingsState.DefaultModelLabel = DefaultModelLabel();
+        _settingsWindow.Refresh();
+    }
 
     internal static string ModelSettingKey(AssistantBackend backend) => backend switch
     {
@@ -124,6 +160,7 @@ internal sealed partial class AssistantUi
             bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
             _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
             _pane.SetAuthProvider(codexManaged: true);
+            RefreshSettingsWindow();
             return;
         }
 
@@ -131,6 +168,7 @@ internal sealed partial class AssistantUi
         bool found = AssistantCliLocator.TryLocateFromSettings(_backend, out _, out _);
         _pane.SetProvider(found ? $"{name} · CLI detected" : $"{name} · CLI not detected");
         _pane.SetAuthProvider(codexManaged: false);
+        RefreshSettingsWindow();
     }
 
     private async Task RefreshProviderModelsAsync()
@@ -170,6 +208,7 @@ internal sealed partial class AssistantUi
         }
         AssistantModelSelector.Bind(_pane.ModelSelector, _pane, _providerModels,
             Settings.Get(ModelSettingKey(_backend)), DefaultModelLabel());
+        RefreshSettingsWindow();
     }
 
     private string DefaultModelLabel() => _backend switch
@@ -313,6 +352,7 @@ internal sealed partial class AssistantUi
         if (_connection.ModelLabel.Length > 0) text += $"\nModel: {_connection.ModelLabel}";
         _pane.SetAccount(text);
         RefreshModelSelector();
+        RefreshSettingsWindow();
     }
 
     private void SelectModel(string wireModel)

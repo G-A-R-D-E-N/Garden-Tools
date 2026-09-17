@@ -65,11 +65,11 @@ internal static class AssistantLifecycleSmoke
                 .Single(button => button.Content?.ToString() == "Assistant settings");
             settings.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            Check("Assistant settings opens the drawer", window.AssistantDrawerOpen);
+            Check("Assistant settings opens its own window, not the chat drawer",
+                window.AssistantUiForTest.SettingsWindowForTest is { IsVisible: true } && !window.AssistantDrawerOpen);
             Check("Assistant settings preserves active activity", activity == window.SelectedActivity);
             Check("Assistant settings exposes ChatGPT sign in",
-                window.AssistantUiForTest.SignInVisible &&
-                window.AssistantUiForTest.Status.Contains("Sign in with ChatGPT", StringComparison.Ordinal));
+                window.AssistantUiForTest.SettingsWindowForTest!.SignInVisible);
             Check("opening Assistant settings makes no provider request", fake.CallCount == 0);
 
             var chat = Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Chat");
@@ -244,15 +244,30 @@ internal static class AssistantLifecycleSmoke
             Check("the shell hosts a settings gear", shell?.SettingsButton != null);
             Check("the gear sits in the left rail", shell!.SettingsButton.Content?.ToString() == "\u2699");
             Check("the assistant starts closed", !window.AssistantDrawerOpen);
+            Check("no settings window is open at startup", window.AssistantUiForTest.SettingsWindowForTest is null);
 
             shell.SettingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            Check("the gear opens the assistant settings", window.AssistantDrawerOpen);
-            Check("settings shows the provider and ChatGPT sign-in",
-                window.AssistantUiForTest.Pane.ProviderSelectorVisible &&
-                window.AssistantUiForTest.SignInVisible);
-            Check("settings explains the ChatGPT sign-in boundary",
-                window.AssistantUiForTest.Pane.NoticeText.Contains("ChatGPT sign-in", StringComparison.Ordinal));
+            AssistantSettingsWindow? settings = window.AssistantUiForTest.SettingsWindowForTest;
+            Check("the gear opens a dedicated settings window", settings is { IsVisible: true });
+            Check("opening settings does not open the chat drawer", !window.AssistantDrawerOpen);
+            Check("settings offers the provider", settings!.ProviderSelector.ItemCount == 3);
+            Check("settings offers the model control", settings.ModelSelector != null);
+            Check("Codex settings expose ChatGPT sign in", settings.SignInVisible);
+            Check("settings explains the ChatGPT boundary",
+                settings.NoticeText.Contains("ChatGPT sign-in", StringComparison.Ordinal));
+
+            settings.CloseForTest();
+            Dispatcher.UIThread.RunJobs();
+            Check("the settings window closes", !settings.IsVisible);
+
+            Button toolbar = Smoke.Find<Button>(window)
+                .Single(button => button.Content?.ToString() == "Assistant settings");
+            toolbar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Check("the toolbar settings button opens the same window",
+                window.AssistantUiForTest.SettingsWindowForTest is { IsVisible: true });
+            Check("the toolbar settings button keeps the chat drawer closed", !window.AssistantDrawerOpen);
         }
         finally
         {
