@@ -54,13 +54,8 @@ internal sealed partial class AssistantUi
         root.Children.Add(_pane);
         _sidebar.IsVisible = false;
 
-        var chat = Ux.Primary("Chat");
-        ToolTip.SetTip(chat, "Open your saved chat list and current conversation.");
-        chat.Click += (_, _) => OpenAsChat();
-        var settings = Ux.Secondary("Assistant settings");
-        ToolTip.SetTip(settings, "Open the assistant settings window: provider, model and sign-in.");
-        settings.Click += (_, _) => OpenSettings();
-        shell.Tools.Children.Add(Ux.Group("ChatGPT", Ux.Wrap(chat, settings)));
+        shell.ChatRequested += OpenAsChat;
+        shell.SettingsRequested += OpenSettings;
 
         RestoreChats();
 

@@ -436,7 +436,6 @@ public partial class MainWindow : Window
         root.AddHandler(Avalonia.Input.DragDrop.DragLeaveEvent, BridgeTabDragLeave);
         root.AddHandler(Avalonia.Input.DragDrop.DropEvent, BridgeTabDrop);
         _assistantUi = new AssistantUi(this, root, _shell);
-        _shell.SettingsRequested += () => _assistantUi?.OpenSettings();
         Content = root;
 
         if (Settings.Get("last_tab") is { } lastTab && lastTab.Length > 0)

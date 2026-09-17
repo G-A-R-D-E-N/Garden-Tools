@@ -28,7 +28,7 @@ internal static class MultiChatSmoke
         window.Show();
         try
         {
-            Click(window, "Chat");
+            AssistantLifecycleSmoke.OpenChat(window);
             Dispatcher.UIThread.RunJobs();
             AssistantUi ui = window.AssistantUiForTest;
 
@@ -138,7 +138,7 @@ internal static class MultiChatSmoke
 
             Check("the sidebar lists exactly one auto-created chat", ui.ChatListForTest.Count == 1);
 
-            Click(window, "Chat");
+            AssistantLifecycleSmoke.OpenChat(window);
             Dispatcher.UIThread.RunJobs();
             Check("Chat button opens the drawer to the active chat", window.AssistantDrawerOpen);
             Check("open drawer shows the sidebar", ui.SidebarVisibleForTest);
@@ -212,7 +212,7 @@ internal static class MultiChatSmoke
             string objectId = BehaviourGraphModel.Parse(window.LoadedXml).Objects
                 .First(objectInfo => objectInfo.Class == "hkbClipGenerator").Id;
 
-            Click(window, "Chat");
+            AssistantLifecycleSmoke.OpenChat(window);
             Dispatcher.UIThread.RunJobs();
             AssistantUi ui = window.AssistantUiForTest;
             AssistantTools tools = window.CreateAssistantTools();

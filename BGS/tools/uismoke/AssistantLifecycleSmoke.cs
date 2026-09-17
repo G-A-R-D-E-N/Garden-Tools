@@ -49,10 +49,15 @@ internal static class AssistantLifecycleSmoke
         {
             Dispatcher.UIThread.RunJobs();
             Check("assistant starts closed", !window.AssistantDrawerOpen);
-            Check("Chat entry point exists once", Smoke.Find<Button>(window)
-                .Count(button => button.Content?.ToString() == "Chat") == 1);
-            Check("Assistant settings entry point exists once", Smoke.Find<Button>(window)
-                .Count(button => button.Content?.ToString() == "Assistant settings") == 1);
+            EditorShell? shell = EditorShell.Find(window.Content as Control);
+            Check("the left rail owns both assistant entry points",
+                shell is { ChatButton: not null, SettingsButton: not null });
+            Check("the rail icons carry the chat and settings glyphs",
+                shell!.ChatButton.Content?.ToString() == EditorShell.ChatGlyph &&
+                shell.SettingsButton.Content?.ToString() == EditorShell.SettingsGlyph);
+            Check("the toolbar ChatGPT box is gone",
+                !Smoke.Find<Button>(window).Any(button => button.Content?.ToString() == "Chat") &&
+                !Smoke.Find<Button>(window).Any(button => button.Content?.ToString() == "Assistant settings"));
             Check("assistant advertises the ChatGPT subscription boundary without a request",
                 window.AssistantUiForTest.ProviderStatus.Contains("ChatGPT via Codex", StringComparison.Ordinal));
             Check("assistant starts signed out and offers sign in",
@@ -61,9 +66,7 @@ internal static class AssistantLifecycleSmoke
             string activity = window.SelectedActivity;
             var fake = new FakeChatClient(
                 new ChatResponse(new ChatMessage(ChatRole.Assistant, "Hello from the test provider.")));
-            var settings = Smoke.Find<Button>(window)
-                .Single(button => button.Content?.ToString() == "Assistant settings");
-            settings.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.SettingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Check("Assistant settings opens its own window, not the chat drawer",
                 window.AssistantUiForTest.SettingsWindowForTest is { IsVisible: true } && !window.AssistantDrawerOpen);
@@ -72,8 +75,7 @@ internal static class AssistantLifecycleSmoke
                 window.AssistantUiForTest.SettingsWindowForTest!.SignInVisible);
             Check("opening Assistant settings makes no provider request", fake.CallCount == 0);
 
-            var chat = Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Chat");
-            chat.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.ChatButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Check("Chat opens the assistant drawer", window.AssistantDrawerOpen);
             Check("Chat preserves active activity", activity == window.SelectedActivity);
@@ -233,6 +235,14 @@ internal static class AssistantLifecycleSmoke
         }
     }
 
+    internal static void OpenChat(MainWindow window)
+    {
+        EditorShell shell = EditorShell.Find(window.Content as Control)
+            ?? throw new InvalidOperationException("the editor shell is unavailable");
+        shell.ChatButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static void TheGearOpensAssistantSettings()
     {
         var window = new MainWindow();
@@ -241,8 +251,10 @@ internal static class AssistantLifecycleSmoke
         {
             Dispatcher.UIThread.RunJobs();
             EditorShell? shell = EditorShell.Find(window.Content as Control);
-            Check("the shell hosts a settings gear", shell?.SettingsButton != null);
-            Check("the gear sits in the left rail", shell!.SettingsButton.Content?.ToString() == "\u2699");
+            Check("the shell hosts the chat and settings icons",
+                shell?.ChatButton != null && shell.SettingsButton != null);
+            Check("the settings gear uses the settings glyph",
+                shell!.SettingsButton.Content?.ToString() == EditorShell.SettingsGlyph);
             Check("the assistant starts closed", !window.AssistantDrawerOpen);
             Check("no settings window is open at startup", window.AssistantUiForTest.SettingsWindowForTest is null);
 
@@ -261,13 +273,10 @@ internal static class AssistantLifecycleSmoke
             Dispatcher.UIThread.RunJobs();
             Check("the settings window closes", !settings.IsVisible);
 
-            Button toolbar = Smoke.Find<Button>(window)
-                .Single(button => button.Content?.ToString() == "Assistant settings");
-            toolbar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.ChatButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            Check("the toolbar settings button opens the same window",
-                window.AssistantUiForTest.SettingsWindowForTest is { IsVisible: true });
-            Check("the toolbar settings button keeps the chat drawer closed", !window.AssistantDrawerOpen);
+            Check("the chat icon above the gear opens the chat drawer", window.AssistantDrawerOpen);
+            Check("the chat icon does not reopen settings", !settings.IsVisible);
         }
         finally
         {
