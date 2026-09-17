@@ -60,6 +60,8 @@ internal sealed class CodexTestServer : ICodexTransport
     public JsonElement? LastConfigReadParams { get; private set; }
     public JsonElement? LastThreadStartParams { get; private set; }
     public JsonElement? LastTurnStartParams { get; private set; }
+    public string LastThreadId { get; internal set; } = "";
+    public string LastTurnId { get; internal set; } = "";
     public string LastToolArguments { get; private set; } = "";
     public string LastToolResponse { get; private set; } = "";
     public string LastToolName { get; set; } = "";
@@ -188,21 +190,25 @@ internal sealed class CodexTestServer : ICodexTransport
     private string TurnStart()
     {
         TurnStarts++;
-        const string turnId = "turn-1";
+        string turnId = $"turn-{TurnStarts}";
+        string threadId = LastThreadId;
+        if (threadId.Length == 0) threadId = "thread-1";
+        LastTurnId = turnId;
         if (AutoCompleteTurns)
         {
-            Notify(CodexMethods.TurnStarted, "{\"turn\":{\"id\":\"" + turnId + "\"}}");
-            Notify(CodexMethods.ItemStarted, Item("userMessage", "u1", null));
-            Notify(CodexMethods.ItemCompleted, Item("userMessage", "u1", null));
+            Notify(CodexMethods.TurnStarted,
+                "{\"turn\":{\"id\":\"" + turnId + "\"}}");
+            Notify(CodexMethods.ItemStarted, Item("userMessage", "u1", null, threadId, turnId));
+            Notify(CodexMethods.ItemCompleted, Item("userMessage", "u1", null, threadId, turnId));
             foreach (string delta in Deltas)
                 Notify(CodexMethods.AgentMessageDelta,
-                    "{\"threadId\":\"thread-1\",\"turnId\":\"" + turnId + "\",\"itemId\":\"a1\",\"delta\":" +
+                    "{\"threadId\":\"" + threadId + "\",\"turnId\":\"" + turnId + "\",\"itemId\":\"a1\",\"delta\":" +
                     JsonSerializer.Serialize(delta) + "}");
-            Notify(CodexMethods.ItemStarted, Item("agentMessage", "a1", null));
-            Notify(CodexMethods.ItemCompleted, Item("agentMessage", "a1", FinalText));
+            Notify(CodexMethods.ItemStarted, Item("agentMessage", "a1", null, threadId, turnId));
+            Notify(CodexMethods.ItemCompleted, Item("agentMessage", "a1", FinalText, threadId, turnId));
             Notify(CodexMethods.TurnCompleted,
-                "{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"" + turnId + "\",\"status\":\"completed\"," +
-                "\"items\":[" + Item("agentMessage", "a1", FinalText) + "],\"itemsView\":\"summary\"}}");
+                "{\"threadId\":\"" + threadId + "\",\"turn\":{\"id\":\"" + turnId + "\",\"status\":\"completed\"," +
+                "\"items\":[" + Item("agentMessage", "a1", FinalText, threadId, turnId) + "],\"itemsView\":\"summary\"}}");
         }
         return "{\"turn\":{\"id\":\"" + turnId + "\",\"items\":[],\"itemsView\":\"notLoaded\"," +
                "\"status\":\"inProgress\"}}";
@@ -211,8 +217,11 @@ internal sealed class CodexTestServer : ICodexTransport
     private string TurnInterrupt()
     {
         Interrupted = true;
+        string threadId = LastThreadId;
+        if (threadId.Length == 0) threadId = "thread-1";
+        string turnId = LastTurnId.Length > 0 ? LastTurnId : "turn-1";
         Notify(CodexMethods.TurnCompleted,
-            "{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"status\":\"interrupted\",\"items\":[]," +
+            "{\"threadId\":\"" + threadId + "\",\"turn\":{\"id\":\"" + turnId + "\",\"status\":\"interrupted\",\"items\":[]," +
             "\"itemsView\":\"summary\"}}");
         return "{}";
     }
@@ -244,10 +253,13 @@ internal sealed class CodexTestServer : ICodexTransport
         JsonSerializer.Serialize(message) + "}}";
 
     private static string Item(string type, string id, string? text) =>
+        Item(type, id, text, "thread-1", "turn-1");
+
+    private static string Item(string type, string id, string? text, string threadId, string turnId) =>
         text is null
-            ? "{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"item\":{\"id\":\"" + id + "\",\"type\":\"" +
+            ? "{\"threadId\":\"" + threadId + "\",\"turnId\":\"" + turnId + "\",\"item\":{\"id\":\"" + id + "\",\"type\":\"" +
               type + "\"}}"
-            : "{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"item\":{\"id\":\"" + id + "\",\"type\":\"" +
+            : "{\"threadId\":\"" + threadId + "\",\"turnId\":\"" + turnId + "\",\"item\":{\"id\":\"" + id + "\",\"type\":\"" +
               type + "\",\"text\":" + JsonSerializer.Serialize(text) +
               ",\"phase\":\"final_answer\"}}";
 
@@ -260,12 +272,14 @@ internal sealed class CodexTestServer : ICodexTransport
     internal void RecordThreadStart(JsonElement root)
     {
         ThreadStarts++;
+        LastThreadId = "thread-" + ThreadStarts;
         if (root.TryGetProperty("params", out JsonElement parameters))
             LastThreadStartParams = parameters.Clone();
     }
 
     internal void RecordTurnStart(JsonElement root)
     {
+        LastTurnId = "turn-" + TurnStarts;
         if (root.TryGetProperty("params", out JsonElement parameters))
             LastTurnStartParams = parameters.Clone();
     }

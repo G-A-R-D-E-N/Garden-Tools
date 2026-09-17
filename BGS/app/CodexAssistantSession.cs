@@ -118,18 +118,44 @@ public sealed class CodexAssistantSession : IAssistantSession
         _disposed = true;
         TaskCompletionSource<CodexTurnOutcome>? completion;
         string turnId;
+        string threadId;
         lock (_stateGate)
         {
             completion = _turnCompletion;
             turnId = _activeTurn;
+            threadId = _threadId;
             _turnCompletion = null;
         }
         completion?.TrySetResult(new CodexTurnOutcome("interrupted", ""));
         if (turnId.Length > 0) _ = InterruptAsync(turnId);
+        Unsubscribe(threadId);
         _requestGate.Dispose();
         _toolGate.Dispose();
-        _connection.Dispose();
     }
+
+    private void Unsubscribe(string threadId)
+    {
+        if (!_subscribed) return;
+        try
+        {
+            CodexAppServerClient? client;
+            try { client = _connection.Client; }
+            catch (InvalidOperationException) { client = null; }
+            if (client != null)
+            {
+                client.Notification -= OnNotification;
+                if (threadId.Length > 0) client.UnregisterToolHandler(threadId);
+                else if (ToolCallRegistrationKey().Length > 0)
+                    client.UnregisterToolHandler(ToolCallRegistrationKey());
+            }
+        }
+        catch (Exception exception) when (exception is ObjectDisposedException or InvalidOperationException)
+        {
+        }
+        _subscribed = false;
+    }
+
+    internal string ToolCallRegistrationKey() => Volatile.Read(ref _threadId);
 
     private async Task<AssistantReply> SendLockedAsync(
         string prompt, AssistantContext context, CancellationToken cancellationToken)
@@ -507,7 +533,9 @@ public sealed class CodexAssistantSession : IAssistantSession
     {
         if (_subscribed) return;
         client.Notification += OnNotification;
-        client.ToolCallHandler = HandleToolCallAsync;
+        string threadId = ToolCallRegistrationKey();
+        if (threadId.Length > 0) client.RegisterToolHandler(threadId, HandleToolCallAsync);
+        else client.DefaultToolCallHandler = HandleToolCallAsync;
         _subscribed = true;
     }
 

@@ -1,351 +1,73 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Threading;
 
 namespace BehaviourStudio.App;
 
-internal sealed class AssistantPane : Border
-{
-    private readonly TextBlock _provider = new() { TextWrapping = TextWrapping.Wrap };
-    private readonly TextBlock _account = new() { TextWrapping = TextWrapping.Wrap };
-    private readonly TextBlock _deviceInfo = new() { TextWrapping = TextWrapping.Wrap, IsVisible = false };
-    private readonly StackPanel _messages = new() { Spacing = 6 };
-    private readonly TextBox _composer = new()
-    {
-        AcceptsReturn = true,
-        TextWrapping = TextWrapping.Wrap,
-        MinHeight = 70,
-        MaxHeight = 150,
-    };
-    private readonly Button _signIn = Ux.Primary("Sign in with ChatGPT");
-    private readonly Button _deviceCode = Ux.Secondary("Use device code");
-    private readonly Button _signOut = Ux.Secondary("Sign out");
-    private readonly Button _openUrl = Ux.Secondary("Open sign-in page");
-    private readonly Button _send = Ux.Primary("Send");
-    private readonly Button _cancel = Ux.Secondary("Cancel");
-    private readonly Border _approval = new();
-    private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap };
-    private readonly Button _approve = Ux.Primary("Apply approved edit");
-    private readonly Button _reject = Ux.Secondary("Reject");
-    private string _pendingUrl = "";
-    private int _messageCount;
-
-    public AssistantPane()
-    {
-        Background = Ux.RailBrush;
-        BorderBrush = Ux.BorderBrush;
-        BorderThickness = new Thickness(1, 0, 0, 0);
-        Padding = new Thickness(12);
-
-        var title = new TextBlock
-        {
-            Text = "ChatGPT Assistant",
-            FontSize = Ux.FontTitle,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Ux.TitleBrush,
-        };
-        var newChat = Ux.Secondary("New chat");
-        var close = Ux.Secondary("Close");
-        newChat.Click += (_, _) => NewChatRequested?.Invoke();
-        close.Click += (_, _) => CloseRequested?.Invoke();
-        var header = new DockPanel { LastChildFill = false };
-        DockPanel.SetDock(close, Dock.Right);
-        DockPanel.SetDock(newChat, Dock.Right);
-        header.Children.Add(close);
-        header.Children.Add(newChat);
-        header.Children.Add(title);
-
-        _provider.Foreground = Ux.TitleBrush;
-        _provider.FontSize = Ux.FontSmall;
-        _provider.Margin = new Thickness(0, 4, 0, 0);
-
-        _account.Foreground = Ux.MetaBrush;
-        _account.FontSize = Ux.FontSmall;
-        _account.Margin = new Thickness(0, 2, 0, 0);
-
-        _signIn.Click += (_, _) => SignInRequested?.Invoke();
-        _deviceCode.Click += (_, _) => DeviceCodeRequested?.Invoke();
-        _signOut.Click += (_, _) => SignOutRequested?.Invoke();
-        _openUrl.Click += (_, _) => OpenUrlRequested?.Invoke(_pendingUrl);
-        _signOut.IsVisible = false;
-        _openUrl.IsVisible = false;
-        var authRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Margin = new Thickness(0, 6, 0, 0),
-        };
-        authRow.Children.Add(_signIn);
-        authRow.Children.Add(_deviceCode);
-        authRow.Children.Add(_openUrl);
-        authRow.Children.Add(_signOut);
-
-        _deviceInfo.Foreground = Ux.MetaBrush;
-        _deviceInfo.FontSize = Ux.FontSmall;
-        _deviceInfo.Margin = new Thickness(0, 4, 0, 0);
-
-        var notice = new TextBlock
-        {
-            Text = "ChatGPT sign-in happens in your browser or with a device code. BGS never asks for or stores your " +
-                "ChatGPT password, OAuth token, or OpenAI API key. Opening this drawer makes no model request. " +
-                "Prompts send only bounded editor context and BGS tool results when you press Send.",
-            Foreground = Ux.MutedBrush,
-            FontSize = Ux.FontSmall,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 6, 0, 8),
-        };
-
-        var conversation = new ScrollViewer
-        {
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            Content = _messages,
-        };
-
-        _approval.Background = Ux.CardBrush;
-        _approval.BorderBrush = Ux.WarnBrush;
-        _approval.BorderThickness = new Thickness(1);
-        _approval.Padding = new Thickness(8);
-        _approval.Margin = new Thickness(0, 8, 0, 0);
-        _approval.IsVisible = false;
-        var approvalButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        _approve.Click += (_, _) => ApproveRequested?.Invoke();
-        _reject.Click += (_, _) => RejectRequested?.Invoke();
-        approvalButtons.Children.Add(_approve);
-        approvalButtons.Children.Add(_reject);
-        _approval.Child = new StackPanel
-        {
-            Spacing = 6,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "BGS has a pending active-editor preview. Review it before applying.",
-                    Foreground = Ux.WarnBrush,
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                approvalButtons,
-            },
-        };
-
-        _status.Foreground = Ux.MetaBrush;
-        _status.FontSize = Ux.FontSmall;
-        _status.Margin = new Thickness(0, 6, 0, 0);
-        _cancel.IsVisible = false;
-        _send.Click += (_, _) => SendComposer();
-        _cancel.Click += (_, _) => CancelRequested?.Invoke();
-        var composerButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        composerButtons.Children.Add(_send);
-        composerButtons.Children.Add(_cancel);
-
-        var body = new Grid();
-        body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        body.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
-        body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var top = new StackPanel { Children = { header, _provider, _account, authRow, _deviceInfo, notice } };
-        Grid.SetRow(top, 0);
-        Grid.SetRow(conversation, 1);
-        var bottom = new StackPanel { Children = { _approval, _composer, composerButtons, _status } };
-        Grid.SetRow(bottom, 2);
-        body.Children.Add(top);
-        body.Children.Add(conversation);
-        body.Children.Add(bottom);
-        Child = body;
-    }
-
-    public event Action<string>? SendRequested;
-    public event Action? CancelRequested;
-    public event Action? NewChatRequested;
-    public event Action? CloseRequested;
-    public event Action? ApproveRequested;
-    public event Action? RejectRequested;
-    public event Action? SignInRequested;
-    public event Action? DeviceCodeRequested;
-    public event Action? SignOutRequested;
-    public event Action<string>? OpenUrlRequested;
-
-    public int MessageCount => _messageCount;
-    public string ProviderStatus => _provider.Text ?? "";
-    public string AccountStatus => _account.Text ?? "";
-    public string DeviceInfo => _deviceInfo.Text ?? "";
-    public string Status => _status.Text ?? "";
-    public bool ApprovalVisible => _approval.IsVisible;
-    public bool IsBusy => !_send.IsVisible;
-    public bool SignInVisible => _signIn.IsVisible;
-    public bool SignOutVisible => _signOut.IsVisible;
-    public TextBox Composer => _composer;
-
-    public void SetProvider(string text) => _provider.Text = text;
-
-    public void SetAccount(string text)
-    {
-        _account.Text = text;
-        bool signedIn = text.StartsWith("Connected", StringComparison.Ordinal);
-        _signIn.IsVisible = !signedIn;
-        _deviceCode.IsVisible = !signedIn;
-        _signOut.IsVisible = signedIn;
-    }
-
-    public void SetDeviceCode(string url, string userCode)
-    {
-        _pendingUrl = url;
-        bool hasCode = userCode.Length > 0;
-        _openUrl.IsVisible = url.Length > 0;
-        _deviceInfo.IsVisible = hasCode || url.Length > 0;
-        _deviceInfo.Text = hasCode
-            ? $"Enter this one-time code in the browser: {userCode}"
-            : (url.Length > 0 ? "Continue in the browser to finish signing in." : "");
-    }
-
-    public void ClearDeviceCode()
-    {
-        _pendingUrl = "";
-        _openUrl.IsVisible = false;
-        _deviceInfo.IsVisible = false;
-        _deviceInfo.Text = "";
-    }
-
-    public void AddUser(string text) => AddMessage("You", text, Ux.CardBrush);
-
-    public void AddAssistant(string text)
-    {
-        if (text.Length > 0) AddMessage("Assistant", text, Ux.BaseBrush);
-    }
-
-    public void AddTool(string name, bool requiresApproval, string detail = "") =>
-        AddMessage("BGS", $"{name}{(requiresApproval ? " (approval pending)" : "")}" +
-            (detail.Length == 0 ? "" : $": {detail}"),
-            Ux.RailBrush, Ux.MetaBrush, Ux.FontSmall);
-
-    public void SetStatus(string text, IBrush brush)
-    {
-        _status.Text = text;
-        _status.Foreground = brush;
-    }
-
-    public void SetBusy(bool busy)
-    {
-        _composer.IsEnabled = !busy;
-        _send.IsVisible = !busy;
-        _cancel.IsVisible = busy;
-    }
-
-    public void SetAuthBusy(bool busy)
-    {
-        _signIn.IsEnabled = !busy;
-        _deviceCode.IsEnabled = !busy;
-        _signOut.IsEnabled = !busy;
-    }
-
-    public void SetApproval(bool visible) => _approval.IsVisible = visible;
-
-    public void Clear()
-    {
-        _messages.Children.Clear();
-        _messageCount = 0;
-        SetApproval(false);
-        ClearDeviceCode();
-        SetStatus("New chat.", Ux.MetaBrush);
-    }
-
-    private void SendComposer()
-    {
-        string text = (_composer.Text ?? "").Trim();
-        if (text.Length == 0) return;
-        _composer.Text = "";
-        SendRequested?.Invoke(text);
-    }
-
-    private void AddMessage(string speaker, string text, IBrush background,
-                            IBrush? foreground = null, double? fontSize = null)
-    {
-        var label = new TextBlock
-        {
-            Text = speaker,
-            Foreground = Ux.TitleBrush,
-            FontSize = Ux.FontSmall,
-            FontWeight = FontWeight.SemiBold,
-        };
-        var content = new TextBlock
-        {
-            Text = text,
-            Foreground = foreground ?? Ux.MetaBrush,
-            FontSize = fontSize ?? Ux.FontBody,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        _messages.Children.Add(new Border
-        {
-            Background = background,
-            BorderBrush = Ux.BorderBrush,
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(8),
-            Child = new StackPanel { Spacing = 3, Children = { label, content } },
-        });
-        _messageCount++;
-    }
-}
-
 internal sealed class AssistantUi
 {
-    private const double DefaultWidth = 420;
-    private const double MinimumWidth = 320;
-    private const double MaximumWidth = 520;
+    private const double DefaultWidth = 760;
+    private const double MinimumWidth = 520;
+    private const double MaximumWidth = 1120;
+    private const double SidebarWidth = 220;
     private const string WidthSetting = "assistant.drawer_width";
+    private const string ActiveChatSetting = "assistant.active_chat_id";
 
     private readonly MainWindow _owner;
     private readonly AssistantPane _pane = new();
+    private readonly AssistantConversationSidebar _sidebar = new();
     private readonly ColumnDefinition _splitterColumn = new(new GridLength(0, GridUnitType.Pixel));
+    private readonly ColumnDefinition _sidebarColumn =
+        new(new GridLength(SidebarWidth, GridUnitType.Pixel)) { MinWidth = 160, MaxWidth = 280 };
     private readonly ColumnDefinition _drawerColumn =
         new(new GridLength(0, GridUnitType.Pixel)) { MinWidth = 0, MaxWidth = MaximumWidth };
     private readonly GridSplitter _splitter;
-    private AssistantTools? _tools;
-    private IAssistantSession? _session;
     private CodexAssistantConnection? _connection;
+    private AssistantTools? _tools;
+    private AssistantConversationController? _controller;
     private CancellationTokenSource? _requestCancellation;
     private bool _open;
 
     public AssistantUi(MainWindow owner, Grid root, EditorShell shell)
     {
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        root.ColumnDefinitions.Add(_sidebarColumn);
         root.ColumnDefinitions.Add(_splitterColumn);
         root.ColumnDefinitions.Add(_drawerColumn);
         _splitter = new GridSplitter
         {
             Width = 6,
-            Background = Brushes.Transparent,
+            Background = Avalonia.Media.Brushes.Transparent,
             IsVisible = false,
         };
+        Grid.SetColumn(_sidebar, 0);
         Grid.SetColumn(_splitter, 1);
         Grid.SetColumn(_pane, 2);
+        root.Children.Add(_sidebar);
         root.Children.Add(_splitter);
         root.Children.Add(_pane);
 
         var chat = Ux.Primary("Chat");
-        ToolTip.SetTip(chat, "Open ChatGPT Assistant.");
-        chat.Click += (_, _) =>
-        {
-            SetOpen(true);
-            _pane.SetStatus("Ready. Type a message below to chat with ChatGPT through Codex.", Ux.MetaBrush);
-            _pane.Composer.Focus();
-        };
+        ToolTip.SetTip(chat, "Open your saved chat list and current conversation.");
+        chat.Click += (_, _) => OpenAsChat();
         var settings = Ux.Secondary("Assistant settings");
         ToolTip.SetTip(settings, "Open ChatGPT account and Codex connection settings.");
-        settings.Click += (_, _) =>
-        {
-            SetOpen(true);
-            _pane.SetStatus(
-                "Assistant settings. Sign in with ChatGPT above, use a device code, or sign out. Credentials are never entered into BGS.",
-                Ux.MetaBrush);
-        };
+        settings.Click += (_, _) => OpenAsSettings();
         shell.Tools.Children.Add(Ux.Group("ChatGPT", Ux.Wrap(chat, settings)));
-        _pane.NewChatRequested += NewChat;
+
+        RestoreChats();
+
+        _sidebar.NewChatRequested += NewChatInternal;
+        _sidebar.ConversationSelected += Select;
+        _sidebar.RenameCommitted += RenameCommitted;
+        _sidebar.DeleteRequested += Delete;
+
+        _pane.NewChatRequested += NewChatInternal;
         _pane.CloseRequested += () => SetOpen(false);
         _pane.CancelRequested += Cancel;
         _pane.SendRequested += Send;
@@ -360,7 +82,7 @@ internal sealed class AssistantUi
         bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
         _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
         _pane.SetAccount("Signed out");
-        _pane.SetStatus("Ready. Click Chat to start or Assistant settings to sign in.", Ux.MetaBrush);
+        _pane.SetStatus("Pick a chat or click + New chat to start.", Ux.MetaBrush);
         SetOpen(false);
     }
 
@@ -375,12 +97,111 @@ internal sealed class AssistantUi
     public bool SignInVisible => _pane.SignInVisible;
     public AssistantPane Pane => _pane;
 
+    internal AssistantUi AssistantUiForTest => this;
+
     internal void SetSessionForTest(IAssistantSession session, AssistantTools? tools = null)
     {
         if (tools != null) _tools = tools;
         _tools ??= _owner.CreateAssistantTools();
-        _session?.Dispose();
-        _session = session;
+        AssistantConversationEntry? entry = _controller?.Active;
+        if (entry is null) return;
+        entry.Session?.Dispose();
+        entry.Session = session;
+        entry.HasPendingApproval = () => _tools!.HasPendingApproval;
+    }
+
+    internal IReadOnlyList<AssistantChatSummary> ChatListForTest =>
+        _controller?.List.Summaries() ?? Array.Empty<AssistantChatSummary>();
+
+    internal string? ActiveChatIdForTest => _controller?.List.ActiveChatId;
+
+    internal void SelectChatForTest(string chatId)
+    {
+        if (_controller is null) return;
+        if (_controller.List.IsBusy) return;
+        if (_controller.TrySelectById(chatId))
+        {
+            AssistantConversationEntry? previous = _controller.List.Entries
+                .FirstOrDefault(e => !ReferenceEquals(e, _controller.Active));
+            previous?.ClearPendingApproval();
+            OnSelectionChanged(_controller.List.ActiveIndex);
+        }
+    }
+
+    private void RestoreChats()
+    {
+        IReadOnlyList<AssistantChatSummary> summaries = AssistantChatStore.All();
+        var loaded = new List<AssistantChat>(summaries.Count);
+        foreach (AssistantChatSummary summary in summaries)
+        {
+            AssistantChat? chat = AssistantChatStore.Load(summary.Id);
+            if (chat != null) loaded.Add(chat);
+        }
+        loaded = loaded.OrderByDescending(c => c.UpdatedUtc).Take(AssistantChatStore.MaxConversations).ToList();
+
+        string? activeId = Settings.Get(ActiveChatSetting);
+
+        var sessionFactory = new Func<string, IAssistantSession?>(chatId => CreateSessionForChat(chatId));
+        _controller = new AssistantConversationController(sessionFactory, loaded, activeId);
+        _controller.List.StructureChanged += RefreshSidebar;
+        _controller.List.SelectionChanged += OnSelectionChanged;
+        RefreshSidebar();
+        OnSelectionChanged(_controller.List.ActiveIndex);
+    }
+
+    private IAssistantSession? CreateSessionForChat(string chatId)
+    {
+        if (!EnsureCodex()) return null;
+        AssistantTools tools = _tools ?? (_tools = _owner.CreateAssistantTools());
+        return new CodexAssistantSession(_connection!, tools.Functions, () => tools!.HasPendingApproval);
+    }
+
+    private void RefreshSidebar()
+    {
+        if (_controller is null) return;
+        IReadOnlyList<AssistantChatSummary> summaries = _controller.List.Summaries();
+        _sidebar.Bind(summaries, _controller.List.ActiveChatId);
+    }
+
+    private void OnSelectionChanged(int index)
+    {
+        if (_controller is null) return;
+        AssistantConversationEntry? entry = _controller.Active;
+        _pane.Clear();
+        if (entry is not null)
+        {
+            _pane.ChatTitle = entry.Chat.Title;
+            foreach (AssistantChatMessage message in entry.Chat.Messages)
+            {
+                switch (message.Role)
+                {
+                    case AssistantChatRole.User:
+                        _pane.AddUser(message.Text);
+                        break;
+                    case AssistantChatRole.Assistant:
+                        _pane.AddAssistant(message.Text);
+                        break;
+                    case AssistantChatRole.Tool:
+                        _pane.AddTool(
+                            message.ToolName ?? "tool",
+                            message.ToolRequiresApproval ?? false);
+                        break;
+                }
+            }
+            _pane.SetApproval(entry.PendingApproval);
+        }
+        else
+        {
+            _pane.ChatTitle = "(no chat selected)";
+        }
+        RefreshSidebar();
+        SaveActiveChatId();
+    }
+
+    private void SaveActiveChatId()
+    {
+        if (_controller is null) return;
+        Settings.TrySet(ActiveChatSetting, _controller.List.ActiveChatId ?? "", out _);
     }
 
     private void SetOpen(bool open)
@@ -401,43 +222,136 @@ internal sealed class AssistantUi
         _splitter.IsVisible = open;
     }
 
+    private void OpenAsChat()
+    {
+        SetOpen(true);
+        _pane.SetStatus("Ready. Type below to send to the selected chat.", Ux.MetaBrush);
+        Dispatcher.UIThread.Post(() => _pane.Composer.Focus());
+    }
+
+    private void OpenAsSettings()
+    {
+        SetOpen(true);
+        _pane.SetStatus(
+            "Assistant settings. Sign in with ChatGPT above, use a device code, or sign out. Credentials are never entered into BGS.",
+            Ux.MetaBrush);
+    }
+
+    private void NewChatInternal()
+    {
+        if (_controller is null) return;
+        if (_controller.List.IsBusy)
+        {
+            _pane.SetStatus("Wait for the current request to finish before starting a new chat.", Ux.MetaBrush);
+            return;
+        }
+        AssistantConversationEntry? entry = _controller.NewChat();
+        if (entry is null)
+        {
+            _pane.SetStatus("BGS kept your existing chats (max reached). Try renaming instead.", Ux.MetaBrush);
+            return;
+        }
+        _pane.SetStatus("Started a new chat. Type below to send.", Ux.MetaBrush);
+        RefreshSidebar();
+        OnSelectionChanged(_controller.List.ActiveIndex);
+    }
+
+    private void Select(string chatId)
+    {
+        if (_controller is null || string.IsNullOrEmpty(chatId)) return;
+        if (_controller.List.IsBusy)
+        {
+            _pane.SetStatus("Wait for the current request to finish before switching chats.", Ux.MetaBrush);
+            return;
+        }
+        if (!_controller.TrySelectById(chatId)) return;
+        AssistantConversationEntry? previous = _controller.List.Entries
+            .FirstOrDefault(e => !ReferenceEquals(e, _controller.Active));
+        previous?.ClearPendingApproval();
+        OnSelectionChanged(_controller.List.ActiveIndex);
+    }
+
+    private void RenameCommitted(string chatId, string newTitle)
+    {
+        if (_controller is null) return;
+        int idx = _controller.List.IndexOf(chatId);
+        if (idx < 0) return;
+        _controller.Rename(idx, newTitle);
+        RefreshSidebar();
+        if (_controller.List.ActiveChatId == chatId)
+            _pane.ChatTitle = _controller.List.Active!.Chat.Title;
+    }
+
+    private void Delete(string chatId)
+    {
+        if (_controller is null) return;
+        int idx = _controller.List.IndexOf(chatId);
+        if (idx < 0) return;
+        _controller.Delete(idx);
+        RefreshSidebar();
+        OnSelectionChanged(_controller.List.ActiveIndex);
+    }
+
     private async void Send(string prompt)
     {
-        if (_pane.IsBusy) return;
+        if (_controller is null || _controller.List.IsBusy) return;
+        AssistantConversationEntry? entry = _controller.Active;
+        if (entry is null) return;
+
         _pane.AddUser(prompt);
         _pane.SetBusy(true);
+        _controller.List.IsBusy = true;
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
         try
         {
-            if (!EnsureSession()) return;
-            var reply = await _session!.SendAsync(prompt, _owner.AssistantContextSnapshot,
-                _requestCancellation.Token).ConfigureAwait(true);
-            foreach (var tool in reply.Tools) _pane.AddTool(tool.Name, tool.RequiresApproval);
-            _pane.AddAssistant(reply.Text);
-            _pane.SetApproval(reply.AwaitingApproval);
-            _pane.SetStatus(ReplyStatus(reply),
-                reply.Status == "ok" ? new SolidColorBrush(Ux.Good) : Ux.WarnBrush);
-            if (reply.Status == "signed_out") RefreshAccountText();
+            AssistantReply reply = await _controller
+                .SendAsync(prompt, _owner.AssistantContextSnapshot, _requestCancellation.Token)
+                .ConfigureAwait(true);
+            OnSelectionChanged(_controller.List.ActiveIndex);
+            string statusText = reply.Status switch
+            {
+                "ok" => "Ready.",
+                "cancelled" => "Cancelled.",
+                "busy" => "BGS is processing another request.",
+                "signed_out" => "Sign in with ChatGPT to use the assistant.",
+                _ => "The assistant did not return a reply.",
+            };
+            _pane.SetStatus(statusText,
+                reply.Status == "ok" ? new Avalonia.Media.SolidColorBrush(Ux.Good) : Ux.WarnBrush);
+        }
+        catch (OperationCanceledException)
+        {
+            OnSelectionChanged(_controller.List.ActiveIndex);
+            _pane.SetStatus("Cancelled.", Ux.MetaBrush);
         }
         finally
         {
+            _controller.List.IsBusy = false;
             _pane.SetBusy(false);
             _requestCancellation?.Dispose();
             _requestCancellation = null;
         }
     }
 
-    private static string ReplyStatus(AssistantReply reply) =>
-        reply.Status == "ok" ? "Ready." : reply.Text;
+    private void Cancel() => _requestCancellation?.Cancel();
 
-    private bool EnsureSession()
+    private void Approve()
     {
-        if (_session != null) return true;
-        if (!EnsureCodex()) return false;
-        _tools = _owner.CreateAssistantTools();
-        _session = _owner.CreateCodexSession(_connection!, _tools);
-        return true;
+        AssistantTools? tools = _tools ?? (_tools = _owner.CreateAssistantTools());
+        tools.ApprovePendingClipAnimation();
+        _pane.SetApproval(false);
+        _pane.AddTool("bgs.set_clip_animation", false, "applied");
+        _pane.SetStatus("Applied in the editor; save remains explicit.",
+            new Avalonia.Media.SolidColorBrush(Ux.Good));
+    }
+
+    private void Reject()
+    {
+        AssistantTools? tools = _tools ?? (_tools = _owner.CreateAssistantTools());
+        tools.RejectPendingClipAnimation();
+        _pane.SetApproval(false);
+        _pane.SetStatus("The proposed edit was rejected.", Ux.MetaBrush);
     }
 
     private bool EnsureCodex()
@@ -469,7 +383,6 @@ internal sealed class AssistantUi
                 _pane.SetStatus("Connected. Opening the assistant made no model request.", Ux.MetaBrush);
                 return;
             }
-
             CodexLoginChallenge challenge = await _connection.BeginChatGptLoginAsync().ConfigureAwait(true);
             if (challenge.HasBrowserUrl)
             {
@@ -528,7 +441,8 @@ internal sealed class AssistantUi
         {
             if (_connection is null) return;
             await _connection.SignOutAsync().ConfigureAwait(true);
-            _session?.ClearHistory();
+            foreach (AssistantConversationEntry entry in _controller!.List.Entries)
+                entry.ClearPendingApproval();
             RefreshAccountText();
             _pane.SetStatus("Signed out. Codex owns the remaining credential state.", Ux.MetaBrush);
         }
@@ -544,6 +458,7 @@ internal sealed class AssistantUi
 
     private void RefreshAccountText()
     {
+        if (_controller is null) return;
         if (_connection is null || !_connection.IsConnected)
         {
             _pane.SetAccount("Signed out");
@@ -585,31 +500,7 @@ internal sealed class AssistantUi
         }
     }
 
-    private void Cancel() => _requestCancellation?.Cancel();
-
-    private void NewChat()
-    {
-        _session?.ClearHistory();
-        _tools?.RejectPendingClipAnimation();
-        _pane.Clear();
-    }
-
-    private void Approve()
-    {
-        if (_tools == null) return;
-        var result = _tools.ApprovePendingClipAnimation();
-        _pane.SetApproval(false);
-        _pane.AddTool("bgs.set_clip_animation", false, result.Applied ? "applied" : result.Message);
-        _pane.SetStatus(result.Applied ? "Applied in the editor; save remains explicit." : result.Message,
-            result.Applied ? new SolidColorBrush(Ux.Good) : Ux.WarnBrush);
-    }
-
-    private void Reject()
-    {
-        _tools?.RejectPendingClipAnimation();
-        _pane.SetApproval(false);
-        _pane.SetStatus("The proposed edit was rejected.", Ux.MetaBrush);
-    }
+    private void SetApproval(bool visible) => _pane.SetApproval(visible);
 
     private static double ReadStoredWidth()
     {

@@ -18,6 +18,24 @@ internal static class AssistantLifecycleSmoke
 {
     internal static void Run()
     {
+        string previousFolder = AssistantChatStore.Folder;
+        string tempFolder = Path.Combine(Path.GetTempPath(),
+            "bgs-assistant-smoke-" + Guid.NewGuid().ToString("N"));
+        AssistantChatStore.Folder = tempFolder;
+        try
+        {
+            RunInternal();
+        }
+        finally
+        {
+            AssistantChatStore.Folder = previousFolder;
+            try { if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private static void RunInternal()
+    {
         var window = new MainWindow();
         window.Show();
         try
