@@ -47,6 +47,8 @@ internal sealed partial class AssistantUi
     internal void SignOutForTest() => SignOut();
     internal void RefreshAccountForTest() => RefreshAccountText();
 
+    internal void DeleteChatForTest(string chatId) => Delete(chatId);
+
     internal void SelectChatForTest(string chatId)
     {
         if (_controller is null) return;

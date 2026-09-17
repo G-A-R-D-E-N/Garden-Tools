@@ -54,6 +54,10 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
         try
         {
             await EnsureServersAsync(cancellationToken).ConfigureAwait(false);
+            if (_discovery is not { Ok: true })
+                return new("provider_error",
+                    _discovery?.Error ?? OpencodeServerDiscovery.Failed.Error,
+                    0, Activity(invoked), Pending());
             var arguments = new List<string> { "run", "--format", "json", "--pure", "--dir", _root };
             if (_model.Length > 0)
             {
@@ -153,17 +157,16 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
         return path;
     }
 
-    private IReadOnlyList<string> _otherServers = Array.Empty<string>();
+    private IReadOnlyList<string> _otherServers => _discovery?.Servers ?? Array.Empty<string>();
 
     private async Task EnsureServersAsync(CancellationToken cancellationToken)
     {
-        if (_serversRead) return;
-        _otherServers = await OpencodeCli.ReadConfiguredServersAsync(_cli, cancellationToken)
+        if (_discovery is not null) return;
+        _discovery = await OpencodeCli.ReadConfiguredServersAsync(_cli, cancellationToken)
             .ConfigureAwait(false);
-        _serversRead = true;
     }
 
-    private bool _serversRead;
+    private OpencodeServerDiscovery? _discovery;
 
     private static string FailureText(AssistantCommandResult result) =>
         CodexProtocol.Scrub(result.StandardError.Trim(), 300) is { Length: > 0 } message

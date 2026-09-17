@@ -67,6 +67,34 @@ public sealed class AssistantModelCatalogTests
     }
 
     [Fact]
+    public void DuplicateWireModelsAcrossAgentsHaveDistinctIdentities()
+    {
+        var codex = new CodexModel("shared", "Shared", false, "shared") { Agent = "Codex" };
+        var opencode = new CodexModel("shared", "Shared", false, "shared") { Agent = "opencode" };
+
+        Assert.Equal("Codex::shared", AssistantModelCatalog.Identity(codex));
+        Assert.NotEqual(AssistantModelCatalog.Identity(codex), AssistantModelCatalog.Identity(opencode));
+    }
+
+    [Fact]
+    public void AnIdentityCannotBeSplitByThePreferenceStoreSeparator()
+    {
+        var model = new CodexModel("google/gemini-3.5-flash-lite", "Gemini", false,
+            "google/gemini-3.5-flash-lite") { Agent = "opencode" };
+
+        Assert.DoesNotContain('|', AssistantModelCatalog.Identity(model));
+    }
+
+    [Fact]
+    public void EachBackendMapsToItsOwnAgent()
+    {
+        Assert.Equal("Codex", AssistantModelCatalog.AgentFor(AssistantBackend.Codex));
+        Assert.Equal("opencode", AssistantModelCatalog.AgentFor(AssistantBackend.Opencode));
+        Assert.Equal("Gemini", AssistantModelCatalog.AgentFor(AssistantBackend.Gemini));
+        Assert.Equal("Local", AssistantModelCatalog.AgentFor(AssistantBackend.Local));
+    }
+
+    [Fact]
     public void EveryCatalogStampsItsAgent()
     {
         CodexModel? codex = CodexAccountClient.ParseModelForTest(

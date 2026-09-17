@@ -16,7 +16,7 @@ internal sealed partial class AssistantUi
     private CodexAssistantConnection? _connection;
     private BgsMcpBridge? _bridge;
     private AssistantCli? _cli;
-    private string _apiKey = "";
+    private readonly Dictionary<AssistantBackend, string> _apiKeys = new();
     private AssistantBackend _backend = AssistantBackend.Codex;
     private IReadOnlyList<CodexModel> _providerModels = Array.Empty<CodexModel>();
     private IReadOnlyList<CodexModel> _catalogModels = Array.Empty<CodexModel>();
@@ -63,13 +63,13 @@ internal sealed partial class AssistantUi
         _settingsState.DefaultModelLabel = DefaultModelLabel();
         _settingsState.IsApiProvider = ApiProviders.IsApi(_backend);
         _settingsState.BaseUrl = ApiProviders.IsApi(_backend) ? ApiProviders.BaseUrl(_backend) : "";
-        _settingsState.ApiKeySet = _apiKey.Length > 0;
+        _settingsState.ApiKeySet = KeyFor(_backend).Length > 0;
         _settingsWindow?.Refresh();
     }
 
     private void ChooseApiKey(string key)
     {
-        _apiKey = (key ?? "").Trim();
+        _apiKeys[_backend] = (key ?? "").Trim();
         RefreshProviderStatus();
         RefreshAccountText();
         _ = RefreshProviderModelsAsync();
@@ -101,8 +101,21 @@ internal sealed partial class AssistantUi
     };
 
     internal AssistantBackend Backend => _backend;
-    internal string ApiKeyForTest => _apiKey;
-    internal void SetApiKeyForTest(string key) => _apiKey = key ?? "";
+    internal string ApiKeyForTest => KeyFor(_backend);
+    internal void SetApiKeyForTest(string key) => _apiKeys[_backend] = (key ?? "").Trim();
+
+    private string KeyFor(AssistantBackend backend) =>
+        _apiKeys.TryGetValue(backend, out string? key) ? key : "";
+
+    private string ApiKeyFor(AssistantBackend backend)
+    {
+        string key = KeyFor(backend);
+        if (key.Length == 0) return "";
+        return ApiProviders.TryBaseUrl(backend, out Uri? endpoint, out _) &&
+               ApiProviders.AllowsCredentials(endpoint!)
+            ? key
+            : "";
+    }
 
     private void InitializeProvider()
     {
@@ -143,7 +156,7 @@ internal sealed partial class AssistantUi
             _pane.SetStatus("Choose a model for this provider first.", Ux.WarnBrush);
             return null;
         }
-        IChatClient client = ApiChatClients.Create(endpoint!, _apiKey, model);
+        IChatClient client = ApiChatClients.Create(endpoint!, ApiKeyFor(_backend), model);
         return new AssistantSession(client, tools.Functions, () => tools.HasPendingApproval);
     }
 
@@ -230,7 +243,7 @@ internal sealed partial class AssistantUi
             string apiBaseUrl = ApiProviders.BaseUrl(_backend);
             if (apiBaseUrl.Length == 0)
                 _providerDescription = preset.Name + " \u00B7 set the API base URL";
-            else if (_backend == AssistantBackend.Gemini && _apiKey.Length == 0)
+            else if (_backend == AssistantBackend.Gemini && KeyFor(_backend).Length == 0)
                 _providerDescription = preset.Name + " \u00B7 API key needed for this session";
             else
                 _providerDescription = preset.Name + " \u00B7 " + apiBaseUrl;
@@ -287,7 +300,7 @@ internal sealed partial class AssistantUi
     {
         AssistantBackend requested = _backend;
         ApiModelList result = await ApiModelCatalog
-            .ReadAsync(ApiProviders.BaseUrl(_backend), _apiKey).ConfigureAwait(true);
+            .ReadAsync(ApiProviders.BaseUrl(_backend), ApiKeyFor(_backend)).ConfigureAwait(true);
         if (_backend != requested) return;
         if (result.Failed)
         {
@@ -310,7 +323,8 @@ internal sealed partial class AssistantUi
         {
             _providerModels = ClaudeModelCatalog.Read();
         }
-        _pane.SetModels(CurrentCatalog(), Settings.Get(ModelSettingKey(_backend)), DefaultModelLabel());
+        _pane.SetModels(CurrentCatalog(), AssistantModelCatalog.AgentFor(_backend),
+            Settings.Get(ModelSettingKey(_backend)), DefaultModelLabel());
         RefreshSettingsWindow();
     }
 
@@ -345,9 +359,9 @@ internal sealed partial class AssistantUi
 
             foreach (AssistantBackend api in new[] { AssistantBackend.Gemini, AssistantBackend.Local })
             {
-                if (api == AssistantBackend.Gemini && _apiKey.Length == 0) continue;
+                if (api == AssistantBackend.Gemini && KeyFor(api).Length == 0) continue;
                 ApiModelList list = await ApiModelCatalog
-                    .ReadAsync(ApiProviders.BaseUrl(api), _apiKey).ConfigureAwait(true);
+                    .ReadAsync(ApiProviders.BaseUrl(api), ApiKeyFor(api)).ConfigureAwait(true);
                 if (list.ModelIds.Count > 0) sources.Add(ApiModels(api, list.ModelIds));
             }
 
@@ -522,7 +536,7 @@ internal sealed partial class AssistantUi
             _pane.SetApproval(false);
             if (ApiProviders.IsApi(_backend))
             {
-                _apiKey = "";
+                _apiKeys.Remove(_backend);
                 RefreshAccountText();
                 _pane.SetStatus("Cleared the session API key.", Ux.MetaBrush);
                 return;
@@ -553,7 +567,7 @@ internal sealed partial class AssistantUi
         if (ApiProviders.IsApi(_backend))
         {
             _accountText = _backend == AssistantBackend.Gemini
-                ? (_apiKey.Length > 0
+                ? (KeyFor(_backend).Length > 0
                     ? "Gemini API key set for this session"
                     : "No Gemini API key in this session")
                 : "Local endpoint \u00B7 no account";

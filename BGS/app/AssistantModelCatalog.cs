@@ -15,10 +15,24 @@ public static class AssistantModelCatalog
     public static readonly IReadOnlyList<string> CanonicalAgents =
         new[] { CodexAgent, ClaudeAgent, OpencodeAgent, GeminiAgent, LocalAgent };
 
+    public const string IdentitySeparator = "::";
+
     public static string AgentOf(CodexModel model) =>
         model.Agent.Length > 0
             ? model.Agent
             : model.Group.Length > 0 ? model.Group : "Models";
+
+    public static string Identity(CodexModel model) =>
+        AgentOf(model) + IdentitySeparator + model.WireModel;
+
+    public static string AgentFor(AssistantBackend backend) => backend switch
+    {
+        AssistantBackend.Codex => CodexAgent,
+        AssistantBackend.Claude => ClaudeAgent,
+        AssistantBackend.Opencode => OpencodeAgent,
+        AssistantBackend.Gemini => GeminiAgent,
+        _ => LocalAgent,
+    };
 
     public static IReadOnlyList<CodexModel> Merge(IEnumerable<IReadOnlyList<CodexModel>> sources)
     {

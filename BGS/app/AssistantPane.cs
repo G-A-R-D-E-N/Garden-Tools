@@ -294,12 +294,13 @@ internal sealed class AssistantPane : Border
     internal void InvokeModelSelected(CodexModel model) => ModelSelected?.Invoke(model);
     internal void InvokeModelResetRequested() => ModelResetRequested?.Invoke();
 
-    public void SetModels(IReadOnlyList<CodexModel> models, string selected, string defaultLabel)
+    public void SetModels(IReadOnlyList<CodexModel> models, string agent, string selected, string defaultLabel)
     {
-        _picker.SetModels(models, selected);
+        _picker.SetModels(models, agent, selected);
         _modelButton.IsVisible = models.Count > 0;
         _modelReset.IsVisible = selected.Length > 0;
         CodexModel? chosen = models.FirstOrDefault(model =>
+            string.Equals(AssistantModelCatalog.AgentOf(model), agent, StringComparison.Ordinal) &&
             string.Equals(model.WireModel, selected, StringComparison.Ordinal));
         _modelButton.Content = (chosen?.DisplayName ?? defaultLabel) + " \u25BE";
     }

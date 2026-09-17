@@ -18,6 +18,37 @@ public sealed class ApiProviderTests
     }
 
     [Fact]
+    public void GeminiRefusesAnInsecureBaseUrl()
+    {
+        string? previous = Settings.SettingsPathForTest;
+        Settings.SettingsPathForTest = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "bgs-api-" + Guid.NewGuid().ToString("N") + ".cfg");
+        try
+        {
+            Settings.TrySet(ApiProviders.BaseUrlSetting(AssistantBackend.Gemini),
+                "http://example.test/v1", out _);
+
+            Assert.False(ApiProviders.TryBaseUrl(AssistantBackend.Gemini, out _, out string error));
+            Assert.Contains("https", error, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Settings.SettingsPathForTest = previous;
+        }
+    }
+
+    [Fact]
+    public void CredentialsAreOnlyAllowedOverTlsOrLoopback()
+    {
+        Assert.True(ApiProviders.AllowsCredentials(
+            new Uri("https://generativelanguage.googleapis.com/v1beta/openai/")));
+        Assert.True(ApiProviders.AllowsCredentials(new Uri("http://127.0.0.1:11434/v1")));
+        Assert.True(ApiProviders.AllowsCredentials(new Uri("http://localhost:11434/v1")));
+        Assert.False(ApiProviders.AllowsCredentials(new Uri("http://192.168.1.50:11434/v1")));
+        Assert.False(ApiProviders.AllowsCredentials(new Uri("http://example.test/v1")));
+    }
+
+    [Fact]
     public void EachApiProviderHasItsOwnWireNameAndDefaultEndpoint()
     {
         Assert.Equal("gemini", AssistantCliLocator.CommandName(AssistantBackend.Gemini));

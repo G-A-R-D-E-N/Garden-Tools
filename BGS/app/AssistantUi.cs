@@ -34,7 +34,7 @@ internal sealed partial class AssistantUi
     private AssistantMutationGate? _gate;
     private AssistantConversationController? _controller;
     private CancellationTokenSource? _requestCancellation;
-    private readonly List<string> _queue = new();
+    private readonly List<(string ChatId, string Text)> _queue = new();
     private bool _open;
 
     public AssistantUi(MainWindow owner, Grid root, EditorShell shell)
@@ -81,7 +81,7 @@ internal sealed partial class AssistantUi
         {
             if (index < 0 || index >= _queue.Count) return;
             _queue.RemoveAt(index);
-            _pane.ShowQueue(_queue);
+            _pane.ShowQueue(QueueTexts());
         };
         _pane.CommandSource = () => AssistantCommandCatalog.For(_backend);
         _pane.QuickStartDismissed += DismissQuickStart;
@@ -247,7 +247,7 @@ internal sealed partial class AssistantUi
         RefreshSidebar();
         OnSelectionChanged(_controller.List.ActiveIndex);
         _queue.Clear();
-        _pane.ShowQueue(_queue);
+        _pane.ShowQueue(QueueTexts());
         if (AssistantChatStore.Exists(entry.Chat.Id))
             _pane.SetStatus("Started a new chat. Type below to send.", Ux.MetaBrush);
         else
@@ -264,7 +264,7 @@ internal sealed partial class AssistantUi
         }
         if (!_controller.TrySelectById(chatId)) return;
         _queue.Clear();
-        _pane.ShowQueue(_queue);
+        _pane.ShowQueue(QueueTexts());
         OnSelectionChanged(_controller.List.ActiveIndex);
     }
 
@@ -296,6 +296,8 @@ internal sealed partial class AssistantUi
             _pane.SetStatus("BGS could not delete that chat from disk, so it was kept.", Ux.WarnBrush);
             return;
         }
+        _queue.RemoveAll(entry => string.Equals(entry.ChatId, chatId, StringComparison.Ordinal));
+        _pane.ShowQueue(QueueTexts());
         RefreshSidebar();
         OnSelectionChanged(_controller.List.ActiveIndex);
     }
@@ -348,7 +350,7 @@ internal sealed partial class AssistantUi
             return;
         }
         _queue.Clear();
-        _pane.ShowQueue(_queue);
+        _pane.ShowQueue(QueueTexts());
         OnSelectionChanged(_controller.List.ActiveIndex);
         _pane.SetStatus("Cleared this chat.", Ux.MetaBrush);
     }
@@ -361,25 +363,33 @@ internal sealed partial class AssistantUi
         _pane.SetStatus("BGS commands. Other slash text goes to the provider.", Ux.MetaBrush);
     }
 
+    private List<string> QueueTexts() => _queue.Select(entry => entry.Text).ToList();
+
     private void Enqueue(string text)
     {
+        if (_controller?.List.ActiveChatId is not { Length: > 0 } chatId) return;
         if (_queue.Count >= MaximumQueuedMessages)
         {
             _pane.SetStatus($"The queue holds up to {MaximumQueuedMessages} messages.", Ux.WarnBrush);
             return;
         }
-        _queue.Add(text);
-        _pane.ShowQueue(_queue);
+        _queue.Add((chatId, text));
+        _pane.ShowQueue(QueueTexts());
         _pane.SetStatus("Queued. It sends when the current turn ends.", Ux.MetaBrush);
     }
 
     private void SendNextQueued()
     {
-        if (_queue.Count == 0) return;
-        string next = _queue[0];
-        _queue.RemoveAt(0);
-        _pane.ShowQueue(_queue);
-        SendNow(next);
+        while (_queue.Count > 0)
+        {
+            (string chatId, string text) = _queue[0];
+            _queue.RemoveAt(0);
+            _pane.ShowQueue(QueueTexts());
+            if (_controller is null) return;
+            if (!string.Equals(_controller.List.ActiveChatId, chatId, StringComparison.Ordinal)) continue;
+            SendNow(text);
+            return;
+        }
     }
 
     private async void SendNow(string prompt)

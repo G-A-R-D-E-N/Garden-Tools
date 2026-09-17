@@ -13,6 +13,12 @@ public sealed record OpencodeTurn(
     public bool Failed => Error.Length > 0;
 }
 
+public sealed record OpencodeServerDiscovery(bool Ok, IReadOnlyList<string> Servers, string Error)
+{
+    public static readonly OpencodeServerDiscovery Failed = new(false, Array.Empty<string>(),
+        "The configured opencode MCP servers could not be read, so BGS refused to start the session.");
+}
+
 public static class OpencodeCli
 {
     public const int MaximumAnswerCharacters = 8000;
@@ -54,8 +60,11 @@ public static class OpencodeCli
         return JsonSerializer.Serialize(config, Wire);
     }
 
-    public static IReadOnlyList<string> ParseConfiguredServers(string resolvedConfigJson)
+    public static bool TryParseConfiguredServers(string resolvedConfigJson, out IReadOnlyList<string> servers)
     {
+        servers = Array.Empty<string>();
+        if (string.IsNullOrWhiteSpace(resolvedConfigJson)) return false;
+
         JsonDocument document;
         try
         {
@@ -63,29 +72,36 @@ public static class OpencodeCli
         }
         catch (JsonException)
         {
-            return Array.Empty<string>();
+            return false;
         }
 
         using (document)
         {
-            JsonElement? servers = CodexProtocol.Property(document.RootElement, "mcp");
-            if (servers is not { ValueKind: JsonValueKind.Object } map) return Array.Empty<string>();
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return false;
+            JsonElement? map = CodexProtocol.Property(document.RootElement, "mcp");
+            if (map is null) return true;
+            if (map is not { ValueKind: JsonValueKind.Object } serversMap) return false;
+
             var names = new List<string>();
-            foreach (JsonProperty property in map.EnumerateObject())
+            foreach (JsonProperty property in serversMap.EnumerateObject())
             {
                 string name = CodexProtocol.Scrub(property.Name, 120);
                 if (name.Length > 0) names.Add(name);
             }
-            return names.AsReadOnly();
+            servers = names.AsReadOnly();
+            return true;
         }
     }
 
-    public static async Task<IReadOnlyList<string>> ReadConfiguredServersAsync(
+    public static async Task<OpencodeServerDiscovery> ReadConfiguredServersAsync(
         AssistantCli cli, CancellationToken cancellationToken = default)
     {
         AssistantCommandResult result = await AssistantCommandRunner
             .RunAsync(cli, new[] { "debug", "config" }, Timeout, cancellationToken).ConfigureAwait(false);
-        return result.Succeeded ? ParseConfiguredServers(result.StandardOutput) : Array.Empty<string>();
+        if (!result.Succeeded) return OpencodeServerDiscovery.Failed;
+        return TryParseConfiguredServers(result.StandardOutput, out IReadOnlyList<string> servers)
+            ? new OpencodeServerDiscovery(true, servers, "")
+            : OpencodeServerDiscovery.Failed;
     }
 
     public static OpencodeTurn Parse(string output)

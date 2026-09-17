@@ -47,6 +47,13 @@ public static class ApiProviders
         return For(backend)?.DefaultBaseUrl ?? "";
     }
 
+    public static bool IsLoopback(Uri endpoint) =>
+        endpoint.IsLoopback ||
+        string.Equals(endpoint.Host, "localhost", StringComparison.OrdinalIgnoreCase);
+
+    public static bool AllowsCredentials(Uri endpoint) =>
+        endpoint.Scheme == Uri.UriSchemeHttps || IsLoopback(endpoint);
+
     public static bool TryBaseUrl(AssistantBackend backend, out Uri? uri, out string error)
     {
         uri = null;
@@ -61,6 +68,11 @@ public static class ApiProviders
             (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
         {
             error = "The API base URL must be an absolute http or https address.";
+            return false;
+        }
+        if (backend == AssistantBackend.Gemini && parsed.Scheme != Uri.UriSchemeHttps)
+        {
+            error = "The Gemini API requires an https base URL.";
             return false;
         }
         uri = parsed;

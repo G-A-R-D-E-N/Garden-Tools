@@ -51,17 +51,19 @@ public sealed class OpencodeCliTests
             "\"model\":\"opencode/x\",\"mcp\":{\"ccassist\":{\"type\":\"remote\"}," +
             "\"f4-re-mcp\":{\"type\":\"local\"},\"prisma-mcp\":{\"type\":\"local\"}}}";
 
-        IReadOnlyList<string> servers = OpencodeCli.ParseConfiguredServers(resolved);
+        Assert.True(OpencodeCli.TryParseConfiguredServers(resolved, out IReadOnlyList<string> servers));
 
         Assert.Equal(new[] { "ccassist", "f4-re-mcp", "prisma-mcp" }, servers);
     }
 
     [Fact]
-    public void AConfigurationWithoutServersYieldsNoneRatherThanThrowing()
+    public void AConfigurationWithoutServersIsValidButAnUnreadableOneIsNot()
     {
-        Assert.Empty(OpencodeCli.ParseConfiguredServers("{}"));
-        Assert.Empty(OpencodeCli.ParseConfiguredServers("not json"));
-        Assert.Empty(OpencodeCli.ParseConfiguredServers("{\"mcp\":[]}"));
+        Assert.True(OpencodeCli.TryParseConfiguredServers("{}", out IReadOnlyList<string> none));
+        Assert.Empty(none);
+        Assert.False(OpencodeCli.TryParseConfiguredServers("not json", out _));
+        Assert.False(OpencodeCli.TryParseConfiguredServers("{\"mcp\":[]}", out _));
+        Assert.False(OpencodeCli.TryParseConfiguredServers("", out _));
     }
 
     [Fact]

@@ -209,7 +209,9 @@ public sealed class AssistantSettingsWindow : Window
                 if (item.Wire == _state.SelectedBackend) current = item;
             _provider.SelectedItem = current;
 
-            _modelPicker.SetModels(_state.Models, _state.SelectedModel);
+            AssistantBackend selectedBackend =
+                AssistantCliLocator.Parse(_state.SelectedBackend) ?? AssistantBackend.Codex;
+            _modelPicker.SetModels(_state.Models, AssistantModelCatalog.AgentFor(selectedBackend), _state.SelectedModel);
 
             _providerText.Text = _state.Description;
             _accountText.Text = _state.Account;
