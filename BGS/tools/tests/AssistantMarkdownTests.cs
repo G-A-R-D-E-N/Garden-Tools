@@ -135,6 +135,70 @@ public sealed class AssistantMarkdownTests
     }
 
     [Fact]
+    public void APipeTableBecomesRowsOfCells()
+    {
+        IReadOnlyList<MarkdownBlock> blocks = AssistantMarkdown.Parse(
+            "| Tool | What it does |\n| --- | ---: |\n| `bgs_check_project` | Checks |\n| `bgs_inspect_object` | Inspects |");
+
+        MarkdownBlock table = Assert.Single(blocks);
+        Assert.Equal(MarkdownBlockKind.Table, table.Kind);
+        Assert.Equal(3, table.Rows.Count);
+        Assert.Equal("Tool", table.Rows[0].Cells[0][0].Text);
+        Assert.Equal("What it does", table.Rows[0].Cells[1][0].Text);
+        Assert.True(table.Rows[1].Cells[0][0].Code);
+        Assert.Equal("bgs_inspect_object", table.Rows[2].Cells[0][0].Text);
+    }
+
+    [Fact]
+    public void PipesWithoutASeparatorRowStayOrdinaryText()
+    {
+        IReadOnlyList<MarkdownBlock> blocks = AssistantMarkdown.Parse("a | b\nnot a table");
+
+        Assert.Equal(MarkdownBlockKind.Paragraph, Assert.Single(blocks).Kind);
+    }
+
+    [Fact]
+    public void BlockquoteLinesJoinIntoOneQuote()
+    {
+        IReadOnlyList<MarkdownBlock> blocks = AssistantMarkdown.Parse("> first line\n> second line\n\nafter");
+
+        Assert.Equal(MarkdownBlockKind.Quote, blocks[0].Kind);
+        Assert.Equal("first line second line", blocks[0].Spans[0].Text);
+        Assert.Equal("after", blocks[1].Spans[0].Text);
+    }
+
+    [Fact]
+    public void StrikethroughIsMarkedOnItsSpan()
+    {
+        var spans = AssistantMarkdown.Inline("~~old~~ new");
+
+        Assert.True(spans[0].Strike);
+        Assert.Equal("old", spans[0].Text);
+        Assert.Equal(" new", spans[1].Text);
+    }
+
+    [Fact]
+    public void TaskListItemsGetCheckboxMarkers()
+    {
+        IReadOnlyList<MarkdownBlock> blocks = AssistantMarkdown.Parse("- [x] done\n- [ ] todo");
+
+        Assert.Equal("\u2611", blocks[0].Marker);
+        Assert.Equal("done", blocks[0].Spans[0].Text);
+        Assert.Equal("\u2610", blocks[1].Marker);
+        Assert.Equal("todo", blocks[1].Spans[0].Text);
+    }
+
+    [Fact]
+    public void IndentedListItemsRecordTheirDepth()
+    {
+        IReadOnlyList<MarkdownBlock> blocks = AssistantMarkdown.Parse("- top\n  - child\n    - grandchild");
+
+        Assert.Equal(0, blocks[0].Level);
+        Assert.Equal(1, blocks[1].Level);
+        Assert.Equal(2, blocks[2].Level);
+    }
+
+    [Fact]
     public void UnderscoresInsideIdentifiersAreKeptIntact()
     {
         var spans = AssistantMarkdown.Inline("call bgs_set_clip_animation on the file");

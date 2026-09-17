@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,15 +17,24 @@ public enum MarkdownBlockKind
     Numbered,
     Code,
     Rule,
+    Quote,
+    Table,
 }
 
-public sealed record MarkdownSpan(string Text, bool Bold, bool Italic, bool Code);
+public sealed record MarkdownSpan(string Text, bool Bold, bool Italic, bool Code, bool Strike = false);
+
+public sealed record MarkdownTableRow(IReadOnlyList<IReadOnlyList<MarkdownSpan>> Cells);
 
 public sealed record MarkdownBlock(
-    MarkdownBlockKind Kind, IReadOnlyList<MarkdownSpan> Spans, int Level = 0, string Marker = "");
+    MarkdownBlockKind Kind, IReadOnlyList<MarkdownSpan> Spans, int Level = 0, string Marker = "")
+{
+    public IReadOnlyList<MarkdownTableRow> Rows { get; init; } = Array.Empty<MarkdownTableRow>();
+}
 
 public static class AssistantMarkdown
 {
+    private const int MaximumIndent = 3;
+
     private static readonly FontFamily Mono =
         new("Cascadia Mono,Consolas,Menlo,DejaVu Sans Mono,monospace");
 
@@ -35,6 +45,8 @@ public static class AssistantMarkdown
 
         string[] lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var paragraph = new List<string>();
+        var quote = new List<string>();
+        var table = new List<IReadOnlyList<string>>();
         var code = new List<string>();
         string language = "";
         bool fenced = false;
@@ -42,23 +54,39 @@ public static class AssistantMarkdown
         void FlushParagraph()
         {
             if (paragraph.Count == 0) return;
-            blocks.Add(new MarkdownBlock(MarkdownBlockKind.Paragraph,
-                Inline(string.Join(" ", paragraph))));
+            blocks.Add(new MarkdownBlock(MarkdownBlockKind.Paragraph, Inline(string.Join(" ", paragraph))));
             paragraph.Clear();
         }
 
-        void FlushCode()
+        void FlushQuote()
         {
-            blocks.Add(new MarkdownBlock(MarkdownBlockKind.Code,
-                new[] { new MarkdownSpan(string.Join("\n", code), false, false, true) },
-                0, language));
-            code.Clear();
-            language = "";
+            if (quote.Count == 0) return;
+            blocks.Add(new MarkdownBlock(MarkdownBlockKind.Quote, Inline(string.Join(" ", quote))));
+            quote.Clear();
         }
 
-        foreach (string raw in lines)
+        void FlushTable()
         {
-            string line = raw.TrimEnd();
+            if (table.Count == 0) return;
+            blocks.Add(new MarkdownBlock(MarkdownBlockKind.Table, Array.Empty<MarkdownSpan>())
+            {
+                Rows = table
+                    .Select(row => new MarkdownTableRow(row.Select(Inline).ToArray()))
+                    .ToArray(),
+            });
+            table.Clear();
+        }
+
+        void FlushAll()
+        {
+            FlushParagraph();
+            FlushQuote();
+            FlushTable();
+        }
+
+        for (int index = 0; index < lines.Length; index++)
+        {
+            string line = lines[index].TrimEnd();
             string trimmed = line.TrimStart();
 
             if (fenced)
@@ -66,7 +94,10 @@ public static class AssistantMarkdown
                 if (IsFence(trimmed))
                 {
                     fenced = false;
-                    FlushCode();
+                    blocks.Add(new MarkdownBlock(MarkdownBlockKind.Code,
+                        new[] { new MarkdownSpan(string.Join("\n", code), false, false, true) }, 0, language));
+                    code.Clear();
+                    language = "";
                 }
                 else
                 {
@@ -77,7 +108,7 @@ public static class AssistantMarkdown
 
             if (IsFence(trimmed))
             {
-                FlushParagraph();
+                FlushAll();
                 fenced = true;
                 language = trimmed.Trim('`', '~').Trim();
                 continue;
@@ -85,13 +116,37 @@ public static class AssistantMarkdown
 
             if (trimmed.Length == 0)
             {
+                FlushAll();
+                continue;
+            }
+
+            if (trimmed.StartsWith("|", StringComparison.Ordinal) && index + 1 < lines.Length &&
+                IsTableSeparator(lines[index + 1]))
+            {
                 FlushParagraph();
+                FlushQuote();
+                table.Add(SplitCells(trimmed));
+                index++;
+                while (index + 1 < lines.Length && lines[index + 1].TrimStart().StartsWith("|", StringComparison.Ordinal))
+                {
+                    index++;
+                    table.Add(SplitCells(lines[index].TrimStart()));
+                }
+                FlushTable();
+                continue;
+            }
+
+            if (trimmed.StartsWith(">", StringComparison.Ordinal))
+            {
+                FlushParagraph();
+                FlushTable();
+                quote.Add(trimmed[1..].TrimStart());
                 continue;
             }
 
             if (IsRule(trimmed))
             {
-                FlushParagraph();
+                FlushAll();
                 blocks.Add(new MarkdownBlock(MarkdownBlockKind.Rule, Array.Empty<MarkdownSpan>()));
                 continue;
             }
@@ -99,7 +154,7 @@ public static class AssistantMarkdown
             int level = HeadingLevel(trimmed);
             if (level > 0)
             {
-                FlushParagraph();
+                FlushAll();
                 blocks.Add(new MarkdownBlock(MarkdownBlockKind.Heading,
                     Inline(trimmed[(level + 1)..].Trim()), level));
                 continue;
@@ -108,22 +163,35 @@ public static class AssistantMarkdown
             if (TryBullet(trimmed, out string bullet))
             {
                 FlushParagraph();
-                blocks.Add(new MarkdownBlock(MarkdownBlockKind.Bullet, Inline(bullet), 0, "\u2022"));
+                FlushQuote();
+                FlushTable();
+                (string marker, string body) = TaskMarker(bullet);
+                blocks.Add(new MarkdownBlock(MarkdownBlockKind.Bullet, Inline(body),
+                    IndentLevel(line), marker));
                 continue;
             }
 
-            if (TryNumbered(trimmed, out string marker, out string body))
+            if (TryNumbered(trimmed, out string number, out string item))
             {
                 FlushParagraph();
-                blocks.Add(new MarkdownBlock(MarkdownBlockKind.Numbered, Inline(body), 0, marker));
+                FlushQuote();
+                FlushTable();
+                blocks.Add(new MarkdownBlock(MarkdownBlockKind.Numbered, Inline(item),
+                    IndentLevel(line), number));
                 continue;
             }
 
+            FlushQuote();
+            FlushTable();
             paragraph.Add(trimmed);
         }
 
-        if (fenced) FlushCode();
-        FlushParagraph();
+        if (fenced)
+        {
+            blocks.Add(new MarkdownBlock(MarkdownBlockKind.Code,
+                new[] { new MarkdownSpan(string.Join("\n", code), false, false, true) }, 0, language));
+        }
+        FlushAll();
         return blocks;
     }
 
@@ -149,6 +217,14 @@ public static class AssistantMarkdown
                 Flush();
                 spans.Add(new MarkdownSpan(text[(index + 1)..tick], false, false, true));
                 index = tick + 1;
+                continue;
+            }
+            if (current == '~' && index + 1 < text.Length && text[index + 1] == '~' &&
+                text.IndexOf("~~", index + 2, StringComparison.Ordinal) is int strike && strike > index)
+            {
+                Flush();
+                spans.Add(new MarkdownSpan(text[(index + 2)..strike], false, false, false, true));
+                index = strike + 2;
                 continue;
             }
             if (current == '*' && index + 1 < text.Length && text[index + 1] == '*' &&
@@ -222,11 +298,75 @@ public static class AssistantMarkdown
             Background = Ux.BorderBrush,
             Margin = new Thickness(0, 4, 0, 4),
         },
+        MarkdownBlockKind.Quote => new Border
+        {
+            BorderBrush = Ux.AccentBrush,
+            BorderThickness = new Thickness(3, 0, 0, 0),
+            Padding = new Thickness(10, 0, 0, 0),
+            Child = Paragraph(block.Spans, Ux.MutedBrush, Ux.FontBody, FontWeight.Normal),
+        },
+        MarkdownBlockKind.Table => Table(block),
         MarkdownBlockKind.Heading => Paragraph(block.Spans, Ux.TitleBrush, HeadingSize(block.Level),
             FontWeight.SemiBold),
-        MarkdownBlockKind.Bullet or MarkdownBlockKind.Numbered => Indented(block.Marker, block.Spans),
+        MarkdownBlockKind.Bullet or MarkdownBlockKind.Numbered => Indented(block),
         _ => Paragraph(block.Spans, Ux.MetaBrush, Ux.FontBody, FontWeight.Normal),
     };
+
+    private static Control Indented(MarkdownBlock block)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("20,*"),
+            Margin = new Thickness(block.Level * 14, 0, 0, 0),
+        };
+        var marker = new TextBlock
+        {
+            Text = block.Marker,
+            Foreground = Ux.MutedBrush,
+            FontSize = Ux.FontBody,
+        };
+        var body = Paragraph(block.Spans, Ux.MetaBrush, Ux.FontBody, FontWeight.Normal);
+        Grid.SetColumn(marker, 0);
+        Grid.SetColumn(body, 1);
+        grid.Children.Add(marker);
+        grid.Children.Add(body);
+        return grid;
+    }
+
+    private static Control Table(MarkdownBlock block)
+    {
+        int columns = block.Rows.Count == 0 ? 0 : block.Rows.Max(row => row.Cells.Count);
+        if (columns == 0) return new TextBlock { Text = "" };
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", columns))),
+        };
+        for (int row = 0; row < block.Rows.Count; row++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            IReadOnlyList<IReadOnlyList<MarkdownSpan>> cells = block.Rows[row].Cells;
+            bool header = row == 0;
+            for (int column = 0; column < columns; column++)
+            {
+                Control text = column < cells.Count
+                    ? Paragraph(cells[column], header ? Ux.TitleBrush : Ux.MetaBrush, Ux.FontSmall,
+                        header ? FontWeight.SemiBold : FontWeight.Normal)
+                    : new TextBlock();
+                var host = new Border
+                {
+                    Padding = new Thickness(6, 3, 6, 3),
+                    BorderBrush = Ux.BorderBrush,
+                    BorderThickness = new Thickness(0, 0, 0, header ? 1 : 0),
+                    Child = text,
+                };
+                Grid.SetRow(host, row);
+                Grid.SetColumn(host, column);
+                grid.Children.Add(host);
+            }
+        }
+        return grid;
+    }
 
     private static Control Paragraph(
         IReadOnlyList<MarkdownSpan> spans, IBrush brush, double size, FontWeight weight)
@@ -238,51 +378,64 @@ public static class AssistantMarkdown
             FontWeight = weight,
             TextWrapping = TextWrapping.Wrap,
         };
-        AddRuns(text.Inlines!, spans);
-        return text;
-    }
-
-    private static Control Indented(string marker, IReadOnlyList<MarkdownSpan> spans)
-    {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("18,*") };
-        var bullet = new TextBlock
-        {
-            Text = marker,
-            Foreground = Ux.MutedBrush,
-            FontSize = Ux.FontBody,
-            Margin = new Thickness(0, 0, 6, 0),
-        };
-        var body = Paragraph(spans, Ux.MetaBrush, Ux.FontBody, FontWeight.Normal);
-        Grid.SetColumn(bullet, 0);
-        Grid.SetColumn(body, 1);
-        grid.Children.Add(bullet);
-        grid.Children.Add(body);
-        return grid;
-    }
-
-    private static void AddRuns(InlineCollection collection, IReadOnlyList<MarkdownSpan> spans)
-    {
         foreach (MarkdownSpan span in spans)
         {
             var run = new Run(span.Text);
             if (span.Bold) run.FontWeight = FontWeight.SemiBold;
             if (span.Italic) run.FontStyle = FontStyle.Italic;
+            if (span.Strike) run.TextDecorations = TextDecorations.Strikethrough;
             if (span.Code)
             {
                 run.FontFamily = Mono;
                 run.Foreground = Ux.CodeBrush;
             }
-            collection.Add(run);
+            text.Inlines!.Add(run);
         }
+        return text;
     }
 
-    private static double HeadingSize(int level) => level switch
+    internal static IReadOnlyList<string> SplitCells(string line)
     {
-        1 => 17,
-        2 => 15,
-        3 => 14,
-        _ => 13,
-    };
+        string trimmed = line.Trim();
+        if (trimmed.StartsWith("|", StringComparison.Ordinal)) trimmed = trimmed[1..];
+        if (trimmed.EndsWith("|", StringComparison.Ordinal)) trimmed = trimmed[..^1];
+        return trimmed.Split('|').Select(cell => cell.Trim()).ToArray();
+    }
+
+    internal static bool IsTableSeparator(string line)
+    {
+        string trimmed = line.Trim().Trim('|').Trim();
+        if (trimmed.Length == 0) return false;
+        foreach (string cell in trimmed.Split('|'))
+        {
+            string value = cell.Trim();
+            if (value.Length == 0) return false;
+            string dashes = value.Trim(':');
+            if (dashes.Length == 0) return false;
+            foreach (char character in dashes)
+                if (character != '-') return false;
+        }
+        return true;
+    }
+
+    private static (string Marker, string Body) TaskMarker(string body)
+    {
+        if (body.StartsWith("[ ] ", StringComparison.Ordinal)) return ("\u2610", body[4..]);
+        if (body.StartsWith("[x] ", StringComparison.OrdinalIgnoreCase)) return ("\u2611", body[4..]);
+        return ("\u2022", body);
+    }
+
+    private static int IndentLevel(string line)
+    {
+        int spaces = 0;
+        foreach (char character in line)
+        {
+            if (character == ' ') spaces++;
+            else if (character == '\t') spaces += 2;
+            else break;
+        }
+        return Math.Min(MaximumIndent, spaces / 2);
+    }
 
     private static bool IsEmphasisUnderscore(string text, int index)
     {
@@ -293,7 +446,16 @@ public static class AssistantMarkdown
         return close == text.Length - 1 || !char.IsLetterOrDigit(text[close + 1]);
     }
 
-    private static bool IsFence(string line) =>        line.StartsWith("```", StringComparison.Ordinal) || line.StartsWith("~~~", StringComparison.Ordinal);
+    private static double HeadingSize(int level) => level switch
+    {
+        1 => 17,
+        2 => 15,
+        3 => 14,
+        _ => 13,
+    };
+
+    private static bool IsFence(string line) =>
+        line.StartsWith("```", StringComparison.Ordinal) || line.StartsWith("~~~", StringComparison.Ordinal);
 
     private static bool IsRule(string line)
     {
