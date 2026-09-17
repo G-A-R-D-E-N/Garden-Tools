@@ -12,7 +12,8 @@ public sealed record AssistantReply(
     string Text,
     int Iterations,
     IReadOnlyList<AssistantToolActivity> Tools,
-    bool AwaitingApproval);
+    bool AwaitingApproval,
+    string PersistenceNotice = "");
 
 public interface IAssistantSession : IDisposable
 {
@@ -20,4 +21,7 @@ public interface IAssistantSession : IDisposable
         string prompt, AssistantContext context, CancellationToken cancellationToken = default);
 
     void ClearHistory();
+
+    Task<bool> PrepareForSendAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
 }

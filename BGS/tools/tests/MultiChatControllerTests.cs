@@ -188,27 +188,54 @@ public sealed class MultiChatControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteDuringActiveRequestCannotResurrectHistory()
+    public async Task CompletionDuringDeletionCannotResurrectHistory()
     {
         var session = new BlockingSession();
         using var controller = new AssistantConversationController(_ => session);
         AssistantConversationEntry entry = controller.Active!;
+        string path = AssistantChatStore.FilePathFor(entry.Chat.Id);
+        Assert.True(File.Exists(path));
 
         Task<AssistantReply> pending = controller.SendAsync("slow", CodexSessionFixture.Context());
         await session.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        AssistantConversationEntry? after = controller.Delete(controller.List.ActiveIndex);
-        session.Complete();
-        AssistantReply reply = await pending;
+        var deletedOnDisk = new ManualResetEventSlim(false);
+        var completionFinished = new ManualResetEventSlim(false);
+        AssistantChatStore.DeleteForTest = _ =>
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch (IOException) { return false; }
+            deletedOnDisk.Set();
+            completionFinished.Wait(TimeSpan.FromSeconds(10));
+            return !File.Exists(path);
+        };
+        try
+        {
+            Task<AssistantConversationEntry?> deleting =
+                Task.Run(() => controller.Delete(controller.List.ActiveIndex));
+            Assert.True(deletedOnDisk.Wait(TimeSpan.FromSeconds(10)),
+                "delete never reached the disk step");
 
-        Assert.NotNull(after);
-        Assert.Equal("ok", reply.Status);
-        Assert.False(AssistantChatStore.Exists(entry.Chat.Id),
-            "a late completion must not recreate a deleted chat");
+            session.Complete();
+            AssistantReply reply = await pending;
+            Assert.Equal("ok", reply.Status);
+
+            completionFinished.Set();
+            AssistantConversationEntry? after = await deleting;
+
+            Assert.NotNull(after);
+            Assert.False(File.Exists(path),
+                "a completion that races deletion must not recreate the chat file");
+        }
+        finally
+        {
+            completionFinished.Set();
+            AssistantChatStore.DeleteForTest = null;
+        }
     }
 
     [Fact]
-    public void FailedDiskDeleteKeepsTheChatVisible()
+    public async Task FailedDiskDeleteKeepsTheChatVisibleAndUsable()
     {
         using var controller = new AssistantConversationController(MakeFactory());
         AssistantConversationEntry entry = controller.Active!;
@@ -227,6 +254,11 @@ public sealed class MultiChatControllerTests : IDisposable
         {
             AssistantChatStore.DeleteForTest = null;
         }
+
+        AssistantReply reply = await controller.SendAsync("after failed delete", CodexSessionFixture.Context())
+            .ConfigureAwait(false);
+        Assert.Equal("ok", reply.Status);
+        Assert.True(AssistantChatStore.Exists(entry.Chat.Id));
     }
 
     [Fact]
@@ -442,6 +474,175 @@ public sealed class MultiChatControllerTests : IDisposable
         entry = controller.NewChat()!;
         Assert.False(entry.ApprovalActive,
             "switching/NewChat must not carry approval state between conversations");
+    }
+
+    [Fact]
+    public async Task SignOutEndsEverySessionAndUnregistersItsThread()
+    {
+        using var connection = new FakeConnection();
+        var created = new List<CodexAssistantSession>();
+        Func<string, IAssistantSession?> factory = _ =>
+        {
+            var session = new CodexAssistantSession(connection.Connection,
+                new[] { Microsoft.Extensions.AI.AIFunctionFactory.Create(
+                    () => "ok", "bgs.inspect_behavior", "test") });
+            created.Add(session);
+            return session;
+        };
+        using var controller = new AssistantConversationController(factory);
+        AssistantConversationEntry a = controller.Active!;
+        await controller.SendAsync("first", CodexSessionFixture.Context()).ConfigureAwait(false);
+        AssistantConversationEntry b = controller.NewChat()!;
+        await controller.SendAsync("second", CodexSessionFixture.Context()).ConfigureAwait(false);
+
+        Assert.Equal(2, created.Count);
+        Assert.Equal("2", connection.Connection.Client.RegisteredToolThreadCount);
+        string threadBefore = connection.Server.LastThreadId;
+
+        controller.EndAllSessions();
+
+        Assert.Equal("0", connection.Connection.Client.RegisteredToolThreadCount);
+        Assert.Null(a.Session);
+        Assert.Null(b.Session);
+        Assert.False(a.SessionPrimed);
+        Assert.False(b.SessionPrimed);
+        Assert.True(AssistantChatStore.Exists(a.Chat.Id));
+        Assert.True(AssistantChatStore.Exists(b.Chat.Id));
+        foreach (CodexAssistantSession session in created)
+            await Assert.ThrowsAsync<ObjectDisposedException>(
+                () => session.SendAsync("after sign out", CodexSessionFixture.Context()));
+
+        Assert.True(controller.TrySelectById(a.Chat.Id));
+        await controller.SendAsync("third", CodexSessionFixture.Context()).ConfigureAwait(false);
+
+        Assert.Equal(3, created.Count);
+        Assert.NotEqual(threadBefore, connection.Server.LastThreadId);
+        Assert.Contains("# BGS chat history", TurnInput(connection.Server), StringComparison.Ordinal);
+        Assert.Equal("1", connection.Connection.Client.RegisteredToolThreadCount);
+
+        await controller.SendAsync("fourth", CodexSessionFixture.Context()).ConfigureAwait(false);
+        Assert.DoesNotContain("# BGS chat history", TurnInput(connection.Server), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AppServerReplacementNeverReusesTheOldThreadIdAndReplaysOnce()
+    {
+        using var connection = new FakeConnection();
+        var session = new CodexAssistantSession(connection.Connection,
+            new[] { Microsoft.Extensions.AI.AIFunctionFactory.Create(
+                () => "ok", "bgs.inspect_behavior", "test") });
+        using var controller = new AssistantConversationController(_ => session);
+
+        await controller.SendAsync("one", CodexSessionFixture.Context()).ConfigureAwait(false);
+        await controller.SendAsync("two", CodexSessionFixture.Context()).ConfigureAwait(false);
+        string firstThread = connection.Server.LastThreadId;
+        Assert.False(string.IsNullOrEmpty(firstThread));
+
+        connection.Server.Exit();
+
+        await controller.SendAsync("three", CodexSessionFixture.Context()).ConfigureAwait(false);
+        string secondThread = connection.Server.LastThreadId;
+        Assert.NotEqual(firstThread, secondThread);
+        Assert.Contains("# BGS chat history", TurnInput(connection.Server), StringComparison.Ordinal);
+
+        await controller.SendAsync("fourth", CodexSessionFixture.Context()).ConfigureAwait(false);
+        Assert.Equal(secondThread, connection.Server.LastThreadId);
+        Assert.DoesNotContain("# BGS chat history", TurnInput(connection.Server), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveFailureIsReportedAndTheChatStaysUsable()
+    {
+        using var controller = new AssistantConversationController(MakeFactory());
+        AssistantConversationEntry entry = controller.Active!;
+        AssistantChatStore.SaveFailureForTest = () => throw new IOException("simulated disk failure");
+        try
+        {
+            AssistantReply reply = await controller.SendAsync("hello", CodexSessionFixture.Context())
+                .ConfigureAwait(false);
+
+            Assert.Equal("ok", reply.Status);
+            Assert.Equal(AssistantConversationController.NotSavedMessage, reply.PersistenceNotice);
+            Assert.Contains(entry.Chat.Messages, m => m.Role == AssistantChatRole.Assistant);
+            AssistantChat? onDisk = AssistantChatStore.Load(entry.Chat.Id);
+            Assert.NotNull(onDisk);
+            Assert.DoesNotContain(onDisk!.Messages, m => m.Role == AssistantChatRole.Assistant);
+        }
+        finally
+        {
+            AssistantChatStore.SaveFailureForTest = null;
+        }
+
+        AssistantReply next = await controller.SendAsync("again", CodexSessionFixture.Context())
+            .ConfigureAwait(false);
+        Assert.Equal("", next.PersistenceNotice);
+        Assert.Contains(AssistantChatStore.Load(entry.Chat.Id)!.Messages,
+            m => m.Role == AssistantChatRole.Assistant);
+    }
+
+    [Fact]
+    public async Task CredentialPromptIsRedactedAndNeverPersisted()
+    {
+        using var controller = new AssistantConversationController(MakeFactory());
+        AssistantConversationEntry entry = controller.Active!;
+        const string secret = "sk-abcdefghijklmnopqrstuv";
+
+        AssistantReply reply = await controller.SendAsync(
+            "here is my key " + secret, CodexSessionFixture.Context()).ConfigureAwait(false);
+
+        Assert.Equal("ok", reply.Status);
+        Assert.Equal(AssistantConversationController.RedactedMessage, reply.PersistenceNotice);
+        string text = File.ReadAllText(AssistantChatStore.FilePathFor(entry.Chat.Id));
+        Assert.DoesNotContain(secret, text, StringComparison.Ordinal);
+        Assert.Contains("redacted", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RenameFailureIsNonfatal()
+    {
+        using var controller = new AssistantConversationController(MakeFactory());
+        AssistantConversationEntry entry = controller.Active!;
+        string original = entry.Chat.Title;
+        AssistantChatStore.SaveFailureForTest = () => throw new IOException("simulated disk failure");
+        try
+        {
+            Assert.False(controller.Rename(controller.List.ActiveIndex, "Renamed"));
+        }
+        finally
+        {
+            AssistantChatStore.SaveFailureForTest = null;
+        }
+        Assert.Equal(original, entry.Chat.Title);
+    }
+
+    [Fact]
+    public void NewChatFailureFallsBackToAnInMemoryChat()
+    {
+        using var controller = new AssistantConversationController(MakeFactory());
+        int before = controller.List.Count;
+        AssistantChatStore.SaveFailureForTest = () => throw new IOException("simulated disk failure");
+        try
+        {
+            AssistantConversationEntry? created = controller.NewChat();
+
+            Assert.NotNull(created);
+            Assert.Equal(before + 1, controller.List.Count);
+            Assert.False(AssistantChatStore.Exists(created!.Chat.Id));
+        }
+        finally
+        {
+            AssistantChatStore.SaveFailureForTest = null;
+        }
+    }
+
+    private static string TurnInput(CodexTestServer server)
+    {
+        if (server.LastTurnStartParams is not { } parameters) return "";
+        if (!parameters.TryGetProperty("input", out System.Text.Json.JsonElement input) ||
+            input.ValueKind != System.Text.Json.JsonValueKind.Array)
+            return "";
+        return string.Join("\n", input.EnumerateArray().Select(element =>
+            element.TryGetProperty("text", out System.Text.Json.JsonElement text) ? text.GetString() : null));
     }
 
     private static Func<string, IAssistantSession?> MakeFactory() =>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace BehaviourStudio.App;
@@ -17,6 +18,7 @@ public sealed class AssistantConversationEntry : IDisposable
     public Func<bool>? HasPendingApproval { get; internal set; }
     internal bool SessionPrimed { get; set; }
     internal bool Deleted { get; set; }
+    internal object SaveGate { get; } = new();
 
     public void ClearPendingApproval() => PendingApproval = false;
     public void MarkPendingApproval() => PendingApproval = true;
@@ -105,8 +107,14 @@ public sealed class AssistantConversationList : IDisposable
     {
         if (IsBusy) return null;
         if (Count >= AssistantChatStore.MaxConversations) return null;
-        var chat = AssistantChatStore.CreateEmpty();
-        AssistantChatStore.Save(chat);
+        AssistantChat chat = AssistantChatStore.CreateEmpty();
+        try
+        {
+            chat = AssistantChatStore.Save(chat);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+        }
         _entries.Add(new AssistantConversationEntry(chat));
         StructureChanged?.Invoke();
         _activeIndex = _entries.Count - 1;
@@ -119,19 +127,57 @@ public sealed class AssistantConversationList : IDisposable
         if (index < 0 || index >= _entries.Count) return false;
         var entry = _entries[index];
         AssistantChat renamed = entry.Chat.WithTitle(newTitle);
-        AssistantChatStore.Save(renamed);
+        try
+        {
+            renamed = AssistantChatStore.Save(renamed);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return false;
+        }
         entry.Chat = renamed;
         StructureChanged?.Invoke();
         return true;
+    }
+
+    public void ClearSessions()
+    {
+        foreach (AssistantConversationEntry entry in _entries)
+        {
+            entry.ClearPendingApproval();
+            entry.Session?.Dispose();
+            entry.Session = null;
+            entry.SessionPrimed = false;
+        }
     }
 
     public AssistantConversationEntry? Delete(int index)
     {
         if (index < 0 || index >= _entries.Count) return null;
         var entry = _entries[index];
-        if (!AssistantChatStore.Delete(entry.Chat.Id)) return null;
-        entry.Deleted = true;
-        entry.ClearPendingApproval();
+
+        lock (entry.SaveGate)
+        {
+            entry.Deleted = true;
+            entry.ClearPendingApproval();
+        }
+
+        bool removed;
+        try
+        {
+            removed = AssistantChatStore.Delete(entry.Chat.Id);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            removed = false;
+        }
+
+        if (!removed)
+        {
+            entry.Deleted = false;
+            return null;
+        }
+
         entry.Dispose();
         _entries.RemoveAt(index);
         StructureChanged?.Invoke();
@@ -141,8 +187,14 @@ public sealed class AssistantConversationList : IDisposable
 
         if (_entries.Count == 0)
         {
-            var fresh = AssistantChatStore.CreateEmpty();
-            AssistantChatStore.Save(fresh);
+            AssistantChat fresh = AssistantChatStore.CreateEmpty();
+            try
+            {
+                fresh = AssistantChatStore.Save(fresh);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+            }
             _entries.Add(new AssistantConversationEntry(fresh));
             _activeIndex = 0;
             SelectionChanged?.Invoke(_activeIndex);

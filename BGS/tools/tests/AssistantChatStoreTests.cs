@@ -264,7 +264,7 @@ public sealed class AssistantChatStoreTests : IDisposable
     }
 
     [Fact]
-    public void SaveRefusesForbiddenCredentialContent()
+    public void SaveRedactsBearerAuthorizationBeforePersisting()
     {
         AssistantChat chat = AssistantChatStore.CreateEmpty();
         chat = chat.WithMessages(new[]
@@ -272,31 +272,63 @@ public sealed class AssistantChatStoreTests : IDisposable
             new AssistantChatMessage(AssistantChatRole.User, "authorization: bearer abcdefghijklmnop", DateTime.UtcNow),
         }, DateTime.UtcNow);
 
-        Assert.Throws<InvalidOperationException>(() => AssistantChatStore.Save(chat));
+        AssistantChat saved = AssistantChatStore.Save(chat);
+        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
+
+        Assert.Contains(AssistantChatStore.RedactedPlaceholder, saved.Messages[0].Text);
+        Assert.NotNull(loaded);
+        Assert.DoesNotContain("abcdefghijklmnop", loaded!.Messages[0].Text);
+        Assert.Contains(AssistantChatStore.RedactedPlaceholder, loaded.Messages[0].Text);
     }
 
     [Fact]
-    public void SaveRefusesRefreshToken()
+    public void SaveRedactsRefreshTokenBeforePersisting()
+    {
+        const string secret = "0123456789abcdef0123456789abcdef";
+        AssistantChat chat = AssistantChatStore.CreateEmpty();
+        chat = chat.WithMessages(new[]
+        {
+            new AssistantChatMessage(AssistantChatRole.User, "refresh_token=" + secret, DateTime.UtcNow),
+        }, DateTime.UtcNow);
+
+        AssistantChatStore.Save(chat);
+        string text = File.ReadAllText(Path.Combine(_folder, chat.Id + ".json"));
+        Assert.DoesNotContain(secret, text);
+        Assert.Contains(AssistantChatStore.RedactedPlaceholder, text);
+    }
+
+    [Fact]
+    public void SaveRedactsApiKeyShapeBeforePersisting()
+    {
+        const string secret = "sk-projects-abcdefghijklmnop";
+        AssistantChat chat = AssistantChatStore.CreateEmpty();
+        chat = chat.WithMessages(new[]
+        {
+            new AssistantChatMessage(AssistantChatRole.User, secret, DateTime.UtcNow),
+        }, DateTime.UtcNow);
+
+        AssistantChatStore.Save(chat);
+        string text = File.ReadAllText(Path.Combine(_folder, chat.Id + ".json"));
+        Assert.DoesNotContain(secret, text);
+        Assert.Contains(AssistantChatStore.RedactedPlaceholder, text);
+    }
+
+    [Fact]
+    public void RedactKeepsUnrelatedMessagesIntact()
     {
         AssistantChat chat = AssistantChatStore.CreateEmpty();
         chat = chat.WithMessages(new[]
         {
-            new AssistantChatMessage(AssistantChatRole.User, "refresh_token=0123456789abcdef0123456789abcdef", DateTime.UtcNow),
+            new AssistantChatMessage(AssistantChatRole.User, "my token is sk-abcdefghijklmnop and nothing else", DateTime.UtcNow),
+            new AssistantChatMessage(AssistantChatRole.Assistant, "noted, keep it private", DateTime.UtcNow),
         }, DateTime.UtcNow);
 
-        Assert.Throws<InvalidOperationException>(() => AssistantChatStore.Save(chat));
-    }
+        AssistantChat redacted = AssistantChatStore.Redact(chat);
 
-    [Fact]
-    public void SaveRefusesApiKeyShape()
-    {
-        AssistantChat chat = AssistantChatStore.CreateEmpty();
-        chat = chat.WithMessages(new[]
-        {
-            new AssistantChatMessage(AssistantChatRole.User, "sk-projects-something", DateTime.UtcNow),
-        }, DateTime.UtcNow);
-
-        Assert.Throws<InvalidOperationException>(() => AssistantChatStore.Save(chat));
+        Assert.Equal(2, redacted.Messages.Count);
+        Assert.StartsWith("my token is", redacted.Messages[0].Text, StringComparison.Ordinal);
+        Assert.EndsWith("and nothing else", redacted.Messages[0].Text, StringComparison.Ordinal);
+        Assert.Equal("noted, keep it private", redacted.Messages[1].Text);
     }
 
     [Fact]

@@ -42,6 +42,10 @@ public static class AssistantChatStore
 
     internal static Func<string, bool>? DeleteForTest { get; set; }
 
+    internal static Action? SaveFailureForTest { get; set; }
+
+    public const string RedactedPlaceholder = "[redacted]";
+
     public static string CreateId()
     {
         Span<byte> bytes = stackalloc byte[8];
@@ -76,20 +80,21 @@ public static class AssistantChatStore
     public static AssistantChat? Deserialize(string text) =>
         new AssistantChatSerializer().Deserialize(text);
 
-    public static AssistantChat? Save(AssistantChat chat)
+    public static AssistantChat Save(AssistantChat chat)
     {
         if (chat is null) throw new ArgumentNullException(nameof(chat));
         if (!IsValidId(chat.Id))
             throw new ArgumentException("The chat id is not a valid storage key.", nameof(chat));
         if (Encoding.UTF8.GetByteCount(chat.Title) > ChatText.MaxTitleLength * 4)
             throw new ArgumentException("The chat title is too long.", nameof(chat));
-        AssistantChat trimmed = Trim(chat);
+        AssistantChat trimmed = Redact(Trim(chat));
         string text = Serialize(trimmed);
         byte[] bytes = Encoding.UTF8.GetBytes(text);
         if (bytes.Length > MaxChatBytes)
             throw new InvalidOperationException("The chat is too large to persist.");
 
         ScanForForbiddenCredentials(text);
+        SaveFailureForTest?.Invoke();
 
         EnsureFolder();
         string finalPath = FilePathFor(chat.Id);
@@ -226,6 +231,42 @@ public static class AssistantChatStore
 
     public static bool ContainsForbiddenCredential(string content) =>
         ForbiddenCredentialPatterns.Any(pattern => pattern.IsMatch(content));
+
+    public static AssistantChat Redact(AssistantChat chat)
+    {
+        bool changed = false;
+
+        string title = chat.Title.Length == 0 ? chat.Title : RedactText(chat.Title);
+        if (!string.Equals(title, chat.Title, StringComparison.Ordinal)) changed = true;
+
+        var messages = new List<AssistantChatMessage>(chat.Messages.Count);
+        foreach (AssistantChatMessage message in chat.Messages)
+        {
+            string redacted = message.Text.Length == 0 ? message.Text : RedactText(message.Text);
+            if (!string.Equals(redacted, message.Text, StringComparison.Ordinal))
+            {
+                changed = true;
+                messages.Add(message with { Text = redacted });
+            }
+            else
+            {
+                messages.Add(message);
+            }
+        }
+
+        return changed
+            ? new AssistantChat(chat.Id, title, chat.CreatedUtc, chat.UpdatedUtc, messages)
+            : chat;
+    }
+
+    public static string RedactText(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text ?? "";
+        string redacted = text;
+        foreach (Regex pattern in ForbiddenCredentialPatterns)
+            redacted = pattern.Replace(redacted, RedactedPlaceholder);
+        return ChatText.Cap(redacted);
+    }
 
     internal static void ScanForForbiddenCredentials(string content)
     {

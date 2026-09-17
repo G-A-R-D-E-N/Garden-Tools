@@ -24,8 +24,14 @@ public sealed class AssistantConversationController : IDisposable
 
         if (List.Count == 0)
         {
-            var empty = AssistantChatStore.CreateEmpty();
-            AssistantChatStore.Save(empty);
+            AssistantChat empty = AssistantChatStore.CreateEmpty();
+            try
+            {
+                empty = AssistantChatStore.Save(empty);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+            }
             List.Add(empty);
             activeChatId = empty.Id;
         }
@@ -84,6 +90,12 @@ public sealed class AssistantConversationController : IDisposable
         Mutations?.Reject();
     }
 
+    public void EndAllSessions()
+    {
+        RejectPendingMutations();
+        List.ClearSessions();
+    }
+
     public void RejectPending(AssistantConversationEntry? entry)
     {
         entry?.ClearPendingApproval();
@@ -114,10 +126,6 @@ public sealed class AssistantConversationController : IDisposable
                 $"The message is too long. BGS accepts up to {AssistantChatStore.MaxPromptCharacters} characters.",
                 0, Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
 
-        string outgoing = entry.SessionPrimed ? trimmed : ComposeReplay(entry.Chat, trimmed);
-        DateTime stamp = DateTime.UtcNow;
-        AssistantChat updated = AppendUserMessage(entry.Chat, trimmed, stamp);
-
         IAssistantSession? session = entry.Session;
         if (session is null)
         {
@@ -128,6 +136,24 @@ public sealed class AssistantConversationController : IDisposable
             entry.Session = session;
             entry.SessionPrimed = false;
         }
+
+        bool replay = !entry.SessionPrimed;
+        try
+        {
+            replay = await session.PrepareForSendAsync(cancellationToken).ConfigureAwait(false) || replay;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new("cancelled", "The request was cancelled.", 0,
+                Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+        }
+
+        string outgoing = replay ? ComposeReplay(entry.Chat, trimmed) : trimmed;
+        DateTime stamp = DateTime.UtcNow;
+        AssistantChat updated = AppendUserMessage(entry.Chat, trimmed, stamp);
 
         AssistantReply reply;
         try
@@ -142,37 +168,62 @@ public sealed class AssistantConversationController : IDisposable
                 Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
         }
 
-        if (entry.Deleted) return reply;
-
-        entry.SessionPrimed = ThreadEngaged(reply);
-
-        DateTime replyStamp = DateTime.UtcNow;
-        updated = AssistantChatStore.AppendMessage(updated,
-            new AssistantChatMessage(AssistantChatRole.Assistant,
-                ChatText.Cap(reply.Text), replyStamp));
-        foreach (AssistantToolActivity tool in reply.Tools)
-        {
-            string status = tool.RequiresApproval ? "pending approval" : "ran";
-            updated = AssistantChatStore.AppendMessage(updated,
-                new AssistantChatMessage(AssistantChatRole.Tool,
-                    $"{tool.Name} ({status})", replyStamp,
-                    ToolName: tool.Name, ToolStatus: status, ToolRequiresApproval: tool.RequiresApproval));
-        }
-
-        if (reply.AwaitingApproval)
-        {
-            entry.MarkPendingApproval();
-            Mutations?.MarkOwner(entry.Chat.Id);
-        }
-        else
-        {
-            entry.ClearPendingApproval();
-        }
-
-        entry.Chat = updated;
-        AssistantChatStore.Save(updated);
-        return reply;
+        return Persist(entry, reply, updated);
     }
+
+    private AssistantReply Persist(AssistantConversationEntry entry, AssistantReply reply, AssistantChat updated)
+    {
+        lock (entry.SaveGate)
+        {
+            if (entry.Deleted) return reply;
+
+            entry.SessionPrimed = ThreadEngaged(reply);
+
+            DateTime replyStamp = DateTime.UtcNow;
+            updated = AssistantChatStore.AppendMessage(updated,
+                new AssistantChatMessage(AssistantChatRole.Assistant,
+                    ChatText.Cap(reply.Text), replyStamp));
+            foreach (AssistantToolActivity tool in reply.Tools)
+            {
+                string status = tool.RequiresApproval ? "pending approval" : "ran";
+                updated = AssistantChatStore.AppendMessage(updated,
+                    new AssistantChatMessage(AssistantChatRole.Tool,
+                        $"{tool.Name} ({status})", replyStamp,
+                        ToolName: tool.Name, ToolStatus: status, ToolRequiresApproval: tool.RequiresApproval));
+            }
+
+            if (reply.AwaitingApproval)
+            {
+                entry.MarkPendingApproval();
+                Mutations?.MarkOwner(entry.Chat.Id);
+            }
+            else
+            {
+                entry.ClearPendingApproval();
+            }
+
+            AssistantChat sanitized = AssistantChatStore.Redact(updated);
+            bool redacted = !ReferenceEquals(sanitized, updated);
+            entry.Chat = sanitized;
+
+            try
+            {
+                AssistantChatStore.Save(sanitized);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                return reply with { PersistenceNotice = NotSavedMessage };
+            }
+
+            return redacted ? reply with { PersistenceNotice = RedactedMessage } : reply;
+        }
+    }
+
+    internal const string NotSavedMessage =
+        "The assistant replied, but BGS could not save this chat to disk. The transcript stays visible for this session.";
+
+    internal const string RedactedMessage =
+        "Saved, but BGS redacted text that looked like a credential so it never reached disk.";
 
     public void Cancel(AssistantConversationEntry? entry)
     {

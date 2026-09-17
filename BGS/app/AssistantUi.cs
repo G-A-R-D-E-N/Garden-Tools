@@ -124,6 +124,7 @@ internal sealed class AssistantUi
         _controller?.List.Summaries() ?? Array.Empty<AssistantChatSummary>();
 
     internal string? ActiveChatIdForTest => _controller?.List.ActiveChatId;
+    internal IAssistantSession? ActiveSessionForTest => _controller?.ActiveSession;
 
     internal bool SidebarVisibleForTest => _sidebar.IsVisible;
     internal int SidebarColumnIndexForTest => Grid.GetColumn(_sidebar);
@@ -295,7 +296,10 @@ internal sealed class AssistantUi
             _pane.SetStatus("BGS kept your existing chats (max reached). Try renaming instead.", Ux.MetaBrush);
             return;
         }
-        _pane.SetStatus("Started a new chat. Type below to send.", Ux.MetaBrush);
+        if (AssistantChatStore.Exists(entry.Chat.Id))
+            _pane.SetStatus("Started a new chat. Type below to send.", Ux.MetaBrush);
+        else
+            _pane.SetStatus("Started a new chat, but BGS could not save it to disk yet.", Ux.WarnBrush);
         RefreshSidebar();
         OnSelectionChanged(_controller.List.ActiveIndex);
     }
@@ -317,7 +321,12 @@ internal sealed class AssistantUi
         if (_controller is null) return;
         int idx = _controller.List.IndexOf(chatId);
         if (idx < 0) return;
-        _controller.Rename(idx, newTitle);
+        if (!_controller.Rename(idx, newTitle))
+        {
+            _pane.SetStatus("BGS could not rename that chat. The previous name is kept.", Ux.WarnBrush);
+            RefreshSidebar();
+            return;
+        }
         RefreshSidebar();
         if (_controller.List.ActiveChatId == chatId)
             _pane.ChatTitle = _controller.List.Active!.Chat.Title;
@@ -356,6 +365,11 @@ internal sealed class AssistantUi
                 .SendAsync(prompt, _owner.AssistantContextSnapshot, _requestCancellation.Token)
                 .ConfigureAwait(true);
             OnSelectionChanged(_controller.List.ActiveIndex);
+            if (reply.PersistenceNotice.Length > 0)
+            {
+                _pane.SetStatus(reply.PersistenceNotice, Ux.WarnBrush);
+                return;
+            }
             string statusText = reply.Status switch
             {
                 "ok" => "Ready.",
@@ -371,6 +385,11 @@ internal sealed class AssistantUi
         {
             OnSelectionChanged(_controller.List.ActiveIndex);
             _pane.SetStatus("Cancelled.", Ux.MetaBrush);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            OnSelectionChanged(_controller.List.ActiveIndex);
+            _pane.SetStatus("BGS could not finish the request, but the chat is still usable.", Ux.WarnBrush);
         }
         finally
         {
@@ -495,12 +514,15 @@ internal sealed class AssistantUi
         _pane.SetAuthBusy(true);
         try
         {
-            _controller?.RejectPendingMutations();
+            _requestCancellation?.Cancel();
+            _controller?.EndAllSessions();
             _pane.SetApproval(false);
             if (_connection is null) return;
             await _connection.SignOutAsync().ConfigureAwait(true);
             RefreshAccountText();
-            _pane.SetStatus("Signed out. Codex owns the remaining credential state.", Ux.MetaBrush);
+            _pane.SetStatus(
+                "Signed out. Every chat will start a fresh ephemeral thread after you sign in again.",
+                Ux.MetaBrush);
         }
         catch (CodexProtocolException exception)
         {

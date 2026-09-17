@@ -104,6 +104,15 @@ public sealed class CodexAssistantSession : IAssistantSession
         }
     }
 
+    public async Task<bool> PrepareForSendAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        CodexAppServerClient client = _connection.Client;
+        Subscribe(client);
+        lock (_stateGate) return _threadId.Length == 0;
+    }
+
     public void ClearHistory()
     {
         lock (_stateGate)
@@ -548,6 +557,8 @@ public sealed class CodexAssistantSession : IAssistantSession
                 foreach (string threadId in _registeredThreads)
                     previous.UnregisterToolHandler(threadId);
                 _registeredThreads.Clear();
+                _threadId = "";
+                _activeTurn = "";
             }
         }
         if (previous is not null) previous.Notification -= OnNotification;

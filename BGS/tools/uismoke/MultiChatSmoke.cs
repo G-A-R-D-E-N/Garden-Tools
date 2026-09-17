@@ -19,6 +19,55 @@ internal static class MultiChatSmoke
     {
         RunPhase(LayoutAndConversations);
         RunPhase(MutationIsolation);
+        RunPhase(PersistenceBoundary);
+    }
+
+    private static void PersistenceBoundary()
+    {
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            Click(window, "Chat");
+            Dispatcher.UIThread.RunJobs();
+            AssistantUi ui = window.AssistantUiForTest;
+
+            var fake = new FakeChatClient(
+                new ChatResponse(new ChatMessage(ChatRole.Assistant, "understood")),
+                new ChatResponse(new ChatMessage(ChatRole.Assistant, "still here")),
+                new ChatResponse(new ChatMessage(ChatRole.Assistant, "all good")));
+            ui.SetSessionForTest(new AssistantSession(fake, Array.Empty<AIFunction>()));
+
+            ui.Pane.Composer.Text = "my key is sk-abcdefghijklmnopqrstuv";
+            Click(window, "Send");
+            Dispatcher.UIThread.RunJobs();
+            Check("a credential-like prompt still gets a reply", ui.MessageCount == 2);
+            Check("the UI reports the redaction instead of crashing",
+                ui.Status.Contains("redacted", StringComparison.OrdinalIgnoreCase));
+            string chatId = ui.ActiveChatIdForTest!;
+            string text = File.ReadAllText(AssistantChatStore.FilePathFor(chatId));
+            Check("the credential never reaches disk",
+                !text.Contains("sk-abcdefghijklmnopqrstuv", StringComparison.Ordinal));
+
+            AssistantChatStore.SaveFailureForTest = () => throw new IOException("simulated disk failure");
+            ui.Pane.Composer.Text = "second message";
+            Click(window, "Send");
+            Dispatcher.UIThread.RunJobs();
+            Check("an I/O save failure is reported instead of crashing",
+                ui.Status.Contains("could not save", StringComparison.OrdinalIgnoreCase));
+            Check("the reply stays visible after a save failure", ui.MessageCount == 4);
+            AssistantChatStore.SaveFailureForTest = null;
+
+            ui.Pane.Composer.Text = "third message";
+            Click(window, "Send");
+            Dispatcher.UIThread.RunJobs();
+            Check("the chat is still usable after a save failure", ui.MessageCount == 6);
+        }
+        finally
+        {
+            AssistantChatStore.SaveFailureForTest = null;
+            Smoke.CloseForTest(window);
+        }
     }
 
     private static void RunPhase(Action phase)
@@ -211,6 +260,7 @@ internal static class MultiChatSmoke
         bool cleared = WaitFor(() => !tools.HasPendingApproval && !ui.ApprovalVisible);
 
         Check("signing out rejects the real pending mutation", cleared);
+        Check("signing out disposes the live chat session", ui.ActiveSessionForTest is null);
     }
 
     private static bool WaitFor(Func<bool> condition)
