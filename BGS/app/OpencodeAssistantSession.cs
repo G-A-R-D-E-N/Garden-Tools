@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BehaviourStudio.App;
 
-public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantReplayAware
+public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantReplayAware, IAssistantProgressSink
 {
     public static readonly TimeSpan TurnTimeout = TimeSpan.FromMinutes(5);
 
@@ -45,6 +45,7 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
             return new("error", "A message is required.", 0, Array.Empty<AssistantToolActivity>(), Pending());
 
         var invoked = new List<string>();
+        Report(AssistantPhase.Working, "Waiting for opencode\u2026");
         _bridge.ToolInvoked = name =>
         {
             lock (invoked) invoked.Add(name);
@@ -59,8 +60,22 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
                 arguments.Add("--model");
                 arguments.Add(_model);
             }
-            string turn = replayPrompt.Length > 0 ? replayPrompt : prompt;
-            arguments.Add(TurnText(turn, context));
+            bool isCommand = prompt.StartsWith("/", StringComparison.Ordinal);
+            string turn = isCommand ? prompt : replayPrompt.Length > 0 ? replayPrompt : prompt;
+            if (isCommand)
+            {
+                int space = turn.IndexOf(' ');
+                string command = space < 0 ? turn[1..] : turn[1..space];
+                string commandArguments = space < 0 ? "" : turn[(space + 1)..].Trim();
+                arguments.Add("--command");
+                arguments.Add(command);
+                if (commandArguments.Length > 0) arguments.Add(commandArguments);
+                Report(AssistantPhase.Working, "Running /" + command + "\u2026");
+            }
+            else
+            {
+                arguments.Add(TurnText(turn, context));
+            }
 
             var environment = new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -100,6 +115,21 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
 
     public void ClearHistory()
     {
+    }
+
+    public IProgress<AssistantProgress>? Progress { get; set; }
+
+    private void Report(AssistantPhase phase, string detail)
+    {
+        IProgress<AssistantProgress>? progress = Progress;
+        if (progress is null) return;
+        try
+        {
+            progress.Report(new AssistantProgress(phase, detail));
+        }
+        catch (Exception)
+        {
+        }
     }
 
     public void Dispose()

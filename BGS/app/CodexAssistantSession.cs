@@ -10,7 +10,7 @@ using Microsoft.Extensions.AI;
 
 namespace BehaviourStudio.App;
 
-public sealed partial class CodexAssistantSession : IAssistantSession, IAssistantReplayAware
+public sealed partial class CodexAssistantSession : IAssistantSession, IAssistantReplayAware, IAssistantProgressSink
 {
     public const int MaximumIterationsPerRequest = 6;
 
@@ -71,6 +71,21 @@ public sealed partial class CodexAssistantSession : IAssistantSession, IAssistan
 
     public bool ToolsAvailable => _dynamicToolsAvailable;
 
+    public IProgress<AssistantProgress>? Progress { get; set; }
+
+    private void Report(AssistantPhase phase, string detail)
+    {
+        IProgress<AssistantProgress>? progress = Progress;
+        if (progress is null) return;
+        try
+        {
+            progress.Report(new AssistantProgress(phase, detail));
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     public Task<AssistantReply> SendAsync(
         string prompt, AssistantContext context, CancellationToken cancellationToken = default) =>
         SendAsync(prompt, prompt, context, cancellationToken);
@@ -83,6 +98,7 @@ public sealed partial class CodexAssistantSession : IAssistantSession, IAssistan
         if (string.IsNullOrWhiteSpace(prompt))
             return new("error", "A message is required.", 0, Array.Empty<AssistantToolActivity>(), Pending());
 
+        Report(AssistantPhase.Working, "Waiting for Codex\u2026");
         await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -436,9 +452,13 @@ public sealed partial class CodexAssistantSession : IAssistantSession, IAssistan
                 HandleTurnCompleted(parameters);
                 break;
             case CodexMethods.AgentMessageDelta:
+                Report(AssistantPhase.Thinking, "");
                 HandleDelta(parameters);
                 break;
             case CodexMethods.ItemStarted:
+                ReportItemProgress(parameters);
+                HandleItem(method, parameters);
+                break;
             case CodexMethods.ItemCompleted:
                 HandleItem(method, parameters);
                 break;
@@ -446,6 +466,16 @@ public sealed partial class CodexAssistantSession : IAssistantSession, IAssistan
                 HandleError(parameters);
                 break;
         }
+    }
+
+    private void ReportItemProgress(JsonElement? parameters)
+    {
+        if (!IsActiveTurn(CodexProtocol.String(parameters, "turnId"))) return;
+        JsonElement? item = CodexProtocol.Property(parameters, "item");
+        string name = CodexProtocol.String(item, "name");
+        if (name.Length == 0) name = CodexProtocol.String(item, "command");
+        if (name.Length == 0) name = CodexProtocol.String(item, "type");
+        Report(AssistantPhase.Tool, name);
     }
 
     private void HandleTurnCompleted(JsonElement? parameters)

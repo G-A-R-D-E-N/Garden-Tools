@@ -93,7 +93,7 @@ public sealed class AssistantCliLocatorTests
     [Fact]
     public void AnUnknownBackendIsRefusedInsteadOfDefaulting()
     {
-        Assert.Null(AssistantCliLocator.Parse("gemini"));
+        Assert.Null(AssistantCliLocator.Parse("not-a-provider"));
         Assert.Null(AssistantCliLocator.Parse(""));
     }
 
@@ -125,10 +125,11 @@ public sealed class AssistantCliLocatorTests
         var keys = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
         foreach (AssistantBackend backend in AssistantCliLocator.All)
         {
-            Assert.True(keys.Add(AssistantCliLocator.SettingsKey(backend)));
             Assert.NotEmpty(AssistantCliLocator.DisplayName(backend));
             Assert.NotEmpty(AssistantCliLocator.CommandName(backend));
             Assert.Equal(backend, AssistantCliLocator.Parse(AssistantCliLocator.CommandName(backend)));
+            if (ApiProviders.IsApi(backend)) continue;
+            Assert.True(keys.Add(AssistantCliLocator.SettingsKey(backend)));
         }
     }
 }

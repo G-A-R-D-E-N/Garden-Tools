@@ -4,7 +4,9 @@ using System.Globalization;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -15,7 +17,10 @@ public sealed class AssistantModelPicker : Border
     private const double MaximumListHeight = 320;
 
     private readonly TextBox _search = new() { PlaceholderText = "Search models" };
+    private readonly WrapPanel _agents = new();
     private readonly StackPanel _rows = new() { Spacing = 1 };
+    private readonly ScrollViewer _list;
+    private readonly List<(string Agent, string Label, Border Chip)> _agentChips = new();
     private readonly TextBlock _empty = new()
     {
         Text = "No models match that search.",
@@ -27,6 +32,7 @@ public sealed class AssistantModelPicker : Border
     private IReadOnlyList<CodexModel> _models = Array.Empty<CodexModel>();
     private string _selected = "";
     private string _query = "";
+    private string _agentFilter = "";
     private int _highlight = -1;
 
     public AssistantModelPicker()
@@ -56,10 +62,10 @@ public sealed class AssistantModelPicker : Border
             Margin = new Thickness(6, 6, 6, 0),
         };
 
-        var list = new ScrollViewer
+        _list = new ScrollViewer
         {
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             MaxHeight = MaximumListHeight,
             Content = _rows,
         };
@@ -67,22 +73,31 @@ public sealed class AssistantModelPicker : Border
         Child = new StackPanel
         {
             Spacing = 4,
-            Children = { _search, list, _empty, hint },
+            Children = { _search, _agents, _list, _empty, hint },
         };
+
+        AddHandler(KeyDownEvent, OnPickerKeyDown, RoutingStrategies.Tunnel);
     }
 
-    public event Action<string>? Chosen;
+    public event Action<CodexModel>? Chosen;
+    public event Action? Dismissed;
 
     public string Query => _query;
     public string SelectedModel => _selected;
     public IReadOnlyList<string> VisibleModels => _visible.Select(model => model.WireModel).ToArray();
+    public IReadOnlyList<string> Agents =>
+        _agentChips.Where(chip => chip.Agent.Length > 0).Select(chip => chip.Agent).ToArray();
+    public IReadOnlyList<string> FilterLabels => _agentChips.Select(chip => chip.Label).ToArray();
+    public string AgentFilter => _agentFilter;
     public int HighlightedIndex => _highlight;
     public TextBox Search => _search;
+    public ScrollViewer ModelList => _list;
 
     public void SetModels(IReadOnlyList<CodexModel> models, string selected)
     {
         _models = models ?? Array.Empty<CodexModel>();
         _selected = selected ?? "";
+        RebuildAgents();
         Rebuild();
     }
 
@@ -90,6 +105,16 @@ public sealed class AssistantModelPicker : Border
     {
         _query = text ?? "";
         _search.Text = _query;
+        Rebuild();
+    }
+
+    public void SetAgentFilter(string agent)
+    {
+        string resolved = agent ?? "";
+        if (resolved.Length > 0 &&
+            !_models.Any(model => string.Equals(AssistantModelCatalog.AgentOf(model), resolved, StringComparison.Ordinal)))
+            resolved = "";
+        _agentFilter = resolved;
         Rebuild();
     }
 
@@ -103,13 +128,20 @@ public sealed class AssistantModelPicker : Border
 
     public bool Choose(string wireModel)
     {
-        if (!_models.Any(model => string.Equals(model.WireModel, wireModel, StringComparison.Ordinal)))
-            return false;
-        _selected = wireModel;
-        AssistantModelPrefs.Remember(wireModel);
+        CodexModel? model = _models.FirstOrDefault(candidate =>
+            string.Equals(candidate.WireModel, wireModel, StringComparison.Ordinal));
+        if (model is null) return false;
+        _selected = model.WireModel;
+        AssistantModelPrefs.Remember(model.WireModel);
         Rebuild();
-        Chosen?.Invoke(wireModel);
+        Chosen?.Invoke(model);
         return true;
+    }
+
+    internal bool ChooseVisible(int index)
+    {
+        if (index < 0 || index >= _visible.Count) return false;
+        return Choose(_visible[index].WireModel);
     }
 
     internal static string ContextLabel(long context) => context switch
@@ -120,11 +152,64 @@ public sealed class AssistantModelPicker : Border
         _ => "",
     };
 
+    private void RebuildAgents()
+    {
+        _agents.Children.Clear();
+        _agentChips.Clear();
+        IReadOnlyList<string> agents = AssistantModelCatalog.AgentsInOrder(_models);
+        if (agents.Count <= 1)
+        {
+            _agents.IsVisible = false;
+            return;
+        }
+        _agents.IsVisible = true;
+        AddAgentChip("", "All");
+        foreach (string agent in agents) AddAgentChip(agent, agent);
+    }
+
+    private void AddAgentChip(string agent, string label)
+    {
+        var text = new TextBlock
+        {
+            Text = label,
+            FontSize = Ux.FontSmall,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 3, 8, 3),
+        };
+        var chip = new Border
+        {
+            Child = text,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Ux.Radius),
+            Margin = new Thickness(0, 0, 4, 4),
+            Cursor = new Cursor(StandardCursorType.Hand),
+        };
+        chip.PointerPressed += (_, args) =>
+        {
+            args.Handled = true;
+            SetAgentFilter(agent);
+        };
+        _agentChips.Add((agent, label, chip));
+        _agents.Children.Add(chip);
+    }
+
+    private void PaintAgentChips()
+    {
+        foreach ((string agent, string _, Border chip) in _agentChips)
+        {
+            bool on = string.Equals(agent, _agentFilter, StringComparison.Ordinal);
+            chip.Background = on ? Ux.AccentBrush : Ux.BaseBrush;
+            chip.BorderBrush = on ? Ux.AccentBrush : Ux.BorderBrush;
+            if (chip.Child is TextBlock text) text.Foreground = on ? Brushes.White : Ux.MetaBrush;
+        }
+    }
+
     private void Rebuild()
     {
         _rows.Children.Clear();
         _visible.Clear();
         _highlight = -1;
+        PaintAgentChips();
 
         var matching = new List<CodexModel>();
         foreach (CodexModel model in _models)
@@ -135,28 +220,40 @@ public sealed class AssistantModelPicker : Border
         var placed = new HashSet<string>(StringComparer.Ordinal);
         AddSection("Favorites", matching, AssistantModelPrefs.Favorites(), placed);
         AddSection("Recent", matching, AssistantModelPrefs.Recents(), placed);
-        foreach (IGrouping<string, CodexModel> group in matching
-                     .Where(model => !placed.Contains(model.WireModel))
-                     .GroupBy(model => model.Group.Length > 0 ? model.Group : "Models"))
+
+        foreach (string agent in AssistantModelCatalog.AgentsInOrder(matching))
         {
-            AddSection(Title(group.Key), group.ToList(), null, placed);
+            List<CodexModel> available = matching
+                .Where(model => !placed.Contains(EntryKey(model)) &&
+                                string.Equals(AssistantModelCatalog.AgentOf(model), agent, StringComparison.Ordinal))
+                .ToList();
+            foreach (IGrouping<string, CodexModel> group in available.GroupBy(
+                         model => model.Group.Length > 0 ? model.Group : agent))
+            {
+                AddSection(
+                    AssistantModelCatalog.SectionTitle(agent, group.Key),
+                    group.ToList(),
+                    null,
+                    placed);
+            }
         }
 
         if (_highlight < 0 && _visible.Count > 0) _highlight = 0;
         PaintHighlight();
     }
 
+    private static string EntryKey(CodexModel model) =>
+        AssistantModelCatalog.AgentOf(model) + "\u0000" + model.WireModel;
+
     private void AddSection(
         string title, IReadOnlyList<CodexModel> matching, IReadOnlyList<string>? order, HashSet<string> placed)
     {
         List<CodexModel> rows = order is null
-            ? matching.Where(model => !placed.Contains(model.WireModel)).ToList()
-            : order
-                .Select(id => matching.FirstOrDefault(model =>
-                    string.Equals(model.WireModel, id, StringComparison.Ordinal)))
-                .Where(model => model is not null)
-                .Select(model => model!)
-                .Where(model => !placed.Contains(model.WireModel))
+            ? matching.Where(model => !placed.Contains(EntryKey(model))).ToList()
+            : matching
+                .Where(model => order.Contains(model.WireModel, StringComparer.Ordinal))
+                .OrderBy(model => order.ToList().IndexOf(model.WireModel))
+                .Where(model => !placed.Contains(EntryKey(model)))
                 .ToList();
         if (rows.Count == 0) return;
 
@@ -171,7 +268,7 @@ public sealed class AssistantModelPicker : Border
 
         foreach (CodexModel model in rows)
         {
-            placed.Add(model.WireModel);
+            placed.Add(EntryKey(model));
             _visible.Add(model);
             _rows.Children.Add(BuildRow(model, _visible.Count - 1));
         }
@@ -199,21 +296,28 @@ public sealed class AssistantModelPicker : Border
         if (context.Length > 0) meta.Children.Add(Chip(context));
         if (model.Reasoning) meta.Children.Add(Chip("Thinking"));
 
-        var star = new Button
+        var starText = new TextBlock
         {
-            Content = AssistantModelPrefs.IsFavorite(model.WireModel) ? "\u2605" : "\u2606",
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Foreground = AssistantModelPrefs.IsFavorite(model.WireModel) ? Ux.WarnBrush : Ux.MutedBrush,
             FontSize = 14,
-            Padding = new Thickness(6, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 6, 0),
+            Text = AssistantModelPrefs.IsFavorite(model.WireModel) ? "\u2605" : "\u2606",
+            Foreground = AssistantModelPrefs.IsFavorite(model.WireModel) ? Ux.WarnBrush : Ux.MutedBrush,
+        };
+        var star = new Border
+        {
+            Child = starText,
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand),
         };
         ToolTip.SetTip(star, "Favourite this model");
-        star.Click += (_, _) =>
+        star.PointerPressed += (_, args) =>
         {
+            args.Handled = true;
             AssistantModelPrefs.ToggleFavorite(model.WireModel);
             Rebuild();
         };
+        star.PointerReleased += (_, args) => args.Handled = true;
 
         var layout = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(meta, Dock.Right);
@@ -222,20 +326,25 @@ public sealed class AssistantModelPicker : Border
         layout.Children.Add(meta);
         layout.Children.Add(name);
 
-        var row = new Button
+        var row = new Border
         {
-            Content = layout,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Background = model.WireModel == _selected ? Ux.CardHoverBrush : Brushes.Transparent,
+            Child = layout,
+            Background = RowBrush(index == _highlight || model.WireModel == _selected),
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(Ux.Radius),
             Padding = new Thickness(6, 4, 6, 4),
             Tag = index,
+            Cursor = new Cursor(StandardCursorType.Hand),
         };
-        row.Click += (_, _) => Choose(model.WireModel);
+        row.PointerPressed += (_, args) =>
+        {
+            args.Handled = true;
+            ChooseVisible(index);
+        };
         return row;
     }
+
+    private static IBrush RowBrush(bool on) => on ? Ux.CardHoverBrush : Brushes.Transparent;
 
     private static TextBlock Chip(string text) => new()
     {
@@ -244,6 +353,13 @@ public sealed class AssistantModelPicker : Border
         FontSize = Ux.FontSmall,
         VerticalAlignment = VerticalAlignment.Center,
     };
+
+    private void OnPickerKeyDown(object? sender, KeyEventArgs args)
+    {
+        if (args.Key != Key.Escape) return;
+        args.Handled = true;
+        Dismissed?.Invoke();
+    }
 
     private void OnSearchKeyDown(object? sender, KeyEventArgs args)
     {
@@ -258,7 +374,7 @@ public sealed class AssistantModelPicker : Border
                 args.Handled = true;
                 break;
             case Key.Enter:
-                if (_highlight >= 0 && _highlight < _visible.Count) Choose(_visible[_highlight].WireModel);
+                if (_highlight >= 0 && _highlight < _visible.Count) ChooseVisible(_highlight);
                 args.Handled = true;
                 break;
         }
@@ -275,19 +391,18 @@ public sealed class AssistantModelPicker : Border
     {
         for (int index = 0; index < _rows.Children.Count; index++)
         {
-            if (_rows.Children[index] is not Button row || row.Tag is not int slot) continue;
-            bool on = slot == _highlight;
-            row.Background = on || _visible[slot].WireModel == _selected ? Ux.CardHoverBrush : Brushes.Transparent;
+            if (_rows.Children[index] is not Border row || row.Tag is not int slot) continue;
+            row.Background = RowBrush(slot == _highlight || _visible[slot].WireModel == _selected);
         }
     }
 
     private bool Matches(CodexModel model)
     {
+        if (_agentFilter.Length > 0 &&
+            !string.Equals(AssistantModelCatalog.AgentOf(model), _agentFilter, StringComparison.Ordinal))
+            return false;
         if (_query.Length == 0) return true;
         return model.DisplayName.Contains(_query, StringComparison.OrdinalIgnoreCase) ||
                model.WireModel.Contains(_query, StringComparison.OrdinalIgnoreCase);
     }
-
-    private static string Title(string group) =>
-        group.Length == 0 ? "Models" : char.ToUpperInvariant(group[0]) + group[1..];
 }

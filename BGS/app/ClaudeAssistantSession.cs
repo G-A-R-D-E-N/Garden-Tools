@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BehaviourStudio.App;
 
-public sealed class ClaudeAssistantSession : IAssistantSession, IAssistantReplayAware
+public sealed class ClaudeAssistantSession : IAssistantSession, IAssistantReplayAware, IAssistantProgressSink
 {
     public static readonly TimeSpan TurnTimeout = TimeSpan.FromMinutes(5);
 
@@ -45,6 +45,7 @@ public sealed class ClaudeAssistantSession : IAssistantSession, IAssistantReplay
             return new("error", "A message is required.", 0, Array.Empty<AssistantToolActivity>(), Pending());
 
         var invoked = new List<string>();
+        Report(AssistantPhase.Working, "Waiting for Claude\u2026");
         _bridge.ToolInvoked = name =>
         {
             lock (invoked) invoked.Add(name);
@@ -87,6 +88,21 @@ public sealed class ClaudeAssistantSession : IAssistantSession, IAssistantReplay
 
     public void ClearHistory()
     {
+    }
+
+    public IProgress<AssistantProgress>? Progress { get; set; }
+
+    private void Report(AssistantPhase phase, string detail)
+    {
+        IProgress<AssistantProgress>? progress = Progress;
+        if (progress is null) return;
+        try
+        {
+            progress.Report(new AssistantProgress(phase, detail));
+        }
+        catch (Exception)
+        {
+        }
     }
 
     public void Dispose()

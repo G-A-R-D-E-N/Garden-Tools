@@ -18,6 +18,8 @@ internal sealed partial class AssistantUi
     private const double SidebarMaxWidth = 280;
     private const string WidthSetting = "assistant.drawer_width";
     private const string ActiveChatSetting = "assistant.active_chat_id";
+    private const string QuickStartSetting = "assistant.quick_start_done";
+    private const int MaximumQueuedMessages = 5;
 
     private readonly MainWindow _owner;
     private readonly AssistantPane _pane = new();
@@ -32,6 +34,7 @@ internal sealed partial class AssistantUi
     private AssistantMutationGate? _gate;
     private AssistantConversationController? _controller;
     private CancellationTokenSource? _requestCancellation;
+    private readonly List<string> _queue = new();
     private bool _open;
 
     public AssistantUi(MainWindow owner, Grid root, EditorShell shell)
@@ -71,8 +74,17 @@ internal sealed partial class AssistantUi
         _pane.ApproveRequested += Approve;
         _pane.RejectRequested += Reject;
 
-        _pane.ModelSelected += SelectModel;
+        _pane.ModelSelected += SelectCatalogModel;
         _pane.ModelResetRequested += ResetModel;
+        _pane.ModelControlOpened += () => _ = RefreshCatalogAsync();
+        _pane.QueuedRemoved += index =>
+        {
+            if (index < 0 || index >= _queue.Count) return;
+            _queue.RemoveAt(index);
+            _pane.ShowQueue(_queue);
+        };
+        _pane.CommandSource = () => AssistantCommandCatalog.For(_backend);
+        _pane.QuickStartDismissed += DismissQuickStart;
 
         _pane.SetStatus("Pick a chat or click + New chat to start.", Ux.MetaBrush);
         InitializeProvider();
@@ -207,8 +219,15 @@ internal sealed partial class AssistantUi
     private void OpenAsChat()
     {
         SetOpen(true);
+        if (Settings.Get(QuickStartSetting).Length == 0) _pane.ShowQuickStart();
         _pane.SetStatus("Ready. Type below to send to the selected chat.", Ux.MetaBrush);
         Dispatcher.UIThread.Post(() => _pane.Composer.Focus());
+    }
+
+    private void DismissQuickStart()
+    {
+        _pane.HideQuickStart();
+        Settings.TrySet(QuickStartSetting, "1", out _);
     }
 
     private void NewChatInternal()
@@ -227,6 +246,8 @@ internal sealed partial class AssistantUi
         }
         RefreshSidebar();
         OnSelectionChanged(_controller.List.ActiveIndex);
+        _queue.Clear();
+        _pane.ShowQueue(_queue);
         if (AssistantChatStore.Exists(entry.Chat.Id))
             _pane.SetStatus("Started a new chat. Type below to send.", Ux.MetaBrush);
         else
@@ -242,6 +263,8 @@ internal sealed partial class AssistantUi
             return;
         }
         if (!_controller.TrySelectById(chatId)) return;
+        _queue.Clear();
+        _pane.ShowQueue(_queue);
         OnSelectionChanged(_controller.List.ActiveIndex);
     }
 
@@ -277,21 +300,110 @@ internal sealed partial class AssistantUi
         OnSelectionChanged(_controller.List.ActiveIndex);
     }
 
-    private async void Send(string prompt)
+    private void Send(string prompt)
     {
-        if (_controller is null || _controller.List.IsBusy) return;
+        if (_controller is null) return;
+        string trimmed = (prompt ?? "").Trim();
+        if (trimmed.Length == 0) return;
+        if (_pane.QuickStartVisible) DismissQuickStart();
+        if (HandleCommand(trimmed)) return;
+        if (_controller.List.IsBusy || _controller.Active is null)
+        {
+            Enqueue(trimmed);
+            return;
+        }
+        SendNow(trimmed);
+    }
+
+    private bool HandleCommand(string text)
+    {
+        if (!AssistantCommands.TryParse(text, out string name, out _)) return false;
+        if (!AssistantCommands.IsBgsCommand(name)) return false;
+        switch (name)
+        {
+            case "new":
+                NewChatInternal();
+                break;
+            case "clear":
+                ClearActiveChat();
+                break;
+            case "model":
+                _pane.OpenModelPicker();
+                break;
+            case "cancel":
+                Cancel();
+                break;
+            case "help":
+                ShowCommandHelp();
+                break;
+        }
+        return true;
+    }
+
+    private void ClearActiveChat()
+    {
+        if (_controller?.ClearActive() != true)
+        {
+            _pane.SetStatus("Only an idle chat can be cleared.", Ux.WarnBrush);
+            return;
+        }
+        _queue.Clear();
+        _pane.ShowQueue(_queue);
+        OnSelectionChanged(_controller.List.ActiveIndex);
+        _pane.SetStatus("Cleared this chat.", Ux.MetaBrush);
+    }
+
+    private void ShowCommandHelp()
+    {
+        _pane.AddUser("/help");
+        foreach (AssistantCommand command in AssistantCommands.All)
+            _pane.AddTool("/" + command.Name, false, command.Description);
+        _pane.SetStatus("BGS commands. Other slash text goes to the provider.", Ux.MetaBrush);
+    }
+
+    private void Enqueue(string text)
+    {
+        if (_queue.Count >= MaximumQueuedMessages)
+        {
+            _pane.SetStatus($"The queue holds up to {MaximumQueuedMessages} messages.", Ux.WarnBrush);
+            return;
+        }
+        _queue.Add(text);
+        _pane.ShowQueue(_queue);
+        _pane.SetStatus("Queued. It sends when the current turn ends.", Ux.MetaBrush);
+    }
+
+    private void SendNextQueued()
+    {
+        if (_queue.Count == 0) return;
+        string next = _queue[0];
+        _queue.RemoveAt(0);
+        _pane.ShowQueue(_queue);
+        SendNow(next);
+    }
+
+    private async void SendNow(string prompt)
+    {
+        if (_controller is null) return;
         AssistantConversationEntry? entry = _controller.Active;
         if (entry is null) return;
+        if (_controller.List.IsBusy)
+        {
+            Enqueue(prompt);
+            return;
+        }
 
         _pane.AddUser(prompt);
         _pane.SetBusy(true);
+        _pane.ShowProgress("Assistant is working\u2026");
         _controller.List.IsBusy = true;
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
+        var progress = new Progress<AssistantProgress>(OnAssistantProgress);
         try
         {
             AssistantReply reply = await _controller
-                .SendAsync(prompt, _owner.AssistantContextSnapshot, _requestCancellation.Token)
+                .SendAsync(prompt, _owner.AssistantContextSnapshot, _requestCancellation.Token, progress)
                 .ConfigureAwait(true);
             OnSelectionChanged(_controller.List.ActiveIndex);
             if (reply.Status == "ok" && reply.PersistenceNotice.Length > 0)
@@ -324,8 +436,38 @@ internal sealed partial class AssistantUi
         {
             _controller.List.IsBusy = false;
             _pane.SetBusy(false);
+            _pane.HideProgress();
             _requestCancellation?.Dispose();
             _requestCancellation = null;
+            SendNextQueued();
+        }
+    }
+
+    private void OnAssistantProgress(AssistantProgress progress)
+    {
+        switch (progress.Phase)
+        {
+            case AssistantPhase.Tool:
+                if (progress.Detail.Length > 0)
+                {
+                    _pane.ShowProgress("Running " + progress.Detail + "\u2026");
+                    _pane.AddTool(progress.Detail, false, "running");
+                }
+                else
+                {
+                    _pane.ShowProgress("Working\u2026");
+                }
+                break;
+            case AssistantPhase.Thinking:
+                _pane.ShowProgress(progress.Detail.Length > 0
+                    ? "Thinking\u2026 " + progress.Detail
+                    : "Thinking\u2026");
+                break;
+            default:
+                _pane.ShowProgress(progress.Detail.Length > 0
+                    ? progress.Detail
+                    : "Assistant is working\u2026");
+                break;
         }
     }
 

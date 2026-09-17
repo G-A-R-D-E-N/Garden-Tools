@@ -10,6 +10,8 @@ public enum AssistantBackend
     Codex,
     Claude,
     Opencode,
+    Gemini,
+    Local,
 }
 
 public sealed record AssistantCli(string Path, string Source)
@@ -25,6 +27,7 @@ public static class AssistantCliLocator
     internal static readonly AssistantBackend[] All =
     {
         AssistantBackend.Codex, AssistantBackend.Claude, AssistantBackend.Opencode,
+        AssistantBackend.Gemini, AssistantBackend.Local,
     };
 
     internal static Func<AssistantBackend, IReadOnlyList<string>> CandidatePathsForTest =
@@ -37,6 +40,8 @@ public static class AssistantCliLocator
         AssistantBackend.Codex => "codex",
         AssistantBackend.Claude => "claude",
         AssistantBackend.Opencode => "opencode",
+        AssistantBackend.Gemini => "gemini",
+        AssistantBackend.Local => "local",
         _ => "",
     };
 
@@ -45,6 +50,8 @@ public static class AssistantCliLocator
         AssistantBackend.Codex => "ChatGPT via Codex",
         AssistantBackend.Claude => "Claude Code",
         AssistantBackend.Opencode => "opencode",
+        AssistantBackend.Gemini => "Google Gemini (API key)",
+        AssistantBackend.Local => "Local models (OpenAI-compatible)",
         _ => "",
     };
 
@@ -72,6 +79,11 @@ public static class AssistantCliLocator
     {
         cli = null;
         error = "";
+        if (ApiProviders.IsApi(backend))
+        {
+            error = "This provider uses an API endpoint, not a command-line tool.";
+            return false;
+        }
         string name = CommandName(backend);
         if (name.Length == 0)
         {
@@ -114,6 +126,7 @@ public static class AssistantCliLocator
 
     private static IReadOnlyList<string> DefaultCandidatePaths(AssistantBackend backend)
     {
+        if (ApiProviders.IsApi(backend)) return Array.Empty<string>();
         string name = CommandName(backend);
         var candidates = new List<string>();
 

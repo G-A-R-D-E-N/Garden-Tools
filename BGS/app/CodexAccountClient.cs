@@ -28,6 +28,7 @@ public sealed record CodexModel(string Id, string DisplayName, bool IsDefault, s
 {
     public string WireModel => Model.Length > 0 ? Model : Id;
     public string Group { get; init; } = "";
+    public string Agent { get; init; } = "";
     public long ContextLimit { get; init; }
     public bool Reasoning { get; init; }
     public decimal InputCost { get; init; }
@@ -94,18 +95,10 @@ public sealed class CodexAccountClient
             foreach (JsonElement entry in list.EnumerateArray())
             {
                 if (entry.ValueKind != JsonValueKind.Object || CodexProtocol.Bool(entry, "hidden")) continue;
-                string id = CodexProtocol.String(entry, "id");
                 string slug = CodexProtocol.String(entry, "model");
-                if (slug.Length == 0) slug = id;
+                if (slug.Length == 0) slug = CodexProtocol.String(entry, "id");
                 if (string.IsNullOrWhiteSpace(slug) || slug.Any(char.IsControl) || !slugs.Add(slug)) continue;
-                string displayName = CodexProtocol.Scrub(CodexProtocol.String(entry, "displayName"), 120);
-                models.Add(new CodexModel(id, displayName.Length > 0 ? displayName : slug,
-                    CodexProtocol.Bool(entry, "isDefault"), slug)
-                {
-                    Group = "Codex",
-                    Reasoning = CodexProtocol.Property(entry, "supportedReasoningEfforts") is
-                        { ValueKind: JsonValueKind.Array } efforts && efforts.GetArrayLength() > 0,
-                });
+                models.Add(BuildModel(entry, slug));
             }
             cursor = CodexProtocol.String(result, "nextCursor");
             if (cursor.Length > 0 && (!cursors.Add(cursor) || cursors.Count >= 100))
@@ -118,6 +111,30 @@ public sealed class CodexAccountClient
     {
         IReadOnlyList<CodexModel> models = await ReadModelsAsync(cancellationToken).ConfigureAwait(false);
         return models.FirstOrDefault(model => model.IsDefault) ?? models.FirstOrDefault();
+    }
+
+    internal static CodexModel BuildModel(JsonElement entry, string slug)
+    {
+        string id = CodexProtocol.String(entry, "id");
+        string displayName = CodexProtocol.Scrub(CodexProtocol.String(entry, "displayName"), 120);
+        return new CodexModel(id, displayName.Length > 0 ? displayName : slug,
+            CodexProtocol.Bool(entry, "isDefault"), slug)
+        {
+            Group = "Codex",
+            Agent = AssistantModelCatalog.CodexAgent,
+            Reasoning = CodexProtocol.Property(entry, "supportedReasoningEfforts") is
+                { ValueKind: JsonValueKind.Array } efforts && efforts.GetArrayLength() > 0,
+        };
+    }
+
+    internal static CodexModel? ParseModelForTest(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement entry = document.RootElement;
+        if (entry.ValueKind != JsonValueKind.Object) return null;
+        string slug = CodexProtocol.String(entry, "model");
+        if (slug.Length == 0) slug = CodexProtocol.String(entry, "id");
+        return BuildModel(entry, slug);
     }
 
     private async Task<CodexLoginChallenge> StartLoginAsync(

@@ -91,6 +91,7 @@ public static class OpencodeModelCatalog
         return new CodexModel(id, name.Length > 0 ? name : id, false, id)
         {
             Group = group,
+            Agent = AssistantModelCatalog.OpencodeAgent,
             ContextLimit = context,
             Reasoning = reasoning,
         };

@@ -77,6 +77,29 @@ public sealed class AssistantConversationController : IDisposable
 
     public bool Rename(int index, string newTitle) => List.Rename(index, newTitle);
 
+    public bool ClearActive()
+    {
+        AssistantConversationEntry? entry = List.Active;
+        if (entry is null || entry.Deleted || List.IsBusy) return false;
+        AssistantChat cleared = entry.Chat.WithMessages(
+            Array.Empty<AssistantChatMessage>(), DateTime.UtcNow);
+        try
+        {
+            cleared = AssistantChatStore.Save(cleared);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+        }
+        lock (entry.SaveGate)
+        {
+            if (entry.Deleted) return false;
+            entry.Chat = cleared;
+            entry.ClearPendingApproval();
+        }
+        RejectPendingMutations();
+        return true;
+    }
+
     public AssistantConversationEntry? Delete(int index)
     {
         if (index < 0 || index >= List.Count) return null;
@@ -112,7 +135,8 @@ public sealed class AssistantConversationController : IDisposable
     }
 
     public async Task<AssistantReply> SendAsync(
-        string prompt, AssistantContext context, CancellationToken cancellationToken = default)
+        string prompt, AssistantContext context, CancellationToken cancellationToken = default,
+        IProgress<AssistantProgress>? progress = null)
     {
         AssistantConversationEntry? entry = List.Active;
         if (entry is null || entry.Deleted) return BusyReply();
@@ -144,6 +168,7 @@ public sealed class AssistantConversationController : IDisposable
         AssistantChat updated = AppendUserMessage(entry.Chat, trimmed, stamp);
 
         AssistantReply reply;
+        if (session is IAssistantProgressSink sink) sink.Progress = progress;
         try
         {
             reply = session is IAssistantReplayAware replayAware
@@ -155,6 +180,10 @@ public sealed class AssistantConversationController : IDisposable
         {
             return new("cancelled", "The request was cancelled.", 0,
                 Array.Empty<AssistantToolActivity>(), entry.ApprovalActive);
+        }
+        finally
+        {
+            if (session is IAssistantProgressSink completed) completed.Progress = null;
         }
 
         return Persist(entry, reply, updated, generation);
@@ -175,14 +204,6 @@ public sealed class AssistantConversationController : IDisposable
                 updated = AssistantChatStore.AppendMessage(updated,
                     new AssistantChatMessage(AssistantChatRole.Assistant,
                         ChatText.Cap(reply.Text), replyStamp));
-                foreach (AssistantToolActivity tool in reply.Tools)
-                {
-                    string status = tool.RequiresApproval ? "pending approval" : "ran";
-                    updated = AssistantChatStore.AppendMessage(updated,
-                        new AssistantChatMessage(AssistantChatRole.Tool,
-                            $"{tool.Name} ({status})", replyStamp,
-                            ToolName: tool.Name, ToolStatus: status, ToolRequiresApproval: tool.RequiresApproval));
-                }
             }
 
             if (reply.AwaitingApproval)

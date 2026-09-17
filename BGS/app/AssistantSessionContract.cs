@@ -7,6 +7,15 @@ namespace BehaviourStudio.App;
 
 public sealed record AssistantToolActivity(string Name, bool RequiresApproval);
 
+public enum AssistantPhase
+{
+    Working,
+    Thinking,
+    Tool,
+}
+
+public sealed record AssistantProgress(AssistantPhase Phase, string Detail = "");
+
 public sealed record AssistantReply(
     string Status,
     string Text,
@@ -21,6 +30,11 @@ public interface IAssistantSession : IDisposable
         string prompt, AssistantContext context, CancellationToken cancellationToken = default);
 
     void ClearHistory();
+}
+
+public interface IAssistantProgressSink
+{
+    IProgress<AssistantProgress>? Progress { get; set; }
 }
 
 public interface IAssistantReplayAware

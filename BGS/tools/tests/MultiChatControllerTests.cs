@@ -444,7 +444,7 @@ public sealed class MultiChatControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task SendPersistsUserAndAssistantMessages()
+    public async Task SendPersistsUserAndAssistantMessagesButNotToolRows()
     {
         var registered = new Dictionary<string, IAssistantSession>();
         Func<string, IAssistantSession?> factory = chatId =>
@@ -466,10 +466,10 @@ public sealed class MultiChatControllerTests : IDisposable
 
         AssistantChat? loaded = AssistantChatStore.Load(entry.Chat.Id);
         Assert.NotNull(loaded);
-        Assert.True(loaded!.Messages.Count >= 3,
-            "user + assistant + tool messages should be persisted");
         Assert.Contains(loaded.Messages, m => m.Role == AssistantChatRole.User);
         Assert.Contains(loaded.Messages, m => m.Role == AssistantChatRole.Assistant);
+        Assert.DoesNotContain(loaded.Messages, m => m.Role == AssistantChatRole.Tool);
+        Assert.Equal(2, loaded.Messages.Count);
     }
 
     [Fact]

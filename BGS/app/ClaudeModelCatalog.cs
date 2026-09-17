@@ -61,7 +61,11 @@ public static class ClaudeModelCatalog
                 string id = CodexProtocol.Scrub(CodexProtocol.String(entry, "id"), 120);
                 if (id.Length == 0 || !seen.Add(id)) continue;
                 string name = CodexProtocol.Scrub(CodexProtocol.String(entry, "name"), 120);
-                found.Add(new CodexModel(id, name.Length > 0 ? name : id, false, id) { Group = "Claude" });
+                found.Add(new CodexModel(id, name.Length > 0 ? name : id, false, id)
+                {
+                    Group = AssistantModelCatalog.ClaudeAgent,
+                    Agent = AssistantModelCatalog.ClaudeAgent,
+                });
             }
             return found.AsReadOnly();
         }
