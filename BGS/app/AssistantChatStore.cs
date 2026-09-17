@@ -16,6 +16,7 @@ public static class AssistantChatStore
     public const int MaxPromptCharacters = 4_000;
     public const int MaxTotalFileSizeBytes = 1_048_576;
     public const int MaxReplayTurns = 8;
+    public const int MaxReplayMessages = MaxReplayTurns * 2;
     public const long MaxChatBytes = 1_048_576L;
 
     private static readonly object WriteGate = new();
@@ -218,7 +219,7 @@ public static class AssistantChatStore
     {
         var turns = new List<AssistantChatMessage>();
         int turnsAdded = 0;
-        for (int i = chat.Messages.Count - 1; i >= 0 && turnsAdded < MaxReplayTurns * 2; i--)
+        for (int i = chat.Messages.Count - 1; i >= 0 && turnsAdded < MaxReplayMessages; i--)
         {
             AssistantChatMessage message = chat.Messages[i];
             if (message.Role == AssistantChatRole.Tool) continue;

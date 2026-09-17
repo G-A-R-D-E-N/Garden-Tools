@@ -364,23 +364,68 @@ public sealed class MultiChatControllerTests : IDisposable
         Assert.DoesNotContain("REPLAY-MARKER", TurnInput(connection.Server), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task ProviderErrorMessageIsNotPersistedAsHistory()
+    [Theory]
+    [InlineData("cancelled")]
+    [InlineData("policy_error")]
+    [InlineData("tool_policy_error")]
+    [InlineData("signed_out")]
+    [InlineData("provider_error")]
+    [InlineData("error")]
+    [InlineData("busy")]
+    public async Task BgsGeneratedStatusTextIsNotPersistedOrReplayed(string status)
     {
         using var controller = new AssistantConversationController(
-            _ => new FixedReplySession("boom", status: "provider_error"));
+            _ => new FixedReplySession("BGS-NOTICE-" + status, status: status));
         AssistantConversationEntry entry = controller.Active!;
 
         AssistantReply reply = await controller.SendAsync("hello", CodexSessionFixture.Context())
             .ConfigureAwait(false);
 
-        Assert.Equal("provider_error", reply.Status);
+        Assert.Equal(status, reply.Status);
         Assert.Contains(entry.Chat.Messages, m => m.Role == AssistantChatRole.User);
         Assert.DoesNotContain(entry.Chat.Messages, m => m.Role == AssistantChatRole.Assistant);
-        Assert.DoesNotContain("boom",
+        Assert.DoesNotContain("BGS-NOTICE",
             AssistantConversationController.ComposeReplay(entry.Chat, "next"), StringComparison.Ordinal);
         Assert.DoesNotContain(AssistantChatStore.Load(entry.Chat.Id)!.Messages,
             m => m.Role == AssistantChatRole.Assistant);
+    }
+
+    [Fact]
+    public void ComposeReplayUsesTheStoreReplayBoundExactly()
+    {
+        AssistantChat chat = AssistantChatStore.CreateEmpty();
+        DateTime stamp = DateTime.UtcNow;
+        int pairs = AssistantChatStore.MaxReplayTurns + 5;
+        for (int i = 0; i < pairs; i++)
+        {
+            chat = AssistantChatStore.AppendMessage(chat,
+                new AssistantChatMessage(AssistantChatRole.User, "u" + i, stamp.AddMinutes(i)));
+            chat = AssistantChatStore.AppendMessage(chat,
+                new AssistantChatMessage(AssistantChatRole.Assistant, "a" + i, stamp.AddMinutes(i).AddSeconds(1)));
+        }
+
+        string replay = AssistantConversationController.ComposeReplay(chat, "current");
+
+        string nl = Environment.NewLine;
+        int firstRetained = pairs - AssistantChatStore.MaxReplayTurns;
+        Assert.Equal(AssistantChatStore.MaxReplayTurns, CountOf(replay, "[user] "));
+        Assert.Equal(AssistantChatStore.MaxReplayTurns, CountOf(replay, "[assistant] "));
+        Assert.Contains("[user] u" + firstRetained + nl, replay, StringComparison.Ordinal);
+        Assert.Contains("[assistant] a" + (pairs - 1) + nl, replay, StringComparison.Ordinal);
+        Assert.DoesNotContain("[user] u" + (firstRetained - 1) + nl, replay, StringComparison.Ordinal);
+        Assert.EndsWith("# Current message" + nl + "current", replay, StringComparison.Ordinal);
+        Assert.Equal(replay,
+            AssistantConversationController.ComposeReplay(chat, "current"));
+    }
+
+    private static int CountOf(string text, string token)
+    {
+        int count = 0;
+        for (int index = text.IndexOf(token, StringComparison.Ordinal);
+             index >= 0;
+             index = text.IndexOf(token, index + token.Length, StringComparison.Ordinal))
+            count++;
+        return count;
     }
 
     [Fact]

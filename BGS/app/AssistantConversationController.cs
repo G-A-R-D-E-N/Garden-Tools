@@ -232,17 +232,7 @@ public sealed class AssistantConversationController : IDisposable
 
     internal static string ComposeReplay(AssistantChat chat, string newUserPrompt)
     {
-        var turns = new List<AssistantChatMessage>();
-        int turnsAdded = 0;
-        for (int i = chat.Messages.Count - 1; i >= 0; i--)
-        {
-            AssistantChatMessage m = chat.Messages[i];
-            if (m.Role == AssistantChatRole.Tool) continue;
-            turns.Insert(0, m);
-            if (m.Role == AssistantChatRole.User || m.Role == AssistantChatRole.Assistant) turnsAdded++;
-            if (turnsAdded >= AssistantChatStore.MaxReplayTurns) break;
-        }
-
+        IReadOnlyList<AssistantChatMessage> turns = AssistantChatStore.ReplayHistory(chat);
         if (turns.Count == 0) return newUserPrompt;
 
         var joined = new System.Text.StringBuilder();
@@ -280,7 +270,7 @@ public sealed class AssistantConversationController : IDisposable
     };
 
     private static bool PersistsAssistantMessage(string status) =>
-        status is not ("signed_out" or "provider_error" or "error");
+        string.Equals(status, "ok", StringComparison.Ordinal);
 
     private static AssistantReply BusyReply() => new(
         "busy",

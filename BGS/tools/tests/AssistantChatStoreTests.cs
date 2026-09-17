@@ -156,7 +156,8 @@ public sealed class AssistantChatStoreTests : IDisposable
     {
         AssistantChat chat = AssistantChatStore.CreateEmpty();
         DateTime stamp = DateTime.UtcNow;
-        for (int i = 0; i < AssistantChatStore.MaxReplayTurns + 4; i++)
+        int pairs = AssistantChatStore.MaxReplayTurns + 4;
+        for (int i = 0; i < pairs; i++)
         {
             chat = AssistantChatStore.AppendMessage(chat,
                 new AssistantChatMessage(AssistantChatRole.User, "u" + i, stamp.AddMinutes(i)));
@@ -167,9 +168,17 @@ public sealed class AssistantChatStoreTests : IDisposable
 
         IReadOnlyList<AssistantChatMessage> replay = AssistantChatStore.ReplayHistory(chat);
 
+        Assert.Equal(AssistantChatStore.MaxReplayMessages, replay.Count);
         Assert.Equal(AssistantChatStore.MaxReplayTurns * 2, replay.Count);
         Assert.True(replay.First().TimestampUtc < replay.Last().TimestampUtc);
         Assert.DoesNotContain(replay, m => m.Role == AssistantChatRole.Tool);
+
+        int firstRetained = pairs - AssistantChatStore.MaxReplayTurns;
+        Assert.Equal("u" + firstRetained, replay[0].Text);
+        Assert.Equal("a" + firstRetained, replay[1].Text);
+        Assert.Equal("u" + (pairs - 1), replay[^2].Text);
+        Assert.Equal("a" + (pairs - 1), replay[^1].Text);
+        Assert.DoesNotContain(replay, m => m.Text == "u" + (firstRetained - 1));
     }
 
     [Fact]
