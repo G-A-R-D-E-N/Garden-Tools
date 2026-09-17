@@ -46,7 +46,7 @@ internal sealed class AssistantPane : Border
 
         var title = new TextBlock
         {
-            Text = "Assistant",
+            Text = "ChatGPT Assistant",
             FontSize = Ux.FontTitle,
             FontWeight = FontWeight.SemiBold,
             Foreground = Ux.TitleBrush,
@@ -93,9 +93,9 @@ internal sealed class AssistantPane : Border
 
         var notice = new TextBlock
         {
-            Text = "Sends only your prompt, bounded editor context, and BGS tool results when you press Send. " +
-                "Opening this drawer makes no model request. Codex owns ChatGPT sign-in and token refresh; " +
-                "BGS never stores your credentials.",
+            Text = "ChatGPT sign-in happens in your browser or with a device code. BGS never asks for or stores your " +
+                "ChatGPT password, OAuth token, or OpenAI API key. Opening this drawer makes no model request. " +
+                "Prompts send only bounded editor context and BGS tool results when you press Send.",
             Foreground = Ux.MutedBrush,
             FontSize = Ux.FontSmall,
             TextWrapping = TextWrapping.Wrap,
@@ -327,10 +327,24 @@ internal sealed class AssistantUi
         root.Children.Add(_splitter);
         root.Children.Add(_pane);
 
-        var toggle = Ux.Secondary("Assistant");
-        ToolTip.SetTip(toggle, "Open the AI assistant drawer.");
-        toggle.Click += (_, _) => SetOpen(!_open);
-        shell.Tools.Children.Add(toggle);
+        var chat = Ux.Primary("Chat");
+        ToolTip.SetTip(chat, "Open ChatGPT Assistant.");
+        chat.Click += (_, _) =>
+        {
+            SetOpen(true);
+            _pane.SetStatus("Ready. Type a message below to chat with ChatGPT through Codex.", Ux.MetaBrush);
+            _pane.Composer.Focus();
+        };
+        var settings = Ux.Secondary("Assistant settings");
+        ToolTip.SetTip(settings, "Open ChatGPT account and Codex connection settings.");
+        settings.Click += (_, _) =>
+        {
+            SetOpen(true);
+            _pane.SetStatus(
+                "Assistant settings. Sign in with ChatGPT above, use a device code, or sign out. Credentials are never entered into BGS.",
+                Ux.MetaBrush);
+        };
+        shell.Tools.Children.Add(Ux.Group("ChatGPT", Ux.Wrap(chat, settings)));
         _pane.NewChatRequested += NewChat;
         _pane.CloseRequested += () => SetOpen(false);
         _pane.CancelRequested += Cancel;
@@ -346,7 +360,7 @@ internal sealed class AssistantUi
         bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
         _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
         _pane.SetAccount("Signed out");
-        _pane.SetStatus("Ready. Opening the drawer makes no model request.", Ux.MetaBrush);
+        _pane.SetStatus("Ready. Click Chat to start or Assistant settings to sign in.", Ux.MetaBrush);
         SetOpen(false);
     }
 
