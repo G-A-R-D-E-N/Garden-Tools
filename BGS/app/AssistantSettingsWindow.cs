@@ -12,6 +12,7 @@ public sealed class AssistantSettingsState
     public string Description { get; set; } = "";
     public string SelectedBackend { get; set; } = "codex";
     public string Account { get; set; } = "";
+    public string DeviceCodeText { get; set; } = "";
     public bool CodexManaged { get; set; } = true;
     public bool SignedIn { get; set; }
     public IReadOnlyList<CodexModel> Models { get; set; } = Array.Empty<CodexModel>();
@@ -27,12 +28,23 @@ public sealed class AssistantSettingsState
 
 public sealed class AssistantSettingsWindow : Window
 {
+    public const string CodexNotice =
+        "ChatGPT sign-in happens in your browser or with a device code. BGS never asks for or stores your " +
+        "ChatGPT password, OAuth token, or OpenAI API key. Opening this drawer makes no model request. " +
+        "Prompts send only bounded editor context and BGS tool results when you press Send.";
+
+    public const string CliNotice =
+        "This provider signs in through its own command-line tool, so BGS never sees or stores a credential. " +
+        "Opening this drawer makes no model request. Prompts send only bounded editor context and BGS tool " +
+        "results when you press Send.";
+
     private readonly AssistantSettingsState _state;
     private readonly ComboBox _provider = new() { MinWidth = 200 };
     private readonly ComboBox _model = new() { MinWidth = 200 };
     private readonly Button _modelReset = Ux.Secondary("Use provider default");
     private readonly TextBlock _providerText = new();
     private readonly TextBlock _accountText = new();
+    private readonly TextBlock _deviceText = new();
     private readonly TextBlock _notice = new();
     private readonly StackPanel _authRow = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
     private readonly Button _signIn = Ux.Primary("Sign in with ChatGPT");
@@ -81,6 +93,9 @@ public sealed class AssistantSettingsWindow : Window
         _notice.Foreground = Ux.MutedBrush;
         _notice.FontSize = Ux.FontSmall;
         _notice.TextWrapping = TextWrapping.Wrap;
+        _deviceText.Foreground = Ux.CodeBrush;
+        _deviceText.FontSize = Ux.FontSmall;
+        _deviceText.TextWrapping = TextWrapping.Wrap;
 
         _authRow.Children.Add(_signIn);
         _authRow.Children.Add(_deviceCode);
@@ -110,6 +125,7 @@ public sealed class AssistantSettingsWindow : Window
                     Section("Provider", _provider),
                     _providerText,
                     _accountText,
+                    _deviceText,
                     _authRow,
                     Section("Model", modelRow),
                     _notice,
@@ -128,6 +144,7 @@ public sealed class AssistantSettingsWindow : Window
     }
 
     public ComboBox ProviderSelector => _provider;
+    public string? SelectedProvider => (_provider.SelectedItem as AssistantProviderItem)?.Wire;
     public ComboBox ModelSelector => _model;
     public bool SignInVisible => _signIn.IsVisible;
     public bool DeviceCodeVisible => _deviceCode.IsVisible;
@@ -174,7 +191,9 @@ public sealed class AssistantSettingsWindow : Window
 
             _providerText.Text = _state.Description;
             _accountText.Text = _state.Account;
-            _notice.Text = _state.CodexManaged ? AssistantPane.CodexNotice : AssistantPane.CliNotice;
+            _deviceText.Text = _state.DeviceCodeText;
+            _deviceText.IsVisible = _state.DeviceCodeText.Length > 0;
+            _notice.Text = _state.CodexManaged ? CodexNotice : CliNotice;
 
             _signIn.IsVisible = _state.CodexManaged && !_state.SignedIn;
             _deviceCode.IsVisible = _state.CodexManaged && !_state.SignedIn;

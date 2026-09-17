@@ -17,6 +17,9 @@ internal sealed partial class AssistantUi
     private IReadOnlyList<CodexModel> _providerModels = Array.Empty<CodexModel>();
     private AssistantSettingsWindow? _settingsWindow;
     private readonly AssistantSettingsState _settingsState = new();
+    private string _providerDescription = "";
+    private string _accountText = "";
+    private string _deviceCode = "";
 
     internal void OpenSettings()
     {
@@ -39,17 +42,17 @@ internal sealed partial class AssistantUi
 
     private void RefreshSettingsWindow()
     {
-        if (_settingsWindow is null) return;
         _settingsState.SelectedBackend = AssistantCliLocator.CommandName(_backend);
-        _settingsState.Description = _pane.ProviderStatus;
-        _settingsState.Account = _pane.AccountStatus;
+        _settingsState.Description = _providerDescription;
+        _settingsState.Account = _accountText;
+        _settingsState.DeviceCodeText = _deviceCode;
         _settingsState.CodexManaged = _backend == AssistantBackend.Codex;
         _settingsState.SignedIn = _backend == AssistantBackend.Codex &&
                                   _connection?.Account.SignedIn == true;
         _settingsState.Models = _providerModels;
         _settingsState.SelectedModel = Settings.Get(ModelSettingKey(_backend));
         _settingsState.DefaultModelLabel = DefaultModelLabel();
-        _settingsWindow.Refresh();
+        _settingsWindow?.Refresh();
     }
 
     internal static string ModelSettingKey(AssistantBackend backend) => backend switch
@@ -64,7 +67,6 @@ internal sealed partial class AssistantUi
     private void InitializeProvider()
     {
         _backend = AssistantCliLocator.FromSettings();
-        AssistantModelSelector.BindProviders(_pane.ProviderSelector, AssistantCliLocator.CommandName(_backend));
         RefreshProviderStatus();
         RefreshAccountText();
         RefreshModelSelector();
@@ -158,16 +160,14 @@ internal sealed partial class AssistantUi
         {
             AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
             bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
-            _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
-            _pane.SetAuthProvider(codexManaged: true);
+            _providerDescription = AssistantProvider.Describe(options, detected ? executable : null);
             RefreshSettingsWindow();
             return;
         }
 
         string name = AssistantCliLocator.DisplayName(_backend);
         bool found = AssistantCliLocator.TryLocateFromSettings(_backend, out _, out _);
-        _pane.SetProvider(found ? $"{name} · CLI detected" : $"{name} · CLI not detected");
-        _pane.SetAuthProvider(codexManaged: false);
+        _providerDescription = found ? $"{name} · CLI detected" : $"{name} · CLI not detected";
         RefreshSettingsWindow();
     }
 
@@ -220,7 +220,6 @@ internal sealed partial class AssistantUi
 
     private async void SignIn()
     {
-        _pane.SetAuthBusy(true);
         try
         {
             if (_backend != AssistantBackend.Codex)
@@ -259,13 +258,11 @@ internal sealed partial class AssistantUi
         }
         finally
         {
-            _pane.SetAuthBusy(false);
         }
     }
 
     private async void DeviceCode()
     {
-        _pane.SetAuthBusy(true);
         try
         {
             if (_backend != AssistantBackend.Codex)
@@ -278,7 +275,10 @@ internal sealed partial class AssistantUi
             if (!EnsureCodex()) return;
             await _connection!.ConnectAsync().ConfigureAwait(true);
             CodexLoginChallenge challenge = await _connection.BeginDeviceCodeLoginAsync().ConfigureAwait(true);
-            _pane.SetDeviceCode(challenge.VerificationUrl, challenge.UserCode);
+            _deviceCode = challenge.UserCode.Length > 0
+                ? "Enter code " + challenge.UserCode + " at " + challenge.VerificationUrl
+                : challenge.VerificationUrl;
+            RefreshSettingsWindow();
             OpenUrl(challenge.VerificationUrl);
             _pane.SetStatus("Waiting for device-code sign-in to finish...", Ux.MetaBrush);
         }
@@ -292,13 +292,11 @@ internal sealed partial class AssistantUi
         }
         finally
         {
-            _pane.SetAuthBusy(false);
         }
     }
 
     private async void SignOut()
     {
-        _pane.SetAuthBusy(true);
         try
         {
             _requestCancellation?.Cancel();
@@ -321,7 +319,6 @@ internal sealed partial class AssistantUi
         }
         finally
         {
-            _pane.SetAuthBusy(false);
         }
     }
 
@@ -330,27 +327,29 @@ internal sealed partial class AssistantUi
         if (_controller is null) return;
         if (_backend != AssistantBackend.Codex)
         {
-            _pane.SetAccount("Signed in through the " + AssistantCliLocator.CommandName(_backend) + " CLI");
+            _accountText = "Signed in through the " + AssistantCliLocator.CommandName(_backend) + " CLI";
+            RefreshSettingsWindow();
             return;
         }
         if (_connection is null || !_connection.IsConnected)
         {
-            _pane.SetAccount("Signed out");
+            _accountText = "Signed out";
+            RefreshSettingsWindow();
             return;
         }
         CodexAccount account = _connection.Account;
         if (!account.SignedIn)
         {
-            _pane.SetAccount("Signed out");
+            _accountText = "Signed out";
+            RefreshSettingsWindow();
             return;
         }
 
         string plan = PlanLabel(account.PlanType);
-        string text = plan.Length > 0
+        _accountText = plan.Length > 0
             ? $"Connected · ChatGPT {plan}"
             : $"Connected · {account.AuthMode}";
-        if (_connection.ModelLabel.Length > 0) text += $"\nModel: {_connection.ModelLabel}";
-        _pane.SetAccount(text);
+        if (_connection.ModelLabel.Length > 0) _accountText += $"\nModel: {_connection.ModelLabel}";
         RefreshModelSelector();
         RefreshSettingsWindow();
     }

@@ -344,15 +344,22 @@ internal static class AssistantLifecycleSmoke
         try
         {
             AssistantPane pane = window.AssistantUiForTest.Pane;
-            Check("the provider selector is present", pane.ProviderSelectorVisible);
-            string[] offered = pane.ProviderSelector.ItemsSource!.Cast<AssistantProviderItem>()
+            window.AssistantUiForTest.OpenSettings();
+            Dispatcher.UIThread.RunJobs();
+            AssistantSettingsWindow settings = window.AssistantUiForTest.SettingsWindowForTest!;
+            Check("the provider selector lives in the settings window",
+                settings.ProviderSelector.ItemCount == 3);
+            string[] offered = settings.ProviderSelector.ItemsSource!.Cast<AssistantProviderItem>()
                 .Select(item => item.Wire).ToArray();
             Check("every provider is offered exactly once",
                 offered.SequenceEqual(new[] { "codex", "claude", "opencode" }));
-            Check("the assistant starts on Codex", pane.SelectedProvider == "codex");
-            Check("Codex keeps the ChatGPT sign-in", pane.SignInVisible);
+            Check("the assistant starts on Codex", settings.SelectedProvider == "codex");
+            Check("Codex keeps the ChatGPT sign-in", window.AssistantUiForTest.SignInVisible);
+            Check("the chat header no longer carries provider clutter",
+                !pane.ChatTitle.Contains("detected", StringComparison.OrdinalIgnoreCase));
 
-            pane.InvokeProviderSelected("claude");
+            settings.ProviderSelector.SelectedItem = settings.ProviderSelector.ItemsSource!
+                .Cast<AssistantProviderItem>().Single(item => item.Wire == "claude");
             Dispatcher.UIThread.RunJobs();
             Check("choosing a provider persists it", Settings.Get("assistant.backend") == "claude");
             Check("choosing a provider is reported",
@@ -361,9 +368,13 @@ internal static class AssistantLifecycleSmoke
                 window.AssistantUiForTest.ProviderStatus.Contains("Claude Code", StringComparison.Ordinal));
             Check("Claude uses its own sign-in rather than BGS",
                 window.AssistantUiForTest.AccountStatus.Contains("claude", StringComparison.OrdinalIgnoreCase));
-            Check("the ChatGPT sign-in buttons are withdrawn for a CLI provider", !pane.SignInVisible);
+            Check("the ChatGPT sign-in buttons are withdrawn for a CLI provider",
+                !window.AssistantUiForTest.SignInVisible);
             Check("the notice explains the CLI-managed sign-in",
-                pane.NoticeText.Contains("own command-line tool", StringComparison.Ordinal));
+                window.AssistantUiForTest.NoticeText.Contains("own command-line tool", StringComparison.Ordinal));
+            Check("the settings window follows the chosen provider",
+                settings.SelectedProvider == "claude" &&
+                settings.AccountText.Contains("claude", StringComparison.OrdinalIgnoreCase));
 
             Check("Claude offers a real model list rather than free text",
                 pane.ModelSelector.ItemCount == 2);
@@ -396,7 +407,7 @@ internal static class AssistantLifecycleSmoke
         try
         {
             Check("the chosen provider is restored on the next window",
-                restored.AssistantUiForTest.Pane.SelectedProvider == "claude");
+                restored.AssistantUiForTest.Backend == AssistantBackend.Claude);
         }
         finally
         {

@@ -90,13 +90,5 @@ internal static class AssistantModelSelector
                 pane.InvokeModelSelected(item.WireModel);
         };
         reset.Click += (_, _) => pane.InvokeModelResetRequested();
-
-        ComboBox provider = pane.ProviderSelector;
-        provider.SelectionChanged += (_, _) =>
-        {
-            if (_binding) return;
-            if (provider.SelectedItem is AssistantProviderItem item)
-                pane.InvokeProviderSelected(item.Wire);
-        };
     }
 }

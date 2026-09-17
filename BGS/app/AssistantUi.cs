@@ -70,19 +70,11 @@ internal sealed partial class AssistantUi
         _pane.SendRequested += Send;
         _pane.ApproveRequested += Approve;
         _pane.RejectRequested += Reject;
-        _pane.SignInRequested += SignIn;
-        _pane.DeviceCodeRequested += DeviceCode;
-        _pane.SignOutRequested += SignOut;
-        _pane.OpenUrlRequested += OpenUrl;
+
         AssistantModelSelector.HookEvents(_pane);
         _pane.ModelSelected += SelectModel;
         _pane.ModelResetRequested += ResetModel;
-        _pane.ProviderSelected += SelectProvider;
 
-        AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
-        bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
-        _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
-        _pane.SetAccount("Signed out");
         _pane.SetStatus("Pick a chat or click + New chat to start.", Ux.MetaBrush);
         InitializeProvider();
         SetOpen(false);
@@ -91,12 +83,14 @@ internal sealed partial class AssistantUi
     public bool IsOpen => _open;
     public bool IsBusy => _pane.IsBusy;
     public int MessageCount => _pane.MessageCount;
-    public string ProviderStatus => _pane.ProviderStatus;
-    public string AccountStatus => _pane.AccountStatus;
-    public string DeviceInfo => _pane.DeviceInfo;
+    public string ProviderStatus => _settingsState.Description;
+    public string AccountStatus => _settingsState.Account;
+    public string NoticeText => _settingsState.CodexManaged
+        ? AssistantSettingsWindow.CodexNotice
+        : AssistantSettingsWindow.CliNotice;
     public string Status => _pane.Status;
     public bool ApprovalVisible => _pane.ApprovalVisible;
-    public bool SignInVisible => _pane.SignInVisible;
+    public bool SignInVisible => _settingsState.CodexManaged && !_settingsState.SignedIn;
     public AssistantPane Pane => _pane;
 
     private void RestoreChats()
