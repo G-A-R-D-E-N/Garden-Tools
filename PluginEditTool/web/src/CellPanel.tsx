@@ -11,6 +11,12 @@ import './CellPanel.css';
 const LS = (k: string, d: string) => localStorage.getItem('cell.' + k) ?? d;
 const setLS = (k: string, v: string) => localStorage.setItem('cell.' + k, v);
 
+export function parseCellGridCoordinate(value: string): number | null {
+  if (!/^[+-]?\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 export default function CellPanel({ onClose }: { onClose: () => void }) {
   const { pickPlugin: askForTarget } = useDialogs();
   const [cellId, setCellId] = useState(() => LS('cellId', ''));
@@ -215,9 +221,9 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
   const loadGrid = async (wsOverride?: string) => {
     const ws = (wsOverride ?? worldspace).trim();
-    const x = Number.parseInt(gridX, 10);
-    const y = Number.parseInt(gridY, 10);
-    if (!cell || !ws || Number.isNaN(x) || Number.isNaN(y)) return;
+    const x = parseCellGridCoordinate(gridX);
+    const y = parseCellGridCoordinate(gridY);
+    if (!cell || !ws || x === null || y === null) return;
     setLS('worldspace', ws);
     setLS('gridX', String(x));
     setLS('gridY', String(y));
@@ -228,9 +234,9 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     const backend = getBackend();
     if (!backend || !cell) return;
     const formKey = resolveWorldspaceFormKey();
-    const x = Number.parseInt(gridX, 10);
-    const y = Number.parseInt(gridY, 10);
-    if (!formKey || Number.isNaN(x) || Number.isNaN(y)) {
+    const x = parseCellGridCoordinate(gridX);
+    const y = parseCellGridCoordinate(gridY);
+    if (!formKey || x === null || y === null) {
       const msg = !formKey
         ? 'Pick a worldspace from the list (Create Record needs its FormKey).'
         : 'Grid X and Y must be integers.';
@@ -532,7 +538,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                       className="papyrus-run cell-load-btn"
                       onClick={() => loadGrid()}
                       disabled={busy || unavailable || noEnv || !worldspace.trim()
-                        || Number.isNaN(Number.parseInt(gridX, 10)) || Number.isNaN(Number.parseInt(gridY, 10))}
+                        || parseCellGridCoordinate(gridX) === null || parseCellGridCoordinate(gridY) === null}
                     >
                       <Play size={14} /> {busy ? 'Loading…' : 'Load Cell'}
                     </button>
@@ -540,7 +546,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                       className="papyrus-run cell-load-btn"
                       onClick={() => void createExteriorCell()}
                       disabled={busy || unavailable || noEnv || !worldspace.trim()
-                        || Number.isNaN(Number.parseInt(gridX, 10)) || Number.isNaN(Number.parseInt(gridY, 10))}
+                        || parseCellGridCoordinate(gridX) === null || parseCellGridCoordinate(gridY) === null}
                       title="Create a new exterior CELL via CreateRecord with worldspace FormKey, x, and y"
                     >
                       <Play size={14} /> {busy ? 'Working…' : 'Create exterior CELL'}
