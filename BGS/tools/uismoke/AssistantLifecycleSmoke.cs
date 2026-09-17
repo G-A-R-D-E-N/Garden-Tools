@@ -24,8 +24,10 @@ internal static class AssistantLifecycleSmoke
         {
             Dispatcher.UIThread.RunJobs();
             Check("assistant starts closed", !window.AssistantDrawerOpen);
-            Check("assistant toggle exists once", Smoke.Find<Button>(window)
-                .Count(button => button.Content?.ToString() == "Assistant") == 1);
+            Check("Chat entry point exists once", Smoke.Find<Button>(window)
+                .Count(button => button.Content?.ToString() == "Chat") == 1);
+            Check("Assistant settings entry point exists once", Smoke.Find<Button>(window)
+                .Count(button => button.Content?.ToString() == "Assistant settings") == 1);
             Check("assistant advertises the ChatGPT subscription boundary without a request",
                 window.AssistantUiForTest.ProviderStatus.Contains("ChatGPT via Codex", StringComparison.Ordinal));
             Check("assistant starts signed out and offers sign in",
@@ -34,13 +36,24 @@ internal static class AssistantLifecycleSmoke
             string activity = window.SelectedActivity;
             var fake = new FakeChatClient(
                 new ChatResponse(new ChatMessage(ChatRole.Assistant, "Hello from the test provider.")));
-            var toggle = Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Assistant");
-            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var settings = Smoke.Find<Button>(window)
+                .Single(button => button.Content?.ToString() == "Assistant settings");
+            settings.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            Check("opening assistant shows the drawer", window.AssistantDrawerOpen);
-            Check("opening assistant preserves active activity", activity == window.SelectedActivity);
-            Check("opening assistant makes no provider request", fake.CallCount == 0);
-            Check("opening assistant leaves the account signed out",
+            Check("Assistant settings opens the drawer", window.AssistantDrawerOpen);
+            Check("Assistant settings preserves active activity", activity == window.SelectedActivity);
+            Check("Assistant settings exposes ChatGPT sign in",
+                window.AssistantUiForTest.SignInVisible &&
+                window.AssistantUiForTest.Status.Contains("Sign in with ChatGPT", StringComparison.Ordinal));
+            Check("opening Assistant settings makes no provider request", fake.CallCount == 0);
+
+            var chat = Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Chat");
+            chat.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Check("Chat opens the assistant drawer", window.AssistantDrawerOpen);
+            Check("Chat preserves active activity", activity == window.SelectedActivity);
+            Check("opening Chat makes no provider request", fake.CallCount == 0);
+            Check("opening Chat leaves the account signed out",
                 window.AssistantUiForTest.AccountStatus == "Signed out" &&
                 window.AssistantUiForTest.SignInVisible);
 
@@ -56,7 +69,8 @@ internal static class AssistantLifecycleSmoke
                 window.AssistantUiForTest.MessageCount == 2);
             Check("completed request returns to ready", window.AssistantUiForTest.Status == "Ready.");
 
-            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Close")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Check("closing assistant restores the shell", !window.AssistantDrawerOpen);
         }
