@@ -13,19 +13,26 @@ public sealed record AssistantCommandResult(int ExitCode, string StandardOutput,
 
 public static class AssistantCommandRunner
 {
-    internal static Func<AssistantCli, IReadOnlyList<string>, TimeSpan, CancellationToken,
-        Task<AssistantCommandResult>> RunForTest = DefaultRunAsync;
+    internal static Func<AssistantCli, IReadOnlyList<string>, IReadOnlyDictionary<string, string>?,
+        TimeSpan, CancellationToken, Task<AssistantCommandResult>> RunForTest = DefaultRunAsync;
 
     public static Task<AssistantCommandResult> RunAsync(
         AssistantCli cli, IReadOnlyList<string> arguments, TimeSpan timeout,
         CancellationToken cancellationToken = default) =>
-        RunForTest(cli, arguments, timeout, cancellationToken);
+        RunForTest(cli, arguments, null, timeout, cancellationToken);
+
+    public static Task<AssistantCommandResult> RunAsync(
+        AssistantCli cli, IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string>? environment, TimeSpan timeout,
+        CancellationToken cancellationToken = default) =>
+        RunForTest(cli, arguments, environment, timeout, cancellationToken);
 
     internal static string ShellPath() =>
         Environment.GetEnvironmentVariable("COMSPEC") is { Length: > 0 } shell ? shell : "cmd.exe";
 
     private static async Task<AssistantCommandResult> DefaultRunAsync(
-        AssistantCli cli, IReadOnlyList<string> arguments, TimeSpan timeout,
+        AssistantCli cli, IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string>? environment, TimeSpan timeout,
         CancellationToken cancellationToken)
     {
         var info = new ProcessStartInfo
@@ -35,6 +42,9 @@ public static class AssistantCommandRunner
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (environment is not null)
+            foreach (KeyValuePair<string, string> pair in environment)
+                info.Environment[pair.Key] = pair.Value;
         if (cli.NeedsShell)
         {
             info.FileName = ShellPath();

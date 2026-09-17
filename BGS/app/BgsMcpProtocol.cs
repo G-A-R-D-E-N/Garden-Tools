@@ -33,6 +33,8 @@ public sealed class BgsMcpProtocol
 
     public int ToolCount => _tools.Length;
 
+    public Action<string>? OnToolInvoked { get; set; }
+
     public async Task<string> HandleAsync(string body, CancellationToken cancellationToken)
     {
         JsonDocument document;
@@ -89,6 +91,7 @@ public sealed class BgsMcpProtocol
             return Failure(id, -32602, "Unknown tool: " + CodexProtocol.Scrub(name, 80));
 
         JsonElement? arguments = CodexProtocol.Property(parameters, "arguments");
+        OnToolInvoked?.Invoke(function.Name);
         try
         {
             object? result = await function

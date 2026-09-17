@@ -36,6 +36,12 @@ public sealed class BgsMcpBridge : IDisposable
     public string Token { get; }
     public int ToolCount => _protocol.ToolCount;
 
+    public Action<string>? ToolInvoked
+    {
+        get => _protocol.OnToolInvoked;
+        set => _protocol.OnToolInvoked = value;
+    }
+
     public static BgsMcpBridge Start(IReadOnlyList<AIFunction> tools)
     {
         for (int attempt = 0; attempt < 8; attempt++)

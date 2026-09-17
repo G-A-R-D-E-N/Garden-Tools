@@ -43,12 +43,12 @@ public sealed class OpencodeModelCatalogTests
     [Fact]
     public async Task ReadingUsesTheCliCatalogRatherThanABuiltInList()
     {
-        Func<AssistantCli, IReadOnlyList<string>, TimeSpan, CancellationToken,
-            Task<AssistantCommandResult>> previous = AssistantCommandRunner.RunForTest;
+        Func<AssistantCli, IReadOnlyList<string>, IReadOnlyDictionary<string, string>?, TimeSpan,
+            CancellationToken, Task<AssistantCommandResult>> previous = AssistantCommandRunner.RunForTest;
         try
         {
             IReadOnlyList<string>? arguments = null;
-            AssistantCommandRunner.RunForTest = (_, args, _, _) =>
+            AssistantCommandRunner.RunForTest = (_, args, _, _, _) =>
             {
                 arguments = args;
                 return Task.FromResult(new AssistantCommandResult(0,
@@ -72,11 +72,11 @@ public sealed class OpencodeModelCatalogTests
     [Fact]
     public async Task AFailedCatalogCommandYieldsNoModelsRatherThanGuesses()
     {
-        Func<AssistantCli, IReadOnlyList<string>, TimeSpan, CancellationToken,
-            Task<AssistantCommandResult>> previous = AssistantCommandRunner.RunForTest;
+        Func<AssistantCli, IReadOnlyList<string>, IReadOnlyDictionary<string, string>?, TimeSpan,
+            CancellationToken, Task<AssistantCommandResult>> previous = AssistantCommandRunner.RunForTest;
         try
         {
-            AssistantCommandRunner.RunForTest = (_, _, _, _) =>
+            AssistantCommandRunner.RunForTest = (_, _, _, _, _) =>
                 Task.FromResult(new AssistantCommandResult(1, "", "failed"));
 
             Assert.Empty(await OpencodeModelCatalog.ReadAsync(new AssistantCli("opencode", "detected")));
