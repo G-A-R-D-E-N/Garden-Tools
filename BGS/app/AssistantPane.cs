@@ -31,6 +31,8 @@ internal sealed class AssistantPane : Border
     private readonly ComboBox _modelSelect = new() { PlaceholderText = "Model" };
     private readonly Button _modelReset = Ux.Secondary("Reset model");
     private readonly ComboBox _providerSelect = new() { PlaceholderText = "Provider" };
+    private readonly TextBlock _notice = new();
+    private bool _codexManaged = true;
     private readonly Button _send = Ux.Primary("Send");
     private readonly Button _cancel = Ux.Secondary("Cancel");
     private readonly Border _approval = new();
@@ -124,16 +126,11 @@ internal sealed class AssistantPane : Border
         _deviceInfo.FontSize = Ux.FontSmall;
         _deviceInfo.Margin = new Thickness(0, 4, 0, 0);
 
-        var notice = new TextBlock
-        {
-            Text = "ChatGPT sign-in happens in your browser or with a device code. BGS never asks for or stores your " +
-                "ChatGPT password, OAuth token, or OpenAI API key. Opening this drawer makes no model request. " +
-                "Prompts send only bounded editor context and BGS tool results when you press Send.",
-            Foreground = Ux.MutedBrush,
-            FontSize = Ux.FontSmall,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 6, 0, 8),
-        };
+        _notice.Text = CodexNotice;
+        _notice.Foreground = Ux.MutedBrush;
+        _notice.FontSize = Ux.FontSmall;
+        _notice.TextWrapping = TextWrapping.Wrap;
+        _notice.Margin = new Thickness(0, 6, 0, 8);
 
         var conversation = new ScrollViewer
         {
@@ -182,7 +179,8 @@ internal sealed class AssistantPane : Border
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         body.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
         body.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var top = new StackPanel { Children = { header, _chatHeader, _provider, _account, authRow, providerRow, modelRow, _deviceInfo, notice } };
+        var top = new StackPanel { Children = { header, _chatHeader, _provider, _account, authRow,
+            providerRow, modelRow, _deviceInfo, _notice } };
         Grid.SetRow(top, 0);
         Grid.SetRow(conversation, 1);
         var bottom = new StackPanel { Children = { _approval, _composer, composerButtons, _status } };
@@ -233,6 +231,27 @@ internal sealed class AssistantPane : Border
 
     public bool ProviderSelectorVisible => _providerSelect.IsVisible;
     public string? SelectedProvider => (_providerSelect.SelectedItem as AssistantProviderItem)?.Wire;
+    public string NoticeText => _notice.Text ?? "";
+
+    public const string CodexNotice =
+        "ChatGPT sign-in happens in your browser or with a device code. BGS never asks for or stores your " +
+        "ChatGPT password, OAuth token, or OpenAI API key. Opening this drawer makes no model request. " +
+        "Prompts send only bounded editor context and BGS tool results when you press Send.";
+
+    public const string CliNotice =
+        "This provider signs in through its own command-line tool, so BGS never sees or stores a credential. " +
+        "Opening this drawer makes no model request. Prompts send only bounded editor context and BGS tool " +
+        "results when you press Send.";
+
+    public void SetAuthProvider(bool codexManaged)
+    {
+        _codexManaged = codexManaged;
+        _signIn.IsVisible = codexManaged;
+        _deviceCode.IsVisible = codexManaged;
+        _openUrl.IsVisible = codexManaged;
+        _signOut.IsVisible = codexManaged;
+        _notice.Text = codexManaged ? CodexNotice : CliNotice;
+    }
     public TextBox Composer => _composer;
     public string ChatTitle
     {
@@ -244,6 +263,7 @@ internal sealed class AssistantPane : Border
     public void SetAccount(string text)
     {
         _account.Text = text;
+        if (!_codexManaged) return;
         bool signedIn = text.StartsWith("Connected", StringComparison.Ordinal);
         _signIn.IsVisible = !signedIn;
         _deviceCode.IsVisible = !signedIn;

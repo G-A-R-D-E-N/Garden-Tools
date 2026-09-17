@@ -105,6 +105,7 @@ internal static class AssistantLifecycleSmoke
         }
 
         WindowOwnsCodexConnection();
+        TheGearOpensAssistantSettings();
         ModelSelectorListsCatalogAndPersistsChoice();
         ProviderSelectionIsExplicitAndPersisted();
         ActiveEditorApproval();
@@ -232,6 +233,33 @@ internal static class AssistantLifecycleSmoke
         }
     }
 
+    private static void TheGearOpensAssistantSettings()
+    {
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            EditorShell? shell = EditorShell.Find(window.Content as Control);
+            Check("the shell hosts a settings gear", shell?.SettingsButton != null);
+            Check("the gear sits in the left rail", shell!.SettingsButton.Content?.ToString() == "\u2699");
+            Check("the assistant starts closed", !window.AssistantDrawerOpen);
+
+            shell.SettingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Check("the gear opens the assistant settings", window.AssistantDrawerOpen);
+            Check("settings shows the provider and ChatGPT sign-in",
+                window.AssistantUiForTest.Pane.ProviderSelectorVisible &&
+                window.AssistantUiForTest.SignInVisible);
+            Check("settings explains the ChatGPT sign-in boundary",
+                window.AssistantUiForTest.Pane.NoticeText.Contains("ChatGPT sign-in", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
+    }
+
     private static void ProviderSelectionIsExplicitAndPersisted()
     {
         Settings.TrySet("assistant.backend", "", out _);
@@ -255,6 +283,7 @@ internal static class AssistantLifecycleSmoke
             Check("every provider is offered exactly once",
                 offered.SequenceEqual(new[] { "codex", "claude", "opencode" }));
             Check("the assistant starts on Codex", pane.SelectedProvider == "codex");
+            Check("Codex keeps the ChatGPT sign-in", pane.SignInVisible);
 
             pane.InvokeProviderSelected("claude");
             Dispatcher.UIThread.RunJobs();
@@ -265,6 +294,9 @@ internal static class AssistantLifecycleSmoke
                 window.AssistantUiForTest.ProviderStatus.Contains("Claude Code", StringComparison.Ordinal));
             Check("Claude uses its own sign-in rather than BGS",
                 window.AssistantUiForTest.AccountStatus.Contains("claude", StringComparison.OrdinalIgnoreCase));
+            Check("the ChatGPT sign-in buttons are withdrawn for a CLI provider", !pane.SignInVisible);
+            Check("the notice explains the CLI-managed sign-in",
+                pane.NoticeText.Contains("own command-line tool", StringComparison.Ordinal));
 
             Check("Claude offers a real model list rather than free text",
                 pane.ModelSelector.ItemCount == 2);

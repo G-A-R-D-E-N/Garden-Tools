@@ -123,12 +123,14 @@ internal sealed partial class AssistantUi
             AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
             bool detected = AssistantProvider.TryResolveExecutable(options, out CodexExecutable? executable, out _);
             _pane.SetProvider(AssistantProvider.Describe(options, detected ? executable : null));
+            _pane.SetAuthProvider(codexManaged: true);
             return;
         }
 
         string name = AssistantCliLocator.DisplayName(_backend);
         bool found = AssistantCliLocator.TryLocateFromSettings(_backend, out _, out _);
         _pane.SetProvider(found ? $"{name} · CLI detected" : $"{name} · CLI not detected");
+        _pane.SetAuthProvider(codexManaged: false);
     }
 
     private async Task RefreshProviderModelsAsync()

@@ -231,6 +231,8 @@ internal sealed partial class AssistantUi
             Ux.MetaBrush);
     }
 
+    internal void OpenSettings() => OpenAsSettings();
+
     private void NewChatInternal()
     {
         if (_controller is null) return;

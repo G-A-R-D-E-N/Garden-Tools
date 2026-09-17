@@ -37,6 +37,7 @@ public sealed class EditorShell : Grid
         Spacing = 6,
     };
     private readonly Border _secondaryHost;
+    private readonly Button _settingsButton;
     private readonly WrapPanel _tools = new()
     {
         Orientation = Orientation.Horizontal,
@@ -76,12 +77,33 @@ public sealed class EditorShell : Grid
             rail.Children.Add(button);
         }
 
+        var railStack = new DockPanel { LastChildFill = false };
+        DockPanel.SetDock(rail, Dock.Top);
+        railStack.Children.Add(rail);
+
+        _settingsButton = new Button
+        {
+            Content = "\u2699",
+            FontSize = 18,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Padding = new Thickness(4, 8),
+            CornerRadius = new CornerRadius(Ux.Radius),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = Ux.MetaBrush,
+        };
+        ToolTip.SetTip(_settingsButton, "Assistant settings: provider, model and sign-in");
+        _settingsButton.Click += (_, _) => SettingsRequested?.Invoke();
+        DockPanel.SetDock(_settingsButton, Dock.Bottom);
+        railStack.Children.Add(_settingsButton);
+
         var railHost = new Border
         {
             Background = Ux.RailBrush,
             BorderBrush = Ux.BorderBrush,
             BorderThickness = new Thickness(0, 0, 1, 0),
-            Child = rail,
+            Child = railStack,
         };
         SetRowSpan(railHost, 4);
         Children.Add(railHost);
@@ -135,6 +157,10 @@ public sealed class EditorShell : Grid
     }
 
     public event Action<string>? Navigate;
+
+    public event Action? SettingsRequested;
+
+    public Button SettingsButton => _settingsButton;
 
     public string Activity { get; private set; } = Home;
 
