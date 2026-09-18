@@ -50,7 +50,8 @@ public sealed class AssistantConversationList : IDisposable
     public event Action? StructureChanged;
 
     public IReadOnlyList<AssistantConversationEntry> Entries => _entries;
-    public AssistantConversationEntry? Active => _activeIndex >= 0 ? _entries[_activeIndex] : null;
+    public AssistantConversationEntry? Active =>
+        _activeIndex >= 0 && _activeIndex < _entries.Count ? _entries[_activeIndex] : null;
     public int ActiveIndex => _activeIndex;
     public bool IsBusy { get; set; }
     public string? ActiveChatId => Active?.Chat.Id;
@@ -185,10 +186,10 @@ public sealed class AssistantConversationList : IDisposable
 
         entry.Dispose();
         _entries.RemoveAt(index);
-        StructureChanged?.Invoke();
 
         bool autoSelect = index == _activeIndex;
         bool shift = index < _activeIndex;
+        bool repaired = autoSelect || shift;
 
         if (_entries.Count == 0)
         {
@@ -202,20 +203,20 @@ public sealed class AssistantConversationList : IDisposable
             }
             _entries.Add(new AssistantConversationEntry(fresh));
             _activeIndex = 0;
-            SelectionChanged?.Invoke(_activeIndex);
-            return _entries[0];
+            repaired = true;
         }
         else if (autoSelect)
         {
             _activeIndex = Math.Min(index, _entries.Count - 1);
-            SelectionChanged?.Invoke(_activeIndex);
         }
         else if (shift)
         {
             _activeIndex--;
-            SelectionChanged?.Invoke(_activeIndex);
         }
-        return _entries[_activeIndex];
+
+        StructureChanged?.Invoke();
+        if (repaired) SelectionChanged?.Invoke(_activeIndex);
+        return Active;
     }
 
     public IReadOnlyList<AssistantChatSummary> Summaries() =>

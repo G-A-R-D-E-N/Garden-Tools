@@ -44,6 +44,86 @@ public sealed class OpencodeCliTests
     }
 
     [Fact]
+    public void TheConfigSelectsADenyAllBgsAgent()
+    {
+        string json = OpencodeCli.BuildConfigJson(
+            "http://127.0.0.1:1234/mcp", Array.Empty<string>());
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement agent = document.RootElement.GetProperty("agent")
+            .GetProperty(OpencodeCli.AgentName);
+
+        Assert.Equal("primary", agent.GetProperty("mode").GetString());
+        JsonElement permission = agent.GetProperty("permission");
+        Assert.Equal("deny", permission.GetProperty("*").GetString());
+        Assert.Equal("allow", permission.GetProperty("bgs_*").GetString());
+        foreach (string tool in OpencodeCli.AgentDeniedPermissions)
+            Assert.Equal("deny", permission.GetProperty(tool).GetString());
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryAcceptsADenyAllBgsAgent()
+    {
+        string resolved = Resolved(
+            OpencodeStubConfig.AgentPermissionForTest(),
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl +
+            "\",\"enabled\":true},\"evil\":{\"type\":\"local\",\"enabled\":false}}");
+
+        Assert.True(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsAnAgentAllowOutsideBgs()
+    {
+        string resolved = Resolved(
+            "{\"*\":\"deny\",\"question\":\"allow\",\"bgs_*\":\"allow\"}",
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsAReenabledForeignServer()
+    {
+        string resolved = Resolved(
+            OpencodeStubConfig.AgentPermissionForTest(),
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl +
+            "\",\"enabled\":true},\"evil\":{\"type\":\"local\",\"enabled\":true}}");
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsAMissingBgsAgent()
+    {
+        Assert.False(OpencodeCli.VerifyResolvedConfig(
+            "{\"mcp\":{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}}",
+            BridgeUrl));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsABridgeUrlMismatch()
+    {
+        string resolved = Resolved(
+            OpencodeStubConfig.AgentPermissionForTest(),
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:9/other\",\"enabled\":true}}");
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsUnreadableOutput()
+    {
+        Assert.False(OpencodeCli.VerifyResolvedConfig("not json", BridgeUrl));
+        Assert.False(OpencodeCli.VerifyResolvedConfig("", BridgeUrl));
+    }
+
+    private const string BridgeUrl = "http://127.0.0.1:9/mcp";
+
+    private static string Resolved(string agentPermission, string servers) =>
+        "{\"agent\":{\"bgs\":{\"mode\":\"primary\",\"permission\":" + agentPermission +
+        "}},\"mcp\":" + servers + "}";
+
+    [Fact]
     public void ConfiguredServersAreReadFromTheResolvedConfiguration()
     {
         const string resolved =

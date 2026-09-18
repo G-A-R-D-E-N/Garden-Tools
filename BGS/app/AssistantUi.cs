@@ -318,7 +318,11 @@ internal sealed partial class AssistantUi
     private bool HandleCommand(string text)
     {
         if (!AssistantCommands.TryParse(text, out string name, out _)) return false;
-        if (!AssistantCommands.IsBgsCommand(name)) return false;
+        if (!AssistantCommands.IsBgsCommand(name))
+        {
+            _pane.SetStatus("Unknown BGS command. Use /help to list available commands.", Ux.WarnBrush);
+            return true;
+        }
         switch (name)
         {
             case "new":
@@ -358,7 +362,7 @@ internal sealed partial class AssistantUi
         _pane.AddUser("/help");
         foreach (AssistantCommand command in AssistantCommands.All)
             _pane.AddTool("/" + command.Name, false, command.Description);
-        _pane.SetStatus("BGS commands. Other slash text goes to the provider.", Ux.MetaBrush);
+        _pane.SetStatus("BGS commands. Only these slash commands run here.", Ux.MetaBrush);
     }
 
     private async void SendNow(string prompt)

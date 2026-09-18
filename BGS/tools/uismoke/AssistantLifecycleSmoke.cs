@@ -125,6 +125,8 @@ internal static partial class AssistantLifecycleSmoke
         ApiCredentialsStayWithTheirProvider();
         DuplicateModelIdsStayDistinct();
         AQueuedMessageNeverCrossesConversations();
+        DeletingTheLastChatLeavesAUsableConversation();
+        UnknownSlashCommandsAreRefused();
         ProgressShowsWhileATurnRuns();
         ComposerSendsQueuesAndRunsCommands();
         SlashCommandsCompleteInTheComposer();

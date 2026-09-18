@@ -58,32 +58,24 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
                 return new("provider_error",
                     _discovery?.Error ?? OpencodeServerDiscovery.Failed.Error,
                     0, Activity(invoked), Pending());
-            var arguments = new List<string> { "run", "--format", "json", "--pure", "--dir", _root };
+            string configPath = WriteConfig();
+            OpencodeConfigVerification verification = await OpencodeCli.VerifyEffectiveConfigAsync(
+                _cli, configPath, _bridge.TokenQueryUrl(), cancellationToken).ConfigureAwait(false);
+            if (!verification.Ok)
+                return new("provider_error", verification.Error, 0, Activity(invoked), Pending());
+            var arguments = new List<string>
+                { "run", "--format", "json", "--pure", "--agent", OpencodeCli.AgentName, "--dir", _root };
             if (_model.Length > 0)
             {
                 arguments.Add("--model");
                 arguments.Add(_model);
             }
-            bool isCommand = prompt.StartsWith("/", StringComparison.Ordinal);
-            string turn = isCommand ? prompt : replayPrompt.Length > 0 ? replayPrompt : prompt;
-            if (isCommand)
-            {
-                int space = turn.IndexOf(' ');
-                string command = space < 0 ? turn[1..] : turn[1..space];
-                string commandArguments = space < 0 ? "" : turn[(space + 1)..].Trim();
-                arguments.Add("--command");
-                arguments.Add(command);
-                if (commandArguments.Length > 0) arguments.Add(commandArguments);
-                Report(AssistantPhase.Working, "Running /" + command + "\u2026");
-            }
-            else
-            {
-                arguments.Add(TurnText(turn, context));
-            }
+            string turn = replayPrompt.Length > 0 ? replayPrompt : prompt;
+            arguments.Add(TurnText(turn, context));
 
             var environment = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["OPENCODE_CONFIG"] = WriteConfig(),
+                ["OPENCODE_CONFIG"] = configPath,
             };
 
             AssistantCommandResult result = await AssistantCommandRunner

@@ -22,10 +22,13 @@ public sealed class OpencodeAssistantSessionTests
     {
         _previous = AssistantCommandRunner.RunForTest;
         AssistantCommandRunner.RunForTest = (_, arguments, environment, _, _) =>
-            arguments.Contains("debug")
-                ? Task.FromResult(new AssistantCommandResult(0,
-                    "{\"mcp\":{\"f4-re-mcp\":{\"type\":\"local\"}}}", ""))
-                : handler(arguments, environment);
+            arguments.Contains("debug") && environment is not null &&
+            environment.TryGetValue("OPENCODE_CONFIG", out string? path) && File.Exists(path)
+                ? Task.FromResult(new AssistantCommandResult(0, OpencodeStubConfig.Resolved(path), ""))
+                : arguments.Contains("debug")
+                    ? Task.FromResult(new AssistantCommandResult(0,
+                        "{\"mcp\":{\"f4-re-mcp\":{\"type\":\"local\"}}}", ""))
+                    : handler(arguments, environment);
     }
 
     private static void Restore()
@@ -258,6 +261,30 @@ public sealed class OpencodeAssistantSessionTests
             Assert.True(File.Exists(captured));
             session.Dispose();
             Assert.False(File.Exists(captured));
+        }
+        finally
+        {
+            Restore();
+        }
+    }
+
+    [Fact]
+    public async Task ProviderSlashCommandsAreNeverForwarded()
+    {
+        using BgsMcpBridge bridge = BgsMcpBridge.Start(BgsMcpProtocolTests.Tools());
+        Stub((arguments, _) =>
+        {
+            if (arguments.Contains("--command"))
+                return Task.FromResult(Text("SHELL EXECUTED"));
+            return Task.FromResult(Text("ordinary answer"));
+        });
+        try
+        {
+            using var session = new OpencodeAssistantSession(Cli, bridge, "");
+            AssistantReply reply = await session.SendAsync("/evil !`whoami`", CodexSessionFixture.Context());
+
+            Assert.Equal("ok", reply.Status);
+            Assert.DoesNotContain("SHELL EXECUTED", reply.Text, StringComparison.Ordinal);
         }
         finally
         {

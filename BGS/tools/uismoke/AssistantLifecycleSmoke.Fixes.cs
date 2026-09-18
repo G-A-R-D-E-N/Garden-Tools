@@ -194,4 +194,55 @@ internal static partial class AssistantLifecycleSmoke
             Settings.TrySet(ApiProviders.BaseUrlSetting(AssistantBackend.Local), "", out _);
         }
     }
+
+    private static void DeletingTheLastChatLeavesAUsableConversation()
+    {
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            OpenChat(window);
+            Smoke.Find<Button>(window).First(button => button.Content?.ToString() == "New chat")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            string[] ids = window.AssistantUiForTest.ChatListForTest
+                .Select(summary => summary.Id).ToArray();
+            Check("the smoke starts with two chats", ids.Length == 2);
+            foreach (string id in ids)
+            {
+                window.AssistantUiForTest.DeleteChatForTest(id);
+                Dispatcher.UIThread.RunJobs();
+            }
+            Check("deleting every chat leaves one usable conversation",
+                window.AssistantUiForTest.ChatListForTest.Count == 1);
+            Check("the surviving conversation is selected",
+                window.AssistantUiForTest.ActiveChatIdForTest ==
+                window.AssistantUiForTest.ChatListForTest[0].Id);
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
+    }
+
+    private static void UnknownSlashCommandsAreRefused()
+    {
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            OpenChat(window);
+            AssistantPane pane = window.AssistantUiForTest.Pane;
+            pane.Composer.Text = "/evil !`whoami`";
+            PressEnter(window, pane, shift: false);
+            Check("an unknown slash command is refused",
+                pane.Status.Contains("Unknown BGS command", StringComparison.Ordinal));
+            Check("a refused command never reaches the conversation",
+                !TextShown(window).Contains("/evil", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
+    }
 }

@@ -19,16 +19,30 @@ public sealed record OpencodeServerDiscovery(bool Ok, IReadOnlyList<string> Serv
         "The configured opencode MCP servers could not be read, so BGS refused to start the session.");
 }
 
+public sealed record OpencodeConfigVerification(bool Ok, string Error)
+{
+    public static readonly OpencodeConfigVerification Refused = new(false,
+        "The opencode permission boundary could not be verified, so BGS refused to run the turn.");
+}
+
 public static class OpencodeCli
 {
     public const int MaximumAnswerCharacters = 8000;
     public const string ServerName = "bgs";
+    public const string AgentName = "bgs";
+    public const string AgentDescription = "BGS assistant agent. Only BGS tools are allowed.";
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
 
     internal static readonly string[] DeniedTools =
     {
         "bash", "edit", "webfetch", "websearch",
         "read", "glob", "grep", "task", "todowrite", "skill",
+    };
+
+    internal static readonly string[] AgentDeniedPermissions =
+    {
+        "read", "edit", "glob", "grep", "list", "bash", "task",
+        "todowrite", "webfetch", "websearch", "lsp", "skill", "question",
     };
 
     private static readonly JsonSerializerOptions Wire = new(JsonSerializerDefaults.Web);
@@ -38,6 +52,23 @@ public static class OpencodeCli
         var permissions = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (string tool in DeniedTools) permissions[tool] = "deny";
         permissions["bgs*"] = "allow";
+
+        var agentPermission = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["*"] = "deny",
+        };
+        foreach (string tool in AgentDeniedPermissions) agentPermission[tool] = "deny";
+        agentPermission["bgs_*"] = "allow";
+
+        var agents = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [AgentName] = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["mode"] = "primary",
+                ["description"] = AgentDescription,
+                ["permission"] = agentPermission,
+            },
+        };
 
         var servers = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (string name in otherServers)
@@ -55,9 +86,100 @@ public static class OpencodeCli
         var config = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["permission"] = permissions,
+            ["agent"] = agents,
             ["mcp"] = servers,
         };
         return JsonSerializer.Serialize(config, Wire);
+    }
+
+    public static async Task<OpencodeConfigVerification> VerifyEffectiveConfigAsync(
+        AssistantCli cli, string configPath, string bridgeUrl,
+        CancellationToken cancellationToken = default)
+    {
+        AssistantCommandResult result = await AssistantCommandRunner.RunAsync(
+            cli,
+            new[] { "debug", "config" },
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENCODE_CONFIG"] = configPath },
+            Timeout, cancellationToken).ConfigureAwait(false);
+        if (!result.Succeeded) return OpencodeConfigVerification.Refused;
+        return VerifyResolvedConfig(result.StandardOutput, bridgeUrl)
+            ? new OpencodeConfigVerification(true, "")
+            : OpencodeConfigVerification.Refused;
+    }
+
+    internal static bool VerifyResolvedConfig(string resolvedConfigJson, string bridgeUrl)
+    {
+        if (string.IsNullOrWhiteSpace(resolvedConfigJson)) return false;
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(resolvedConfigJson);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return false;
+            if (CodexProtocol.Property(document.RootElement, "agent") is not
+                { ValueKind: JsonValueKind.Object } agents) return false;
+            if (CodexProtocol.Property(agents, AgentName) is not
+                { ValueKind: JsonValueKind.Object } agent) return false;
+            if (CodexProtocol.String(agent, "mode") != "primary") return false;
+            if (CodexProtocol.Property(agent, "permission") is not
+                { ValueKind: JsonValueKind.Object } permission) return false;
+            if (!AgentPermissionIsDenyAllExceptBgs(permission)) return false;
+            if (CodexProtocol.Property(document.RootElement, "mcp") is not
+                { ValueKind: JsonValueKind.Object } servers) return false;
+            return McpBoundaryHolds(servers, bridgeUrl);
+        }
+    }
+
+    private static bool AgentPermissionIsDenyAllExceptBgs(JsonElement permission)
+    {
+        foreach (JsonProperty property in permission.EnumerateObject())
+        {
+            if (string.Equals(property.Name, "bgs_*", StringComparison.Ordinal))
+            {
+                if (property.Value.ValueKind != JsonValueKind.String ||
+                    property.Value.GetString() != "allow") return false;
+                continue;
+            }
+            if (!SubtreeDeniesAll(property.Value)) return false;
+        }
+        return true;
+    }
+
+    private static bool SubtreeDeniesAll(JsonElement node)
+    {
+        if (node.ValueKind == JsonValueKind.String) return node.GetString() == "deny";
+        if (node.ValueKind != JsonValueKind.Object) return false;
+        foreach (JsonProperty property in node.EnumerateObject())
+            if (!SubtreeDeniesAll(property.Value)) return false;
+        return true;
+    }
+
+    private static bool McpBoundaryHolds(JsonElement servers, string bridgeUrl)
+    {
+        foreach (JsonProperty property in servers.EnumerateObject())
+        {
+            if (string.Equals(property.Name, ServerName, StringComparison.Ordinal))
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object) return false;
+                if (CodexProtocol.String(property.Value, "type") != "remote") return false;
+                if (CodexProtocol.String(property.Value, "url") != bridgeUrl) return false;
+                if (CodexProtocol.Property(property.Value, "enabled") is not
+                    { ValueKind: JsonValueKind.True }) return false;
+                continue;
+            }
+            if (property.Value.ValueKind != JsonValueKind.Object) return false;
+            if (CodexProtocol.Property(property.Value, "enabled") is not
+                { ValueKind: JsonValueKind.False }) return false;
+        }
+        return true;
     }
 
     public static bool TryParseConfiguredServers(string resolvedConfigJson, out IReadOnlyList<string> servers)
