@@ -81,7 +81,7 @@ internal sealed partial class AssistantUi
             _queue.RemoveAt(index);
             _pane.ShowQueue(QueueTexts());
         };
-        _pane.CommandSource = () => AssistantCommandCatalog.For(_backend);
+        _pane.CommandSource = () => AssistantCommands.All;
         _pane.QuickStartDismissed += DismissQuickStart;
 
         _pane.SetStatus("Pick a chat or click + New chat to start.", Ux.MetaBrush);

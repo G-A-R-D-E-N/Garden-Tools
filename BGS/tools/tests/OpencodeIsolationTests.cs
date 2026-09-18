@@ -271,7 +271,8 @@ public sealed class OpencodeIsolationTests
     {
         string json = OpencodeCli.BuildConfigJson(
             "http://127.0.0.1:1234/mcp?token=t",
-            new[] { "f4-re-mcp", "fo4editor", "bgs" });
+            new[] { "f4-re-mcp", "fo4editor", "bgs" },
+            OpencodeStubConfig.Advertised);
 
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement servers = document.RootElement.GetProperty("mcp");

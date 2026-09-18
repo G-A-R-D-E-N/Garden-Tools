@@ -328,6 +328,9 @@ internal static partial class AssistantLifecycleSmoke
             Check("typing a slash shows the command list", pane.CommandsVisible);
             Check("the list holds the BGS commands",
                 pane.CommandChoices.Any(command => command.Name == "new"));
+            Check("the palette offers only the BGS commands",
+                pane.CommandChoices.All(command =>
+                    AssistantCommands.All.Any(bgs => bgs.Name == command.Name)));
 
             pane.Composer.Text = "/cl";
             Dispatcher.UIThread.RunJobs();

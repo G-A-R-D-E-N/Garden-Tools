@@ -13,7 +13,7 @@ public sealed class OpencodeCliTests
     public void TheConfigDeniesEveryBuiltInToolAndEnablesOnlyTheBridge()
     {
         string json = OpencodeCli.BuildConfigJson("http://127.0.0.1:1234/mcp",
-            new[] { "f4-re-mcp", "prisma-mcp" });
+            new[] { "f4-re-mcp", "prisma-mcp" }, OpencodeStubConfig.Advertised);
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement root = document.RootElement;
 
@@ -35,7 +35,7 @@ public sealed class OpencodeCliTests
     public void TheBridgesOwnNameIsNeverDisabledByTheCallersList()
     {
         string json = OpencodeCli.BuildConfigJson("http://127.0.0.1:1/mcp",
-            new[] { OpencodeCli.ServerName, "other" });
+            new[] { OpencodeCli.ServerName, "other" }, OpencodeStubConfig.Advertised);
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement bridge = document.RootElement.GetProperty("mcp").GetProperty(OpencodeCli.ServerName);
 
@@ -44,10 +44,10 @@ public sealed class OpencodeCliTests
     }
 
     [Fact]
-    public void TheConfigSelectsADenyAllBgsAgent()
+    public void TheConfigAllowsOnlyTheExactCallableBgsTools()
     {
         string json = OpencodeCli.BuildConfigJson(
-            "http://127.0.0.1:1234/mcp", Array.Empty<string>());
+            "http://127.0.0.1:1234/mcp", Array.Empty<string>(), OpencodeStubConfig.Advertised);
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement agent = document.RootElement.GetProperty("agent")
             .GetProperty(OpencodeCli.AgentName);
@@ -55,9 +55,32 @@ public sealed class OpencodeCliTests
         Assert.Equal("primary", agent.GetProperty("mode").GetString());
         JsonElement permission = agent.GetProperty("permission");
         Assert.Equal("deny", permission.GetProperty("*").GetString());
-        Assert.Equal("allow", permission.GetProperty("bgs_*").GetString());
         foreach (string tool in OpencodeCli.AgentDeniedPermissions)
             Assert.Equal("deny", permission.GetProperty(tool).GetString());
+
+        string[] allowed = permission.EnumerateObject()
+            .Where(property => property.Value.ValueKind == JsonValueKind.String &&
+                property.Value.GetString() == "allow")
+            .Select(property => property.Name)
+            .ToArray();
+        Assert.Equal(OpencodeCli.CallableToolNames(OpencodeStubConfig.Advertised), allowed);
+        foreach (string tool in allowed)
+        {
+            Assert.StartsWith(OpencodeCli.ServerName + "_", tool, StringComparison.Ordinal);
+            Assert.DoesNotContain("*", tool, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void TheCallableNamesPrefixTheServerKeyOntoTheAdvertisedNames()
+    {
+        Assert.Equal(new[]
+            {
+                "bgs_bgs_inspect_behavior", "bgs_bgs_resolve_project_chain", "bgs_bgs_check_project",
+                "bgs_bgs_search_project", "bgs_bgs_inspect_animation", "bgs_bgs_inspect_object",
+                "bgs_bgs_set_clip_animation",
+            },
+            OpencodeCli.CallableToolNames(OpencodeStubConfig.Advertised));
     }
 
     [Fact]
@@ -68,17 +91,59 @@ public sealed class OpencodeCliTests
             "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl +
             "\",\"enabled\":true},\"evil\":{\"type\":\"local\",\"enabled\":false}}");
 
-        Assert.True(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+        Assert.True(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
     [Fact]
     public void TheResolvedBoundaryRejectsAnAgentAllowOutsideBgs()
     {
         string resolved = Resolved(
-            "{\"*\":\"deny\",\"question\":\"allow\",\"bgs_*\":\"allow\"}",
+            "{\"*\":\"deny\",\"question\":\"allow\",\"bgs_bgs_inspect_object\":\"allow\"}",
             "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
 
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsAWildcardBgsAllow()
+    {
+        string resolved = Resolved(
+            "{\"*\":\"deny\",\"bgs_*\":\"allow\"}",
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsAMissingWildcardDeny()
+    {
+        string resolved = Resolved(
+            OpencodeStubConfig.AgentPermissionForTest().Replace("\"*\":\"deny\",", ""),
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsAnAmbientCustomToolAllow()
+    {
+        string resolved = Resolved(
+            OpencodeStubConfig.AgentPermissionForTest().Replace(
+                "\"*\":\"deny\"", "\"*\":\"deny\",\"bgs_evil\":\"allow\""),
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
+    }
+
+    [Fact]
+    public void TheResolvedBoundaryRejectsAMissingGenuineBgsTool()
+    {
+        string resolved = Resolved(
+            OpencodeStubConfig.AgentPermissionForTest().Replace(
+                "\"bgs_bgs_inspect_object\":\"allow\",", ""),
+            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
     [Fact]
@@ -89,7 +154,7 @@ public sealed class OpencodeCliTests
             "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl +
             "\",\"enabled\":true},\"evil\":{\"type\":\"local\",\"enabled\":true}}");
 
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
     [Fact]
@@ -97,7 +162,7 @@ public sealed class OpencodeCliTests
     {
         Assert.False(OpencodeCli.VerifyResolvedConfig(
             "{\"mcp\":{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}}",
-            BridgeUrl));
+            BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
     [Fact]
@@ -107,20 +172,21 @@ public sealed class OpencodeCliTests
             OpencodeStubConfig.AgentPermissionForTest(),
             "{\"bgs\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:9/other\",\"enabled\":true}}");
 
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl));
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
     [Fact]
     public void TheResolvedBoundaryRejectsUnreadableOutput()
     {
-        Assert.False(OpencodeCli.VerifyResolvedConfig("not json", BridgeUrl));
-        Assert.False(OpencodeCli.VerifyResolvedConfig("", BridgeUrl));
+        Assert.False(OpencodeCli.VerifyResolvedConfig("not json", BridgeUrl, OpencodeStubConfig.Advertised));
+        Assert.False(OpencodeCli.VerifyResolvedConfig("", BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
     private const string BridgeUrl = "http://127.0.0.1:9/mcp";
 
     private static string Resolved(string agentPermission, string servers) =>
-        "{\"agent\":{\"bgs\":{\"mode\":\"primary\",\"permission\":" + agentPermission +
+        "{\"permission\":" + OpencodeStubConfig.TopLevelPermissionForTest() +
+        ",\"agent\":{\"bgs\":{\"mode\":\"primary\",\"permission\":" + agentPermission +
         "}},\"mcp\":" + servers + "}";
 
     [Fact]

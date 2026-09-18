@@ -47,18 +47,33 @@ public static class OpencodeCli
 
     private static readonly JsonSerializerOptions Wire = new(JsonSerializerDefaults.Web);
 
-    public static string BuildConfigJson(string bridgeUrl, IReadOnlyList<string> otherServers)
+    public static IReadOnlyList<string> CallableToolNames(IReadOnlyList<string> advertisedToolNames)
     {
+        var names = new List<string>(advertisedToolNames.Count);
+        foreach (string advertised in advertisedToolNames)
+        {
+            if (advertised.Length == 0) continue;
+            names.Add(ServerName + "_" + advertised);
+        }
+        return names.AsReadOnly();
+    }
+
+    public static string BuildConfigJson(
+        string bridgeUrl, IReadOnlyList<string> otherServers,
+        IReadOnlyList<string> advertisedToolNames)
+    {
+        IReadOnlyList<string> callable = CallableToolNames(advertisedToolNames);
+
         var permissions = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (string tool in DeniedTools) permissions[tool] = "deny";
-        permissions["bgs*"] = "allow";
+        foreach (string tool in callable) permissions[tool] = "allow";
 
         var agentPermission = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["*"] = "deny",
         };
         foreach (string tool in AgentDeniedPermissions) agentPermission[tool] = "deny";
-        agentPermission["bgs_*"] = "allow";
+        foreach (string tool in callable) agentPermission[tool] = "allow";
 
         var agents = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -94,6 +109,7 @@ public static class OpencodeCli
 
     public static async Task<OpencodeConfigVerification> VerifyEffectiveConfigAsync(
         AssistantCli cli, string configPath, string bridgeUrl,
+        IReadOnlyList<string> advertisedToolNames,
         CancellationToken cancellationToken = default)
     {
         AssistantCommandResult result = await AssistantCommandRunner.RunAsync(
@@ -102,12 +118,13 @@ public static class OpencodeCli
             new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENCODE_CONFIG"] = configPath },
             Timeout, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded) return OpencodeConfigVerification.Refused;
-        return VerifyResolvedConfig(result.StandardOutput, bridgeUrl)
+        return VerifyResolvedConfig(result.StandardOutput, bridgeUrl, advertisedToolNames)
             ? new OpencodeConfigVerification(true, "")
             : OpencodeConfigVerification.Refused;
     }
 
-    internal static bool VerifyResolvedConfig(string resolvedConfigJson, string bridgeUrl)
+    internal static bool VerifyResolvedConfig(
+        string resolvedConfigJson, string bridgeUrl, IReadOnlyList<string> advertisedToolNames)
     {
         if (string.IsNullOrWhiteSpace(resolvedConfigJson)) return false;
 
@@ -121,9 +138,15 @@ public static class OpencodeCli
             return false;
         }
 
+        IReadOnlyList<string> callable = CallableToolNames(advertisedToolNames);
+        if (callable.Count == 0) return false;
+
         using (document)
         {
             if (document.RootElement.ValueKind != JsonValueKind.Object) return false;
+            if (CodexProtocol.Property(document.RootElement, "permission") is not
+                { ValueKind: JsonValueKind.Object } global) return false;
+            if (!NoWildcardAllow(global)) return false;
             if (CodexProtocol.Property(document.RootElement, "agent") is not
                 { ValueKind: JsonValueKind.Object } agents) return false;
             if (CodexProtocol.Property(agents, AgentName) is not
@@ -131,24 +154,52 @@ public static class OpencodeCli
             if (CodexProtocol.String(agent, "mode") != "primary") return false;
             if (CodexProtocol.Property(agent, "permission") is not
                 { ValueKind: JsonValueKind.Object } permission) return false;
-            if (!AgentPermissionIsDenyAllExceptBgs(permission)) return false;
+            if (!ExactToolBoundary(permission, callable)) return false;
             if (CodexProtocol.Property(document.RootElement, "mcp") is not
                 { ValueKind: JsonValueKind.Object } servers) return false;
             return McpBoundaryHolds(servers, bridgeUrl);
         }
     }
 
-    private static bool AgentPermissionIsDenyAllExceptBgs(JsonElement permission)
+    private static bool ExactToolBoundary(JsonElement permission, IReadOnlyList<string> callable)
     {
+        bool denyAll = false;
+        var allowed = new HashSet<string>(StringComparer.Ordinal);
         foreach (JsonProperty property in permission.EnumerateObject())
         {
-            if (string.Equals(property.Name, "bgs_*", StringComparison.Ordinal))
+            if (string.Equals(property.Name, "*", StringComparison.Ordinal))
             {
                 if (property.Value.ValueKind != JsonValueKind.String ||
-                    property.Value.GetString() != "allow") return false;
+                    property.Value.GetString() != "deny") return false;
+                denyAll = true;
+                continue;
+            }
+            if (property.Name.Contains('*', StringComparison.Ordinal)) return false;
+            if (property.Value.ValueKind == JsonValueKind.String &&
+                property.Value.GetString() == "allow")
+            {
+                if (!callable.Contains(property.Name, StringComparer.Ordinal)) return false;
+                allowed.Add(property.Name);
                 continue;
             }
             if (!SubtreeDeniesAll(property.Value)) return false;
+        }
+        if (!denyAll) return false;
+        foreach (string name in callable)
+            if (!allowed.Contains(name)) return false;
+        return true;
+    }
+
+    private static bool NoWildcardAllow(JsonElement permission)
+    {
+        foreach (JsonProperty property in permission.EnumerateObject())
+        {
+            bool wildcard = property.Name.Contains('*', StringComparison.Ordinal);
+            if (!wildcard) continue;
+            if (property.Value.ValueKind == JsonValueKind.String &&
+                property.Value.GetString() != "deny") return false;
+            if (property.Value.ValueKind == JsonValueKind.Object && !SubtreeDeniesAll(property.Value))
+                return false;
         }
         return true;
     }

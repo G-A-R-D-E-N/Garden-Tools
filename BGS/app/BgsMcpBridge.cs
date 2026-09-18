@@ -35,6 +35,7 @@ public sealed class BgsMcpBridge : IDisposable
     public string Url { get; }
     public string Token { get; }
     public int ToolCount => _protocol.ToolCount;
+    public IReadOnlyList<string> ToolNames => _protocol.ToolNames;
 
     public Action<string>? ToolInvoked
     {

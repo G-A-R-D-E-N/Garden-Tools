@@ -29,9 +29,12 @@ public sealed class BgsMcpProtocol
         _byName = new Dictionary<string, AIFunction>(StringComparer.Ordinal);
         foreach (AIFunction function in _tools)
             _byName[CodexProtocol.ToProtocolToolName(function.Name)] = function;
+        ToolNames = _tools.Select(function => CodexProtocol.ToProtocolToolName(function.Name)).ToArray();
     }
 
     public int ToolCount => _tools.Length;
+
+    public IReadOnlyList<string> ToolNames { get; }
 
     public Action<string>? OnToolInvoked { get; set; }
 

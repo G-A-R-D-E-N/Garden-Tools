@@ -60,7 +60,8 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
                     0, Activity(invoked), Pending());
             string configPath = WriteConfig();
             OpencodeConfigVerification verification = await OpencodeCli.VerifyEffectiveConfigAsync(
-                _cli, configPath, _bridge.TokenQueryUrl(), cancellationToken).ConfigureAwait(false);
+                _cli, configPath, _bridge.TokenQueryUrl(), _bridge.ToolNames, cancellationToken)
+                .ConfigureAwait(false);
             if (!verification.Ok)
                 return new("provider_error", verification.Error, 0, Activity(invoked), Pending());
             var arguments = new List<string>
@@ -145,7 +146,8 @@ public sealed class OpencodeAssistantSession : IAssistantSession, IAssistantRepl
     {
         Directory.CreateDirectory(_root);
         string path = Path.Combine(_root, "opencode.json");
-        File.WriteAllText(path, OpencodeCli.BuildConfigJson(_bridge.TokenQueryUrl(), _otherServers));
+        File.WriteAllText(path, OpencodeCli.BuildConfigJson(
+            _bridge.TokenQueryUrl(), _otherServers, _bridge.ToolNames));
         return path;
     }
 
