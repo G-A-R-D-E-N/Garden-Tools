@@ -39,6 +39,6 @@ The HEDR patch is applied to a TES4 copy during serialization, so the const inpu
 `tests/test_hedr_count.cpp` covers both sides of the contract:
 
 - a clean plugin with a deliberately stale stored count remains byte-identical;
-- a dirty plugin containing a top-level group, major record, nested group, and nested major record rebuilds HEDR to `4`.
-
-Issue #19 still asks for a third real ESL/WRLD-heavy sample as an additional fixture-level cross-check. That sample remains useful, but the binary writer rule itself is no longer inferred solely from the existing fixtures.
+- a dirty plugin containing a top-level group, major record, nested group, and nested major record rebuilds HEDR to `4`;
+- both committed real fixtures (`FW_HeatherSurvivalPatch.esp`, `SlowTime.esp`) store exactly the recursive count, computed independently of the writer from `collect_records`/`collect_groups`, and a forced rebuild writes the same value back;
+- with `FO4_DATA_DIR` set, the same two checks run over every official master present (`Fallout4.esm`, the DLC masters including the WRLD-heavy `DLCCoast.esm`/`DLCNukaWorld.esm`) and every `.esl` in the Data folder (the Creation Club light plugins on a stock install). This is the real ESL/WRLD-heavy acceptance #19 asks for; it skips when the game data is not present, so CI runs only the committed-fixture half.
