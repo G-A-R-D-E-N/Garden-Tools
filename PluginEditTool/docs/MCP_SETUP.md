@@ -84,7 +84,7 @@ Reload fails closed unless `discard_pending` is true.
 
 ### Reading and analysis
 `get_record` · `get_winning_record` · `list_records` · `list_records_summary` · `list_record_types` ·
-`search_records` · `search_all` · `resolve_editorid` · `get_scripts` · `diff_records` ·
+`list_plugin_worklist` · `search_records` · `search_all` · `resolve_editorid` · `get_scripts` · `diff_records` ·
 `get_referenced_by` · `get_problems` · `search_robco_configs`
 
 ### Conflict detection

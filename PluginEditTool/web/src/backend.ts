@@ -71,6 +71,7 @@ export interface Backend {
   GetRecordPluginMatrix(formKey: string): Promise<string>;
   GetDependencies(formKey: string): Promise<string>;
   GetHistory(formKey: string): Promise<string>;
+  GetPluginWorklist(plugin: string, filter: string, type: string, limit: number, offset: number): Promise<string>;
   GetLoadOrderSummary(): Promise<string>;
 
 

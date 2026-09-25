@@ -137,6 +137,7 @@ private:
     Result<nlohmann::json> getDependencies(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getProblems(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getHistory(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getPluginWorklist(const nlohmann::json& arguments) const;
     Result<nlohmann::json> searchRecords(const nlohmann::json& arguments) const;
     Result<nlohmann::json> scanConflicts() const;
     Result<nlohmann::json> scanBrokenRefs() const;

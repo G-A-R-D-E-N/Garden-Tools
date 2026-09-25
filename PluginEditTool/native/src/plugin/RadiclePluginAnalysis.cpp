@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <exception>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -21,6 +22,30 @@ namespace {
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
     return args[index].get<std::string>();
+}
+
+std::size_t sizeArgument(const nlohmann::json& args,
+                         std::size_t index,
+                         std::size_t fallback,
+                         std::size_t maximum) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) {
+        return fallback;
+    }
+    const auto raw = args[index].get<long long>();
+    if (raw < 0) return fallback;
+    return std::min(static_cast<std::size_t>(raw), maximum);
+}
+
+enum class WorklistKind { all, added, overrides, winning, losing, conflicted };
+
+std::optional<WorklistKind> worklistKind(std::string_view text) {
+    if (text.empty() || text == "all") return WorklistKind::all;
+    if (text == "added") return WorklistKind::added;
+    if (text == "overrides") return WorklistKind::overrides;
+    if (text == "winning") return WorklistKind::winning;
+    if (text == "losing") return WorklistKind::losing;
+    if (text == "conflicted") return WorklistKind::conflicted;
+    return std::nullopt;
 }
 
 Result<fo4::FormKey> formKeyArgument(const nlohmann::json& args) {
@@ -221,6 +246,125 @@ Result<nlohmann::json> RadiclePluginBackend::getHistory(const nlohmann::json& ar
         previous = record;
     }
     return nlohmann::json(rows.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
+    const nlohmann::json& arguments) const {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto kindText = stringArgument(arguments, 1);
+    const auto signatureText = stringArgument(arguments, 2);
+    const auto limit = sizeArgument(arguments, 3, 200, 5000);
+    const auto offset = sizeArgument(arguments, 4, 0, 10000000);
+
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
+    const auto kind = worklistKind(kindText);
+    if (!kind.has_value()) {
+        return std::unexpected(Error{
+            "InvalidWorklistFilter",
+            "Worklist filter must be all, added, overrides, winning, losing or conflicted: " +
+                kindText
+        });
+    }
+    std::optional<fo4::Signature> signature;
+    if (!signatureText.empty()) {
+        if (signatureText.size() != 4) {
+            return std::unexpected(Error{
+                "InvalidSignature", "Record signature must be four characters: " + signatureText});
+        }
+        signature = fo4::Signature::from_string(signatureText);
+    }
+
+    std::scoped_lock lock(mutex_);
+    const auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+
+    std::size_t added = 0;
+    std::size_t overrides = 0;
+    std::size_t winning = 0;
+    std::size_t losing = 0;
+    std::size_t conflicted = 0;
+    std::size_t total = 0;
+    nlohmann::json rows = nlohmann::json::array();
+
+    // One pass over the plugin's own records against the prebuilt conflict
+    // graph; each lookup is a map find, so there is no per-record query fan-out.
+    for (const auto* record : fo4::collect_records(loaded->plugin)) {
+        if (record->header.signature == fo4::sig_tes4 || record->form_key.owner().empty()) continue;
+        if (signature.has_value() && record->header.signature != *signature) continue;
+
+        const auto& versions = graph_.versions(record->form_key);
+        const auto self = std::find_if(versions.begin(), versions.end(), [&](const auto& version) {
+            return version.plugin == loaded->plugin.key;
+        });
+        if (self == versions.end()) {
+            return std::unexpected(Error{
+                "ConflictGraphOutOfDate",
+                "Conflict graph has no version of " + record->form_key.to_string() + " in " +
+                    loaded->name
+            });
+        }
+
+        const bool isAdded = record->form_key.owner() == loaded->plugin.key;
+        const bool isWinner = self + 1 == versions.end();
+        const bool isConflicted = versions.size() > 1;
+        added += isAdded ? 1 : 0;
+        overrides += isAdded ? 0 : 1;
+        winning += isWinner ? 1 : 0;
+        losing += isWinner ? 0 : 1;
+        conflicted += isConflicted ? 1 : 0;
+
+        bool include = true;
+        switch (*kind) {
+            case WorklistKind::all: break;
+            case WorklistKind::added: include = isAdded; break;
+            case WorklistKind::overrides: include = !isAdded; break;
+            case WorklistKind::winning: include = isWinner; break;
+            case WorklistKind::losing: include = !isWinner; break;
+            case WorklistKind::conflicted: include = isConflicted; break;
+        }
+        if (!include) continue;
+        const auto index = total++;
+        if (index < offset || index - offset >= limit) continue;
+
+        nlohmann::json chain = nlohmann::json::array();
+        nlohmann::json overriddenBy = nlohmann::json::array();
+        for (auto it = versions.begin(); it != versions.end(); ++it) {
+            chain.push_back(std::string(it->plugin.filename()));
+            if (it > self) overriddenBy.push_back(std::string(it->plugin.filename()));
+        }
+
+        rows.push_back({
+            {"FormKey", record->form_key.to_string()},
+            {"EditorID", editorId(*record)},
+            {"Type", record->header.signature.to_string()},
+            {"Kind", isAdded ? "Added" : "Override"},
+            {"OverrideDepth", static_cast<std::size_t>(self - versions.begin())},
+            {"Origin", std::string(record->form_key.owner().filename())},
+            {"OriginLoaded", versions.front().plugin == record->form_key.owner()},
+            {"Winner", std::string(versions.back().plugin.filename())},
+            {"IsWinner", isWinner},
+            {"OverriddenBy", std::move(overriddenBy)},
+            {"Plugins", std::move(chain)}
+        });
+    }
+
+    return nlohmann::json(nlohmann::json{
+        {"Plugin", loaded->name},
+        {"Total", total},
+        {"Offset", std::min(offset, total)},
+        {"Counts", {
+            {"Added", added},
+            {"Overrides", overrides},
+            {"Winning", winning},
+            {"Losing", losing},
+            {"Conflicted", conflicted}
+        }},
+        {"Rows", std::move(rows)}
+    }.dump());
 }
 
 }

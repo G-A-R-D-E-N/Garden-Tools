@@ -83,6 +83,7 @@ fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginWorklistTests.cpp
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
     unit/RadiclePluginLifecycleTests.cpp
@@ -123,6 +124,10 @@ add_executable(
 target_include_directories(
     fo4ide_test_plugin_backend
     PRIVATE "${PROJECT_SOURCE_DIR}/../../Radicle/tests"
+)
+target_compile_definitions(
+    fo4ide_test_plugin_backend
+    PRIVATE FO4IDE_RADICLE_TESTDATA_DIR="${PROJECT_SOURCE_DIR}/../../Radicle/testdata"
 )
 target_link_libraries(
     fo4ide_test_plugin_backend
