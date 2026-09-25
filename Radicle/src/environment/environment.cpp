@@ -158,14 +158,15 @@ const RecordRef* Environment::winner(const FormKey& key) const noexcept {
 
 const RecordRef* Environment::find_by_editor_id(std::string_view editor_id,
                                                 std::optional<Signature> signature) const {
-  if (editor_id.empty()) return nullptr;
+  if (editor_id.find_first_not_of(" \t\r\n\v\f") == std::string_view::npos) return nullptr;
   for (std::size_t index = loaded_.size(); index-- > 0;) {
     for (const auto& key : plugin_records_[index]) {
-      const auto* win = winner(key);
-      if (win == nullptr || win->plugin != index) continue;
-      if (signature && win->record->header.signature != *signature) continue;
-      const auto edid = editor_id_of(*win->record);
-      if (edid && iequals(*edid, editor_id)) return win;
+      for (const auto& ref : versions(key)) {
+        if (ref.plugin != index) continue;
+        if (signature && ref.record->header.signature != *signature) continue;
+        const auto edid = editor_id_of(*ref.record);
+        if (edid && iequals(*edid, editor_id)) return &ref;
+      }
     }
   }
   return nullptr;

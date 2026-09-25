@@ -436,9 +436,15 @@ First slice of garden-engine/GardenEngine#114 (replace Mutagen with Radicle). It
 - **Load.** `Environment::load(paths)` reads every path in order and stamps master light/full kinds from the loaded set, as `RadiclePluginBackend::loadEnvironment` does. It then indexes every record version by `FormKey`. The load fails closed on an unreadable file, a duplicate filename, or the same FormKey twice inside one plugin. The engine's behaviour for an in-plugin duplicate is unproven, so the index refuses it instead of picking one copy.
 - **Unresolved masters.** A master that does not load earlier than its dependent plugin is reported in `PluginInfo::unresolved_masters`, not rejected. Mo2ProfileLoader already prepends the implicit masters and throws only when `Fallout4.esm` is missing.
 - **Versions.** `versions()` is ordered lowest priority first, with the winner last. This matches `GameLoader.GetRecordContexts`, which reverses `ResolveAllSimpleContexts`.
-- **EditorID lookup.** `find_by_editor_id` matches only a record's winning EDID, ASCII case-insensitively, searching from the highest-priority plugin down.
-  - **Parity check still open:** Mutagen's `TryResolve(string editorId)` may still resolve an EDID that a later override renamed. The #114 Mutagen side-by-side fixture must confirm this, and the case-folding rule, before `ResolveCellId` / `ResolveWorldspace` switch over.
-- **`winners_of(signature)`.** Groups winners by the highest-priority plugin that holds them, then by on-disk order. This mirrors Mutagen's priority-order winning-override enumeration used by `WorldspaceService.ListWorldspaces` and `AssetConverterMain.CollectUniqueNifPaths`, pending the same fixture.
+- **EditorID lookup.** `find_by_editor_id` matches the vendored Mutagen link cache (`Mutagen.Bethesda.Core/Plugins/Cache/Internals/Implementations/Internal/InternalImmutableLoadOrderLinkCache.cs` and `ImmutableLoadOrderLinkCacheCategory.cs`):
+  - It walks plugins from the highest priority down.
+  - It indexes every record *version* under that version's own EDID; the first match wins.
+  - Matching is `StringComparer.OrdinalIgnoreCase`.
+  - Blank or whitespace-only EDIDs never match.
+  - Consequence: an EDID that a later override renamed still resolves to the older, lower-priority version, exactly as `GameLoader.ResolveCellId` sees it today.
+- **`winners_of(signature)`.** Groups winners by the highest-priority plugin that holds them, then by on-disk order. This is the output order of Mutagen's `OverrideMixIns.WinningOverrides` over `PriorityOrder`.
+  - One difference: `WinningOverrides` skips deleted winners by default, but `winners_of` keeps them. Callers filter on `RecordMetadata::deleted`.
+  - GardenEngine's current callers (`ListWorldspaces`, `CollectUniqueNifPaths`) enumerate each mod's records and resolve the winner themselves; they do not call `WinningOverrides`.
 - **`metadata()`.** Decodes only the generic surfaces:
   - EDID and MODL as NUL-terminated strings; a malformed payload is reported as absent.
   - OBND as six `int16`.

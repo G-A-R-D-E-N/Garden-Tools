@@ -79,7 +79,7 @@ RADICLE_API radicle_status radicle_env_versions(const radicle_env* env,
                                                 radicle_form_key key,
                                                 const radicle_record*** out_records,
                                                 size_t* out_count);
-/* Case-insensitive winning EDID, highest priority first; `signature` is NULL or four characters. */
+/* First version, highest priority first, whose own EDID matches case-insensitively; `signature` is NULL or four characters. */
 RADICLE_API radicle_status radicle_env_find_editor_id(const radicle_env* env,
                                                       const char* editor_id,
                                                       const char* signature,

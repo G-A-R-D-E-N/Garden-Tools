@@ -156,13 +156,18 @@ TEST_F(EnvironmentTest, WinnerAndVersionsFollowLoadOrder) {
   EXPECT_TRUE(env.versions(key("000FFF:Base.esm")).empty());
 }
 
-TEST_F(EnvironmentTest, EditorIdLookupUsesWinningEditorIdCaseInsensitively) {
+TEST_F(EnvironmentTest, EditorIdLookupMatchesAnyVersionByPriorityCaseInsensitively) {
   const auto env = fo4::env::Environment::load(write_base_and_patch());
 
   const auto* patched = env.find_by_editor_id("rockpatched");
   ASSERT_NE(patched, nullptr);
   EXPECT_EQ(patched->record->form_key, key("000800:Base.esm"));
-  EXPECT_EQ(env.find_by_editor_id("RockBase"), nullptr);
+  EXPECT_EQ(patched->plugin, 1u);
+  // Mutagen's link cache indexes every version, so a renamed EDID still reaches the older version.
+  const auto* renamed = env.find_by_editor_id("RockBase");
+  ASSERT_NE(renamed, nullptr);
+  EXPECT_EQ(renamed->plugin, 0u);
+  EXPECT_EQ(env.find_by_editor_id("   "), nullptr);
 
   EXPECT_NE(env.find_by_editor_id("Wrench", fo4::Signature::from_string("MISC")), nullptr);
   EXPECT_EQ(env.find_by_editor_id("Wrench", fo4::Signature::from_string("STAT")), nullptr);
