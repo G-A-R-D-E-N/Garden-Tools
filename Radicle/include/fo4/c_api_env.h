@@ -96,6 +96,116 @@ RADICLE_API radicle_status radicle_record_get_info(const radicle_env* env,
                                                    const radicle_record* record,
                                                    radicle_record_info* out_info);
 
+/* Links use plugin == NULL for an absent or null FormID; has_* flags mark absent subrecords. */
+typedef struct radicle_worldspace_info {
+  radicle_form_key parent;
+  int32_t has_parent_flags;
+  uint16_t parent_flags;
+  radicle_form_key climate;
+  radicle_form_key water;
+  radicle_form_key lighting_template;
+  int32_t has_land_defaults;
+  float default_land_height;
+  float default_water_height;
+  int32_t has_bounds_min;
+  float bounds_min[2];
+  int32_t has_bounds_max;
+  float bounds_max[2];
+  int32_t has_flags;
+  uint8_t flags;
+} radicle_worldspace_info;
+
+typedef struct radicle_byte_color {
+  uint8_t red;
+  uint8_t green;
+  uint8_t blue;
+} radicle_byte_color;
+
+typedef struct radicle_cell_lighting {
+  radicle_byte_color ambient;
+  radicle_byte_color directional;
+  radicle_byte_color fog_near_color;
+  float fog_near;
+  float fog_far;
+  int32_t directional_rotation_xy;
+  int32_t directional_rotation_z;
+  float directional_fade;
+  float fog_clip_distance;
+  float fog_power;
+  int32_t has_fog_far_color;
+  radicle_byte_color fog_far_color;
+  int32_t has_fog_max;
+  float fog_max;
+  int32_t has_light_fade;
+  float light_fade_begin;
+  float light_fade_end;
+  int32_t has_inherits;
+  uint32_t inherits;
+} radicle_cell_lighting;
+
+typedef struct radicle_cell_info {
+  int32_t has_flags;
+  uint16_t flags;
+  int32_t has_grid;
+  int32_t grid_x;
+  int32_t grid_y;
+  int32_t has_land_flags;
+  uint8_t land_flags;
+  int32_t has_lighting;
+  radicle_cell_lighting lighting;
+  radicle_form_key lighting_template;
+  int32_t has_water_height;
+  float water_height;
+  radicle_form_key image_space;
+  radicle_form_key encounter_zone;
+  radicle_form_key location;
+  radicle_form_key worldspace;
+} radicle_cell_info;
+
+typedef struct radicle_cell_child {
+  const radicle_record* record;
+  int32_t persistent;
+} radicle_cell_child;
+
+/* RADICLE_STATUS_PARSE_ERROR for a wrong signature or a malformed present subrecord. */
+RADICLE_API radicle_status radicle_worldspace_get_info(const radicle_env* env,
+                                                       const radicle_record* record,
+                                                       radicle_worldspace_info* out_info);
+RADICLE_API radicle_status radicle_cell_get_info(const radicle_env* env,
+                                                 const radicle_record* record,
+                                                 radicle_cell_info* out_info);
+
+/* Immediate group type (fo4 GroupType values) and the enclosing WRLD/CELL; absent keys have plugin == NULL. */
+RADICLE_API radicle_status radicle_record_get_container(const radicle_env* env,
+                                                        const radicle_record* record,
+                                                        int32_t* out_group_type,
+                                                        radicle_form_key* out_worldspace,
+                                                        radicle_form_key* out_cell);
+
+/* Persistent top CELL from the highest-priority plugin; RADICLE_STATUS_NOT_FOUND when absent. */
+RADICLE_API radicle_status radicle_env_worldspace_top_cell(const radicle_env* env,
+                                                           radicle_form_key worldspace,
+                                                           const radicle_record** out_record);
+/* Block/sub-block CELLs, each from the highest plugin listing it; ascending plugin, then on-disk. */
+RADICLE_API radicle_status radicle_env_worldspace_cells(const radicle_env* env,
+                                                        radicle_form_key worldspace,
+                                                        const radicle_record*** out_records,
+                                                        size_t* out_count);
+/* Winning CELLs whose winning version sits in an interior sub-block. */
+RADICLE_API radicle_status radicle_env_interior_cells(const radicle_env* env,
+                                                      const radicle_record*** out_records,
+                                                      size_t* out_count);
+/* Children merged low to high priority; free with radicle_free_cell_children. */
+RADICLE_API radicle_status radicle_env_cell_children(const radicle_env* env,
+                                                     radicle_form_key cell,
+                                                     radicle_cell_child** out_children,
+                                                     size_t* out_count);
+RADICLE_API void radicle_free_cell_children(radicle_cell_child* children);
+/* LAND child of the highest-priority CELL version holding one; RADICLE_STATUS_NOT_FOUND otherwise. */
+RADICLE_API radicle_status radicle_env_cell_landscape(const radicle_env* env,
+                                                      radicle_form_key cell,
+                                                      const radicle_record** out_record);
+
 #ifdef __cplusplus
 }
 #endif
