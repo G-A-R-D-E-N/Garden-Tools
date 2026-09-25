@@ -1,5 +1,7 @@
 #include <fo4ide/f4se/Emitter.hpp>
 
+#include <algorithm>
+
 #include <fo4ide/f4se/BindingValidator.hpp>
 #include <fo4ide/f4se/CppEmitter.hpp>
 #include <fo4ide/f4se/PapyrusHeaderEmitter.hpp>
