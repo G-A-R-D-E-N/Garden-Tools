@@ -105,7 +105,7 @@ public:
   std::span<const RecordRef> versions(const FormKey& key) const noexcept;
   const RecordRef* winner(const FormKey& key) const noexcept;
 
-  // First winning record, highest-priority plugin down, whose winning EDID matches case-insensitively.
+  // First record version, highest-priority plugin down, whose own EDID matches case-insensitively.
   const RecordRef* find_by_editor_id(std::string_view editor_id,
                                      std::optional<Signature> signature = std::nullopt) const;
 
