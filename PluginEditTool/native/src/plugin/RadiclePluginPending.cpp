@@ -56,14 +56,19 @@ RadiclePluginBackend::OpLock::OpLock(const RadiclePluginBackend& backend, Mode m
         if (mode == Mode::Write) {
             {
                 std::shared_lock resolve(backend.stateMutex_);
+                std::vector<const LoadedPlugin*> targets;
                 for (const auto name : names) {
-                    if (const auto* loaded = backend.findPlugin(name)) {
-                        owners.push_back(loaded->writeMutex.get());
-                    }
+                    if (const auto* loaded = backend.findPlugin(name)) targets.push_back(loaded);
                 }
+                std::sort(targets.begin(), targets.end(),
+                          [](const LoadedPlugin* a, const LoadedPlugin* b) {
+                              if (a->plugin.key < b->plugin.key) return true;
+                              if (b->plugin.key < a->plugin.key) return false;
+                              return std::less<const LoadedPlugin*>{}(a, b);
+                          });
+                targets.erase(std::unique(targets.begin(), targets.end()), targets.end());
+                for (const auto* loaded : targets) owners.push_back(loaded->writeMutex.get());
             }
-            std::sort(owners.begin(), owners.end(), std::less<std::mutex*>{});
-            owners.erase(std::unique(owners.begin(), owners.end()), owners.end());
             for (auto* owner : owners) owner->lock();
         }
         backend.stateMutex_.lock_shared();
