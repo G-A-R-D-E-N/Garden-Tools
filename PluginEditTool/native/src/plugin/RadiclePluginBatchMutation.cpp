@@ -100,7 +100,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
         }
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {targetName});
     auto* target = findPlugin(targetName);
     if (target == nullptr) {
         return std::unexpected(Error{

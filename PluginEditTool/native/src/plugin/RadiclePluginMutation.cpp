@@ -155,6 +155,7 @@ bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
 }
 
 void RadiclePluginBackend::setDataDirectory(std::filesystem::path dataDirectory) {
+    OpLock lock(*this, OpLock::Mode::Lifecycle);
     dataDirectory_ = std::move(dataDirectory);
 }
 
@@ -199,7 +200,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
         return std::unexpected(Error{"RecordMissing", "Record FormKey is empty"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{
@@ -339,7 +340,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
         return std::unexpected(Error{"RecordMissing", "Record FormKey is empty"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{
@@ -528,7 +529,7 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{
@@ -703,7 +704,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {targetName, sourceName});
     const auto* source = findPlugin(sourceName);
     if (source == nullptr) {
         return std::unexpected(Error{

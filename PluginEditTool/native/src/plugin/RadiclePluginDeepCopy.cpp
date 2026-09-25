@@ -115,7 +115,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
         });
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {targetName, requestedSourceName});
     auto* target = findPlugin(targetName);
     if (apply && target == nullptr) {
         return std::unexpected(Error{

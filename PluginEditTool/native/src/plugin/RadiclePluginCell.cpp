@@ -273,7 +273,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPlacedReferences(
         return std::unexpected(Error{"CellMissing", "Cell FormKey or EditorID is empty"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto key = resolveRecordKey(plugins_, cellId, k_cell);
     if (!key.has_value()) {
         return nlohmann::json(nlohmann::json{{"error", "Cell not found: " + cellId}}.dump());
@@ -297,7 +297,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPlacedReferencesAtGrid(
         });
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto worldKey = resolveRecordKey(plugins_, worldId, k_wrld);
     if (!worldKey.has_value()) {
         return nlohmann::json(nlohmann::json{{"error", "Worldspace not found: " + worldId}}.dump());
@@ -346,7 +346,7 @@ Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {patchName});
     auto* patch = findPlugin(patchName);
     if (patch == nullptr) {
         return std::unexpected(Error{

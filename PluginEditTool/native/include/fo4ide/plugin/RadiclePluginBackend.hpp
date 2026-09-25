@@ -26,6 +26,8 @@ using LocalizedQuestAfterTableParseHook = void (*)();
 void setLocalizedQuestAfterTableParseHook(LocalizedQuestAfterTableParseHook hook);
 using LoadMo2AfterPendingCheckHook = void (*)();
 void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
+using WriteOpLockedHook = void (*)();
+void setWriteOpLockedHook(WriteOpLockedHook hook);
 #endif
 
 class RadiclePluginBackend final : public IPluginBackend {
@@ -99,6 +101,8 @@ private:
         StateHold state{StateHold::None};
         std::vector<std::mutex*> owners;
         OpLock* previous;
+
+        static thread_local OpLock* current;
     };
 
     class CommitScope {

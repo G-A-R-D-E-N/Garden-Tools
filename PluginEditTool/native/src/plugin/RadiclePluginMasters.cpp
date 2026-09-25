@@ -49,7 +49,7 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
         return std::unexpected(Error{"InvalidMasterOrder", "Master order must be a JSON array"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
@@ -111,7 +111,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
         return std::unexpected(Error{"InvalidLightFlag", "Light flag must be boolean"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Lifecycle);
     auto* loaded = findPlugin(name);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
@@ -148,7 +148,7 @@ Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::j
     const auto name = stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});

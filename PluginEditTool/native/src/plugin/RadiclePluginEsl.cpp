@@ -23,7 +23,7 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(name);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});

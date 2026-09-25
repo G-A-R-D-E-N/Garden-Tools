@@ -441,7 +441,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                                 arguments["discardPending"].get<bool>();
     std::uint64_t consentEpoch = 0;
     {
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Read);
         consentEpoch = mutationEpoch_;
         if (!discardPending) {
             const auto pendingList = dirtyPluginListLocked();
@@ -517,7 +517,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             if (rootEc || root.empty()) continue;  // fail closed: no root
             if (uniqueRoots.insert(root).second) roots.push_back(root);
         }
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Lifecycle);
         const bool consentStale = mutationEpoch_ != consentEpoch;
         const auto pendingList = dirtyPluginListLocked();
         if (consentStale || (!discardPending && !pendingList.empty())) {
@@ -544,7 +544,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 
 Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
     nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     for (const auto& loaded : plugins_) {
         rows.push_back({
             {"Key", loaded.name},
@@ -563,7 +563,7 @@ Result<nlohmann::json> RadiclePluginBackend::getChildren(const nlohmann::json& a
     if (path.empty()) return nlohmann::json("[]");
     const auto [pluginName, signature] = splitTreePath(path);
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     // An unknown plugin must be an error, not an empty tree: the two are
     // indistinguishable for the client otherwise.
@@ -647,7 +647,7 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
         // influence save-root decisions or silently swap record data.
         std::error_code newEc;
         const auto newCanonical = std::filesystem::weakly_canonical(filePath, newEc);
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Lifecycle);
         auto* existing = findPlugin(name);
         if (existing != nullptr) {
             std::error_code existingEc;
@@ -708,7 +708,7 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
     const auto requestedPath = stringArgument(arguments, 1);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     // Guards live here, not only in the RPC shim: every dispatch path into
@@ -750,7 +750,7 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
     const auto name = stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     if (!loaded->dirty) {
@@ -762,6 +762,7 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
             "Plugin is dirty but has no recoverable original snapshot: " + name
         });
     }
+    CommitScope commit;
     loaded->plugin = *loaded->originalPlugin;
     loaded->originalPlugin.reset();
     loaded->stagedLocalization.reset();
@@ -772,7 +773,7 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
 
 Result<nlohmann::json> RadiclePluginBackend::getEditablePlugins() const {
     nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     for (const auto& loaded : plugins_) {
         if (isEditable(loaded)) rows.push_back(loaded.name);
     }
@@ -781,7 +782,7 @@ Result<nlohmann::json> RadiclePluginBackend::getEditablePlugins() const {
 
 Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
     nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     for (std::size_t index = 0; index < plugins_.size(); ++index) {
         const auto& loaded = plugins_[index];
         rows.push_back({
@@ -798,7 +799,7 @@ Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
 
 Result<nlohmann::json> RadiclePluginBackend::getRecordTypeIndex() const {
     std::map<std::string, std::size_t> counts;
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     for (const auto& loaded : plugins_) {
         for (const auto* record : fo4::collect_records(loaded.plugin)) {
             if (record->header.signature == fo4::sig_tes4) continue;
@@ -816,7 +817,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordTypeIndex() const {
 Result<nlohmann::json> RadiclePluginBackend::getLoadOrderSummary() const {
     std::size_t totalRecords = 0;
     nlohmann::json names = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     for (const auto& loaded : plugins_) {
         names.push_back(loaded.name);
         for (const auto* record : fo4::collect_records(loaded.plugin)) {
@@ -831,7 +832,7 @@ Result<nlohmann::json> RadiclePluginBackend::getLoadOrderSummary() const {
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getConflicts() const {
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     nlohmann::json rows = nlohmann::json::array();
     for (const auto& key : graph_.conflicts()) {
         const auto& versions = graph_.versions(key);
@@ -874,7 +875,7 @@ Result<nlohmann::json> RadiclePluginBackend::getConflictMatrix(const nlohmann::j
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto& versions = graph_.versions(key);
     const auto* winner = graph_.winner(key);
     if (winner == nullptr) {
@@ -923,7 +924,7 @@ Result<nlohmann::json> RadiclePluginBackend::getReferencedBy(const nlohmann::jso
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     nlohmann::json rows = nlohmann::json::array();
     std::set<std::pair<std::string, std::string>> seen;
     for (const auto& hit : graph_.referenced_by(key)) {
@@ -956,7 +957,7 @@ Result<nlohmann::json> RadiclePluginBackend::searchRecords(const nlohmann::json&
     const auto typeFilter = stringArgument(arguments, 1);
 
     nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     constexpr std::size_t maxResults = 500;
 
     for (const auto& loaded : plugins_) {
@@ -986,7 +987,7 @@ Result<nlohmann::json> RadiclePluginBackend::searchRecords(const nlohmann::json&
 }
 
 Result<nlohmann::json> RadiclePluginBackend::scanConflicts() const {
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto count = graph_.conflicts().size();
     return nlohmann::json(
         "Found " + std::to_string(count) + " conflicted record" +
@@ -995,7 +996,7 @@ Result<nlohmann::json> RadiclePluginBackend::scanConflicts() const {
 }
 
 Result<nlohmann::json> RadiclePluginBackend::scanBrokenRefs() const {
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
 
     std::set<fo4::FormKey> knownRecords;
     for (const auto& loaded : plugins_) {
@@ -1052,7 +1053,7 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
     const auto name = stringArgument(arguments, 0);
     if (name.empty()) return nlohmann::json("{}");
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(name);
     if (!loaded) return nlohmann::json("{}");
 
@@ -1134,7 +1135,7 @@ Result<nlohmann::json> RadiclePluginBackend::getConditions(
         return std::unexpected(Error{"RecordMissing", "Record ID is empty"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const LoadedPlugin* loaded = nullptr;
     if (!pluginName.empty()) {
         loaded = findPlugin(pluginName);
@@ -1198,7 +1199,7 @@ Result<nlohmann::json> RadiclePluginBackend::getConditionsAtPath(
         return std::unexpected(Error{"RecordMissing", "Record ID is empty"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const LoadedPlugin* loaded = nullptr;
     if (!pluginName.empty()) {
         loaded = findPlugin(pluginName);

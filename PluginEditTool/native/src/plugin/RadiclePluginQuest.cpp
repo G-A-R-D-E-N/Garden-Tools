@@ -2434,7 +2434,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
         });
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
@@ -3001,7 +3001,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         });
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
@@ -3432,7 +3432,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                         std::string(error.what())
                 });
             }
-            stageLocalizationMutationLocked(*loaded, StagedLocalization{
+            StagedLocalization staged{
                 localizedTables->dlstringsPath,
                 fo4::localization::write_string_table(localizedTables->dlstrings),
                 localizedTables->originalDlstringsBytes,
@@ -3440,8 +3440,12 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 localizedTables->originalStringsBytes,
                 localizedTables->ilstringsPath,
                 localizedTables->originalIlstringsBytes,
-            });
-            stagePluginMutationLocked(*loaded, std::move(mutated));
+            };
+            {
+                CommitScope commit;
+                stageLocalizationMutationLocked(*loaded, std::move(staged));
+                stagePluginMutationLocked(*loaded, std::move(mutated));
+            }
             return nlohmann::json(
                 "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
                 recordText + " in " + pluginName + ". SavePlugin to persist.");
