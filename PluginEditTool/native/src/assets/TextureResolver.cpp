@@ -260,15 +260,17 @@ std::vector<std::filesystem::path> TextureResolver::addDataRoots(
     if (path.empty()) return roots;
     if (startsWithInsensitive(path.generic_string(), cacheDir_.generic_string())) return roots;
 
+    // Each root is scanned recursively for BA2s, so only climb to a real Data
+    // folder; without one the climb reaches the filesystem root.
     auto dir = path;
     for (int guard = 0; guard < 24; ++guard) {
         roots.push_back(dir);
-        if (iequals(dir.filename().string(), "Data")) break;
+        if (iequals(dir.filename().string(), "Data")) return roots;
         const auto parent = dir.parent_path();
         if (parent.empty() || parent == dir) break;
         dir = parent;
     }
-    return roots;
+    return {};
 }
 
 std::vector<std::string> TextureResolver::lookupKeys(std::string_view rel,

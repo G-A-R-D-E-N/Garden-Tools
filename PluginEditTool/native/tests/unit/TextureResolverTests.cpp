@@ -322,3 +322,32 @@ TEST_CASE("Texture resolver follows a BGSM material to its diffuse texture") {
     const auto url = resolver.getTexturePngDataUrl(nifPath, "Materials\\Armor\\Suit.bgsm", "");
     CHECK(url.starts_with("data:image/png;base64,"));
 }
+
+TEST_CASE("Texture resolver does not scan archives above a NIF that has no Data ancestor") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    // An archive beside, not beneath, the NIF's tree. Climbing from the NIF
+    // would reach `root` (and then the filesystem root) and scan into it.
+    writeBa2TextureArchive(root / "elsewhere" / "textures.ba2", {
+        textureEntry("Textures\\Stray.dds", rgba8Dds())
+    });
+    writeFile(root / "loose" / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    const auto nifPath = (root / "loose" / "meshes" / "thing.nif").string();
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\stray.dds", "").empty());
+}
+
+TEST_CASE("Texture resolver still finds archives in the Data folder above a NIF") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBa2TextureArchive(root / "Game" / "Data" / "textures.ba2", {
+        textureEntry("Textures\\InData.dds", rgba8Dds())
+    });
+    writeFile(root / "Game" / "Data" / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    const auto nifPath = (root / "Game" / "Data" / "meshes" / "thing.nif").string();
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\indata.dds", "")
+              .starts_with("data:image/png;base64,"));
+}
