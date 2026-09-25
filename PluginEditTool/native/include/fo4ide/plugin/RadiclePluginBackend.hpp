@@ -3,8 +3,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <initializer_list>
+#include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -77,10 +80,52 @@ private:
         std::optional<fo4::Plugin> originalPlugin;
         bool dirty{false};
         std::optional<StagedLocalization> stagedLocalization;
+        std::unique_ptr<std::mutex> writeMutex = std::make_unique<std::mutex>();
+    };
+
+    enum class StateHold { None, Shared, Exclusive };
+
+    class OpLock {
+    public:
+        enum class Mode { Read, Write, Lifecycle };
+        OpLock(const RadiclePluginBackend& backend, Mode mode,
+               std::initializer_list<std::string_view> owners = {});
+        ~OpLock();
+        OpLock(const OpLock&) = delete;
+        OpLock& operator=(const OpLock&) = delete;
+
+        const RadiclePluginBackend& backend;
+        Mode mode;
+        StateHold state{StateHold::None};
+        std::vector<std::mutex*> owners;
+        OpLock* previous;
+    };
+
+    class CommitScope {
+    public:
+        CommitScope();
+        ~CommitScope();
+        CommitScope(const CommitScope&) = delete;
+        CommitScope& operator=(const CommitScope&) = delete;
+
+    private:
+        OpLock* op_;
+        StateHold restore_;
+    };
+
+    class StateReleased {
+    public:
+        StateReleased();
+        ~StateReleased();
+        StateReleased(const StateReleased&) = delete;
+        StateReleased& operator=(const StateReleased&) = delete;
+
+    private:
+        OpLock* op_;
+        StateHold restore_;
     };
 
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
-    Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
     void stageLocalizationMutationLocked(LoadedPlugin& loaded, StagedLocalization staged);
     Result<void> persistPluginLocked(LoadedPlugin& loaded, const std::filesystem::path& output);
@@ -164,7 +209,8 @@ private:
     void rebuildGraphLocked();
     std::string dirtyPluginListLocked() const;
 
-    mutable std::mutex mutex_;
+    mutable std::shared_mutex lifecycleMutex_;
+    mutable std::shared_mutex stateMutex_;
     std::vector<LoadedPlugin> plugins_;
     std::uint64_t mutationEpoch_{0};
     fo4::ConflictGraph graph_;
