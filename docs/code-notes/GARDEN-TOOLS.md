@@ -428,3 +428,23 @@ Fallout4.esm (`D:\Fallout4Backup\Fallout 4\Data\Fallout4.esm`) uncompressed top-
 `Radicle/tests/test_packed_formlink_arrays.cpp` covers remap, fail-closed odd lengths, empty arrays, collision controls, rekey cache invalidation, and document order.
 
 For `Radicle/src/schema/form_link_mixed.cpp:packed_formid_array_offsets`, the local commonlib_NonVR reference confirms the distinct runtime form types for OMOD, EQUP, and MUSC. Runtime member shape does not independently prove plugin subrecord serialization, xEdit definitions, or quoted RVAs; those claims remain concept-level here and are not shipped as runtime offset evidence.
+
+## PluginEditTool/web/src/CellViewport.tsx:CellViewport, MainShell.tsx:MainShell — latest-value refs (#77 tranche 2)
+
+The React Compiler `react-hooks/refs` rule forbids writing `ref.current` during render. Refs that mirror the latest prop/callback for long-lived three.js or host-message listeners are now updated in a dep-less `useLayoutEffect`, which runs before any passive `useEffect` in the same commit, so listeners never see a stale value. `MainShell`'s `reloadMatrixRef`/`openByFormKeyRef` are declared before the host-message effect that reads them (with no-op initial values) because the compiler's `immutability` rule rejects modifying a value an earlier effect already captured.
+
+## PluginEditTool/web/src/CellPanel.tsx:CellPanel — visibility undo/redo history
+
+Undo/redo stacks moved from refs plus a render-tick counter into one `history` state object, so the hidden bar and Undo/Redo `disabled` flags read state instead of refs during render. `undoVisibility`/`redoVisibility` read the top snapshot from the render closure (`CellViewport` reaches them through its layout-effect-mirrored `onUndoRef`/`onRedoRef`); stack updates use functional `setHistory` so batched pushes stay capped at `HISTORY_CAP`.
+
+## PluginEditTool/web/src/NifViewport.tsx:setWireframe
+
+The wireframe toggle mutates three.js materials owned by the main scene effect. Doing it through `setWireframe(mats, on)` keeps the mutation outside the component body the compiler analyses (same pattern as `util/cellInstances.ts:applyVisibility`).
+
+## PluginEditTool/web/src/useDialogs.ts:useDialogs, Shell/mo2Freshness.ts:mo2FreshnessLabel
+
+Split out of `dialogs.tsx` and `Shell/StatusBar.tsx` so those files export only components (`react-refresh/only-export-components`). `dialogs.tsx:DialogProvider` supplies `DialogContext` from `useDialogs.ts`.
+
+## PluginEditTool/web/src/util/cellInstances.ts:applyHidden, Shell/ExplorerTree.tsx:ExplorerTree, Workspace/conflictStatus.ts:resolveStatus
+
+Moved out of `CellViewport.tsx`, `MainShell.tsx` and `RecordView.tsx` unchanged so each of those over-750-line files shrinks when touched (source line-limit guard). `cellInstances.ts` holds the instanced-mesh hide/visibility/selection helpers and `InstanceRef`; `ExplorerTree.tsx` is the lazy plugin/record tree; `conflictStatus.ts` holds the conflict-cell status resolution, severity filter sets and legend tables.

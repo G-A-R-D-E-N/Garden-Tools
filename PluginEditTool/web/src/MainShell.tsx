@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
@@ -13,7 +13,7 @@ import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
 import BlueprintPanel from './Blueprint/BlueprintPanel';
 import { readFavourites, removeFavourite, FAVOURITES_CHANGED } from './favourites';
-import { useDialogs } from './dialogs';
+import { useDialogs } from './useDialogs';
 
 interface McpLiveMsg {
   Tool: string;
@@ -43,76 +43,7 @@ import type {
 } from './backend';
 import type { RecordTab } from './RecordView';
 import { errorMessage } from './errors';
-
-interface RecordNode {
-  Key: string;
-  ConflictStatus: number;
-  IsRecordNode: boolean;
-  HasChildren: boolean;
-  FilePath: string;
-}
-
-const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, node: RecordNode, backend: AppInterop | null, onOpenRecord: (path: string, node: RecordNode) => void }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [children, setChildren] = useState<RecordNode[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState('');
-
-  const toggle = async () => {
-    if (!expanded) {
-      if (node.HasChildren && children.length === 0) {
-        setLoading(true);
-
-
-        try {
-          if (!backend) throw new Error('Host bridge is not available');
-          const json = await backend.GetChildren(path);
-          setChildren(JSON.parse(json));
-        } catch (err) {
-          setLoadError(errorMessage(err) ?? String(err));
-        } finally {
-          setLoading(false);
-        }
-      }
-    }
-    setExpanded(!expanded);
-  };
-
-  return (
-    <div className="tree-node">
-      <div
-        className={`tree-row ${node.IsRecordNode ? 'is-record' : ''}`}
-        onClick={node.IsRecordNode ? () => onOpenRecord(path, node) : toggle}
-      >
-        <div className="tree-icon-container">
-          {node.HasChildren ? (
-            expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-          ) : <div style={{width: 14}}/>}
-        </div>
-        <div className="tree-icon">
-          {node.IsRecordNode ? <FileBox size={14} color="#569CD6"/> : <Database size={14} color="#DCDCAA" />}
-        </div>
-        <span
-          className="tree-label"
-          style={node.ConflictStatus === 1 ? { color: '#c79a5e' }
-            : node.ConflictStatus === 2 ? { color: '#b07a7a' }
-            : undefined}
-        >{node.Key}</span>
-        {loading && <span className="tree-loading">...</span>}
-        {!loading && loadError && (
-          <span className="tree-loading" style={{ color: '#f44747' }} title={loadError}>failed</span>
-        )}
-      </div>
-      {expanded && (
-        <div className="tree-children">
-          {children.map((c, i) => (
-            <ExplorerTree key={`${c.Key}:${i}`} path={`${path}\\${c.Key}`} node={c} backend={backend} onOpenRecord={onOpenRecord} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+import ExplorerTree, { type RecordNode } from './Shell/ExplorerTree';
 
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
@@ -267,7 +198,9 @@ export default function MainShell() {
 
 
   const openRecordRef = useRef(openRecord);
-  openRecordRef.current = openRecord;
+  const reloadMatrixRef = useRef<() => Promise<void>>(async () => {});
+  const openByFormKeyRef = useRef<(formKey: string, pluginName: string) => Promise<void>>(async () => {});
+  useLayoutEffect(() => { openRecordRef.current = openRecord; });
 
 
   const [search, setSearch] = useState('');
@@ -699,10 +632,10 @@ export default function MainShell() {
 
 
 
-  const reloadMatrixRef = useRef(reloadMatrix);
-  reloadMatrixRef.current = reloadMatrix;
-  const openByFormKeyRef = useRef(openByFormKey);
-  openByFormKeyRef.current = openByFormKey;
+  useLayoutEffect(() => {
+    reloadMatrixRef.current = reloadMatrix;
+    openByFormKeyRef.current = openByFormKey;
+  });
 
 
   useEffect(() => {

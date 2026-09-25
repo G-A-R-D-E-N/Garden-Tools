@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDialogs } from './dialogs';
+import { useDialogs } from './useDialogs';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
 import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
@@ -39,35 +39,29 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
   type VisSnapshot = { types: Set<string>; refs: Set<string> };
   const HISTORY_CAP = 50;
-  const undoStackRef = useRef<VisSnapshot[]>([]);
-  const redoStackRef = useRef<VisSnapshot[]>([]);
-
-
-  const [, setHistoryTick] = useState(0);
+  const [history, setHistory] = useState<{ undo: VisSnapshot[]; redo: VisSnapshot[] }>({ undo: [], redo: [] });
 
   const snapshotVisibility = (): VisSnapshot => ({ types: new Set(hiddenTypes), refs: new Set(hiddenRefs) });
   const pushUndo = () => {
-    undoStackRef.current.push(snapshotVisibility());
-    if (undoStackRef.current.length > HISTORY_CAP) undoStackRef.current.shift();
-    redoStackRef.current = [];
-    setHistoryTick(t => t + 1);
+    const snap = snapshotVisibility();
+    setHistory(h => ({ undo: [...h.undo, snap].slice(-HISTORY_CAP), redo: [] }));
   };
   const applySnapshot = (s: VisSnapshot) => { setHiddenTypes(s.types); setHiddenRefs(s.refs); };
   const undoVisibility = () => {
-    const prev = undoStackRef.current.pop();
+    const prev = history.undo.at(-1);
     if (!prev) return;
-    redoStackRef.current.push(snapshotVisibility());
+    const cur = snapshotVisibility();
+    setHistory(h => ({ undo: h.undo.slice(0, -1), redo: [...h.redo, cur] }));
     applySnapshot(prev);
-    setHistoryTick(t => t + 1);
   };
   const redoVisibility = () => {
-    const next = redoStackRef.current.pop();
+    const next = history.redo.at(-1);
     if (!next) return;
-    undoStackRef.current.push(snapshotVisibility());
+    const cur = snapshotVisibility();
+    setHistory(h => ({ undo: [...h.undo, cur], redo: h.redo.slice(0, -1) }));
     applySnapshot(next);
-    setHistoryTick(t => t + 1);
   };
-  const resetVisibilityHistory = () => { undoStackRef.current = []; redoStackRef.current = []; };
+  const resetVisibilityHistory = () => setHistory({ undo: [], redo: [] });
 
 
 
@@ -629,14 +623,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
 
-                {(hiddenRefs.size > 0 || undoStackRef.current.length > 0 || redoStackRef.current.length > 0) && (
+                {(hiddenRefs.size > 0 || history.undo.length > 0 || history.redo.length > 0) && (
                   <div className="cell-hidden-bar">
                     <span>{hiddenRefs.size > 0 ? `${hiddenRefs.size} mesh${hiddenRefs.size === 1 ? '' : 'es'} hidden` : ''}</span>
                     <div className="cell-hidden-actions">
-                      <button className="papyrus-copy" onClick={undoVisibility} disabled={undoStackRef.current.length === 0} title="Undo last hide/show">
+                      <button className="papyrus-copy" onClick={undoVisibility} disabled={history.undo.length === 0} title="Undo last hide/show">
                         Undo <kbd>Ctrl+Z</kbd>
                       </button>
-                      <button className="papyrus-copy" onClick={redoVisibility} disabled={redoStackRef.current.length === 0} title="Redo">
+                      <button className="papyrus-copy" onClick={redoVisibility} disabled={history.redo.length === 0} title="Redo">
                         Redo <kbd>Ctrl+Y</kbd>
                       </button>
                       {hiddenRefs.size > 0 && <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>}

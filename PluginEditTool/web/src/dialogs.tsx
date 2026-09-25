@@ -11,43 +11,11 @@
 
 
 
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import PluginTargetDialog, { type TargetRequest, type TargetResult } from './PluginTargetDialog';
 import './PluginTargetDialog.css';
 
-export interface ConfirmRequest {
-  title: string;
-  message: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-
-  danger?: boolean;
-}
-
-export interface PromptRequest {
-  title: string;
-  label: string;
-  defaultValue?: string;
-  placeholder?: string;
-  description?: string;
-  confirmLabel?: string;
-
-  validate?: (value: string) => string | null;
-}
-
-interface DialogApi {
-  confirm: (req: ConfirmRequest) => Promise<boolean>;
-  prompt: (req: PromptRequest) => Promise<string | null>;
-  pickPlugin: (req: TargetRequest) => Promise<TargetResult | null>;
-}
-
-const Ctx = createContext<DialogApi | null>(null);
-
-export function useDialogs(): DialogApi {
-  const api = useContext(Ctx);
-  if (!api) throw new Error('useDialogs must be used inside <DialogProvider>');
-  return api;
-}
+import { DialogContext, type DialogApi, type ConfirmRequest, type PromptRequest } from './useDialogs';
 
 type Pending =
   | { kind: 'confirm'; req: ConfirmRequest }
@@ -76,7 +44,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={api}>
+    <DialogContext.Provider value={api}>
       {children}
       {pending?.kind === 'confirm' && (
         <ConfirmDialog req={pending.req} onResolve={v => settle(v)} />
@@ -87,7 +55,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       {pending?.kind === 'plugin' && (
         <PluginTargetDialog request={pending.req} onResolve={v => settle(v)} />
       )}
-    </Ctx.Provider>
+    </DialogContext.Provider>
   );
 }
 
