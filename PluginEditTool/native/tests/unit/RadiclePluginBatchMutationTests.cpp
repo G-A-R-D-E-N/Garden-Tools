@@ -249,3 +249,80 @@ TEST_CASE("Native CopyAsOverrideMany reports per-item failures and commits succe
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm")) != nullptr);
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000802:Master.esm")) == nullptr);
 }
+
+TEST_CASE("Native CopyAsOverrideMany asks before writing overrides that would lose") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "SourceA.esp";
+    const auto target = root / "Patch.esp";
+    writeBytes(source, makeSource(0x00000800, "WeaponA"));
+    writeBytes(target, makeTarget());
+
+    // Patch loads first, so SourceA's override of the same record wins over it.
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", target),
+            pluginEntry("SourceA.esp", source)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json items = nlohmann::json::array({
+        {{"formKey", "000800:Master.esm"}, {"source", "SourceA.esp"}}
+    });
+    const auto pending = [&] {
+        const auto active = parseResult(
+            backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+        return active.at(0).at("Pending").get<bool>();
+    };
+
+    const auto asked = parseResult(backend.invokeBackend(
+        "CopyAsOverrideMany", nlohmann::json::array({items.dump(), "Patch.esp", false})));
+    CHECK(asked.at("ok") == 0);
+    CHECK(asked.at("requiresOverwrite") == false);
+    CHECK(asked.at("requiresLoadOrderConfirmation") == true);
+    REQUIRE(asked.at("losing").size() == 1);
+    CHECK(asked.at("losing")[0].at("formKey") == "000800:Master.esm");
+    CHECK(asked.at("losing")[0].at("loadsAfter") == nlohmann::json::array({"SourceA.esp"}));
+    CHECK_FALSE(pending());
+
+    const auto invalid = backend.invokeBackend(
+        "CopyAsOverrideMany", nlohmann::json::array({items.dump(), "Patch.esp", false, "yes"}));
+    REQUIRE_FALSE(invalid.has_value());
+    CHECK(invalid.error().type == "InvalidAllowLosingFlag");
+    CHECK_FALSE(pending());
+
+    const auto copied = parseResult(backend.invokeBackend(
+        "CopyAsOverrideMany", nlohmann::json::array({items.dump(), "Patch.esp", false, true})));
+    CHECK(copied.at("ok") == 1);
+    CHECK(copied.at("requiresLoadOrderConfirmation") == false);
+    CHECK(copied.at("losing").empty());
+    CHECK(pending());
+}
+
+TEST_CASE("Native CopyAsOverrideMany does not ask when the target already loads last") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "SourceA.esp";
+    const auto target = root / "Patch.esp";
+    writeBytes(source, makeSource(0x00000800, "WeaponA"));
+    writeBytes(target, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("SourceA.esp", source),
+            pluginEntry("Patch.esp", target)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json items = nlohmann::json::array({
+        {{"formKey", "000800:Master.esm"}, {"source", "SourceA.esp"}}
+    });
+    const auto result = parseResult(backend.invokeBackend(
+        "CopyAsOverrideMany", nlohmann::json::array({items.dump(), "Patch.esp", false})));
+    CHECK(result.at("ok") == 1);
+    CHECK(result.at("requiresLoadOrderConfirmation") == false);
+}

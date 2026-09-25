@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, ShieldAlert, Check, Copy } from 'lucide-react';
+import { useDialogs } from './dialogs';
 import './ConflictResolver.css';
 
 interface ConflictEntry {
@@ -38,6 +39,7 @@ export default function ConflictResolver() {
   const [winnerTarget, setWinnerTarget] = useState('');
   const [editablePlugins, setEditablePlugins] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
+  const { confirm: askConfirm } = useDialogs();
 
 
 
@@ -105,7 +107,16 @@ export default function ConflictResolver() {
     if (!matrix) return;
     const backend = window.chrome?.webview?.hostObjects?.backend;
     if (!backend) return;
-    const msg = await backend.ResolveConflict(matrix.FormKey, winnerTarget, patchTarget);
+    let msg = await backend.ResolveConflict(matrix.FormKey, winnerTarget, patchTarget);
+    if (msg.startsWith('LOSES:')) {
+      const proceed = await askConfirm({
+        title: 'Override will not win',
+        message: msg.slice('LOSES:'.length).trim(),
+        confirmLabel: 'Copy anyway',
+      });
+      if (!proceed) { setStatus(`Resolve cancelled -- ${patchTarget} was left unchanged.`); return; }
+      msg = await backend.ResolveConflict(matrix.FormKey, winnerTarget, patchTarget, true);
+    }
     setStatus(msg);
   };
 

@@ -362,8 +362,19 @@ export default function RecordView(
     if (!b) return;
     setStatus('Copying…');
     try {
+      let allowLosing = false;
       let msg = await b.CopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, false);
 
+      if (msg.startsWith('LOSES:')) {
+        const proceed = await askConfirm({
+          title: 'Override will not win',
+          message: msg.slice('LOSES:'.length).trim(),
+          confirmLabel: 'Copy anyway',
+        });
+        if (!proceed) { setStatus(`Copy cancelled -- ${target} was left unchanged.`); return; }
+        allowLosing = true;
+        msg = await b.CopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, false, true);
+      }
 
       if (msg.startsWith('EXISTS:')) {
         const proceed = await askConfirm({
@@ -373,7 +384,7 @@ export default function RecordView(
           danger: true,
         });
         if (!proceed) { setStatus('Copy cancelled -- the existing override was left alone.'); return; }
-        msg = await b.CopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true);
+        msg = await b.CopyAsOverride(matrix.Plugins[col], matrix.FormKey, target, true, allowLosing);
       }
       setStatus(msg);
 

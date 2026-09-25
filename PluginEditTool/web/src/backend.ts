@@ -26,8 +26,10 @@ export interface Backend {
   DeleteRecord(plugin: string, id: string): Promise<string>;
 
 
-  CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
-  CopyAsOverrideMany(itemsJson: string, patchPlugin: string, overwrite: boolean): Promise<string>;
+  // allowLosing opts in to an override that loads before the plugins that already win it;
+  // without it the backend answers "LOSES: ..." / requiresLoadOrderConfirmation and writes nothing.
+  CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean, allowLosing?: boolean): Promise<string>;
+  CopyAsOverrideMany(itemsJson: string, patchPlugin: string, overwrite: boolean, allowLosing?: boolean): Promise<string>;
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
@@ -75,7 +77,7 @@ export interface Backend {
   GetLoadOrderSummary(): Promise<string>;
 
 
-  ResolveConflict(formKey: string, winner: string, patch: string): Promise<string>;
+  ResolveConflict(formKey: string, winner: string, patch: string, allowLosing?: boolean): Promise<string>;
   SavePatch(patch: string): Promise<string>;
   SavePlugin(plugin: string, path: string): Promise<string>;
 }

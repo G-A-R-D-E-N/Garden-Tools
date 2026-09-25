@@ -355,6 +355,62 @@ TEST_CASE("Native CopyAsOverride persists a destination-safe override") {
     CHECK(link->key == fo4::FormKey::parse("000801:Master.esm"));
 }
 
+TEST_CASE("Native CopyAsOverride asks before writing an override that would lose") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Source.esp";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(sourcePath, makeSourceOverride());
+    writeBytes(targetPath, makeTargetPlugin());
+
+    // Target loads first, so Source's override of the same record beats it.
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Target.esp", targetPath),
+            pluginEntry("Source.esp", sourcePath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    const auto winner = [&] {
+        return parseStringResult(backend.invoke(
+            "backend.GetConflictMatrix",
+            nlohmann::json::array({"000800:Master.esm"}))).at("Plugins").size();
+    };
+    REQUIRE(winner() == 1);
+
+    const auto asked = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({"Source.esp", "000800:Master.esm", "Target.esp", false}));
+    REQUIRE(asked.has_value());
+    const auto message = asked->get<std::string>();
+    CHECK(message.find("LOSES:") == 0);
+    CHECK(message.find("Source.esp") != std::string::npos);
+    CHECK(winner() == 1);
+
+    const auto invalid = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({"Source.esp", "000800:Master.esm", "Target.esp", false, 1}));
+    REQUIRE_FALSE(invalid.has_value());
+    CHECK(invalid.error().type == "InvalidAllowLosingFlag");
+
+    const auto missing = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({"Source.esp", "000999:Master.esm", "Target.esp", false}));
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error().type == "RecordNotFound");
+
+    const auto copied = backend.invokeBackend(
+        "CopyAsOverride",
+        nlohmann::json::array({"Source.esp", "000800:Master.esm", "Target.esp", false, true}));
+    REQUIRE(copied.has_value());
+    CHECK(copied->get<std::string>().find("Copied") == 0);
+    const auto matrix = parseStringResult(backend.invoke(
+        "backend.GetConflictMatrix", nlohmann::json::array({"000800:Master.esm"})));
+    CHECK(matrix.at("Plugins").size() == 2);
+    CHECK(matrix.at("Winner") == "Source.esp");
+}
+
 TEST_CASE("Native CopyAsOverride refuses protected destination plugins") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
