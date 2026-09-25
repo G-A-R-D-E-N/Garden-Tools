@@ -584,3 +584,46 @@ Source: the vendored Mutagen in GardenEngine `opencw/third_party/Mutagen` (files
 - `Radicle/include/fo4/environment/placed.hpp:Script::name` and `ScriptProperty::name` are owned strings. They were views into `Scripts::raw`, so a copy of `PlacedReferenceData` kept pointers into the original, which dangled once it was destroyed. Test: the copy check at the end of `test_environment_placed.cpp:DecodesObjectReferenceFields`.
 - `Radicle/include/fo4/c_api_env.h:radicle_placed_ref` lost its lifetime comment, which claimed every pointer lives until `radicle_placed_ref_free`. The arrays do. `comments`, `map_marker_name_text`, script and property names from `raw`, and every `radicle_form_key.plugin` point into the environment and live until `radicle_env_destroy`.
 - Not changed: `Radicle/src/environment/environment.cpp:zstring_view` still requires exactly one trailing NUL for EDID and FULL, where Mutagen `BinaryStringUtility.ProcessNullTermination` cuts at the first NUL. Matching it would turn the 4-byte binary FULL that `MetadataDecodesNamesBoundsAndFlags` treats as malformed into one-character text. No real plugin in the 644-plugin Fallen World parity run was affected.
+
+## Radicle/src/environment/terrain.cpp:fo4::env::decode_landscape / landscape_texture_diffuse — GardenEngine #114 terrain surface
+
+Fourth #114 slice, stacked on the placed-reference slice. It covers the LAND, LTEX and TXST data that `TerrainService`, `TerrainTextureBaker` and `CellService` read. Godot mesh and splatmap building stays in GardenEngine.
+
+**LAND layouts.** These follow xEdit FO4 `wbRecord(LAND` plus `wbLandHeights`, `wbLandNormals`, `wbLandColors` and `wbLandLayers` in `Core/wbDefinitionsCommon.pas` (pin `9fb016884bec138ea6c7b872cec831537d464c3e`). The vendored Mutagen (`Landscape_Generated.cs`, `AlphaLayer_Generated.cs`) agrees on every size:
+- `DATA` is a `u32` of flags.
+- `VHGT` is 1096 bytes: an `f32` offset, 33×33 height bytes, then 3 unused bytes. The two readers disagree on sign: xEdit reads the height bytes as `s8`, Mutagen as `u8`. The bytes are returned untouched, and GardenEngine keeps its own signed-delta ×8 accumulation.
+- `VNML` and `VCLR` are 33×33×3 bytes each.
+- All grids are row-major, y outer and x inner, which matches Mutagen's `Array2dBinaryTranslation`.
+
+**Layers:**
+- `BTXT` (base) and `ATXT` (alpha) share an 8-byte header: LTEX form ID, quadrant `u8` (0–3), an unused byte, and a 16-bit layer number.
+  - Source: the vendored Mutagen `Mutagen.Bethesda.Fallout4/Records/Major Records/LayerHeader_Generated.cs` reads the texture link at 0x0 (4 bytes), `Quadrant` at 0x4 (1 byte), `Unused` at 0x5 and `LayerNumber` as `u16` at 0x6. `Radicle/src/environment/terrain.cpp:decode_landscape` reads the same offsets.
+  - The layer number is returned as raw bits; xEdit reads it as `s16`, Mutagen as `u16`.
+  - A quadrant above 3 fails.
+- `VTXT` must directly follow its `ATXT` and be a multiple of 8 bytes: `u16` position, 2 unused bytes, `f32` opacity.
+  - It is returned raw, like Mutagen's `AlphaLayerData`.
+  - A `VTXT` anywhere else fails.
+- An `ATXT` without `VTXT` is valid; its alpha is empty.
+
+**Texture chain:**
+- LTEX `TNAM` links the texture set.
+- TXST has eight string slots, `TX00`–`TX07` in slot order, plus `MNAM` material, `DNAM` `u16` flags, and the width/height/depth/shininess prefix of `DODT` (xEdit `wbDODT`, Mutagen `Decal.xml`).
+  - `Radicle/include/fo4/environment/terrain.hpp:TextureSetData::textures` slots are diffuse, normal/gloss, wrinkles, glow, height, environment, multilayer and smooth spec.
+- `landscape_texture_diffuse` walks winning LTEX → `TNAM` → winning TXST → `TX00`, which is `TerrainTextureBaker.Resolve`'s chain. It gives nothing when any link or the path is missing.
+- `decode_landscape`, `decode_landscape_texture_set` and `decode_texture_set` throw `WorldDecodeError` on a wrong signature or a malformed subrecord that is present.
+
+**C ABI.** `Radicle/src/c_api_terrain.cpp` provides:
+- `radicle_landscape_decode` / `radicle_landscape_free`: one owned view whose grids and alpha payloads point into plugin bytes;
+  - `radicle_landscape` `heights`, `normals` and `colors` are the row-major 33×33 grids, NULL when the subrecord is absent;
+  - `radicle_land_layer::alpha` is the raw VTXT payload, NULL for base layers.
+- `radicle_landscape_texture_get_set`: the LTEX `TNAM`; the out key's `plugin` is NULL when it is absent.
+- `radicle_texture_set_get_info`:
+  - `textures` is `TX00`–`TX07`, NULL for absent slots. The strings are views into plugin bytes that end at a NUL the decoder located, so they are valid C strings.
+  - `decal` holds min width, max width, min height, max height, depth and shininess; only the first `decal_count` are present.
+- `radicle_env_landscape_texture_diffuse`: `RADICLE_STATUS_NOT_FOUND` when any link or the path is missing.
+
+**Tests.** `Radicle/tests/test_environment_terrain.cpp` covers:
+- a full LAND;
+- orphan `VTXT`, `VHGT` size and quadrant failures;
+- the LTEX/TXST chain, including missing links;
+- the C ABI.

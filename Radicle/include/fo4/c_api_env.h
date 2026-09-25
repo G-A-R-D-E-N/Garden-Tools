@@ -358,6 +358,52 @@ RADICLE_API radicle_status radicle_record_primary_model_path(const radicle_env* 
                                                              const radicle_record* record,
                                                              const char** out_path);
 
+typedef struct radicle_land_layer {
+  int32_t is_base;
+  radicle_form_key texture;
+  uint8_t quadrant;
+  uint16_t layer;
+  const uint8_t* alpha;
+  size_t alpha_size;
+} radicle_land_layer;
+
+typedef struct radicle_landscape {
+  int32_t has_flags;
+  uint32_t flags;
+  int32_t has_heights;
+  float height_offset;
+  const uint8_t* heights;
+  const uint8_t* normals;
+  const uint8_t* colors;
+  const radicle_land_layer* layers;
+  size_t layer_count;
+  void* internal;
+} radicle_landscape;
+
+typedef struct radicle_texture_set_info {
+  const char* textures[8];
+  const char* material;
+  int32_t has_flags;
+  uint16_t flags;
+  int32_t has_decal;
+  float decal[6];
+  size_t decal_count;
+} radicle_texture_set_info;
+
+RADICLE_API radicle_status radicle_landscape_decode(const radicle_env* env,
+                                                    const radicle_record* record,
+                                                    radicle_landscape** out_landscape);
+RADICLE_API void radicle_landscape_free(radicle_landscape* landscape);
+RADICLE_API radicle_status radicle_landscape_texture_get_set(const radicle_env* env,
+                                                             const radicle_record* record,
+                                                             radicle_form_key* out_texture_set);
+RADICLE_API radicle_status radicle_texture_set_get_info(const radicle_env* env,
+                                                        const radicle_record* record,
+                                                        radicle_texture_set_info* out_info);
+RADICLE_API radicle_status radicle_env_landscape_texture_diffuse(const radicle_env* env,
+                                                                 radicle_form_key landscape_texture,
+                                                                 const char** out_path);
+
 #ifdef __cplusplus
 }
 #endif
