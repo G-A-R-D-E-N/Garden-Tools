@@ -7,6 +7,8 @@
 #include <fo4ide/f4se/RegionMerge.hpp>
 #include <fo4ide/f4se/RegistrationExtractor.hpp>
 
+#include <algorithm>
+
 namespace fo4ide::f4se {
 
 namespace {
