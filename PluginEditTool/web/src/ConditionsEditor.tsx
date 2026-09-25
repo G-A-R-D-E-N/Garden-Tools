@@ -3,6 +3,7 @@ import { X, Plus, Trash2, ArrowUp, ArrowDown, Search } from 'lucide-react';
 import type { ConditionDto } from './backend';
 import RecordPicker from './RecordPicker';
 import './ConditionsEditor.css';
+import { errorMessage } from './errors';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
@@ -40,7 +41,7 @@ export default function ConditionsEditor(
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) setRows(parsed);
         else { setError(String(raw)); setRows([]); }
-      } catch (e: any) { setError('Could not read conditions: ' + (e?.message || e)); setRows([]); }
+      } catch (e) { setError('Could not read conditions: ' + (errorMessage(e) ?? String(e))); setRows([]); }
       try { setFunctions(JSON.parse(await b.GetConditionFunctions())); } catch { setFunctions([]); }
       try { setRunOns(JSON.parse(await b.GetConditionRunOnTypes())); } catch { setRunOns(['Subject']); }
       try { setParamTable(JSON.parse(await b.GetConditionFunctionParams())); } catch { setParamTable({}); }
@@ -63,7 +64,7 @@ export default function ConditionsEditor(
       try {
         const got = JSON.parse(await b.ResolveFormKeyLabels(missing.join(',')));
         setLabels(prev => ({ ...prev, ...got }));
-      } catch {  }
+      } catch { /* labels are cosmetic; rows keep their raw FormKeys */ }
     })();
   }, [rows]);
 
@@ -106,8 +107,8 @@ export default function ConditionsEditor(
     try {
       onSaved(await b.SetConditionsAt(plugin, record, path, JSON.stringify(rows)));
       onClose();
-    } catch (e: any) {
-      setError('Save failed: ' + (e?.message || e));
+    } catch (e) {
+      setError('Save failed: ' + (errorMessage(e) ?? String(e)));
       setSaving(false);
     }
   };

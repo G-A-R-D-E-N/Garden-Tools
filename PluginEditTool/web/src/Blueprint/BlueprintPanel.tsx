@@ -69,7 +69,7 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
         setEntries(parsed.entries);
         setTotal(parsed.total);
       } catch {
-
+        // Best-effort palette search: keep the previous results; the next keystroke retries.
       }
     }, 200);
     return () => clearTimeout(timer);
@@ -89,7 +89,7 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
         setValidation(JSON.parse(raw));
         setValidatedDoc(doc);
       } catch {
-
+        // Best-effort live validation: keep the last result; the next edit revalidates.
       }
     }, 600);
     return () => clearTimeout(timer);

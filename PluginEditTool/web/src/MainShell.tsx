@@ -25,6 +25,12 @@ interface McpLiveMsg {
   ts: number;
   isNew?: boolean;
 }
+// Host -> page messages; only the fields each Type uses are read.
+interface HostMessage {
+  Type?: string;
+  Text?: string;
+  Value?: number;
+}
 import './MainShell.css';
 import SettingsModal from './SettingsModal';
 import RecordView from './RecordView';
@@ -33,9 +39,10 @@ import TopBar, { type ShellTab } from './Shell/TopBar';
 import DetailRail from './Shell/DetailRail';
 import StatusBar from './Shell/StatusBar';
 import type {
-  ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
+  AppInterop, ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
 } from './backend';
 import type { RecordTab } from './RecordView';
+import { errorMessage } from './errors';
 
 interface RecordNode {
   Key: string;
@@ -45,7 +52,7 @@ interface RecordNode {
   FilePath: string;
 }
 
-const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, node: RecordNode, backend: any, onOpenRecord: (path: string, node: RecordNode) => void }) => {
+const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, node: RecordNode, backend: AppInterop | null, onOpenRecord: (path: string, node: RecordNode) => void }) => {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<RecordNode[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,10 +65,11 @@ const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, nod
 
 
         try {
+          if (!backend) throw new Error('Host bridge is not available');
           const json = await backend.GetChildren(path);
           setChildren(JSON.parse(json));
-        } catch (err: any) {
-          setLoadError(err?.message || String(err));
+        } catch (err) {
+          setLoadError(errorMessage(err) ?? String(err));
         } finally {
           setLoading(false);
         }
@@ -188,7 +196,7 @@ export default function MainShell() {
 
   const [recordTab, setRecordTab] = useState<RecordTab>('grid');
   const [plugins, setPlugins] = useState<RecordNode[]>([]);
-  const [backend, setBackend] = useState<any>(null);
+  const [backend, setBackend] = useState<AppInterop | null>(null);
   const [errorStr, setErrorStr] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [progress, setProgress] = useState<number | null>(null);
@@ -285,6 +293,39 @@ export default function MainShell() {
     }
   }, []);
 
+  const parseMo2Status = (raw: unknown): Mo2Status | null => {
+    try {
+      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!value || typeof value !== 'object') return null;
+      return value as Mo2Status;
+    } catch {
+      return null;
+    }
+  };
+
+  const refreshMo2Status = async () => {
+    const b = window.chrome?.webview?.hostObjects?.appInterop as
+      | { GetMo2Status?: () => Promise<unknown> }
+      | undefined;
+    if (!b?.GetMo2Status) return;
+    try {
+      setMo2Status(parseMo2Status(await b.GetMo2Status()));
+    } catch {
+      setMo2Status(null);
+    }
+  };
+
+  const refreshPlugins = async () => {
+    const b = window.chrome?.webview?.hostObjects?.appInterop;
+    if (!b) return;
+    const json = await b.GetPlugins();
+    setPlugins(JSON.parse(json));
+    setErrorStr("");
+
+    await refreshNavigator();
+    await refreshMo2Status();
+  };
+
   useEffect(() => {
     const handleRejection = (event: PromiseRejectionEvent) => {
       let msg = "Unhandled Promise: ";
@@ -303,13 +344,13 @@ export default function MainShell() {
 
 
 
-    const onMessage = (e: any) => {
-      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    const onMessage = (e: MessageEvent) => {
+      const data = (typeof e.data === 'string' ? JSON.parse(e.data) : e.data) as HostMessage | null;
       if (!data || !data.Type) return;
       if (data.Type === 'SetStatus') setStatus(data.Text || "");
-      if (data.Type === 'SetProgress') setProgress(data.Value < 0 ? null : data.Value);
+      if (data.Type === 'SetProgress') setProgress((data.Value ?? 0) < 0 ? null : data.Value ?? null);
       if (data.Type === 'McpLive') {
-        const ev: McpLiveMsg = { ...data, ts: Date.now(), isNew: true };
+        const ev: McpLiveMsg = { ...(data as Omit<McpLiveMsg, 'ts' | 'isNew'>), ts: Date.now(), isNew: true };
         setMcpFeed(prev => [ev, ...prev].slice(0, 12));
         setMcpActive(true);
         if (mcpActiveTimerRef.current) clearTimeout(mcpActiveTimerRef.current);
@@ -350,9 +391,9 @@ export default function MainShell() {
           setBackend(() => b);
           await refreshPlugins();
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Init Error:", err);
-        setErrorStr(err?.message || JSON.stringify(err) || String(err));
+        setErrorStr(errorMessage(err) ?? (JSON.stringify(err) || String(err)));
       }
     };
     init();
@@ -365,27 +406,7 @@ export default function MainShell() {
   }, []);
 
 
-  const parseMo2Status = (raw: unknown): Mo2Status | null => {
-    try {
-      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (!value || typeof value !== 'object') return null;
-      return value as Mo2Status;
-    } catch {
-      return null;
-    }
-  };
 
-  const refreshMo2Status = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop as
-      | { GetMo2Status?: () => Promise<unknown> }
-      | undefined;
-    if (!b?.GetMo2Status) return;
-    try {
-      setMo2Status(parseMo2Status(await b.GetMo2Status()));
-    } catch {
-      setMo2Status(null);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -409,16 +430,6 @@ export default function MainShell() {
     };
   }, [backend]);
 
-  const refreshPlugins = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop;
-    if (!b) return;
-    const json = await b.GetPlugins();
-    setPlugins(JSON.parse(json));
-    setErrorStr("");
-
-    await refreshNavigator();
-    await refreshMo2Status();
-  };
 
   const isPendingReloadError = (err: unknown) =>
     String((err as { message?: string })?.message ?? err ?? '').includes('PluginHasPendingChanges');
@@ -438,14 +449,14 @@ export default function MainShell() {
     try {
       try {
         await b.LoadEnvironment();
-      } catch (err: any) {
+      } catch (err) {
         if (!isPendingReloadError(err)) throw err;
         if (!(await confirmDiscardPendingReload())) return;
         await b.LoadEnvironment(true);
       }
       await refreshPlugins();
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setProgress(null);
       setEnvLoading(false);
@@ -461,14 +472,14 @@ export default function MainShell() {
       setEnvLoading(true);
       try {
         await b.OpenMo2Profile(path);
-      } catch (err: any) {
+      } catch (err) {
         if (!isPendingReloadError(err)) throw err;
         if (!(await confirmDiscardPendingReload())) return;
         await b.OpenMo2Profile(path, true);
       }
       await refreshPlugins();
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setProgress(null);
       setEnvLoading(false);
@@ -486,8 +497,8 @@ export default function MainShell() {
       await refreshNavigator();
       if (openRecord) await reloadMatrix();
       setStatus('Refreshed.');
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     }
   };
 
@@ -498,8 +509,8 @@ export default function MainShell() {
       const summary = await b.ScanConflicts();
       setStatus(summary);
       await refreshPlugins();
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setProgress(null);
     }
@@ -517,8 +528,8 @@ export default function MainShell() {
       const report = await b.ScanBrokenRefs();
       setBrokenRefsReport(report);
       setStatus('Broken-ref scan complete.');
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setBrokenRefsScanning(false);
       setProgress(null);
@@ -552,8 +563,8 @@ export default function MainShell() {
         return;
       }
       putRecord({ title: node.Key, plugin, matrix });
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     } finally {
       setRecordLoading(false);
     }
@@ -582,7 +593,7 @@ export default function MainShell() {
     if (!b) return;
     setConflicts(null);
     try { setConflicts(JSON.parse(await b.GetConflicts())); }
-    catch (e: any) { setErrorStr(e?.message || String(e)); setConflicts([]); }
+    catch (e) { setErrorStr(errorMessage(e) ?? String(e)); setConflicts([]); }
   };
 
 
@@ -632,8 +643,8 @@ export default function MainShell() {
         : '';
       setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
       if (!res.failed) setConflictSel({});
-    } catch (e: any) {
-      setStatus('Batch copy failed: ' + (e?.message || e));
+    } catch (e) {
+      setStatus('Batch copy failed: ' + (errorMessage(e) ?? String(e)));
     } finally { setConflictBusy(false); }
   };
 
@@ -647,8 +658,8 @@ export default function MainShell() {
       const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
       if (!matrix) { setErrorStr(`No record for ${hit.FormKey}.`); return; }
       putRecord({ title: hit.EditorID || hit.FormKey, plugin: hit.Plugin, matrix });
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     } finally {
       setRecordLoading(false);
     }
@@ -664,8 +675,8 @@ export default function MainShell() {
       const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
       if (!matrix) { setErrorStr(`No record for ${formKey}.`); return; }
       putRecord({ title: matrix.EditorID || formKey, plugin: pluginName || matrix.Winner, matrix });
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     } finally {
       setRecordLoading(false);
     }
@@ -681,8 +692,8 @@ export default function MainShell() {
 
       if (!matrix || !matrix.Plugins || matrix.Plugins.length === 0) closeRecordTab(openRecord.matrix.FormKey);
       else setOpenRecords(prev => prev.map(r => (r.matrix.FormKey === matrix.FormKey ? { ...r, matrix } : r)));
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     }
   };
 

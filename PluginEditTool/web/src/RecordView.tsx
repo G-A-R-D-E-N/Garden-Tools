@@ -15,6 +15,7 @@ import WorkspaceHeader from './Workspace/WorkspaceHeader';
 import { buildActions } from './Workspace/actions';
 import ConflictsView, { type ConflictLayout } from './Workspace/ConflictsView';
 import './RecordView.css';
+import { errorMessage } from './errors';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
@@ -325,7 +326,7 @@ export default function RecordView(
     try {
       setStatus(await b.SetField(matrix.Plugins[col], matrix.FormKey, r.Field, value));
       await onReload();
-    } catch (e: any) { setStatus('Edit failed: ' + (e?.message || e)); }
+    } catch (e) { setStatus('Edit failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   useEffect(() => {
@@ -381,7 +382,7 @@ export default function RecordView(
       await onReload();
       onPluginsChanged?.();
     }
-    catch (e: any) { setStatus('Copy failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Copy failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const savePlugin = async (col: number) => {
@@ -390,7 +391,7 @@ export default function RecordView(
     if (!b) return;
     setStatus('Saving plugin…');
     try { setStatus(await b.SavePlugin(matrix.Plugins[col], '')); }
-    catch (e: any) { setStatus('Save failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Save failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const deleteRecord = async (col: number) => {
@@ -402,7 +403,7 @@ export default function RecordView(
       message: `Remove ${matrix.EditorID || matrix.FormKey} from ${plug}?` })) return;
     setStatus('Deleting…');
     try { setStatus(await b.DeleteRecord(plug, matrix.FormKey)); await onReload(); }
-    catch (e: any) { setStatus('Delete failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Delete failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const renumberFormId = async (col: number) => {
@@ -420,7 +421,7 @@ export default function RecordView(
     if (!next) return;
     setStatus('Renumbering…');
     try { setStatus(await b.RenumberFormId(plug, matrix.FormKey, next)); await onReload(); }
-    catch (e: any) { setStatus('Renumber failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Renumber failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const compactEsl = async (col: number) => {
@@ -431,7 +432,7 @@ export default function RecordView(
       message: `Compact ${matrix.Plugins[col]} to ESL?\n\nThis renumbers every record's FormID into the 0x800-0xFFF range and can break references from other plugins.` })) return;
     setStatus('Compacting…');
     try { setStatus(await b.CompactToEsl(matrix.Plugins[col])); await onReload(); }
-    catch (e: any) { setStatus('Compact failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Compact failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const cleanPlugin = async (col: number) => {
@@ -442,7 +443,7 @@ export default function RecordView(
       message: `Clean (UDR) ${matrix.Plugins[col]}?\n\nThis undeletes and disables every deleted record in the plugin.` })) return;
     setStatus('Cleaning…');
     try { setStatus(await b.CleanPlugin(matrix.Plugins[col])); await onReload(); }
-    catch (e: any) { setStatus('Clean failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Clean failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
 
@@ -465,7 +466,7 @@ export default function RecordView(
     const { target, extra: edid } = picked;
     setStatus('Duplicating…');
     try { setStatus(await b.CopyAsNewRecord(matrix.Plugins[col], matrix.FormKey, target, edid)); await onReload(); }
-    catch (e: any) { setStatus('Copy as new record failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Copy as new record failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const deepCopyAsOverride = async (col: number) => {
@@ -506,7 +507,7 @@ export default function RecordView(
       }
       setStatus(result);
       await onReload();
-    } catch (e: any) { setStatus('Deep copy failed: ' + (e?.message || e)); }
+    } catch (e) { setStatus('Deep copy failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const changeReferencingRecords = async () => {
@@ -535,7 +536,7 @@ export default function RecordView(
       if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
       setStatus(await b.ChangeReferencingRecords(matrix.FormKey, to, target, true));
       await onReload();
-    } catch (e: any) { setStatus('Change referencing records failed: ' + (e?.message || e)); }
+    } catch (e) { setStatus('Change referencing records failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
 
@@ -554,7 +555,7 @@ export default function RecordView(
         message: `${preview}\n\nRemove them from ${plug}?` })) return;
       setStatus(await b.RemoveIdenticalToMaster(plug, true));
       await onReload();
-    } catch (e: any) { setStatus('Remove ITM failed: ' + (e?.message || e)); }
+    } catch (e) { setStatus('Remove ITM failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const addMasters = async (col: number) => {
@@ -570,7 +571,7 @@ export default function RecordView(
     });
     if (!list) return;
     try { setStatus(await b.AddMasters(plug, list)); await onReload(); }
-    catch (e: any) { setStatus('Add masters failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Add masters failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
 
@@ -594,7 +595,7 @@ export default function RecordView(
       if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
       setStatus(await b.RenumberPluginFormIds(plug, start, true));
       await onReload();
-    } catch (e: any) { setStatus('Renumber failed: ' + (e?.message || e)); }
+    } catch (e) { setStatus('Renumber failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const createSeq = async (col: number) => {
@@ -602,7 +603,7 @@ export default function RecordView(
     const b = back();
     if (!b) return;
     try { setStatus(await b.CreateSeqFile(matrix.Plugins[col], '')); }
-    catch (e: any) { setStatus('Create SEQ failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Create SEQ failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const checkCircularLeveled = async (col: number) => {
@@ -611,7 +612,7 @@ export default function RecordView(
     if (!b) return;
     setStatus('Checking leveled lists…');
     try { setStatus(await b.CheckCircularLeveledLists(matrix.Plugins[col])); }
-    catch (e: any) { setStatus('Check failed: ' + (e?.message || e)); }
+    catch (e) { setStatus('Check failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   const copyText = (what: string, text: string) => {
@@ -651,7 +652,7 @@ export default function RecordView(
       }
       setStatus(msg);
       await onReload();
-    } catch (e: any) { setStatus('Failed: ' + (e?.message || e)); }
+    } catch (e) { setStatus('Failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
 

@@ -86,25 +86,6 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   const browseMat = async () => { const m = getMaterial(); if (m) { const p = await m.BrowseForFile('Select a material', 'FO4 material (*.bgsm;*.bgem)|*.bgsm;*.bgem|BGSM lighting material (*.bgsm)|*.bgsm|BGEM effect material (*.bgem)|*.bgem|All files|*.*'); if (p) setMatPath(p); } };
 
 
-  const onDrop = useCallback(async (e: DragEvent) => {
-    e.preventDefault(); setDragOver(false);
-    if (!nif) return;
-    const f = e.dataTransfer.files?.[0];
-    if (!f) return;
-    try {
-      const buf = await f.arrayBuffer();
-      let bin = ''; const bytes = new Uint8Array(buf);
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      const path = await nif.StageDroppedFile(f.name, btoa(bin));
-      if (path.startsWith('ERR:')) { appendLog('✗ drop failed -- ' + path); return; }
-      if (/\.obj$/i.test(f.name)) { setMode('import'); setObjPath(path); }
-      else if (/\.bg(sm|em)$/i.test(f.name)) { setMatPath(path); loadMaterial(path); }
-      else if (/\.nif$/i.test(f.name)) { setNifPath(path); if (mode === 'view') loadGeo(path); else if (mode === 'edit') loadTree(path); else if (mode === 'import') setMode('inspect'); }
-      appendLog('• dropped ' + f.name);
-    } catch (err) {
-      appendLog('✗ drop failed -- ' + (err instanceof Error ? err.message : String(err)));
-    }
-  }, [nif, mode]);
 
   const loadGeo = async (path?: string) => {
     const p = (path ?? nifPath).trim();
@@ -166,6 +147,26 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
     } finally { setBusy(false); }
   };
 
+
+  const onDrop = async (e: DragEvent) => {
+    e.preventDefault(); setDragOver(false);
+    if (!nif) return;
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    try {
+      const buf = await f.arrayBuffer();
+      let bin = ''; const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const path = await nif.StageDroppedFile(f.name, btoa(bin));
+      if (path.startsWith('ERR:')) { appendLog('✗ drop failed -- ' + path); return; }
+      if (/\.obj$/i.test(f.name)) { setMode('import'); setObjPath(path); }
+      else if (/\.bg(sm|em)$/i.test(f.name)) { setMatPath(path); loadMaterial(path); }
+      else if (/\.nif$/i.test(f.name)) { setNifPath(path); if (mode === 'view') loadGeo(path); else if (mode === 'edit') loadTree(path); else if (mode === 'import') setMode('inspect'); }
+      appendLog('• dropped ' + f.name);
+    } catch (err) {
+      appendLog('✗ drop failed -- ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
 
   const onEditorSaved = () => { loadTree(nifPath); };
 
