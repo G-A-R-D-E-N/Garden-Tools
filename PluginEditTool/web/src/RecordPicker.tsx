@@ -9,8 +9,9 @@ export default function RecordPicker(
   { title, refType, refTypes, onPick, onClose }:
   { title: string; refType: string | null; refTypes: string | null; onPick: (formKey: string) => void; onClose: () => void }
 ) {
-  const [query, setQuery] = useState('');
+  const [query, setQueryState] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const setQuery = (v: string) => { setQueryState(v); setHits(null); };
   const [filterOn, setFilterOn] = useState(!!refTypes);
   const timer = useRef<number | null>(null);
 
@@ -21,7 +22,6 @@ export default function RecordPicker(
     const b = back();
     if (!b) return;
     if (timer.current) window.clearTimeout(timer.current);
-    setHits(null);
     timer.current = window.setTimeout(async () => {
       try { setHits(JSON.parse(await b.SearchRecords(query, activeFilter))); } catch { setHits([]); }
     }, 250);
@@ -41,7 +41,7 @@ export default function RecordPicker(
           {refTypes && (
             <button
               className={`rp-chip ${filterOn ? 'on' : ''}`}
-              onClick={() => setFilterOn(v => !v)}
+              onClick={() => { setFilterOn(v => !v); setHits(null); }}
               title={filterOn ? `Showing only valid types -- click to show all` : 'Click to filter to the field type'}
             >
               {refType || 'type'}{filterOn ? '' : ' (off)'}

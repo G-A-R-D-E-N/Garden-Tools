@@ -22,19 +22,19 @@ export default function ConditionsEditor(
   { plugin: string; record: string; path: string; label: string;
     onClose: () => void; onSaved: (msg: string) => void }
 ) {
-  const [rows, setRows] = useState<ConditionDto[] | null>(null);
+  const [rows, setRows] = useState<ConditionDto[] | null>(() => (back() ? null : []));
   const [functions, setFunctions] = useState<string[]>([]);
   const [runOns, setRunOns] = useState<string[]>([]);
   const [paramTable, setParamTable] = useState<ParamTable>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => (back() ? '' : 'No backend bridge.'));
   const [saving, setSaving] = useState(false);
   const [pick, setPick] = useState<PickTarget | null>(null);
   const [fnFilter, setFnFilter] = useState('');
 
   useEffect(() => {
     const b = back();
-    if (!b) { setError('No backend bridge.'); setRows([]); return; }
+    if (!b) return;
     (async () => {
       try {
         const raw = await b.GetConditionsAt(plugin, record, path);

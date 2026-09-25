@@ -119,14 +119,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     appendLog(`${failed > 0 ? '✗' : 'ℹ'} ${line}`);
   }, []);
 
-  const checkPlugins = async () => {
-    if (!cell) { setPluginCount(0); return; }
-    try {
-      const raw = await cell.GetPlugins();
+  const checkPlugins = () => cell?.GetPlugins()
+    .then(raw => {
       const list = JSON.parse(raw) as string[];
       setPluginCount(Array.isArray(list) ? list.length : 0);
-    } catch { setPluginCount(0); }
-  };
+    })
+    .catch(() => setPluginCount(0));
 
   useEffect(() => { checkPlugins(); }, []);
 
@@ -143,10 +141,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
 
   useEffect(() => {
-    if (!cell || noEnv) { setMatches(null); return; }
+    if (!cell || noEnv) return;
     const mySeq = ++searchSeq.current;
-    setMatchesLoading(true);
     const t = setTimeout(async () => {
+      setMatchesLoading(true);
       try {
         const raw = await cell.SearchCells(cellId.trim(), 30);
         if (searchSeq.current !== mySeq) return;
@@ -174,10 +172,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const wsSeq = useRef(0);
 
   useEffect(() => {
-    if (!cell || noEnv || pickMode !== 'grid') { setWsMatches(null); return; }
+    if (!cell || noEnv || pickMode !== 'grid') return;
     const mySeq = ++wsSeq.current;
-    setWsLoading(true);
     const t = setTimeout(async () => {
+      setWsLoading(true);
       try {
         const raw = await cell.SearchWorldspaces(worldspace.trim(), 100);
         if (wsSeq.current !== mySeq) return;

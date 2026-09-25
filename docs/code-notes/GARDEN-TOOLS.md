@@ -448,3 +448,11 @@ Split out of `dialogs.tsx` and `Shell/StatusBar.tsx` so those files export only 
 ## PluginEditTool/web/src/util/cellInstances.ts:applyHidden, Shell/ExplorerTree.tsx:ExplorerTree, Workspace/conflictStatus.ts:resolveStatus
 
 Moved out of `CellViewport.tsx`, `MainShell.tsx` and `RecordView.tsx` unchanged so each of those over-750-line files shrinks when touched (source line-limit guard). `cellInstances.ts` holds the instanced-mesh hide/visibility/selection helpers and `InstanceRef`; `ExplorerTree.tsx` is the lazy plugin/record tree; `conflictStatus.ts` holds the conflict-cell status resolution, severity filter sets and legend tables.
+
+## PluginEditTool/web/src/RecordView.tsx:RecordView, MainShell.tsx:MainShell — no synchronous setState in effects (#77 tranche 3)
+
+`react-hooks/set-state-in-effect` flags any state update that runs synchronously in an effect body, including inside a local `async` function the effect calls. Effects now only start async work; setState happens in `.then`/`.catch` or timer callbacks. The resets moved out as follows:
+- Per-record resets use the "store previous key in state" render pattern (`RecordView` on `matrix.FormKey`; `MainShell` on `activeKey`, which also switches to the Record/Grid tab). `RecordView` is not keyed by FormKey, so the reset is still needed.
+- User-driven resets moved into the event handlers: `RecordView:openMenu` clears `elementActions`, the Conflicts Rescan button clears `conflicts`, and `Shell/TopBar.tsx:changeQuery` and `RecordPicker.tsx` clear results on input.
+- Resets the render already gates were dropped: the sidebar search results only show at 2+ characters, `SpreadsheetPanel.tsx` shows `types` only with a plugin set, and `CellPanel.tsx` checks `!cell`. `ConditionsEditor.tsx` sets its no-backend state with lazy `useState` initialisers.
+- The MCP highlight flash is `highlightField` itself. The `.rv-row-flash` CSS animation runs once for 1.8 s and then holds its transparent end state (`forwards`), so `RecordView`'s separate 1.8 s timer is gone. `MainShell`'s MCP handler switches to the grid tab, so a child render never calls the parent's `onTabChange`.

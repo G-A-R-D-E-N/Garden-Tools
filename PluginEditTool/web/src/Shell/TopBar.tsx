@@ -55,7 +55,7 @@ export default function TopBar({
 
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) { setResults(null); setOpen(false); return; }
+    if (q.length < 2) return;
     let cancelled = false;
     const t = setTimeout(async () => {
       const hits = await onSearch(q);
@@ -76,10 +76,14 @@ export default function TopBar({
     return () => window.removeEventListener('mousedown', onClick);
   }, []);
 
+  const changeQuery = (v: string) => {
+    setQuery(v);
+    if (v.trim().length < 2) { setResults(null); setOpen(false); }
+  };
+
   const choose = (hit: SearchHit) => {
     onOpenHit(hit);
-    setOpen(false);
-    setQuery('');
+    changeQuery('');
     inputRef.current?.blur();
   };
 
@@ -133,7 +137,7 @@ export default function TopBar({
             ref={inputRef}
             value={query}
             placeholder="Search records, fields, or formIDs..."
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => changeQuery(e.target.value)}
             onKeyDown={onInputKey}
             onFocus={() => { if (results && results.length) setOpen(true); }}
           />
