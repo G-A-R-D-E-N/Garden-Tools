@@ -107,6 +107,7 @@ typedef struct radicle_worldspace_info {
   int32_t has_land_defaults;
   float default_land_height;
   float default_water_height;
+  /* Stored NAM0/NAM9 values; Mutagen ObjectBoundsMin/Max divide these by 4096. */
   int32_t has_bounds_min;
   float bounds_min[2];
   int32_t has_bounds_max;

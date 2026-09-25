@@ -22,7 +22,7 @@ struct WorldspaceData {
   std::optional<FormKey> lighting_template;
   std::optional<float> default_land_height;
   std::optional<float> default_water_height;
-  // NAM0/NAM9 floats as stored; xEdit only scales them by 1/4096 for display.
+  // NAM0/NAM9 floats as stored; Mutagen ObjectBoundsMin/Max are these divided by 4096.
   std::optional<std::array<float, 2>> bounds_min;
   std::optional<std::array<float, 2>> bounds_max;
   std::optional<std::uint8_t> flags;
