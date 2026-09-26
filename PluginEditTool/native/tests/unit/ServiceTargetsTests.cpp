@@ -892,17 +892,17 @@ TEST_CASE("GraphTarget serializes concurrent RPC access to its compiler cache") 
                     try {
                         switch ((t + i) % 4) {
                             case 0:
-                                target.invoke("GetCorePalette", nlohmann::json::array());
+                                static_cast<void>(target.invoke("GetCorePalette", nlohmann::json::array()));
                                 break;
                             case 1:
-                                target.invoke("SearchPalette",
-                                              nlohmann::json::array({"any", "debug", "", 10}));
+                                static_cast<void>(target.invoke("SearchPalette",
+                                              nlohmann::json::array({"any", "debug", "", 10})));
                                 break;
                             case 2:
-                                target.invoke("ValidateGraph", nlohmann::json::array({"{}"}));
+                                static_cast<void>(target.invoke("ValidateGraph", nlohmann::json::array({"{}"})));
                                 break;
                             default:
-                                target.invoke("Refresh", nlohmann::json::array());
+                                static_cast<void>(target.invoke("Refresh", nlohmann::json::array()));
                                 break;
                         }
                     } catch (...) {
