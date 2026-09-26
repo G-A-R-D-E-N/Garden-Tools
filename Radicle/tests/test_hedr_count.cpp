@@ -1,3 +1,4 @@
+#include "fo4/binary/cursor.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
@@ -47,11 +48,16 @@ std::uint64_t recursive_hedr_count(const fo4::Plugin& plugin) {
   return static_cast<std::uint64_t>(non_tes4) + fo4::collect_groups(plugin).size();
 }
 
-std::uint32_t rebuilt_hedr_count(fo4::Plugin plugin) {
+std::uint32_t rebuilt_hedr_count(fo4::Plugin& plugin) {
   plugin.original_range.clear();
   plugin.tes4.original_range.clear();
   const auto written = fo4::write_plugin(plugin);
-  return fo4::read_plugin(written, plugin.path).header.record_count;
+  fo4::binary::Cursor cursor{written};
+  cursor.read_signature();
+  const auto payload_size = cursor.read_u32();
+  cursor.seek(0);
+  return fo4::read_plugin(cursor.read_bytes(fo4::k_record_header_size + payload_size),
+                          plugin.path).header.record_count;
 }
 
 std::string lower_extension(const std::filesystem::path& path) {
@@ -122,14 +128,14 @@ TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
 TEST(HedrCount, CommittedRealPluginsStoreTheRecursiveCount) {
   for (const char* name : {"FW_HeatherSurvivalPatch.esp", "SlowTime.esp"}) {
     SCOPED_TRACE(name);
-    const auto plugin =
+    auto plugin =
         fo4::read_plugin_file(std::filesystem::path{FO4_TESTDATA_DIR} / name);
     EXPECT_EQ(plugin.header.record_count, recursive_hedr_count(plugin));
     EXPECT_EQ(rebuilt_hedr_count(plugin), plugin.header.record_count);
   }
 }
 
-TEST(HedrCount, OfficialMastersAndLightPluginsStoreTheRecursiveCountWhenPresent) {
+TEST(HedrCount, OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
@@ -139,8 +145,10 @@ TEST(HedrCount, OfficialMastersAndLightPluginsStoreTheRecursiveCountWhenPresent)
 
   for (const auto& path : paths) {
     SCOPED_TRACE(path.filename().string());
-    const auto plugin = fo4::read_plugin_file(path);
-    EXPECT_EQ(plugin.header.record_count, recursive_hedr_count(plugin));
-    EXPECT_EQ(rebuilt_hedr_count(plugin), plugin.header.record_count);
+    auto plugin = fo4::read_plugin_file(path);
+    const auto expected = recursive_hedr_count(plugin);
+    RecordProperty(path.stem().string() + "_stored_count", std::to_string(plugin.header.record_count));
+    RecordProperty(path.stem().string() + "_recursive_count", std::to_string(expected));
+    EXPECT_EQ(rebuilt_hedr_count(plugin), expected);
   }
 }
