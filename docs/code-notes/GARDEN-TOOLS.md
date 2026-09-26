@@ -770,3 +770,9 @@ GardenEngine needs what the game shows, so Radicle follows the game. This only d
 # Asset path validation
 
 `Radicle/src/archive/assets.cpp:normalize_asset_path` rejects colons before joining path components to the Data directory. A drive-qualified component can replace that directory on Windows; colons also select alternate data streams. `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.RejectsDriveAndStreamPaths` covers both loose-file and archive lookup entry points. A Windows C ABI reproduction read a temporary sentinel outside Data before the guard and must return `RADICLE_STATUS_INVALID_ARGUMENT` afterward.
+
+## Real-data HEDR acceptance and Windows test portability
+
+`Radicle/tests/test_hedr_count.cpp:rebuilt_hedr_count` mutates the test-owned plugin instead of copying its full record graph, then parses only the serialized TES4 prefix. This preserves the rebuilt-header assertion without retaining a second full master graph. `OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent` compares against the independently traversed structure because an installed official master can carry a different stored count; see `Radicle/docs/HEDR_RECORD_COUNT.md` for the pinned xEdit oracle and observed sample counts.
+
+`PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:GraphTarget serializes concurrent RPC access to its compiler cache` explicitly discards RPC results because this concurrency check detects thrown exceptions. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver resolves loose NIFs and NIFs inside BA2s` checks file identity with `std::filesystem::equivalent`, since a case-insensitive filesystem can resolve the correct file while retaining the requested lowercase spelling.
