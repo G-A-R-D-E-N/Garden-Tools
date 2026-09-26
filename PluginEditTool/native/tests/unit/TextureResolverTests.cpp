@@ -296,7 +296,7 @@ TEST_CASE("Texture resolver resolves loose NIFs and NIFs inside BA2s") {
 
     const auto loose = resolver.resolveNif("weapons/loose.nif");
     REQUIRE(loose.has_value());
-    CHECK(loose->filename() == "Loose.nif");
+    CHECK(std::filesystem::equivalent(*loose, root / "Meshes" / "Weapons" / "Loose.nif"));
 
     // "meshes\\" prefixed relative paths strip the prefix under roots.
     const auto prefixed = resolver.resolveNif("meshes\\weapons\\loose.nif");
