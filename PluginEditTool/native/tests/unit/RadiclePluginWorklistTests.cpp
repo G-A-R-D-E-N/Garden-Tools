@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -52,7 +53,7 @@ struct RecordSpec {
 
 struct GroupSpec {
     std::string_view signature;
-    std::initializer_list<RecordSpec> records;
+    std::vector<RecordSpec> records;
 };
 
 std::vector<std::byte> makePlugin(std::initializer_list<std::string_view> masters,
@@ -115,16 +116,13 @@ struct Chain {
             {"WEAP", {{0x00000800, "Weapon"}, {0x00000801, "Untouched"}}},
             {"MISC", {{0x00000802, "Junk"}}},
         }));
-        // Mid overrides two Base records and adds one of its own.
         writeBytes(mid, makePlugin({"Base.esp"}, {
             {"WEAP", {{0x00000800, "WeaponMid"}, {0x01000800, "MidWeapon"}}},
             {"MISC", {{0x00000802, "JunkMid"}}},
         }));
-        // Top loads last and takes Weapon away from Mid.
         writeBytes(top, makePlugin({"Base.esp"}, {
             {"WEAP", {{0x00000800, "WeaponTop"}}},
         }));
-        // Orphan overrides a record whose master is not in the load order.
         writeBytes(orphan, makePlugin({"Missing.esm"}, {
             {"WEAP", {{0x00000900, "MissingWeapon"}}},
         }));
@@ -217,7 +215,6 @@ TEST_CASE("Plugin worklist filters by kind and signature and pages without chang
         worklist(chain.backend, nlohmann::json::array({"Mid.esp", "conflicted"}));
     CHECK(conflicted.at("Total") == 2);
 
-    // Signature narrows both the rows and the summary counts.
     const auto misc = worklist(chain.backend, nlohmann::json::array({"Mid.esp", "all", "MISC"}));
     CHECK(misc.at("Total") == 1);
     CHECK(misc.at("Counts").at("Overrides") == 1);
@@ -251,6 +248,68 @@ TEST_CASE("Plugin worklist reports overrides whose origin master is not loaded")
     CHECK(result.at("Counts").at("Conflicted") == 0);
 }
 
+TEST_CASE("Plugin worklist distinguishes a loaded origin from a missing origin record") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto base = root / "Base.esp";
+    const auto patch = root / "Patch.esp";
+    writeBytes(base, makePlugin({}, {}));
+    writeBytes(patch, makePlugin({"Base.esp"}, {{"WEAP", {{0x00000800, "Override"}}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{
+        {"plugins", nlohmann::json::array({pluginEntry("Base.esp", base),
+                                          pluginEntry("Patch.esp", patch)})}
+    }).has_value());
+    const auto result = worklist(backend, nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(result.at("Rows").size() == 1);
+    CHECK(result.at("Rows")[0].at("OriginLoaded") == true);
+    CHECK(result.at("Rows")[0].at("OverrideDepth") == 0);
+    CHECK(result.at("Rows")[0].at("Plugins") == nlohmann::json::array({"Patch.esp"}));
+}
+
+TEST_CASE("Plugin worklist bounds unsigned pagination without signed wrapping") {
+    Chain chain;
+    const auto maximum = std::numeric_limits<std::uint64_t>::max();
+    const auto past = worklist(chain.backend,
+        nlohmann::json::array({"Mid.esp", "all", "", 1, maximum}));
+    CHECK(past.at("Total") == 3);
+    CHECK(past.at("Offset") == 3);
+    CHECK(past.at("Rows").empty());
+    const auto all = worklist(chain.backend,
+        nlohmann::json::array({"Mid.esp", "all", "", maximum, 0}));
+    CHECK(all.at("Rows").size() == 3);
+
+    const auto path = chain.root / "Large.esp";
+    std::vector<RecordSpec> records;
+    for (std::uint32_t id = 0x800; id < 0x800 + 5001; ++id) records.push_back({id, "Large"});
+    writeBytes(path, makePlugin({}, {{"WEAP", records}}));
+    REQUIRE(chain.backend.invoke("environment.LoadMo2", nlohmann::json{
+        {"plugins", nlohmann::json::array({pluginEntry("Large.esp", path)})}
+    }).has_value());
+    const auto bounded = worklist(chain.backend,
+        nlohmann::json::array({"Large.esp", "all", "", maximum, 0}));
+    CHECK(bounded.at("Total") == 5001);
+    CHECK(bounded.at("Rows").size() == 5000);
+    CHECK(worklist(chain.backend, nlohmann::json::array({"Large.esp"})).at("Rows").size() == 200);
+}
+
+TEST_CASE("Plugin worklist updates unsaved chains and restores them on discard") {
+    Chain chain;
+    REQUIRE(chain.backend.invoke("backend.CopyAsOverride",
+        nlohmann::json::array({"Base.esp", "000801:Base.esp", "Top.esp", false})).has_value());
+    const auto pending = worklist(chain.backend, nlohmann::json::array({"Top.esp"}));
+    REQUIRE(pending.at("Rows").size() == 2);
+    CHECK(pending.at("Counts").at("Overrides") == 2);
+    CHECK(pending.at("Rows")[1].at("FormKey") == "000801:Base.esp");
+    CHECK(pending.at("Rows")[1].at("OverrideDepth") == 1);
+    const auto base = worklist(chain.backend, nlohmann::json::array({"Base.esp", "losing"}));
+    CHECK(base.at("Total") == 3);
+    REQUIRE(chain.backend.invoke("backend.DiscardPlugin",
+        nlohmann::json::array({"Top.esp"})).has_value());
+    CHECK(worklist(chain.backend, nlohmann::json::array({"Top.esp"})).at("Total") == 1);
+    CHECK(worklist(chain.backend, nlohmann::json::array({"Base.esp", "losing"})).at("Total") == 2);
+}
+
 TEST_CASE("Plugin worklist rejects unknown plugins filters and signatures") {
     Chain chain;
 
@@ -275,8 +334,6 @@ TEST_CASE("Plugin worklist rejects unknown plugins filters and signatures") {
 }
 
 TEST_CASE("Plugin worklist covers a real plugin fixture") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
     const auto path =
         std::filesystem::path{FO4IDE_RADICLE_TESTDATA_DIR} / "FW_HeatherSurvivalPatch.esp";
     REQUIRE(std::filesystem::exists(path));
@@ -289,7 +346,6 @@ TEST_CASE("Plugin worklist covers a real plugin fixture") {
 
     const auto result =
         worklist(backend, nlohmann::json::array({"FW_HeatherSurvivalPatch.esp"}));
-    // HEDR 7 = 3 top-level GRUPs + 4 non-TES4 records.
     CHECK(result.at("Total") == 4);
     const auto& counts = result.at("Counts");
     CHECK(counts.at("Added").get<std::size_t>() + counts.at("Overrides").get<std::size_t>() == 4);

@@ -382,6 +382,18 @@ The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePlug
 
 # Native Windows launch
 
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getPluginWorklist
+
+The worklist walks the selected plugin's records against the existing conflict graph. Depth counts loaded definitions before this plugin; later definitions determine the winner and losing rows. Counts apply the signature filter before the kind filter and pagination. `OriginLoaded` describes whether the owning plugin is loaded, even when it has no definition of this record. `sizeArgument` clamps unsigned JSON pagination values before conversion so they cannot wrap into negative defaults.
+
+`PluginEditTool/native/tests/unit/RadiclePluginWorklistTests.cpp` covers synthetic chains, filters, pages, a missing origin, an origin loaded without a record, unsigned pagination, unsaved copy/discard, and the committed Heather fixture. `PluginEditTool/native/tests/native_mcp_smoke.py:main` exercises the same query through the stdio host after in-memory record creation.
+
+`PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::addDataRoots` retains the inherited Data-ancestor restriction. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp` verifies archive resolution within Data and refusal to scan unrelated ancestors.
+
+`PluginEditTool/native/tests/unit/TextureResolverTests.cpp` checks a loose NIF with `std::filesystem::equivalent`, since a Windows lookup can preserve the query's casing rather than the directory entry's casing.
+
+`Radicle/src/graph/conflict_graph.cpp:ConflictGraph::winner` selects the last loaded definition. This worklist exposes that existing graph behavior. Pinned [xEdit](https://github.com/TES5Edit/TES5Edit/blob/9fb016884bec138ea6c7b872cec831537d464c3e/Core/wbImplementation.pas#L11278) excludes partial forms in `TwbMainRecord.GetIsWinningOverride`; partial-form winner parity is not introduced by this query. No engine layout or runtime behavior is inferred from these source rules.
+
 - `PluginEditTool/web/src/hostbridge.ts:install` supplies the existing HTTP transport for the native host's loopback HTTP page, including when WebView2 exposes its default `chrome.webview` object. The legacy C# host serves `https://app.local` and retains its registered host objects. `PluginEditTool/web/src/hostbridge.test.ts` covers both transports.
 
 - `PluginEditTool/native/tests/native_mcp_smoke.py:main` exercises the executable with an isolated MO2 profile and settings directory. It checks plugin discovery, pending edits, failed-edit preservation, explicit save, reload, discard, and invalid startup arguments. Pass `--build-dir` and optionally `--cmake` to include the Release host build.

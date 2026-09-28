@@ -296,7 +296,7 @@ TEST_CASE("Texture resolver resolves loose NIFs and NIFs inside BA2s") {
 
     const auto loose = resolver.resolveNif("weapons/loose.nif");
     REQUIRE(loose.has_value());
-    CHECK(loose->filename() == "Loose.nif");
+    CHECK(std::filesystem::equivalent(*loose, root / "Meshes" / "Weapons" / "Loose.nif"));
 
     // "meshes\\" prefixed relative paths strip the prefix under roots.
     const auto prefixed = resolver.resolveNif("meshes\\weapons\\loose.nif");
@@ -326,8 +326,6 @@ TEST_CASE("Texture resolver follows a BGSM material to its diffuse texture") {
 TEST_CASE("Texture resolver does not scan archives above a NIF that has no Data ancestor") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    // An archive beside, not beneath, the NIF's tree. Climbing from the NIF
-    // would reach `root` (and then the filesystem root) and scan into it.
     writeBa2TextureArchive(root / "elsewhere" / "textures.ba2", {
         textureEntry("Textures\\Stray.dds", rgba8Dds())
     });

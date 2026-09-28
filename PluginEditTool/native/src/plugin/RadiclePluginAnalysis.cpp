@@ -4,6 +4,7 @@
 #include <chrono>
 #include <ctime>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <map>
 #include <optional>
@@ -31,9 +32,9 @@ std::size_t sizeArgument(const nlohmann::json& args,
     if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) {
         return fallback;
     }
-    const auto raw = args[index].get<long long>();
-    if (raw < 0) return fallback;
-    return std::min(static_cast<std::size_t>(raw), maximum);
+    if (!args[index].is_number_unsigned() && args[index].get<std::int64_t>() < 0) return fallback;
+    return static_cast<std::size_t>(std::min(args[index].get<std::uint64_t>(),
+                                           static_cast<std::uint64_t>(maximum)));
 }
 
 enum class WorklistKind { all, added, overrides, winning, losing, conflicted };
@@ -290,8 +291,6 @@ Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
     std::size_t total = 0;
     nlohmann::json rows = nlohmann::json::array();
 
-    // One pass over the plugin's own records against the prebuilt conflict
-    // graph; each lookup is a map find, so there is no per-record query fan-out.
     for (const auto* record : fo4::collect_records(loaded->plugin)) {
         if (record->header.signature == fo4::sig_tes4 || record->form_key.owner().empty()) continue;
         if (signature.has_value() && record->header.signature != *signature) continue;
@@ -344,7 +343,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
             {"Kind", isAdded ? "Added" : "Override"},
             {"OverrideDepth", static_cast<std::size_t>(self - versions.begin())},
             {"Origin", std::string(record->form_key.owner().filename())},
-            {"OriginLoaded", versions.front().plugin == record->form_key.owner()},
+            {"OriginLoaded", findPlugin(record->form_key.owner().filename()) != nullptr},
             {"Winner", std::string(versions.back().plugin.filename())},
             {"IsWinner", isWinner},
             {"OverriddenBy", std::move(overriddenBy)},
