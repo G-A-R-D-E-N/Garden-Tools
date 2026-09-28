@@ -39,7 +39,6 @@ std::vector<std::byte> make_nested_plugin(std::uint32_t stored_count) {
   return out.bytes;
 }
 
-// Independent of the writer: every non-TES4 major record plus every GRUP.
 std::uint64_t recursive_hedr_count(const fo4::Plugin& plugin) {
   const auto records = fo4::collect_records(plugin);
   const auto non_tes4 = std::count_if(records.begin(), records.end(), [](const fo4::Record* r) {
@@ -67,8 +66,6 @@ std::string lower_extension(const std::filesystem::path& path) {
   return ext;
 }
 
-// Official masters (DLCCoast/DLCNukaWorld are the WRLD-heavy ones) plus every
-// light plugin in Data, which on a stock install is the Creation Club ESLs.
 std::vector<std::filesystem::path> official_hedr_samples(const std::filesystem::path& dir) {
   static constexpr const char* kMasters[] = {
       "Fallout4.esm",      "DLCRobot.esm",      "DLCworkshop01.esm", "DLCworkshop02.esm",
@@ -125,13 +122,19 @@ TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   EXPECT_EQ(fo4::collect_groups(reread).size(), 2u);
 }
 
-TEST(HedrCount, CommittedRealPluginsStoreTheRecursiveCount) {
+TEST(HedrCount, CommittedRealPluginsRebuildStaleCounts) {
   for (const char* name : {"FW_HeatherSurvivalPatch.esp", "SlowTime.esp"}) {
     SCOPED_TRACE(name);
     auto plugin =
         fo4::read_plugin_file(std::filesystem::path{FO4_TESTDATA_DIR} / name);
-    EXPECT_EQ(plugin.header.record_count, recursive_hedr_count(plugin));
-    EXPECT_EQ(rebuilt_hedr_count(plugin), plugin.header.record_count);
+    const auto expected = recursive_hedr_count(plugin);
+    EXPECT_EQ(plugin.header.record_count, expected);
+    const auto hedr = std::find_if(plugin.tes4.subrecords.begin(), plugin.tes4.subrecords.end(),
+                                   [](const auto& sub) { return sub.signature == fo4::sig_hedr; });
+    ASSERT_NE(hedr, plugin.tes4.subrecords.end());
+    ASSERT_EQ(hedr->data.size(), 12u);
+    std::fill(hedr->data.begin() + 4, hedr->data.begin() + 8, std::byte{0xff});
+    EXPECT_EQ(rebuilt_hedr_count(plugin), expected);
   }
 }
 
