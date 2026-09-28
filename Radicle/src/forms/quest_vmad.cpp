@@ -15,6 +15,7 @@ namespace fo4::forms {
 namespace {
 
 constexpr auto k_vmad = Signature::from_string("VMAD");
+constexpr RecordFlags::value_type k_quest_partial_form = 1u << 14;
 
 void write_i16(std::vector<std::byte>& data, std::size_t offset, std::int16_t value) {
   if (offset + 2 > data.size()) {
@@ -192,6 +193,11 @@ void sync_quest_vmad_stages(Record& record,
     throw QuestError("QUST VMAD cannot be rewritten: extras cannot be inspected");
   }
   if (layout.fragments.empty()) return;
+  if (record.header.flags.test(k_quest_partial_form) && previous.stages.empty()) {
+    if (next.stages.empty()) return;
+    throw QuestError(
+        "QUST partial form VMAD binds master stages that this override does not carry");
+  }
 
   std::set<std::uint16_t> new_indexes;
   for (const auto& stage : next.stages) {

@@ -136,7 +136,53 @@ std::vector<std::byte> vmad_stage_fragment() {
   return vmad.bytes;
 }
 
+fo4::Plugin load_edid_vmad_quest(std::uint32_t flags) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0x80, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto grup = fo4::test::begin_group(out, "QUST", 0);
+  const auto rec = fo4::test::begin_record(out, "QUST", flags, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Q\0", 2});
+  fo4::test::write_subrecord(out, "VMAD", vmad_stage_fragment());
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+  return fo4::read_plugin(out.bytes, "Q.esp");
+}
+
 }  // namespace
+
+TEST(QuestAuthoring, PartialFormVmadKeepsMasterStageFragmentsOnUnchangedRewrite) {
+  auto plugin = load_edid_vmad_quest(0x4000);
+  const auto before = signatures(plugin);
+  const auto vmad_before = fo4::find_record(plugin, key())->subrecords[1].data;
+
+  const auto stages = fo4::forms::decode_quest_stages(plugin, key());
+  EXPECT_TRUE(stages.stages.empty());
+  fo4::forms::write_quest_stages(plugin, key(), stages);
+  const auto objectives = fo4::forms::decode_quest_objectives(plugin, key());
+  fo4::forms::write_quest_objectives(plugin, key(), objectives);
+
+  EXPECT_EQ(signatures(plugin), before);
+  EXPECT_EQ(fo4::find_record(plugin, key())->subrecords[1].data, vmad_before);
+}
+
+TEST(QuestAuthoring, PartialFormVmadRefusesStagesItCannotBind) {
+  auto partial = load_edid_vmad_quest(0x4000);
+  fo4::forms::QuestStages added;
+  added.stages.emplace_back().index = 20;
+  EXPECT_THROW(fo4::forms::write_quest_stages(partial, key(), added),
+               fo4::forms::QuestError);
+
+  auto full = load_edid_vmad_quest(0);
+  const auto none = fo4::forms::decode_quest_stages(full, key());
+  EXPECT_THROW(fo4::forms::write_quest_stages(full, key(), none),
+               fo4::forms::QuestError);
+}
 
 TEST(QuestAuthoring, RewritingUnchangedArraysIsByteExact) {
   auto plugin = load();
