@@ -349,3 +349,17 @@ TEST_CASE("Texture resolver still finds archives in the Data folder above a NIF"
     CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\indata.dds", "")
               .starts_with("data:image/png;base64,"));
 }
+
+TEST_CASE("Texture resolver scans an explicit texture root that has no Data ancestor") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBa2TextureArchive(root / "Unpacked" / "textures.ba2", {
+        textureEntry("Textures\\Chosen.dds", rgba8Dds())
+    });
+    writeFile(root / "loose" / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    const auto nifPath = (root / "loose" / "meshes" / "thing.nif").string();
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\chosen.dds", (root / "Unpacked").string())
+              .starts_with("data:image/png;base64,"));
+}
