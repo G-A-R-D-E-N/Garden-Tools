@@ -24,7 +24,7 @@ typedef enum radicle_status {
   RADICLE_STATUS_INVALID_ARGUMENT = 1,
   RADICLE_STATUS_IO_ERROR = 2,
   RADICLE_STATUS_PARSE_ERROR = 3,
-  /* Reserved for future read APIs; no current entry point returns it. */
+  /* Returned by the environment lookups in c_api_env.h. */
   RADICLE_STATUS_NOT_FOUND = 4,
   RADICLE_STATUS_OUT_OF_MEMORY = 5,
   RADICLE_STATUS_INTERNAL_ERROR = 255
