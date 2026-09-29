@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cstring>
 #include <exception>
+#include <format>
+#include <new>
 #include <set>
 #include <utility>
 
@@ -16,8 +18,15 @@ namespace {
 constexpr Signature k_edid{'E', 'D', 'I', 'D'};
 constexpr Signature k_full{'F', 'U', 'L', 'L'};
 constexpr Signature k_obnd{'O', 'B', 'N', 'D'};
+constexpr Signature k_obte{'O', 'B', 'T', 'E'};
+constexpr Signature k_stop{'S', 'T', 'O', 'P'};
 constexpr Signature k_cell{'C', 'E', 'L', 'L'};
 constexpr Signature k_land{'L', 'A', 'N', 'D'};
+
+std::string utf8(const std::filesystem::path& path) {
+  const auto text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
 
 char ascii_lower(char ch) noexcept {
   return (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
@@ -62,7 +71,16 @@ std::optional<std::string_view> zstring_view(const Subrecord& subrecord) noexcep
 }
 
 RecordName decode_record_name(const Plugin& owner, const Record& record) noexcept {
-  const auto* full = first_subrecord(record, k_full);
+  const Subrecord* full = nullptr;
+  bool in_template = false;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == k_obte) in_template = true;
+    if (sub.signature == k_stop) in_template = false;
+    if (!in_template && sub.signature == k_full) {
+      full = &sub;
+      break;
+    }
+  }
   if (full == nullptr) return {};
   if (owner.header.tes4_flags.is_localized()) {
     if (full->data.size() != 4) return {NameKind::malformed, {}, 0};
@@ -93,12 +111,14 @@ Environment Environment::load(std::span<const std::filesystem::path> ordered_pat
   for (const auto& path : ordered_paths) {
     try {
       env.loaded_.push_back(read_plugin_file(path));
+    } catch (const std::bad_alloc&) {
+      throw;
     } catch (const std::exception& error) {
-      throw EnvironmentError("failed to load " + path.string() + ": " + error.what());
+      throw EnvironmentError("failed to load " + utf8(path) + ": " + error.what());
     }
     const auto& key = env.loaded_.back().key;
     if (key.empty() || !seen.insert(key).second) {
-      throw EnvironmentError("duplicate or unnamed plugin in load order: " + path.string());
+      throw EnvironmentError("duplicate or unnamed plugin in load order: " + utf8(path));
     }
   }
 
@@ -156,11 +176,10 @@ std::uint32_t Environment::intern_container(std::size_t plugin, const GroupHeade
   try {
     key = resolve_plugin_form_id(RawFormId{header.label_as_u32()}, contexts_[plugin]);
   } catch (const std::exception& error) {
-    throw EnvironmentError("unresolvable group label in " + loaded_[plugin].path.string() +
-                           ": " + error.what());
+    throw EnvironmentError("unresolvable group label in " + utf8(loaded_[plugin].path) + ": " + error.what());
   }
   if (key.owner().empty()) {
-    throw EnvironmentError("null group label in " + loaded_[plugin].path.string());
+    throw EnvironmentError("null group label in " + utf8(loaded_[plugin].path));
   }
   const auto [it, inserted] =
       container_index_.try_emplace(key, static_cast<std::uint32_t>(containers_.size()));
@@ -181,11 +200,16 @@ void Environment::index_group(std::size_t plugin,
       continue;
     }
     const auto& record = std::get<Record>(child);
-    if (record.form_key.owner().empty()) continue;
+    if (record.form_key.owner().empty()) {
+      if (record.header.form_id.is_null()) continue;
+      throw EnvironmentError(std::format("record {:08X} in {} uses master index {} past its {}-entry master table",
+                                         record.header.form_id.value(), utf8(loaded_[plugin].path),
+                                         record.header.form_id.index_byte(), contexts_[plugin].masters.size()));
+    }
     auto& versions = versions_[record.form_key];
     if (!versions.empty() && versions.back().plugin == plugin) {
-      throw EnvironmentError("record " + record.form_key.to_string() +
-                             " appears more than once in " + loaded_[plugin].path.string());
+      throw EnvironmentError("record " + record.form_key.to_string() + " appears more than once in " +
+                             utf8(loaded_[plugin].path));
     }
     versions.push_back({plugin, &record, type, world, cell});
     plugin_records_[plugin].push_back(record.form_key);
@@ -239,7 +263,9 @@ std::vector<const RecordRef*> Environment::winners_of(Signature signature) const
 }
 
 FormKey Environment::resolve_link(const RecordRef& ref, RawFormId raw) const {
-  return resolve_plugin_form_id(raw, contexts_.at(ref.plugin));
+  const auto& context = contexts_.at(ref.plugin);
+  if (raw.index_byte() > context.masters.size()) return FormKey{context.current_plugin, LocalFormId{raw.local_24()}};
+  return resolve_plugin_form_id(raw, context);
 }
 
 const PluginKey* Environment::stable_owner(const FormKey& key) const noexcept {
@@ -321,7 +347,8 @@ std::vector<CellChild> Environment::cell_children(const FormKey& cell) const {
     removed[slot->second] = ref->record->header.flags.is_deleted();
   }
   for (std::size_t i = 0; i < merged.size(); ++i) {
-    if (!removed[i]) result.push_back(merged[i]);
+    if (removed[i] || versions_.at(merged[i].ref->record->form_key).back().cell != merged[i].ref->cell) continue;
+    result.push_back(merged[i]);
   }
   return result;
 }
