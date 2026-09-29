@@ -261,7 +261,6 @@ typedef struct radicle_script {
   size_t property_count;
 } radicle_script;
 
-/* Decoded REFR/ACHR/placed trap; every pointer lives until radicle_placed_ref_free. */
 typedef struct radicle_placed_ref {
   char signature[5];
   radicle_form_key base;

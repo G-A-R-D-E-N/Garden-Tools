@@ -486,7 +486,8 @@ Labels resolve through the plugin's own master table, so master-owned worlds and
   - a later copy replaces an earlier one;
   - a copy with the deleted flag removes the child;
   - the list keeps first-insertion order;
-  - every signature is returned (LAND and NAVM included); consumers filter by signature.
+  - every signature is returned (LAND and NAVM included); consumers filter by signature;
+  - a child whose winning version sits in another cell is left out, so a reference a later plugin moves appears only in its new cell.
 - **`cell_landscape`**: mirrors `WorldspaceService.ResolveWinningLandscape`. It returns the LAND held by the highest-priority cell version that has one.
 
 **Layouts**, from xEdit FO4 at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `Core/wbDefinitionsFO4.pas` `wbRecord(WRLD` and `wbRecord(CELL`, plus `Core/wbDefinitionsCommon.pas` `wbWorldLandData`, `wbWorldObjectBounds`, `wbCellGrid`, `wbAmbientColors` and `wbByteColors`.
@@ -530,11 +531,11 @@ Any of those signatures outside its section fails closed. Every other listed fie
 - **Link and flag fields:**
   - `XESP`: 4 or 8 bytes, FormID then `u8` flags.
   - `XOWN`: 4 or 12 bytes, FormID, 4 unused bytes, then a no-crime byte.
-  - `XLKR`: 8 bytes as keyword + reference, or 4 bytes as reference only (Mutagen `<Break>`).
+  - `XLKR`: 8 bytes as keyword + reference, or 4 bytes as keyword only, leaving `reference` empty (Mutagen `LinkedReferencesBinaryCreateTranslation.FillBinaryStructs` fills `KeywordOrReference` and stops at the `<Break>`).
   - `XAPR`: FormID + `f32` delay.
 - **Geometry fields:**
   - `XTEL`: door, position, rotation, `u32` flags, and at 36 bytes the transition-interior CELL. xEdit lists that member; a 32-byte form is also accepted.
-  - `XPRM`: bounds `vec3`, RGBA floats, `u32` type. Bounds are returned as stored; Mutagen `PlacedPrimitive.FillBinaryBoundsCustom` and xEdit both double them.
+  - `XPRM`: bounds `vec3`, colour RGB floats plus one float Mutagen reads as `Unknown` (`PlacedPrimitive_Generated.cs`, `ColorBinaryType.NoAlphaFloat`), `u32` type. `Primitive::color[3]` and `radicle_placed_ref.primitive_color[3]` hold that float, not alpha. Bounds are returned as stored; Mutagen `PlacedPrimitive.FillBinaryBoundsCustom` and xEdit both double them.
   - `XBSD`: slack, thickness, half extents, then an optional wind-detached byte.
   - `XPTL`: width, height, position, quaternion.
 - **Comments.** `MNAM` holds comments on REFR and the traps.
@@ -547,7 +548,7 @@ Any of those signatures outside its section fails closed. Every other listed fie
 **Model path.** `primary_model_path` mirrors `ModelPathResolver.PrimaryModelPath`:
 - SCOL has none.
 - ARMO uses its world model: `MOD2` (male), then `MOD4` (female). ARMO `MODL` is an armature FormID, not a path.
-- Every other record uses its first `MODL`.
+- Only the model-bearing signatures in `primary_model_path`'s `modeled` list use their first `MODL`: ACTI, ADDN, ALCH, AMMO, ANIO, ARTO, BOOK, BPTD, CAMS, CLMT, CONT, DOOR, EFSH, EXPL, FLOR, FURN, GRAS, HAZD, HDPT, IDLM, INGR, IPCT, KEYM, LIGH, LVLN, MATO, MISC, MSTT, NOTE, OMOD, PROJ, STAT, TACT, TERM, TREE, WEAP. These are the FO4 major records whose Mutagen getter implements `IModeledGetter` (checked in the vendored `Mutagen.Bethesda.Fallout4/Records/Major Records/*_Generated.cs`), which is the test GardenEngine's Mutagen `ModelPathResolver.PrimaryModelPath` used. RACE, ARMA, WTHR and WRLD have `Model` fields but do not implement it, so they report no model.
 - The text is cut at the first NUL, like Mutagen's zero-terminated string read. Empty or unterminated text counts as no model.
 
 `Environment::metadata().model` now uses the same rule.
@@ -566,3 +567,20 @@ Any of those signatures outside its section fails closed. Every other listed fie
 - a Variable VMAD;
 - model-path parity;
 - the C ABI.
+
+## Radicle/src/environment/environment.cpp / placed.cpp — review repairs on main after #322-#324 (GardenEngine #114)
+
+#322-#324 were merged to `main` without the fixes that later stack PRs carry. This branch ports four of #336's fixes and fixes the review findings on the merged code. Each change has a regression test.
+
+Source: the vendored Mutagen in GardenEngine `opencw/third_party/Mutagen` (files cited per item) and the regression tests named per item, each of which fails against `main` at `a041442e`.
+
+- `Radicle/src/environment/environment.cpp:decode_record_name` ignores a `FULL` between `OBTE` and `STOP`. Mutagen reads that span as the `ObjectTemplates` list (`Armor.xml`, `counterRecType="OBTE"`, `endMarker="STOP"`), whose entries carry their own `FULL` name (`ObjectTemplate.xml`). Ported from #336. Test: `test_environment.cpp:NameIgnoresObjectTemplateCombinationFull`.
+- `Radicle/src/environment/environment.cpp:Environment::resolve_link` resolves a link whose master index is past the plugin's master table (including `0xFF`) to the plugin itself, as Mutagen `Plugins/Masters/SeparatedMasterPackage.cs:GetFormKey` does for any index at or past the master count. Because both decoders only resolve links through it, they no longer let `FormIdError` escape, so `decode_placed_reference` and the WRLD/CELL decoders throw only `WorldDecodeError` as documented. Ported from #336. Test: `test_environment_placed.cpp:LinkPastTheMasterTableResolvesToTheOwningPlugin`.
+- `Radicle/src/environment/environment.cpp:Environment::index_group` used to skip every record whose own header form ID failed to resolve, so such a record vanished from `winner`, `versions`, `find_by_editor_id` and `winners_of` with no error. A null form ID is still skipped; any other unresolvable one now fails the load with an `EnvironmentError` naming the form ID, the plugin, the index and the master count. Ported from #336. Test: `test_environment.cpp:RejectsRecordWhoseMasterIndexIsPastTheMasterTable`.
+- `Radicle/src/environment/placed.cpp:primary_model_path` reads `MODL` only for the model-bearing signatures listed above. Ported from #336. Test: `test_environment_placed.cpp:PrimaryModelPathIgnoresModlOnRecordsWithoutAModel`.
+- `Radicle/src/environment/environment.cpp:Environment::load` rethrows `std::bad_alloc` instead of wrapping it, so `radicle_env_load` reports `RADICLE_STATUS_OUT_OF_MEMORY` rather than `PARSE_ERROR`. Every `EnvironmentError` message now writes paths through the local `utf8` helper (`path.u8string()`). `path.string()` throws `std::system_error` on MSVC for characters outside the ANSI code page, which replaced the real error with `INTERNAL_ERROR` and dropped the plugin path that GardenEngine's `GameLoader.LoadRadicle` searches for to skip a broken plugin. Test: `test_environment.cpp:LoadErrorsNameNonAnsiPathsInUtf8`.
+- `Radicle/src/environment/environment.cpp:Environment::cell_children` drops a child whose winning version is in another cell (see the `cell_children` notes above). The GardenEngine Mutagen reference (`MutagenCellService.cs`) keeps such a reference in both cells, so `CellServiceParityTests` will report moved references as a difference once GardenEngine pins a Radicle with this change. Test: `test_environment_world.cpp:AReferenceMovedToAnotherCellLeavesItsOldCell`.
+- `Radicle/src/environment/placed.cpp:decode_placed_reference` stores a 4-byte `XLKR` as the keyword, matching Mutagen and GardenEngine's previous `CellService` output, which the XLKR note above already claimed. Test: `test_environment_placed.cpp:DecodesObjectReferenceFields` and `CApiDecodesPlacedReferences`.
+- `Radicle/include/fo4/environment/placed.hpp:Script::name` and `ScriptProperty::name` are owned strings. They were views into `Scripts::raw`, so a copy of `PlacedReferenceData` kept pointers into the original, which dangled once it was destroyed. Test: the copy check at the end of `test_environment_placed.cpp:DecodesObjectReferenceFields`.
+- `Radicle/include/fo4/c_api_env.h:radicle_placed_ref` lost its lifetime comment, which claimed every pointer lives until `radicle_placed_ref_free`. The arrays do. `comments`, `map_marker_name_text`, script and property names from `raw`, and every `radicle_form_key.plugin` point into the environment and live until `radicle_env_destroy`.
+- Not changed: `Radicle/src/environment/environment.cpp:zstring_view` still requires exactly one trailing NUL for EDID and FULL, where Mutagen `BinaryStringUtility.ProcessNullTermination` cuts at the first NUL. Matching it would turn the 4-byte binary FULL that `MetadataDecodesNamesBoundsAndFlags` treats as malformed into one-character text. No real plugin in the 644-plugin Fallen World parity run was affected.

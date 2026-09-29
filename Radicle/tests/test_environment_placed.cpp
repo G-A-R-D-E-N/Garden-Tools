@@ -230,8 +230,8 @@ TEST_F(PlacedEnvironmentTest, DecodesObjectReferenceFields) {
   ASSERT_EQ(d.linked_references.size(), 2u);
   EXPECT_EQ(d.linked_references[0].keyword, key(0x911));
   EXPECT_EQ(d.linked_references[0].reference, key(0x912));
-  EXPECT_TRUE(d.linked_references[1].keyword.owner().empty());
-  EXPECT_EQ(d.linked_references[1].reference, key(0x913));
+  EXPECT_EQ(d.linked_references[1].keyword, key(0x913));
+  EXPECT_TRUE(d.linked_references[1].reference.owner().empty());
   EXPECT_EQ(d.activate_parent_flags, std::optional<std::uint8_t>{1});
   ASSERT_EQ(d.activate_parents.size(), 1u);
   EXPECT_EQ(d.activate_parents[0].delay, 1.5f);
@@ -290,6 +290,12 @@ TEST_F(PlacedEnvironmentTest, DecodesObjectReferenceFields) {
   EXPECT_EQ(script.properties[1].text, std::optional<std::string>{"hi"});
   EXPECT_EQ(script.properties[2].integer, 7);
   EXPECT_EQ(script.properties[3].element_count, std::optional<std::uint32_t>{2});
+
+  std::optional<fo4::env::PlacedReferenceData> original{d};
+  const auto copy = *original;
+  original.reset();
+  EXPECT_EQ(copy.scripts->scripts[0].name, "DoorScript");
+  EXPECT_EQ(copy.scripts->scripts[0].properties[0].name, d.scripts->scripts[0].properties[0].name);
 }
 
 TEST_F(PlacedEnvironmentTest, DecodesActorAndTrapReferences) {
@@ -306,6 +312,21 @@ TEST_F(PlacedEnvironmentTest, DecodesActorAndTrapReferences) {
   const auto hazard = fo4::env::decode_placed_reference(env, *env.winner(key(0x802)));
   EXPECT_EQ(hazard.base, key(0x930));
   EXPECT_TRUE(hazard.position.has_value());
+}
+
+TEST_F(PlacedEnvironmentTest, LinkPastTheMasterTableResolvesToTheOwningPlugin) {
+  const auto path = root_ / "Dangling.esp";
+  const auto data = make_plugin(0, {{"REFR", 0x810,
+                                     {{"NAME", words({0x900})},
+                                      {"XLYR", words({0x02006FCB})},
+                                      {"DATA", floats({0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}}}});
+  std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(data.data()),
+                                               static_cast<std::streamsize>(data.size()));
+  const std::vector<std::filesystem::path> paths{path};
+  const auto env = fo4::env::Environment::load(paths);
+  const fo4::FormKey ref{fo4::PluginKey::from_filename("Dangling.esp"), fo4::LocalFormId{0x810}};
+  const auto d = fo4::env::decode_placed_reference(env, *env.winner(ref));
+  EXPECT_EQ(d.layer, (fo4::FormKey{fo4::PluginKey::from_filename("Dangling.esp"), fo4::LocalFormId{0x006FCB}}));
 }
 
 TEST_F(PlacedEnvironmentTest, FailsClosedOnSectionAndSizeErrors) {
@@ -335,6 +356,26 @@ TEST_F(PlacedEnvironmentTest, PrimaryModelPathMatchesModelPathResolver) {
   EXPECT_EQ(env.metadata(*env.winner(key(0x805))).model, "Armor\\Female.nif");
 }
 
+TEST_F(PlacedEnvironmentTest, PrimaryModelPathIgnoresModlOnRecordsWithoutAModel) {
+  const auto path = root_ / "Unmodeled.esp";
+  const auto data = make_plugin(0, {{"RACE", 0x810, {{"MODL", zstring("Actors\\Character\\Body.egt")}}},
+                                    {"ARMA", 0x811, {{"MODL", words({0x900})}}},
+                                    {"WTHR", 0x812, {{"MODL", zstring("Sky\\Storm.nif")}}},
+                                    {"LIGH", 0x813, {{"MODL", zstring("Lights\\Bulb.nif")}}}});
+  std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(data.data()),
+                                               static_cast<std::streamsize>(data.size()));
+  const std::vector<std::filesystem::path> paths{path};
+  const auto env = fo4::env::Environment::load(paths);
+  const auto model = [&](std::uint32_t id) {
+    return fo4::env::primary_model_path(
+        *env.winner(fo4::FormKey{fo4::PluginKey::from_filename("Unmodeled.esp"), fo4::LocalFormId{id}}));
+  };
+  EXPECT_FALSE(model(0x810).has_value());
+  EXPECT_FALSE(model(0x811).has_value());
+  EXPECT_FALSE(model(0x812).has_value());
+  EXPECT_EQ(model(0x813), "Lights\\Bulb.nif");
+}
+
 TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
   const auto utf8 = path_.u8string();
   const std::string path(utf8.begin(), utf8.end());
@@ -354,8 +395,8 @@ TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
   EXPECT_EQ(ref->has_scale, 1);
   EXPECT_EQ(ref->location_ref_type_count, 2u);
   EXPECT_EQ(ref->linked_ref_count, 2u);
-  EXPECT_EQ(ref->linked_refs[1].keyword.plugin, nullptr);
-  EXPECT_EQ(ref->linked_refs[1].reference.local_id, 0x913u);
+  EXPECT_EQ(ref->linked_refs[1].keyword.local_id, 0x913u);
+  EXPECT_EQ(ref->linked_refs[1].reference.plugin, nullptr);
   EXPECT_EQ(ref->has_no_crime, 1);
   EXPECT_EQ(ref->no_crime, 1);
   EXPECT_STREQ(ref->comments, "placed by test");

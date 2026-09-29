@@ -227,9 +227,38 @@ TEST_F(EnvironmentTest, LoadFailsClosed) {
   EXPECT_THROW(fo4::env::Environment::load(repeat), fo4::env::EnvironmentError);
 }
 
+TEST_F(EnvironmentTest, RejectsRecordWhoseMasterIndexIsPastTheMasterTable) {
+  const auto paths = write_base_and_patch();
+  const auto broken = write("Broken.esp", make_plugin(0, {"Base.esm"}, {{"MISC", 0x02000801, 0, {}}}));
+  const std::vector<std::filesystem::path> order{paths[0], broken};
+  try {
+    (void)fo4::env::Environment::load(order);
+    FAIL() << "expected EnvironmentError";
+  } catch (const fo4::env::EnvironmentError& error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("Broken.esp"), std::string::npos) << message;
+    EXPECT_NE(message.find("02000801"), std::string::npos) << message;
+  }
+}
+
+TEST_F(EnvironmentTest, LoadErrorsNameNonAnsiPathsInUtf8) {
+  const auto folder = root_ / std::filesystem::path(u8"Моды");
+  std::filesystem::create_directories(folder);
+  const auto broken = folder / "Broken.esp";
+  std::ofstream(broken, std::ios::binary) << "not a plugin";
+  const std::vector<std::filesystem::path> order{broken};
+  try {
+    (void)fo4::env::Environment::load(order);
+    FAIL() << "expected EnvironmentError";
+  } catch (const fo4::env::EnvironmentError& error) {
+    const auto utf8 = broken.u8string();
+    EXPECT_NE(std::string(error.what()).find(std::string(utf8.begin(), utf8.end())), std::string::npos);
+  }
+}
+
 TEST_F(EnvironmentTest, MetadataDecodesNamesBoundsAndFlags) {
   fo4::test::ByteWriter obnd;
-  for (const std::int16_t value : {-10, -20, -30, 10, 20, 30}) {
+  for (const int value : {-10, -20, -30, 10, 20, 30}) {
     obnd.u16(static_cast<std::uint16_t>(value));
   }
   const auto inline_plugin = write(
@@ -264,6 +293,24 @@ TEST_F(EnvironmentTest, MetadataDecodesNamesBoundsAndFlags) {
   EXPECT_EQ(localized.name.string_id, 0x1234u);
   EXPECT_EQ(env.metadata(*env.winner(key("000801:Localized.esp"))).name.kind,
             fo4::env::NameKind::malformed);
+}
+
+TEST_F(EnvironmentTest, NameIgnoresObjectTemplateCombinationFull) {
+  const auto plugin = write(
+      "Templates.esp",
+      make_plugin(0, {},
+                  {{"ARMO", 0x00000800, 0,
+                    {{"OBTE", u32_bytes(1)}, {"OBTF", {}}, {"FULL", zstring("Rusty")}, {"OBTS", u32_bytes(0)}, {"STOP", {}}}},
+                   {"NPC_", 0x00000801, 0,
+                    {{"OBTE", u32_bytes(1)}, {"OBTF", {}}, {"FULL", zstring("Rusty")}, {"OBTS", u32_bytes(0)},
+                     {"STOP", {}}, {"FULL", zstring("Protectron")}}}}));
+  const std::vector<std::filesystem::path> ordered{plugin};
+  const auto env = fo4::env::Environment::load(ordered);
+
+  EXPECT_EQ(env.metadata(*env.winner(key("000800:Templates.esp"))).name.kind, fo4::env::NameKind::absent);
+  const auto npc = env.metadata(*env.winner(key("000801:Templates.esp")));
+  EXPECT_EQ(npc.name.kind, fo4::env::NameKind::inline_text);
+  EXPECT_EQ(npc.name.text, "Protectron");
 }
 
 TEST_F(EnvironmentTest, CApiQueriesMatchTheEnvironment) {

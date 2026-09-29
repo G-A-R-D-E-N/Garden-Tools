@@ -24,7 +24,6 @@ struct Ownership {
   std::optional<bool> no_crime;
 };
 
-// XLKR: a four-byte payload carries only the reference and leaves `keyword` empty.
 struct LinkedReference {
   FormKey keyword;
   FormKey reference;
@@ -99,7 +98,7 @@ struct RoomBounds {
 };
 
 struct ScriptProperty {
-  std::string_view name;
+  std::string name;
   std::uint8_t type{0};
   std::uint8_t flags{0};
   std::optional<FormKey> object;
@@ -112,7 +111,7 @@ struct ScriptProperty {
 };
 
 struct Script {
-  std::string_view name;
+  std::string name;
   std::uint8_t flags{0};
   std::vector<ScriptProperty> properties;
 };
@@ -160,7 +159,6 @@ bool is_placed_reference_signature(Signature signature) noexcept;
 // REFR, ACHR and the placed trap/projectile/hazard family; throws WorldDecodeError when malformed.
 PlacedReferenceData decode_placed_reference(const Environment& env, const RecordRef& ref);
 
-// Mirrors GardenEngine ModelPathResolver.PrimaryModelPath: SCOL none, ARMO MOD2 then MOD4, else MODL.
 std::optional<std::string_view> primary_model_path(const RecordRef& ref) noexcept;
 
 }  // namespace fo4::env

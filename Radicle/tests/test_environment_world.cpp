@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -286,6 +287,30 @@ TEST_F(WorldEnvironmentTest, MergesCellChildrenAcrossOverrides) {
   ASSERT_NE(land, nullptr);
   EXPECT_EQ(land->plugin, 1u);
   EXPECT_EQ(env.cell_landscape(key("000803:Base.esm")), nullptr);
+}
+
+TEST_F(WorldEnvironmentTest, AReferenceMovedToAnotherCellLeavesItsOldCell) {
+  const auto mover = write(
+      "Mover.esp",
+      make_plugin({"Base.esm"},
+                  {top("WRLD", {rec("WRLD", 0x800),
+                                grp(0x800, 1,
+                                    {rec("CELL", 0x801, {{"DATA", {std::byte{0x02}, std::byte{0}}}}, 0x400),
+                                     grp(0x801, 6, {grp(0x801, 8, {rec("REFR", 0x812)})})})})}));
+  const std::vector<std::filesystem::path> order{paths_[0], paths_[1], mover};
+  const auto env = fo4::env::Environment::load(order);
+
+  const auto has = [&](const std::vector<fo4::env::CellChild>& children, std::uint32_t id) {
+    return std::ranges::any_of(children, [&](const auto& c) { return c.ref->record->form_key.local().value() == id; });
+  };
+  const auto old_cell = env.cell_children(key("000802:Base.esm"));
+  EXPECT_FALSE(has(old_cell, 0x812));
+  EXPECT_TRUE(has(old_cell, 0x900));
+  const auto new_cell = env.cell_children(key("000801:Base.esm"));
+  ASSERT_TRUE(has(new_cell, 0x812));
+  for (const auto& child : new_cell) {
+    if (child.ref->record->form_key.local().value() == 0x812) EXPECT_EQ(child.ref->plugin, 2u);
+  }
 }
 
 TEST_F(WorldEnvironmentTest, DecodesCellFields) {

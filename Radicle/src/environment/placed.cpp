@@ -187,7 +187,7 @@ private:
       data_.faction_rank = Reader::i32(sub, 0);
     } else if (s == sig("XLKR")) {
       if (sub.data.size() == 4) {
-        data_.linked_references.push_back({FormKey{}, link(sub)});
+        data_.linked_references.push_back({link(sub), FormKey{}});
       } else if (sub.data.size() == 8) {
         data_.linked_references.push_back({link(sub), link(sub, 4)});
       } else {
@@ -338,6 +338,13 @@ std::optional<std::string_view> primary_model_path(const RecordRef& ref) noexcep
     if (auto male = first_path(sig("MOD2"))) return male;
     return first_path(sig("MOD4"));
   }
+  static constexpr std::array modeled{
+      sig("ACTI"), sig("ADDN"), sig("ALCH"), sig("AMMO"), sig("ANIO"), sig("ARTO"), sig("BOOK"), sig("BPTD"),
+      sig("CAMS"), sig("CLMT"), sig("CONT"), sig("DOOR"), sig("EFSH"), sig("EXPL"), sig("FLOR"), sig("FURN"),
+      sig("GRAS"), sig("HAZD"), sig("HDPT"), sig("IDLM"), sig("INGR"), sig("IPCT"), sig("KEYM"), sig("LIGH"),
+      sig("LVLN"), sig("MATO"), sig("MISC"), sig("MSTT"), sig("NOTE"), sig("OMOD"), sig("PROJ"), sig("STAT"),
+      sig("TACT"), sig("TERM"), sig("TREE"), sig("WEAP")};
+  if (std::ranges::find(modeled, signature) == modeled.end()) return std::nullopt;
   return first_path(sig("MODL"));
 }
 
