@@ -10,15 +10,17 @@ The same permissive check also controlled both grid action buttons.
 
 ## Fix
 
-`parseCellGridCoordinate` accepts only a complete optional-sign plus decimal-digit token and requires the converted number to be a safe integer. Both load/create paths and both button guards use the same parser.
+`PluginEditTool/web/src/CellPanel.tsx:parseCellGridCoordinate` accepts only a complete optional-sign plus decimal-digit token and requires the converted number to be a safe integer. Both load/create paths and both button guards use the same parser.
 
 The native backend remains authoritative for Fallout 4 coordinate range and CELL semantics. This change only prevents the frontend from silently changing the user's token before dispatch.
 
 ## Proof
 
-The regression was committed first as `02400fc30bf69a7545a03081d307f1b5c950f7fb`. Before the implementation, the requested helper did not exist and the current `Number.parseInt` behavior reproduced the defect:
+The current branch carries the regression in `f8dd7b3d` before the implementation in `f29d22d6`. Before the implementation, the requested helper did not exist and the `Number.parseInt` behavior reproduced the defect:
 
 - `12abc` -> `12`
 - `1.5` -> `1`
 
 Post-fix parser checks cover signed integer acceptance plus suffix, decimal, exponent, whitespace, empty, and unsafe-integer refusal.
+
+`PluginEditTool/web/src/CellPanelGrid.test.tsx:Cell Viewer exterior grid dispatch` renders the real panel with a simulated native bridge and plugin picker. Invalid persisted X or Y disables both actions and Enter sends no load request. Correcting an invalid value restores loading. Signed coordinates reach CreateRecord, SavePlugin and the subsequent grid reload unchanged. This verifies React dispatch; it does not verify live WebView2 or in-game behavior.
