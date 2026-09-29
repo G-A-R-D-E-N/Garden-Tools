@@ -584,6 +584,7 @@ std::optional<std::filesystem::path> TextureResolver::resolveFromArchives(
     }
     if (!textureRoot.empty()) {
         auto roots = addDataRoots(textureRoot);
+        if (roots.empty()) roots.emplace_back(textureRoot);
         cheap.insert(cheap.end(), roots.begin(), roots.end());
     }
     return scanAndLookup(cheap, keys);
