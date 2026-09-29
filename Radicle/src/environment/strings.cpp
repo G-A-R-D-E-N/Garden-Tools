@@ -13,6 +13,11 @@ constexpr Signature sig(const char (&text)[5]) {
   return Signature{text[0], text[1], text[2], text[3]};
 }
 
+std::string utf8(const std::filesystem::path& path) {
+  const auto text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+
 std::string lower(std::string_view text) {
   std::string out(text);
   std::transform(out.begin(), out.end(), out.begin(),
@@ -45,10 +50,10 @@ std::unordered_map<std::string, std::vector<std::filesystem::path>> list_directo
   std::error_code ec;
   if (!std::filesystem::is_directory(dir, ec)) return files;
   std::filesystem::directory_iterator it(dir, ec);
-  if (ec) throw EnvironmentError("could not list strings directory: " + dir.string());
+  if (ec) throw EnvironmentError("could not list strings directory: " + utf8(dir));
   for (const auto& entry : it) {
     if (!entry.is_regular_file(ec)) continue;
-    files[lower(entry.path().filename().string())].push_back(entry.path());
+    files[lower(utf8(entry.path().filename()))].push_back(entry.path());
   }
   return files;
 }
@@ -96,7 +101,7 @@ StringTables StringTables::load(const Environment& env,
       if (it == files.end()) continue;
       if (it->second.size() > 1) {
         throw EnvironmentError("string table name matches several files differing only by case: " +
-                               it->second.front().string());
+                               utf8(it->second.front()));
       }
       Table table;
       table.path = it->second.front();
@@ -108,7 +113,7 @@ StringTables StringTables::load(const Environment& env,
           table.strings.emplace(entry.id, std::string(bytes, entry.text.size()));
         }
       } catch (const localization::StringTableError& error) {
-        throw EnvironmentError("malformed string table " + table.path.string() + ": " + error.what());
+        throw EnvironmentError("malformed string table " + utf8(table.path) + ": " + error.what());
       }
       result.tables_[plugin][static_cast<std::size_t>(source)] = std::move(table);
     }

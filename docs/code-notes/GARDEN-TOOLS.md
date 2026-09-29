@@ -650,6 +650,8 @@ Every `INFO` field except `RNAM` goes to `.ILSTRINGS`, and everything else to `.
 - The language is the ISO token Mutagen's `StringsUtility.GetIsoLanguageString` uses for Fallout 4 (`en`, `de`, `fr`, `it`, `es`, `esmx`, `pl`, `ru`, `ja`, `cn`, `zhhans`, `ptbr`). Any alphanumeric token is accepted, so callers pick the language, with English as the Mutagen default.
 - A missing directory or file means that table is absent. Mutagen likewise skips it, and a lookup then fails.
 - Two files whose names differ only by case, where that name is actually needed, fail. This can only happen on case-sensitive filesystems.
+- `Radicle/src/environment/strings.cpp:list_directory` keys the regular files by their lower-cased UTF-8 name. Lower-casing is ASCII-only, where Mutagen's `OrdinalIgnoreCase` also folds non-ASCII letters.
+- Every path in `strings.cpp` is turned into text through the local `utf8` helper (`path.u8string()`), as in `environment.cpp`. With `path.string()`, MSVC threw `std::system_error` for any file in the strings directory whose name has characters outside the ANSI code page, so one unrelated file broke the whole load (`radicle_strings_load` returned `INTERNAL_ERROR`). Test: `test_environment_strings.cpp:HandlesNonAnsiFileNames`, which builds its names from UTF-16 code units because MSVC reads the test sources as the ANSI code page (no `/utf-8`), so a raw non-ASCII `u8` literal becomes a different, ANSI-representable name.
 
 **Error timing.** A malformed table fails the whole load with `EnvironmentError`. Mutagen parses lazily and throws on the first lookup, so Radicle reports the same bad file earlier.
 
@@ -678,4 +680,5 @@ The C# binding should apply the same table, so no language choice is built into 
 - owning-plugin resolution for an override;
 - inline names, a missing ID and a missing directory;
 - a malformed table and bad language tokens;
+- non-ANSI file and directory names (`test_environment_strings.cpp:HandlesNonAnsiFileNames`);
 - the C ABI.

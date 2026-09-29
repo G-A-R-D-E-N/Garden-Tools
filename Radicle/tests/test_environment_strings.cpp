@@ -198,6 +198,26 @@ TEST_F(StringsEnvironmentTest, RejectsMalformedTablesAndLanguages) {
   EXPECT_NO_THROW(fo4::env::StringTables::load(env, strings_, "de"));
 }
 
+TEST_F(StringsEnvironmentTest, HandlesNonAnsiFileNames) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const std::u16string japanese{0x30C9, 0x30AD, 0x30E5, 0x30E1, 0x30F3, 0x30C8, '.', 't', 'x', 't'};
+  std::ofstream(strings_ / std::filesystem::path(japanese)) << "x";
+  const auto tables = fo4::env::StringTables::load(env, strings_, "en");
+  EXPECT_EQ(tables.lookup(0, fo4::env::StringSource::normal, 0x10),
+            std::optional<std::string_view>{"Commonwealth"});
+
+  const auto cyrillic = root_ / std::filesystem::path(std::u16string{0x0421, 0x0442, 0x0440, 0x043E, 0x043A, 0x0438});
+  std::filesystem::create_directories(cyrillic);
+  std::ofstream(cyrillic / "Base_en.STRINGS", std::ios::binary) << '\x01';
+  try {
+    fo4::env::StringTables::load(env, cyrillic, "en");
+    ADD_FAILURE() << "malformed table loaded";
+  } catch (const fo4::env::EnvironmentError& error) {
+    EXPECT_NE(std::string_view(error.what()).find("\xD0\xA1\xD1\x82\xD1\x80\xD0\xBE\xD0\xBA\xD0\xB8"),
+              std::string_view::npos);
+  }
+}
+
 TEST_F(StringsEnvironmentTest, CApiResolvesStrings) {
   std::vector<std::string> utf8;
   for (const auto& path : paths_) utf8.push_back(path.string());
