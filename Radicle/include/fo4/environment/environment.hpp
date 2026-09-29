@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <set>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -38,8 +39,20 @@ struct PluginInfo {
 
 // One on-disk version of a record. `plugin` indexes Environment::plugins().
 struct RecordRef {
+  static constexpr std::uint32_t k_no_container = 0xFFFFFFFFu;
+
   std::size_t plugin{0};
   const Record* record{nullptr};
+  // Type of the group that directly holds the record.
+  GroupType group{GroupType::top};
+  // Indexes into Environment::container(): the enclosing WRLD and CELL, if any.
+  std::uint32_t world{k_no_container};
+  std::uint32_t cell{k_no_container};
+};
+
+struct CellChild {
+  const RecordRef* ref{nullptr};
+  bool persistent{false};
 };
 
 enum class NameKind {
@@ -101,16 +114,48 @@ public:
 
   RecordMetadata metadata(const RecordRef& ref) const;
 
+  // Resolves a raw FormID stored in `ref`'s plugin; null IDs give an empty FormKey.
+  FormKey resolve_link(const RecordRef& ref, RawFormId raw) const;
+  // The same key with its owner name borrowed from the environment, for lifetime-safe views.
+  const PluginKey* stable_owner(const FormKey& key) const noexcept;
+
+  const FormKey& container(std::uint32_t index) const { return containers_.at(index); }
+  std::optional<FormKey> world_of(const RecordRef& ref) const;
+  std::optional<FormKey> cell_of(const RecordRef& ref) const;
+
+  // Persistent CELL directly under the world's children group, from the highest-priority plugin.
+  const RecordRef* worldspace_top_cell(const FormKey& world) const;
+  // Block/sub-block CELLs under the world, each from the highest plugin listing it; ascending plugin, on-disk order.
+  std::vector<const RecordRef*> worldspace_cells(const FormKey& world) const;
+  // Winning CELLs whose winning version sits in an interior sub-block.
+  std::vector<const RecordRef*> interior_cells() const;
+  // Persistent/temporary children merged low to high priority: later copies replace, deleted copies remove.
+  std::vector<CellChild> cell_children(const FormKey& cell) const;
+  // LAND child of the highest-priority CELL version that has one.
+  const RecordRef* cell_landscape(const FormKey& cell) const;
+
 private:
   struct FormKeyHash {
     std::size_t operator()(const FormKey& key) const noexcept;
   };
+
+  std::uint32_t intern_container(std::size_t plugin, const GroupHeader& header);
+  void index_group(std::size_t plugin, const Group& group, std::uint32_t world, std::uint32_t cell);
+  const std::vector<const RecordRef*>* members(
+      const std::vector<std::vector<const RecordRef*>>& table, const FormKey& key) const;
 
   std::vector<Plugin> loaded_;
   std::vector<PluginInfo> plugins_;
   std::unordered_map<FormKey, std::vector<RecordRef>, FormKeyHash> versions_;
   // Per plugin, the records it holds in on-disk order, as FormKeys.
   std::vector<std::vector<FormKey>> plugin_records_;
+  std::vector<PluginFormIdContext> contexts_;
+  std::vector<FormKey> containers_;
+  std::unordered_map<FormKey, std::uint32_t, FormKeyHash> container_index_;
+  std::set<PluginKey> owners_;
+  // Per container, records it holds (cell children, or world-level records outside any cell).
+  std::vector<std::vector<const RecordRef*>> world_members_;
+  std::vector<std::vector<const RecordRef*>> cell_members_;
 };
 
 // Decoders shared with Environment::metadata; exposed for focused tests.

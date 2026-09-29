@@ -1,7 +1,6 @@
 #include "fo4/environment/environment.hpp"
 
 #include "fo4/plugin/reader.hpp"
-#include "fo4/plugin/visit.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -16,6 +15,8 @@ constexpr Signature k_edid{'E', 'D', 'I', 'D'};
 constexpr Signature k_full{'F', 'U', 'L', 'L'};
 constexpr Signature k_modl{'M', 'O', 'D', 'L'};
 constexpr Signature k_obnd{'O', 'B', 'N', 'D'};
+constexpr Signature k_cell{'C', 'E', 'L', 'L'};
+constexpr Signature k_land{'L', 'A', 'N', 'D'};
 
 char ascii_lower(char ch) noexcept {
   return (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
@@ -123,19 +124,71 @@ Environment Environment::load(std::span<const std::filesystem::path> ordered_pat
     env.plugins_.push_back(std::move(info));
     earlier.insert(plugin.key);
 
-    auto& order = env.plugin_records_[index];
-    visit_records(plugin, [&](const Record& record) {
-      if (&record == &plugin.tes4 || record.form_key.owner().empty()) return;
-      auto& versions = env.versions_[record.form_key];
-      if (!versions.empty() && versions.back().plugin == index) {
-        throw EnvironmentError("record " + record.form_key.to_string() +
-                               " appears more than once in " + plugin.path.string());
+    env.contexts_.push_back(plugin_form_id_context(plugin));
+    env.owners_.insert(plugin.key);
+    for (const auto& master : plugin.header.masters) env.owners_.insert(master.key);
+    for (const auto& group : plugin.groups) {
+      env.index_group(index, group, RecordRef::k_no_container, RecordRef::k_no_container);
+    }
+  }
+
+  // Version vectors are final now, so pointers into them stay valid.
+  env.world_members_.resize(env.containers_.size());
+  env.cell_members_.resize(env.containers_.size());
+  for (std::size_t index = 0; index < env.loaded_.size(); ++index) {
+    for (const auto& key : env.plugin_records_[index]) {
+      for (const auto& ref : env.versions_.at(key)) {
+        if (ref.plugin != index) continue;
+        if (ref.cell != RecordRef::k_no_container) {
+          env.cell_members_[ref.cell].push_back(&ref);
+        } else if (ref.world != RecordRef::k_no_container) {
+          env.world_members_[ref.world].push_back(&ref);
+        }
       }
-      versions.push_back({index, &record});
-      order.push_back(record.form_key);
-    });
+    }
   }
   return env;
+}
+
+std::uint32_t Environment::intern_container(std::size_t plugin, const GroupHeader& header) {
+  FormKey key;
+  try {
+    key = resolve_plugin_form_id(RawFormId{header.label_as_u32()}, contexts_[plugin]);
+  } catch (const std::exception& error) {
+    throw EnvironmentError("unresolvable group label in " + loaded_[plugin].path.string() +
+                           ": " + error.what());
+  }
+  if (key.owner().empty()) {
+    throw EnvironmentError("null group label in " + loaded_[plugin].path.string());
+  }
+  const auto [it, inserted] =
+      container_index_.try_emplace(key, static_cast<std::uint32_t>(containers_.size()));
+  if (inserted) containers_.push_back(key);
+  return it->second;
+}
+
+void Environment::index_group(std::size_t plugin,
+                              const Group& group,
+                              std::uint32_t world,
+                              std::uint32_t cell) {
+  const auto type = static_cast<GroupType>(group.header.group_type);
+  if (type == GroupType::world_children) world = intern_container(plugin, group.header);
+  if (type == GroupType::cell_children) cell = intern_container(plugin, group.header);
+  for (const auto& child : group.children) {
+    if (const auto* nested = std::get_if<Group>(&child)) {
+      index_group(plugin, *nested, world, cell);
+      continue;
+    }
+    const auto& record = std::get<Record>(child);
+    if (record.form_key.owner().empty()) continue;
+    auto& versions = versions_[record.form_key];
+    if (!versions.empty() && versions.back().plugin == plugin) {
+      throw EnvironmentError("record " + record.form_key.to_string() +
+                             " appears more than once in " + loaded_[plugin].path.string());
+    }
+    versions.push_back({plugin, &record, type, world, cell});
+    plugin_records_[plugin].push_back(record.form_key);
+  }
 }
 
 std::optional<std::size_t> Environment::find_plugin(std::string_view filename) const {
@@ -182,6 +235,103 @@ std::vector<const RecordRef*> Environment::winners_of(Signature signature) const
     }
   }
   return result;
+}
+
+FormKey Environment::resolve_link(const RecordRef& ref, RawFormId raw) const {
+  return resolve_plugin_form_id(raw, contexts_.at(ref.plugin));
+}
+
+const PluginKey* Environment::stable_owner(const FormKey& key) const noexcept {
+  const auto it = owners_.find(key.owner());
+  return it == owners_.end() ? nullptr : &*it;
+}
+
+std::optional<FormKey> Environment::world_of(const RecordRef& ref) const {
+  if (ref.world == RecordRef::k_no_container) return std::nullopt;
+  return containers_.at(ref.world);
+}
+
+std::optional<FormKey> Environment::cell_of(const RecordRef& ref) const {
+  if (ref.cell == RecordRef::k_no_container) return std::nullopt;
+  return containers_.at(ref.cell);
+}
+
+const std::vector<const RecordRef*>* Environment::members(
+    const std::vector<std::vector<const RecordRef*>>& table, const FormKey& key) const {
+  const auto it = container_index_.find(key);
+  return it == container_index_.end() ? nullptr : &table[it->second];
+}
+
+const RecordRef* Environment::worldspace_top_cell(const FormKey& world) const {
+  const auto* list = members(world_members_, world);
+  if (list == nullptr) return nullptr;
+  for (auto it = list->rbegin(); it != list->rend(); ++it) {
+    const auto* ref = *it;
+    if (ref->group == GroupType::world_children && ref->record->header.signature == k_cell) {
+      return ref;
+    }
+  }
+  return nullptr;
+}
+
+std::vector<const RecordRef*> Environment::worldspace_cells(const FormKey& world) const {
+  std::vector<const RecordRef*> result;
+  const auto* list = members(world_members_, world);
+  if (list == nullptr) return result;
+  std::set<FormKey> seen;
+  for (auto it = list->rbegin(); it != list->rend(); ++it) {
+    const auto* ref = *it;
+    if (ref->group != GroupType::exterior_cell_subblock ||
+        ref->record->header.signature != k_cell) {
+      continue;
+    }
+    if (seen.insert(ref->record->form_key).second) result.push_back(ref);
+  }
+  // Collected highest plugin first with each plugin reversed; restore ascending on-disk order.
+  std::reverse(result.begin(), result.end());
+  return result;
+}
+
+std::vector<const RecordRef*> Environment::interior_cells() const {
+  std::vector<const RecordRef*> result;
+  for (const auto* ref : winners_of(k_cell)) {
+    if (ref->group == GroupType::interior_cell_subblock) result.push_back(ref);
+  }
+  return result;
+}
+
+std::vector<CellChild> Environment::cell_children(const FormKey& cell) const {
+  std::vector<CellChild> result;
+  const auto* list = members(cell_members_, cell);
+  if (list == nullptr) return result;
+  std::vector<CellChild> merged;
+  std::vector<bool> removed;
+  std::unordered_map<FormKey, std::size_t, FormKeyHash> slots;
+  for (const auto* ref : *list) {
+    const bool persistent = ref->group == GroupType::cell_persistent_children;
+    if (!persistent && ref->group != GroupType::cell_temporary_children) continue;
+    const auto [slot, inserted] = slots.try_emplace(ref->record->form_key, merged.size());
+    if (inserted) {
+      merged.push_back({ref, persistent});
+      removed.push_back(false);
+    } else {
+      merged[slot->second] = {ref, persistent};
+    }
+    removed[slot->second] = ref->record->header.flags.is_deleted();
+  }
+  for (std::size_t i = 0; i < merged.size(); ++i) {
+    if (!removed[i]) result.push_back(merged[i]);
+  }
+  return result;
+}
+
+const RecordRef* Environment::cell_landscape(const FormKey& cell) const {
+  const auto* list = members(cell_members_, cell);
+  if (list == nullptr) return nullptr;
+  for (auto it = list->rbegin(); it != list->rend(); ++it) {
+    if ((*it)->record->header.signature == k_land) return *it;
+  }
+  return nullptr;
 }
 
 RecordMetadata Environment::metadata(const RecordRef& ref) const {

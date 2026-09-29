@@ -1,0 +1,196 @@
+#include "fo4/environment/world.hpp"
+
+#include <cstring>
+#include <string>
+
+namespace fo4::env {
+namespace {
+
+constexpr Signature k_wrld{'W', 'R', 'L', 'D'};
+constexpr Signature k_cell{'C', 'E', 'L', 'L'};
+constexpr Signature k_wnam{'W', 'N', 'A', 'M'};
+constexpr Signature k_pnam{'P', 'N', 'A', 'M'};
+constexpr Signature k_cnam{'C', 'N', 'A', 'M'};
+constexpr Signature k_nam2{'N', 'A', 'M', '2'};
+constexpr Signature k_ltmp{'L', 'T', 'M', 'P'};
+constexpr Signature k_dnam{'D', 'N', 'A', 'M'};
+constexpr Signature k_nam0{'N', 'A', 'M', '0'};
+constexpr Signature k_nam9{'N', 'A', 'M', '9'};
+constexpr Signature k_data{'D', 'A', 'T', 'A'};
+constexpr Signature k_xclc{'X', 'C', 'L', 'C'};
+constexpr Signature k_xcll{'X', 'C', 'L', 'L'};
+constexpr Signature k_xclw{'X', 'C', 'L', 'W'};
+constexpr Signature k_xcim{'X', 'C', 'I', 'M'};
+constexpr Signature k_xezn{'X', 'E', 'Z', 'N'};
+constexpr Signature k_xlcn{'X', 'L', 'C', 'N'};
+
+// xEdit wbAmbientColors: six directional colors, plus specular and fresnel power from form version 30.
+constexpr std::uint16_t k_ambient_specular_form_version = 30;
+
+class Reader {
+public:
+  Reader(const Environment& env, const RecordRef& ref, Signature expected)
+      : env_(env), ref_(ref) {
+    if (ref.record == nullptr || ref.record->header.signature != expected) {
+      throw WorldDecodeError("expected a " + expected.to_string() + " record");
+    }
+  }
+
+  const Subrecord* unique(Signature signature) const {
+    const Subrecord* found = nullptr;
+    for (const auto& subrecord : ref_.record->subrecords) {
+      if (subrecord.signature != signature) continue;
+      if (found != nullptr) fail(signature, "appears more than once");
+      found = &subrecord;
+    }
+    return found;
+  }
+
+  const Subrecord* sized(Signature signature, std::size_t size) const {
+    const auto* subrecord = unique(signature);
+    if (subrecord != nullptr && subrecord->data.size() != size) {
+      fail(signature, "must be " + std::to_string(size) + " bytes");
+    }
+    return subrecord;
+  }
+
+  std::optional<FormKey> link(Signature signature) const {
+    const auto* subrecord = sized(signature, 4);
+    if (subrecord == nullptr) return std::nullopt;
+    return env_.resolve_link(ref_, RawFormId{u32(*subrecord, 0)});
+  }
+
+  std::optional<float> f32(Signature signature) const {
+    const auto* subrecord = sized(signature, 4);
+    if (subrecord == nullptr) return std::nullopt;
+    return f32(*subrecord, 0);
+  }
+
+  [[noreturn]] void fail(Signature signature, const std::string& message) const {
+    throw WorldDecodeError(ref_.record->header.signature.to_string() + " " +
+                           ref_.record->form_key.to_string() + " " + signature.to_string() +
+                           " " + message);
+  }
+
+  static std::uint32_t u32(const Subrecord& subrecord, std::size_t offset) {
+    std::uint32_t value = 0;
+    std::memcpy(&value, subrecord.data.data() + offset, 4);
+    return value;
+  }
+
+  static std::int32_t i32(const Subrecord& subrecord, std::size_t offset) {
+    std::int32_t value = 0;
+    std::memcpy(&value, subrecord.data.data() + offset, 4);
+    return value;
+  }
+
+  static std::uint16_t u16(const Subrecord& subrecord, std::size_t offset) {
+    std::uint16_t value = 0;
+    std::memcpy(&value, subrecord.data.data() + offset, 2);
+    return value;
+  }
+
+  static float f32(const Subrecord& subrecord, std::size_t offset) {
+    float value = 0.0f;
+    std::memcpy(&value, subrecord.data.data() + offset, 4);
+    return value;
+  }
+
+  static ByteColor color(const Subrecord& subrecord, std::size_t offset) {
+    const auto* bytes = subrecord.data.data() + offset;
+    return {std::to_integer<std::uint8_t>(bytes[0]), std::to_integer<std::uint8_t>(bytes[1]),
+            std::to_integer<std::uint8_t>(bytes[2])};
+  }
+
+  const RecordRef& ref() const noexcept { return ref_; }
+
+private:
+  const Environment& env_;
+  const RecordRef& ref_;
+};
+
+std::optional<std::array<float, 2>> point2(const Reader& reader, Signature signature) {
+  const auto* subrecord = reader.sized(signature, 8);
+  if (subrecord == nullptr) return std::nullopt;
+  return std::array<float, 2>{Reader::f32(*subrecord, 0), Reader::f32(*subrecord, 4)};
+}
+
+std::optional<CellLighting> decode_lighting(const Reader& reader) {
+  const auto* xcll = reader.unique(k_xcll);
+  if (xcll == nullptr) return std::nullopt;
+  const std::size_t ambient_size =
+      reader.ref().record->header.form_version >= k_ambient_specular_form_version ? 32 : 24;
+  const std::size_t tail = 40 + ambient_size;
+  const auto size = xcll->data.size();
+  if (size < tail) reader.fail(k_xcll, "is shorter than its required members");
+
+  CellLighting lighting;
+  lighting.ambient = Reader::color(*xcll, 0);
+  lighting.directional = Reader::color(*xcll, 4);
+  lighting.fog_near_color = Reader::color(*xcll, 8);
+  lighting.fog_near = Reader::f32(*xcll, 12);
+  lighting.fog_far = Reader::f32(*xcll, 16);
+  lighting.directional_rotation_xy = Reader::i32(*xcll, 20);
+  lighting.directional_rotation_z = Reader::i32(*xcll, 24);
+  lighting.directional_fade = Reader::f32(*xcll, 28);
+  lighting.fog_clip_distance = Reader::f32(*xcll, 32);
+  lighting.fog_power = Reader::f32(*xcll, 36);
+  if (size >= tail + 4) lighting.fog_far_color = Reader::color(*xcll, tail);
+  if (size >= tail + 8) lighting.fog_max = Reader::f32(*xcll, tail + 4);
+  if (size >= tail + 12) lighting.light_fade_begin = Reader::f32(*xcll, tail + 8);
+  if (size >= tail + 16) lighting.light_fade_end = Reader::f32(*xcll, tail + 12);
+  if (size >= tail + 20) lighting.inherits = Reader::u32(*xcll, tail + 16);
+  return lighting;
+}
+
+}  // namespace
+
+WorldspaceData decode_worldspace(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, k_wrld);
+  WorldspaceData data;
+  data.parent = reader.link(k_wnam);
+  if (const auto* pnam = reader.sized(k_pnam, 2)) data.parent_flags = Reader::u16(*pnam, 0);
+  data.climate = reader.link(k_cnam);
+  data.water = reader.link(k_nam2);
+  data.lighting_template = reader.link(k_ltmp);
+  if (const auto* dnam = reader.sized(k_dnam, 8)) {
+    data.default_land_height = Reader::f32(*dnam, 0);
+    data.default_water_height = Reader::f32(*dnam, 4);
+  }
+  data.bounds_min = point2(reader, k_nam0);
+  data.bounds_max = point2(reader, k_nam9);
+  if (const auto* flags = reader.sized(k_data, 1)) {
+    data.flags = std::to_integer<std::uint8_t>(flags->data[0]);
+  }
+  return data;
+}
+
+CellData decode_cell(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, k_cell);
+  CellData data;
+  if (const auto* flags = reader.unique(k_data)) {
+    if (flags->data.size() == 1) {
+      data.flags = std::to_integer<std::uint8_t>(flags->data[0]);
+    } else if (flags->data.size() == 2) {
+      data.flags = Reader::u16(*flags, 0);
+    } else {
+      reader.fail(k_data, "must be 1 or 2 bytes");
+    }
+  }
+  if (const auto* xclc = reader.unique(k_xclc)) {
+    if (xclc->data.size() != 8 && xclc->data.size() != 12) reader.fail(k_xclc, "must be 8 or 12 bytes");
+    CellGrid grid{Reader::i32(*xclc, 0), Reader::i32(*xclc, 4), std::nullopt};
+    if (xclc->data.size() == 12) grid.land_flags = std::to_integer<std::uint8_t>(xclc->data[8]);
+    data.grid = grid;
+  }
+  data.lighting = decode_lighting(reader);
+  data.lighting_template = reader.link(k_ltmp);
+  data.water_height = reader.f32(k_xclw);
+  data.image_space = reader.link(k_xcim);
+  data.encounter_zone = reader.link(k_xezn);
+  data.location = reader.link(k_xlcn);
+  data.worldspace = env.world_of(ref);
+  return data;
+}
+
+}  // namespace fo4::env
