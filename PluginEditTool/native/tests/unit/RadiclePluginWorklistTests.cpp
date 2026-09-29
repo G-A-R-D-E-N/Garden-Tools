@@ -221,6 +221,7 @@ TEST_CASE("Plugin worklist filters by kind and signature and pages without chang
     CHECK(misc.at("Counts").at("Added") == 0);
     REQUIRE(misc.at("Rows").size() == 1);
     CHECK(misc.at("Rows")[0].at("FormKey") == "000802:Base.esp");
+    CHECK(worklist(chain.backend, nlohmann::json::array({"Mid.esp", "all", "misc"})).at("Total") == 1);
 
     const auto page = worklist(chain.backend, nlohmann::json::array({"Mid.esp", "", "", 1, 1}));
     CHECK(page.at("Total") == 3);

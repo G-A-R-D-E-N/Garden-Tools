@@ -1,6 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <cstddef>
@@ -253,7 +254,9 @@ Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
     const nlohmann::json& arguments) const {
     const auto pluginName = stringArgument(arguments, 0);
     const auto kindText = stringArgument(arguments, 1);
-    const auto signatureText = stringArgument(arguments, 2);
+    auto signatureText = stringArgument(arguments, 2);
+    std::transform(signatureText.begin(), signatureText.end(), signatureText.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
     const auto limit = sizeArgument(arguments, 3, 200, 5000);
     const auto offset = sizeArgument(arguments, 4, 0, 10000000);
 
