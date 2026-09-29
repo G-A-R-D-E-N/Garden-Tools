@@ -80,6 +80,29 @@ std::vector<std::byte> deepEmptyPatchBytes() {
     return out.bytes;
 }
 
+std::vector<std::byte> deepLaterOverrideBytes() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x800);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Base.esm\0", 9});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto colors = fo4::test::begin_group(out, "CLFM", 0);
+    const auto color = fo4::test::begin_record(out, "CLFM", 0, 0x00000800u, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"LaterColor\0", 11});
+    fo4::test::end_record(out, color);
+    fo4::test::end_group(out, colors);
+    return out.bytes;
+}
+
 nlohmann::json deepPluginEntry(std::string name,
                                const std::filesystem::path& path) {
     return {
@@ -203,4 +226,53 @@ TEST_CASE("Native DeepCopyAsOverride previews a brand-new target without creatin
     CHECK(preview->get<std::string>().starts_with("DRY RUN:"));
     CHECK(preview->get<std::string>().find("2 record(s)") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(missingPath));
+}
+
+TEST_CASE("Native DeepCopyAsOverride requires consent before writing overrides that will lose") {
+    const auto root = deepTempRoot();
+    DeepCleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    const auto laterPath = root / "Later.esp";
+    deepWriteBytes(sourcePath, deepSourceBytes());
+    deepWriteBytes(patchPath, deepEmptyPatchBytes());
+    deepWriteBytes(laterPath, deepLaterOverrideBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{
+            "plugins",
+            nlohmann::json::array({
+                deepPluginEntry("Base.esm", sourcePath),
+                deepPluginEntry("Patch.esp", patchPath),
+                deepPluginEntry("Later.esp", laterPath)
+            })
+        }}).has_value());
+
+    const auto preview = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", false, false, 200
+    }));
+    REQUIRE(preview.has_value());
+    CHECK(preview->get<std::string>().find(
+        "1 would not win because Patch.esp loads before other plugins that override them "
+        "(000800:Base.esm loses to Later.esp)") != std::string::npos);
+
+    const auto refused = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200
+    }));
+    REQUIRE(refused.has_value());
+    CHECK(refused->get<std::string>().starts_with("LOSES: Patch.esp"));
+    CHECK(refused->get<std::string>().find("1 of the 2 record(s)") != std::string::npos);
+    const auto unchanged = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", false, false, 200
+    }));
+    REQUIRE(unchanged.has_value());
+    CHECK(unchanged->get<std::string>().find("already exist") == std::string::npos);
+
+    const auto applied = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200, true
+    }));
+    REQUIRE(applied.has_value());
+    CHECK(applied->get<std::string>().find("Deep-copied 2 of 2 record(s)") != std::string::npos);
 }

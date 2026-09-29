@@ -148,3 +148,48 @@ describe('losing override confirmation', () => {
     expect(JSON.parse(batch.mock.calls[2][0])).toEqual([{ formKey: matrix.FormKey, source: 'Later.esp' }]);
   });
 });
+
+describe('deep copy losing override confirmation', () => {
+  const row = {
+    Field: 'FULL', DisplayLabel: 'Name', Level: 0, Values: ['DeepOld', 'DeepNew'], Differs: true,
+    Statuses: [], Severity: 'conflict', Kind: 'Value' as const, Group: '', GroupLabel: '', IsSummary: false,
+    HasChildren: false, EditKind: 'Text' as const, EnumOptions: null, RefType: null, RefTypes: null,
+  };
+  const deep = vi.fn<Backend['DeepCopyAsOverride']>();
+
+  async function openDeepCopy() {
+    const hostObjects = (window as unknown as { chrome: { webview: { hostObjects: { backend: Record<string, unknown> } } } })
+      .chrome.webview.hostObjects.backend;
+    hostObjects.DeepCopyAsOverride = deep;
+    hostObjects.DescribeElement = vi.fn(async () => '{}');
+    deep.mockReset()
+      .mockResolvedValueOnce('DRY RUN: deep copy would bring 2 record(s) into Patch.esp.')
+      .mockResolvedValueOnce('LOSES: Patch.esp loads before Later.esp.')
+      .mockResolvedValueOnce('EXISTS: Patch.esp already contains 1 of the 2 record(s).')
+      .mockResolvedValueOnce('Deep-copied 2 of 2 record(s).');
+    render(<DialogProvider>
+      <RecordView matrix={{ ...matrix, Rows: [row] }} plugin="Later.esp" onReload={reload} />
+    </DialogProvider>);
+    fireEvent.contextMenu(await screen.findByText('DeepNew'));
+    fireEvent.click(await screen.findByRole('button', { name: /Deep copy as override into/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Proceed' }));
+    await screen.findByText('Overrides will not win');
+  }
+
+  it('cancels without retrying the apply', async () => {
+    await openDeepCopy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await screen.findByText('Deep copy cancelled -- the target plugin was left unchanged.');
+    expect(deep).toHaveBeenCalledTimes(2);
+    expect(deep).toHaveBeenLastCalledWith('Later.esp', matrix.FormKey, 'Patch.esp', true, false);
+  });
+
+  it('keeps load-order consent through the overwrite prompt', async () => {
+    await openDeepCopy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy anyway' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Overwrite all and copy' }));
+    await screen.findByText('Deep-copied 2 of 2 record(s).');
+    expect(deep).toHaveBeenNthCalledWith(3, 'Later.esp', matrix.FormKey, 'Patch.esp', true, false, 200, true);
+    expect(deep).toHaveBeenNthCalledWith(4, 'Later.esp', matrix.FormKey, 'Patch.esp', true, true, 200, true);
+  });
+});

@@ -107,6 +107,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
     const bool apply = deepBoolArgument(arguments, 3, false);
     const bool overwrite = deepBoolArgument(arguments, 4, false);
     const auto cap = deepLimitArgument(arguments, 5, 200);
+    const bool allowLosing = deepBoolArgument(arguments, 6, false);
 
     if (recordId.empty() || targetName.empty()) {
         return std::unexpected(Error{
@@ -234,6 +235,22 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             }
         }
 
+        std::size_t losingCount = 0;
+        std::string losingSample;
+        if (target != nullptr) {
+            for (const auto& key : toCopy) {
+                const auto later = laterOverridesLocked(*target, key);
+                if (later.empty()) continue;
+                if (++losingCount > 5) continue;
+                if (!losingSample.empty()) losingSample += "; ";
+                losingSample += key.to_string() + " loses to ";
+                for (std::size_t index = 0; index < later.size(); ++index) {
+                    losingSample += (index == 0 ? "" : ", ") + later[index];
+                }
+            }
+            if (losingCount > 5) losingSample += "; and " + std::to_string(losingCount - 5) + " more";
+        }
+
         if (!apply) {
             std::string preview =
                 "DRY RUN: deep copy of " + rootKey.to_string() + " would bring " +
@@ -247,6 +264,11 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
                 preview += " " + std::to_string(existing.size()) +
                            " already exist in the target and will require a separate overwrite confirmation.";
             }
+            if (losingCount > 0) {
+                preview += " " + std::to_string(losingCount) + " would not win because " +
+                           targetName + " loads before other plugins that override them (" +
+                           losingSample + ") and will require load-order confirmation.";
+            }
             preview += " Re-run with apply=true.";
             return nlohmann::json(std::move(preview));
         }
@@ -258,6 +280,14 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             });
         }
         if (const auto guard = writeGuard(*target)) return std::unexpected(*guard);
+
+        if (losingCount > 0 && !allowLosing) {
+            return nlohmann::json(
+                "LOSES: " + targetName + " loads before other plugins that also override " +
+                std::to_string(losingCount) + " of the " + std::to_string(toCopy.size()) +
+                " record(s) in this deep copy: " + losingSample +
+                ". The copied overrides will not win until " + targetName + " loads after them.");
+        }
 
         if (!existing.empty() && !overwrite) {
             std::string sample;
