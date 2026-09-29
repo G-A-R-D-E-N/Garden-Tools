@@ -512,3 +512,57 @@ Labels resolve through the plugin's own master table, so master-owned worlds and
 - **XCLC.** Mutagen reads 12 bytes and keeps a raw 4-byte value in `CellGrid.Flag`. Only byte 8 carries the land flags (xEdit `wbCellGrid`: `u8` plus 3 unused bytes), and that byte is what is exposed here.
 
 `Radicle/src/c_api_world.cpp` is the C ABI over this: `radicle_worldspace_get_info`, `radicle_cell_get_info`, `radicle_record_get_container`, and the hierarchy queries. Link fields borrow their owner name from `Environment::stable_owner`, a set of every plugin and master name. A link whose plugin is NULL is absent. `Radicle/tests/test_environment_world.cpp` builds a two-plugin WRLD/CELL fixture covering: top cell, exterior block/sub-block, interior block, persistent and temporary children, a deleted child override, and a LAND override. It also tests malformed and wrong-signature decodes and the C ABI.
+
+## Radicle/src/environment/placed.cpp:fo4::env::decode_placed_reference / primary_model_path — GardenEngine #114 placed references and model paths
+
+Third #114 slice, stacked on the WRLD/CELL slice. It covers every placed-reference field `CellService.GetPlacedReferencesJson` and `ReferenceWriteback` touch, plus `ModelPathResolver.PrimaryModelPath`.
+
+**Scope.** `decode_placed_reference` accepts REFR, ACHR and the placed trap family (PARW, PBAR, PBEA, PCON, PFLA, PHZD, PMIS, PGRE). This matches the record types Mutagen's `Cell.ParseTypical` dispatches.
+
+**Sections.** The decode is sequential because several signatures change meaning with the anchor before them (xEdit FO4 `wbRefRecord(REFR` / `wbRefRecord(ACHR` at pin `9fb016884bec138ea6c7b872cec831537d464c3e`):
+- `XMRK` opens the map-marker section: `FNAM` flags, `FULL` name, `TNAM` type.
+- `XRMR` opens the room section: `LNAM` lighting template, `INAM` image space, `XLRM` linked rooms. Mutagen's `FillBinaryBoundDataCustom` reads the same members after XRMR.
+- `XPRD` opens a patrol: `XPPA`, `INAM` idle, `PDTO` topics, and on ACHR a `TNAM` topic.
+
+Any of those signatures outside its section fails closed. Every other listed field is sized exactly: a wrong size or an unexpected repeat throws `WorldDecodeError`. Unknown subrecords are ignored (they stay in the plugin untouched).
+
+**Layouts** agree between xEdit and the vendored Mutagen:
+- **Link and flag fields:**
+  - `XESP`: 4 or 8 bytes, FormID then `u8` flags.
+  - `XOWN`: 4 or 12 bytes, FormID, 4 unused bytes, then a no-crime byte.
+  - `XLKR`: 8 bytes as keyword + reference, or 4 bytes as reference only (Mutagen `<Break>`).
+  - `XAPR`: FormID + `f32` delay.
+- **Geometry fields:**
+  - `XTEL`: door, position, rotation, `u32` flags, and at 36 bytes the transition-interior CELL. xEdit lists that member; a 32-byte form is also accepted.
+  - `XPRM`: bounds `vec3`, RGBA floats, `u32` type. Bounds are returned as stored; Mutagen `PlacedPrimitive.FillBinaryBoundsCustom` and xEdit both double them.
+  - `XBSD`: slack, thickness, half extents, then an optional wind-detached byte.
+  - `XPTL`: width, height, position, quaternion.
+- **Comments.** `MNAM` holds comments on REFR and the traps.
+
+**Scripts.** `VMAD` goes through the new `fo4::read_vmad_scripts` (`Radicle/src/schema/vmad.cpp`), which shares the existing VMAD walker:
+- It returns script names, flags and properties.
+- Values are kept for object (FormID and alias), string, int, float and bool. Structs and arrays report their leading count.
+- A Variable property (type 6 or 16) stops decoding with `unsupported` set. Mutagen throws `NotImplemented` there.
+
+**Model path.** `primary_model_path` mirrors `ModelPathResolver.PrimaryModelPath`:
+- SCOL has none.
+- ARMO uses its world model: `MOD2` (male), then `MOD4` (female). ARMO `MODL` is an armature FormID, not a path.
+- Every other record uses its first `MODL`.
+- The text is cut at the first NUL, like Mutagen's zero-terminated string read. Empty or unterminated text counts as no model.
+
+`Environment::metadata().model` now uses the same rule.
+
+**C ABI.** `Radicle/src/c_api_placed.cpp` provides `radicle_placed_ref_decode` / `radicle_placed_ref_free`:
+- It returns one heap view that owns every array.
+- The opaque `internal` pointer lets the free call find that owner.
+
+`radicle_record_primary_model_path` exposes the model rule.
+
+**Tests.** `Radicle/tests/test_environment_placed.cpp` covers:
+- a REFR carrying every field;
+- ACHR patrol and level modifier;
+- a PHZD;
+- section and size failures;
+- a Variable VMAD;
+- model-path parity;
+- the C ABI.

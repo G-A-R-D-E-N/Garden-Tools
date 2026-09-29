@@ -76,4 +76,11 @@ radicle_status guarded(const char* what, Fn&& fn) {
   }
 }
 
+inline radicle_form_key to_c_key(const radicle_env& env, const std::optional<fo4::FormKey>& key) {
+  if (!key || key->owner().empty()) return {nullptr, 0};
+  const auto* owner = env.value.stable_owner(*key);
+  if (owner == nullptr) throw fo4::env::EnvironmentError("FormKey owner is not in the environment");
+  return {owner->filename().data(), key->local().value()};
+}
+
 }  // namespace radicle_c_env_detail

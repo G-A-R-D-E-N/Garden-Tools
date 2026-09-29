@@ -1,10 +1,14 @@
 #include "fo4/environment/world.hpp"
 
+#include "record_reader.hpp"
+
 #include <cstring>
 #include <string>
 
 namespace fo4::env {
 namespace {
+
+using detail::Reader;
 
 constexpr Signature k_wrld{'W', 'R', 'L', 'D'};
 constexpr Signature k_cell{'C', 'E', 'L', 'L'};
@@ -26,88 +30,6 @@ constexpr Signature k_xlcn{'X', 'L', 'C', 'N'};
 
 // xEdit wbAmbientColors: six directional colors, plus specular and fresnel power from form version 30.
 constexpr std::uint16_t k_ambient_specular_form_version = 30;
-
-class Reader {
-public:
-  Reader(const Environment& env, const RecordRef& ref, Signature expected)
-      : env_(env), ref_(ref) {
-    if (ref.record == nullptr || ref.record->header.signature != expected) {
-      throw WorldDecodeError("expected a " + expected.to_string() + " record");
-    }
-  }
-
-  const Subrecord* unique(Signature signature) const {
-    const Subrecord* found = nullptr;
-    for (const auto& subrecord : ref_.record->subrecords) {
-      if (subrecord.signature != signature) continue;
-      if (found != nullptr) fail(signature, "appears more than once");
-      found = &subrecord;
-    }
-    return found;
-  }
-
-  const Subrecord* sized(Signature signature, std::size_t size) const {
-    const auto* subrecord = unique(signature);
-    if (subrecord != nullptr && subrecord->data.size() != size) {
-      fail(signature, "must be " + std::to_string(size) + " bytes");
-    }
-    return subrecord;
-  }
-
-  std::optional<FormKey> link(Signature signature) const {
-    const auto* subrecord = sized(signature, 4);
-    if (subrecord == nullptr) return std::nullopt;
-    return env_.resolve_link(ref_, RawFormId{u32(*subrecord, 0)});
-  }
-
-  std::optional<float> f32(Signature signature) const {
-    const auto* subrecord = sized(signature, 4);
-    if (subrecord == nullptr) return std::nullopt;
-    return f32(*subrecord, 0);
-  }
-
-  [[noreturn]] void fail(Signature signature, const std::string& message) const {
-    throw WorldDecodeError(ref_.record->header.signature.to_string() + " " +
-                           ref_.record->form_key.to_string() + " " + signature.to_string() +
-                           " " + message);
-  }
-
-  static std::uint32_t u32(const Subrecord& subrecord, std::size_t offset) {
-    std::uint32_t value = 0;
-    std::memcpy(&value, subrecord.data.data() + offset, 4);
-    return value;
-  }
-
-  static std::int32_t i32(const Subrecord& subrecord, std::size_t offset) {
-    std::int32_t value = 0;
-    std::memcpy(&value, subrecord.data.data() + offset, 4);
-    return value;
-  }
-
-  static std::uint16_t u16(const Subrecord& subrecord, std::size_t offset) {
-    std::uint16_t value = 0;
-    std::memcpy(&value, subrecord.data.data() + offset, 2);
-    return value;
-  }
-
-  static float f32(const Subrecord& subrecord, std::size_t offset) {
-    float value = 0.0f;
-    std::memcpy(&value, subrecord.data.data() + offset, 4);
-    return value;
-  }
-
-  static ByteColor color(const Subrecord& subrecord, std::size_t offset) {
-    const auto* bytes = subrecord.data.data() + offset;
-    return {std::to_integer<std::uint8_t>(bytes[0]), std::to_integer<std::uint8_t>(bytes[1]),
-            std::to_integer<std::uint8_t>(bytes[2])};
-  }
-
-  const RecordRef& ref() const noexcept { return ref_; }
-
-private:
-  const Environment& env_;
-  const RecordRef& ref_;
-};
 
 std::optional<std::array<float, 2>> point2(const Reader& reader, Signature signature) {
   const auto* subrecord = reader.sized(signature, 8);

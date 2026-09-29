@@ -1,5 +1,7 @@
 #include "fo4/environment/environment.hpp"
 
+#include "fo4/environment/placed.hpp"
+
 #include "fo4/plugin/reader.hpp"
 
 #include <algorithm>
@@ -13,7 +15,6 @@ namespace {
 
 constexpr Signature k_edid{'E', 'D', 'I', 'D'};
 constexpr Signature k_full{'F', 'U', 'L', 'L'};
-constexpr Signature k_modl{'M', 'O', 'D', 'L'};
 constexpr Signature k_obnd{'O', 'B', 'N', 'D'};
 constexpr Signature k_cell{'C', 'E', 'L', 'L'};
 constexpr Signature k_land{'L', 'A', 'N', 'D'};
@@ -345,7 +346,7 @@ RecordMetadata Environment::metadata(const RecordRef& ref) const {
   meta.deleted = record.header.flags.is_deleted();
   meta.editor_id = editor_id_of(record);
   meta.name = decode_record_name(owner, record);
-  if (const auto* modl = first_subrecord(record, k_modl)) meta.model = zstring_view(*modl);
+  meta.model = primary_model_path(ref);
   meta.bounds = decode_object_bounds(record);
   return meta;
 }

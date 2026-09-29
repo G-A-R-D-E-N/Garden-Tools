@@ -207,6 +207,158 @@ RADICLE_API radicle_status radicle_env_cell_landscape(const radicle_env* env,
                                                       radicle_form_key cell,
                                                       const radicle_record** out_record);
 
+typedef struct radicle_linked_ref {
+  radicle_form_key keyword;
+  radicle_form_key reference;
+} radicle_linked_ref;
+
+typedef struct radicle_activate_parent {
+  radicle_form_key reference;
+  float delay;
+} radicle_activate_parent;
+
+typedef struct radicle_portal {
+  radicle_form_key origin;
+  radicle_form_key destination;
+} radicle_portal;
+
+typedef struct radicle_topic_ref {
+  uint32_t type;
+  radicle_form_key topic;
+  uint32_t subtype;
+} radicle_topic_ref;
+
+typedef struct radicle_patrol {
+  float idle_time;
+  radicle_form_key idle;
+  radicle_form_key topic;
+  const radicle_topic_ref* topics;
+  size_t topic_count;
+} radicle_patrol;
+
+typedef struct radicle_script_property {
+  const char* name;
+  uint8_t type;
+  uint8_t flags;
+  radicle_form_key object;
+  int32_t has_alias;
+  int16_t alias;
+  const char* text;
+  int32_t has_integer;
+  int32_t integer;
+  int32_t has_real;
+  float real;
+  int32_t has_boolean;
+  int32_t boolean;
+  int32_t has_element_count;
+  uint32_t element_count;
+} radicle_script_property;
+
+typedef struct radicle_script {
+  const char* name;
+  uint8_t flags;
+  const radicle_script_property* properties;
+  size_t property_count;
+} radicle_script;
+
+/* Decoded REFR/ACHR/placed trap; every pointer lives until radicle_placed_ref_free. */
+typedef struct radicle_placed_ref {
+  char signature[5];
+  radicle_form_key base;
+  int32_t has_placement;
+  float position[3];
+  float rotation[3];
+  int32_t has_scale;
+  float scale;
+  radicle_form_key layer;
+  radicle_form_key encounter_zone;
+  radicle_form_key location_reference;
+  radicle_form_key attach_ref;
+  const radicle_form_key* location_ref_types;
+  size_t location_ref_type_count;
+  int32_t has_enable_parent;
+  radicle_form_key enable_parent;
+  int32_t has_enable_parent_flags;
+  uint8_t enable_parent_flags;
+  int32_t has_ownership;
+  radicle_form_key owner;
+  int32_t has_no_crime;
+  int32_t no_crime;
+  int32_t has_faction_rank;
+  int32_t faction_rank;
+  const radicle_linked_ref* linked_refs;
+  size_t linked_ref_count;
+  int32_t has_activate_parent_flags;
+  uint8_t activate_parent_flags;
+  const radicle_activate_parent* activate_parents;
+  size_t activate_parent_count;
+  const char* comments;
+  int32_t ignored_by_sandbox;
+  int32_t open_by_default;
+  int32_t has_map_marker;
+  int32_t has_map_marker_flags;
+  uint8_t map_marker_flags;
+  radicle_name_kind map_marker_name_kind;
+  const char* map_marker_name_text;
+  uint32_t map_marker_name_string_id;
+  int32_t has_map_marker_type;
+  uint8_t map_marker_type;
+  int32_t has_teleport;
+  radicle_form_key teleport_door;
+  float teleport_position[3];
+  float teleport_rotation[3];
+  uint32_t teleport_flags;
+  radicle_form_key teleport_transition_interior;
+  /* Stored XPRM bounds; Mutagen's PlacedPrimitive.Bounds doubles them. */
+  int32_t has_primitive;
+  float primitive_bounds[3];
+  float primitive_color[4];
+  uint32_t primitive_type;
+  int32_t has_spline;
+  float spline_slack;
+  float spline_thickness;
+  float spline_half_extents[3];
+  int32_t has_spline_wind_detached_end;
+  int32_t spline_wind_detached_end;
+  const radicle_portal* portals;
+  size_t portal_count;
+  int32_t has_room_portal;
+  float room_portal_size[2];
+  float room_portal_position[3];
+  float room_portal_rotation[4];
+  int32_t has_room;
+  uint8_t room_linked_room_count;
+  uint8_t room_flags;
+  radicle_form_key room_lighting_template;
+  radicle_form_key room_image_space;
+  const radicle_form_key* linked_rooms;
+  size_t linked_room_count;
+  const radicle_patrol* patrols;
+  size_t patrol_count;
+  int32_t has_count;
+  int32_t count;
+  int32_t has_level_modifier;
+  int32_t level_modifier;
+  int32_t has_scripts;
+  int16_t script_version;
+  int16_t script_object_format;
+  int32_t scripts_unsupported;
+  const radicle_script* scripts;
+  size_t script_count;
+  void* internal;
+} radicle_placed_ref;
+
+/* RADICLE_STATUS_PARSE_ERROR for a non-placed record or a malformed present subrecord. */
+RADICLE_API radicle_status radicle_placed_ref_decode(const radicle_env* env,
+                                                     const radicle_record* record,
+                                                     radicle_placed_ref** out_ref);
+RADICLE_API void radicle_placed_ref_free(radicle_placed_ref* ref);
+
+/* ModelPathResolver.PrimaryModelPath parity; RADICLE_STATUS_NOT_FOUND when the record has no model. */
+RADICLE_API radicle_status radicle_record_primary_model_path(const radicle_env* env,
+                                                             const radicle_record* record,
+                                                             const char** out_path);
+
 #ifdef __cplusplus
 }
 #endif
