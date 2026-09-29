@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
+#include <limits>
 #include <map>
 #include <optional>
 #include <string>
@@ -37,7 +39,15 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 
 std::optional<int> intArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) return std::nullopt;
-    return args[index].get<int>();
+    const auto& value = args[index];
+    if (value.is_number_unsigned() && value.get<std::uint64_t>() > std::numeric_limits<int>::max()) {
+        return std::nullopt;
+    }
+    const auto number = value.get<std::int64_t>();
+    if (number < std::numeric_limits<int>::min() || number > std::numeric_limits<int>::max()) {
+        return std::nullopt;
+    }
+    return static_cast<int>(number);
 }
 
 std::optional<float> floatArgument(const nlohmann::json& args, std::size_t index) {
