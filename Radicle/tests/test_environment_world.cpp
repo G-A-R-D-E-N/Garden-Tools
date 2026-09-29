@@ -309,7 +309,9 @@ TEST_F(WorldEnvironmentTest, AReferenceMovedToAnotherCellLeavesItsOldCell) {
   const auto new_cell = env.cell_children(key("000801:Base.esm"));
   ASSERT_TRUE(has(new_cell, 0x812));
   for (const auto& child : new_cell) {
-    if (child.ref->record->form_key.local().value() == 0x812) EXPECT_EQ(child.ref->plugin, 2u);
+    if (child.ref->record->form_key.local().value() == 0x812) {
+      EXPECT_EQ(child.ref->plugin, 2u);
+    }
   }
 }
 
