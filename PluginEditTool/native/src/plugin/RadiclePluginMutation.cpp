@@ -36,7 +36,6 @@ bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     return true;
 }
 
-// Absent or null means false; anything else that is not a boolean is an error.
 bool optionalBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     value = false;
     if (!args.is_array() || index >= args.size() || args[index].is_null()) return true;

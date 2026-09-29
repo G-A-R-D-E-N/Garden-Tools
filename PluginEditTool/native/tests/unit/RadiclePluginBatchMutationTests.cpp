@@ -258,7 +258,6 @@ TEST_CASE("Native CopyAsOverrideMany asks before writing overrides that would lo
     writeBytes(source, makeSource(0x00000800, "WeaponA"));
     writeBytes(target, makeTarget());
 
-    // Patch loads first, so SourceA's override of the same record wins over it.
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
         {"plugins", nlohmann::json::array({

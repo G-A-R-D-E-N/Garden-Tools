@@ -363,7 +363,6 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                 ensured->name,
                 false
             });
-            // Optional 4th argument: explicit opt-in to an override that will lose.
             if (args.is_array() && args.size() > 3) copyArgs.push_back(args[3]);
             auto operation = backend_.invokeBackend("CopyAsOverride", copyArgs);
             return finishAutoCreatedTarget(

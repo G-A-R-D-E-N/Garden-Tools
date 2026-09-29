@@ -82,8 +82,6 @@ private:
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
-    // Plugins loading after `target` that already override `key`; an override
-    // written into `target` loses to the last of them.
     std::vector<std::string> laterOverridesLocked(const LoadedPlugin& target,
                                                   const fo4::FormKey& key) const;
     void stageLocalizationMutationLocked(LoadedPlugin& loaded, StagedLocalization staged);

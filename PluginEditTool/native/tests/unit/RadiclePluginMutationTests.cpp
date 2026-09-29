@@ -363,7 +363,6 @@ TEST_CASE("Native CopyAsOverride asks before writing an override that would lose
     writeBytes(sourcePath, makeSourceOverride());
     writeBytes(targetPath, makeTargetPlugin());
 
-    // Target loads first, so Source's override of the same record beats it.
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
         {"plugins", nlohmann::json::array({

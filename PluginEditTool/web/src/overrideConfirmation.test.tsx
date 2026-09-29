@@ -1,0 +1,150 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Backend, ConflictMatrix } from './backend';
+import { DialogProvider } from './dialogs';
+import ConflictResolver from './ConflictResolver';
+import RecordView from './RecordView';
+import MainShell from './MainShell';
+
+const pickPlugin = vi.hoisted(() => vi.fn());
+vi.mock('./dialogs', async importOriginal => {
+  const original = await importOriginal<typeof import('./dialogs')>();
+  return { ...original, useDialogs: () => ({ ...original.useDialogs(), pickPlugin }) };
+});
+
+const matrix: ConflictMatrix = {
+  FormKey: '000800:Master.esm', EditorID: 'TestWeapon', Type: 'WEAP',
+  Winner: 'Later.esp', Plugins: ['Master.esm', 'Later.esp'], Rows: [], Level: 'conflict',
+};
+const warning = 'LOSES: Patch.esp loads before Later.esp. The copied override will not win.';
+const copy = vi.fn<Backend['CopyAsOverride']>();
+const resolve = vi.fn<Backend['ResolveConflict']>();
+const batch = vi.fn<Backend['CopyAsOverrideMany']>();
+const reload = vi.fn(async () => {});
+const losingBatch = JSON.stringify({
+  total: 1, ok: 0, failed: 0, requiresLoadOrderConfirmation: true,
+  losing: [{ formKey: matrix.FormKey, loadsAfter: ['Later.esp'] }],
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  copy.mockReset().mockResolvedValue(warning);
+  resolve.mockReset().mockResolvedValue(warning);
+  batch.mockReset().mockResolvedValue(losingBatch);
+  localStorage.clear();
+  pickPlugin.mockResolvedValue({ target: 'Patch.esp', extra: '' });
+  vi.stubGlobal('chrome', { webview: { addEventListener: vi.fn(), removeEventListener: vi.fn(), hostObjects: { backend: {
+    CopyAsOverride: copy, ResolveConflict: resolve, CopyAsOverrideMany: batch,
+    GetConflicts: vi.fn(async () => JSON.stringify([{ ...matrix, Count: 2 }])),
+    GetConflictMatrix: vi.fn(async () => JSON.stringify(matrix)),
+    GetEditablePlugins: vi.fn(async () => '["Patch.esp"]'),
+    GetContainmentPath: vi.fn(async () => '[]'),
+    GetProblems: vi.fn(async () => '[]'),
+    GetReferencedBy: vi.fn(async () => '[]'),
+    GetDependencies: vi.fn(async () => '[]'),
+    GetHistory: vi.fn(async () => '[]'),
+  } } } });
+});
+
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+async function openRecordCopy() {
+  render(<DialogProvider><RecordView matrix={matrix} plugin="Later.esp" onReload={reload} /></DialogProvider>);
+  fireEvent.click(screen.getByRole('button', { name: /Actions/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Copy as override into/ }));
+  await screen.findByText('Override will not win');
+}
+
+async function openResolve() {
+  render(<DialogProvider><ConflictResolver /></DialogProvider>);
+  fireEvent.click(await screen.findByText('TestWeapon'));
+  const selects = await screen.findAllByRole('combobox');
+  fireEvent.change(selects[1], { target: { value: 'Patch.esp' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Resolve' }));
+  await screen.findByText('Override will not win');
+}
+
+async function openBatchCopy() {
+  localStorage.setItem('treeMode', 'conflicts');
+  render(<DialogProvider><MainShell /></DialogProvider>);
+  fireEvent.click(await screen.findByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: /Copy selected/ }));
+}
+
+describe('losing override confirmation', () => {
+  it('cancels a record copy without retrying or reloading', async () => {
+    await openRecordCopy();
+    expect(copy).toHaveBeenCalledWith('Later.esp', matrix.FormKey, 'Patch.esp', false);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await screen.findByText('Copy cancelled -- Patch.esp was left unchanged.');
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the losing opt-in through a subsequent overwrite confirmation', async () => {
+    copy.mockResolvedValueOnce(warning)
+      .mockResolvedValueOnce('EXISTS: Patch.esp already contains the record.')
+      .mockResolvedValueOnce('Replaced record.');
+    await openRecordCopy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy anyway' }));
+    await screen.findByText('Record already exists in target plugin');
+    expect(copy).toHaveBeenNthCalledWith(2, 'Later.esp', matrix.FormKey, 'Patch.esp', false, true);
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite' }));
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(copy).toHaveBeenNthCalledWith(3, 'Later.esp', matrix.FormKey, 'Patch.esp', true, true);
+  });
+
+  it('cancels overwrite after accepting the losing warning without writing', async () => {
+    copy.mockResolvedValueOnce(warning).mockResolvedValueOnce('EXISTS: Record already exists.');
+    await openRecordCopy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy anyway' }));
+    await screen.findByText('Record already exists in target plugin');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await screen.findByText('Copy cancelled -- the existing override was left alone.');
+    expect(copy).toHaveBeenCalledTimes(2);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('cancels conflict resolution without sending an opt-in', async () => {
+    await openResolve();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await screen.findByText('Resolve cancelled -- Patch.esp was left unchanged.');
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(resolve).toHaveBeenCalledWith(matrix.FormKey, 'Later.esp', 'Patch.esp');
+  });
+
+  it('retries conflict resolution with an explicit opt-in after confirmation', async () => {
+    resolve.mockResolvedValueOnce(warning).mockResolvedValueOnce('Copied record.');
+    await openResolve();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy anyway' }));
+    await screen.findByText('Copied record.');
+    expect(resolve).toHaveBeenCalledTimes(2);
+    expect(resolve).toHaveBeenNthCalledWith(2, matrix.FormKey, 'Later.esp', 'Patch.esp', true);
+  });
+
+  it('cancels a batch without retrying', async () => {
+    await openBatchCopy();
+    await screen.findByText('Overrides will not win');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await screen.findByText('Batch copy cancelled -- Patch.esp was left unchanged.');
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(batch.mock.calls[0].slice(1)).toEqual(['Patch.esp', false, false]);
+  });
+
+  it('keeps batch overwrite consent through the losing confirmation', async () => {
+    batch.mockResolvedValueOnce(JSON.stringify({
+      total: 1, requiresOverwrite: true, existing: [{ formKey: matrix.FormKey }],
+    })).mockResolvedValueOnce(losingBatch)
+      .mockResolvedValueOnce(JSON.stringify({ total: 1, ok: 1, failed: 0 }));
+    await openBatchCopy();
+    await screen.findByText('Overwrite existing overrides?');
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite and copy' }));
+    await screen.findByText('Overrides will not win');
+    expect(batch.mock.calls[1].slice(1)).toEqual(['Patch.esp', true, false]);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy anyway' }));
+    await screen.findByText(/Copied 1\/1 into Patch.esp/);
+    expect(batch).toHaveBeenCalledTimes(3);
+    expect(batch.mock.calls[2].slice(1)).toEqual(['Patch.esp', true, true]);
+    expect(JSON.parse(batch.mock.calls[2][0])).toEqual([{ formKey: matrix.FormKey, source: 'Later.esp' }]);
+  });
+});

@@ -428,6 +428,20 @@ Sidecar roots are canonicalized and accepted only beneath a trusted editable plu
 
 The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp:mutateStaleLocalizationSiblingAfterTableParse` mutates ILSTRINGS after its parse, deterministically proving that the parsed table and retained freshness bytes come from the same read.
 
+## PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:RadiclePluginBackend::laterOverridesLocked — #40 losing overrides
+
+`laterOverridesLocked` reads the existing graph's definition chain after the target's index in `plugins_`. `RadiclePluginBackend.cpp:rebuildGraphLocked` builds the graph in that same order. Copying into the target does not move it in load order. `RadiclePluginMutation.cpp:copyAsOverride` validates source presence before returning `LOSES:` and leaves pending state unchanged until consent. Its `optionalBoolArgument` and the corresponding helper in `RadiclePluginBatchMutation.cpp` default absent/null consent to false and reject other non-booleans.
+
+`PluginEditTool/native/src/plugin/RadiclePluginBatchMutation.cpp:copyAsOverrideMany` asks about overwrite before losing load order. `PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke` forwards ResolveConflict's optional fourth argument as CopyAsOverride's fifth argument. Omitted consent retains the existing call shape.
+
+`PluginEditTool/web/src/RecordView.tsx:copyInto` asks about losing load order before overwrite and carries consent through the retry. `MainShell.tsx:batchCopyAsOverride` retains overwrite consent while asking about losing order. `ConflictResolver.tsx:handleResolve` retries with consent only after confirmation. These fields are declared in `backend.ts:Backend`.
+
+`PluginEditTool/web/src/overrideConfirmation.test.tsx` renders the three real components with the real confirmation dialog and a simulated native bridge. It checks cancellation without retry, explicit consent, and preservation of consent across both prompt sequences. The plugin picker is stubbed to select a fixed target. This is component acceptance, not WebView2 or game-runtime proof.
+
+`PluginEditTool/native/tests/unit/RadiclePluginMutationTests.cpp` and `RadiclePluginBatchMutationTests.cpp` place the empty target before the source definition to exercise refusal without mutation and consent to a losing copy. The graph still reports the later source as winner.
+
+`PluginEditTool/native/src/assets/TextureResolver.cpp:addDataRoots` adds recursive BA2 scan roots only when the climb reaches a Data ancestor. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp` places an archive beside the NIF tree to detect accidental ancestor discovery. The loose-NIF assertion compares filesystem identity because Windows lookup can return different filename casing.
+
 # Native Windows launch
 
 ## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getPluginWorklist
