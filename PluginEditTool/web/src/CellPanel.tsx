@@ -4,18 +4,14 @@ import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeO
 import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
+import { parseCellGridCoordinate } from './util/cellGrid';
+import { statusBanner } from './util/cellStatus';
 import './PapyrusPanel.css';
 import './NifPanel.css';
 import './CellPanel.css';
 
 const LS = (k: string, d: string) => localStorage.getItem('cell.' + k) ?? d;
 const setLS = (k: string, v: string) => localStorage.setItem('cell.' + k, v);
-
-export function parseCellGridCoordinate(value: string): number | null {
-  if (!/^[+-]?\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
 
 export default function CellPanel({ onClose }: { onClose: () => void }) {
   const { pickPlugin: askForTarget } = useDialogs();
@@ -25,7 +21,6 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<CellReferencesResult | null>(null);
   const [geometry, setGeometry] = useState<CellGeoMap>({});
   const [log, setLog] = useState<string[]>([]);
-
 
 
 
@@ -752,11 +747,4 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
-}
-
-function statusBanner(status: string, busy: boolean): { kind: 'ok' | 'warn' | 'error' } | null {
-  if (!status || busy) return null;
-  if (/error|could not|not available/i.test(status)) return { kind: 'error' };
-  if (/unavailable/i.test(status)) return { kind: 'warn' };
-  return { kind: 'ok' };
 }

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { parseCellGridCoordinate } from './CellPanel';
+import { parseCellGridCoordinate } from './util/cellGrid';
 
 const accepted: Array<[string, number]> = [
   ['0', 0],
   ['-33', -33],
   ['+32', 32],
   ['2147483647', 2147483647],
+  ['-2147483648', -2147483648],
 ];
 
 const rejected = [
@@ -16,6 +17,9 @@ const rejected = [
   ' 5',
   '5 ',
   '9007199254740992',
+  '2147483648',
+  '-2147483649',
+  '4294967297',
 ];
 
 describe('parseCellGridCoordinate', () => {
