@@ -627,3 +627,55 @@ Fourth #114 slice, stacked on the placed-reference slice. It covers the LAND, LT
 - orphan `VTXT`, `VHGT` size and quadrant failures;
 - the LTEX/TXST chain, including missing links;
 - the C ABI.
+
+## Radicle/src/environment/strings.cpp:fo4::env::StringTables / string_source — GardenEngine #114 localization
+
+Fifth #114 slice, stacked on the terrain slice. It replaces Mutagen's `StringsFolderLookupOverlay` for loose string files. Reading strings out of BA2 archives waits for the BA2 slice.
+
+**Which table a field uses.** `string_source` sends these fields to `.DLSTRINGS`:
+- `DESC`, except in `LSCR`;
+- `QUST CNAM` and `BOOK CNAM`.
+
+Every `INFO` field except `RNAM` goes to `.ILSTRINGS`, and everything else to `.STRINGS`. Sources:
+- This is xEdit's `TwbLocalizationHandler.LocalizedValueDecider` in `Core/wbLocalization.pas` (pin `9fb016884bec138ea6c7b872cec831537d464c3e`).
+- Mutagen upstream (`Mutagen.Bethesda.Fallout4/Records/**/*.xml`, commit `5f8f1adeac2c4aaba59d06779340c7aec3da24c5`) declares the same thing per field:
+  - `translated="DL"` on every Fallout 4 `DESC` except `LoadScreen.xml` (`Normal`), and on `Quest.xml`/`Book.xml` `CNAM`;
+  - `translated="IL"` only on `DialogResponses.xml` `NAM1`.
+- The vendored copy in GardenEngine (`opencw/third_party/Mutagen/Mutagen.Bethesda.Fallout4/Records`) agrees: `translated="DL"` on every `DESC` except `LoadScreen.xml` (`Normal`) and on `Quest.xml`/`Book.xml` `CNAM`; `translated="IL"` only on `DialogResponses.xml` `NAM1`; `DialogResponses.xml` `RNAM` is `Normal`.
+- `Radicle/src/environment/strings.cpp:string_source_extension` gives the upper-case extension without the dot: `STRINGS`, `DLSTRINGS` or `ILSTRINGS`.
+
+**File discovery:**
+- For each plugin with the TES4 localized flag, the loader looks for `<strings_dir>/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>`.
+- The whole name is matched case-insensitively. This matches Mutagen's `StringsFolderLookupFactory`, which compares mod names with `OrdinalIgnoreCase` and lower-cases the language, and Windows file semantics.
+- The language is the ISO token Mutagen's `StringsUtility.GetIsoLanguageString` uses for Fallout 4 (`en`, `de`, `fr`, `it`, `es`, `esmx`, `pl`, `ru`, `ja`, `cn`, `zhhans`, `ptbr`). Any alphanumeric token is accepted, so callers pick the language, with English as the Mutagen default.
+- A missing directory or file means that table is absent. Mutagen likewise skips it, and a lookup then fails.
+- Two files whose names differ only by case, where that name is actually needed, fail. This can only happen on case-sensitive filesystems.
+
+**Error timing.** A malformed table fails the whole load with `EnvironmentError`. Mutagen parses lazily and throws on the first lookup, so Radicle reports the same bad file earlier.
+
+**Lookups:**
+- Text always comes from the table of the plugin that owns that record version. An override in `Patch.esp` resolves in `Patch_<lang>.*`, not in the master's table, like Mutagen's per-mod `StringsFolderLookupOverlay`.
+- `resolve_name` returns inline `FULL` text unchanged for plugins that are not localized. For a string ID, it reads the owning plugin's Normal table.
+
+**Encoding.** Text is returned as raw bytes, NUL-terminated for the C ABI, and the caller decodes it. Mutagen's `MutagenEncoding.GetSkyrimSeEncoding` covers Fallout 4:
+- English is Windows-1252.
+- Other Western languages try UTF-8 and fall back to 1252.
+- Czech, Hungarian and Polish try UTF-8, then 1250; Russian tries UTF-8, then 1251; Japanese tries UTF-8, then 932.
+- Chinese, Korean and Thai are UTF-8.
+
+The C# binding should apply the same table, so no language choice is built into the SDK.
+
+**C ABI.** `Radicle/src/c_api_strings.cpp` provides:
+- `radicle_string_source_for`: both signatures must be four characters.
+- `radicle_strings_load` / `radicle_strings_destroy`. The environment must outlive the handle. Missing files are skipped; a malformed table fails with `RADICLE_STATUS_PARSE_ERROR`. The handle is immutable, and borrowed text stays valid until `radicle_strings_destroy`.
+- `radicle_strings_table_path`: the loaded table's UTF-8 path (`radicle_strings::paths`, indexed [plugin][source] like `StringTables::tables_`), or `RADICLE_STATUS_NOT_FOUND` when that plugin and source have none.
+- `radicle_strings_lookup`: raw NUL-terminated bytes and their size from the plugin's own table; the encoding follows the language and is left to the caller.
+- `radicle_strings_resolve_name`: the record version's `FULL`, inline or looked up in the owning plugin's Normal table; `RADICLE_STATUS_NOT_FOUND` when it is absent, malformed or unresolved.
+
+**Tests.** `Radicle/tests/test_environment_strings.cpp` covers:
+- the field rules;
+- case-insensitive discovery and language selection;
+- owning-plugin resolution for an override;
+- inline names, a missing ID and a missing directory;
+- a malformed table and bad language tokens;
+- the C ABI.
