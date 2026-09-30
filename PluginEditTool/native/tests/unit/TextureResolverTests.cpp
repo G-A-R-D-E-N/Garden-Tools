@@ -364,16 +364,16 @@ TEST_CASE("Texture resolver scans an explicit texture root that has no Data ance
               .starts_with("data:image/png;base64,"));
 }
 
-TEST_CASE("Texture resolver does not scan an explicit texture root inside its cache") {
+TEST_CASE("Texture resolver scans an explicit texture root without a Data ancestor only at its top level") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    writeBa2TextureArchive(root / "cache" / "stray" / "textures.ba2", {
-        textureEntry("Textures\\Cached.dds", rgba8Dds())
+    writeBa2TextureArchive(root / "Unpacked" / "nested" / "textures.ba2", {
+        textureEntry("Textures\\Nested.dds", rgba8Dds())
     });
     writeFile(root / "loose" / "meshes" / "thing.nif", {'n', 'i', 'f'});
 
     fo4ide::assets::TextureResolver resolver(root / "cache");
     const auto nifPath = (root / "loose" / "meshes" / "thing.nif").string();
-    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\cached.dds", (root / "cache" / "stray").string())
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\nested.dds", (root / "Unpacked").string())
               .empty());
 }
