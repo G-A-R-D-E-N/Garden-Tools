@@ -587,33 +587,24 @@ std::optional<Error> parseCreateLevel(const nlohmann::json& object, std::uint32_
     if (found == object.end() || found->is_null()) return std::nullopt;
     if (found->is_string()) {
         const auto text = found->get<std::string>();
-        if (text == "Easy" || text == "0") {
-            out = 0;
-            return std::nullopt;
-        }
-        if (text == "Medium" || text == "1") {
-            out = 1;
-            return std::nullopt;
-        }
-        if (text == "Hard" || text == "2") {
-            out = 2;
-            return std::nullopt;
-        }
-        if (text == "VeryHard" || text == "3") {
-            out = 3;
-            return std::nullopt;
+        constexpr std::array<std::string_view, 5> names{"Easy", "Medium", "Hard", "VeryHard", "None"};
+        for (std::uint32_t level = 0; level < names.size(); ++level) {
+            if (text == names[level] || text == std::to_string(level)) {
+                out = level;
+                return std::nullopt;
+            }
         }
         return Error{
             "InvalidQuestAliasPayload",
-            "createReference.level must be Easy, Medium, Hard, or VeryHard"
+            "createReference.level must be Easy, Medium, Hard, VeryHard, or None"
         };
     }
     if (found->is_number_unsigned() || found->is_number_integer()) {
         const auto parsed = found->get<std::int64_t>();
-        if (parsed < 0 || parsed > 3) {
+        if (parsed < 0 || parsed > 4) {
             return Error{
                 "InvalidQuestAliasPayload",
-                "createReference.level must be 0..3 (Easy, Medium, Hard, VeryHard)"
+                "createReference.level must be 0..4 (Easy, Medium, Hard, VeryHard, None)"
             };
         }
         out = static_cast<std::uint32_t>(parsed);
@@ -621,7 +612,7 @@ std::optional<Error> parseCreateLevel(const nlohmann::json& object, std::uint32_
     }
     return Error{
         "InvalidQuestAliasPayload",
-        "createReference.level must be Easy, Medium, Hard, or VeryHard"
+        "createReference.level must be Easy, Medium, Hard, VeryHard, or None"
     };
 }
 
@@ -1794,7 +1785,7 @@ std::optional<Error> existingFillUnrepresentable(
                         "existing QUST alias createReference create mode cannot be reconstructed"
                     };
                 }
-                if (value.level > 3u) {
+                if (value.level > 4u) {
                     return Error{
                         "QuestAuthoringCoverageIncomplete",
                         "existing QUST alias createReference level cannot be reconstructed"
