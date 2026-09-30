@@ -337,6 +337,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_reader.cpp
     tests/test_ba2_real.cpp
     tests/test_environment_writeback.cpp
+    tests/test_writeback_real.cpp
     tests/test_original_storage.cpp
     tests/plugin_bytes.cpp
   )

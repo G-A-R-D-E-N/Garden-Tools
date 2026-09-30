@@ -263,6 +263,61 @@ TEST(PlacedReferenceRemap, RewritesArrayAndStructFormIdsWhenMastersMove) {
                fo4::FormIdError);
 }
 
+TEST(PlacedReferenceRemap, AcceptsReferenceOnlySplineAndReflectionLinks) {
+  auto source = fo4::read_plugin(make_dlc(), "DLC.esm");
+  fo4::visit_records(source, [](fo4::Record& r) {
+    for (auto& sub : r.subrecords) {
+      if (sub.signature == fo4::Signature::from_string("XPLK") || sub.signature == fo4::Signature::from_string("XPWR")) {
+        sub.data.resize(4);
+      }
+    }
+  });
+  const auto moved = fo4::remap_plugin_masters(source, std::vector<fo4::PluginKey>{
+                                                           fo4::PluginKey::from_filename("Other.esm"),
+                                                           fo4::PluginKey::from_filename("Master.esm")});
+  const auto* record = fo4::find_record(moved, key("DLC.esm", 0x841));
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(raw_u32(*record, "XPLK", 0), 0x02000842u);
+  EXPECT_EQ(raw_u32(*record, "XPWR", 0), 0x02000842u);
+}
+
+TEST(PlacedReferenceRemap, LinksPastTheMasterTableStayWithTheOwningPlugin) {
+  auto source = fo4::read_plugin(make_dlc(), "DLC.esm");
+  fo4::visit_records(source, [](fo4::Record& r) {
+    for (auto& sub : r.subrecords) {
+      if (sub.signature == fo4::Signature::from_string("NAME")) {
+        const std::uint32_t past_table = 0x05000810u;
+        std::memcpy(sub.data.data(), &past_table, 4);
+      }
+    }
+  });
+  const auto moved = fo4::remap_plugin_masters(source, std::vector<fo4::PluginKey>{
+                                                           fo4::PluginKey::from_filename("Other.esm"),
+                                                           fo4::PluginKey::from_filename("Master.esm")});
+  const auto* record = fo4::find_record(moved, key("DLC.esm", 0x841));
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(raw_u32(*record, "NAME", 0), 0x02000810u);
+}
+
+TEST(PlacedReferenceRemap, RewritesTheOwnershipOwner) {
+  auto source = fo4::read_plugin(make_dlc(), "DLC.esm");
+  fo4::visit_records(source, [](fo4::Record& r) {
+    if (r.header.signature != fo4::Signature::from_string("REFR")) return;
+    fo4::Subrecord xown;
+    xown.signature = fo4::Signature::from_string("XOWN");
+    xown.data.resize(12);
+    const std::uint32_t owner = 0x01000842u;
+    std::memcpy(xown.data.data(), &owner, 4);
+    r.subrecords.insert(r.subrecords.end() - 1, std::move(xown));
+  });
+  const auto moved = fo4::remap_plugin_masters(source, std::vector<fo4::PluginKey>{
+                                                           fo4::PluginKey::from_filename("Other.esm"),
+                                                           fo4::PluginKey::from_filename("Master.esm")});
+  const auto* record = fo4::find_record(moved, key("DLC.esm", 0x841));
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(raw_u32(*record, "XOWN", 0), 0x02000842u);
+}
+
 TEST_F(WritebackTest, OverridesEditsSavesAndReloadsWithParity) {
   const auto env = fo4::env::Environment::load(paths_);
   auto patch = fo4::make_empty_plugin("Patch.esp");

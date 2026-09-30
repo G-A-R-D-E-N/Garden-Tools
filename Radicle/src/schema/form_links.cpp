@@ -310,7 +310,7 @@ bool visit_coed_formids(const Subrecord& sub,
     } else {
       FormKey owner_key;
       try {
-        owner_key = resolve_plugin_form_id(owner_raw, *context);
+        owner_key = resolve_plugin_link(owner_raw, *context);
       } catch (const FormIdError&) {
         if (strict_remap) {
           throw FormIdError("cannot safely remap COED union: owner FormID does not resolve");
@@ -631,7 +631,7 @@ void remap_raw(std::span<std::byte> data, std::size_t offset,
   if (raw.is_null()) {
     return;
   }
-  const auto key = resolve_plugin_form_id(raw, old_context);
+  const auto key = resolve_plugin_link(raw, old_context);
   const auto encoded = encode_plugin_form_id(key, new_context);
   if (encoded != raw) {
     write_u32(data, offset, encoded.value());
@@ -678,7 +678,7 @@ void rekey_form_links(Plugin& plugin,
         if (offset + 4 > bytes.size()) return;
         const auto raw = RawFormId{read_u32(bytes, offset)};
         if (raw.is_null()) return;
-        if (resolve_plugin_form_id(raw, context) != old_key) return;
+        if (resolve_plugin_link(raw, context) != old_key) return;
         const auto replacement = encode_plugin_form_id(new_key, context);
         if (replacement == raw) return;
         write_u32(bytes, offset, replacement.value());
@@ -730,7 +730,7 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
         hit.raw = RawFormId{read_u32(sub.data, offset)};
         if (!hit.raw.is_null()) {
           try {
-            hit.key = resolve_plugin_form_id(hit.raw, context);
+            hit.key = resolve_plugin_link(hit.raw, context);
           } catch (const FormIdError&) {
           }
         }

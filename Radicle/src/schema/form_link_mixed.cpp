@@ -329,20 +329,22 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
     std::size_t stride;
     std::initializer_list<std::size_t> slots;
     bool exact;
+    std::size_t short_size;
   };
   static const Layout k_layouts[] = {
-      {"XPOD", 8, {0, 4}, false},     // Portal Data: array of {Origin, Destination}
-      {"XORD", 4, {0}, false},        // Linked Occlusion References
-      {"XLRT", 4, {0}, false},        // Location Ref Type
-      {"XPWR", 8, {0}, true},         // Reflected/Refracted By: {Reference, Type}
-      {"XAPR", 8, {0}, true},         // Activate Parent Ref: {Reference, Delay}
-      {"XPLK", 8, {0}, true},         // Spline Connection: {Ref, Unknown}
-      {"XWPN", 12, {0, 4, 8}, true},  // Power Grid Connection: {Node 1, Node 2, Line}
+      {"XPOD", 8, {0, 4}, false, 0},  // Portal Data: array of {Origin, Destination}
+      {"XORD", 4, {0}, false, 0},     // Linked Occlusion References
+      {"XLRT", 4, {0}, false, 0},     // Location Ref Type
+      {"XPWR", 8, {0}, true, 4},      // Reflected/Refracted By: {Reference, Type}
+      {"XAPR", 8, {0}, true, 0},      // Activate Parent Ref: {Reference, Delay}
+      {"XPLK", 8, {0}, true, 4},      // Spline Connection: {Ref, Unknown}
+      {"XWPN", 12, {0, 4, 8}, true, 0},  // Power Grid Connection: {Node 1, Node 2, Line}
   };
   for (const auto& layout : k_layouts) {
     if (sub.signature != Signature::from_string(layout.signature)) continue;
-    const bool valid = layout.exact ? sub.data.size() == layout.stride
-                                    : sub.data.size() % layout.stride == 0;
+    const auto size = sub.data.size();
+    const bool valid = layout.exact ? size == layout.stride || (layout.short_size != 0 && size == layout.short_size)
+                                    : size % layout.stride == 0;
     if (!valid) {
       if (strict_remap) {
         throw FormIdError("cannot safely remap malformed placed-reference " + sub.signature.to_string() +
@@ -352,7 +354,9 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
     }
     std::vector<std::size_t> offsets;
     for (std::size_t base = 0; base < sub.data.size(); base += layout.stride) {
-      for (const auto slot : layout.slots) offsets.push_back(base + slot);
+      for (const auto slot : layout.slots) {
+        if (base + slot + 4 <= size) offsets.push_back(base + slot);
+      }
     }
     return offsets;
   }
