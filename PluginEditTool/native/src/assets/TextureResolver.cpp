@@ -291,7 +291,7 @@ std::vector<std::filesystem::path> TextureResolver::globalRoots() const {
     return globalRootsCache_;
 }
 
-void TextureResolver::ensureRootScanned(const std::filesystem::path& root) {
+void TextureResolver::ensureRootScanned(const std::filesystem::path& root, bool recursive) {
     const auto trimmedRoot = trimmed(root.string());
     if (trimmedRoot.empty()) return;
     if (!scannedRoots_.insert(std::filesystem::path(trimmedRoot)).second) return;
@@ -299,14 +299,20 @@ void TextureResolver::ensureRootScanned(const std::filesystem::path& root) {
 
     std::error_code ec;
     std::vector<std::filesystem::path> archives;
-    try {
-        std::filesystem::recursive_directory_iterator it(trimmedRoot, ec);
-        const std::filesystem::recursive_directory_iterator end;
+    const auto collect = [&](auto it) {
+        const decltype(it) end;
         while (it != end && !ec) {
             if (it->is_regular_file(ec) && lower(it->path().extension().string()) == ".ba2") {
                 archives.push_back(it->path());
             }
             it.increment(ec);
+        }
+    };
+    try {
+        if (recursive) {
+            collect(std::filesystem::recursive_directory_iterator(trimmedRoot, ec));
+        } else {
+            collect(std::filesystem::directory_iterator(trimmedRoot, ec));
         }
     } catch (const std::exception&) {
         return;
@@ -338,9 +344,11 @@ void TextureResolver::ensureRootScanned(const std::filesystem::path& root) {
 
 std::optional<std::filesystem::path> TextureResolver::scanAndLookup(
     const std::vector<std::filesystem::path>& roots,
-    const std::vector<std::string>& keys) {
+    const std::vector<std::string>& keys,
+    const std::optional<std::filesystem::path>& shallowRoot) {
     std::lock_guard<std::mutex> guard(indexMutex_);
     for (const auto& root : roots) ensureRootScanned(root);
+    if (shallowRoot) ensureRootScanned(*shallowRoot, false);
     for (const auto& key : keys) {
         const auto it = index_.find(key);
         if (it != index_.end()) return extractFromArchive(it->second, key);
@@ -582,16 +590,13 @@ std::optional<std::filesystem::path> TextureResolver::resolveFromArchives(
         auto roots = addDataRoots(nifDir);
         cheap.insert(cheap.end(), roots.begin(), roots.end());
     }
+    std::optional<std::filesystem::path> shallowRoot;
     if (!textureRoot.empty()) {
         auto roots = addDataRoots(textureRoot);
-        const std::filesystem::path explicitRoot(textureRoot);
-        if (roots.empty() && explicitRoot.has_relative_path() &&
-            !startsWithInsensitive(explicitRoot.generic_string(), cacheDir_.generic_string())) {
-            roots.push_back(explicitRoot);
-        }
+        if (roots.empty()) shallowRoot = std::filesystem::path(textureRoot);
         cheap.insert(cheap.end(), roots.begin(), roots.end());
     }
-    return scanAndLookup(cheap, keys);
+    return scanAndLookup(cheap, keys, shallowRoot);
 }
 
 std::optional<std::filesystem::path> TextureResolver::getTexturePngPath(

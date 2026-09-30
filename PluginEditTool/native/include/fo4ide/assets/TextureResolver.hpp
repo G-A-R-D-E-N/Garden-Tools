@@ -57,8 +57,9 @@ private:
         std::string_view topFolder);
     std::optional<std::filesystem::path> scanAndLookup(
         const std::vector<std::filesystem::path>& roots,
-        const std::vector<std::string>& keys);
-    void ensureRootScanned(const std::filesystem::path& root);
+        const std::vector<std::string>& keys,
+        const std::optional<std::filesystem::path>& shallowRoot = std::nullopt);
+    void ensureRootScanned(const std::filesystem::path& root, bool recursive = true);
     std::optional<std::filesystem::path> extractFromArchive(
         const std::filesystem::path& archivePath,
         std::string_view innerKey);
