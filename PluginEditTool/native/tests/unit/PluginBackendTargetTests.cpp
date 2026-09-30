@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4ide/app/PluginBackendTarget.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 namespace {
@@ -469,4 +470,17 @@ TEST_CASE("Cell GetPlugins reuses the native environment plugin list") {
     REQUIRE(plugins.size() == 1);
     CHECK(plugins[0].at("Key") == "Patch.esp");
     CHECK(backend.invokedOperation == "appInterop.GetPlugins");
+}
+
+TEST_CASE("JSON int helpers refuse or saturate values outside int") {
+    using fo4ide::core::jsonInt;
+    using fo4ide::core::jsonIntSaturated;
+    CHECK(jsonInt(nlohmann::json(-2147483648LL)) == -2147483647 - 1);
+    CHECK_FALSE(jsonInt(nlohmann::json(4294967263ULL)).has_value());
+    CHECK_FALSE(jsonInt(nlohmann::json(-2147483649LL)).has_value());
+    CHECK_FALSE(jsonInt(nlohmann::json(1.0)).has_value());
+    CHECK_FALSE(jsonInt(nlohmann::json(true)).has_value());
+    CHECK(jsonIntSaturated(nlohmann::json(18446744073709551615ULL)) == 2147483647);
+    CHECK(jsonIntSaturated(nlohmann::json(-9223372036854775807LL - 1)) == -2147483647 - 1);
+    CHECK(jsonIntSaturated(nlohmann::json(42)) == 42);
 }

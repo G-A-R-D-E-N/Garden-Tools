@@ -23,7 +23,7 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 
 int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
     if (!args.is_array() || index >= args.size()) return fallback;
-    return core::jsonInt(args[index]).value_or(fallback);
+    return core::jsonIntSaturated(args[index]).value_or(fallback);
 }
 
 bool boolArgument(const nlohmann::json& args, std::size_t index, bool fallback = false) {

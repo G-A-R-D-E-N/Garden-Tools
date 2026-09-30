@@ -40,7 +40,7 @@ bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
 
 int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
     if (!args.is_array() || index >= args.size()) return fallback;
-    return core::jsonInt(args[index]).value_or(fallback);
+    return core::jsonIntSaturated(args[index]).value_or(fallback);
 }
 
 std::string asciiLower(std::string_view value) {

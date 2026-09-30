@@ -1,4 +1,5 @@
 #include <fo4ide/graph/GraphDocument.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
 #include <fstream>
@@ -348,8 +349,8 @@ LoadResult tryDeserialize(std::string_view json) {
     }
 
     GraphDocument document;
-    if (const auto it = root.find("schema"); it != root.end() && it->is_number()) {
-        document.schema = it->get<int>();
+    if (const auto it = root.find("schema"); it != root.end()) {
+        if (const auto schema = core::jsonInt(*it)) document.schema = *schema;
     }
     if (const auto it = root.find("id"); it != root.end() && it->is_string()) {
         document.id = it->get<std::string>();

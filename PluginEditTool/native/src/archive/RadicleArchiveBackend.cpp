@@ -1,4 +1,5 @@
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -55,8 +56,8 @@ std::string stringField(const nlohmann::json& arguments, std::string_view name) 
 int intField(const nlohmann::json& arguments, std::string_view name, int fallback) {
     if (!arguments.is_object()) return fallback;
     const auto it = arguments.find(std::string(name));
-    if (it == arguments.end() || !it->is_number_integer()) return fallback;
-    return it->get<int>();
+    if (it == arguments.end()) return fallback;
+    return core::jsonIntSaturated(*it).value_or(fallback);
 }
 
 bool boolField(const nlohmann::json& arguments, std::string_view name, bool fallback) {

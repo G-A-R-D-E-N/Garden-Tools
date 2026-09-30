@@ -15,7 +15,7 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 
 int intArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size()) return 0;
-    return core::jsonInt(args[index]).value_or(0);
+    return core::jsonIntSaturated(args[index]).value_or(0);
 }
 
 bool boolArgument(const nlohmann::json& args, std::size_t index) {

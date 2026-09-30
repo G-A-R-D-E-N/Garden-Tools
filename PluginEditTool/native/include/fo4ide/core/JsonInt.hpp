@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -20,6 +21,16 @@ inline std::optional<int> jsonInt(const nlohmann::json& value) {
         return std::nullopt;
     }
     return static_cast<int>(number);
+}
+
+inline std::optional<int> jsonIntSaturated(const nlohmann::json& value) {
+    if (!value.is_number_integer()) return std::nullopt;
+    if (value.is_number_unsigned()) {
+        const auto number = value.get<std::uint64_t>();
+        return static_cast<int>(std::min<std::uint64_t>(number, std::numeric_limits<int>::max()));
+    }
+    return static_cast<int>(std::clamp<std::int64_t>(
+        value.get<std::int64_t>(), std::numeric_limits<int>::min(), std::numeric_limits<int>::max()));
 }
 
 }
