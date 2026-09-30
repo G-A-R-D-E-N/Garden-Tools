@@ -7,6 +7,7 @@
 
 #include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -49,6 +50,42 @@ std::string describe(const Snapshot& before, const Snapshot& after) {
 }
 
 }  // namespace
+
+TEST(QuestAuthoringRealData, PartialFormMasterFragmentsSurviveSerialization) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder";
+
+  const std::pair<const char*, const char*> cases[] = {
+      {"DLCCoast.esm", "0AE51C:Fallout4.esm"},
+      {"DLCNukaWorld.esm", "05DEE4:Fallout4.esm"},
+  };
+  for (const auto& [name, form_key] : cases) {
+    SCOPED_TRACE(name);
+    const auto path = std::filesystem::path{dir} / name;
+    ASSERT_TRUE(std::filesystem::exists(path));
+    auto plugin = fo4::read_plugin_file(path);
+    const auto key = fo4::FormKey::parse(form_key);
+    const auto* record = fo4::find_record(plugin, key);
+    ASSERT_NE(record, nullptr);
+    ASSERT_TRUE(record->header.flags.test(0x4000));
+    const auto before = snapshot(*record);
+    ASSERT_EQ(before.members.size(), 2u);
+    ASSERT_EQ(before.members[1].first, "VMAD");
+    const auto flags = record->header.flags;
+    const auto stages = fo4::forms::decode_quest_stages(plugin, key);
+    ASSERT_TRUE(stages.stages.empty());
+    fo4::forms::write_quest_stages(plugin, key, stages);
+    fo4::forms::write_quest_objectives(
+        plugin, key, fo4::forms::decode_quest_objectives(plugin, key));
+
+    const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), name);
+    const auto* after = fo4::find_record(reloaded, key);
+    ASSERT_NE(after, nullptr);
+    EXPECT_EQ(after->header.flags, flags);
+    EXPECT_EQ(snapshot(*after).members, before.members);
+    EXPECT_TRUE(fo4::forms::decode_quest_stages(reloaded, key).stages.empty());
+  }
+}
 
 TEST(QuestAuthoringRealData, RewritingUnchangedStagesAndObjectivesIsByteExact) {
   const char* dir = std::getenv("FO4_DATA_DIR");
