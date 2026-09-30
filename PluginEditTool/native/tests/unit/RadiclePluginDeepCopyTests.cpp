@@ -270,6 +270,12 @@ TEST_CASE("Native DeepCopyAsOverride requires consent before writing overrides t
     REQUIRE(unchanged.has_value());
     CHECK(unchanged->get<std::string>().find("already exist") == std::string::npos);
 
+    const auto invalid = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200, 1
+    }));
+    REQUIRE_FALSE(invalid.has_value());
+    CHECK(invalid.error().type == "InvalidAllowLosingFlag");
+
     const auto applied = backend.deepCopyAsOverride(nlohmann::json::array({
         "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200, true
     }));

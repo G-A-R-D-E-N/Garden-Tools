@@ -35,6 +35,14 @@ bool deepBoolArgument(const nlohmann::json& args,
     return args[index].get<bool>();
 }
 
+bool deepOptionalBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
+    value = false;
+    if (!args.is_array() || index >= args.size() || args[index].is_null()) return true;
+    if (!args[index].is_boolean()) return false;
+    value = args[index].get<bool>();
+    return true;
+}
+
 std::size_t deepLimitArgument(const nlohmann::json& args,
                               std::size_t index,
                               std::size_t fallback) {
@@ -107,7 +115,10 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
     const bool apply = deepBoolArgument(arguments, 3, false);
     const bool overwrite = deepBoolArgument(arguments, 4, false);
     const auto cap = deepLimitArgument(arguments, 5, 200);
-    const bool allowLosing = deepBoolArgument(arguments, 6, false);
+    bool allowLosing = false;
+    if (!deepOptionalBoolArgument(arguments, 6, allowLosing)) {
+        return std::unexpected(Error{"InvalidAllowLosingFlag", "Allow-losing flag must be boolean"});
+    }
 
     if (recordId.empty() || targetName.empty()) {
         return std::unexpected(Error{
