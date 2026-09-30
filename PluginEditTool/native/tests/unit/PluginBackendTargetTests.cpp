@@ -8,6 +8,8 @@
 
 #include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/core/JsonInt.hpp>
+
+#include "../../src/app/ServiceTargetSupport.hpp"
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 namespace {
@@ -483,4 +485,16 @@ TEST_CASE("JSON int helpers refuse or saturate values outside int") {
     CHECK(jsonIntSaturated(nlohmann::json(18446744073709551615ULL)) == 2147483647);
     CHECK(jsonIntSaturated(nlohmann::json(-9223372036854775807LL - 1)) == -2147483647 - 1);
     CHECK(jsonIntSaturated(nlohmann::json(42)) == 42);
+}
+
+TEST_CASE("Service number arguments truncate in-range floats and refuse the rest") {
+    using fo4ide::app::support::intNumberArgument;
+    const auto args = nlohmann::json::array({12.9, 1e20, -1e20, 7, 4294967297ULL, "3"});
+    CHECK(intNumberArgument(args, 0, -1) == 12);
+    CHECK(intNumberArgument(args, 1, -1) == -1);
+    CHECK(intNumberArgument(args, 2, -1) == -1);
+    CHECK(intNumberArgument(args, 3, -1) == 7);
+    CHECK(intNumberArgument(args, 4, -1) == -1);
+    CHECK(intNumberArgument(args, 5, -1) == -1);
+    CHECK(intNumberArgument(args, 6, -1) == -1);
 }

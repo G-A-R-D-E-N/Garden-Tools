@@ -189,5 +189,15 @@ TEST_CASE("PluginEditTool rejects invalid exterior CELL payloads before writing"
         }));
     REQUIRE_FALSE(outOfBounds.has_value());
     CHECK(outOfBounds.error().type == "CellCreateFailed");
+
+    const auto wrapped = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "CELL",
+            nlohmann::json{{"worldspace", "000800:Patch.esp"}, {"x", 18446744073709551583ULL}, {"y", 32}}
+        }));
+    REQUIRE_FALSE(wrapped.has_value());
+    CHECK(wrapped.error().type == "InvalidRecordCreationPayload");
     CHECK(readBytes(path) == before);
 }
