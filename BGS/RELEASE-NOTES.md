@@ -32,9 +32,10 @@ fail closed instead of writing guessed data.
 - Structure authoring supports expression transition conditions, enter/exit notify events, global events, and non-empty state-machine creation and attachment, with verified save/reopen coverage.
 - Native graph authoring, templates, variables, transitions, symbols, and supported arrays are
   covered by validation and save/reopen checks.
-- Skeleton editing and validation, skin-weight editing, and NIF skin-weight persistence are included.
-- Simple skeleton-mapper row authoring is included for explicit caller-provided pairs, with measured
-  validation and conservative refusal of malformed or unsafe inputs.
+- Skeleton and skin authoring APIs are library tools; the editor does not expose skeleton/skin
+  editing or a NIF skin-weight save workflow.
+- Simple skeleton-mapper rows can be constructed for explicit caller-provided pairs, with measured
+  validation and conservative refusal of malformed inputs; mapper serialization remains incomplete.
 
 ## Fallout 4 analysis tools
 
@@ -46,9 +47,8 @@ fail closed instead of writing guessed data.
 ## Animation / skeleton / skin
 
 - Animation playback, frame editing, trimming, retiming, spline diagnostics, and skeleton rendering.
-- Skeleton hierarchy editing and validation, retarget/skeleton-mapper reading, and measured simple
-  mapper-row construction.
-- Skin influence inspection/editing and verified NIF weight persistence.
+- Skeleton rendering, retarget/skeleton-mapper reading, and measured simple mapper-row construction.
+- Skeleton hierarchy and skin-weight authoring APIs are library tools without an editor save workflow.
 - Embedded NIF Havok payload reading and bounded Havok tagfile groundwork.
 
 ## Physics / ragdoll
