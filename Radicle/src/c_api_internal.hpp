@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace radicle_c_detail {
 
@@ -15,5 +16,6 @@ void clear_error();
 radicle_status fail(radicle_status status, const char* message);
 radicle_status fail_exception(radicle_status status, const std::exception& error);
 std::filesystem::path utf8_path(std::string_view value);
+radicle_status copy_strings(const std::vector<std::string>& values, char*** out_strings, size_t* out_count);
 
 }  // namespace radicle_c_detail

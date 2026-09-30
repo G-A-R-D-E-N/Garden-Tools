@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fo4/archive/assets.hpp"
 #include "fo4/environment/environment.hpp"
 
 #include <array>
@@ -28,7 +29,8 @@ class StringTables {
 public:
   static StringTables load(const Environment& env,
                            const std::filesystem::path& strings_dir,
-                           std::string_view language);
+                           std::string_view language,
+                           const archive::AssetResolver* archives = nullptr);
 
   const std::string& language() const noexcept { return language_; }
   const std::filesystem::path* table_path(std::size_t plugin, StringSource source) const noexcept;

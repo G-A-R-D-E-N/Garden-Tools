@@ -86,7 +86,8 @@ std::string_view string_source_extension(StringSource source) noexcept {
 
 StringTables StringTables::load(const Environment& env,
                                 const std::filesystem::path& strings_dir,
-                                std::string_view language) {
+                                std::string_view language,
+                                const archive::AssetResolver* archives) {
   validate_language(language);
   StringTables result;
   result.language_ = std::string(language);
@@ -97,20 +98,34 @@ StringTables StringTables::load(const Environment& env,
     if (!info.localized) continue;
     const auto prefix = plugin_stem(info.key.filename()) + "_" + result.language_ + ".";
     for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
-      const auto it = files.find(lower(prefix + std::string(string_source_extension(source))));
-      if (it == files.end()) continue;
-      if (it->second.size() > 1) {
-        throw EnvironmentError("string table name matches several files differing only by case: " +
-                               utf8(it->second.front()));
-      }
+      const auto name = prefix + std::string(string_source_extension(source));
+      const auto it = files.find(lower(name));
       Table table;
-      table.path = it->second.front();
+      std::vector<std::byte> archived;
+      if (it != files.end()) {
+        if (it->second.size() > 1) {
+          throw EnvironmentError("string table name matches several files differing only by case: " +
+                                 utf8(it->second.front()));
+        }
+        table.path = it->second.front();
+      } else if (archives != nullptr) {
+        const auto location = archives->locate_in_archives("strings/" + name);
+        if (!location) continue;
+        const auto& reader = archives->archives()[location->archive];
+        auto entry_path = reader.entries()[location->entry].path;
+        std::replace(entry_path.begin(), entry_path.end(), '\\', '/');
+        table.path = reader.path() / entry_path;
+        archived = archives->read(*location);
+      } else {
+        continue;
+      }
       try {
-        auto parsed = localization::read_string_table_file(table.path, table_kind(source));
+        auto parsed = it != files.end() ? localization::read_string_table_file(table.path, table_kind(source))
+                                        : localization::read_string_table(archived, table_kind(source));
         table.strings.reserve(parsed.entries.size());
         for (auto& entry : parsed.entries) {
-          const auto* bytes = reinterpret_cast<const char*>(entry.text.data());
-          table.strings.emplace(entry.id, std::string(bytes, entry.text.size()));
+          const auto* text = reinterpret_cast<const char*>(entry.text.data());
+          table.strings.emplace(entry.id, std::string(text, entry.text.size()));
         }
       } catch (const localization::StringTableError& error) {
         throw EnvironmentError("malformed string table " + utf8(table.path) + ": " + error.what());

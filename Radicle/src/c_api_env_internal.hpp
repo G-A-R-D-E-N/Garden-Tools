@@ -2,6 +2,7 @@
 
 #include "c_api_internal.hpp"
 #include "fo4/c_api_env.h"
+#include "fo4/archive/assets.hpp"
 #include "fo4/environment/environment.hpp"
 
 #include <cstdlib>
@@ -69,6 +70,10 @@ radicle_status guarded(const char* what, Fn&& fn) {
     return fail_exception(RADICLE_STATUS_PARSE_ERROR, error);
   } catch (const fo4::FormIdError& error) {
     return fail_exception(RADICLE_STATUS_PARSE_ERROR, error);
+  } catch (const fo4::archive::Ba2Error& error) {
+    return fail_exception(RADICLE_STATUS_PARSE_ERROR, error);
+  } catch (const fo4::archive::AssetPathError& error) {
+    return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
   } catch (const std::exception& error) {
     return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
   } catch (...) {
@@ -82,5 +87,11 @@ inline radicle_form_key to_c_key(const radicle_env& env, const std::optional<fo4
   if (owner == nullptr) throw fo4::env::EnvironmentError("FormKey owner is not in the environment");
   return {owner->filename().data(), key->local().value()};
 }
+
+radicle_status load_strings(const radicle_env* env,
+                            const char* strings_dir,
+                            const char* language,
+                            const fo4::archive::AssetResolver* assets,
+                            radicle_strings** out_strings);
 
 }  // namespace radicle_c_env_detail

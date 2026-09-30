@@ -435,6 +435,90 @@ RADICLE_API radicle_status radicle_strings_resolve_name(const radicle_strings* s
                                                         const char** out_text,
                                                         size_t* out_size);
 
+/* Index-only BA2 reader; entries are read on demand and const calls are thread-safe. */
+typedef struct radicle_ba2 radicle_ba2;
+typedef struct radicle_assets radicle_assets;
+
+typedef enum radicle_ba2_kind {
+  RADICLE_BA2_GENERAL = 0,
+  RADICLE_BA2_TEXTURE = 1
+} radicle_ba2_kind;
+
+typedef struct radicle_ba2_info {
+  radicle_ba2_kind kind;
+  uint32_t version;
+  int32_t has_name_table;
+  size_t entry_count;
+} radicle_ba2_info;
+
+typedef struct radicle_ba2_entry_info {
+  const char* path;
+  uint32_t name_hash;
+  uint32_t extension_hash;
+  uint32_t directory_hash;
+  uint64_t unpacked_size;
+  size_t chunk_count;
+  uint16_t width;
+  uint16_t height;
+  uint8_t mip_count;
+  uint8_t dxgi_format;
+  uint8_t texture_flags;
+  uint8_t tile_mode;
+} radicle_ba2_entry_info;
+
+typedef enum radicle_asset_origin {
+  RADICLE_ASSET_LOOSE = 0,
+  RADICLE_ASSET_ARCHIVE = 1
+} radicle_asset_origin;
+
+typedef struct radicle_asset_location {
+  radicle_asset_origin origin;
+  size_t archive_index;
+  size_t entry_index;
+} radicle_asset_location;
+
+RADICLE_API radicle_status radicle_ba2_open(const char* path, radicle_ba2** out_ba2);
+RADICLE_API void radicle_ba2_close(radicle_ba2* ba2);
+RADICLE_API radicle_status radicle_ba2_get_info(const radicle_ba2* ba2, radicle_ba2_info* out_info);
+RADICLE_API radicle_status radicle_ba2_get_entry(const radicle_ba2* ba2,
+                                                 size_t index,
+                                                 radicle_ba2_entry_info* out_entry);
+RADICLE_API radicle_status radicle_ba2_find(const radicle_ba2* ba2, const char* path, size_t* out_index);
+RADICLE_API radicle_status radicle_ba2_extract(const radicle_ba2* ba2,
+                                               size_t index,
+                                               uint8_t** out_bytes,
+                                               size_t* out_size);
+
+RADICLE_API radicle_status radicle_archive_load_order(const char* data_dir,
+                                                      const char* const* ini_archives,
+                                                      size_t ini_count,
+                                                      const char* const* plugins,
+                                                      size_t plugin_count,
+                                                      char*** out_paths,
+                                                      size_t* out_count);
+RADICLE_API radicle_status radicle_assets_open(const char* data_dir,
+                                               const char* const* archive_paths,
+                                               size_t archive_count,
+                                               radicle_assets** out_assets);
+RADICLE_API void radicle_assets_destroy(radicle_assets* assets);
+RADICLE_API size_t radicle_assets_archive_count(const radicle_assets* assets);
+RADICLE_API radicle_status radicle_assets_get_archive(const radicle_assets* assets,
+                                                      size_t index,
+                                                      const radicle_ba2** out_ba2);
+RADICLE_API radicle_status radicle_assets_locate(const radicle_assets* assets,
+                                                 const char* path,
+                                                 radicle_asset_location* out_location);
+RADICLE_API radicle_status radicle_assets_read(const radicle_assets* assets,
+                                               const char* path,
+                                               uint8_t** out_bytes,
+                                               size_t* out_size,
+                                               radicle_asset_location* out_location);
+RADICLE_API radicle_status radicle_strings_load_with_assets(const radicle_env* env,
+                                                            const char* strings_dir,
+                                                            const char* language,
+                                                            const radicle_assets* assets,
+                                                            radicle_strings** out_strings);
+
 #ifdef __cplusplus
 }
 #endif
