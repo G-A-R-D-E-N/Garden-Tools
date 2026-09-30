@@ -36,16 +36,16 @@ inline std::string lifecycleStringArgument(const nlohmann::json& args, std::size
 }
 
 inline const nlohmann::json* lifecycleObjectArgument(const nlohmann::json& args,
-                                              std::size_t index) {
+                                                     std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_object()) return nullptr;
     return &args[index];
 }
 
 template <class UInt>
 inline bool lifecycleUnsignedField(const nlohmann::json& object,
-                            const char* key,
-                            UInt defaultValue,
-                            UInt& value) {
+                                   const char* key,
+                                   UInt defaultValue,
+                                   UInt& value) {
     const auto found = object.find(key);
     if (found == object.end()) {
         value = defaultValue;
@@ -68,9 +68,9 @@ inline bool lifecycleUnsignedField(const nlohmann::json& object,
 
 template <class SInt>
 inline bool lifecycleSignedField(const nlohmann::json& object,
-                          const char* key,
-                          SInt defaultValue,
-                          SInt& value) {
+                                 const char* key,
+                                 SInt defaultValue,
+                                 SInt& value) {
     const auto found = object.find(key);
     if (found == object.end()) {
         value = defaultValue;
@@ -91,9 +91,9 @@ inline bool lifecycleSignedField(const nlohmann::json& object,
 }
 
 inline bool lifecycleFloatField(const nlohmann::json& object,
-                         const char* key,
-                         float defaultValue,
-                         float& value) {
+                                const char* key,
+                                float defaultValue,
+                                float& value) {
     const auto found = object.find(key);
     if (found == object.end()) {
         value = defaultValue;
@@ -111,8 +111,8 @@ inline bool lifecycleFloatField(const nlohmann::json& object,
 }
 
 inline std::optional<std::string> optionalStringField(const nlohmann::json& object,
-                                               const char* key,
-                                               bool& valid) {
+                                                      const char* key,
+                                                      bool& valid) {
     valid = true;
     const auto found = object.find(key);
     if (found == object.end() || found->is_null()) return std::nullopt;
@@ -130,8 +130,8 @@ inline std::optional<std::string_view> optionalStringView(
 }
 
 inline std::optional<Error> parseFormKeyField(const nlohmann::json& object,
-                                       const char* key,
-                                       fo4::FormKey& value) {
+                                              const char* key,
+                                              fo4::FormKey& value) {
     bool valid = true;
     const auto text = optionalStringField(object, key, valid);
     if (!valid) {
@@ -181,8 +181,8 @@ inline bool lifecycleBoundsField(const nlohmann::json& object, fo4::forms::Objec
 }
 
 inline bool lifecycleVec3Field(const nlohmann::json& object,
-                        const char* key,
-                        std::array<float, 3>& value) {
+                               const char* key,
+                               std::array<float, 3>& value) {
     const auto found = object.find(key);
     if (found == object.end() || found->is_null()) return true;
     if (!found->is_array() || found->size() != 3) return false;
@@ -201,9 +201,9 @@ inline bool lifecycleVec3Field(const nlohmann::json& object,
 }
 
 inline std::optional<Error> checkLoadedSlot(const fo4::ConflictGraph& graph,
-                                     const fo4::FormKey& key,
-                                     std::initializer_list<std::string_view> accepted,
-                                     std::string_view slotName) {
+                                            const fo4::FormKey& key,
+                                            std::initializer_list<std::string_view> accepted,
+                                            std::string_view slotName) {
     if (key.owner().empty()) return std::nullopt;
     const auto* winner = graph.winner(key);
     if (winner == nullptr) {
@@ -230,8 +230,8 @@ inline std::optional<Error> checkLoadedSlot(const fo4::ConflictGraph& graph,
 }
 
 inline std::optional<Error> validateProvidedScalar(const nlohmann::json& object,
-                                            const char* jsonKey,
-                                            std::string_view path) {
+                                                   const char* jsonKey,
+                                                   std::string_view path) {
     const auto found = object.find(jsonKey);
     if (found == object.end() || found->is_null()) return std::nullopt;
     if (!found->is_number()) {
@@ -270,10 +270,10 @@ inline std::optional<Error> validateProvidedScalars(
 }
 
 inline std::optional<Error> validateProvidedVec3(const nlohmann::json& object,
-                                          const char* jsonKey,
-                                          std::string_view pathX,
-                                          std::string_view pathY,
-                                          std::string_view pathZ) {
+                                                 const char* jsonKey,
+                                                 std::string_view pathX,
+                                                 std::string_view pathY,
+                                                 std::string_view pathZ) {
     const auto found = object.find(jsonKey);
     if (found == object.end() || found->is_null()) return std::nullopt;
     if (!found->is_array() || found->size() != 3) {

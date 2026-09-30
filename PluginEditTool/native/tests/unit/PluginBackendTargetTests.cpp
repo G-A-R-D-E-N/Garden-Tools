@@ -8,9 +8,9 @@
 
 #include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/core/JsonInt.hpp>
+#include <fo4ide/plugin/IPluginBackend.hpp>
 
 #include "../../src/app/ServiceTargetSupport.hpp"
-#include <fo4ide/plugin/IPluginBackend.hpp>
 
 namespace {
 
@@ -496,5 +496,9 @@ TEST_CASE("Service number arguments truncate in-range floats and refuse the rest
     CHECK(intNumberArgument(args, 3, -1) == 7);
     CHECK(intNumberArgument(args, 4, -1) == -1);
     CHECK(intNumberArgument(args, 5, -1) == -1);
-    CHECK(intNumberArgument(args, 6, -1) == -1);
+    CHECK(intNumberArgument(nlohmann::json::array(), 0, -1) == -1);
+    CHECK(intNumberArgument(args, 1, -1, true) == 2147483647);
+    CHECK(intNumberArgument(args, 2, -1, true) == -2147483647 - 1);
+    CHECK(intNumberArgument(args, 4, -1, true) == 2147483647);
+    CHECK(intNumberArgument(args, 0, -1, true) == 12);
 }

@@ -1,3 +1,13 @@
+#include <fo4ide/app/ServiceTargets.hpp>
+
+#include <algorithm>
+#include <atomic>
+#include <exception>
+#include <set>
+#include <system_error>
+#include <thread>
+#include <utility>
+
 #include "ServiceTargetSupport.hpp"
 
 namespace fo4ide::app {

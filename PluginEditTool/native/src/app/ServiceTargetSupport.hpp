@@ -1,42 +1,25 @@
 #pragma once
 
-#include <fo4ide/app/ServiceTargets.hpp>
-#include <fo4ide/app/WikiService.hpp>
-
 #include <algorithm>
-#include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
-#include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iterator>
-#include <memory>
-#include <optional>
-#include <regex>
-#include <set>
-#include <sstream>
+#include <limits>
+#include <stdexcept>
 #include <string>
-#include <system_error>
+#include <string_view>
 #include <thread>
-#include <utility>
 #include <vector>
 
-#include <fo4ide/graph/GraphCompiler.hpp>
-#include <fo4ide/graph/GraphDocument.hpp>
-#include <fo4ide/graph/GraphScriptLoader.hpp>
-#include <fo4ide/graph/GraphToolService.hpp>
-#include <fo4ide/graph/NodeDefinition.hpp>
-#include <fo4ide/graph/NodePalette.hpp>
-#include <fo4ide/papyrus/AnalysisService.hpp>
-#include <fo4ide/papyrus/Decompiler.hpp>
-#include <fo4ide/papyrus/ScriptIndex.hpp>
+#include <nlohmann/json.hpp>
 
 #include <fo4ide/core/JsonInt.hpp>
-
-#include <cmath>
-#include <limits>
+#include <fo4ide/core/Result.hpp>
 
 namespace fo4ide::app::support {
 
@@ -125,14 +108,19 @@ inline void writeFileText(const std::filesystem::path& path, std::string_view te
     if (!stream) throw std::runtime_error("Could not write '" + path.string() + "'.");
 }
 
-inline int intNumberArgument(const nlohmann::json& args, std::size_t index, int fallback) {
+inline int intNumberArgument(const nlohmann::json& args, std::size_t index, int fallback,
+                             bool saturate = false) {
     const auto* value = argument(args, index);
     if (value == nullptr || !value->is_number()) return fallback;
-    if (!value->is_number_float()) return core::jsonInt(*value).value_or(fallback);
+    if (!value->is_number_float()) {
+        return (saturate ? core::jsonIntSaturated(*value) : core::jsonInt(*value)).value_or(fallback);
+    }
     const double number = value->get<double>();
-    if (!std::isfinite(number) || number < std::numeric_limits<int>::min() ||
-        number > std::numeric_limits<int>::max()) {
-        return fallback;
+    if (!std::isfinite(number)) return fallback;
+    const double low = std::numeric_limits<int>::min();
+    const double high = std::numeric_limits<int>::max();
+    if (number < low || number > high) {
+        return saturate ? static_cast<int>(std::clamp(number, low, high)) : fallback;
     }
     return static_cast<int>(number);
 }

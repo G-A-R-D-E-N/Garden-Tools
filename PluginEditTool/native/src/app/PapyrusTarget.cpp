@@ -1,3 +1,14 @@
+#include <fo4ide/app/ServiceTargets.hpp>
+#include <fo4ide/app/WikiService.hpp>
+
+#include <optional>
+#include <regex>
+#include <set>
+#include <sstream>
+#include <system_error>
+#include <fo4ide/papyrus/AnalysisService.hpp>
+#include <fo4ide/papyrus/Decompiler.hpp>
+
 #include "ServiceTargetSupport.hpp"
 
 namespace fo4ide::app {

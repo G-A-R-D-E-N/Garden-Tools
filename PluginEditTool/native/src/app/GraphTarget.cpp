@@ -1,3 +1,17 @@
+#include <fo4ide/app/ServiceTargets.hpp>
+
+#include <memory>
+#include <optional>
+#include <system_error>
+
+#include <fo4ide/graph/GraphCompiler.hpp>
+#include <fo4ide/graph/GraphDocument.hpp>
+#include <fo4ide/graph/GraphScriptLoader.hpp>
+#include <fo4ide/graph/GraphToolService.hpp>
+#include <fo4ide/graph/NodeDefinition.hpp>
+#include <fo4ide/graph/NodePalette.hpp>
+#include <fo4ide/papyrus/ScriptIndex.hpp>
+
 #include "ServiceTargetSupport.hpp"
 
 namespace fo4ide::app {
@@ -151,7 +165,7 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             const auto kind = stringArgument(args, 0);
             const auto query = stringArgument(args, 1);
             const auto scriptFilter = stringArgument(args, 2);
-            const int requested = intNumberArgument(args, 3, 0);
+            const int requested = intNumberArgument(args, 3, 0, true);
             std::optional<std::string_view> filter;
             if (!isWhitespace(scriptFilter)) filter = std::string_view(scriptFilter);
             const auto result = compiler().palette().search(
