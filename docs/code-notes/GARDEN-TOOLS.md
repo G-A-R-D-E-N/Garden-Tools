@@ -642,6 +642,7 @@ Every `INFO` field except `RNAM` goes to `.ILSTRINGS`, and everything else to `.
   - `translated="DL"` on every Fallout 4 `DESC` except `LoadScreen.xml` (`Normal`), and on `Quest.xml`/`Book.xml` `CNAM`;
   - `translated="IL"` only on `DialogResponses.xml` `NAM1`.
 - The vendored copy in GardenEngine (`opencw/third_party/Mutagen/Mutagen.Bethesda.Fallout4/Records`) agrees: `translated="DL"` on every `DESC` except `LoadScreen.xml` (`Normal`) and on `Quest.xml`/`Book.xml` `CNAM`; `translated="IL"` only on `DialogResponses.xml` `NAM1`; `DialogResponses.xml` `RNAM` is `Normal`.
+- `Radicle/src/environment/strings.cpp:string_source` is the xEdit rule, which sends every `INFO` field except `RNAM` to IL. Mutagen only marks the fields it localizes, and the other `INFO` strings (`NAM2` script notes, `NAM3` edits, `NAM4` alternate lip text) carry no `translated` attribute, so the two agree on every localized field and differ only for fields that are never looked up in a string table.
 - `Radicle/src/environment/strings.cpp:string_source_extension` gives the upper-case extension without the dot: `STRINGS`, `DLSTRINGS` or `ILSTRINGS`.
 
 **File discovery:**
@@ -663,6 +664,7 @@ Every `INFO` field except `RNAM` goes to `.ILSTRINGS`, and everything else to `.
 - English is Windows-1252.
 - Other Western languages try UTF-8 and fall back to 1252.
 - Czech, Hungarian and Polish try UTF-8, then 1250; Russian tries UTF-8, then 1251; Japanese tries UTF-8, then 932.
+- Greek tries UTF-8, then 1253; Turkish tries UTF-8, then 1254; Arabic tries UTF-8, then 1256.
 - Chinese, Korean and Thai are UTF-8.
 
 The C# binding should apply the same table, so no language choice is built into the SDK.
