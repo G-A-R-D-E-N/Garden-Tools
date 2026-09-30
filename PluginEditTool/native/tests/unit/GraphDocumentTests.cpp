@@ -217,7 +217,7 @@ TEST_CASE("Node configuration is a free form bag") {
 }
 
 TEST_CASE("A document whose schema is not an integer is refused") {
-    for (const char* schema : {"2.0", "4294967297", "\"1\""}) {
+    for (const char* schema : {"2.0", "4294967297", "\"1\"", "null"}) {
         auto json = documentJson::serialize(sample());
         const auto pos = json.find("\"schema\": 1");
         REQUIRE(pos != std::string::npos);
