@@ -519,6 +519,33 @@ RADICLE_API radicle_status radicle_strings_load_with_assets(const radicle_env* e
                                                             const radicle_assets* assets,
                                                             radicle_strings** out_strings);
 
+/* Reference writeback into a caller-owned radicle_plugin (see c_api.h); a plugin handle is not thread-safe. */
+typedef enum radicle_placed_copy_status {
+  RADICLE_PLACED_COPY_INSERTED = 0,
+  RADICLE_PLACED_COPY_REPLACED = 1,
+  RADICLE_PLACED_COPY_ALREADY_EXISTS = 2
+} radicle_placed_copy_status;
+
+RADICLE_API radicle_status radicle_plugin_create(const char* filename, radicle_plugin** out_plugin);
+RADICLE_API radicle_status radicle_plugin_copy_placed_ref_override(radicle_plugin* plugin,
+                                                                   const radicle_env* env,
+                                                                   const radicle_record* record,
+                                                                   int32_t overwrite,
+                                                                   radicle_placed_copy_status* out_status);
+RADICLE_API radicle_status radicle_plugin_copy_placed_ref_new(radicle_plugin* plugin,
+                                                              const radicle_env* env,
+                                                              const radicle_record* record,
+                                                              radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_plugin_set_placed_transform(radicle_plugin* plugin,
+                                                               radicle_form_key reference,
+                                                               const float position[3],
+                                                               const float rotation[3]);
+RADICLE_API radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugin,
+                                                           radicle_form_key reference,
+                                                           int32_t has_scale,
+                                                           float scale);
+RADICLE_API radicle_status radicle_plugin_sort_masters(radicle_plugin* plugin, const radicle_env* env);
+
 #ifdef __cplusplus
 }
 #endif

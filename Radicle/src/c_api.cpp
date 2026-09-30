@@ -16,9 +16,6 @@
 #include <utility>
 #include <vector>
 
-struct radicle_plugin {
-  fo4::Plugin value;
-};
 
 namespace radicle_c_detail {
 

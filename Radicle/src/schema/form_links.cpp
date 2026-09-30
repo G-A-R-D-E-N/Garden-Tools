@@ -386,8 +386,8 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     return;
   }
-  if (const auto packed = packed_formid_array_offsets(record, sub, strict_remap)) {
-    for (const auto offset : *packed) fn(offset);
+  if (const auto mixed = mixed_formid_offsets(record, sub, strict_remap)) {
+    for (const auto offset : *mixed) fn(offset);
     return;
   }
   if (sub.data.empty()) {

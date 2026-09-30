@@ -1,5 +1,6 @@
 #include "fo4/environment/placed.hpp"
 
+#include "fo4/schema/form_link_mixed.hpp"
 #include "record_reader.hpp"
 
 #include "fo4/error.hpp"
@@ -17,11 +18,6 @@ using detail::Reader;
 constexpr Signature sig(const char (&text)[5]) {
   return Signature{text[0], text[1], text[2], text[3]};
 }
-
-constexpr std::array<Signature, 10> k_placed_signatures{
-    sig("REFR"), sig("ACHR"), sig("PARW"), sig("PBAR"), sig("PBEA"),
-    sig("PCON"), sig("PFLA"), sig("PHZD"), sig("PMIS"), sig("PGRE"),
-};
 
 enum class Section { none, map_marker, room, patrol };
 
@@ -308,11 +304,6 @@ private:
 };
 
 }  // namespace
-
-bool is_placed_reference_signature(Signature signature) noexcept {
-  return std::find(k_placed_signatures.begin(), k_placed_signatures.end(), signature) !=
-         k_placed_signatures.end();
-}
 
 PlacedReferenceData decode_placed_reference(const Environment& env, const RecordRef& ref) {
   if (ref.record == nullptr || !is_placed_reference_signature(ref.record->header.signature)) {
