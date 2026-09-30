@@ -1,8 +1,10 @@
 #include <fo4ide/app/ServiceTargets.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <system_error>
+#include <utility>
 
 #include <fo4ide/graph/GraphCompiler.hpp>
 #include <fo4ide/graph/GraphDocument.hpp>

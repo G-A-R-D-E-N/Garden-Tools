@@ -117,12 +117,13 @@ inline int intNumberArgument(const nlohmann::json& args, std::size_t index, int 
     }
     const double number = value->get<double>();
     if (!std::isfinite(number)) return fallback;
+    const double whole = std::trunc(number);
     const double low = std::numeric_limits<int>::min();
     const double high = std::numeric_limits<int>::max();
-    if (number < low || number > high) {
-        return saturate ? static_cast<int>(std::clamp(number, low, high)) : fallback;
+    if (whole < low || whole > high) {
+        return saturate ? static_cast<int>(std::clamp(whole, low, high)) : fallback;
     }
-    return static_cast<int>(number);
+    return static_cast<int>(whole);
 }
 
 }

@@ -501,4 +501,7 @@ TEST_CASE("Service number arguments truncate in-range floats and refuse the rest
     CHECK(intNumberArgument(args, 2, -1, true) == -2147483647 - 1);
     CHECK(intNumberArgument(args, 4, -1, true) == 2147483647);
     CHECK(intNumberArgument(args, 0, -1, true) == 12);
+    CHECK(intNumberArgument(nlohmann::json::array({-2147483648.5}), 0, -1) == -2147483647 - 1);
+    CHECK(intNumberArgument(nlohmann::json::array({2147483647.5}), 0, -1) == 2147483647);
+    CHECK(intNumberArgument(nlohmann::json::array({2147483648.0}), 0, -1) == -1);
 }

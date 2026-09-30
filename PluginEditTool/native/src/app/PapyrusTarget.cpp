@@ -1,11 +1,13 @@
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/app/WikiService.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <regex>
 #include <set>
 #include <sstream>
 #include <system_error>
+#include <utility>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 #include <fo4ide/papyrus/Decompiler.hpp>
 
