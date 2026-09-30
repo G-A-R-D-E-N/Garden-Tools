@@ -3,6 +3,7 @@
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/form_links.hpp"
 
 #include <gtest/gtest.h>
 
@@ -10,6 +11,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -46,6 +48,16 @@ std::vector<std::string> links(const fo4::env::PlacedReferenceData& d) {
   return out;
 }
 
+std::map<std::string, std::string> raw_links(const fo4::Plugin& plugin, const std::set<fo4::FormKey>& refs) {
+  std::map<std::string, std::string> out;
+  for (const auto& hit : fo4::collect_form_links_detailed(plugin).links) {
+    if (!refs.contains(hit.record)) continue;
+    out[hit.record.to_string() + " " + hit.subrecord.to_string() + "#" + std::to_string(hit.subrecord_ordinal) + "@" +
+        std::to_string(hit.offset)] = hit.key.to_string();
+  }
+  return out;
+}
+
 }  // namespace
 
 TEST(WritebackRealData, CopiedDlcReferencesKeepEveryLinkWhenMastersMove) {
@@ -62,6 +74,12 @@ TEST(WritebackRealData, CopiedDlcReferencesKeepEveryLinkWhenMastersMove) {
   const std::set<std::string> added{"XPOD", "XORD", "XLRT", "XPWR", "XAPR", "XPLK", "XWPN"};
   const std::set<std::string> linked{"XESP", "XLKR", "XOWN", "XTEL", "XLRM", "XEZN", "XLCN",
                                      "XLYR", "XATR", "VMAD", "XRMR", "XRFG"};
+  std::set<fo4::FormKey> past_master_table;
+  for (const auto& hit : fo4::collect_form_links_detailed(dlc).links) {
+    if (hit.raw.index_byte() > dlc.header.masters.size()) past_master_table.insert(hit.record);
+  }
+  ASSERT_FALSE(past_master_table.empty()) << "DLCRobot.esm holds XRFG links past its master table";
+
   std::vector<fo4::FormKey> refs;
   std::size_t other = 0;
   fo4::visit_records(dlc, [&](const fo4::Record& record) {
@@ -72,7 +90,9 @@ TEST(WritebackRealData, CopiedDlcReferencesKeepEveryLinkWhenMastersMove) {
       has_added = has_added || added.contains(sub.signature.to_string());
       has_linked = has_linked || linked.contains(sub.signature.to_string());
     }
-    if (has_added || (has_linked && other++ % 25 == 0)) refs.push_back(record.form_key);
+    if (has_added || past_master_table.contains(record.form_key) || (has_linked && other++ % 25 == 0)) {
+      refs.push_back(record.form_key);
+    }
   });
   ASSERT_FALSE(refs.empty());
 
@@ -107,7 +127,18 @@ TEST(WritebackRealData, CopiedDlcReferencesKeepEveryLinkWhenMastersMove) {
       }
     }
   }
+  const std::set<fo4::FormKey> ref_set(refs.begin(), refs.end());
+  const auto source_raw = raw_links(dlc, ref_set);
+  const auto patched_raw = raw_links(reloaded.plugin(2), ref_set);
+  EXPECT_EQ(source_raw.size(), patched_raw.size());
+  std::size_t raw_mismatched = 0;
+  for (const auto& [where, key] : source_raw) {
+    const auto found = patched_raw.find(where);
+    const auto got = found == patched_raw.end() ? std::string("<none>") : found->second;
+    if (got != key && ++raw_mismatched <= 20) ADD_FAILURE() << where << ": " << key << " became " << got;
+  }
   std::error_code ec;
   std::filesystem::remove_all(dir_out, ec);
   EXPECT_EQ(mismatched, 0u) << "of " << refs.size() << " copied references";
+  EXPECT_EQ(raw_mismatched, 0u) << "of " << source_raw.size() << " raw links";
 }
