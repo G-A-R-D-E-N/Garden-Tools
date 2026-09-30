@@ -61,7 +61,25 @@ public static partial class SkinEdit
         IReadOnlyList<Influence> influences)
     {
         Require(shape, vertex);
+        var kept = CheckedInfluences(shape, influences);
+        WriteInfluences(shape, vertex, kept);
+    }
+
+    private static void WriteInfluences(NifShape shape, int vertex, IReadOnlyList<Influence> kept)
+    {
+        for (int slot = 0; slot < Slots; slot++)
+        {
+            shape.BoneIndices[vertex * Slots + slot] = slot < kept.Count ? kept[slot].Bone : 0;
+            shape.BoneWeights[vertex * Slots + slot] = slot < kept.Count ? kept[slot].Weight : 0;
+        }
+    }
+
+    private static List<Influence> CheckedInfluences(NifShape shape, IReadOnlyList<Influence> influences)
+    {
         ArgumentNullException.ThrowIfNull(influences);
+
+        if (influences.Any(value => !float.IsFinite(value.Weight)))
+            throw new ArgumentException("weights must be finite", nameof(influences));
 
         var kept = influences.Where(value => value.Weight > 0).ToList();
         if (kept.Count > Slots)
@@ -83,12 +101,7 @@ public static partial class SkinEdit
                 nameof(influences));
 
         kept.Sort((a, b) => b.Weight.CompareTo(a.Weight));
-
-        for (int slot = 0; slot < Slots; slot++)
-        {
-            shape.BoneIndices[vertex * Slots + slot] = slot < kept.Count ? kept[slot].Bone : 0;
-            shape.BoneWeights[vertex * Slots + slot] = slot < kept.Count ? kept[slot].Weight : 0;
-        }
+        return kept;
     }
 
     public static float WeightSum(NifShape shape, int vertex)
@@ -129,7 +142,7 @@ public static partial class SkinEdit
                 nameof(minimum),
                 "the cut has to be above zero");
 
-        int changed = 0;
+        var writes = new List<(int Vertex, List<Influence> Influences)>();
         for (int vertex = 0; vertex < shape.Vertices.Count; vertex++)
         {
             var influences = InfluencesOf(shape, vertex);
@@ -143,14 +156,12 @@ public static partial class SkinEdit
                 kept.Add(influences[0]);
 
             float total = kept.Sum(value => value.Weight);
-            SetInfluences(
-                shape,
-                vertex,
-                kept.Select(value => value with { Weight = value.Weight / total }).ToList());
-            changed++;
+            writes.Add((vertex, CheckedInfluences(shape,
+                kept.Select(value => value with { Weight = value.Weight / total }).ToList())));
         }
 
-        return changed;
+        foreach (var (vertex, influences) in writes) WriteInfluences(shape, vertex, influences);
+        return writes.Count;
     }
 
     public static Influenced InfluencedBy(
@@ -206,7 +217,7 @@ public static partial class SkinEdit
                 "a bone cannot be copied onto itself",
                 nameof(toBone));
 
-        int changed = 0;
+        var writes = new List<(int Vertex, List<Influence> Influences)>();
         for (int vertex = 0; vertex < shape.Vertices.Count; vertex++)
         {
             var influences = InfluencesOf(shape, vertex);
@@ -248,11 +259,11 @@ public static partial class SkinEdit
                 }
             }
 
-            SetInfluences(shape, vertex, rebuilt);
-            changed++;
+            writes.Add((vertex, CheckedInfluences(shape, rebuilt)));
         }
 
-        return changed;
+        foreach (var (vertex, influences) in writes) WriteInfluences(shape, vertex, influences);
+        return writes.Count;
     }
 
     private static void Require(NifShape shape, int vertex)

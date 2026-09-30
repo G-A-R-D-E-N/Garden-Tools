@@ -284,8 +284,16 @@ public sealed class SkeletonEdit
     private List<int> Subtree(int root)
     {
         var found = new List<int> { root };
+        var seen = new HashSet<int> { root };
         for (int i = 0; i < found.Count; i++)
-            found.AddRange(ChildrenOf(found[i]));
+        {
+            foreach (int child in ChildrenOf(found[i]))
+            {
+                if (!seen.Add(child))
+                    throw new InvalidOperationException("the skeleton contains a parent cycle");
+                found.Add(child);
+            }
+        }
         return found;
     }
 

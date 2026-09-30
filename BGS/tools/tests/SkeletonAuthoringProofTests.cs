@@ -8,6 +8,25 @@ namespace BehaviourStudio.Tests;
 
 public sealed class SkeletonAuthoringProofTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExistingParentCyclesAreRejectedBeforeMutation(bool reparent)
+    {
+        var rig = Rig();
+        rig.Skeleton.ParentIndices[0] = 2;
+        var names = rig.Skeleton.BoneNames.ToArray();
+        var parents = rig.Skeleton.ParentIndices.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            if (reparent) rig.Reparent(0, -1);
+            else rig.AddBone("Arm", 0);
+        });
+        Assert.Equal(names, rig.Skeleton.BoneNames);
+        Assert.Equal(parents, rig.Skeleton.ParentIndices);
+    }
+
     [Fact]
     public void SkeletonAuthoringBuildsAnOrderedValidRig()
     {

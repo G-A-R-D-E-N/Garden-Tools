@@ -98,12 +98,12 @@ public static partial class SkinEdit
                 continue;
             }
 
-            writes.Add((vertex, mirrored));
+            writes.Add((vertex, CheckedInfluences(shape, mirrored)));
         }
 
         foreach (var (vertex, influences) in writes)
         {
-            SetInfluences(shape, vertex, influences);
+            WriteInfluences(shape, vertex, influences);
             report.Mirrored++;
             report.Worst = MathF.Max(report.Worst, apart[vertex]);
         }

@@ -9,6 +9,49 @@ namespace BehaviourStudio.Tests;
 
 public sealed class SkinEditingProofTests
 {
+    [Theory]
+    [InlineData("copy")]
+    [InlineData("prune")]
+    [InlineData("mirror")]
+    public void InvalidLaterVertexDoesNotLeaveAnEarlierVertexChanged(string operation)
+    {
+        var shape = Shape(4, "Root", "LArm_Hand", "RArm_Hand");
+        shape.Vertices[0] = new Vector3(10, 0, 0);
+        shape.Vertices[1] = new Vector3(20, 0, 0);
+        shape.Vertices[2] = new Vector3(-10, 0, 0);
+        shape.Vertices[3] = new Vector3(-20, 0, 0);
+        for (int vertex = 0; vertex < 4; vertex++) Set(shape, vertex, (0, 0.001f), (2, 0.999f));
+        shape.BoneWeights[4] = float.PositiveInfinity;
+        var indices = shape.BoneIndices.ToArray();
+        var weights = shape.BoneWeights.ToArray();
+
+        Assert.Throws<ArgumentException>(() =>
+        {
+            if (operation == "copy") SkinEdit.CopyWeights(shape, 2, 1);
+            else if (operation == "prune") SkinEdit.Prune(shape, 0.01f);
+            else SkinEdit.MirrorWeights(shape, 0, true, bonePosition: bone =>
+                bone == 0 ? Vector3.Zero : new Vector3(bone == 1 ? -10 : 10, 0, 0));
+        });
+        Assert.Equal(indices, shape.BoneIndices);
+        Assert.Equal(weights, shape.BoneWeights);
+    }
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    public void NonFiniteWeightsAreRejectedWithoutChangingTheVertex(float weight)
+    {
+        var shape = Shape(1, "Root", "Arm");
+        Set(shape, 0, (0, 1f));
+        var indices = shape.BoneIndices.ToArray();
+        var weights = shape.BoneWeights.ToArray();
+
+        Assert.Throws<ArgumentException>(() => Set(shape, 0, (1, weight)));
+        Assert.Equal(indices, shape.BoneIndices);
+        Assert.Equal(weights, shape.BoneWeights);
+    }
+
     [Fact]
     public void SkinEditingNormalisesPrunesAndCopiesWeights()
     {

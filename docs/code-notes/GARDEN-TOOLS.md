@@ -899,3 +899,10 @@ For stage authoring, explicitly select a full source record and use native `Plug
 `BGS/tools/tests/MultiChatControllerTests.SessionLifecycle.cs:MultiChatControllerTests` groups session disposal, reset, logout, and server replacement proofs in the existing partial test class so the controller suite stays within the source-size limit. Test ownership, fixtures, and behavior are unchanged.
 
 `BGS/app/AssistantChatStore.cs:AssistantChatStore.All` sorts loaded summaries by their persisted UpdatedUtc timestamp. Filesystem write times can tie or be changed by copying files. `BGS/tools/tests/AssistantChatStoreTests.cs:EnumerationReturnsSavedChatsSortedByUpdatedUtcDescending` now reverses the filesystem timestamps to reproduce the former incorrect order deterministically.
+## BGS skeleton and skin authoring validation (PR 161)
+
+`BGS/src/Nif/SkinEdit.cs:SkinEdit.SetInfluences` rejects all non-finite incoming weights before filtering or mutating a vertex. `BGS/tools/tests/SkinEditingProofTests.cs:NonFiniteWeightsAreRejectedWithoutChangingTheVertex` failed for NaN and both infinities before the guard and passes after it.
+
+`BGS/src/Hkx/SkeletonAuthoring.cs:SkeletonEdit.Subtree` tracks visited bones so AddBone and Reparent reject an existing parent cycle before modifying the rig. `BGS/tools/tests/SkeletonAuthoringProofTests.cs:ExistingParentCyclesAreRejectedBeforeMutation` covers both callers and checks the original arrays survive refusal. These are library authoring APIs; this PR adds no editor or NIF save workflow.
+
+`BGS/src/Nif/SkinEdit.cs:SkinEdit.CheckedInfluences` validates all proposed batch output before `Prune`, `CopyWeights`, or `BGS/src/Nif/SkinEdit.Mirror.cs:SkinEdit.MirrorWeights` writes any vertex. `SkinEdit.WriteInfluences` applies already-checked slots without repeating normalization. `BGS/tools/tests/SkinEditingProofTests.cs:InvalidLaterVertexDoesNotLeaveAnEarlierVertexChanged` failed for all three operations before staging writes and passes afterward; an independent two-vertex NaN copy reproduction also leaves both vertices unchanged. Windows Release suite: 636 passed.
