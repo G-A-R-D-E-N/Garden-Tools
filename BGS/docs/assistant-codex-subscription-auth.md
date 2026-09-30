@@ -619,4 +619,3 @@ design (no chat with the user's ChatGPT can be exercised from CI):
 
 The harness covers everything except the browser OAuth round-trip and the live Codex child
 count after BGS exit — both of which need the real signed-in account.
-
