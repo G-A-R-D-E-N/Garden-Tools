@@ -442,6 +442,10 @@ The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePlug
 
 `PluginEditTool/native/src/assets/TextureResolver.cpp:addDataRoots` adds recursive BA2 scan roots only when the climb reaches a Data ancestor. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp` places an archive beside the NIF tree to detect accidental ancestor discovery. The loose-NIF assertion compares filesystem identity because Windows lookup can return different filename casing.
 
+
+
+`PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveFromArchives` keeps an explicit NIF-panel texture root as its own scan root when it has no Data ancestor, so a user-chosen folder such as an unpacked mod still has its own archives scanned; only the climb above it is refused. A filesystem root (no relative path) or a folder inside the resolver cache is never used this way, since the scan is recursive; `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver does not scan an explicit texture root inside its cache` covers the cache case. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver scans an explicit texture root that has no Data ancestor` fails without that fallback.
+
 # Native Windows launch
 
 ## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getPluginWorklist
