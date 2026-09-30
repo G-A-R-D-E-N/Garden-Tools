@@ -37,7 +37,16 @@ public static class LifecycleSmoke
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions())
                 .SetupWithoutStarting();
             AssistantLifecycleSmoke.Run();
-            return 0;
+            return Smoke.FailedCount == 0 ? 0 : 1;
+        }
+
+        if (args.Length > 0 && args[0] == "--multichat")
+        {
+            AppBuilder.Configure<HeadlessApp>()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+                .SetupWithoutStarting();
+            MultiChatSmoke.Run();
+            return Smoke.FailedCount == 0 ? 0 : 1;
         }
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
