@@ -1,6 +1,7 @@
 #include "fo4/environment/strings.hpp"
 
 #include "fo4/localization/strings.hpp"
+#include "fo4/io/path_text.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -13,10 +14,7 @@ constexpr Signature sig(const char (&text)[5]) {
   return Signature{text[0], text[1], text[2], text[3]};
 }
 
-std::string utf8(const std::filesystem::path& path) {
-  const auto text = path.u8string();
-  return std::string(text.begin(), text.end());
-}
+using io::utf8;
 
 std::string lower(std::string_view text) {
   std::string out(text);
