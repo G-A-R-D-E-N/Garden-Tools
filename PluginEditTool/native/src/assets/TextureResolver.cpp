@@ -294,7 +294,7 @@ std::vector<std::filesystem::path> TextureResolver::globalRoots() const {
 void TextureResolver::ensureRootScanned(const std::filesystem::path& root, bool recursive) {
     const auto trimmedRoot = trimmed(root.string());
     if (trimmedRoot.empty()) return;
-    if (!scannedRoots_.insert(std::filesystem::path(trimmedRoot)).second) return;
+    if (recursive && !scannedRoots_.insert(std::filesystem::path(trimmedRoot)).second) return;
     if (!std::filesystem::is_directory(trimmedRoot)) return;
 
     std::error_code ec;
