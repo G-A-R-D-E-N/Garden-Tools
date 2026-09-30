@@ -69,6 +69,7 @@ public sealed class AssistantChatStoreTests : IDisposable
         AssistantChat newer = AssistantChatStore.CreateEmpty();
         AssistantChatStore.Save(older);
         AssistantChatStore.Save(newer.WithMessages(newer.Messages, DateTime.UtcNow.AddMinutes(5)));
+        File.SetLastWriteTimeUtc(Path.Combine(_folder, older.Id + ".json"), DateTime.UtcNow.AddHours(1));
 
         IReadOnlyList<AssistantChatSummary> found = AssistantChatStore.All();
         Assert.Equal(2, found.Count);

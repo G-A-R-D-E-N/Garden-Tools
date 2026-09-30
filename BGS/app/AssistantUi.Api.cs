@@ -10,7 +10,14 @@ internal sealed partial class AssistantUi
 {
     private void ChooseApiKey(string key)
     {
+        if (_controller?.List.IsBusy == true)
+        {
+            _pane.SetStatus("Wait for the current request to finish before changing the API key.", Ux.WarnBrush);
+            return;
+        }
         _apiKeys[_backend] = (key ?? "").Trim();
+        _controller?.EndAllSessions();
+        _pane.SetApproval(false);
         RefreshProviderStatus();
         RefreshAccountText();
         _ = RefreshProviderModelsAsync();
@@ -18,12 +25,19 @@ internal sealed partial class AssistantUi
 
     private void ChooseBaseUrl(string url)
     {
+        if (_controller?.List.IsBusy == true)
+        {
+            _pane.SetStatus("Wait for the current request to finish before changing the API endpoint.", Ux.WarnBrush);
+            return;
+        }
         string value = (url ?? "").Trim();
         if (!Settings.TrySet(ApiProviders.BaseUrlSetting(_backend), value, out string failure))
         {
             _pane.SetStatus(failure, Ux.WarnBrush);
             return;
         }
+        _controller?.EndAllSessions();
+        _pane.SetApproval(false);
         RefreshProviderStatus();
         _ = RefreshProviderModelsAsync();
         _ = RefreshCatalogAsync();

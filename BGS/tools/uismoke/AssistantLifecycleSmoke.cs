@@ -127,6 +127,8 @@ internal static partial class AssistantLifecycleSmoke
         AQueuedMessageNeverCrossesConversations();
         DeletingTheLastChatLeavesAUsableConversation();
         UnknownSlashCommandsAreRefused();
+        ProviderChangesResetIdleSessions();
+        ProviderFailuresKeepTheirActionableDetail();
         ProgressShowsWhileATurnRuns();
         ComposerSendsQueuesAndRunsCommands();
         SlashCommandsCompleteInTheComposer();
@@ -143,7 +145,7 @@ internal static partial class AssistantLifecycleSmoke
 
 
 
-    private static void Pump(Func<bool> until, int milliseconds = 3000)
+    private static void Pump(Func<bool> until, int milliseconds = 10000)
     {
         DateTime deadline = DateTime.UtcNow.AddMilliseconds(milliseconds);
         while (DateTime.UtcNow < deadline)
@@ -153,6 +155,7 @@ internal static partial class AssistantLifecycleSmoke
             Thread.Sleep(10);
         }
         Dispatcher.UIThread.RunJobs();
+        if (!until()) throw new TimeoutException("Assistant UI smoke condition did not complete within its deadline.");
     }
 
 

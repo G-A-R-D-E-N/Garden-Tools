@@ -56,8 +56,6 @@ public sealed class AssistantConversationList : IDisposable
     public bool IsBusy { get; set; }
     public string? ActiveChatId => Active?.Chat.Id;
 
-    private AssistantConversationEntry? _ => Active;
-
     public void Add(AssistantChat chat, int? selectIndex = null)
     {
         if (!AssistantChatStore.IsValidId(chat.Id))

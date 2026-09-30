@@ -89,11 +89,15 @@ public sealed class AssistantConversationController : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            return false;
         }
         lock (entry.SaveGate)
         {
             if (entry.Deleted) return false;
             entry.Chat = cleared;
+            entry.InvalidateSession();
+            entry.Dispose();
+            entry.SessionPrimed = false;
             entry.ClearPendingApproval();
         }
         RejectPendingMutations();

@@ -105,7 +105,11 @@ public static class OpencodeModelCatalog
         {
             string id = raw.Trim().TrimEnd('\r');
             if (!IsModelId(id) || !seen.Add(id)) continue;
-            models.Add(new CodexModel(id, id, false, id));
+            models.Add(new CodexModel(id, id, false, id)
+            {
+                Agent = AssistantModelCatalog.OpencodeAgent,
+                Group = id[..id.IndexOf('/')],
+            });
         }
         return models.AsReadOnly();
     }

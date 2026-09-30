@@ -14,6 +14,88 @@ namespace BehaviourStudio.UiSmoke;
 
 internal static partial class AssistantLifecycleSmoke
 {
+    private static void ProviderChangesResetIdleSessions()
+    {
+        string previousBackend = Settings.Get("assistant.backend");
+        string previousModel = Settings.Get(AssistantUi.ModelSettingKey(AssistantBackend.Local));
+        string previousUrl = Settings.Get(ApiProviders.BaseUrlSetting(AssistantBackend.Local));
+        Settings.TrySet("assistant.backend", "local", out _);
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            OpenChat(window);
+            var ui = window.AssistantUiForTest;
+            ui.SetSessionForTest(new FailureReplySession());
+            ui.SelectModelForTest(new CodexModel("proof-model", "proof-model", false)
+                { Agent = AssistantModelCatalog.LocalAgent });
+            Check("changing the API model discards cached sessions", ui.ActiveSessionForTest is null);
+            ui.SetSessionForTest(new FailureReplySession());
+            ui.ChooseApiKeyForTest("proof-key");
+            Check("changing the API key discards cached sessions", ui.ActiveSessionForTest is null);
+            ui.SetSessionForTest(new FailureReplySession());
+            ui.ChooseBaseUrlForTest("http://127.0.0.1:1/v1");
+            Check("changing the API endpoint discards cached sessions", ui.ActiveSessionForTest is null);
+
+            var completion = new TaskCompletionSource<ChatResponse>();
+            var client = new GatedChatClient(completion,
+                new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+            var session = new AssistantSession(client, Array.Empty<AIFunction>());
+            ui.SetSessionForTest(session);
+            ui.Pane.Composer.Text = "wait for this request";
+            PressEnter(window, ui.Pane, false);
+            ui.ChooseApiKeyForTest("replacement-key");
+            ui.ChooseBaseUrlForTest("http://127.0.0.1:2/v1");
+            ui.SelectModelForTest(new CodexModel("other-model", "other-model", false)
+                { Agent = AssistantModelCatalog.LocalAgent });
+            Check("busy API requests retain their session and settings",
+                ReferenceEquals(session, ui.ActiveSessionForTest) && ui.ApiKeyForTest == "proof-key" &&
+                ApiProviders.BaseUrl(AssistantBackend.Local) == "http://127.0.0.1:1/v1" &&
+                Settings.Get(AssistantUi.ModelSettingKey(AssistantBackend.Local)) == "proof-model");
+            completion.SetResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+            Pump(() => !ui.Pane.IsBusy);
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+            Settings.TrySet("assistant.backend", previousBackend, out _);
+            Settings.TrySet(AssistantUi.ModelSettingKey(AssistantBackend.Local), previousModel, out _);
+            Settings.TrySet(ApiProviders.BaseUrlSetting(AssistantBackend.Local), previousUrl, out _);
+        }
+    }
+
+    private static void ProviderFailuresKeepTheirActionableDetail()
+    {
+        var window = new MainWindow();
+        window.Show();
+        try
+        {
+            OpenChat(window);
+            var ui = window.AssistantUiForTest;
+            ui.SetSessionForTest(new FailureReplySession());
+            int previousMessages = ui.MessageCount;
+            ui.Pane.Composer.Text = "try the unavailable model";
+            PressEnter(window, ui.Pane, false);
+            Pump(() => !ui.Pane.IsBusy);
+            Check("a provider failure retains its actionable detail",
+                ui.Status.Contains("Choose an available model", StringComparison.Ordinal));
+            Check("provider failures stay out of saved assistant history", ui.MessageCount == previousMessages + 1);
+        }
+        finally
+        {
+            Smoke.CloseForTest(window);
+        }
+    }
+
+    private sealed class FailureReplySession : IAssistantSession
+    {
+        public Task<AssistantReply> SendAsync(string prompt, AssistantContext context,
+            CancellationToken cancellationToken = default) => Task.FromResult(new AssistantReply(
+                "provider_error", "Choose an available model.", 0, Array.Empty<AssistantToolActivity>(), false));
+        public void ClearHistory() { }
+        public void Dispose() { }
+    }
+
     private static void AQueuedMessageNeverCrossesConversations()
     {
         var window = new MainWindow();

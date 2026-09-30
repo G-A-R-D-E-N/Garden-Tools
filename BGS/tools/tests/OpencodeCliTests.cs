@@ -184,6 +184,16 @@ public sealed class OpencodeCliTests
 
     private const string BridgeUrl = "http://127.0.0.1:9/mcp";
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"other\":{\"type\":\"local\",\"enabled\":false}}")]
+    public void TheResolvedBoundaryRejectsAMissingBgsBridge(string servers)
+    {
+        string resolved = Resolved(OpencodeStubConfig.AgentPermissionForTest(), servers);
+
+        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
+    }
+
     private static string Resolved(string agentPermission, string servers) =>
         "{\"permission\":" + OpencodeStubConfig.TopLevelPermissionForTest() +
         ",\"agent\":{\"bgs\":{\"mode\":\"primary\",\"permission\":" + agentPermission +

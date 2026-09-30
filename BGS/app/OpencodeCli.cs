@@ -215,6 +215,7 @@ public static class OpencodeCli
 
     private static bool McpBoundaryHolds(JsonElement servers, string bridgeUrl)
     {
+        if (!servers.TryGetProperty(ServerName, out _)) return false;
         foreach (JsonProperty property in servers.EnumerateObject())
         {
             if (string.Equals(property.Name, ServerName, StringComparison.Ordinal))

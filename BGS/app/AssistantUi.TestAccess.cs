@@ -44,6 +44,9 @@ internal sealed partial class AssistantUi
     internal void ClearPendingMutationsForTest() => _controller?.RejectPendingMutations();
     internal bool RealPendingMutationForTest => EnsureTools().HasPendingApproval;
     internal void SetConnectionForTest(CodexAssistantConnection connection) => _connection = connection;
+    internal void SelectModelForTest(CodexModel model) => SelectCatalogModel(model);
+    internal void ChooseApiKeyForTest(string key) => ChooseApiKey(key);
+    internal void ChooseBaseUrlForTest(string url) => ChooseBaseUrl(url);
     internal void SignOutForTest() => SignOut();
     internal void RefreshAccountForTest() => RefreshAccountText();
 

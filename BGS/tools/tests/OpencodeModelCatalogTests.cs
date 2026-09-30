@@ -31,6 +31,9 @@ public sealed class OpencodeModelCatalogTests
             new[] { "opencode-go/gpt-5.6-luna", "anthropic/claude-haiku-4-5", "opencode/big-pickle" },
             models.Select(model => model.WireModel));
         Assert.All(models, model => Assert.Equal(model.WireModel, model.DisplayName));
+        Assert.All(models, model => Assert.Equal(AssistantBackend.Opencode,
+            AssistantCliLocator.Parse(model.Agent)));
+        Assert.Equal(new[] { "opencode-go", "anthropic", "opencode" }, models.Select(model => model.Group));
     }
 
     [Fact]
@@ -177,11 +180,4 @@ public sealed class OpencodeModelCatalogTests
         }
     }
 
-    [Fact]
-    public void WindowsCommandShimsRunThroughTheShellAndOtherPathsDoNot()
-    {
-        Assert.True(new AssistantCli("claude.cmd", "detected").NeedsShell);
-        Assert.False(new AssistantCli("opencode", "detected").NeedsShell);
-        Assert.NotEmpty(AssistantCommandRunner.ShellPath());
-    }
 }

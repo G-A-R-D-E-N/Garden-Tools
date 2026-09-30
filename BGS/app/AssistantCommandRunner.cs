@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -27,9 +28,6 @@ public static class AssistantCommandRunner
         CancellationToken cancellationToken = default) =>
         RunForTest(cli, arguments, environment, timeout, cancellationToken);
 
-    internal static string ShellPath() =>
-        Environment.GetEnvironmentVariable("COMSPEC") is { Length: > 0 } shell ? shell : "cmd.exe";
-
     private static async Task<AssistantCommandResult> DefaultRunAsync(
         AssistantCli cli, IReadOnlyList<string> arguments,
         IReadOnlyDictionary<string, string>? environment, TimeSpan timeout,
@@ -47,9 +45,13 @@ public static class AssistantCommandRunner
                 info.Environment[pair.Key] = pair.Value;
         if (cli.NeedsShell)
         {
-            info.FileName = ShellPath();
-            info.ArgumentList.Add("/c");
-            info.ArgumentList.Add(cli.Path);
+            string native = Path.Combine(Path.GetDirectoryName(cli.Path) ?? "",
+                "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+            if (!string.Equals(Path.GetFileNameWithoutExtension(cli.Path), "claude",
+                    StringComparison.OrdinalIgnoreCase) || !File.Exists(native))
+                return new AssistantCommandResult(-1, "",
+                    "Select a native executable; shell scripts cannot safely receive assistant prompts.");
+            info.FileName = native;
         }
         else
         {

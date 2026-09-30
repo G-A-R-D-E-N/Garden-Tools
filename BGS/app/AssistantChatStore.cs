@@ -161,7 +161,7 @@ public static class AssistantChatStore
     {
         if (!Directory.Exists(Folder)) return Array.Empty<AssistantChatSummary>();
         var found = new List<AssistantChatSummary>();
-        foreach (string path in Directory.GetFiles(Folder, "*.json").OrderByDescending(File.GetLastWriteTimeUtc))
+        foreach (string path in Directory.GetFiles(Folder, "*.json"))
         {
             try
             {
@@ -176,7 +176,7 @@ public static class AssistantChatStore
             {
             }
         }
-        return found;
+        return found.OrderByDescending(chat => chat.UpdatedUtc).ToList();
     }
 
     public static bool Delete(string id)

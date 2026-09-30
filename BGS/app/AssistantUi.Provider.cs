@@ -459,6 +459,8 @@ internal sealed partial class AssistantUi
                 _pane.SetStatus(apiFailure, Ux.WarnBrush);
                 return;
             }
+            _controller?.EndAllSessions();
+            _pane.SetApproval(false);
             _pane.SetStatus(
                 wireModel.Length > 0 ? "Model set for the next request." : "Using the provider default.",
                 new Avalonia.Media.SolidColorBrush(Ux.Good));
@@ -478,6 +480,8 @@ internal sealed partial class AssistantUi
             _pane.SetStatus(failure, Ux.WarnBrush);
             return;
         }
+        _controller?.EndAllSessions();
+        _pane.SetApproval(false);
         _pane.SetStatus(
             wireModel.Length > 0 ? "Model set for the next request." : "Using the provider default.",
             new Avalonia.Media.SolidColorBrush(Ux.Good));

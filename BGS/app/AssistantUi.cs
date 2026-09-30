@@ -348,7 +348,9 @@ internal sealed partial class AssistantUi
     {
         if (_controller?.ClearActive() != true)
         {
-            _pane.SetStatus("Only an idle chat can be cleared.", Ux.WarnBrush);
+            _pane.SetStatus(_controller?.List.IsBusy == true
+                ? "Only an idle chat can be cleared."
+                : "The chat could not be cleared; its messages and session were kept.", Ux.WarnBrush);
             return;
         }
         _queue.Clear();
@@ -400,7 +402,9 @@ internal sealed partial class AssistantUi
                 "cancelled" => "Cancelled.",
                 "busy" => "BGS is processing another request.",
                 "signed_out" => "Sign in with ChatGPT to use the assistant.",
-                _ => "The assistant did not return a reply.",
+                _ => reply.Text.Length > 0
+                    ? CodexProtocol.Scrub(reply.Text, 300)
+                    : "The assistant did not return a reply.",
             };
             _pane.SetStatus(statusText,
                 reply.Status == "ok" ? new Avalonia.Media.SolidColorBrush(Ux.Good) : Ux.WarnBrush);
