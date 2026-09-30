@@ -93,6 +93,7 @@ private:
     std::map<std::string, std::string> index_;      // key -> archive path
     std::set<std::string> scannedArchives_;         // lowercased archive paths
     std::set<std::filesystem::path> scannedRoots_;
+    std::set<std::filesystem::path> shallowScannedRoots_;
 
     // Guarded by keyLocksMutex_; entries created on demand.
     mutable std::mutex keyLocksMutex_;

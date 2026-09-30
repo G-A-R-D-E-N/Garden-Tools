@@ -212,6 +212,7 @@ void TextureResolver::setSessionRoots(std::vector<std::filesystem::path> roots) 
     index_.clear();
     scannedArchives_.clear();
     scannedRoots_.clear();
+    shallowScannedRoots_.clear();
 }
 
 std::mutex& TextureResolver::lockFor(const std::string& key) {
@@ -294,7 +295,8 @@ std::vector<std::filesystem::path> TextureResolver::globalRoots() const {
 void TextureResolver::ensureRootScanned(const std::filesystem::path& root, bool recursive) {
     const auto trimmedRoot = trimmed(root.string());
     if (trimmedRoot.empty()) return;
-    if (recursive && !scannedRoots_.insert(std::filesystem::path(trimmedRoot)).second) return;
+    auto& seen = recursive ? scannedRoots_ : shallowScannedRoots_;
+    if (!seen.insert(std::filesystem::path(trimmedRoot)).second) return;
     if (!std::filesystem::is_directory(trimmedRoot)) return;
 
     std::error_code ec;
