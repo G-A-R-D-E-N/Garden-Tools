@@ -82,6 +82,8 @@ private:
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
+    std::vector<std::string> laterOverridesLocked(const LoadedPlugin& target,
+                                                  const fo4::FormKey& key) const;
     void stageLocalizationMutationLocked(LoadedPlugin& loaded, StagedLocalization staged);
     Result<void> persistPluginLocked(LoadedPlugin& loaded, const std::filesystem::path& output);
     Result<nlohmann::json> discardPlugin(const nlohmann::json& arguments);

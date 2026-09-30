@@ -225,6 +225,19 @@ TEST_CASE("Legacy ResolveConflict maps to copy-as-override without forced overwr
     CHECK(backend.invokedBackendArguments[3] == false);
 }
 
+TEST_CASE("Legacy ResolveConflict forwards an explicit allow-losing opt-in") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto result = target.invoke(
+        "ResolveConflict",
+        nlohmann::json::array({"000800:Base.esp", "Winner.esp", "Patch.esp", true}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.invokedBackendArguments.size() == 5);
+    CHECK(backend.invokedBackendArguments[3] == false);
+    CHECK(backend.invokedBackendArguments[4] == true);
+}
+
 TEST_CASE("Native copy workflows create a missing target before mutation") {
     RoutingBackend backend;
     fo4ide::app::PluginBackendTarget target(backend, "backend");

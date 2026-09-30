@@ -357,14 +357,14 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "ResolveConflict") {
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
-            auto operation = backend_.invokeBackend(
-                "CopyAsOverride",
-                nlohmann::json::array({
-                    stringArgument(args, 1),
-                    stringArgument(args, 0),
-                    ensured->name,
-                    false
-                }));
+            auto copyArgs = nlohmann::json::array({
+                stringArgument(args, 1),
+                stringArgument(args, 0),
+                ensured->name,
+                false
+            });
+            if (args.is_array() && args.size() > 3) copyArgs.push_back(args[3]);
+            auto operation = backend_.invokeBackend("CopyAsOverride", copyArgs);
             return finishAutoCreatedTarget(
                 backend_, *ensured, std::move(operation), "Copied ", "Replaced ");
         }
