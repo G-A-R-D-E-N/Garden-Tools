@@ -705,6 +705,8 @@ Details:
 - Names match case-insensitively. Files that are missing on disk are skipped.
 - An archive that is both INI-listed and plugin-named appears once, at its INI position, as in Mutagen's `CachedArchiveListingDetailsProvider` comparer.
 - Which plugin archives apply follows Mutagen's `CheckArchiveApplicability`: an exact stem match, or the stem before the last ` - `.
+  - `Radicle/src/archive/assets.cpp:archive_load_order` used to accept any `<stem> - *.ba2`, so `Mod - Patch - Main.ba2` was mounted at `Mod.esp`'s position (and even without `Mod - Patch.esp`). It now compares the name before the last ` - `, as Mutagen does. Test: `test_ba2_reader.cpp:SuffixedArchivesBelongToTheNameBeforeTheLastSeparator`.
+  - One deliberate difference: an empty suffix (`Mod - .ba2`) is not applied, where Mutagen's rule would accept it.
 - Mutagen orders the ` - ` suffixes of one plugin in descending ordinal order. Radicle uses ascending order. Each vanilla/DLC plugin's suffixed archives (`Main`, `Textures`, `Voices_*`) hold different paths, so the order does not change any lookup.
 
 **Precedence.** `AssetResolver::locate` checks loose files under `data_dir` first. It then searches the archives from highest priority down, so the last-mounted archive wins, as the game resolves them.
@@ -733,6 +735,8 @@ GardenEngine needs what the game shows, so Radicle follows the game. This only d
 - `radicle_strings_load_with_assets`.
 
 `Ba2Error` maps to `PARSE_ERROR` and `AssetPathError` to `INVALID_ARGUMENT`. `copy_strings` moved from `c_api.cpp`'s anonymous namespace into `radicle_c_detail` so this file can share it.
+
+**Error paths.** `Radicle/src/archive/ba2_reader.cpp` and `assets.cpp:AssetResolver::read` write paths into `Ba2Error` through a local `utf8` helper (`path.u8string()`). With `path.string()`, MSVC threw `std::system_error` for characters outside the ANSI code page, replacing the `Ba2Error` (`PARSE_ERROR`) with `INTERNAL_ERROR`. Test: `test_ba2_reader.cpp:ErrorsNameNonAnsiPathsInUtf8`. The older whole-file readers in `ba2.cpp` and `ba2_texture.cpp` still use `path.string()` in their error messages.
 
 **Contracts** (moved from source comments when the slice was restacked):
 - `Radicle/include/fo4/archive/ba2_reader.hpp:Ba2Reader::open` throws `Ba2Error` on anything malformed. `Ba2EntryInfo::path` is the name-table path as stored and is empty when the archive has no name table; the texture header is meaningful only for DX10 archives. The reader's index maps the normalized path, or the packed hashes for archives without names, to the entry index.

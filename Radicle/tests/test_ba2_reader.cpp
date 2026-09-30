@@ -173,6 +173,35 @@ TEST_F(Ba2ReaderTest, OrdersArchivesLikeTheGameMountsThem) {
   EXPECT_TRUE(fo4::archive::archive_load_order(root_ / "Nope", ini, plugins).empty());
 }
 
+TEST_F(Ba2ReaderTest, SuffixedArchivesBelongToTheNameBeforeTheLastSeparator) {
+  for (const auto* name : {"Mod - Patch - Main.ba2", "Late.ba2"}) write_file(data() / name, bytes_of("x"));
+  const auto names = [&](const std::vector<std::string>& plugins) {
+    std::vector<std::string> out;
+    for (const auto& path : fo4::archive::archive_load_order(data(), {}, plugins)) out.push_back(path.filename().string());
+    return out;
+  };
+  EXPECT_EQ(names({"Mod.esp", "Late.esp", "Mod - Patch.esp"}),
+            (std::vector<std::string>{"Late.ba2", "Mod - Patch - Main.ba2"}));
+  EXPECT_EQ(names({"Mod.esp"}), std::vector<std::string>{});
+}
+
+TEST_F(Ba2ReaderTest, ErrorsNameNonAnsiPathsInUtf8) {
+  const auto folder = root_ / std::filesystem::path(std::u16string{0x041C, 0x043E, 0x0434, 0x044B});
+  write_file(folder / "Broken.ba2", bytes_of("not an archive"));
+  const auto expect_utf8 = [&](const auto& action) {
+    try {
+      action();
+      ADD_FAILURE() << "expected Ba2Error";
+    } catch (const fo4::archive::Ba2Error& error) {
+      EXPECT_NE(std::string(error.what()).find("\xD0\x9C\xD0\xBE\xD0\xB4\xD1\x8B"), std::string::npos);
+    }
+  };
+  expect_utf8([&] { (void)fo4::archive::Ba2Reader::open(folder / "Broken.ba2"); });
+  expect_utf8([&] { (void)fo4::archive::Ba2Reader::open(folder / "Missing.ba2"); });
+  const auto assets = fo4::archive::AssetResolver::open(folder, {});
+  expect_utf8([&] { (void)assets.read({fo4::archive::AssetOrigin::loose, folder / "Missing.nif", 0, 0}); });
+}
+
 TEST_F(Ba2ReaderTest, LooseFilesThenLaterArchivesWin) {
   const auto low = write_general("Low.ba2", {general("Meshes\\Shared.nif", "low"), general("Meshes\\LowOnly.nif", "low-only")});
   const auto high = write_general("High.ba2", {general("meshes\\shared.nif", "high"), general("meshes\\over.nif", "archived")});

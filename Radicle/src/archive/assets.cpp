@@ -20,8 +20,8 @@ std::filesystem::path from_utf8(std::string_view text) {
   return std::filesystem::path(std::u8string(text.begin(), text.end()));
 }
 
-std::string utf8_name(const std::filesystem::path& path) {
-  const auto text = path.filename().u8string();
+std::string utf8(const std::filesystem::path& path) {
+  const auto text = path.u8string();
   return std::string(text.begin(), text.end());
 }
 
@@ -30,7 +30,7 @@ std::vector<std::pair<std::string, std::filesystem::path>> list_files(const std:
   std::error_code ec;
   if (!std::filesystem::is_directory(dir, ec)) return files;
   for (const auto& entry : std::filesystem::directory_iterator(dir)) {
-    if (entry.is_regular_file(ec)) files.emplace_back(lower(utf8_name(entry.path())), entry.path());
+    if (entry.is_regular_file(ec)) files.emplace_back(lower(utf8(entry.path().filename())), entry.path());
   }
   std::sort(files.begin(), files.end());
   return files;
@@ -46,7 +46,7 @@ std::optional<std::filesystem::path> child(const std::filesystem::path& dir, std
   std::optional<std::filesystem::path> found;
   for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
     const bool kind = want_dir ? entry.is_directory(ec) : entry.is_regular_file(ec);
-    if (!kind || lower(utf8_name(entry.path())) != name) continue;
+    if (!kind || lower(utf8(entry.path().filename())) != name) continue;
     if (!found || entry.path() < *found) found = entry.path();
   }
   return found;
@@ -97,10 +97,11 @@ std::vector<std::filesystem::path> archive_load_order(const std::filesystem::pat
     for (const auto& [name, path] : files) {
       if (name == stem + ".ba2") add(name, path);
     }
-    const auto prefix = stem + " - ";
     for (const auto& [name, path] : files) {
-      if (name.size() > prefix.size() + 4 && name.compare(0, prefix.size(), prefix) == 0 &&
-          name.compare(name.size() - 4, 4, ".ba2") == 0) {
+      if (!name.ends_with(".ba2")) continue;
+      const std::string_view base(name.data(), name.size() - 4);
+      const auto separator = base.rfind(" - ");
+      if (separator != std::string_view::npos && separator + 3 < base.size() && base.substr(0, separator) == stem) {
         add(name, path);
       }
     }
@@ -147,14 +148,14 @@ std::optional<AssetLocation> AssetResolver::locate_in_archives(std::string_view 
 std::vector<std::byte> AssetResolver::read(const AssetLocation& location) const {
   if (location.origin == AssetOrigin::archive) return archives_.at(location.archive).extract(location.entry);
   std::ifstream stream(location.loose_path, std::ios::binary | std::ios::ate);
-  if (!stream) throw Ba2Error("could not open loose asset: " + location.loose_path.string());
+  if (!stream) throw Ba2Error("could not open loose asset: " + utf8(location.loose_path));
   const auto end = stream.tellg();
-  if (end < 0) throw Ba2Error("could not size loose asset: " + location.loose_path.string());
+  if (end < 0) throw Ba2Error("could not size loose asset: " + utf8(location.loose_path));
   std::vector<std::byte> bytes(static_cast<std::size_t>(end));
   stream.seekg(0, std::ios::beg);
   if (!bytes.empty()) {
     stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    if (!stream) throw Ba2Error("could not read loose asset: " + location.loose_path.string());
+    if (!stream) throw Ba2Error("could not read loose asset: " + utf8(location.loose_path));
   }
   return bytes;
 }

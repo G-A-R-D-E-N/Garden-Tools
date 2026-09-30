@@ -20,29 +20,34 @@ constexpr std::uint16_t k_general_chunk_header_size = 0x10u;
 constexpr std::uint16_t k_texture_chunk_header_size = 0x18u;
 constexpr std::uint64_t k_header_size = 24;
 
+std::string utf8(const std::filesystem::path& path) {
+  const auto text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+
 class FileCursor {
 public:
   explicit FileCursor(const std::filesystem::path& path) : path_(path), stream_(path, std::ios::binary) {
-    if (!stream_) throw Ba2Error("could not open BA2: " + path.string());
+    if (!stream_) throw Ba2Error("could not open BA2: " + utf8(path));
     std::error_code ec;
     size_ = std::filesystem::file_size(path, ec);
-    if (ec) throw Ba2Error("could not determine BA2 size: " + path.string());
+    if (ec) throw Ba2Error("could not determine BA2 size: " + utf8(path));
   }
 
   std::uint64_t size() const noexcept { return size_; }
   std::uint64_t position() const noexcept { return position_; }
 
   void seek(std::uint64_t offset) {
-    if (offset > size_) throw Ba2Error("BA2 offset points outside the archive: " + path_.string());
+    if (offset > size_) throw Ba2Error("BA2 offset points outside the archive: " + utf8(path_));
     stream_.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
-    if (!stream_) throw Ba2Error("could not seek in BA2: " + path_.string());
+    if (!stream_) throw Ba2Error("could not seek in BA2: " + utf8(path_));
     position_ = offset;
   }
 
   void read(void* out, std::size_t length) {
-    if (length > size_ - position_) throw Ba2Error("BA2 is truncated: " + path_.string());
+    if (length > size_ - position_) throw Ba2Error("BA2 is truncated: " + utf8(path_));
     stream_.read(static_cast<char*>(out), static_cast<std::streamsize>(length));
-    if (!stream_) throw Ba2Error("could not read BA2: " + path_.string());
+    if (!stream_) throw Ba2Error("could not read BA2: " + utf8(path_));
     position_ += length;
   }
 
@@ -110,8 +115,8 @@ Ba2Reader Ba2Reader::open(const std::filesystem::path& path) {
   FileCursor file(path);
   Ba2Reader reader;
   reader.path_ = path;
-  if (file.size() < k_header_size) throw Ba2Error("archive truncated before BA2 header: " + path.string());
-  if (file.u32() != k_magic) throw Ba2Error("not a BA2 archive: missing BTDX magic: " + path.string());
+  if (file.size() < k_header_size) throw Ba2Error("archive truncated before BA2 header: " + utf8(path));
+  if (file.u32() != k_magic) throw Ba2Error("not a BA2 archive: missing BTDX magic: " + utf8(path));
   reader.version_ = file.u32();
   const auto tag = file.u32();
   if (tag == k_gnrl) {
@@ -125,7 +130,7 @@ Ba2Reader Ba2Reader::open(const std::filesystem::path& path) {
       throw Ba2Error("unsupported DX10 BA2 version " + std::to_string(reader.version_));
     }
   } else {
-    throw Ba2Error("unsupported BA2 content type; expected GNRL or DX10: " + path.string());
+    throw Ba2Error("unsupported BA2 content type; expected GNRL or DX10: " + utf8(path));
   }
   const bool texture = reader.kind_ == Ba2Kind::texture;
   const auto file_count = file.u32();
