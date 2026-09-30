@@ -377,3 +377,20 @@ TEST_CASE("Texture resolver scans an explicit texture root without a Data ancest
     CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\nested.dds", (root / "Unpacked").string())
               .empty());
 }
+
+TEST_CASE("Texture resolver still scans a folder recursively after a shallow scan of it") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Game" / "Data";
+    writeBa2TextureArchive(data / "nested" / "textures.ba2", {
+        textureEntry("Textures\\Deep.dds", rgba8Dds())
+    });
+    writeFile(root / "loose" / "thing.nif", {'n', 'i', 'f'});
+    writeFile(data / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    CHECK(resolver.getTexturePngDataUrl((root / "loose" / "thing.nif").string(), "textures\\deep.dds",
+                                        data.string() + " ").empty());
+    CHECK(resolver.getTexturePngDataUrl((data / "meshes" / "thing.nif").string(), "textures\\deep.dds", "")
+              .starts_with("data:image/png;base64,"));
+}
