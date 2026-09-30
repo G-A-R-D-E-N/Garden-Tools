@@ -404,6 +404,37 @@ RADICLE_API radicle_status radicle_env_landscape_texture_diffuse(const radicle_e
                                                                  radicle_form_key landscape_texture,
                                                                  const char** out_path);
 
+typedef struct radicle_strings radicle_strings;
+
+typedef enum radicle_string_source {
+  RADICLE_STRING_SOURCE_NORMAL = 0,
+  RADICLE_STRING_SOURCE_DL = 1,
+  RADICLE_STRING_SOURCE_IL = 2
+} radicle_string_source;
+
+RADICLE_API radicle_status radicle_string_source_for(const char* record_signature,
+                                                     const char* subrecord_signature,
+                                                     radicle_string_source* out_source);
+RADICLE_API radicle_status radicle_strings_load(const radicle_env* env,
+                                                const char* strings_dir,
+                                                const char* language,
+                                                radicle_strings** out_strings);
+RADICLE_API void radicle_strings_destroy(radicle_strings* strings);
+RADICLE_API radicle_status radicle_strings_table_path(const radicle_strings* strings,
+                                                      size_t plugin_index,
+                                                      radicle_string_source source,
+                                                      const char** out_path);
+RADICLE_API radicle_status radicle_strings_lookup(const radicle_strings* strings,
+                                                  size_t plugin_index,
+                                                  radicle_string_source source,
+                                                  uint32_t string_id,
+                                                  const char** out_text,
+                                                  size_t* out_size);
+RADICLE_API radicle_status radicle_strings_resolve_name(const radicle_strings* strings,
+                                                        const radicle_record* record,
+                                                        const char** out_text,
+                                                        size_t* out_size);
+
 #ifdef __cplusplus
 }
 #endif
