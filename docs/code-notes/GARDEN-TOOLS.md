@@ -390,7 +390,7 @@ The worklist walks the selected plugin's records against the existing conflict g
 
 `PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::addDataRoots` retains the inherited Data-ancestor restriction. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp` verifies archive resolution within Data and refusal to scan unrelated ancestors.
 
-`PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveFromArchives` keeps an explicit NIF-panel texture root as its own scan root when it has no Data ancestor, so a user-chosen folder such as an unpacked mod still has its own archives scanned; only the climb above it is refused. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver scans an explicit texture root that has no Data ancestor` fails without that fallback.
+`PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveFromArchives` keeps an explicit NIF-panel texture root as its own scan root when it has no Data ancestor, so a user-chosen folder such as an unpacked mod still has its own archives scanned; only the climb above it is refused. A filesystem root (no relative path) or a folder inside the resolver cache is never used this way, since the scan is recursive; `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver does not scan an explicit texture root inside its cache` covers the cache case. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver scans an explicit texture root that has no Data ancestor` fails without that fallback.
 
 `PluginEditTool/native/tests/unit/TextureResolverTests.cpp` checks a loose NIF with `std::filesystem::equivalent`, since a Windows lookup can preserve the query's casing rather than the directory entry's casing.
 
@@ -404,7 +404,7 @@ The worklist walks the selected plugin's records against the existing conflict g
 - `PluginEditTool/native/apps/fo4ide/McpTools.cpp:registerPluginTools` exposes existing native plugin operations. `save_plugin` uses the existing in-place SavePatch route. `reload_mo2_profile` reloads the active profile and fails closed on pending edits unless `discard_pending` is true. Desktop and stdio sessions have separate pending state; reload after another session saves. Record creation retains the backend's supported-type and payload restrictions. `get_record` returns the existing record matrix; `list_records_summary` supplies decoded grid values and editable column paths.
 - `PluginEditTool/native/include/fo4ide/graph/NodeDefinition.hpp:NodeDefinition::pin` and `PluginEditTool/native/src/graph/GraphDocument.cpp:GraphDocument::node` use distinct parameter names to avoid member-shadowing errors in the MSVC build.
 
-`getPluginWorklist` upper-cases the optional signature before matching, so an MCP caller passing `misc` gets the MISC rows instead of a silent empty page; `PluginEditTool/native/tests/unit/RadiclePluginWorklistTests.cpp:Plugin worklist filters by kind and signature and pages without changing counts` checks the lowercase form.
+`PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getPluginWorklist` upper-cases the optional signature before matching, so an MCP caller passing `misc` gets the MISC rows instead of a silent empty page; `PluginEditTool/native/tests/unit/RadiclePluginWorklistTests.cpp:Plugin worklist filters by kind and signature and pages without changing counts` checks the lowercase form.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginPending.cpp — #174C pending lifecycle
 
