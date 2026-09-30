@@ -72,6 +72,13 @@ def main(executable):
 
                 assert read_record() == "Original Eyes"
                 assert "Original Eyes" in call("list_records_summary", {"plugin": plugin, "type": "EYES"})
+                worklist = json.loads(call("list_plugin_worklist", {"plugin": plugin, "filter": "added"}))
+                assert worklist["Total"] == 1 and worklist["Rows"][0]["FormKey"] == form_key, worklist
+                assert worklist["Rows"][0]["Kind"] == "Added" and worklist["Rows"][0]["OverrideDepth"] == 0, worklist
+                page = json.loads(call("list_plugin_worklist", {"plugin": plugin, "type": "EYES", "limit": 1, "offset": 1}))
+                assert page["Total"] == 1 and page["Offset"] == 1 and page["Rows"] == [], page
+                call("list_plugin_worklist", {"plugin": plugin, "filter": "everything"}, failed=True)
+                call("list_plugin_worklist", {"plugin": plugin, "type": "INVALID"}, failed=True)
                 edit = {"plugin": plugin, "form_key": form_key, "path": "EYES\\Full", "value": "Saved Eyes"}
                 call("set_field", edit)
                 pending = read_record()

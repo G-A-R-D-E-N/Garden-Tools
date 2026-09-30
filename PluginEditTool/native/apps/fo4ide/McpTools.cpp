@@ -101,6 +101,11 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"type", "string"}, {"filter", "string", true}, {"limit", "integer", true}, {"offset", "integer", true}})) return false;
     if (!add("list_records_summary", "Read a plugin's record grid with decoded values and editable column paths", "backend", "GetRecordsGrid",
              {{"plugin", "string"}, {"type", "string"}, {"limit", "integer", true}, {"offset", "integer", true}})) return false;
+    if (!add("list_plugin_worklist",
+             "List every record a plugin adds or overrides in one call, with override depth, winner and later overriding plugins. filter is all, added, overrides, winning, losing or conflicted; type narrows to one record signature",
+             "backend", "GetPluginWorklist",
+             {{"plugin", "string"}, {"filter", "string", true}, {"type", "string", true},
+              {"limit", "integer", true}, {"offset", "integer", true}})) return false;
     if (!add("search_records", "Search the loaded order by text and optional record signature", "backend", "SearchRecords",
              {{"query", "string"}, {"type", "string", true}})) return false;
     if (!add("set_field", "Set a field in memory using an editable column path from list_records_summary; value is text. Call save_plugin to persist", "backend", "SetField",
