@@ -198,6 +198,8 @@ TEST_F(Ba2ReaderTest, ErrorsNameNonAnsiPathsInUtf8) {
   };
   expect_utf8([&] { (void)fo4::archive::Ba2Reader::open(folder / "Broken.ba2"); });
   expect_utf8([&] { (void)fo4::archive::Ba2Reader::open(folder / "Missing.ba2"); });
+  expect_utf8([&] { (void)fo4::archive::read_ba2_general_file(folder / "Missing.ba2"); });
+  expect_utf8([&] { (void)fo4::archive::read_ba2_texture_file(folder / "Missing.ba2"); });
   const auto assets = fo4::archive::AssetResolver::open(folder, {});
   expect_utf8([&] { (void)assets.read({fo4::archive::AssetOrigin::loose, folder / "Missing.nif", 0, 0}); });
 }
