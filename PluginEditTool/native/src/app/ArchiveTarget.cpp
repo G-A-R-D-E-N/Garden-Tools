@@ -13,9 +13,9 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
-int intArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size()) return 0;
-    return core::jsonIntSaturated(args[index]).value_or(0);
+int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
+    if (!args.is_array() || index >= args.size()) return fallback;
+    return core::jsonIntSaturated(args[index]).value_or(fallback);
 }
 
 bool boolArgument(const nlohmann::json& args, std::size_t index) {
@@ -54,7 +54,7 @@ Result<nlohmann::json> ArchiveTarget::invoke(std::string_view method,
     }
     if (method == "List") {
         return jsonStringOrError(service_.list(
-            stringArgument(args, 0), stringArgument(args, 1), intArgument(args, 2), stringArgument(args, 3)));
+            stringArgument(args, 0), stringArgument(args, 1), intArgument(args, 2, 2000), stringArgument(args, 3)));
     }
     if (method == "ExtractFile") {
         return textOrError(service_.extractFile(
@@ -77,7 +77,7 @@ Result<nlohmann::json> ArchiveTarget::invoke(std::string_view method,
     if (method == "ExtractAll") {
         return textOrError(service_.extractAll(
             stringArgument(args, 0), stringArgument(args, 1), stringArgument(args, 2),
-            intArgument(args, 3), stringArgument(args, 4)));
+            intArgument(args, 3, 5000), stringArgument(args, 4)));
     }
     if (method == "Compare") {
         return jsonStringOrError(service_.compare(stringArgument(args, 0), stringArgument(args, 1)));

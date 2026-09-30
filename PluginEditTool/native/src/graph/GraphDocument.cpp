@@ -350,7 +350,13 @@ LoadResult tryDeserialize(std::string_view json) {
 
     GraphDocument document;
     if (const auto it = root.find("schema"); it != root.end()) {
-        if (const auto schema = core::jsonInt(*it)) document.schema = *schema;
+        const auto schema = core::jsonInt(*it);
+        if (!schema) {
+            result.error = errorDiagnostic(std::string(codes::kMalformedDocument),
+                                           "The graph document schema must be an integer.");
+            return result;
+        }
+        document.schema = *schema;
     }
     if (const auto it = root.find("id"); it != root.end() && it->is_string()) {
         document.id = it->get<std::string>();
