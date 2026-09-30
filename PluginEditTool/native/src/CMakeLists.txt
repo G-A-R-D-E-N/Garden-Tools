@@ -13,6 +13,7 @@ add_library(
     plugin/RadiclePluginMasters.cpp
     plugin/RadiclePluginMutation.cpp
     plugin/RadiclePluginLifecycle.cpp
+    plugin/RadiclePluginProjExplHazd.cpp
     plugin/RadiclePluginCreate.cpp
     plugin/RadiclePluginScalar.cpp
     plugin/RadiclePluginArmor.cpp
@@ -236,6 +237,8 @@ fo4ide_enable_sanitizers(fo4ide_assets)
 add_library(
     fo4ide_app
     app/ServiceTargets.cpp
+    app/PapyrusTarget.cpp
+    app/GraphTarget.cpp
     app/AppInteropTarget.cpp
     app/AudioTarget.cpp
     app/MaterialTarget.cpp

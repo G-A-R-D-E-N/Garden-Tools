@@ -180,6 +180,54 @@ The worker pool uses `std::jthread`, not `std::thread`, and the spawn loop is wr
 
 The niftool `geo` output is embedded as-is when it is a JSON object (mirrors the C# `JRaw` path); otherwise it is surfaced as an error entry. Unlike the C#, the parse is validated (`parse(..., nullptr, false)` + `is_discarded()`) so a malformed but `{`-leading output cannot corrupt the whole batch payload.
 
+## PluginEditTool/web/src/util/cellGrid.ts:parseCellGridCoordinate — Cell Viewer grid integers (#283)
+
+### Trace
+
+`PluginEditTool/web/src/CellPanel.tsx` used `Number.parseInt(gridX, 10)` and `Number.parseInt(gridY, 10)` in both exterior-grid loading and exterior CELL creation. JavaScript accepts a numeric prefix, so `12abc` became `12` and `1.5` became `1` before the native backend saw the request.
+
+The same permissive check also controlled both grid action buttons.
+
+### Fix
+
+`PluginEditTool/web/src/util/cellGrid.ts:parseCellGridCoordinate` accepts only a complete optional-sign plus decimal-digit token within the signed 32-bit CELL grid range. Both load/create paths and both button guards in `PluginEditTool/web/src/CellPanel.tsx` use the same parser.
+
+The int32 bound matches the native grid arguments. `PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:intArgument` previously converted `GetPlacedReferencesAtGrid` coordinates with an unchecked `get<int>()`, so an out-of-range safe integer such as `4294967297` wrapped to a different cell; it now refuses them. Create range-checks through `RadiclePluginLifecycle.cpp:lifecycleSignedField`.
+
+The native backend remains authoritative for Fallout 4 coordinate range and CELL semantics. This change only prevents the frontend from silently changing the user's token before dispatch.
+
+### Proof
+
+The current branch carries the regression in `f8dd7b3d` before the implementation in `f29d22d6`. Before the implementation, the requested helper did not exist and the `Number.parseInt` behavior reproduced the defect:
+
+- `12abc` -> `12`
+- `1.5` -> `1`
+
+Post-fix parser checks in `PluginEditTool/web/src/CellPanel.test.ts` cover signed integer acceptance at both int32 bounds plus suffix, decimal, exponent, whitespace, empty, and out-of-range refusal.
+
+`PluginEditTool/web/src/CellPanelGrid.test.tsx:Cell Viewer exterior grid dispatch` renders the real panel with a simulated native bridge and plugin picker. Invalid persisted X or Y disables both actions and Enter sends no load request. Correcting an invalid value restores loading. Signed coordinates reach CreateRecord, SavePlugin and the subsequent grid reload unchanged. This verifies React dispatch; it does not verify live WebView2 or in-game behavior.
+
+`PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:intArgument` also refuses integers outside `int`, so `GetPlacedReferencesAtGrid` reports `CellGridArgumentsMissing` instead of wrapping; `PluginEditTool/native/tests/unit/RadiclePluginExteriorCellTests.cpp:PluginEditTool creates a new exterior CELL in the WRLD hierarchy` checks that `4294967263` no longer resolves the cell at X=-33.
+
+`PluginEditTool/native/include/fo4ide/core/JsonInt.hpp:jsonInt` is the shared strict range check: it refuses non-integers, unsigned values above `INT_MAX` and signed values outside `int`. `jsonIntSaturated` clamps into `int` instead. Grid lookup (`src/plugin/RadiclePluginCell.cpp:intArgument`), audio bitrate (`src/app/AudioTarget.cpp:intArgument`, fallback 0 = encoder default) and graph schema (`src/graph/GraphDocument.cpp:tryDeserialize`) use the strict form. Paging limits use the saturating form (`src/app/ArchiveTarget.cpp:intArgument`, `src/app/PluginBackendTarget.cpp:intArgument`, `src/plugin/RadiclePluginOverridePatch.cpp:intArgument`, `src/archive/RadicleArchiveBackend.cpp:intField`), so an oversized limit becomes the backend maximum rather than one row or a wrapped value. `tests/unit/PluginBackendTargetTests.cpp:JSON int helpers refuse or saturate values outside int` checks both. A present graph schema that is not an `int` (float, string, out of range) is refused as a malformed document rather than silently loading as the current schema (`tests/unit/GraphDocumentTests.cpp:A document whose schema is not an integer is refused`). A missing archive `List`/`ExtractAll` limit falls back to the backend defaults (2000 and 5000) instead of 0, which the backend would clamp to one row. `src/plugin/ConditionCodec.cpp` `applyParam` keeps its `get<std::int32_t>()` on purpose: condition parameters that hold form IDs are stored as the unsigned bit pattern in a signed field. `src/app/ServiceTargetSupport.hpp:intNumberArgument` covers the JSON numbers that `src/app/PapyrusTarget.cpp` (`SymbolAt` position) and `src/app/GraphTarget.cpp` (`SearchPalette` limit) accept: integers go through the strict `jsonInt` check and in-range floats are truncated as before, while non-finite values take the fallback instead of the undefined double-to-int conversion. Out-of-range values take the fallback for the `SymbolAt` position and saturate for the `SearchPalette` limit (its `saturate` flag), matching the other paging limits. `src/plugin/RadiclePluginLifecycleFields.hpp:lifecycleSignedField` refuses unsigned JSON values above `INT64_MAX` before its signed range check, so 18446744073709551583 is no longer accepted as x = -33.
+
+## PluginEditTool/native/src/app/ServiceTargets.cpp split — PapyrusTarget, GraphTarget, ServiceTargetSupport
+
+`src/app/ServiceTargets.cpp` was split along its target classes to stay under the 750-line source limit: `SettingsTarget`, `NifTarget` and `CellTarget` stay there, `PapyrusTarget` moved to `src/app/PapyrusTarget.cpp`, and `GraphTarget` to `src/app/GraphTarget.cpp`. Helpers used by more than one target (`trim`, argument readers, `pathResult`, base64 decoding, staging directories, file text I/O, `toLower`, `isWhitespace`) live as inline functions in `src/app/ServiceTargetSupport.hpp` (`fo4ide::app::support`), which includes only what those helpers need; each target file includes its own project headers, and helpers used by one target stay in that file's anonymous namespace. Behaviour is unchanged apart from `intNumberArgument` above.
+
+Explanations moved out of the source during the split:
+- `src/app/PapyrusTarget.cpp:extractScriptName` mirrors PapyrusService.ExtractScriptName: the first non-comment line, if it starts with ScriptName, contributes its second token.
+- `src/app/PapyrusTarget.cpp:namespacedOutPath` mirrors PapyrusService.NamespacedOutPath: namespaced scripts (Foo:Bar) are written into namespace subfolders so they recompile as-is.
+- `src/app/PapyrusTarget.cpp:diagnoseDependencies` mirrors PapyrusService.DiagnoseDependencies: it mines unresolved symbols out of PapyrusCompiler.exe output and maps known script extenders to Nexus pages.
+- `src/app/PapyrusTarget.cpp:PapyrusTarget::compile` ports PapyrusService.Compile: validation, engine selection, then either the built-in engine (PapyrusAnalysisService.Compile) or the Creation Kit process path when a PapyrusCompiler.exe is configured. Its `workDir` / `target` pair mirrors the C# layout sniffing.
+- `src/app/PapyrusTarget.cpp:PapyrusTarget::decompile` ports PapyrusService.Decompile: a single file (written, or a NOT SAVED preview) or a whole folder of .pex, with namespaced output paths so scripts recompile as-is.
+- `src/app/GraphTarget.cpp:graphScriptRoots` ports GraphInterop.Roots(): the Papyrus base-import directories that exist. `describeNodeDefinition`, `describeGraphDiagnostic` and `graphDiagnosticsJson` port GraphInterop.Describe(NodeDefinition), Describe(GraphDiagnostic) and Diagnostics() (the `{ diagnostics, ok }` payload).
+- `src/app/GraphTarget.cpp:GraphTarget::invoke` locks the whole target because the RPC dispatcher runs `invoke()` concurrently and `compiler()`/`Refresh` mutate `index_`, `compiler_` and `rootsKey_`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp split — RadiclePluginLifecycleFields, RadiclePluginProjExplHazd
+
+`src/plugin/RadiclePluginLifecycle.cpp` was split to stay under the 750-line source limit. Its payload field readers and validators (`lifecycleSignedField`, `lifecycleUnsignedField`, `optionalStringField`, `checkLoadedSlot`, `validateProvidedScalars`, …) moved into `src/plugin/RadiclePluginLifecycleFields.hpp` (`fo4ide::plugin::lifecycle`, inline); apart from the `lifecycleSignedField` unsigned guard described above, their bodies are unchanged. The PROJ, EXPL and HAZD branches of `RadiclePluginBackend::createRecord` moved into private members `RadiclePluginBackend::createProjectileLocked`, `createExplosionLocked` and `createHazardLocked` in `src/plugin/RadiclePluginProjExplHazd.cpp`; they return the created key or the same validation error, and `ProjExplHazdError` still propagates to `createRecord`'s catch. They run under `createRecord`'s lock and mutate only the working plugin copy it passes in.
+
 ## Native write model — deferred persistence (#174)
 
 Ordinary record-edit RPCs stage in-memory dirty state via `stagePluginMutationLocked` and require `SavePlugin` to persist. Localized QUST CNAM table changes stage DLSTRINGS through `stagedLocalization` and flush on the same explicit save path (`persistPluginLocked` + dependency-first write). `DiscardPlugin` restores the last persisted snapshot without writing disk. See `docs/code-notes/174c-pending-lifecycle-audit.md` and the `#174C pending lifecycle` note below.
