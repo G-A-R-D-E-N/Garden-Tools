@@ -1,4 +1,5 @@
 #include <fo4ide/app/PluginBackendTarget.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
 #include <charconv>
@@ -21,8 +22,8 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 }
 
 int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) return fallback;
-    return args[index].get<int>();
+    if (!args.is_array() || index >= args.size()) return fallback;
+    return core::jsonInt(args[index]).value_or(fallback);
 }
 
 bool boolArgument(const nlohmann::json& args, std::size_t index, bool fallback = false) {

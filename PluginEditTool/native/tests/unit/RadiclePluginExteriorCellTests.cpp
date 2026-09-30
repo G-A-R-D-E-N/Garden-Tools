@@ -120,6 +120,8 @@ TEST_CASE("PluginEditTool creates a new exterior CELL in the WRLD hierarchy") {
         nlohmann::json::array({"000800:Patch.esp", 4294967263u, 32}));
     REQUIRE_FALSE(wrapped.has_value());
     CHECK(wrapped.error().type == "CellGridArgumentsMissing");
+    CHECK_FALSE(backend.getPlacedReferencesAtGrid(
+        nlohmann::json::array({"000800:Patch.esp", -33, -2147483649LL})).has_value());
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());

@@ -1,4 +1,5 @@
 #include <fo4ide/app/ArchiveTarget.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <filesystem>
 #include <string>
@@ -13,8 +14,8 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 }
 
 int intArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) return 0;
-    return args[index].get<int>();
+    if (!args.is_array() || index >= args.size()) return 0;
+    return core::jsonInt(args[index]).value_or(0);
 }
 
 bool boolArgument(const nlohmann::json& args, std::size_t index) {
