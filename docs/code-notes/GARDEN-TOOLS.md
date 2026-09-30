@@ -684,3 +684,85 @@ The C# binding should apply the same table, so no language choice is built into 
 - a malformed table and bad language tokens;
 - non-ANSI file and directory names (`test_environment_strings.cpp:HandlesNonAnsiFileNames`);
 - the C ABI.
+
+## Radicle/src/archive/ba2_reader.cpp:fo4::archive::Ba2Reader / assets.cpp:AssetResolver — GardenEngine #114 BA2 surface
+
+Sixth #114 slice, stacked on the localization slice. It covers the BA2 C ABI, asset precedence, and string tables stored inside archives.
+
+**Why a second reader.** `read_ba2_general_file` and `read_ba2_texture_file` load the whole archive into memory, which is fine for authoring small archives. Vanilla `Fallout4 - Meshes.ba2` and the texture archives run to gigabytes.
+
+`Ba2Reader::open` reads only three things from disk: the 24-byte header, the entry and chunk table, and the name table. It checks every chunk's range against the file size up front. `extract` then seeks to and reads only the chunks it needs. It opens its own stream on each call, so a const reader can be used from several threads without locks.
+
+Decompression and DDS rebuilding are the existing `extract_ba2_general_entry` / `extract_ba2_texture_entry`, so both readers share one DX10 → DDS header path and the same 1 GiB extraction cap.
+
+**Lookup.** Paths are matched with `normalize_ba2_path`, so case and separator don't matter. An archive without a name table is searched by `compute_ba2_hashes` instead. When one archive lists the same path twice, the first entry wins.
+
+**Load order.** `archive_load_order` builds the list, lowest priority first:
+- INI-listed names, in listed order. Reading `Fallout4.ini` (`sResourceArchiveList`/`sResourceArchiveList2` in Mutagen's `GetArchiveIniListings`) stays with the caller, as does MO2 profile parsing.
+- Then, for each plugin in load order, `<stem>.ba2`, followed by `<stem> - *.ba2` in case-insensitive ascending order.
+
+Details:
+- Names match case-insensitively. Files that are missing on disk are skipped.
+- An archive that is both INI-listed and plugin-named appears once, at its INI position, as in Mutagen's `CachedArchiveListingDetailsProvider` comparer.
+- Which plugin archives apply follows Mutagen's `CheckArchiveApplicability`: an exact stem match, or the stem before the last ` - `.
+- Mutagen orders the ` - ` suffixes of one plugin in descending ordinal order. Radicle uses ascending order. Each vanilla/DLC plugin's suffixed archives (`Main`, `Textures`, `Voices_*`) hold different paths, so the order does not change any lookup.
+
+**Precedence.** `AssetResolver::locate` checks loose files under `data_dir` first. It then searches the archives from highest priority down, so the last-mounted archive wins, as the game resolves them.
+
+Mutagen differs:
+- `GameAssetProvider` also checks loose files before archives.
+- But `ArchiveAssetProvider` returns the *first* archive in its applicable order that has the path. INI archives come first there, then plugin archives in ascending load order, so Mutagen resolves a conflicting path to the lowest-priority archive.
+
+GardenEngine needs what the game shows, so Radicle follows the game. This only differs from Mutagen for paths that more than one archive provides.
+
+**Path rules:**
+- Asset paths are normalized to lower case with `/` separators.
+- A leading separator and a leading `data/` are dropped, like Mutagen's `DataRelativePath`.
+- Empty paths and `.`/`..` components are rejected with `AssetPathError`, so a lookup cannot escape `data_dir`.
+- On case-sensitive filesystems, loose lookup matches each path component case-insensitively. An exact match is tried first, and when several case variants exist the lexically smallest wins.
+
+**Strings in archives.** `StringTables::load` takes an optional `AssetResolver`. For each table not found loose, it looks up `Strings/<stem>_<lang>.<EXT>` in the archives, highest priority first.
+- Mutagen's `StringsFolderLookupFactory` also checks loose files first. It then walks the INI archives plus that plugin's own archives and keeps the first hit.
+- String table names are specific to one plugin, so both approaches find the same file in real setups.
+- `table_path` reports an archived table as `<archive path>/<entry path>`.
+
+**C ABI.** `Radicle/src/c_api_archive.cpp` provides:
+- `radicle_ba2_open` / `close`, `get_info`, `get_entry`, `find`, `extract` (free with `radicle_free_bytes`);
+- `radicle_archive_load_order`;
+- `radicle_assets_open` / `destroy`, `archive_count`, `get_archive` (borrowed readers), `locate`, `read`;
+- `radicle_strings_load_with_assets`.
+
+`Ba2Error` maps to `PARSE_ERROR` and `AssetPathError` to `INVALID_ARGUMENT`. `copy_strings` moved from `c_api.cpp`'s anonymous namespace into `radicle_c_detail` so this file can share it.
+
+**Contracts** (moved from source comments when the slice was restacked):
+- `Radicle/include/fo4/archive/ba2_reader.hpp:Ba2Reader::open` throws `Ba2Error` on anything malformed. `Ba2EntryInfo::path` is the name-table path as stored and is empty when the archive has no name table; the texture header is meaningful only for DX10 archives. The reader's index maps the normalized path, or the packed hashes for archives without names, to the entry index.
+- `Ba2Reader::extract` returns the decompressed payload; DX10 entries come back as a complete DDS file. `Radicle/src/archive/ba2_reader.cpp` keeps the DDS header rebuild on for named entries; unnamed archives only hold DDS payloads in DX10 form.
+- `Radicle/include/fo4/archive/assets.hpp:AssetResolver::open` takes the archives lowest priority first and reads each index at open. An empty `data_dir` disables loose lookup. `AssetLocation`'s indexes point into `archives()` and that archive's `entries()`.
+- `Radicle/src/archive/assets.cpp` lists the regular files directly in a directory as (lower-cased name, path), sorted by lower-cased name.
+- `Radicle/include/fo4/c_api_env.h`:
+  - `radicle_ba2_entry_info.path` is borrowed and empty for archives without a name table; the texture fields are zero for GNRL. `radicle_ba2_find` gives `RADICLE_STATUS_NOT_FOUND` when absent. `radicle_ba2_extract` bytes are freed with `radicle_free_bytes`.
+  - `radicle_archive_load_order`'s result is freed with `radicle_free_string_array`.
+  - `radicle_assets_open` takes `archive_paths` lowest priority first; `data_dir` may be NULL to disable loose lookup. The handle owns its readers.
+  - `radicle_assets_get_archive` returns a reader borrowed until `radicle_assets_destroy`; it is never passed to `radicle_ba2_close`.
+  - `radicle_assets_locate` gives `RADICLE_STATUS_INVALID_ARGUMENT` for empty or `.`/`..` paths and `NOT_FOUND` when nothing provides the path. `archive_index`/`entry_index` are meaningful only for `RADICLE_ASSET_ARCHIVE`.
+  - `radicle_assets_read` returns the winning copy's bytes (freed with `radicle_free_bytes`); `out_location` may be NULL.
+  - `radicle_strings_load_with_assets` is `radicle_strings_load` plus the archive fallback; `assets` may be NULL. `radicle_strings_table_path` gives the UTF-8 loose path or `<archive>/<entry>` for an archived table.
+- `Radicle/src/c_api_env_internal.hpp` holds the loader shared by `radicle_strings_load` and `radicle_strings_load_with_assets`; it clears the error itself.
+
+**Tests.** `Radicle/tests/test_ba2_reader.cpp` covers:
+- GNRL and DX10 archives, stored and zlib chunks, with extraction checked against the in-memory reader;
+- hash lookup without a name table;
+- truncated, wrong-tag, out-of-range-chunk and oversized-count archives;
+- load order;
+- loose/archive precedence and path rules;
+- string tables from an archive, with a loose override;
+- the C ABI.
+
+`Radicle/tests/test_ba2_real.cpp` is the real-file proof, gated on `FO4_DATA_DIR`:
+- It opens every vanilla `Fallout4 - *.ba2`, extracts a NIF (checks the `Gamebryo File Format` magic) and a DDS (checks `DDS `).
+- It resolves WRLD `0000003C` to "Commonwealth" through `Strings/Fallout4_en.STRINGS` in the archives.
+- Setting `FO4_BA2_EXTRACT_ALL=1` also extracts every vanilla entry.
+
+# Asset path validation
+
+`Radicle/src/archive/assets.cpp:normalize_asset_path` rejects colons before joining path components to the Data directory. A drive-qualified component can replace that directory on Windows; colons also select alternate data streams. `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.RejectsDriveAndStreamPaths` covers both loose-file and archive lookup entry points. A Windows C ABI reproduction read a temporary sentinel outside Data before the guard and must return `RADICLE_STATUS_INVALID_ARGUMENT` afterward.

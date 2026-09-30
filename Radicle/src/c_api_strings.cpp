@@ -39,6 +39,39 @@ radicle_status found_text(std::optional<std::string_view> text, const char** out
 
 }  // namespace
 
+namespace radicle_c_env_detail {
+
+radicle_status load_strings(const radicle_env* env,
+                            const char* strings_dir,
+                            const char* language,
+                            const fo4::archive::AssetResolver* assets,
+                            radicle_strings** out_strings) {
+  clear_error();
+  if (env == nullptr || strings_dir == nullptr || language == nullptr || out_strings == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, strings_dir, language and out_strings are required");
+  }
+  *out_strings = nullptr;
+  return guarded("unknown exception while loading string tables", [&] {
+    auto strings = std::make_unique<radicle_strings>();
+    strings->env = env;
+    strings->value = fo4::env::StringTables::load(env->value, utf8_path(strings_dir), language, assets);
+    strings->paths.resize(env->value.plugins().size());
+    for (std::size_t plugin = 0; plugin < strings->paths.size(); ++plugin) {
+      for (const auto source : {fo4::env::StringSource::normal, fo4::env::StringSource::dl,
+                                fo4::env::StringSource::il}) {
+        if (const auto* path = strings->value.table_path(plugin, source)) {
+          const auto utf8 = path->u8string();
+          strings->paths[plugin][static_cast<std::size_t>(source)].assign(utf8.begin(), utf8.end());
+        }
+      }
+    }
+    *out_strings = strings.release();
+    return RADICLE_STATUS_OK;
+  });
+}
+
+}  // namespace radicle_c_env_detail
+
 extern "C" {
 
 radicle_status radicle_string_source_for(const char* record_signature,
@@ -58,28 +91,7 @@ radicle_status radicle_strings_load(const radicle_env* env,
                                     const char* strings_dir,
                                     const char* language,
                                     radicle_strings** out_strings) {
-  clear_error();
-  if (env == nullptr || strings_dir == nullptr || language == nullptr || out_strings == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, strings_dir, language and out_strings are required");
-  }
-  *out_strings = nullptr;
-  return guarded("unknown exception while loading string tables", [&] {
-    auto strings = std::make_unique<radicle_strings>();
-    strings->env = env;
-    strings->value = fo4::env::StringTables::load(env->value, utf8_path(strings_dir), language);
-    strings->paths.resize(env->value.plugins().size());
-    for (std::size_t plugin = 0; plugin < strings->paths.size(); ++plugin) {
-      for (const auto source : {fo4::env::StringSource::normal, fo4::env::StringSource::dl,
-                                fo4::env::StringSource::il}) {
-        if (const auto* path = strings->value.table_path(plugin, source)) {
-          const auto utf8 = path->u8string();
-          strings->paths[plugin][static_cast<std::size_t>(source)].assign(utf8.begin(), utf8.end());
-        }
-      }
-    }
-    *out_strings = strings.release();
-    return RADICLE_STATUS_OK;
-  });
+  return load_strings(env, strings_dir, language, nullptr, out_strings);
 }
 
 void radicle_strings_destroy(radicle_strings* strings) {
