@@ -242,7 +242,7 @@ TEST_F(EnvironmentTest, RejectsRecordWhoseMasterIndexIsPastTheMasterTable) {
 }
 
 TEST_F(EnvironmentTest, LoadErrorsNameNonAnsiPathsInUtf8) {
-  const auto folder = root_ / std::filesystem::path(u8"Моды");
+  const auto folder = root_ / std::filesystem::path(std::u16string{0x041C, 0x043E, 0x0434, 0x044B});
   std::filesystem::create_directories(folder);
   const auto broken = folder / "Broken.esp";
   std::ofstream(broken, std::ios::binary) << "not a plugin";
