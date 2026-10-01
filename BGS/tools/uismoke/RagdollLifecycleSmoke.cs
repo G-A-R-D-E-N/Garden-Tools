@@ -150,7 +150,9 @@ public static class LifecycleSmoke
 
             window.Open(animation);
             Dispatcher.UIThread.RunJobs();
-            string orphan = Path.Combine(Path.GetTempPath(), $"bgs-ragdoll-orphan-{Guid.NewGuid():N}.hkx");
+            string orphanFolder = Path.Combine(Path.GetTempPath(), $"bgs-ragdoll-orphan-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(orphanFolder);
+            string orphan = Path.Combine(orphanFolder, "animation.hkx");
             File.Copy(animation, orphan, true);
             window.Open(orphan);
             Dispatcher.UIThread.RunJobs();
@@ -160,6 +162,7 @@ public static class LifecycleSmoke
 
             TryDelete(refused);
             TryDelete(orphan);
+            Directory.Delete(orphanFolder);
         }
         finally
         {
