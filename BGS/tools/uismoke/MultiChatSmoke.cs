@@ -235,7 +235,7 @@ internal static class MultiChatSmoke
             Check("switching to chat B rejects chat A's real pending mutation",
                 !tools.HasPendingApproval && !ui.ApprovalVisible);
 
-            Click(window, "Apply approved edit");
+            Click(window, "Approve action");
             Dispatcher.UIThread.RunJobs();
             Check("chat B cannot apply chat A's edit", !window.IsDirty && window.UndoStepsForTest == 0);
 
@@ -315,7 +315,8 @@ internal static class MultiChatSmoke
                 "The preview is ready for your approval.")));
 
     private static void Click(MainWindow window, string text) =>
-        Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == text)
+        Smoke.Find<Button>(text == "Send" ? window.AssistantUiForTest!.Pane : window)
+            .Single(button => button.Content?.ToString() == text)
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static void Check(string name, bool value) => Smoke.CheckTrue(name, value);
