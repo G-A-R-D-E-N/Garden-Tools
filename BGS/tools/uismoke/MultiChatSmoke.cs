@@ -315,7 +315,8 @@ internal static class MultiChatSmoke
                 "The preview is ready for your approval.")));
 
     private static void Click(MainWindow window, string text) =>
-        Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == text)
+        Smoke.Find<Button>(text == "Send" ? window.AssistantUiForTest!.Pane : window)
+            .Single(button => button.Content?.ToString() == text)
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static void Check(string name, bool value) => Smoke.CheckTrue(name, value);
