@@ -97,6 +97,9 @@ jobs:
       - name: Run workspace layout smoke
         run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --layout-smoke
 
+      - name: Run rig authoring and physics smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --rig-authoring
+
       - name: Publish platform package
         run: >
           dotnet publish app/BehaviourStudio.csproj --configuration Release

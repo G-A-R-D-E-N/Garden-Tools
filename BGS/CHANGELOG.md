@@ -4,6 +4,13 @@ Changes that affect Behaviour Graph Studio users are documented here.
 
 New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
 
+## Unreleased
+
+* Added a Skeleton / skin authoring window with bone names, reference transforms, translation locks, parent changes, validation, undo/redo, and verified HKX save/reopen. Bone addition/removal and reorderings are supported for standalone skeleton files; dependent rigs refuse changes that require asset remapping.
+* Added Fallout 4 NIF vertex influence editing, shape-wide normalization and pruning, bone-weight copying, mirror matching, a mesh preview, and verified weight-only save/reopen with backups and external-change protection.
+* Added interactive BEPU physics preview with measured convex hulls, gravity, ground and body collisions, fixed/ball/hinge/cone/twist preview joints, pause/step/reset, and body impulses. Masses and preview joint limits are explicitly authored in the window; uniform-density inertia and preview settings do not reproduce or modify native Havok solver settings.
+* Added mounted editor and simulation lifecycle checks to both CI platforms.
+
 ## 1.2.0
 
 October 1, 2026

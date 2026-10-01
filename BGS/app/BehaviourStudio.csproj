@@ -32,6 +32,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../src/BehaviourGraph.Core.csproj" />
+    <None Include="../licenses/BEPU-LICENSE.md" Link="licenses/BEPU-LICENSE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="uismoke" />

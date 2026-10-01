@@ -15,6 +15,17 @@ public static class LifecycleSmoke
 {
     public static int Main(string[] args)
     {
+        if (args.Contains("--rig-authoring"))
+        {
+            bool render = args.Contains("--render-rig");
+            var builder = AppBuilder.Configure<HeadlessApp>();
+            if (render) builder.UseSkia();
+            builder.UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = !render }).SetupWithoutStarting();
+            Settings.SettingsPathForTest = Path.Combine(Path.GetTempPath(), $"bgs-rig-ui-{Guid.NewGuid():N}.cfg");
+            Settings.TrySet("tour_done", "1", out _);
+            try { RigAuthoringSmoke.Run(render ? args.Last() : null); return 0; }
+            finally { File.Delete(Settings.SettingsPathForTest); Settings.SettingsPathForTest = null; }
+        }
         if (args.Contains("--layout-smoke"))
         {
             AppBuilder.Configure<HeadlessApp>()

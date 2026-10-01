@@ -1,0 +1,27 @@
+# Behaviour Graph Studio (Unreleased)
+
+This update brings skeleton and skin tools into the editor and adds interactive collision-based physics preview. These notes describe the next release; version 1.2.0 remains the published release.
+
+## Major changes
+
+- Skeleton authoring: bone names, reference transforms, translation locks, parent changes, validation, mirror-pair inspection, undo/redo and verified save/reopen.
+- Standalone skeletons support bone addition/removal and reordering. Dependent rigs refuse edits that need animation, mapper or physics index remapping.
+- Skin authoring: per-vertex influences, normalization, pruning, bone-weight copying, mirror matching, mesh inspection, undo/redo and weight-only NIF persistence.
+- Interactive physics: gravity, ground and body collisions, preview joints, pause/step/reset and selected-body impulses using BEPU 2.4.0.
+
+## Safety and compatibility
+
+- Skeleton and skin saves retain backups and refuse external file changes. Edits are verified in memory and after rebuilding the native file.
+- NIF saving supports Fallout 4 BSVersion 130 vertex skin payloads. It preserves geometry, binding transforms and every byte outside the owned weight/index slots.
+- Physics uses measured convex vertices and complete joint frames. Users explicitly set simulation masses and preview joint limits; inertia assumes uniform hull density.
+- CI exercises the mounted editor save/reopen and physics reset/close lifecycle on both platforms.
+
+## Known limitations
+
+- Index-changing edits in dependent rigs require asset remapping and are refused. Skeleton mapper write-back remains unsupported.
+- Physics settings stay in the preview window. Native angular atoms, motors, mass/inertia, collision materials and game solver behavior are not imported or modified.
+- Missing/degenerate hulls, incomplete frames, compound/mesh geometry and unsupported native layouts are refused.
+- The existing Drop/Recover control remains a constrained preview. The Physics simulation tab provides the separate collision-based simulation.
+- Cloth simulation and cloth write-back are not implemented.
+
+See the [rig authoring guide](guide/rig-authoring.md) for editor steps and save boundaries.

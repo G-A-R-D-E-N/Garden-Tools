@@ -241,3 +241,27 @@ An animation file carries no ragdoll of its own; the character's sibling skeleto
 ## `BGS/app/MainWindow.Pose.cs:ShowConstraintInspection` — constraint limit readout
 
 The Playback summary line carries per-constraint limit inspection while a constraint is hovered or pinned (amber, like the constraint overlay), and restores the previous summary text and colour when the selection clears.
+
+## Skeleton reference-pose persistence
+
+`BGS/src/Hkx/NativeSave.cs:Compare` and `BGS/src/Hkx/NativeSave.Apply.cs:Apply` separate edit planning from binary application without changing the existing mutation gate. `BGS/tools/tests/SkeletonPoseSaveTests.cs:ReferencePoseEditCanUseTheVerifiedNativeSavePipeline` reproduces the missing qstransform-array save path using the shipped skeleton fixture. `BGS/src/Hkx/HavokClassLayouts.json` and `BGS/src/Hkx/HavokClassTypes.json` remain the authoritative schemas. `BGS/src/Hkx/SaveVerifier.cs:Verify` checks object counts and intended edits; shared storage requires the separate ownership guard below.
+
+## Rig editing and persistence
+
+`BGS/app/RigAuthoringUi.cs:RigAuthoringUi.Attach` mounts skeleton and skin controls through the production window factory. `BGS/src/Hkx/SkeletonDocument.cs:Edit` validates and rebuilds edits in memory before adding history; dependent bone indices remain stable, while pose padding and other skeleton fields are retained. `BGS/src/Hkx/PackfileObjects.cs:WriteStringAt` extends the existing append-and-repoint string writer to owned struct members such as bone names.
+
+`BGS/src/Nif/NifShape.cs:NifGeometry.ReadShape` records the existing reader's vertex skin spans. `BGS/src/Nif/SkinSave.cs:Apply` writes only those spans in a cloned BSVersion 130 source and verifies a reparse with half-precision quantization. Geometry, binding transforms and all other bytes remain unchanged. `BGS/src/Nif/SkinSave.cs:SkinDocument.Save` uses the existing source-stamp and backup transaction. `BGS/tools/uismoke/RigAuthoringSmoke.cs:Run` exercises the mounted controls, undo/redo, backups and saved-file reopening.
+
+## Interactive physics preview
+
+`BGS/src/Hkx/RagdollSimulation.cs:RagdollSimulation` uses BEPU 2.4.0 with explicit user-authored masses and uniform-density hull inertia. The engine receives the measured convex vertices and complete joint frames, refuses incomplete/unsupported geometry, and preserves BEPU's hull-centroid offset when converting between solver poses and displayed body origins. BEPU's version-tagged `ConvexHull`, `TwistLimit`, `SwingLimit`, `Hinge`, `Weld`, and self-contained demo source define this adapter's engine API.
+
+`BGS/app/RigAuthoringWindow.Physics.cs:SetJoints` explicitly authors preview limits rather than importing native angular atoms, motors, material settings or inertia. `BGS/src/Hkx/RagdollSimulation.Joints.cs:AddJoint` supports ball/socket, fixed, hinge, limited hinge, and cone/twist preview joints. This is a collision-based editor simulation, not a claim of equivalent Havok or game behavior. Adjacent bodies are filtered; nonadjacent bodies and the ground collide. Settings stay in the window and do not modify HKX bytes.
+
+`BGS/app/SkeletonView.Drop.cs` owns the existing constrained-drop approximation after a mechanical split. `BGS/app/SkeletonView.Simulation.cs:ShowSimulationFrames` renders the independent disposable simulation owner's frames. `BGS/app/RigAuthoringWindow.Physics.cs:StopPhysics` stops its UI timer and disposes native buffers on reset, replacement, failure or window close. `BGS/tools/tests/RagdollSimulationTests.cs` exercises off-origin rotated hulls, collisions, asymmetric hinge limits, input refusal, source preservation and repeated disposal.
+
+`BGS/src/Hkx/NativeSave.Ownership.cs:RequireUnaliasedArrays` rejects edits that would mutate or move fixups in array storage referenced by another owner. `BGS/tools/tests/SkeletonDocumentTests.cs:SharedBoneArrayIsRefusedWithoutChangingEitherSkeletonOrTheFile` first reproduced an unchecked shared bone array mutation using two skeletons in the measured fixture; rejection occurs before editing bytes or adding history. Numeric array edits append new storage and retain the old storage/fixups.
+
+`BGS/app/RigAuthoringWindow.Physics.cs:EnsureSimulation` freezes gravity/ground inputs while their simulation exists; Reset releases that owner before allowing changes. `BGS/tools/uismoke/RigAuthoringSmoke.cs:Run` checks this state and the Save/Discard/Cancel dirty-close paths.
+
+`BGS/src/Hkx/RagdollSimulation.cs:HullEdges` copies the solver hull's face edges and transforms them by the same rigid poses used for collision solving. `BGS/app/RigAuthoringWindow.Physics.cs:AdvancePhysics` feeds these into the existing mesh renderer. `BGS/app/SkeletonView.Rendering.cs:Render` also accepts mesh-only views without an animation pose. The physics proof includes rotated fixed frames and cone/twist limits; the shared-storage proof includes global references sourced in another section.
