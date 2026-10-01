@@ -40,4 +40,5 @@ TEST(EnvBenchRealData, LoadsOfficialMasters) {
   EXPECT_EQ(result.retained_file_bytes, result.plugin_bytes);
   EXPECT_GT(result.subrecord_count, result.record_count);
   EXPECT_GT(result.subrecord_bytes, 0u);
+  EXPECT_EQ(result.payload_bytes, 0u);
 }

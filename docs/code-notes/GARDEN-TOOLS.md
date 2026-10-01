@@ -1248,6 +1248,14 @@ Release breakdown for 482 MB of plugins, 2,192,230 records and 9,501,965 subreco
 - 804 MB of node slots;
 - about 650 MB of allocator overhead and environment indexes.
 
-Each record's bytes are held twice: once in the file bytes or the decompressed payload (kept for `record_original_bytes` and writeback), and again as one heap-allocated vector per subrecord. Making `Subrecord::data` a view into those buffers would remove the 609 MB copy and roughly 9.5 M allocations. That changes a type every reader and the writer use.
+Each record's bytes were held twice: once in the file bytes or the decompressed payload, and again as one heap-allocated vector per subrecord. Making `Subrecord::data` a view into those buffers would remove the 609 MB copy and roughly 9.5 M allocations. That changes a type every reader and the writer use.
 
 Not done, because nothing in GardenEngine has failed on memory. The Fallen World profile (652 plugins) loads in 15 s at about 4.7 GB inside GardenEngine, and every #114 parity test runs in one process on that load.
+
+## Radicle/src/plugin/reader.cpp:read_record — compressed payloads are not retained
+
+Nothing read `Record::decompressed_payload`; every writer only cleared it, because the writer re-emits records from `subrecords` and `record_original_bytes` slices the retained file bytes. `read_record` now inflates into a local buffer, and `parse_subrecords` copies out of it, so no view outlives the buffer. The field stays in `include/fo4/plugin/container.hpp`, because removing it means touching the files over 750 lines that clear it (`placed_reference_copy.cpp`, `formlink_lists.cpp`, `form_links.cpp`).
+
+Proof: `EnvBenchRealData.LoadsOfficialMasters` asserts `payload_bytes == 0`, the full `fo4_tests` suite passes (590 tests), and `RealPluginPreservation.UnmodifiedFallout4MasterIsByteIdentical` passes on real data. On the official masters (Release, 2026-09-28), peak working set fell from 3,097,288 KB to 2,567,404 KB and load time is unchanged at about 4.8–5.0 s.
+
+`QuestAliasRealData.DecodesEveryShippedQuest` and `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` fail with the same `QUST ALCL Level must be 0..3` errors on the unmodified reader, so those failures predate this change.
