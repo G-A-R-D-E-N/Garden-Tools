@@ -158,6 +158,7 @@ add_executable(
     fo4ide_test_quest_authoring
     unit/RadiclePluginQuestAuthoringTests.cpp
     unit/RadiclePluginQuestPartialFormTests.cpp
+    unit/RadiclePluginQuestCreateLevelTests.cpp
     unit/RadiclePluginDeferredLocalizationTests.cpp
     unit/RadiclePluginPendingLifecycleTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
