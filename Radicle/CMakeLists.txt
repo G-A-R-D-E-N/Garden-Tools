@@ -106,6 +106,7 @@ add_library(fo4
   src/forms/components.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
+  src/forms/placed_reference_edit.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather_concept.cpp
@@ -173,7 +174,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -338,6 +339,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_real.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
+    tests/test_environment_ref_fields.cpp
     tests/test_original_storage.cpp
     tests/plugin_bytes.cpp
   )

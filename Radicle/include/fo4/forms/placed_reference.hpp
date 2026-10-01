@@ -3,9 +3,14 @@
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::forms {
@@ -120,5 +125,49 @@ bool set_placed_reference_transform(
     const FormKey& reference,
     const PositionRotation& transform);
 
+
 bool set_placed_reference_scale(Plugin& plugin, const FormKey& reference, std::optional<float> scale);
+bool set_placed_reference_editor_id(Plugin& plugin, const FormKey& reference, std::string_view editor_id);
+bool set_placed_reference_record_flags(Plugin& plugin, const FormKey& reference, std::uint32_t flags);
+bool set_placed_reference_comments(Plugin& plugin, const FormKey& reference, std::optional<std::string_view> comments);
+bool set_placed_reference_location_reference(Plugin& plugin,
+                                             const FormKey& reference,
+                                             const std::optional<FormKey>& location);
+bool set_placed_reference_ownership(Plugin& plugin,
+                                    const FormKey& reference,
+                                    const std::optional<FormKey>& owner,
+                                    bool no_crime,
+                                    std::optional<std::int32_t> faction_rank);
+bool set_placed_reference_enable_parent(Plugin& plugin,
+                                        const FormKey& reference,
+                                        const std::optional<FormKey>& parent,
+                                        std::uint8_t flags);
+
+struct LinkedReferenceEdit {
+  std::optional<FormKey> keyword;
+  FormKey reference;
+};
+
+bool set_placed_reference_linked_references(Plugin& plugin,
+                                            const FormKey& reference,
+                                            std::span<const LinkedReferenceEdit> links);
+
+enum class PresentFieldEdit {
+  updated,
+  record_missing,
+  field_absent,
+};
+
+PresentFieldEdit set_placed_reference_teleport(Plugin& plugin,
+                                               const FormKey& reference,
+                                               const FormKey& door,
+                                               const PositionRotation& destination);
+PresentFieldEdit set_placed_reference_primitive(Plugin& plugin,
+                                                const FormKey& reference,
+                                                const std::array<float, 3>& bounds,
+                                                std::uint32_t type);
+PresentFieldEdit set_placed_reference_activate_parent_delay(Plugin& plugin,
+                                                            const FormKey& reference,
+                                                            std::size_t index,
+                                                            float delay);
 }  // namespace fo4::forms
