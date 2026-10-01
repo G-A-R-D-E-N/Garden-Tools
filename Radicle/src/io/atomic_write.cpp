@@ -30,22 +30,20 @@ namespace fo4::io {
 namespace {
 
 std::filesystem::path temp_sibling(const std::filesystem::path& path) {
-  const auto parent = path.parent_path();
-  const auto name = path.filename().string();
   static std::atomic<std::uint64_t> counter{0};
   const auto unique = static_cast<std::uint64_t>(
                           std::chrono::steady_clock::now().time_since_epoch().count()) ^
                       (counter.fetch_add(1, std::memory_order_relaxed) << 32u);
   for (int attempt = 0; attempt < 8; ++attempt) {
-    const auto candidate =
-        parent / (name + ".radicle-tmp-" + std::to_string(unique) + "-" +
-                  std::to_string(attempt));
+    auto candidate = path;
+    candidate += ".radicle-tmp-" + std::to_string(unique) + "-" + std::to_string(attempt);
     std::error_code ec;
     if (!std::filesystem::exists(candidate, ec)) {
       return candidate;
     }
   }
-  return parent / (name + ".radicle-tmp");
+  auto fallback = path;
+  return fallback += ".radicle-tmp";
 }
 
 [[noreturn]] void discard_and_throw(const std::filesystem::path& temp,
