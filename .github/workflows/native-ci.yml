@@ -224,7 +224,7 @@ jobs:
         shell: powershell
         run: |
           $all = Get-CimInstance Win32_Process
-          $kill = @($all | Where-Object { $_.Name -in 'cmake.exe', 'ctest.exe' -and $_.CommandLine -like '*\.cache\garden-ci\*' } | ForEach-Object ProcessId)
+          $kill = @($all | Where-Object { $_.Name -in 'cmake.exe', 'ctest.exe', 'git.exe' -and $_.CommandLine -like '*\.cache\garden-ci\*' } | ForEach-Object ProcessId)
           for ($i = 0; $i -lt $kill.Count; $i++) { $kill += @($all | Where-Object ParentProcessId -eq $kill[$i] | ForEach-Object ProcessId) }
           $kill | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
           "Stopped $($kill.Count) leftover process(es)"
