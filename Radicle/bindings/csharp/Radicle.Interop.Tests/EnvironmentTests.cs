@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Radicle.Interop.Native;
 using Xunit;
@@ -70,6 +71,14 @@ public class EnvironmentTests : IClassFixture<WorldFixture>
     public EnvironmentTests(WorldFixture world) => _world = world;
 
     private static FormKey M(uint id) => new("Master.esm", id);
+
+    [Fact]
+    public void FormKeyEqualityIgnoresPluginCase()
+    {
+        Assert.Equal(new FormKey("Strong_PA.esp", 0x808), new FormKey("strong_PA.esp", 0x808));
+        Assert.Single(new HashSet<FormKey> { new("Strong_PA.esp", 0x808), new("strong_PA.esp", 0x808) });
+        Assert.NotEqual(new FormKey("Strong_PA.esp", 0x808), new FormKey("Strong_PA.esp", 0x809));
+    }
 
     [Fact]
     public void LoadsPluginsAndResolvesVersions()
