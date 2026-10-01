@@ -1,21 +1,5 @@
 name: bgs-ci
 
-# Build/test lane for BGS/ (BehaviourGraphStudio), the C#/.NET tool imported
-# from github.com/G-A-R-D-E-N/BGS. It replaces BGS/.github/workflows/ci.yml,
-# which is inert here: GitHub only reads workflows from the repository root.
-#
-# Two deliberate differences from the original:
-#
-#  * Self-hosted, not hosted. BGS was a public repo with free hosted minutes.
-#    This repository is private and both orgs are over the Free Actions
-#    allowance (GHRUNNER#24), where hosted jobs fail silently -- the same
-#    reason native-ci.yml pins the `garden` runner.
-#  * Shell is chosen per leg, and both choices are deliberate. On the Windows
-#    runner `bash` resolves to C:\Windows\system32\bash.EXE -- the WSL stub,
-#    which has no distro installed -- and the default `powershell` cannot run
-#    the .ps1 Actions writes per step, because script execution is disabled on
-#    that host. `cmd` avoids both. Every step is a single command, so nothing
-#    needs shell-specific syntax.
 
 on:
   push:
@@ -43,8 +27,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     env:
-      # Identify the exact commit checked out for this workflow. On pull_request
-      # that is GitHub's synthetic merge commit; on push/dispatch it is the branch commit.
       BUILD_COMMIT: ${{ github.sha }}
     strategy:
       fail-fast: false
@@ -53,13 +35,11 @@ jobs:
           - runner: [self-hosted, Linux, X64, garden]
             rid: linux-x64
             shell: bash
-            executable: ./publish-check/BehaviourGraphStudio
-            strip: find publish-check -name '*.pdb' -delete
-          - runner: [self-hosted, Windows, X64, garden]
+            python: python3
+          - runner: [self-hosted, Windows, X64]
             rid: win-x64
             shell: cmd
-            executable: .\publish-check\BehaviourGraphStudio.exe
-            strip: del /s /q publish-check\*.pdb
+            python: python
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -68,20 +48,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      # setup-dotnet installs into /usr/share/dotnet by default, which the
-      # runner account cannot write to on this host -- that path is only
-      # runner-owned on GitHub's hosted images. The tool cache is writable and
-      # persists between jobs, so the SDK is downloaded once, not per run.
       - name: Set up pinned .NET SDK
-        uses: actions/setup-dotnet@v6
+        uses: https://github.com/actions/setup-dotnet@v6
         env:
-          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
         with:
           dotnet-version: 8.0.424
 
-      # Unrolled rather than looped: a loop needs a specific shell, and the
-      # two legs do not share one. Each restore is its own step so a lock-file
-      # mismatch names the offending project directly.
       - name: Restore BehaviourGraph.Core
         run: dotnet restore src/BehaviourGraph.Core.csproj --locked-mode
 
@@ -97,6 +70,12 @@ jobs:
       - name: Restore uismoke
         run: dotnet restore tools/uismoke/uismoke.csproj --locked-mode
 
+      - name: Restore MCP host
+        run: dotnet restore tools/mcp/BehaviourGraph.Mcp.csproj --locked-mode
+
+      - name: Build MCP host
+        run: dotnet build tools/mcp/BehaviourGraph.Mcp.csproj --configuration Release --no-restore
+
       - name: Build app
         run: dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore
 
@@ -109,12 +88,15 @@ jobs:
       - name: Run UI smoke harness
         run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore
 
-      # Suppress symbol files for the whole build graph so referenced projects
-      # (BehaviourGraph.Core et al.) do not drop portable PDBs into the package.
-      # This override also disables the app's own embedded symbols (the csproj
-      # sets DebugType=embedded). The publish output is used only as a runtime
-      # verification target in CI, but keeping it release-shaped catches package
-      # regressions without retaining anything in Actions storage.
+      - name: Run assistant smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --assistant
+
+      - name: Run multi-chat smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --multichat
+
+      - name: Run workspace layout smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --layout-smoke
+
       - name: Publish platform package
         run: >
           dotnet publish app/BehaviourStudio.csproj --configuration Release
@@ -122,32 +104,7 @@ jobs:
           --output publish-check -p:DebugType=none -p:DebugSymbols=false
           -p:BuildCommit=${{ env.BUILD_COMMIT }}
 
-      # The publish flags above only suppress managed symbols. Avalonia's Skia /
-      # HarfBuzz NuGet packages ship native PDBs (libSkiaSharp.pdb is ~80 MB on
-      # Windows) that otherwise land in publish-check. Strip those too so CI
-      # validates the same lean release-shaped output on both platforms.
-      - name: Strip debug symbols from the package
-        run: ${{ matrix.strip }}
-
-      - name: Verify published executable
-        run: ${{ matrix.executable }} --version
-
-      # Assert that the commit metadata made it into the actual package, not
-      # merely into MSBuild inputs. github-script keeps this cross-platform and
-      # avoids the runner-specific shell constraints documented above.
-      - name: Verify published build identity
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const { execFileSync } = require('node:child_process');
-            const path = require('node:path');
-            const executable = process.platform === 'win32'
-              ? path.join(process.cwd(), 'BGS', 'publish-check', 'BehaviourGraphStudio.exe')
-              : path.join(process.cwd(), 'BGS', 'publish-check', 'BehaviourGraphStudio');
-            const output = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim();
-            const expected = (process.env.BUILD_COMMIT || '').slice(0, 12);
-            if (!expected || !output.includes(`build ${expected}`)) {
-              core.setFailed(`Published build identity mismatch: expected ${expected}, got '${output}'`);
-              return;
-            }
-            core.info(output);
+      - name: Verify package identity and remove symbols
+        run: >
+          ${{ matrix.python }} tools/ci/package.py publish-check
+          --commit ${{ env.BUILD_COMMIT }} --runtime ${{ matrix.rid }}

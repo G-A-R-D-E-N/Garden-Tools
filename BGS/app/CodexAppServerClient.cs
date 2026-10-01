@@ -69,13 +69,13 @@ public sealed class CodexAppServerClient : IDisposable
     public CodexAppServerClient(
         ICodexTransport transport,
         string clientName = "behaviour_graph_studio",
-        string clientVersion = "1.1.0",
+        string? clientVersion = null,
         bool requestExperimental = true,
         TimeSpan? requestTimeout = null)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _clientName = clientName;
-        _clientVersion = clientVersion;
+        _clientVersion = clientVersion ?? BuildInfo.Version;
         _requestExperimental = requestExperimental;
         _requestTimeout = requestTimeout ?? TimeSpan.FromSeconds(30);
         _transport.LineReceived += OnLineReceived;

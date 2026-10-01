@@ -1,6 +1,6 @@
-# Behaviour Graph Studio 1.1.0
+# Behaviour Graph Studio 1.2.0
 
-Behaviour Graph Studio 1.1.0 is a release-hardening update focused on dependable Fallout 4
+Behaviour Graph Studio 1.2.0 adds persistent multi-provider conversations and is a release-hardening update focused on dependable Fallout 4
 inspection, measured authoring, and safe diagnostics. Unsupported operations remain read-only or
 fail closed instead of writing guessed data.
 
@@ -98,7 +98,7 @@ The Drop/Recover control is an engineering preview and is explicitly not a full 
 - Unsupported Havok layouts/classes and conversion paths remain read-only or are refused. BGS never
   writes guessed data; unsupported editing reports the reason and leaves the source unchanged.
 
-These limitations are intentional release boundaries for 1.1.0 and are documented in the UI or
+These limitations are intentional release boundaries for 1.2.0 and are documented in the UI or
 specialist notes where the relevant tool is opened.
 
 ## Manual Windows smoke checklist
@@ -106,7 +106,7 @@ specialist notes where the relevant tool is opened.
 CI cannot validate a real Fallout 4 desktop session. Before publishing, run this checklist with
 the packaged Windows build and vanilla Fallout 4 assets:
 
-- [ ] Launch BGS and confirm About / `--version` reports `1.1.0` and the expected build.
+- [ ] Launch BGS and confirm About / `--version` reports `1.2.0` and the expected build.
 - [ ] Open a vanilla behaviour HKX; browse Tree and Graph.
 - [ ] Open and play an animation; verify skeleton rendering.
 - [ ] Open the physics/ragdoll inspector; verify bodies, constraints, pivots, centre-of-mass and
