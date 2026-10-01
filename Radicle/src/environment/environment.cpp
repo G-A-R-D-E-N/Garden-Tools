@@ -260,6 +260,21 @@ std::vector<const RecordRef*> Environment::winners_of(Signature signature) const
   return result;
 }
 
+std::vector<const RecordRef*> Environment::plugin_records(std::size_t plugin) const {
+  std::vector<const RecordRef*> result;
+  if (plugin >= plugin_records_.size()) return result;
+  result.reserve(plugin_records_[plugin].size());
+  for (const auto& key : plugin_records_[plugin]) {
+    for (const auto& version : versions(key)) {
+      if (version.plugin == plugin) {
+        result.push_back(&version);
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 FormKey Environment::resolve_link(const RecordRef& ref, RawFormId raw) const {
   return resolve_plugin_link(raw, contexts_.at(ref.plugin));
 }

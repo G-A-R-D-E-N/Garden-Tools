@@ -37,14 +37,14 @@ std::optional<std::array<float, 2>> point2(const Reader& reader, Signature signa
   return std::array<float, 2>{Reader::f32(*subrecord, 0), Reader::f32(*subrecord, 4)};
 }
 
-std::optional<CellLighting> decode_lighting(const Reader& reader) {
-  const auto* xcll = reader.unique(k_xcll);
+std::optional<CellLighting> decode_lighting(const Reader& reader, Signature signature, bool has_inherits) {
+  const auto* xcll = reader.unique(signature);
   if (xcll == nullptr) return std::nullopt;
   const std::size_t ambient_size =
       reader.ref().record->header.form_version >= k_ambient_specular_form_version ? 32 : 24;
   const std::size_t tail = 40 + ambient_size;
   const auto size = xcll->data.size();
-  if (size < tail) reader.fail(k_xcll, "is shorter than its required members");
+  if (size < tail) reader.fail(signature, "is shorter than its required members");
 
   CellLighting lighting;
   lighting.ambient = Reader::color(*xcll, 0);
@@ -61,7 +61,7 @@ std::optional<CellLighting> decode_lighting(const Reader& reader) {
   if (size >= tail + 8) lighting.fog_max = Reader::f32(*xcll, tail + 4);
   if (size >= tail + 12) lighting.light_fade_begin = Reader::f32(*xcll, tail + 8);
   if (size >= tail + 16) lighting.light_fade_end = Reader::f32(*xcll, tail + 12);
-  if (size >= tail + 20) lighting.inherits = Reader::u32(*xcll, tail + 16);
+  if (has_inherits && size >= tail + 20) lighting.inherits = Reader::u32(*xcll, tail + 16);
   return lighting;
 }
 
@@ -87,6 +87,14 @@ WorldspaceData decode_worldspace(const Environment& env, const RecordRef& ref) {
   return data;
 }
 
+LightingTemplateData decode_lighting_template(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, Signature::from_string("LGTM"));
+  LightingTemplateData data;
+  data.lighting = decode_lighting(reader, k_data, false);
+  data.god_rays = reader.link(Signature::from_string("WGDR"));
+  return data;
+}
+
 CellData decode_cell(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, k_cell);
   CellData data;
@@ -105,7 +113,7 @@ CellData decode_cell(const Environment& env, const RecordRef& ref) {
     if (xclc->data.size() == 12) grid.land_flags = std::to_integer<std::uint8_t>(xclc->data[8]);
     data.grid = grid;
   }
-  data.lighting = decode_lighting(reader);
+  data.lighting = decode_lighting(reader, k_xcll, true);
   data.lighting_template = reader.link(k_ltmp);
   data.water_height = reader.f32(k_xclw);
   data.image_space = reader.link(k_xcim);

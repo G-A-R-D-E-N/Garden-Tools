@@ -591,6 +591,128 @@ RADICLE_API radicle_status radicle_plugin_set_placed_activate_parent_delay(radic
                                                                            size_t index,
                                                                            float delay);
 
+RADICLE_API radicle_status radicle_env_plugin_records(const radicle_env* env,
+                                                      size_t plugin_index,
+                                                      const radicle_record*** out_records,
+                                                      size_t* out_count);
+
+typedef struct radicle_light_info {
+  int32_t has_data;
+  int32_t time;
+  uint32_t radius;
+  radicle_byte_color color;
+  uint32_t flags;
+  float falloff_exponent;
+  float fov;
+  float near_clip;
+  float flicker_period;
+  float flicker_intensity_amplitude;
+  float flicker_movement_amplitude;
+  float constant;
+  float scalar;
+  int32_t has_exponent;
+  float exponent;
+  int32_t has_god_rays_near_clip;
+  float god_rays_near_clip;
+  int32_t has_value;
+  uint32_t value;
+  int32_t has_weight;
+  float weight;
+  int32_t has_fade;
+  float fade;
+  const char* gobo;
+  radicle_form_key lens;
+  radicle_form_key god_rays;
+} radicle_light_info;
+
+typedef struct radicle_bendable_spline_info {
+  int32_t has_default_tiles;
+  float default_tiles;
+  int32_t has_default_slices;
+  uint16_t default_slices;
+  int32_t has_tiles_relative_to_length;
+  int32_t tiles_relative_to_length;
+  int32_t has_default_color;
+  float default_color[3];
+  int32_t has_wind_sensibility;
+  float wind_sensibility;
+  int32_t has_wind_flexibility;
+  float wind_flexibility;
+  radicle_form_key texture;
+} radicle_bendable_spline_info;
+
+typedef struct radicle_climate_weather {
+  radicle_form_key weather;
+  int32_t chance;
+  radicle_form_key global;
+} radicle_climate_weather;
+
+typedef struct radicle_climate {
+  const radicle_climate_weather* weathers;
+  size_t weather_count;
+  const char* sun_texture;
+  const char* sun_glare_texture;
+  void* internal;
+} radicle_climate;
+
+typedef struct radicle_weather_info {
+  const uint8_t* colors;
+  size_t color_groups;
+  size_t color_times;
+  const float* fog_distances;
+  size_t fog_distance_count;
+  void* internal;
+} radicle_weather_info;
+
+typedef struct radicle_static_placement {
+  float position[3];
+  float rotation[3];
+  float scale;
+} radicle_static_placement;
+
+typedef struct radicle_static_part {
+  radicle_form_key static_record;
+  const radicle_static_placement* placements;
+  size_t placement_count;
+} radicle_static_part;
+
+typedef struct radicle_static_collection {
+  const radicle_static_part* parts;
+  size_t part_count;
+  void* internal;
+} radicle_static_collection;
+
+typedef struct radicle_lighting_template_info {
+  int32_t has_lighting;
+  radicle_cell_lighting lighting;
+  radicle_form_key god_rays;
+} radicle_lighting_template_info;
+
+RADICLE_API radicle_status radicle_light_get_info(const radicle_env* env,
+                                                  const radicle_record* record,
+                                                  radicle_light_info* out_info);
+RADICLE_API radicle_status radicle_bendable_spline_get_info(const radicle_env* env,
+                                                            const radicle_record* record,
+                                                            radicle_bendable_spline_info* out_info);
+RADICLE_API radicle_status radicle_layer_get_parent(const radicle_env* env,
+                                                    const radicle_record* record,
+                                                    radicle_form_key* out_parent);
+RADICLE_API radicle_status radicle_lighting_template_get_info(const radicle_env* env,
+                                                              const radicle_record* record,
+                                                              radicle_lighting_template_info* out_info);
+RADICLE_API radicle_status radicle_climate_decode(const radicle_env* env,
+                                                  const radicle_record* record,
+                                                  radicle_climate** out_climate);
+RADICLE_API void radicle_climate_free(radicle_climate* climate);
+RADICLE_API radicle_status radicle_weather_decode(const radicle_env* env,
+                                                  const radicle_record* record,
+                                                  radicle_weather_info** out_weather);
+RADICLE_API void radicle_weather_free(radicle_weather_info* weather);
+RADICLE_API radicle_status radicle_static_collection_decode(const radicle_env* env,
+                                                            const radicle_record* record,
+                                                            radicle_static_collection** out_collection);
+RADICLE_API void radicle_static_collection_free(radicle_static_collection* collection);
+
 #ifdef __cplusplus
 }
 #endif
