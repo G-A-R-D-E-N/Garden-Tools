@@ -1,6 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 
 #include "fo4/binary/cursor.hpp"
+#include "fo4/io/path_text.hpp"
 #include "fo4/plugin/visit.hpp"
 
 #include <zlib.h>
@@ -262,7 +263,7 @@ std::span<const std::byte> original_bytes_for_range(
 Plugin read_plugin_file(const std::filesystem::path& path) {
   std::ifstream in{path, std::ios::binary};
   if (!in) {
-    throw parse_error(0, "unable to open " + path.string());
+    throw parse_error(0, "unable to open " + io::utf8(path));
   }
   in.seekg(0, std::ios::end);
   const auto size = static_cast<std::size_t>(in.tellg());
@@ -271,7 +272,7 @@ Plugin read_plugin_file(const std::filesystem::path& path) {
   if (size > 0) {
     in.read(reinterpret_cast<char*>(bytes->data()), static_cast<std::streamsize>(size));
     if (!in) {
-      throw parse_error(0, "unable to read " + path.string());
+      throw parse_error(0, "unable to read " + io::utf8(path));
     }
   }
   return read_plugin_from_owned_bytes(std::move(bytes), path);

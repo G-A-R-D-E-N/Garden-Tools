@@ -1,5 +1,6 @@
 #include "fo4/archive/assets.hpp"
 
+#include "fo4/io/path_text.hpp"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -20,10 +21,7 @@ std::filesystem::path from_utf8(std::string_view text) {
   return std::filesystem::path(std::u8string(text.begin(), text.end()));
 }
 
-std::string utf8(const std::filesystem::path& path) {
-  const auto text = path.u8string();
-  return std::string(text.begin(), text.end());
-}
+using io::utf8;
 
 std::vector<std::pair<std::string, std::filesystem::path>> list_files(const std::filesystem::path& dir) {
   std::vector<std::pair<std::string, std::filesystem::path>> files;

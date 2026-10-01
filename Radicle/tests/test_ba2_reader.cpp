@@ -3,7 +3,9 @@
 #include "fo4/archive/ba2_reader.hpp"
 #include "fo4/c_api_env.h"
 #include "fo4/environment/strings.hpp"
+#include "fo4/io/atomic_write.hpp"
 #include "fo4/localization/strings.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -191,15 +193,20 @@ TEST_F(Ba2ReaderTest, ErrorsNameNonAnsiPathsInUtf8) {
   const auto expect_utf8 = [&](const auto& action) {
     try {
       action();
-      ADD_FAILURE() << "expected Ba2Error";
-    } catch (const fo4::archive::Ba2Error& error) {
+      ADD_FAILURE() << "expected an error";
+    } catch (const std::exception& error) {
       EXPECT_NE(std::string(error.what()).find("\xD0\x9C\xD0\xBE\xD0\xB4\xD1\x8B"), std::string::npos);
     }
   };
   expect_utf8([&] { (void)fo4::archive::Ba2Reader::open(folder / "Broken.ba2"); });
   expect_utf8([&] { (void)fo4::archive::Ba2Reader::open(folder / "Missing.ba2"); });
+  expect_utf8([&] { (void)fo4::archive::read_ba2_general_file(folder / "Missing.ba2"); });
+  expect_utf8([&] { (void)fo4::archive::read_ba2_texture_file(folder / "Missing.ba2"); });
   const auto assets = fo4::archive::AssetResolver::open(folder, {});
   expect_utf8([&] { (void)assets.read({fo4::archive::AssetOrigin::loose, folder / "Missing.nif", 0, 0}); });
+  expect_utf8([&] { (void)fo4::read_plugin_file(folder / "Missing.esp"); });
+  std::filesystem::create_directories(folder / "Blocked.esp" / "inner");
+  expect_utf8([&] { fo4::io::write_file_atomic(folder / "Blocked.esp", bytes_of("payload")); });
 }
 
 TEST_F(Ba2ReaderTest, LooseFilesThenLaterArchivesWin) {

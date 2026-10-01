@@ -1,6 +1,7 @@
 #include "fo4/archive/ba2_texture.hpp"
 
 #include "fo4/archive/ba2.hpp"
+#include "ba2_file.hpp"
 #include "fo4/archive/ba2_hash.hpp"
 #include "fo4/binary/cursor.hpp"
 #include "fo4/io/atomic_write.hpp"
@@ -172,26 +173,7 @@ std::size_t checked_size(std::uint64_t value, std::string_view what) {
   return static_cast<std::size_t>(value);
 }
 
-std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
-  std::ifstream stream(path, std::ios::binary | std::ios::ate);
-  if (!stream) {
-    throw Ba2Error("could not open BA2: " + path.string());
-  }
-  const auto end = stream.tellg();
-  if (end < 0) {
-    throw Ba2Error("could not determine BA2 size: " + path.string());
-  }
-  const auto size = static_cast<std::size_t>(end);
-  std::vector<std::byte> bytes(size);
-  stream.seekg(0, std::ios::beg);
-  if (size != 0) {
-    stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
-    if (!stream) {
-      throw Ba2Error("could not read BA2: " + path.string());
-    }
-  }
-  return bytes;
-}
+using detail::read_file_bytes;
 
 Ba2TextureArchive read_ba2_texture_impl(std::span<const std::byte> data) {
   if (data.size() < k_header_size) {

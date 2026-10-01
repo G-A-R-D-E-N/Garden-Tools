@@ -1,6 +1,7 @@
 #include "fo4/archive/ba2_reader.hpp"
 
 #include "fo4/archive/ba2_hash.hpp"
+#include "fo4/io/path_text.hpp"
 
 #include <array>
 #include <cstring>
@@ -20,10 +21,7 @@ constexpr std::uint16_t k_general_chunk_header_size = 0x10u;
 constexpr std::uint16_t k_texture_chunk_header_size = 0x18u;
 constexpr std::uint64_t k_header_size = 24;
 
-std::string utf8(const std::filesystem::path& path) {
-  const auto text = path.u8string();
-  return std::string(text.begin(), text.end());
-}
+using io::utf8;
 
 class FileCursor {
 public:

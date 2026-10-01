@@ -1,6 +1,7 @@
 #include "fo4/environment/environment.hpp"
 
 #include "fo4/environment/placed.hpp"
+#include "fo4/io/path_text.hpp"
 
 #include "fo4/plugin/reader.hpp"
 
@@ -23,10 +24,7 @@ constexpr Signature k_stop{'S', 'T', 'O', 'P'};
 constexpr Signature k_cell{'C', 'E', 'L', 'L'};
 constexpr Signature k_land{'L', 'A', 'N', 'D'};
 
-std::string utf8(const std::filesystem::path& path) {
-  const auto text = path.u8string();
-  return std::string(text.begin(), text.end());
-}
+using io::utf8;
 
 char ascii_lower(char ch) noexcept {
   return (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
