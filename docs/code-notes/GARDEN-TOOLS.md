@@ -1190,6 +1190,7 @@ CTest runs them with `-DRADICLE_CSHARP_TESTS=ON`. The option is off by default s
 Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses every plugin fully into memory, where Mutagen reads plugins over 1 MB lazily. This tool produces the numbers that decide whether Radicle needs lazy loading.
 
 - **Shared helper.** `run_env_bench` lives under `tools/`, not in the `fo4` library. `radicle_env_bench` (`tools/env_bench/main.cpp`) and `tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` both compile it, so the CLI and the test measure the same thing.
+- **Non-ANSI Data folders.** `Radicle/tools/env_bench/main.cpp:wmain` takes the Data folder and plugin names as wide arguments on Windows. With a narrow `main`, Windows converts `argv` through the ANSI code page, so a folder such as `env-bench-Žluť-ж` arrived as `env-bench-Älut-?` and `file_size` failed. The "no official masters" message prints the folder with `u8string()`, because `path::string()` throws for a name outside the ANSI code page. `tools/env_bench/non_ansi_data_dir.cmake` (CTest `radicle_env_bench_non_ansi_data_dir`) runs the tool on such a folder holding `testdata/SlowTime.esp`; it failed before `wmain` and passes after.
 - **What is timed:**
   - `Environment::load` over the given plugins (default: the official masters present);
   - `archive_load_order` + `AssetResolver::open` over the vanilla `Fallout4 - *.ba2` archives only;

@@ -2,8 +2,13 @@
 
 #include <exception>
 #include <iostream>
+#include <string>
 
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+#else
 int main(int argc, char** argv) {
+#endif
   if (argc < 2) {
     std::cerr << "usage: radicle_env_bench <Data dir> [plugin ...]\n";
     return 2;
@@ -13,7 +18,8 @@ int main(int argc, char** argv) {
   for (int i = 2; i < argc; ++i) plugins.push_back(data_dir / argv[i]);
   if (plugins.empty()) plugins = radicle_bench::default_masters(data_dir);
   if (plugins.empty()) {
-    std::cerr << "no official masters found under " << data_dir.string() << "\n";
+    const auto name = data_dir.u8string();
+    std::cerr << "no official masters found under " << std::string(name.begin(), name.end()) << "\n";
     return 1;
   }
   try {

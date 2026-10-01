@@ -366,6 +366,13 @@ if(RADICLE_BUILD_TESTS)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests)
+  if(RADICLE_BUILD_TOOLS)
+    add_test(NAME radicle_env_bench_non_ansi_data_dir
+             COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
+                     -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/env_bench/non_ansi_data_dir.cmake)
+  endif()
 
   # C# bindings: the probe prints the C layout of every public struct for Radicle.Interop.Tests.
   add_executable(radicle_abi_layout_probe bindings/csharp/tests/abi_layout_probe.cpp)
