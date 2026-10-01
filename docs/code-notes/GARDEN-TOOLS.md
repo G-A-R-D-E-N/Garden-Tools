@@ -1096,6 +1096,7 @@ Layouts come from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`) and
 - **BNDS `DNAM`:**
   - Layout: `f32` default tiles, `u16` default slices, a 2-byte bool (tiles relative to length), three float colors, wind sensibility, then (Mutagen `Break`) wind flexibility.
   - The payload must end on a member boundary (0/4/6/8/20/24/28 bytes). `TNAM` holds the texture set.
+  - The three-float color follows xEdit. Mutagen's `BendableSpline.xml` declares `DefaultColor` as `AlphaFloat` (four floats), which would put wind sensibility at offset 24 and leave wind flexibility past a `Break`. All 12 shipped BNDS `DNAM` are 28 bytes, and bytes 20 and 24 hold wind values such as 2.0/0.5 and 4.0/0.75 rather than a color alpha, so the shipped data matches xEdit. `Radicle/src/environment/base_records.cpp:decode_bendable_spline` reads the xEdit layout.
 - **LAYR:** `PNAM` parent layer.
 - **LGTM `DATA`:**
   - Uses the CELL `XCLL` decoder, now parameterized by signature. The form-version-30 rule for the ambient block size applies to both.
