@@ -357,4 +357,35 @@ if(RADICLE_BUILD_TESTS)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests)
+
+  # C# bindings: the probe prints the C layout of every public struct for Radicle.Interop.Tests.
+  add_executable(radicle_abi_layout_probe bindings/csharp/tests/abi_layout_probe.cpp)
+  target_include_directories(radicle_abi_layout_probe PRIVATE include)
+  fo4_apply_warnings(radicle_abi_layout_probe)
+
+  find_package(Python3 COMPONENTS Interpreter QUIET)
+  if(Python3_Interpreter_FOUND)
+    # Fails when fo4/c_api*.h changed without regenerating the committed C# interop and probe.
+    set(_interop_dir ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp)
+    set(_interop_out ${CMAKE_CURRENT_BINARY_DIR}/interop_check)
+    add_test(NAME radicle_csharp_interop_up_to_date
+             COMMAND ${CMAKE_COMMAND}
+                     -DPYTHON=${Python3_EXECUTABLE}
+                     -DGENERATOR=${_interop_dir}/tools/generate_interop.py
+                     -DINCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/include
+                     -DOUT_DIR=${_interop_out}
+                     -DCOMMITTED_CS=${_interop_dir}/Radicle.Interop/RadicleNative.g.cs
+                     -DCOMMITTED_PROBE=${_interop_dir}/tests/abi_layout_probe.cpp
+                     -P ${_interop_dir}/tools/check_generated.cmake)
+  endif()
+
+  option(RADICLE_CSHARP_TESTS "Run the C# binding tests with dotnet (needs the .NET 8 SDK and NuGet access)" OFF)
+  if(RADICLE_CSHARP_TESTS)
+    find_program(DOTNET_EXECUTABLE dotnet REQUIRED)
+    add_test(NAME radicle_csharp_bindings
+             COMMAND ${DOTNET_EXECUTABLE} test ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/Radicle.Interop.Tests
+                     --nologo -v q)
+    set_tests_properties(radicle_csharp_bindings PROPERTIES
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>")
+  endif()
 endif()

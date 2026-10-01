@@ -1141,3 +1141,57 @@ The CELL lighting fill moved into `c_api_env_internal.hpp` (`to_c_lighting`), so
 - plugin record order;
 - the C ABI.
 - `BaseRecordsRealData.DecodesEveryShippedBaseRecord` (with `FO4_DATA_DIR`): every LIGH, BNDS, LAYR, LGTM, CLMT, WTHR and SCOL in the seven official masters decodes; every WTHR has at least 17 color groups and 8 fog distances.
+
+
+## Radicle/bindings/csharp — GardenEngine #114 C# bindings
+
+Tenth #114 slice, stacked on the base-record slice. This is the C# side GardenEngine will call in place of Mutagen. It lives in GARDEN-TOOLS next to the C ABI, so the two change together.
+
+**Generated layer.** `tools/generate_interop.py` parses `fo4/c_api.h` and `fo4/c_api_env.h` and emits `Radicle.Interop/RadicleNative.g.cs`: 87 `DllImport` functions, every public struct as `LayoutKind.Sequential`, and the enums.
+
+Mapping rules:
+- **Scalars:** `size_t` becomes `nuint`, and C `int32_t` flags stay `int`.
+- **Arrays:** scalar arrays become `fixed` buffers; pointer arrays (`const char* textures[8]`) become numbered `IntPtr` fields.
+- **Pointers:**
+  - Handles and C strings are `IntPtr` at their first pointer level.
+  - Input `const char*` is a UTF-8 marshalled `string`.
+  - Deeper pointers stay typed, such as `IntPtr**` for record arrays and `Landscape**` for owned views.
+- **Coverage:** an unmapped type stops generation instead of being skipped, so the ABI cannot outgrow the binding silently.
+
+**Layout proof.** The same script emits `tests/abi_layout_probe.cpp`, built as `radicle_abi_layout_probe`, which prints C `sizeof`/`offsetof` for every struct member. `AbiLayoutTests` compares each line with `Marshal.SizeOf`/`OffsetOf`, and also checks that it covered every generated struct. Changing one generated `int` to `long` fails the test.
+
+**Staleness check.** `radicle_csharp_interop_up_to_date` regenerates into the build tree and byte-compares with the committed files. It runs wherever CTest finds Python 3, so a header change without regeneration fails CI.
+
+**Safe layer:**
+- `RadicleEnvironment`, `StringTables`, `Ba2Archive`, `AssetResolver` and `PluginFile` own their native handles through `IDisposable`.
+- Results are copied into managed records, so no borrowed pointer outlives a call.
+- Status codes map to `RadicleException` (status plus `radicle_last_error`), except lookups whose `NOT_FOUND` means "absent"; those return `null`/`false`.
+- `Record` is a borrowed handle, valid while its environment lives, like Mutagen's link cache records.
+- Native strings passed in are UTF-8 copies freed after each call.
+- `RadicleLibrary.SetPath` / `RADICLE_NATIVE_PATH` pick the library through `NativeLibrary.SetDllImportResolver`, so Godot can point at its bundled `radicle.dll`.
+
+**Tests.** `Radicle.Interop.Tests` builds plugins, a GNRL BA2 and a STRINGS table in C#, and covers:
+- load order, versions and EditorID lookup;
+- plugin records, worlds, cells and cell children;
+- placed-reference decode;
+- the full `ReferenceWriteback` field set with save and reload;
+- archive precedence and archived strings;
+- sky and base records.
+
+CTest runs them with `-DRADICLE_CSHARP_TESTS=ON`. The option is off by default so CI does not depend on NuGet.
+
+**API contract of the safe layer** (formerly XML doc comments; the source-comment policy keeps them here):
+- `Radicle.Interop/Core.cs`: `RadicleLibrary` chooses where the native library loads from and must be set before the first call; `RadicleLibrary.SetPath` takes the full path of `libradicle.so` / `radicle.dll`, and `RADICLE_NATIVE_PATH` is used when it is unset. The UTF-8 marshaller owns copies of the strings passed to a native call for the duration of that call. The status helper maps OK to true, NOT_FOUND to false, and throws `RadicleException` for anything else. The array helpers copy a `radicle_record` array, a string array or a byte buffer and free it with `radicle_free_record_array`, `radicle_free_string_array` or `radicle_free_bytes`.
+- `Radicle.Interop/RadicleEnvironment.cs`: `RadicleEnvironment` is an immutable load order over `radicle_env` and is safe to query from several threads. Plugin paths and record versions are lowest priority first (winner last). `Record` is a borrowed record version, valid while its environment is alive. Terrain grids are 33x33 row-major copies, null when the subrecord is absent. Weather returns `NAM0` as groups x times colors, in the group order `radicle_weather_info` uses, plus the `FNAM` floats.
+- `Radicle.Interop/Archives.cs`: `Ba2Archive` is an index-only view; `Extract` reads one entry on demand, is safe from several threads, and returns decompressed bytes, with texture entries as complete DDS files. `AssetResolver` puts loose files over archives and later archives over earlier ones, as the game mounts them. Its archive order is INI-listed archives, then each plugin's `<stem>.ba2` and `<stem> - *.ba2`, lowest priority first; a null data directory disables loose lookup. Archives it hands out are borrowed: disposing one does nothing, and it dies with the resolver.
+- `Radicle.Interop/Localization.cs`: `StringTables` holds per-plugin tables for one language and returns text as the raw table bytes. The record name helper returns this version's `FULL`, either inline text or its string in the owning plugin's Normal table.
+- `Radicle.Interop/PlacedReferences.cs`: the decoded REFR/ACHR/placed projectile or hazard mirrors `radicle_placed_ref`.
+- `Radicle.Interop/PluginFile.cs`:
+  - `Create` makes an empty plugin; `.esm` sets the master flag and `.esl` sets master + light.
+  - `Write` is atomic: the file at the path is untouched on failure.
+  - `CopyPlacedOverride` (Mutagen's `GetOrAddAsOverride`) copies a record version with its CELL/WRLD containment and masters.
+  - Null removes `XSCL`; null or empty removes `EDID`.
+  - Record flags keep the compression and persistent bits as stored; a null owner removes ownership and faction rank.
+  - Teleport returns false when the reference or its existing `XTEL` is absent. Primitive takes the stored `XPRM` bounds and returns false when the reference or its existing `XPRM` is absent. The activate-parent delay returns false when the reference or that activate parent is absent.
+- `Radicle.Interop.Tests/AbiLayoutTests.cs` reads `RADICLE_ABI_PROBE`, the built `abi_layout_probe` binary that prints C `sizeof`/`offsetof` lines. `Radicle.Interop.Tests/Fixtures.cs` is a minimal FO4 plugin writer (records and groups laid out as the engine reads them) and builds a GNRL v1 BA2 with stored chunks and a name table. The `EnvironmentTests.cs` fixture `Master.esm` holds STAT 000810 (model), WRLD 000800 with top cell 000801 and exterior cell 000802 (REFR 000803, ACHR 000804, LAND 000805), and interior CELL 000820 with REFR 000821; `Patch.esp` moves REFR 000803.
+- `tools/generate_interop.py`: arrays of pointers become numbered fields, fixed buffers take only primitives, and a handle or C string is already one pointer level. The generated files' headers say edits must go through the generator.
