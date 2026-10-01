@@ -102,8 +102,8 @@ jobs:
     # Cross-compiles the Windows x64 build from Linux with clang-cl + the xwin
     # CRT/SDK (GHRUNNER#17) -- the same method used elsewhere on this host. Wine
     # is retired, so Windows binaries cannot be executed here: this job proves
-    # the code COMPILES and LINKS for Windows (tests OFF). Native MSVC/WebView2
-    # test execution still needs a real Windows runner if ever wanted.
+    # the code COMPILES and LINKS for Windows (tests OFF). native-windows-tests
+    # runs the tests with MSVC on the Windows runner.
     #
     # The xwin sysroot does not provide zlib, so this lane builds the pinned
     # static zlib dependency first and points find_package(ZLIB) at it.
@@ -160,8 +160,8 @@ jobs:
     # The native host now fetches the pinned WebView2 SDK itself. This lane also
     # forces the pinned zlib fallback used by package.ps1, so the build matches
     # a clean Windows release machine rather than depending on host packages.
-    # Tests are build-only because the self-hosted runner is Linux and Wine is
-    # intentionally retired.
+    # Tests are OFF here; native-windows-tests runs them with MSVC on the Windows
+    # runner.
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v7
@@ -192,3 +192,60 @@ jobs:
           path: build/fo4ide-win/bin/FO4RecordEditor.exe
           if-no-files-found: warn
           retention-days: 7
+
+  native-windows-tests:
+    name: Native tests (Windows, MSVC)
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Find MSVC and CMake
+        shell: powershell
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "Visual Studio is not installed on this runner" }
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "No Visual Studio install with the C++ x64 tools on this runner" }
+          $bin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          if (-not (Test-Path "$bin\cmake.exe")) { throw "Visual Studio at $vs has no C++ CMake tools component" }
+          [IO.File]::AppendAllText($env:GITHUB_PATH, "$bin`n")
+
+      - name: Build Windows static zlib dependency
+        run: >-
+          git clone --filter=blob:none https://github.com/madler/zlib.git build/zlib-src &&
+          git -C build/zlib-src checkout 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf &&
+          cmake -S build/zlib-src -B build/zlib-msvc -DZLIB_BUILD_EXAMPLES=OFF &&
+          cmake --build build/zlib-msvc --config Release --target zlibstatic &&
+          cmake -E copy build/zlib-src/zlib.h build/zlib-msvc/zlib.h
+
+      - name: Configure Radicle
+        run: >-
+          cmake -S Radicle -B build/radicle-msvc
+          -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-msvc
+          -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-msvc/Release/zlibstatic.lib
+
+      - name: Build Radicle
+        run: cmake --build build/radicle-msvc --config Release --parallel
+
+      - name: Test Radicle
+        run: ctest --test-dir build/radicle-msvc -C Release --output-on-failure
+
+      - name: Configure PluginEditTool native
+        run: >-
+          cmake -S PluginEditTool/native -B build/fo4ide-msvc
+          -DFO4IDE_BUILD_TESTS=ON
+          -DFO4IDE_BUILD_HTTP=ON
+          -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
+
+      - name: Build PluginEditTool native
+        run: cmake --build build/fo4ide-msvc --config Release --parallel
+
+      - name: Test PluginEditTool native
+        run: ctest --test-dir build/fo4ide-msvc -C Release --output-on-failure
