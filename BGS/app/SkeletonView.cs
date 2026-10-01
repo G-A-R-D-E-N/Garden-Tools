@@ -14,6 +14,8 @@ namespace BehaviourStudio.App;
 
 public partial class SkeletonView : Control
 {
+    public SkeletonView() => ClipToBounds = true;
+
     private AnimationPose.Pose? _pose;
     private AnimationPose.Pose? _reference;
 

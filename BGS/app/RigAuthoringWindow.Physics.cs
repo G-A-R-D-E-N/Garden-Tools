@@ -21,7 +21,7 @@ public sealed partial class RigAuthoringWindow
     private RagdollSimulation? _simulation;
     private readonly Dictionary<int, float> _masses = new();
     private readonly Dictionary<int, HavokConstraint> _previewJoints = new();
-    private readonly SkeletonView _physicsView = new() { MinHeight = 280, ShowBodies = true, ShowConstraints = true };
+    private readonly SkeletonView _physicsView = new() { ShowBodies = true, ShowConstraints = true };
     private readonly ComboBox _physicsBodies = new() { MinWidth = 220 };
     private readonly ComboBox _physicsJoints = new() { MinWidth = 220 };
     private readonly TextBox _mass = Ux.Field("positive mass", 110);
@@ -66,7 +66,6 @@ public sealed partial class RigAuthoringWindow
                 EnsureSimulation(); float[] impulse = Values(_impulse, 3);
                 _simulation!.Impulse(SelectedBody(), new Vector3(impulse[0], impulse[1], impulse[2]));
             }))));
-        panel.Children.Add(_physicsView);
         _physicsTimer.Tick += (_, _) => {
             try
             {
@@ -80,7 +79,7 @@ public sealed partial class RigAuthoringWindow
             if (_physics == null || _physicsBodies.SelectedIndex < 0) return;
             _mass.Text = _masses.TryGetValue(SelectedBody(), out float mass) ? Text(mass) : "";
         };
-        return new ScrollViewer { Content = panel };
+        return AuthoringPanel(panel, _physicsView);
     }
 
     public void OpenPhysics(string path)

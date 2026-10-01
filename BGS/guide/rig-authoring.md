@@ -2,6 +2,8 @@
 
 On **Home**, the **Authoring tools** section has **Open skeleton editor**, **Open skin editor** and **Open physics simulation** buttons. Each opens its respective tab. You can also select **Skeleton / skin authoring** from the **Animation** toolbar.
 
+The preview fills the space below the settings and resizes with the window. Scroll settings separately; use **Fit preview** to reset zoom and pan and centre the loaded asset. Zoomed geometry stays clipped inside the viewport.
+
 ## Skeleton
 
 Open a skeleton HKX and choose the skeleton and bone. Edit its name, reference translation, quaternion, scale or translation lock, then select **Apply bone**. Parent changes use **Reparent bone**. Validation and mirror-pair inspection use the existing skeleton tools.

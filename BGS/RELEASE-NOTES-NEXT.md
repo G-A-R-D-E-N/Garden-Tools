@@ -4,6 +4,7 @@ This update brings skeleton and skin tools into the editor and adds interactive 
 
 ## Major changes
 
+- Skeleton, skin and physics previews resize with the window, stay inside their viewport and offer Fit preview. Settings scroll separately from the preview.
 - Home includes an Authoring tools section with direct skeleton, skin, physics, structure and batch editor shortcuts.
 - Top workspace toolbars: Home, Graph, Inspect, Animation and Project select grouped commands above the editing area. Wide command groups scroll horizontally instead of filling the middle of the window.
 - Graph hosts batch and structure authoring; Animation hosts skeleton/skin authoring. Duplicate workspace tab headers are removed; inspectors, results and the playback timeline remain in the workspace.

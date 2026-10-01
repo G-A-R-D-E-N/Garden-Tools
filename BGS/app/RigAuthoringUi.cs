@@ -38,7 +38,7 @@ public sealed partial class RigAuthoringWindow : Window
     private readonly TextBox _rotation = Ux.Field("X Y Z W", 230);
     private readonly TextBox _scale = Ux.Field("X Y Z", 230);
     private readonly CheckBox _lockedTranslation = new() { Content = "Lock translation" };
-    private readonly SkeletonView _preview = new() { MinHeight = 220 };
+    private readonly SkeletonView _preview = new();
     private bool _closeApproved;
     private bool _deciding;
 
@@ -90,10 +90,9 @@ public sealed partial class RigAuthoringWindow : Window
                 var pairing = SkeletonMirror.Of(CurrentSkeleton());
                 Say(pairing + "; " + SkeletonMirror.MirrorAxis(CurrentSkeleton(), pairing));
             }))));
-        panel.Children.Add(_preview);
         _rigs.SelectionChanged += (_, _) => RefreshBones();
         _bones.SelectionChanged += (_, _) => LoadBone();
-        return new ScrollViewer { Content = panel };
+        return AuthoringPanel(panel, _preview);
     }
 
     public void OpenSkeleton(string path)
@@ -101,6 +100,7 @@ public sealed partial class RigAuthoringWindow : Window
         if (_skeleton?.Dirty == true) throw new InvalidOperationException("Save or discard the current skeleton before opening another.");
         _skeleton = new SkeletonDocument(path);
         RefreshSkeleton();
+        _preview.Frame();
         Say("Skeleton opened. Edits stay in memory until Save.");
     }
 
@@ -220,6 +220,20 @@ public sealed partial class RigAuthoringWindow : Window
         var button = Ux.Secondary(title);
         button.Click += (_, _) => action();
         return button;
+    }
+
+    private static Control AuthoringPanel(StackPanel settings, SkeletonView preview)
+    {
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
+        root.Children.Add(new ScrollViewer { Content = settings, MaxHeight = 360 });
+        var fit = Button("Fit preview", preview.Frame);
+        fit.HorizontalAlignment = HorizontalAlignment.Left;
+        fit.Margin = new Avalonia.Thickness(0, 6, 0, 6);
+        Grid.SetRow(fit, 1);
+        root.Children.Add(fit);
+        Grid.SetRow(preview, 2);
+        root.Children.Add(preview);
+        return root;
     }
 
     private static WrapPanel Row(params Control[] controls)

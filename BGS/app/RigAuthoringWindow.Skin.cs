@@ -22,7 +22,7 @@ public sealed partial class RigAuthoringWindow
     private readonly CheckBox _positive = new() { Content = "Copy positive to negative", IsChecked = true };
     private readonly TextBox _tolerance = Ux.Field("tolerance", 100);
     private bool _loadingSkin;
-    private readonly SkeletonView _skinPreview = new() { MinHeight = 220 };
+    private readonly SkeletonView _skinPreview = new();
 
     private Control SkinPanel()
     {
@@ -58,10 +58,9 @@ public sealed partial class RigAuthoringWindow
                     Say(report + ". Save to write matched edits.");
             })));
         panel.Children.Add(Button("Validate skin", () => Run(() => Say(Findings(SkinValidator.Check(CurrentShape()).Select(f => f.ToString()))))));
-        panel.Children.Add(_skinPreview);
         _shapes.SelectionChanged += (_, _) => RefreshSkin();
         _vertex.ValueChanged += (_, _) => LoadInfluences();
-        return new ScrollViewer { Content = panel };
+        return AuthoringPanel(panel, _skinPreview);
     }
 
     public void OpenSkin(string path)

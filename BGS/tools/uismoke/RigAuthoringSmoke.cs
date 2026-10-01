@@ -2,8 +2,10 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using BehaviourStudio.App;
 using OpenCommonwealth.Services.Hkx;
 using OpenCommonwealth.Services.Nif;
@@ -30,6 +32,7 @@ internal static class RigAuthoringSmoke
             editor = owner.OwnedWindows.OfType<RigAuthoringWindow>().Single();
             editor.OpenSkeleton(skeletonPath);
             Dispatcher.UIThread.RunJobs();
+            ViewportFits(editor);
             Render(editor, renderDirectory, "skeleton");
             var boneName = Smoke.Find<TextBox>(editor).Single(box => box.Name == "BoneName");
             string beforeName = boneName.Text!;
@@ -48,6 +51,7 @@ internal static class RigAuthoringSmoke
             tabs.SelectedIndex = 1;
             editor.OpenSkin(skinPath);
             Dispatcher.UIThread.RunJobs();
+            ViewportFits(editor);
             Require(Smoke.Find<SkeletonView>(editor).Any(view => view.DrawnEdges > 0), "skin preview must contain mesh edges without an animation pose");
             Render(editor, renderDirectory, "skin");
             var weight = Smoke.Find<TextBox>(editor).Single(box => box.Name == "SkinWeight0");
@@ -66,6 +70,7 @@ internal static class RigAuthoringSmoke
             tabs.SelectedIndex = 2;
             editor.OpenPhysics(skeletonSource);
             Dispatcher.UIThread.RunJobs();
+            ViewportFits(editor);
             Click(editor, "Step physics");
             Require(Simulation(editor) == null, "physics must refuse missing user-authored masses/settings");
             Smoke.Find<TextBox>(editor).Single(box => box.Name == "SimulationMass").Text = "5";
@@ -106,6 +111,39 @@ internal static class RigAuthoringSmoke
     private static void Click(Window window, string label)
     {
         Smoke.Click(Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == label));
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void ViewportFits(RigAuthoringWindow window)
+    {
+        var view = Smoke.Find<SkeletonView>(window).Single();
+        Require(view.ClipToBounds, "rig geometry must be clipped to its viewport");
+        var fit = Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Fit preview");
+        double before = view.Bounds.Height;
+        window.Height += 180;
+        Dispatcher.UIThread.RunJobs();
+        Require(view.Bounds.Height > before + 100, "rig viewport must grow with the window");
+        Require(!view.GetVisualAncestors().OfType<ScrollViewer>().Any(), "settings scrolling must not move the viewport");
+        typeof(SkeletonView).GetField("_zoom", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(view, 8d);
+        typeof(SkeletonView).GetField("_pan", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(view, new Avalonia.Point(500, -500));
+        Smoke.Click(fit);
+        Require((double)typeof(SkeletonView).GetField("_zoom", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(view)! == 1d,
+            "Fit preview must reset zoom");
+        Require((Avalonia.Point)typeof(SkeletonView).GetField("_pan", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(view)! == default,
+            "Fit preview must reset pan");
+        window.Height -= 180;
+        Dispatcher.UIThread.RunJobs();
+        double width = window.Width, height = window.Height;
+        window.Width = window.MinWidth;
+        window.Height = window.MinHeight;
+        Dispatcher.UIThread.RunJobs();
+        Require(view.Bounds.Width > 600 && view.Bounds.Height > 100,
+            "minimum-size rig window must keep a usable viewport");
+        var content = (Control)window.Content!;
+        Require(view.TranslatePoint(new Avalonia.Point(0, view.Bounds.Height), content)!.Value.Y <= content.Bounds.Height,
+            "minimum-size rig viewport must stay inside the window");
+        window.Width = width;
+        window.Height = height;
         Dispatcher.UIThread.RunJobs();
     }
 
