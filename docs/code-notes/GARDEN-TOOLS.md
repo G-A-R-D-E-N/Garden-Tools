@@ -1081,3 +1081,63 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 **Shipped data.** Every placed reference in the seven official masters stores `XTEL` as 36 bytes, `XPRM` 32, `XOWN` 12, `XESP` 8, `XAPR` 8 and `XSCL` 4, all sizes these edits accept. No shipped `EDID` or `MNAM` on a placed reference has a byte above 0x7F.
 
 **Not verified: string encoding.** These edits write `EDID` and `MNAM` bytes as given, and `Radicle/src/environment/placed.cpp:decode_placed_reference` reads them back unchanged, so Radicle round-trips UTF-8. Mutagen encodes FO4 non-translated strings as Windows-1252 (`Mutagen.Bethesda.Core/Plugins/Meta/GameConstants.cs`), so a non-ASCII comment written here reads differently in Mutagen, xEdit or the Creation Kit. Matching that needs one encoding rule for every Radicle string read and write, not only these edits.
+
+## Radicle/src/environment/base_records.cpp / c_api_base_records.cpp — GardenEngine #114 base-record getters
+
+Ninth #114 slice, stacked on the writeback-fields slice. It covers the base records `CellService` resolves for placed references and sky setup, and the per-plugin record walk `AssetConverterMain.CollectUniqueNifPaths` does with `EnumerateMajorRecords()`.
+
+Layouts come from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`) and Mutagen upstream `Mutagen.Bethesda.Fallout4/Records` (`5f8f1adeac2c4aaba59d06779340c7aec3da24c5`):
+
+- **LIGH `DATA`:**
+  - Layout: Time, Radius, byte Color, Flags, Falloff, FOV, Near Clip, three flicker floats, Constant and Scalar (48 bytes, xEdit `SetOptionalFrom(10)`). Mutagen `Light.xml` then has a `Break`, Exponent, God Rays Near Clip and Value, another `Break`, and Weight, for 64 bytes in total. The shipped masters hold 48-, 60- and 64-byte `DATA`.
+  - `Radicle/src/environment/base_records.cpp:decode_light` fails a `DATA` shorter than 48 bytes, longer than 64, or ending inside a member (a size that is not a multiple of 4); before, a 50- or 68-byte `DATA` decoded silently, against the header's contract (`BaseRecordsTest.DecodesLightsSplinesAndLayers`, records 0x803/0x804). Optional members are read only when present.
+  - Flags are the raw xEdit/Mutagen `Light.Flag` bits.
+  - `FNAM` fade, `NAM0` gobo, `LNAM` lens and `WGDR` god rays sit beside `DATA`.
+- **BNDS `DNAM`:**
+  - Layout: `f32` default tiles, `u16` default slices, a 2-byte bool (tiles relative to length), three float colors, wind sensibility, then (Mutagen `Break`) wind flexibility.
+  - The payload must end on a member boundary (0/4/6/8/20/24/28 bytes). `TNAM` holds the texture set.
+  - The three-float color follows xEdit. Mutagen's `BendableSpline.xml` declares `DefaultColor` as `AlphaFloat` (four floats), which would put wind sensibility at offset 24 and leave wind flexibility past a `Break`. All 12 shipped BNDS `DNAM` are 28 bytes, and bytes 20 and 24 hold wind values such as 2.0/0.5 and 4.0/0.75 rather than a color alpha, so the shipped data matches xEdit. `Radicle/src/environment/base_records.cpp:decode_bendable_spline` reads the xEdit layout.
+- **LAYR:** `PNAM` parent layer.
+- **LGTM `DATA`:**
+  - Uses the CELL `XCLL` decoder, now parameterized by signature. The form-version-30 rule for the ambient block size applies to both.
+  - The word where `XCLL` stores Inherits is `wbUnused(4)` in LGTM, so `inherits` stays empty. `WGDR` holds the god rays.
+- **CLMT `WLST`:**
+  - An array of 12-byte {Weather, Chance `s32`, Global} entries; a size that is not a multiple of 12 fails.
+  - `FNAM`/`GNAM` hold the sun and glare textures.
+- **WTHR `NAM0`:**
+  - Color groups in `wbWeatherColors`/Mutagen `Weather.xml` order: sky upper, fog near, unknown, ambient, sunlight, sun, stars, sky lower, horizon, effect lighting, cloud LOD diffuse/ambient, fog far, sky statics, water multiplier, sun glare, moon glare, fog near/far high.
+  - Each group is 4-byte colors for 8 times from form version 111 (`wbWeatherTimeOfDay`), otherwise 4 times.
+  - The decoder returns a view with the group and time counts. A size that is not a whole number of groups, or fewer than 9 groups (Mutagen's first `Break`), fails.
+  - GardenEngine's `.Day` is time index 1.
+- **WTHR `FNAM`:** the fog distance floats in `wbWeatherFogDistance` order (day/night near, far, power, max, then the 119/120 height members), returned as an array.
+- **SCOL parts:**
+  - Each `ONAM` opens a part; each following `DATA` is an array of 28-byte placements (position, rotation, scale).
+  - Unlike `forms::decode_static_collection_parts`, null `ONAM` parts are kept, because Mutagen's `Parts` list keeps them; GardenEngine skips them when resolving models.
+  - A `DATA` without a preceding `ONAM` fails.
+- **`Environment::plugin_records`:** every record version a plugin holds, in on-disk order.
+
+**C ABI.** `Radicle/src/c_api_base_records.cpp` provides:
+- `radicle_env_plugin_records`;
+- `radicle_light_get_info`, `radicle_bendable_spline_get_info`, `radicle_layer_get_parent`, `radicle_lighting_template_get_info`;
+- owned views `radicle_climate_decode` / `radicle_weather_decode` / `radicle_static_collection_decode`, each with a matching `_free`. The WTHR color view points into plugin bytes.
+
+The CELL lighting fill moved into `c_api_env_internal.hpp` (`to_c_lighting`), so LGTM reuses `radicle_cell_lighting`.
+
+**C ABI contract (`Radicle/include/fo4/c_api_env.h`).**
+- `radicle_env_plugin_records` returns every record version `plugin_index` holds, in on-disk order; free the array with `radicle_free_record_array`. `Environment::plugin_records` returns an empty list for an unknown index.
+- `radicle_light_info::flags` holds the raw `Light.Flag` bits from xEdit/Mutagen: 0x8 flicker, 0x20 off by default, 0x80 pulse, 0x400 shadow spotlight, 0x800 shadow hemisphere, 0x1000 shadow omni, 0x4000 non-shadow spotlight, 0x100000 ambient only. `gobo` is the `NAM0` texture, or NULL when absent.
+- `radicle_weather_info::colors` is the raw `NAM0` view. Group `g` (0 sky upper, 1 fog near, 3 ambient, 4 sunlight, 7 sky lower, 8 horizon, 12 fog far, ...) at time `t` (0 sunrise, 1 day, 2 sunset, 3 night, 4-7 early/late sunrise/sunset) is R, G, B, unused at byte `(g * color_times + t) * 4`; NULL when absent. `fog_distances` holds the `FNAM` floats in order: day near, day far, night near, night far, day power, night power, day max, night max, then the height members.
+- `radicle_lighting_template_info::lighting.has_inherits` is always 0, because LGTM stores an unused word where `XCLL` stores Inherits (`Radicle/src/environment/world.cpp:decode_lighting`, shared by `XCLL` and LGTM `DATA`).
+- `radicle_layer_get_parent` returns `LAYR` `PNAM`; the key has `plugin == NULL` when there is no parent.
+- `radicle_static_collection_decode` returns every `ONAM` part in order, including null Static links (`plugin == NULL`).
+- The C++ decoders in `Radicle/include/fo4/environment/base_records.hpp` throw `WorldDecodeError` on a wrong signature or a malformed subrecord that is present. `Radicle/src/environment/base_records.cpp` takes the WTHR time count from xEdit `wbWeatherTimeOfDay` (8 from form version 111, 4 before); Mutagen breaks after Horizon (9 groups) and Moon Glare (17), and xEdit adds Fog Near/Far High at form version 119. BNDS `DNAM` members end at 4, 6, 8, 20, 24 and 28 bytes; any other size cuts a member.
+- The LGTM test fixture in `Radicle/tests/test_environment_base_records.cpp` is `XCLL`-shaped `DATA` at form version 131: 72 required bytes, then fog far color, max, fade begin/end and an unused word.
+
+**Tests.** `Radicle/tests/test_environment_base_records.cpp` covers:
+- full, short and malformed LIGH/BNDS;
+- LAYR with and without a parent;
+- LGTM, CLMT and 8-time/4-time WTHR (including a bad group count);
+- SCOL with null parts and orphan `DATA`;
+- plugin record order;
+- the C ABI.
+- `BaseRecordsRealData.DecodesEveryShippedBaseRecord` (with `FO4_DATA_DIR`): every LIGH, BNDS, LAYR, LGTM, CLMT, WTHR and SCOL in the seven official masters decodes; every WTHR has at least 17 color groups and 8 fog distances.

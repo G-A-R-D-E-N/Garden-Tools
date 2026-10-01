@@ -112,6 +112,8 @@ public:
   // Winners of this signature, grouped by highest-priority plugin, then on-disk order.
   std::vector<const RecordRef*> winners_of(Signature signature) const;
 
+  std::vector<const RecordRef*> plugin_records(std::size_t plugin) const;
+
   RecordMetadata metadata(const RecordRef& ref) const;
 
   // Resolves a raw FormID stored in `ref`'s plugin; null IDs give an empty FormKey.

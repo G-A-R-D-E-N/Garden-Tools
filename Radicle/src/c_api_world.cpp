@@ -10,16 +10,6 @@ namespace {
 using namespace radicle_c_detail;
 using namespace radicle_c_env_detail;
 
-radicle_byte_color to_c_color(const fo4::env::ByteColor& color) {
-  return {color.red, color.green, color.blue};
-}
-
-template <class T>
-void set_optional(const std::optional<T>& value, int32_t& has, T& out) {
-  has = value ? 1 : 0;
-  if (value) out = *value;
-}
-
 radicle_status resolve_one(const radicle_env* env,
                            radicle_form_key key,
                            const radicle_record** out_record,
@@ -98,30 +88,8 @@ radicle_status radicle_cell_get_info(const radicle_env* env,
       set_optional(data.grid->land_flags, info.has_land_flags, info.land_flags);
     }
     if (data.lighting) {
-      const auto& in = *data.lighting;
-      auto& out = info.lighting;
       info.has_lighting = 1;
-      out.ambient = to_c_color(in.ambient);
-      out.directional = to_c_color(in.directional);
-      out.fog_near_color = to_c_color(in.fog_near_color);
-      out.fog_near = in.fog_near;
-      out.fog_far = in.fog_far;
-      out.directional_rotation_xy = in.directional_rotation_xy;
-      out.directional_rotation_z = in.directional_rotation_z;
-      out.directional_fade = in.directional_fade;
-      out.fog_clip_distance = in.fog_clip_distance;
-      out.fog_power = in.fog_power;
-      if (in.fog_far_color) {
-        out.has_fog_far_color = 1;
-        out.fog_far_color = to_c_color(*in.fog_far_color);
-      }
-      set_optional(in.fog_max, out.has_fog_max, out.fog_max);
-      if (in.light_fade_begin && in.light_fade_end) {
-        out.has_light_fade = 1;
-        out.light_fade_begin = *in.light_fade_begin;
-        out.light_fade_end = *in.light_fade_end;
-      }
-      set_optional(in.inherits, out.has_inherits, out.inherits);
+      info.lighting = to_c_lighting(*data.lighting);
     }
     info.lighting_template = to_c_key(*env, data.lighting_template);
     set_optional(data.water_height, info.has_water_height, info.water_height);

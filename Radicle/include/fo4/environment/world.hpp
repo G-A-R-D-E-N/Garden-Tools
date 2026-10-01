@@ -65,6 +65,11 @@ struct CellData {
   std::optional<FormKey> worldspace;
 };
 
+struct LightingTemplateData {
+  std::optional<CellLighting> lighting;
+  std::optional<FormKey> god_rays;
+};
+
 class WorldDecodeError : public EnvironmentError {
 public:
   using EnvironmentError::EnvironmentError;
@@ -73,5 +78,6 @@ public:
 // Both throw WorldDecodeError on a wrong signature or a malformed present subrecord.
 WorldspaceData decode_worldspace(const Environment& env, const RecordRef& ref);
 CellData decode_cell(const Environment& env, const RecordRef& ref);
+LightingTemplateData decode_lighting_template(const Environment& env, const RecordRef& ref);
 
 }  // namespace fo4::env
