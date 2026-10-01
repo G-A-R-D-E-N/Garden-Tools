@@ -50,12 +50,13 @@ public static class RadicleLibrary
             if (string.IsNullOrEmpty(path))
             {
                 if (!NativeLibrary.TryLoad(name, assembly, searchPath, out handle)) return IntPtr.Zero;
-                VerifyAbi(handle, RadicleNative.CompiledAbiVersion, name);
             }
-            else
+            else handle = NativeLibrary.Load(path);
+            try { VerifyAbi(handle, RadicleNative.CompiledAbiVersion, string.IsNullOrEmpty(path) ? name : path); }
+            catch
             {
-                handle = NativeLibrary.Load(path);
-                VerifyAbi(handle, RadicleNative.CompiledAbiVersion, path);
+                NativeLibrary.Free(handle);
+                throw;
             }
             _path ??= path;
             _handle = handle;

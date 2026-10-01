@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
 using Radicle.Interop.Native;
@@ -53,6 +54,24 @@ public class AbiGuardTests
         Assert.Contains($"reports Radicle ABI {RadicleNative.CompiledAbiVersion + 1}", result);
         Assert.Contains($"generated for ABI {RadicleNative.CompiledAbiVersion}", result);
         Assert.Contains(stub, result);
+    }
+
+    [Fact]
+    public void ARejectedLibraryIsUnloaded()
+    {
+        var stub = Env("RADICLE_ABI_STUB");
+        var copy = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + Path.GetExtension(stub));
+        File.Copy(stub, copy);
+        try
+        {
+            Assert.StartsWith(MismatchType, FirstCallThroughAFreshCopyOfTheBindings(copy));
+            File.Delete(copy);
+            Assert.False(File.Exists(copy));
+        }
+        finally
+        {
+            try { File.Delete(copy); } catch (IOException) { }
+        }
     }
 
     [Fact]
