@@ -1,6 +1,6 @@
-# Behaviour Graph Studio (Unreleased)
+# Behaviour Graph Studio 1.3.0
 
-This update brings skeleton and skin tools into the editor and adds interactive collision-based physics preview. These notes describe the next release; version 1.2.0 remains the published release.
+This update brings skeleton and skin tools into the editor, adds interactive collision-based physics preview, and lets the assistant propose approved actions across editor workspaces. Home's tour explains how to use the AI chat.
 
 ## Major changes
 
