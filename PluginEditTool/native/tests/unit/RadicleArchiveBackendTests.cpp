@@ -217,6 +217,24 @@ TEST_CASE("Radicle archive backend extracts selected entries under the chosen ro
     CHECK(readBytes(output / "Scripts" / "Quest.pex") == bytes("script payload"));
 }
 
+TEST_CASE("Radicle archive backend extracts into a non-ANSI output folder") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = writeArchive(root, "extract.ba2", {entry("Meshes\\Thing.nif", "mesh payload")});
+    const auto output = root / std::filesystem::path(std::u16string{0x041C, 0x043E, 0x0434, 0x044B});
+    const auto text = output.u8string();
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const nlohmann::json args{
+        {"archivePath", path.string()},
+        {"innerPaths", nlohmann::json::array({"Meshes\\Thing.nif"})},
+        {"outputDirectory", std::string(text.begin(), text.end())}
+    };
+    const auto result = backend.invoke("extractSelected", args);
+    REQUIRE(result.has_value());
+    CHECK(readBytes(output / "Meshes" / "Thing.nif") == bytes("mesh payload"));
+}
+
 TEST_CASE("Radicle archive backend rejects traversal before writing extraction output") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

@@ -159,3 +159,33 @@ TEST_CASE("Native CreateSeqFile emits only newly start-game-enabled quests") {
     REQUIRE(stream.good());
     CHECK(value == 0x01000801u);
 }
+
+TEST_CASE("Native CreateSeqFile reports a plugin folder with non-ANSI characters") {
+    const auto root = seqTempRoot() / std::filesystem::path(std::u16string{0x041C, 0x043E, 0x0434, 0x044B});
+    SeqCleanup cleanup{root.parent_path()};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    seqWriteBytes(basePath, baseQuestBytes());
+    seqWriteBytes(patchPath, patchQuestBytes());
+    const auto utf8 = [](const std::filesystem::path& path) {
+        const auto text = path.u8string();
+        return std::string(text.begin(), text.end());
+    };
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const auto loaded = backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{
+            "plugins",
+            nlohmann::json::array({
+                {{"name", "Base.esm"}, {"path", utf8(basePath)}, {"source", "SeqTest"}, {"resolved", true}},
+                {{"name", "Patch.esp"}, {"path", utf8(patchPath)}, {"source", "SeqTest"}, {"resolved", true}}
+            })
+        }});
+    REQUIRE(loaded.has_value());
+
+    const auto result = backend.createSeqFile(nlohmann::json::array({"Patch.esp", ""}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find(utf8(root)) != std::string::npos);
+    CHECK(std::filesystem::file_size(root / "Seq" / "Patch.seq") == 4);
+}

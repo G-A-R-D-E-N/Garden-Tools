@@ -97,6 +97,29 @@ TEST_CASE("MO2 profile resolves plugin winners in virtual data priority") {
     CHECK(snapshot->assetRootsLowToHigh[3] == overwrite);
 }
 
+TEST_CASE("MO2 profile resolves plugins in non-ANSI mod folders") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const std::u16string name{0x041C, 0x043E, 0x0434, 0x044B};
+    const auto mod = root / "mods" / std::filesystem::path(name);
+    const auto text = std::filesystem::path(name).u8string();
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + (root / "Game").string() + "\n");
+    writeFile(root / "profiles" / "Test" / "plugins.txt", "*Ru.esp\n");
+    writeFile(root / "profiles" / "Test" / "modlist.txt", "+" + std::string(text.begin(), text.end()) + "\n");
+    writeFile(root / "Game" / "Data" / "Fallout4.esm");
+    writeFile(root / "Game" / "Data" / std::filesystem::path(name + u".esp"));
+    writeFile(mod / "Ru.esp", "ru");
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    REQUIRE(snapshot->plugins.size() == 2);
+    CHECK(snapshot->plugins[1].path == mod / "Ru.esp");
+    CHECK(snapshot->missingPlugins.empty());
+}
+
 TEST_CASE("MO2 profile reports unresolved enabled plugins without loading records") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

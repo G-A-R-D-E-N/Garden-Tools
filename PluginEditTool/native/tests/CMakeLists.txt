@@ -203,6 +203,8 @@ fo4ide_enable_warnings(fo4ide_test_process)
 fo4ide_enable_sanitizers(fo4ide_test_process)
 catch_discover_tests(fo4ide_test_process PROPERTIES TIMEOUT 10)
 
+fo4ide_use_utf8_code_page()
+
 if(FO4IDE_BUILD_HTTP)
     add_subdirectory(integration)
 endif()

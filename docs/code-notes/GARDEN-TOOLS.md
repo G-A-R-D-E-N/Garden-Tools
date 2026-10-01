@@ -982,3 +982,17 @@ The fields, all from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`),
 - **C ABI round trip.** The same flow runs through the C ABI.
 
 With `placed_reference_formid_offsets` disabled, the remap and parity tests fail.
+
+## PluginEditTool/native/cmake/Utf8CodePage.cmake:fo4ide_use_utf8_code_page — UTF-8 process code page
+
+Every PluginEditTool executable (`FO4RecordEditor.exe` and the test executables) embeds `PluginEditTool/native/cmake/utf8.manifest`, which sets `activeCodePage` to UTF-8. `fo4ide_use_utf8_code_page()` adds the manifest to every executable target in the directory it is called from (`apps/fo4ide`, `tests`, `tests/integration`).
+
+PluginEditTool's strings are UTF-8 (they come from and go back to JSON), but on MSVC `std::filesystem::path(std::string)` and `path::string()` convert through the process ANSI code page. Before the manifest:
+- a non-ASCII folder or file name from a request (even `Café`) decoded to the wrong path, so `RadicleArchiveBackend.cpp` extraction wrote into a garbled folder;
+- any `path::string()` on a name outside the ANSI code page threw `std::system_error`, for example `Mo2Profile.cpp:indexFolder` when a scanned folder held such a file (the whole profile load failed), or the `RadiclePluginSeq.cpp` report after a successful write.
+
+There are about 270 such conversions across 43 files; the manifest makes all of them UTF-8 instead of patching each. Windows applies `activeCodePage` from Windows 10 version 1903; older Windows ignores it and keeps the previous behaviour. `RadiclePluginBackend.cpp:utf8Path` and `RadiclePluginSeq.cpp:seqUtf8Path` still convert explicitly, which stays correct either way.
+
+A plugin name written to `plugins.txt` in a legacy code page (non-ASCII, not UTF-8) already failed when returned in JSON before this change; that case is unchanged.
+
+Tests: `Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders`, `RadicleArchiveBackendTests.cpp:Radicle archive backend extracts into a non-ANSI output folder`, `RadiclePluginSeqTests.cpp:Native CreateSeqFile reports a plugin folder with non-ANSI characters`. All three failed before the manifest on ANSI code page 1252.
