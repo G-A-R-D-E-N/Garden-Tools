@@ -529,6 +529,9 @@ public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
+    public static extern uint AbiVersion();
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_read_file")]
     public static extern Status PluginReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_plugin);
 

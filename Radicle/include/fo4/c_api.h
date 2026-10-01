@@ -13,6 +13,8 @@
   #define RADICLE_API
 #endif
 
+#define RADICLE_ABI_VERSION 1u
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,6 +41,8 @@ typedef struct radicle_master_descriptor {
   const char* filename;
   radicle_plugin_kind kind;
 } radicle_master_descriptor;
+
+RADICLE_API uint32_t radicle_abi_version(void);
 
 /*
  * Handles are owned by the caller and must be released with radicle_plugin_destroy.

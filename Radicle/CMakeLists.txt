@@ -184,6 +184,7 @@ set_target_properties(radicle_c PROPERTIES
   SOVERSION ${PROJECT_VERSION_MAJOR})
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
+target_sources(radicle_c PRIVATE src/c_api_version.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -354,6 +355,7 @@ if(RADICLE_BUILD_TESTS)
   target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
   fo4_apply_warnings(fo4_tests)
   fo4_apply_sanitizers(fo4_tests)
+  target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests)
