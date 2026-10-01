@@ -1259,3 +1259,13 @@ Nothing read `Record::decompressed_payload`; every writer only cleared it, becau
 Proof: `EnvBenchRealData.LoadsOfficialMasters` asserts `payload_bytes == 0`, the full `fo4_tests` suite passes (590 tests), and `RealPluginPreservation.UnmodifiedFallout4MasterIsByteIdentical` passes on real data. On the official masters (Release, 2026-09-28), peak working set fell from 3,097,288 KB to 2,567,404 KB and load time is unchanged at about 4.8–5.0 s.
 
 `QuestAliasRealData.DecodesEveryShippedQuest` and `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` fail with the same `QUST ALCL Level must be 0..3` errors on the unmodified reader, so those failures predate this change.
+
+## Radicle/src/environment/material_swap.cpp:decode_material_swap — MSWP substitutions for GardenEngine
+
+`decode_material_swap` returns each BNAM (original material) with the SNAM (replacement) and CNAM (color remapping index) that follow it, in record order. SNAM or CNAM before any BNAM, a repeated SNAM/CNAM inside one substitution, a CNAM that is not 4 bytes, or a path that is not one NUL-terminated string throws `WorldDecodeError`. FNAM is skipped because GardenEngine does not use it. Sources: the vendored Mutagen `Records/Major Records/MaterialSwap.cs` (`NewFormVersion = 112`) reads a record-level FNAM tree folder from form version 112, and before that requires every per-substitution FNAM to hold the same string; the raw bytes of `Fallout4.esm` `2489D9` (form version 131) read `EDID, FNAM "Interiors\Vault", BNAM, SNAM, BNAM, SNAM`.
+
+`placed_material_swap` reads XMSP on every placed-reference signature. `primary_model_material_swap` returns the swap stored with the model `primary_model_path` chose: MODS for modeled records, MO2S when an ARMO's male world model (MOD2) was chosen and MO4S when the female one (MOD4) was; nothing when the record has no primary model.
+
+The C entry points live in `include/fo4/c_api_materials.h` / `src/c_api_materials.cpp` rather than `c_api_env.h`, which is over the 750-line edit limit; for the same reason XMSP is its own call (`radicle_placed_reference_material_swap`) instead of a field on `radicle_placed_reference`, so that struct's layout is unchanged. `bindings/csharp/tools/generate_interop.py` reads the new header, and the ABI probe includes it.
+
+Proof: `tests/test_environment_material_swap.cpp` (C++ and C API, including the malformed cases); `Radicle.Interop.Tests` ABI layout check; GardenEngine `MaterialSwapParityTests` on Fallen World matches Mutagen for 8,284 MSWP versions (19,821 substitutions), 6,779 model swap links and 308,440 reference swap links.

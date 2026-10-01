@@ -525,6 +525,23 @@ public unsafe struct LightingTemplateInfo
     public FormKey GodRays;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct MaterialSubstitution
+{
+    public IntPtr OriginalMaterial;
+    public IntPtr ReplacementMaterial;
+    public int HasColorRemappingIndex;
+    public float ColorRemappingIndex;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct MaterialSwap
+{
+    public IntPtr Substitutions;
+    public nuint SubstitutionCount;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
@@ -792,5 +809,17 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_static_collection_free")]
     public static extern void StaticCollectionFree(StaticCollection* collection);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_swap_decode")]
+    public static extern Status MaterialSwapDecode(IntPtr env, IntPtr record, MaterialSwap** out_swap);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_swap_free")]
+    public static extern void MaterialSwapFree(MaterialSwap* swap);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_placed_reference_material_swap")]
+    public static extern Status PlacedReferenceMaterialSwap(IntPtr env, IntPtr record, FormKey* out_swap);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_primary_model_material_swap")]
+    public static extern Status RecordPrimaryModelMaterialSwap(IntPtr env, IntPtr record, FormKey* out_swap);
 
 }
