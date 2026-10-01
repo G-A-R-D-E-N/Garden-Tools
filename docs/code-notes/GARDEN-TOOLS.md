@@ -1089,8 +1089,8 @@ Ninth #114 slice, stacked on the writeback-fields slice. It covers the base reco
 Layouts come from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`) and Mutagen upstream `Mutagen.Bethesda.Fallout4/Records` (`5f8f1adeac2c4aaba59d06779340c7aec3da24c5`):
 
 - **LIGH `DATA`:**
-  - Layout: Time, Radius, byte Color, Flags, Falloff, FOV, Near Clip, three flicker floats, Constant and Scalar (48 bytes, xEdit `SetOptionalFrom(10)`). Then Exponent and God Rays Near Clip (Mutagen `Break`), then Value (`Break`), then Weight, for 64 bytes in total.
-  - A shorter `DATA` fails. Optional members are read only when present.
+  - Layout: Time, Radius, byte Color, Flags, Falloff, FOV, Near Clip, three flicker floats, Constant and Scalar (48 bytes, xEdit `SetOptionalFrom(10)`). Mutagen `Light.xml` then has a `Break`, Exponent, God Rays Near Clip and Value, another `Break`, and Weight, for 64 bytes in total. The shipped masters hold 48-, 60- and 64-byte `DATA`.
+  - `Radicle/src/environment/base_records.cpp:decode_light` fails a `DATA` shorter than 48 bytes, longer than 64, or ending inside a member (a size that is not a multiple of 4); before, a 50- or 68-byte `DATA` decoded silently, against the header's contract (`BaseRecordsTest.DecodesLightsSplinesAndLayers`, records 0x803/0x804). Optional members are read only when present.
   - Flags are the raw xEdit/Mutagen `Light.Flag` bits.
   - `FNAM` fade, `NAM0` gobo, `LNAM` lens and `WGDR` god rays sit beside `DATA`.
 - **BNDS `DNAM`:**
@@ -1139,3 +1139,4 @@ The CELL lighting fill moved into `c_api_env_internal.hpp` (`to_c_lighting`), so
 - SCOL with null parts and orphan `DATA`;
 - plugin record order;
 - the C ABI.
+- `BaseRecordsRealData.DecodesEveryShippedBaseRecord` (with `FO4_DATA_DIR`): every LIGH, BNDS, LAYR, LGTM, CLMT, WTHR and SCOL in the seven official masters decodes; every WTHR has at least 17 color groups and 8 fog distances.

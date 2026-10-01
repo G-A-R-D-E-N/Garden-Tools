@@ -40,6 +40,7 @@ LightRecordData decode_light(const Environment& env, const RecordRef& ref) {
   if (const auto* sub = reader.unique(sig("DATA"))) {
     const auto size = sub->data.size();
     if (size < k_light_required_size) reader.fail(sub->signature, "is shorter than its required members");
+    if (size % 4 != 0 || size > 64) reader.fail(sub->signature, "ends inside a member or past Weight");
     LightData data;
     data.time = Reader::i32(*sub, 0);
     data.radius = Reader::u32(*sub, 4);

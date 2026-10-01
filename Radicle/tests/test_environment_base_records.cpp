@@ -11,9 +11,11 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -185,7 +187,9 @@ std::vector<std::byte> make_base() {
                      {top("LIGH", {rec("LIGH", 0x800, {{"DATA", light_data(64)}, {"FNAM", floats({0.75f})},
                                                         {"NAM0", text("Gobo.dds")}, {"LNAM", words({0x850})}}),
                                    rec("LIGH", 0x801, {{"DATA", light_data(48)}}),
-                                   rec("LIGH", 0x802, {{"DATA", light_data(40)}})}),
+                                   rec("LIGH", 0x802, {{"DATA", light_data(40)}}),
+                                   rec("LIGH", 0x803, {{"DATA", light_data(50)}}),
+                                   rec("LIGH", 0x804, {{"DATA", light_data(68)}})}),
                       top("BNDS", {rec("BNDS", 0x810, {{"DNAM", spline_data(28)}, {"TNAM", words({0x851})}}),
                                    rec("BNDS", 0x811, {{"DNAM", spline_data(24)}}),
                                    rec("BNDS", 0x812, {{"DNAM", spline_data(10)}})}),
@@ -256,6 +260,8 @@ TEST_F(BaseRecordsTest, DecodesLightsSplinesAndLayers) {
   EXPECT_EQ(short_light.data->scalar, 2.0f);
   EXPECT_FALSE(short_light.data->exponent.has_value());
   EXPECT_THROW(fo4::env::decode_light(env, *env.winner(key(0x802))), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_light(env, *env.winner(key(0x803))), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_light(env, *env.winner(key(0x804))), fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::decode_light(env, *env.winner(key(0x810))), fo4::env::WorldDecodeError);
 
   const auto spline = fo4::env::decode_bendable_spline(env, *env.winner(key(0x810)));
@@ -330,7 +336,7 @@ TEST_F(BaseRecordsTest, DecodesStaticCollectionsAndListsPluginRecords) {
   EXPECT_THROW(fo4::env::decode_static_collection(env, *env.winner(key(0x861))), fo4::env::WorldDecodeError);
 
   const auto records = env.plugin_records(0);
-  ASSERT_EQ(records.size(), 16u);
+  ASSERT_EQ(records.size(), 18u);
   EXPECT_EQ(records.front()->record->form_key, key(0x800));
   EXPECT_EQ(records.back()->record->form_key, key(0x861));
   EXPECT_TRUE(env.plugin_records(1).empty());
@@ -350,7 +356,7 @@ TEST_F(BaseRecordsTest, CApiDecodesBaseRecords) {
   const radicle_record** records = nullptr;
   size_t count = 0;
   ASSERT_EQ(radicle_env_plugin_records(env, 0, &records, &count), RADICLE_STATUS_OK);
-  EXPECT_EQ(count, 16u);
+  EXPECT_EQ(count, 18u);
   radicle_free_record_array(records);
   EXPECT_EQ(radicle_env_plugin_records(env, 1, &records, &count), RADICLE_STATUS_INVALID_ARGUMENT);
 
@@ -398,4 +404,49 @@ TEST_F(BaseRecordsTest, CApiDecodesBaseRecords) {
   EXPECT_EQ(collection->parts[1].static_record.plugin, nullptr);
   radicle_static_collection_free(collection);
   radicle_env_destroy(env);
+}
+
+TEST(BaseRecordsRealData, DecodesEveryShippedBaseRecord) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  std::vector<std::filesystem::path> order;
+  for (const char* name : {"Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm", "DLCworkshop02.esm",
+                           "DLCworkshop03.esm", "DLCNukaWorld.esm"}) {
+    const auto path = std::filesystem::path(dir) / name;
+    if (std::filesystem::exists(path)) order.push_back(path);
+  }
+  if (order.empty()) GTEST_SKIP() << "no official masters in FO4_DATA_DIR";
+  const auto env = fo4::env::Environment::load(order);
+  std::map<std::string, std::size_t> decoded;
+  for (std::size_t plugin = 0; plugin < env.plugins().size(); ++plugin) {
+    for (const auto* ref : env.plugin_records(plugin)) {
+      const auto signature = ref->record->header.signature.to_string();
+      SCOPED_TRACE(signature + " " + ref->record->form_key.to_string());
+      if (signature == "LIGH") {
+        EXPECT_NO_THROW(fo4::env::decode_light(env, *ref));
+      } else if (signature == "BNDS") {
+        EXPECT_NO_THROW(fo4::env::decode_bendable_spline(env, *ref));
+      } else if (signature == "LAYR") {
+        EXPECT_NO_THROW(fo4::env::decode_layer_parent(env, *ref));
+      } else if (signature == "LGTM") {
+        EXPECT_TRUE(fo4::env::decode_lighting_template(env, *ref).lighting.has_value());
+      } else if (signature == "CLMT") {
+        EXPECT_NO_THROW(fo4::env::decode_climate(env, *ref));
+      } else if (signature == "WTHR") {
+        const auto weather = fo4::env::decode_weather(env, *ref);
+        ASSERT_TRUE(weather.colors.has_value());
+        EXPECT_GE(weather.colors->groups, 17u);
+        EXPECT_GE(weather.fog_distances.size(), 8u);
+      } else if (signature == "SCOL") {
+        EXPECT_NO_THROW(fo4::env::decode_static_collection(env, *ref));
+      } else {
+        continue;
+      }
+      ++decoded[signature];
+    }
+  }
+  for (const char* signature : {"LIGH", "BNDS", "LAYR", "LGTM", "CLMT", "WTHR", "SCOL"}) {
+    EXPECT_GT(decoded[signature], 0u) << signature;
+    RecordProperty(signature, static_cast<int>(decoded[signature]));
+  }
 }
