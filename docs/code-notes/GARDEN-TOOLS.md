@@ -915,3 +915,70 @@ For stage authoring, explicitly select a full source record and use native `Plug
 `BGS/tools/ci/package.py:main` checks the published version, exact commit prefix, and runtime against `BGS/app/BehaviourStudio.csproj:Version` and CI inputs, removes PDB files only within a resolved BGS output directory, and writes build-info.json. Its optional archive creates a fresh ZIP and SHA-256 sidecar for release delivery. `BGS/RELEASE-NOTES.md` and `BGS/CHANGELOG.md` identify version 1.2.0; browser login and real replies from non-Codex providers remain separate manual acceptance boundaries.
 
 `BGS/app/CodexAppServerClient.cs:CodexAppServerClient` defaults its handshake client version to BuildInfo.Version instead of the previous fixed 1.1.0. `BGS/tools/tests/CodexAuthTests.cs:HandshakeRunsInitializeThenInitializedBeforeAccountRead` checks the version sent on the wire; explicit client-version overrides remain supported.
+
+## Radicle/src/c_api_writeback.cpp / forms/placed_reference*.cpp / schema/form_link_mixed.cpp:placed_reference_formid_offsets — GardenEngine #114 reference writeback
+
+Seventh #114 slice, stacked on the BA2 slice. It replaces Mutagen's workflow of `GetOrAddAsOverride`, editing `Placement`/`Scale`, then `WriteToBinary`, for references GardenEngine's editor changes.
+
+**form ID remap gap.** The shared remap and link collection in `visit_link_offsets` never recognized seven form ID-bearing placed-reference subrecords. Before this slice, `copy_placed_reference_as_override` and `remap_plugin_masters` therefore:
+- left these fields' master indexes unchanged whenever the destination master table differed;
+- left their owners out of the masters they add.
+
+The fields, all from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`), `wbRefRecord(REFR` and `ReferenceRecord`:
+
+| Subrecord | Layout | Size rule |
+| --- | --- | --- |
+| `XPOD` Portal Data | array of {Origin, Destination} | multiple of 8 |
+| `XORD` Linked Occlusion References | form ID array | multiple of 4 |
+| `XLRT` Location Ref Type | form ID array | multiple of 4 |
+| `XPWR` Reflected/Refracted By | {Reference, Type} | exactly 8 |
+| `XAPR` Activate Parent Ref | {Reference, Delay} | exactly 8 |
+| `XPLK` Spline Connection | {Ref, Unknown} | exactly 8 |
+| `XWPN` Power Grid Connection | {Node 1, Node 2, Line} | exactly 12 |
+
+`placed_reference_formid_offsets` handles these for the ten placed signatures only, because other record types reuse some of these names. A strict remap throws `FormIdError` when a payload's size breaks its rule, instead of leaving stale IDs.
+
+`is_placed_reference_signature` is now the one shared list; `fo4::env` re-exports it. This also fixes PluginEditTool's placed-reference copies, and its native suite still passes.
+
+**Wider copy/edit support.**
+- `copy_placed_reference_as_override` / `_as_new` and `set_placed_reference_transform` now accept all ten placed signatures (REFR, ACHR, PGRE, PHZD, PMIS, PARW, PBAR, PBEA, PCON, PFLA). They share the CELL containment path, and the 24-byte `DATA` layout is identical across them.
+- `set_placed_reference_scale` sets `XSCL`, inserting it directly before `DATA` when absent (xEdit field order), or removes it for `nullopt`, which is Mutagen's nullable `Scale`. Duplicate or malformed `XSCL` fails without changing anything.
+
+**Plugin creation and master order.**
+- `make_empty_plugin` moves PluginEditTool's `makeEmptyPlugin` header into Radicle: HEDR 1.0 / 0 / `0x800`, form version 131, and the ESM flag for `.esm` or ESM|ESL for `.esl`.
+- Copies add masters in `std::set<PluginKey>` order, which is alphabetical, not load order. `sort_plugin_masters` reorders them to follow a load order through `remap_plugin_masters`, so records, group labels and links are all re-encoded. It throws when a master is not in the load order.
+
+**C ABI.** The source is any record version from the environment; its plugin is `Environment::plugin(ref.plugin)`. `Radicle/src/c_api_writeback.cpp` provides:
+- `radicle_plugin_create`;
+- `radicle_plugin_copy_placed_ref_override` (inserted/replaced/already-exists status);
+- `radicle_plugin_copy_placed_ref_new`. The returned key borrows the destination plugin's filename.
+- `radicle_plugin_set_placed_transform` / `_set_placed_scale`;
+- `radicle_plugin_sort_masters`.
+
+`PlacedReferenceError` maps to `INVALID_ARGUMENT`, and a missing target to `NOT_FOUND`. `struct radicle_plugin` moved into `c_api_internal.hpp` so both C files share it.
+
+**Audit fixes after the restack.** A real-data check (`Radicle/tests/test_writeback_real.cpp:WritebackRealData.CopiedDlcReferencesKeepEveryLinkWhenMastersMove`, gated on `FO4_DATA_DIR`) copies `DLCRobot.esm` placed references into a patch whose master order differs, then writes and reloads it. It selects every reference that carries one of the seven new subrecords, every reference holding a link past the master table, and a 1-in-25 sample of the other linked references. It compares both the decoded links and every raw link hit (record, subrecord, ordinal, offset). It found three failures:
+- `Radicle/src/schema/form_link_mixed.cpp:placed_reference_formid_offsets` required `XPLK` and `XPWR` to be exactly 8 bytes. Both have a `<Break />` after the reference in the vendored Mutagen (`SplineConnection.xml`, `WaterReflection.xml`), so a 4-byte reference-only payload is valid; 244 vanilla `XPLK` subrecords are 4 bytes, and copying any of them threw. The layout table now accepts the short size and emits only slots that fit. Test: `test_environment_writeback.cpp:AcceptsReferenceOnlySplineAndReflectionLinks`.
+- Vanilla data holds links whose master index is past the plugin's master table (for example `DLCRobot.esm` REFR 00272E `XRFG` = `0x02013491` with one master). `Environment::resolve_link` already reads those as the owning plugin, as Mutagen does, but the remap and link collection went through the strict `resolve_plugin_form_id` and threw. `Radicle/src/formid.cpp:resolve_plugin_link` now holds that rule; `Environment::resolve_link` and every link site in `Radicle/src/schema/form_links.cpp` (`remap_raw`, link collection, retargeting, the COED owner) use it. Record header identities and group labels stay strict. Test: `test_environment_writeback.cpp:LinksPastTheMasterTableStayWithTheOwningPlugin`.
+- XOWN (ownership) was never remapped in any record, a bug that already existed on main: copying `DLCRobot.esm` ACHR `010F58` turned its owner `010004:DLCRobot.esm` into `010004:Fallout4.esm`. `Radicle/include/fo4/schema/structured_formids.inc` now lists XOWN with the form ID at offset 0. The layout (source:xEdit `wbDefinitionsCommon.pas` `wbOwnership`) is: owner, 4 unused bytes, a u8 No Crime flag, 3 unused bytes, 12 bytes in total, which is what every vanilla XOWN uses. Test: `Radicle/tests/test_environment_writeback.cpp:RewritesTheOwnershipOwner`.
+- To keep `form_links.cpp` under the 750-line limit, `visit_link_offsets` reaches the packed and placed layouts through one entry point, `form_link_mixed.cpp:mixed_formid_offsets`.
+
+**Contracts** (moved from source comments when the slice was restacked):
+- `Radicle/include/fo4/forms/placed_reference.hpp:copy_placed_reference_as_override` copies any of the ten placed signatures, recreating its CELL/WRLD containment and adding masters. `set_placed_reference_transform` rejects a missing, duplicate or malformed `DATA` without changing the plugin. `set_placed_reference_scale` inserts `XSCL` directly before `DATA` when absent (xEdit FO4 REFR order), removes it for `nullopt`, and returns false when the record is missing. The older header comments on the first two still say REFR/ACHR.
+- `Radicle/include/fo4/plugin/writer.hpp:sort_plugin_masters` reorders masters to follow `load_order`, keeping each master's kind, and throws `FormIdError` when a master is not listed. `make_empty_plugin` writes only TES4, as described above.
+- `Radicle/include/fo4/schema/form_link_mixed.hpp:placed_reference_formid_offsets` gives `nullopt` when the subrecord is not one of the seven listed above.
+- `Radicle/include/fo4/c_api_env.h`:
+  - `radicle_plugin_create`: TES4 only, next form ID `0x800`, ESM flag for `.esm` and ESM|ESL for `.esl`.
+  - `radicle_plugin_copy_placed_ref_override`: copies this record version into the plugin as an override, recreating its CELL/WRLD containment and adding masters. The plugin is unchanged unless `RADICLE_STATUS_OK` is returned.
+  - `radicle_plugin_copy_placed_ref_new`: copies it as a new reference owned by the plugin. `out_key.plugin` is borrowed from the plugin and stays valid until the next call that modifies or destroys it. `NOT_FOUND` when the plugin lacks the parent CELL.
+  - `radicle_plugin_set_placed_transform`: rewrites `DATA` position and rotation (radians); `NOT_FOUND` when the plugin has no such record.
+  - `radicle_plugin_set_placed_scale`: sets `XSCL`, or removes it when `has_scale` is 0; `NOT_FOUND` when the plugin has no such record.
+  - `radicle_plugin_sort_masters`: reorders the plugin's masters to follow the environment's load order; `INVALID_ARGUMENT` when a master is not loaded.
+- `Radicle/tests/test_environment_writeback.cpp` fixtures: `Master.esm` has exterior cell 000801 in WRLD 000800 with refs 000802/000803 and interior cell 000820 with ref 000821; `Other.esm` has interior cell 000850 with ref 000851; `DLC.esm` (master `Master.esm`) has interior cell 01000840 with ref 01000841, whose links point at DLC and Master records. In the patch, `Master.esm` moves from master index 0 to 1 and `DLC.esm` from 1 to 2, so its bytes are rewritten.
+
+**Tests.** `Radicle/tests/test_environment_writeback.cpp` covers:
+- **Raw remap.** Moving DLC.esm from master index 1 to 2 rewrites every new slot and leaves non-form ID struct members alone. A malformed `XAPR` throws.
+- **C++ save/reload parity.** It overrides refs from three masters, copies one as new, and edits transform and scale. It then sorts masters, writes, rereads (byte-identical rewrite) and reloads the environment. Decoded links match the source, edits are applied, and cell children merge the patch copy.
+- **C ABI round trip.** The same flow runs through the C ABI.
+
+With `placed_reference_formid_offsets` disabled, the remap and parity tests fail.

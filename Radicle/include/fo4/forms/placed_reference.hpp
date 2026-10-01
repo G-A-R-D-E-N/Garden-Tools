@@ -120,4 +120,5 @@ bool set_placed_reference_transform(
     const FormKey& reference,
     const PositionRotation& transform);
 
+bool set_placed_reference_scale(Plugin& plugin, const FormKey& reference, std::optional<float> scale);
 }  // namespace fo4::forms

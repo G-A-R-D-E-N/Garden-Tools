@@ -1,12 +1,17 @@
 #pragma once
 
 #include "fo4/c_api.h"
+#include "fo4/plugin/container.hpp"
 
 #include <exception>
 #include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
+
+struct radicle_plugin {
+  fo4::Plugin value;
+};
 
 namespace radicle_c_detail {
 

@@ -2,9 +2,12 @@
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/signature.hpp"
 
+#include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -87,7 +90,7 @@ std::string read_zstring(const Subrecord* subrecord) {
 
 PositionRotation read_transform(const Subrecord& data) {
   if (data.data.size() != 24) {
-    throw PlacedReferenceError("REFR/ACHR DATA must be exactly 24 bytes");
+    throw PlacedReferenceError("placed reference DATA must be exactly 24 bytes");
   }
   return PositionRotation{
       .x = read_f32_le(data.data, 0),
@@ -231,16 +234,16 @@ bool set_placed_reference_transform(
     if (target == nullptr && record.form_key == reference) target = &record;
   });
   if (target == nullptr) return false;
-  if (target->header.signature != k_refr && target->header.signature != k_achr) {
-    throw PlacedReferenceError("transform mutation requires a REFR or ACHR record");
+  if (!is_placed_reference_signature(target->header.signature)) {
+    throw PlacedReferenceError("transform mutation requires a placed-reference record");
   }
 
   auto* data = unique_subrecord(*target, k_data);
   if (data == nullptr) {
-    throw PlacedReferenceError("REFR/ACHR is missing required DATA position/rotation");
+    throw PlacedReferenceError("placed reference is missing required DATA position/rotation");
   }
   if (data->data.size() != 24) {
-    throw PlacedReferenceError("REFR/ACHR DATA must be exactly 24 bytes");
+    throw PlacedReferenceError("placed reference DATA must be exactly 24 bytes");
   }
 
   write_f32_le(data->data, 0, transform.x);
@@ -249,6 +252,48 @@ bool set_placed_reference_transform(
   write_f32_le(data->data, 12, transform.rx);
   write_f32_le(data->data, 16, transform.ry);
   write_f32_le(data->data, 20, transform.rz);
+
+  target->original_range.clear();
+  target->decompressed_payload.clear();
+  target->header.data_size = 0;
+  target->uncompressed_size = 0;
+  next.original_range.clear();
+  plugin = std::move(next);
+  return true;
+}
+
+bool set_placed_reference_scale(Plugin& plugin, const FormKey& reference, std::optional<float> scale) {
+  auto next = plugin;
+  assign_record_form_keys(next);
+  Record* target = nullptr;
+  visit_records(next, [&](Record& record) {
+    if (target == nullptr && record.form_key == reference) target = &record;
+  });
+  if (target == nullptr) return false;
+  if (!is_placed_reference_signature(target->header.signature)) {
+    throw PlacedReferenceError("scale mutation requires a placed-reference record");
+  }
+  if (scale && !std::isfinite(*scale)) throw PlacedReferenceError("scale must be finite");
+
+  auto& subs = target->subrecords;
+  const auto count = std::count_if(subs.begin(), subs.end(), [](const Subrecord& sub) { return sub.signature == k_xscl; });
+  if (count > 1) throw PlacedReferenceError("placed reference has duplicate XSCL");
+  const auto existing = std::find_if(subs.begin(), subs.end(), [](const Subrecord& sub) { return sub.signature == k_xscl; });
+  if (existing != subs.end() && existing->data.size() != 4) throw PlacedReferenceError("XSCL must be exactly 4 bytes");
+  if (!scale) {
+    if (existing == subs.end()) return true;
+    subs.erase(existing);
+  } else if (existing != subs.end()) {
+    write_f32_le(existing->data, 0, *scale);
+  } else {
+    const auto data = std::find_if(subs.begin(), subs.end(), [](const Subrecord& sub) { return sub.signature == k_data; });
+    if (data == subs.end()) throw PlacedReferenceError("placed reference is missing required DATA position/rotation");
+    Subrecord xscl;
+    xscl.signature = k_xscl;
+    xscl.data.resize(4);
+    write_f32_le(xscl.data, 0, *scale);
+    subs.insert(data, std::move(xscl));
+  }
 
   target->original_range.clear();
   target->decompressed_payload.clear();

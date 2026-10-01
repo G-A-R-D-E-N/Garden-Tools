@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fo4/environment/environment.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/environment/world.hpp"
 #include "fo4/schema/vmad.hpp"
 
@@ -154,7 +155,7 @@ struct PlacedReferenceData {
   std::optional<Scripts> scripts;
 };
 
-bool is_placed_reference_signature(Signature signature) noexcept;
+using fo4::is_placed_reference_signature;
 
 // REFR, ACHR and the placed trap/projectile/hazard family; throws WorldDecodeError when malformed.
 PlacedReferenceData decode_placed_reference(const Environment& env, const RecordRef& ref);

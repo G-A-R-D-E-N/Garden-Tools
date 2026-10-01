@@ -261,9 +261,7 @@ std::vector<const RecordRef*> Environment::winners_of(Signature signature) const
 }
 
 FormKey Environment::resolve_link(const RecordRef& ref, RawFormId raw) const {
-  const auto& context = contexts_.at(ref.plugin);
-  if (raw.index_byte() > context.masters.size()) return FormKey{context.current_plugin, LocalFormId{raw.local_24()}};
-  return resolve_plugin_form_id(raw, context);
+  return resolve_plugin_link(raw, contexts_.at(ref.plugin));
 }
 
 const PluginKey* Environment::stable_owner(const FormKey& key) const noexcept {
