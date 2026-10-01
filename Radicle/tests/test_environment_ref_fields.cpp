@@ -181,8 +181,8 @@ protected:
     paths_ = {write("Master.esm", make_master()), write("DLC.esm", make_dlc())};
     env_ = fo4::env::Environment::load(paths_);
     patch_ = fo4::make_empty_plugin("Patch.esp");
-    for (const std::uint32_t id : {0x821u, 0x822u}) {
-      fo4::forms::copy_placed_reference_as_override(patch_, env_.plugin(0), key("Master.esm", id));
+    for (const std::uint32_t form : {0x821u, 0x822u}) {
+      fo4::forms::copy_placed_reference_as_override(patch_, env_.plugin(0), key("Master.esm", form));
     }
   }
 

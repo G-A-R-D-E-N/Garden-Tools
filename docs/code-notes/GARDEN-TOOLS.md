@@ -1070,3 +1070,9 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 - clearing each field;
 - bad input leaving the plugin byte-identical;
 - the C ABI, adding a DLC master for an owner and keeping masters in load order.
+
+**MSVC `/W4 /WX`.** `Radicle/tests/test_environment_ref_fields.cpp:RefFieldsTest::SetUp` named its loop variable `id`, shadowing the temp-directory `id` above it. MSVC reports C4456, which `/WX` turns into C2220, so `fo4_tests` did not build under the `native-windows-tests` job. The loop variable is now `form`.
+
+**Shipped data.** Every placed reference in the seven official masters stores `XTEL` as 36 bytes, `XPRM` 32, `XOWN` 12, `XESP` 8, `XAPR` 8 and `XSCL` 4, all sizes these edits accept. No shipped `EDID` or `MNAM` on a placed reference has a byte above 0x7F.
+
+**Not verified: string encoding.** These edits write `EDID` and `MNAM` bytes as given, and `Radicle/src/environment/placed.cpp:decode_placed_reference` reads them back unchanged, so Radicle round-trips UTF-8. Mutagen encodes FO4 non-translated strings as Windows-1252 (`Mutagen.Bethesda.Core/Plugins/Meta/GameConstants.cs`), so a non-ASCII comment written here reads differently in Mutagen, xEdit or the Creation Kit. Matching that needs one encoding rule for every Radicle string read and write, not only these edits.
