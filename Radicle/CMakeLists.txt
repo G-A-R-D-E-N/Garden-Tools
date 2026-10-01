@@ -19,6 +19,7 @@ option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_BUILD_TESTS "Build Radicle tests" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_INSTALL "Generate Radicle install/export rules" ${PROJECT_IS_TOP_LEVEL})
+option(RADICLE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_custom_target(radicle_schema_check ALL
@@ -74,9 +75,9 @@ add_custom_target(radicle_condition_scope_schema_check ALL
 
 function(fo4_apply_warnings target)
   if(MSVC)
-    target_compile_options(${target} PRIVATE /W4 /permissive- /WX)
+    target_compile_options(${target} PRIVATE /W4 /permissive- $<$<BOOL:${RADICLE_WARNINGS_AS_ERRORS}>:/WX>)
   else()
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic $<$<BOOL:${RADICLE_WARNINGS_AS_ERRORS}>:-Werror>)
   endif()
 endfunction()
 
