@@ -16,26 +16,39 @@ public sealed class RadicleException : Exception
 
 public static class RadicleLibrary
 {
+    private static readonly object Gate = new();
     private static string? _path;
-    private static int _registered;
+    private static IntPtr _handle;
+
+    static RadicleLibrary() => NativeLibrary.SetDllImportResolver(typeof(RadicleNative).Assembly, Resolve);
 
     public static void SetPath(string path)
     {
-        _path = path;
-        Register();
+        lock (Gate)
+        {
+            if (_handle != IntPtr.Zero && path != _path)
+                throw new InvalidOperationException("The native radicle library is already loaded; set its path before the first call.");
+            _path = path;
+        }
     }
 
-    internal static void Register()
-    {
-        if (System.Threading.Interlocked.Exchange(ref _registered, 1) != 0) return;
-        NativeLibrary.SetDllImportResolver(typeof(RadicleNative).Assembly, Resolve);
-    }
+    internal static void Register() { }
 
     private static IntPtr Resolve(string name, Assembly assembly, DllImportSearchPath? searchPath)
     {
         if (name != RadicleNative.Library) return IntPtr.Zero;
-        var path = _path ?? Environment.GetEnvironmentVariable("RADICLE_NATIVE_PATH");
-        return string.IsNullOrEmpty(path) ? IntPtr.Zero : NativeLibrary.Load(path);
+        lock (Gate)
+        {
+            if (_handle != IntPtr.Zero) return _handle;
+            var path = _path ?? Environment.GetEnvironmentVariable("RADICLE_NATIVE_PATH");
+            if (string.IsNullOrEmpty(path))
+            {
+                if (!NativeLibrary.TryLoad(name, assembly, searchPath, out _handle)) return IntPtr.Zero;
+            }
+            else _handle = NativeLibrary.Load(path);
+            _path ??= path;
+            return _handle;
+        }
     }
 }
 

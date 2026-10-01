@@ -16,7 +16,9 @@ public sealed unsafe class StringTables : IDisposable
         _env = env;
     }
 
-    private IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(StringTables));
+    private IntPtr Handle => _handle != IntPtr.Zero && _env.Handle != IntPtr.Zero
+        ? _handle
+        : throw new ObjectDisposedException(nameof(StringTables));
 
     /// <summary>Loose tables from stringsDirectory, then Strings/ inside assets' archives; env must outlive this.</summary>
     public static StringTables Load(RadicleEnvironment env, string stringsDirectory, string language = "en",
@@ -52,7 +54,6 @@ public sealed unsafe class StringTables : IDisposable
 
     public byte[]? ResolveName(Record record)
     {
-        GC.KeepAlive(_env);
         IntPtr text;
         nuint size;
         return Call.Found(RadicleNative.StringsResolveName(Handle, record.Handle, &text, &size)) ? Utf8.Raw(text, size) : null;

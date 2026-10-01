@@ -15,16 +15,20 @@ public sealed unsafe class Ba2Archive : IDisposable
 {
     private IntPtr _handle;
     private readonly bool _owned;
+    private readonly AssetResolver? _owner;
 
     static Ba2Archive() => RadicleLibrary.Register();
 
-    internal Ba2Archive(IntPtr handle, bool owned)
+    internal Ba2Archive(IntPtr handle, bool owned, AssetResolver? owner = null)
     {
         _handle = handle;
         _owned = owned;
+        _owner = owner;
     }
 
-    private IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(Ba2Archive));
+    private IntPtr Handle => _handle != IntPtr.Zero && (_owner is null || _owner.Handle != IntPtr.Zero)
+        ? _handle
+        : throw new ObjectDisposedException(nameof(Ba2Archive));
 
     public static Ba2Archive Open(string path)
     {
@@ -118,7 +122,7 @@ public sealed unsafe class AssetResolver : IDisposable
     {
         IntPtr ba2;
         Call.Check(RadicleNative.AssetsGetArchive(Handle, (nuint)index, &ba2));
-        return new Ba2Archive(ba2, owned: false);
+        return new Ba2Archive(ba2, owned: false, owner: this);
     }
 
     public AssetLocation? Locate(string path)

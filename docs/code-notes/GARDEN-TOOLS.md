@@ -1147,7 +1147,7 @@ The CELL lighting fill moved into `c_api_env_internal.hpp` (`to_c_lighting`), so
 
 Tenth #114 slice, stacked on the base-record slice. This is the C# side GardenEngine will call in place of Mutagen. It lives in GARDEN-TOOLS next to the C ABI, so the two change together.
 
-**Generated layer.** `tools/generate_interop.py` parses `fo4/c_api.h` and `fo4/c_api_env.h` and emits `Radicle.Interop/RadicleNative.g.cs`: 87 `DllImport` functions, every public struct as `LayoutKind.Sequential`, and the enums.
+**Generated layer.** `tools/generate_interop.py` parses `fo4/c_api.h` and `fo4/c_api_env.h` and emits `Radicle.Interop/RadicleNative.g.cs`: 88 `DllImport` functions (87 before `radicle_abi_version`), every public struct as `LayoutKind.Sequential`, and the enums.
 
 Mapping rules:
 - **Scalars:** `size_t` becomes `nuint`, and C `int32_t` flags stay `int`.
@@ -1160,15 +1160,19 @@ Mapping rules:
 
 **Layout proof.** The same script emits `tests/abi_layout_probe.cpp`, built as `radicle_abi_layout_probe`, which prints C `sizeof`/`offsetof` for every struct member. `AbiLayoutTests` compares each line with `Marshal.SizeOf`/`OffsetOf`, and also checks that it covered every generated struct. Changing one generated `int` to `long` fails the test.
 
-**Staleness check.** `radicle_csharp_interop_up_to_date` regenerates into the build tree and byte-compares with the committed files. It runs wherever CTest finds Python 3, so a header change without regeneration fails CI.
+**Staleness check.** `radicle_csharp_interop_up_to_date` regenerates into the build tree and compares with the committed files, ignoring line endings (`tools/check_generated.cmake` uses `compare_files --ignore-eol`): the generator writes the platform's line endings, and a Windows checkout may hold LF or CRLF depending on `core.autocrlf`. `radicle_csharp_interop_check_ignores_line_endings` (`tools/check_generated_eol.cmake`) runs the check against copies of the committed files with their line endings flipped; it failed before `--ignore-eol`. It runs wherever CTest finds Python 3, so a header change without regeneration fails CI.
 
 **Safe layer:**
 - `RadicleEnvironment`, `StringTables`, `Ba2Archive`, `AssetResolver` and `PluginFile` own their native handles through `IDisposable`.
-- Results are copied into managed records, so no borrowed pointer outlives a call.
+- Results are copied into managed records. Two things stay borrowed: a `Record` handle (valid while its environment lives) and the `Ba2Archive` that `AssetResolver.Archive` returns. That archive keeps its resolver and throws `ObjectDisposedException` once the resolver is disposed (`Radicle.Interop/Archives.cs:Ba2Archive.Handle`). `StringTables` likewise throws once the environment it was loaded from is disposed, because the native tables dereference that environment (`Radicle.Interop/Localization.cs:StringTables.Handle`). Before these checks, both cases read freed native memory. Tests: `LifetimeTests.ABorrowedArchiveFailsOnceItsResolverIsDisposed`, `LifetimeTests.StringTablesFailOnceTheirEnvironmentIsDisposed`.
 - Status codes map to `RadicleException` (status plus `radicle_last_error`), except lookups whose `NOT_FOUND` means "absent"; those return `null`/`false`.
 - `Record` is a borrowed handle, valid while its environment lives, like Mutagen's link cache records.
 - Native strings passed in are UTF-8 copies freed after each call.
 - `RadicleLibrary.SetPath` / `RADICLE_NATIVE_PATH` pick the library through `NativeLibrary.SetDllImportResolver`, so Godot can point at its bundled `radicle.dll`.
+  - **Registration.** `Radicle.Interop/Core.cs:RadicleLibrary` registers the resolver in its type initializer, which the runtime runs once under its own lock. `Radicle.Interop/RadicleNative.Init.cs` triggers it from `RadicleNative`'s static constructor, so even a direct `RadicleNative.*` call is resolved.
+  - **Caching.** The CLR calls the resolver for every P/Invoke method the first time that method binds, so `Resolve` loads the library once and returns the cached handle.
+  - **Late paths.** `SetPath` with a different path after that load throws `InvalidOperationException`.
+  - **Before.** A late `SetPath` silently sent later-bound methods to a second library, mixing handles across two copies of Radicle. A second thread could also call before the resolver existed. Test: `LifetimeTests.TheLibraryPathCannotChangeOnceTheLibraryIsLoaded` (before the fix, the late path also broke unrelated tests with `DllNotFoundException`).
 
 **Tests.** `Radicle.Interop.Tests` builds plugins, a GNRL BA2 and a STRINGS table in C#, and covers:
 - load order, versions and EditorID lookup;

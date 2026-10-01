@@ -379,6 +379,16 @@ if(RADICLE_BUILD_TESTS)
                      -DCOMMITTED_CS=${_interop_dir}/Radicle.Interop/RadicleNative.g.cs
                      -DCOMMITTED_PROBE=${_interop_dir}/tests/abi_layout_probe.cpp
                      -P ${_interop_dir}/tools/check_generated.cmake)
+    add_test(NAME radicle_csharp_interop_check_ignores_line_endings
+             COMMAND ${CMAKE_COMMAND}
+                     -DPYTHON=${Python3_EXECUTABLE}
+                     -DGENERATOR=${_interop_dir}/tools/generate_interop.py
+                     -DINCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/include
+                     -DOUT_DIR=${_interop_out}-eol
+                     -DCOMMITTED_CS=${_interop_dir}/Radicle.Interop/RadicleNative.g.cs
+                     -DCOMMITTED_PROBE=${_interop_dir}/tests/abi_layout_probe.cpp
+                     -DCHECK=${_interop_dir}/tools/check_generated.cmake
+                     -P ${_interop_dir}/tools/check_generated_eol.cmake)
   endif()
 
   option(RADICLE_CSHARP_TESTS "Run the C# binding tests with dotnet (needs the .NET 8 SDK and NuGet access)" OFF)
