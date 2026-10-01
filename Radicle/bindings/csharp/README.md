@@ -20,6 +20,10 @@ The main wrapper types:
 | `Ba2Archive` / `AssetResolver` | Archives and asset lookup with the game's precedence. |
 | `PluginFile` | Override creation, reference field edits and saving. |
 
+## ABI check
+
+`RadicleNative.CompiledAbiVersion` is `RADICLE_ABI_VERSION` from `fo4/c_api.h`, written by the generator. The first call into any wrapper loads the native library through `RadicleLibrary`, which calls the library's `radicle_abi_version` and throws `RadicleAbiMismatchException` naming both numbers when they differ, or when the library does not export that function at all. The check covers a path set with `RadicleLibrary.SetPath`, `RADICLE_NATIVE_PATH`, and the default library search.
+
 ## Regenerating
 
 After changing a public C header, run:
@@ -33,6 +37,8 @@ python3 Radicle/bindings/csharp/tools/generate_interop.py Radicle/include \
 ## Tests
 
 The CTest `radicle_csharp_interop_up_to_date` fails when the committed generated files no longer match the headers. It needs Python 3.
+
+`AbiGuardTests` loads a second copy of the bindings in its own `AssemblyLoadContext`, so its first native call is a real first call: it accepts the built library, and rejects both a library that reports another ABI (`radicle_abi_stub`, built with the tests and passed as `RADICLE_ABI_STUB`) and one that is not Radicle.
 
 `abi_layout_probe` prints the C `sizeof` and `offsetof` of every public struct. `AbiLayoutTests` compares that output with `Marshal.SizeOf` / `OffsetOf` for every generated struct, so a mapping mistake fails the test and never reaches the caller as a corrupted read.
 

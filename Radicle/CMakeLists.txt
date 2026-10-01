@@ -393,6 +393,10 @@ if(RADICLE_BUILD_TESTS)
   target_include_directories(radicle_abi_layout_probe PRIVATE include)
   fo4_apply_warnings(radicle_abi_layout_probe)
 
+  add_library(radicle_abi_stub SHARED bindings/csharp/tests/abi_stub.cpp)
+  target_include_directories(radicle_abi_stub PRIVATE include)
+  target_compile_definitions(radicle_abi_stub PRIVATE RADICLE_C_BUILD)
+
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(Python3_Interpreter_FOUND)
     # Fails when fo4/c_api*.h changed without regenerating the committed C# interop and probe.
@@ -426,6 +430,6 @@ if(RADICLE_BUILD_TESTS)
              COMMAND ${DOTNET_EXECUTABLE} test ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/Radicle.Interop.Tests
                      --nologo -v q)
     set_tests_properties(radicle_csharp_bindings PROPERTIES
-      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>")
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>")
   endif()
 endif()

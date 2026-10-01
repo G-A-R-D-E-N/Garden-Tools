@@ -14,6 +14,11 @@ public sealed class RadicleException : Exception
     public Status Status { get; }
 }
 
+public sealed class RadicleAbiMismatchException : InvalidOperationException
+{
+    public RadicleAbiMismatchException(string message) : base(message) { }
+}
+
 public static class RadicleLibrary
 {
     private static readonly object Gate = new();
@@ -41,14 +46,32 @@ public static class RadicleLibrary
         {
             if (_handle != IntPtr.Zero) return _handle;
             var path = _path ?? Environment.GetEnvironmentVariable("RADICLE_NATIVE_PATH");
+            IntPtr handle;
             if (string.IsNullOrEmpty(path))
             {
-                if (!NativeLibrary.TryLoad(name, assembly, searchPath, out _handle)) return IntPtr.Zero;
+                if (!NativeLibrary.TryLoad(name, assembly, searchPath, out handle)) return IntPtr.Zero;
+                VerifyAbi(handle, RadicleNative.CompiledAbiVersion, name);
             }
-            else _handle = NativeLibrary.Load(path);
+            else
+            {
+                handle = NativeLibrary.Load(path);
+                VerifyAbi(handle, RadicleNative.CompiledAbiVersion, path);
+            }
             _path ??= path;
+            _handle = handle;
             return _handle;
         }
+    }
+
+    private static unsafe void VerifyAbi(IntPtr library, uint expected, string description)
+    {
+        if (!NativeLibrary.TryGetExport(library, "radicle_abi_version", out var export))
+            throw new RadicleAbiMismatchException($"{description} does not export radicle_abi_version, so it is not a Radicle library.");
+        var loaded = ((delegate* unmanaged[Cdecl]<uint>)export)();
+        if (loaded != expected)
+            throw new RadicleAbiMismatchException(
+                $"{description} reports Radicle ABI {loaded}, but Radicle.Interop was generated for ABI {expected}. " +
+                "Use a Radicle build from the same commit as these bindings.");
     }
 }
 

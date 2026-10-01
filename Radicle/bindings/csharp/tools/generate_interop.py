@@ -39,10 +39,15 @@ class Model:
         self.opaque = set()
         self.functions = []  # (ret, name, [(ctype, pname, array_len)])
         self.order = []      # (kind, name) in header order
+        self.abi_version = None
 
 
 def parse(include_dir):
     model = Model()
+    abi = re.search(r"^#define\s+RADICLE_ABI_VERSION\s+(\d+)u?\s*$", (include_dir / HEADERS[0]).read_text(), flags=re.M)
+    if abi is None:
+        raise SystemExit(f"{HEADERS[0]} does not define RADICLE_ABI_VERSION")
+    model.abi_version = int(abi.group(1))
     for header in HEADERS:
         text = strip_comments((include_dir / header).read_text())
         text = re.sub(r"^\s*#.*$", "", text, flags=re.M)
@@ -182,6 +187,7 @@ def emit_cs(model):
     out.append("public static unsafe partial class RadicleNative")
     out.append("{")
     out.append('    public const string Library = "radicle";')
+    out.append(f"    public const uint CompiledAbiVersion = {model.abi_version}u;")
     out.append("")
     for ret, name, params in model.functions:
         args = ", ".join(param_cs(model, *p) for p in params)
