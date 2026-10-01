@@ -546,6 +546,51 @@ RADICLE_API radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugi
                                                            float scale);
 RADICLE_API radicle_status radicle_plugin_sort_masters(radicle_plugin* plugin, const radicle_env* env);
 
+RADICLE_API radicle_status radicle_plugin_set_placed_editor_id(radicle_plugin* plugin,
+                                                               radicle_form_key reference,
+                                                               const char* editor_id);
+RADICLE_API radicle_status radicle_plugin_set_placed_record_flags(radicle_plugin* plugin,
+                                                                  radicle_form_key reference,
+                                                                  uint32_t flags);
+RADICLE_API radicle_status radicle_plugin_set_placed_comments(radicle_plugin* plugin,
+                                                              radicle_form_key reference,
+                                                              const char* comments);
+RADICLE_API radicle_status radicle_plugin_set_placed_location_reference(radicle_plugin* plugin,
+                                                                        const radicle_env* env,
+                                                                        radicle_form_key reference,
+                                                                        radicle_form_key location);
+RADICLE_API radicle_status radicle_plugin_set_placed_ownership(radicle_plugin* plugin,
+                                                               const radicle_env* env,
+                                                               radicle_form_key reference,
+                                                               radicle_form_key owner,
+                                                               int32_t no_crime,
+                                                               int32_t has_rank,
+                                                               int32_t faction_rank);
+RADICLE_API radicle_status radicle_plugin_set_placed_enable_parent(radicle_plugin* plugin,
+                                                                   const radicle_env* env,
+                                                                   radicle_form_key reference,
+                                                                   radicle_form_key parent,
+                                                                   uint8_t flags);
+RADICLE_API radicle_status radicle_plugin_set_placed_linked_refs(radicle_plugin* plugin,
+                                                                 const radicle_env* env,
+                                                                 radicle_form_key reference,
+                                                                 const radicle_linked_ref* links,
+                                                                 size_t link_count);
+RADICLE_API radicle_status radicle_plugin_set_placed_teleport(radicle_plugin* plugin,
+                                                              const radicle_env* env,
+                                                              radicle_form_key reference,
+                                                              radicle_form_key door,
+                                                              const float position[3],
+                                                              const float rotation[3]);
+RADICLE_API radicle_status radicle_plugin_set_placed_primitive(radicle_plugin* plugin,
+                                                               radicle_form_key reference,
+                                                               const float bounds[3],
+                                                               uint32_t type);
+RADICLE_API radicle_status radicle_plugin_set_placed_activate_parent_delay(radicle_plugin* plugin,
+                                                                           radicle_form_key reference,
+                                                                           size_t index,
+                                                                           float delay);
+
 #ifdef __cplusplus
 }
 #endif

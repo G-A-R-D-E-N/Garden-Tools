@@ -1006,3 +1006,78 @@ The two Windows cross jobs build with clang-cl/xwin on the Linux runner and cann
 `.github/workflows/native-ci.yml` cancels in-progress runs on a new push, so `native-windows-tests` first recovers from a cancelled run. It stops any leftover cmake, ctest or git process whose command line points into `.cache\garden-ci`, along with its descendants, because a build still writing into the shared build directory could leave an object file newer than its new source, and MSBuild would then link stale code; an old git could likewise finish over the new checkout. See `Radicle/CMakeLists.txt:find_package` for the fixed-path requirement. It also deletes leftover `.git\*.lock` files (`index.lock`, `shallow.lock`, `HEAD.lock`), which would otherwise fail every later git step. See `Radicle/CMakeLists.txt:find_package` above for why the paths must stay fixed. This assumes the Windows runner runs one job at a time; two concurrent jobs would share the directories. If the cache is ever corrupted, delete `%USERPROFILE%\.cache\garden-ci` on the runner and the next run rebuilds it.
 
 `PluginEditTool/native/tests/unit/RadiclePluginEditableTests.cpp:symlinkNotPermitted` makes the two Save As symlink tests skip when Windows refuses the directory symlink with ERROR_PRIVILEGE_NOT_HELD (1314), which happens without Developer Mode or elevation. MSVC does not map 1314 to `std::errc::operation_not_permitted`, so the code is checked directly. Any other symlink error still fails the test, and Linux always runs them.
+
+## Radicle/src/forms/placed_reference_edit.cpp / c_api_ref_fields.cpp — GardenEngine #114 writeback fields
+
+Eighth #114 slice, stacked on the writeback slice. It covers every field `ReferenceWriteback.Commit` sets beyond placement and scale:
+- EditorID and record flags;
+- `Comments`, `LocationReference`, `Ownership`/`FactionRank` and `EnableParent`;
+- rebuilding `LinkedReferences`;
+- `ActivateParents[i].Delay`;
+- and, only when the field already exists, `TeleportDestination` and `Primitive`.
+
+**Field order.** New subrecords go before the first existing subrecord that xEdit FO4 lists after them:
+- REFR uses `wbRefRecord(REFR`, ACHR uses `wbRefRecord(ACHR`, and the projectiles/hazards use `ReferenceRecord` (pin `9fb016884bec138ea6c7b872cec831537d464c3e`).
+- `wbOwnership` expands to `XOWN`, `XRNK`, and `wbVec3PosRot(DATA)` sits before `MNAM`.
+- ACHR puts `XLKR` before `XESP`, and REFR after it.
+- Signatures missing from the list (for example `XACT`, `XRGD`/`XRGB`, `PDTO`, `FULL` and `XCZA`) are never used as anchors, so a new field can land after one of them. xEdit marks REFR, ACHR and `ReferenceRecord` as `.SetUnordered` and Mutagen parses these fields in any order, so this only affects layout, not loading.
+- `set_placed_reference_scale` moved here to use the same rule. On ACHR, `XSCL` now goes before `ONAM` instead of directly before `DATA`.
+
+**Payloads, from Mutagen upstream `Common Subrecords/*.xml` and xEdit:**
+- **`XOWN`:** Owner, `Int32 Unknown`, `NoCrime` as a 4-byte bool (`Ownership.xml`).
+  - An existing 4- or 12-byte value is widened to 12 bytes.
+  - The unknown word and the upper 3 bytes of the bool word are kept. The flag byte is written as exactly 0 or 1, the canonical bool Mutagen writes; Mutagen reads it as a first byte `>= 1` (`Ownership_Generated.cs`) and `Radicle/src/environment/placed.cpp:decode_placed_reference` as `!= 0`. Keeping other bits of an old byte left NoCrime set after clearing it.
+  - A cleared owner removes `XOWN` and `XRNK`, as Mutagen nulls both.
+- **`XESP`:** Reference, a `u8` flags byte, then 3 unknown bytes (`EnableParent.xml`). The unknown bytes are kept.
+- **`XLKR`:** {KeywordOrReference, Reference}, 8 bytes each (`LinkedReferences.xml`).
+  - A rebuild replaces every `XLKR` at the position of the first old one, or at the ordered position when there were none.
+- **`XTEL`:** door, position, rotation. It is written only when present; flags and the optional transition interior are kept.
+- **`XPRM`:** stored (undoubled) bounds and the type at offset 28. It is written only when present; colors and the unknown float are kept.
+- **`XAPR`:** delay at offset 4 of the n-th entry. Written only when that entry exists.
+- **EditorID and comments:** empty or `nullopt` removes the subrecord, as Mutagen writes nothing for a null string. Embedded NUL is rejected.
+- **Record flags:** the compression and persistent bits are kept. Persistence decides whether the ref sits in the CELL's persistent or temporary child group, and a flag edit must not leave it in the wrong one.
+
+**Masters.** A FormKey whose owner is neither the plugin nor one of its masters throws in C++. The C ABI resolves such owners through the environment:
+- It adds each one as a master with that plugin's full/light kind.
+- It then sorts masters into environment load order before the edit.
+- An owner the environment does not load is `INVALID_ARGUMENT`.
+- When the edited plugin is itself in the environment, an owner that loads after it is `INVALID_ARGUMENT`: it would become a master that loads later, or a circular master.
+- The new `MAST` entry takes the environment's spelling of the file name, not the caller's.
+- A `FormIdError` from the master remap or sort (an existing master the environment does not load, or the 255-master limit) is `INVALID_ARGUMENT`.
+
+**Form keys.** `Radicle/src/forms/placed_reference_edit.cpp:encode` rejects a key with no plugin name (for example `"Data/"`, which `PluginKey::from_filename` reduces to an empty name) unless it is the null key, and a named key with local 0 (it would encode as a null link; only a C key whose `plugin` is NULL means clear), and it round-trips every encoded form ID through `resolve_plugin_form_id`. A key that does not survive the round trip, such as a light-plugin local above 0xFFF that `encode_plugin_form_id` would mask to a different form, throws instead of writing the wrong link.
+
+**Atomicity.** Every edit works on a copy, and the plugin changes only on success; the C ABI copies again around master additions.
+
+**C++ contract (`Radicle/include/fo4/forms/placed_reference.hpp`).** Every `set_placed_reference_*` edit returns false (or `PresentFieldEdit::record_missing`) when the record is absent. It throws `PlacedReferenceError` for a non-placed record, a malformed existing field, or a FormKey whose owner is neither the plugin nor one of its masters; otherwise it leaves every other subrecord untouched.
+- `set_placed_reference_scale`: sets `XSCL`, or removes it for `nullopt`.
+- `set_placed_reference_editor_id`: sets `EDID`, or removes it for an empty id.
+- `set_placed_reference_record_flags`: replaces the header flags; the compression and persistent bits stay as stored.
+- `set_placed_reference_comments` / `set_placed_reference_location_reference`: set `MNAM` / `XLRL`, or remove them for `nullopt`.
+- `set_placed_reference_ownership`: sets `XOWN` (existing unknown bytes kept) and `XRNK`; a `nullopt` owner removes both and a `nullopt` rank removes `XRNK`.
+- `set_placed_reference_enable_parent`: sets `XESP` {parent, flags} (existing unknown bytes kept), or removes it for `nullopt`.
+- `set_placed_reference_linked_references`: replaces every `XLKR` with the given links in order; a `LinkedReferenceEdit::keyword` of `nullopt` writes a null form ID.
+- `set_placed_reference_teleport`, `set_placed_reference_primitive` and `set_placed_reference_activate_parent_delay` only change a field that already exists, as GardenEngine's writeback does, and return `field_absent` otherwise. Primitive bounds are the stored (undoubled) `XPRM` values that `decode_placed_reference` returns.
+- `Radicle/src/forms/placed_reference_edit.cpp:edit_placed` runs the edit on a copy and commits only when it returns true. `insertion_point` places a new subrecord before the first existing one that xEdit orders after it (`field_rank` uses xEdit FO4 order at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `wbRefRecord(REFR`, `wbRefRecord(ACHR` and `ReferenceRecord` for placed projectiles and hazards; signatures missing from the list are never anchors), and `single` treats a repeated field as malformed. `set_placed_reference_record_flags` keeps persistence (it decides the CELL child group) and compression (how the payload is stored). `set_placed_reference_ownership` follows Mutagen `Ownership.xml` (Owner, Int32 Unknown, NoCrime as a 4-byte bool); xEdit reads the flag from the low byte.
+
+**C ABI contract (`Radicle/include/fo4/c_api_env.h:radicle_plugin_set_placed_*`).** Each returns `NOT_FOUND` when the plugin lacks the record and `INVALID_ARGUMENT` for a non-placed record or a malformed field. Edits that take a FormKey add any owner `env` loads as a master and keep masters in `env` load order; an owner `env` does not load is `INVALID_ARGUMENT`. A key whose `plugin` is NULL means "clear"; any other key must be a valid FormKey.
+- `radicle_plugin_set_placed_record_flags` keeps the compression and persistent bits as stored.
+- `radicle_plugin_set_placed_comments` with `comments == NULL` removes `MNAM`.
+- `radicle_plugin_set_placed_ownership`: a cleared owner removes `XOWN` and `XRNK`; `has_rank == 0` removes `XRNK`.
+- `radicle_plugin_set_placed_linked_refs` replaces all `XLKR` in order; a cleared keyword writes a null form ID.
+- `radicle_plugin_set_placed_teleport`, `_primitive` and `_activate_parent_delay` only change a field that already exists and return `NOT_FOUND` when it does not. `_primitive` takes the stored `XPRM` bounds, as `radicle_placed_ref` reports them.
+- `Radicle/src/c_api_ref_fields.cpp:with_masters` adds owners `env` loads as masters, then orders masters by load order; `run` maps the C++ outcome and exceptions to a status; the plugin changes only on `OK`.
+
+**Test fixture (`Radicle/tests/test_environment_ref_fields.cpp`).** `Master.esm` has interior cell 000820 holding REFR 000821 (teleport, primitive, activate parents, links, ownership, enable parent) and ACHR 000822 (`ONAM`), plus FACT 000830, KYWD 000812 and LCTN 000813. `DLC.esm` adds FACT 01000831.
+
+**Tests.** `Radicle/tests/test_environment_ref_fields.cpp` covers:
+- all edits on REFR and ACHR, with exact subrecord order, kept unknown bytes, and the decoded values after a save and environment reload;
+- clearing each field;
+- bad input leaving the plugin byte-identical;
+- the C ABI, adding a DLC master for an owner and keeping masters in load order.
+
+**MSVC `/W4 /WX`.** `Radicle/tests/test_environment_ref_fields.cpp:RefFieldsTest::SetUp` named its loop variable `id`, shadowing the temp-directory `id` above it. MSVC reports C4456, which `/WX` turns into C2220, so `fo4_tests` did not build under the `native-windows-tests` job. The loop variable is now `form`.
+
+**Shipped data.** Every placed reference in the seven official masters stores `XTEL` as 36 bytes, `XPRM` 32, `XOWN` 12, `XESP` 8, `XAPR` 8 and `XSCL` 4, all sizes these edits accept. No shipped `EDID` or `MNAM` on a placed reference has a byte above 0x7F.
+
+**Not verified: string encoding.** These edits write `EDID` and `MNAM` bytes as given, and `Radicle/src/environment/placed.cpp:decode_placed_reference` reads them back unchanged, so Radicle round-trips UTF-8. Mutagen encodes FO4 non-translated strings as Windows-1252 (`Mutagen.Bethesda.Core/Plugins/Meta/GameConstants.cs`), so a non-ASCII comment written here reads differently in Mutagen, xEdit or the Creation Kit. Matching that needs one encoding rule for every Radicle string read and write, not only these edits.
