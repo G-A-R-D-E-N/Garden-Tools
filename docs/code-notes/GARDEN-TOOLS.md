@@ -1184,6 +1184,24 @@ Mapping rules:
 
 CTest runs them with `-DRADICLE_CSHARP_TESTS=ON`. The option is off by default so CI does not depend on NuGet.
 
+
+## Radicle/tools/env_bench/env_bench.cpp:radicle_bench::run_env_bench — GardenEngine #114 load metrics
+
+Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses every plugin fully into memory, where Mutagen reads plugins over 1 MB lazily. This tool produces the numbers that decide whether Radicle needs lazy loading.
+
+- **Shared helper.** `run_env_bench` lives under `tools/`, not in the `fo4` library. `radicle_env_bench` (`tools/env_bench/main.cpp`) and `tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` both compile it, so the CLI and the test measure the same thing.
+- **What is timed:**
+  - `Environment::load` over the given plugins (default: the official masters present);
+  - `archive_load_order` + `AssetResolver::open` over the vanilla `Fallout4 - *.ba2` archives only;
+  - `StringTables::load(env, <Data>/Strings, "en", &assets)`;
+  - a walk of every `plugin_records` entry.
+- **Memory (`sample_memory`).**
+  - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
+  - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
+  - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
+- **Test.** Gated on `FO4_DATA_DIR`; CI has no game files and skips. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+# Asset path validation
+
 **API contract of the safe layer** (formerly XML doc comments; the source-comment policy keeps them here):
 - `Radicle.Interop/Core.cs`: `RadicleLibrary` chooses where the native library loads from and must be set before the first call; `RadicleLibrary.SetPath` takes the full path of `libradicle.so` / `radicle.dll`, and `RADICLE_NATIVE_PATH` is used when it is unset. The UTF-8 marshaller owns copies of the strings passed to a native call for the duration of that call. The status helper maps OK to true, NOT_FOUND to false, and throws `RadicleException` for anything else. The array helpers copy a `radicle_record` array, a string array or a byte buffer and free it with `radicle_free_record_array`, `radicle_free_string_array` or `radicle_free_bytes`.
 - `Radicle.Interop/RadicleEnvironment.cs`: `RadicleEnvironment` is an immutable load order over `radicle_env` and is safe to query from several threads. Plugin paths and record versions are lowest priority first (winner last). `Record` is a borrowed record version, valid while its environment is alive. Terrain grids are 33x33 row-major copies, null when the subrecord is absent. Weather returns `NAM0` as groups x times colors, in the group order `radicle_weather_info` uses, plus the `FNAM` floats.

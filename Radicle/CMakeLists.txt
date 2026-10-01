@@ -223,6 +223,11 @@ if(RADICLE_BUILD_TOOLS)
   target_link_libraries(fo4inspect PRIVATE fo4)
   fo4_apply_warnings(fo4inspect)
   fo4_apply_sanitizers(fo4inspect)
+  add_executable(radicle_env_bench tools/env_bench/main.cpp tools/env_bench/env_bench.cpp)
+  target_include_directories(radicle_env_bench PRIVATE tools)
+  target_link_libraries(radicle_env_bench PRIVATE fo4)
+  fo4_apply_warnings(radicle_env_bench)
+  fo4_apply_sanitizers(radicle_env_bench)
 endif()
 
 if(RADICLE_BUILD_TESTS)
@@ -344,9 +349,11 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
     tests/test_original_storage.cpp
+    tests/test_env_bench_real.cpp
+    tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
-  target_include_directories(fo4_tests PRIVATE tests)
+  target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
     FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"

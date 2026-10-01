@@ -48,3 +48,11 @@ To run the C# suite:
 ## Loading the native library
 
 Call `RadicleLibrary.SetPath(fullPath)` before any other call, or set `RADICLE_NATIVE_PATH`. Otherwise .NET's default probing looks for `radicle` (`radicle.dll` / `libradicle.so`).
+
+## Runtime notes
+
+- **Memory.** `RadicleEnvironment` parses every plugin in the load order into memory up front; nothing is read lazily. Measure a real load order with `radicle_env_bench "<Data dir>" [plugin ...]` (built with the Radicle tools), which reports load time, resident and peak memory, archive and string-table open times, and record counts.
+- **Load off the main thread.** Loading the official masters takes long enough to stall a frame. In Godot, build the `RadicleEnvironment` (and `StringTables` / `AssetResolver`) on a background thread or task, never on the main thread, and hand the finished objects over.
+- **Shipping the native library.** Export `radicle.dll` (Windows) or `libradicle.so` (Linux) with the Godot build and call `RadicleLibrary.SetPath(fullPath)` at startup, before any other Radicle call.
+- **Record handles are borrowed.** A `Record` belongs to the `RadicleEnvironment` that returned it. Do not use it after that environment is disposed, and never pass it to a different environment.
+- **Thread safety.** Reads on `RadicleEnvironment`, `StringTables`, `Ba2Archive` and `AssetResolver` are safe from several threads at once. `PluginFile` is not: use each plugin from one thread at a time.

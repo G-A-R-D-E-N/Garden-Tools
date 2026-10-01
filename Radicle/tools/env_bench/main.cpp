@@ -1,0 +1,26 @@
+#include "env_bench/env_bench.hpp"
+
+#include <exception>
+#include <iostream>
+
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    std::cerr << "usage: radicle_env_bench <Data dir> [plugin ...]\n";
+    return 2;
+  }
+  const std::filesystem::path data_dir = argv[1];
+  std::vector<std::filesystem::path> plugins;
+  for (int i = 2; i < argc; ++i) plugins.push_back(data_dir / argv[i]);
+  if (plugins.empty()) plugins = radicle_bench::default_masters(data_dir);
+  if (plugins.empty()) {
+    std::cerr << "no official masters found under " << data_dir.string() << "\n";
+    return 1;
+  }
+  try {
+    radicle_bench::print(std::cout, radicle_bench::run_env_bench(data_dir, plugins));
+  } catch (const std::exception& e) {
+    std::cerr << "error: " << e.what() << "\n";
+    return 1;
+  }
+  return 0;
+}
