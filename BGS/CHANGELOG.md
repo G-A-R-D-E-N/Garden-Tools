@@ -6,6 +6,8 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 ## Unreleased
 
+* Moved Home, Graph, Inspect, Animation and Project navigation to the top of the window. Each view has its own grouped command toolbar; wide toolbars scroll horizontally, while inspectors and the playback timeline stay beside the content they affect.
+* Removed duplicate workspace tab headers. Graph authoring tools live under Graph, skeleton/skin authoring under Animation, and About and assistant controls remain available in the top bar.
 * Added a Skeleton / skin authoring window with bone names, reference transforms, translation locks, parent changes, validation, undo/redo, and verified HKX save/reopen. Bone addition/removal and reorderings are supported for standalone skeleton files; dependent rigs refuse changes that require asset remapping.
 * Added Fallout 4 NIF vertex influence editing, shape-wide normalization and pruning, bone-weight copying, mirror matching, a mesh preview, and verified weight-only save/reopen with backups and external-change protection.
 * Added interactive BEPU physics preview with measured convex hulls, gravity, ground and body collisions, fixed/ball/hinge/cone/twist preview joints, pause/step/reset, and body impulses. Masses and preview joint limits are explicitly authored in the window; uniform-density inertia and preview settings do not reproduce or modify native Havok solver settings.

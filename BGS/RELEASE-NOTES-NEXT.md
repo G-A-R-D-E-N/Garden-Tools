@@ -4,6 +4,8 @@ This update brings skeleton and skin tools into the editor and adds interactive 
 
 ## Major changes
 
+- Top workspace toolbars: Home, Graph, Inspect, Animation and Project select grouped commands above the editing area. Wide command groups scroll horizontally instead of filling the middle of the window.
+- Graph hosts batch and structure authoring; Animation hosts skeleton/skin authoring. Duplicate workspace tab headers are removed; inspectors, results and the playback timeline remain in the workspace.
 - Skeleton authoring: bone names, reference transforms, translation locks, parent changes, validation, mirror-pair inspection, undo/redo and verified save/reopen.
 - Standalone skeletons support bone addition/removal and reordering. Dependent rigs refuse edits that need animation, mapper or physics index remapping.
 - Skin authoring: per-vertex influences, normalization, pruning, bone-weight copying, mirror matching, mesh inspection, undo/redo and weight-only NIF persistence.

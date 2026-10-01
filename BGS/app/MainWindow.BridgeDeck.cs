@@ -56,7 +56,7 @@ public partial class MainWindow : Window
 
         RefRow("Open a file", "The command bar path field — or the Current file card above.");
         RefRow("Browse the file", "Inspect → Tree.");
-        RefRow("See the graph", "Graph on the left rail.");
+        RefRow("See the graph", "Graph on the top toolbar.");
         RefRow("Edit an object's fields", "Pick it in Inspect → Tree or Graph; the pane on the right shows its fields.");
         RefRow("Events and variables", "Inspect → Symbols.");
         RefRow("Undo / Redo", "The command bar (Ctrl+Z / Ctrl+Y), or the Current file card above.");
@@ -66,7 +66,7 @@ public partial class MainWindow : Window
         RefRow("Copy, paste and templates", "Graph → Edit tools.");
         RefRow("Run the simulation", "The Graph toolbar, or the Workspace window → Runtime tab.");
         RefRow("List of machines", "Graph → View ▾ → Workspace.");
-        RefRow("Animation keyframes", "Animation on the left rail.");
+        RefRow("Animation keyframes", "Animation on the top toolbar.");
         RefRow("Playback, skeleton, mesh", "Animation → Playback.");
         RefRow("Compare two files", "Project → Compare.");
         RefRow("What the colours mean", "Graph → View ▾ → Legend.");
@@ -152,11 +152,11 @@ public partial class MainWindow : Window
 
         Section("Open and inspect");
         Station("Tree", "Browse the whole file as a tree of objects, classes and clips.",
-                "Inspect → Tree on the left rail.",
+                "Inspect → Tree on the top toolbar.",
                 ("Go to Tree", () => GoToTab("Tree")));
         Station("Graph", "The state machine drawn as boxes and arrows, with the picked object's " +
                          "fields editable on the right.",
-                "Graph on the left rail.",
+                "Graph on the top toolbar.",
                 ("Go to Graph", () => GoToTab("Graph")),
                 ("Workspace window", OpenWorkspaceWindow),
                 ("Legend", OpenLegendWindow));
@@ -168,11 +168,11 @@ public partial class MainWindow : Window
         Section("Edit");
         Station("Symbols", "The events and variables this file declares — who raises them and who " +
                            "listens.",
-                "Inspect → Symbols on the left rail.",
+                "Inspect → Symbols on the top toolbar.",
                 ("Go to Symbols", () => GoToTab("Symbols")));
         Station("Chain", "Where this file sits in a project chain — what it depends on and what " +
                          "depends on it.",
-                "Project → Chain on the left rail.",
+                "Project → Chain on the top toolbar.",
                 ("Go to Chain", () => GoToTab("Chain")));
         Station("Copy, paste & templates", "Move a subtree into another file, or save a shape to " +
                                           "reuse later.",
@@ -208,10 +208,10 @@ public partial class MainWindow : Window
         Section("Preview");
         Station("Animation", "Read the keyframes of the loaded animation, filter by bone, and edit " +
                              "a frame.",
-                "Animation on the left rail.",
+                "Animation on the top toolbar.",
                 ("Go to Animation", () => GoToTab("Animation")));
         Station("Playback", "Pose the skeleton or mesh and scrub through the animation in time.",
-                "Animation → Playback on the left rail.",
+                "Animation → Playback on the top toolbar.",
                 ("Go to Playback", () => GoToTab("Playback")));
         Station("Simulation", "Run the graph and send it events to watch which state goes active.",
                 "the Simulation controls on the Graph toolbar, or the Runtime tab of the Workspace " +

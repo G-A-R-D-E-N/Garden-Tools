@@ -16,11 +16,11 @@ public static class RigAuthoringUi
 {
     public static void Attach(MainWindow window)
     {
-        var strip = EditorShell.Find(window.Content as Control)?.Tools.Children.OfType<NativeAuthoringStrip>().FirstOrDefault();
-        if (strip?.Child is not Panel row) return;
+        var shell = EditorShell.Find(window.Content as Control);
+        if (shell == null || shell.AnimationTools.Children.OfType<Button>().Any(b => b.Content?.ToString() == "Skeleton / skin authoring")) return;
         var button = Ux.Secondary("Skeleton / skin authoring");
         button.Click += (_, _) => new RigAuthoringWindow(window).Show(window);
-        row.Children.Insert(Math.Max(0, row.Children.Count - 1), button);
+        shell.AnimationTools.Children.Add(button);
     }
 }
 
