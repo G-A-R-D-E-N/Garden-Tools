@@ -1026,7 +1026,7 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 **Payloads, from Mutagen upstream `Common Subrecords/*.xml` and xEdit:**
 - **`XOWN`:** Owner, `Int32 Unknown`, `NoCrime` as a 4-byte bool (`Ownership.xml`).
   - An existing 4- or 12-byte value is widened to 12 bytes.
-  - The unknown word and the upper 3 bytes of the bool word are kept. The flag byte is written as exactly 0 or 1: Mutagen reads NoCrime as a first byte `>= 1` (`Ownership_Generated.cs`), while a flag reader looks only at bit 0, so a value such as 2 would read as true in one and false in the other.
+  - The unknown word and the upper 3 bytes of the bool word are kept. The flag byte is written as exactly 0 or 1, the canonical bool Mutagen writes; Mutagen reads it as a first byte `>= 1` (`Ownership_Generated.cs`) and `Radicle/src/environment/placed.cpp:decode_placed_reference` as `!= 0`. Keeping other bits of an old byte left NoCrime set after clearing it.
   - A cleared owner removes `XOWN` and `XRNK`, as Mutagen nulls both.
 - **`XESP`:** Reference, a `u8` flags byte, then 3 unknown bytes (`EnableParent.xml`). The unknown bytes are kept.
 - **`XLKR`:** {KeywordOrReference, Reference}, 8 bytes each (`LinkedReferences.xml`).
@@ -1045,7 +1045,7 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 - The new `MAST` entry takes the environment's spelling of the file name, not the caller's.
 - A `FormIdError` from the master remap or sort (an existing master the environment does not load, or the 255-master limit) is `INVALID_ARGUMENT`.
 
-**Form keys.** `Radicle/src/forms/placed_reference_edit.cpp:encode` rejects a key with no plugin name (for example `"Data/"`, which `PluginKey::from_filename` reduces to an empty name) unless it is the null key, and it round-trips every encoded form ID through `resolve_plugin_form_id`. A key that does not survive the round trip, such as a light-plugin local above 0xFFF that `encode_plugin_form_id` would mask to a different form, throws instead of writing the wrong link.
+**Form keys.** `Radicle/src/forms/placed_reference_edit.cpp:encode` rejects a key with no plugin name (for example `"Data/"`, which `PluginKey::from_filename` reduces to an empty name) unless it is the null key, and a named key with local 0 (it would encode as a null link; only a C key whose `plugin` is NULL means clear), and it round-trips every encoded form ID through `resolve_plugin_form_id`. A key that does not survive the round trip, such as a light-plugin local above 0xFFF that `encode_plugin_form_id` would mask to a different form, throws instead of writing the wrong link.
 
 **Atomicity.** Every edit works on a copy, and the plugin changes only on success; the C ABI copies again around master additions.
 
