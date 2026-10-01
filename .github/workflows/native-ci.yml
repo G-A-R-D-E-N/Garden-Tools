@@ -1,9 +1,10 @@
 name: native-ci
 
 # Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runners:
-# Linux (label `garden`) and Windows (`native-windows-tests`). Hosted runners are intentionally avoided: both orgs are over
-# the Free Actions minutes allowance (GHRUNNER#24), and hosted jobs fail silently
-# once exhausted. Self-hosted minutes are free. Pull requests run through the
+# Linux (label `garden`) and Windows (`native-windows-tests`). Hosted runners
+# are intentionally avoided: both orgs are over the Free Actions minutes
+# allowance (GHRUNNER#24), and hosted jobs fail silently once exhausted.
+# Self-hosted minutes are free. Pull requests run through the
 # pull_request trigger only; work-branch push runs are intentionally omitted so
 # one PR commit does not consume two self-hosted CI slots.
 
