@@ -27,6 +27,7 @@ fo4::Plugin with_masters(const fo4::Plugin& plugin,
   std::vector<fo4::MasterDescriptor> masters;
   for (const auto& master : plugin.header.masters) masters.push_back({master.key, master.kind});
   bool added = false;
+  const auto self = env.value.find_plugin(plugin.key.filename());
   for (const auto& key : keys) {
     if (!key || key->owner().empty() || key->owner() == plugin.key) continue;
     const auto& owner = key->owner();
@@ -35,7 +36,11 @@ fo4::Plugin with_masters(const fo4::Plugin& plugin,
     if (!index) {
       throw fo4::forms::PlacedReferenceError(std::string(owner.filename()) + " is not loaded in the environment");
     }
-    masters.push_back({owner, env.value.plugins()[*index].kind});
+    if (self && *index > *self) {
+      throw fo4::forms::PlacedReferenceError(std::string(owner.filename()) + " loads after " +
+                                             std::string(plugin.key.filename()));
+    }
+    masters.push_back({env.value.plugins()[*index].key, env.value.plugins()[*index].kind});
     added = true;
   }
   if (!added) return plugin;
@@ -53,6 +58,8 @@ radicle_status run(radicle_plugin* plugin, const char* what, Edit&& edit) {
       if (status == RADICLE_STATUS_OK) plugin->value = std::move(next);
       return status;
     } catch (const fo4::forms::PlacedReferenceError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
   });

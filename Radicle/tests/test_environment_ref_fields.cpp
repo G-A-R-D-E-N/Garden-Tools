@@ -332,6 +332,60 @@ TEST_F(RefFieldsTest, RejectsBadInputWithoutChangingThePlugin) {
   EXPECT_EQ(fo4::write_plugin(patch_), before);
 }
 
+TEST_F(RefFieldsTest, NoCrimeWritesAWholeBoolByte) {
+  const auto refr = key("Master.esm", 0x821);
+  fo4::visit_records(patch_, [](fo4::Record& record) {
+    for (auto& sub : record.subrecords) {
+      if (sub.signature == fo4::Signature::from_string("XOWN")) sub.data[8] = std::byte{0x03};
+    }
+  });
+  ASSERT_TRUE(fo4::forms::set_placed_reference_ownership(patch_, refr, key("Master.esm", 0x830), false, std::nullopt));
+  EXPECT_EQ(std::vector<std::byte>(find_sub(*fo4::find_record(patch_, refr), "XOWN")->data.begin() + 8,
+                                   find_sub(*fo4::find_record(patch_, refr), "XOWN")->data.end()),
+            (bytes({0x00, 0x11, 0x22, 0x33})));
+}
+
+TEST_F(RefFieldsTest, CApiRejectsOwnersItCannotWriteFaithfully) {
+  const auto light = write("Light.esl", make_plugin(0x201, {"Master.esm"}, {top("FACT", {rec("FACT", 0x01000801)})}));
+  const auto later = write("Later.esp", make_plugin(0, {"Master.esm"}, {top("FACT", {rec("FACT", 0x01000900)})}));
+  const auto patch_path = root_ / "Patch.esp";
+  fo4::write_plugin_file(patch_, patch_path);
+  const auto stray_path = root_ / "Stray.esp";
+  fo4::write_plugin_file(fo4::remap_plugin_masters(patch_, {{fo4::PluginKey::from_filename("Master.esm"), fo4::PluginKind::full},
+                                                           {fo4::PluginKey::from_filename("Other.esm"), fo4::PluginKind::full}}),
+                         stray_path);
+  std::vector<std::string> utf8;
+  for (const auto& path : {paths_[0], paths_[1], light, patch_path, later}) utf8.push_back(path.string());
+  std::vector<const char*> raw;
+  for (const auto& path : utf8) raw.push_back(path.c_str());
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(raw.data(), raw.size(), &env), RADICLE_STATUS_OK);
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(patch_path.string().c_str(), &patch), RADICLE_STATUS_OK);
+  const radicle_form_key ref{"Master.esm", 0x821};
+
+  EXPECT_EQ(radicle_plugin_set_placed_enable_parent(patch, env, ref, {"Light.esl", 0x1801}, 0),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_placed_location_reference(patch, env, ref, {"Data/", 0x813}),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_placed_ownership(patch, env, ref, {"Later.esp", 0x900}, 0, 0, 0),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  ASSERT_EQ(radicle_plugin_set_placed_enable_parent(patch, env, ref, {"Light.esl", 0x801}, 0), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_plugin_set_placed_ownership(patch, env, ref, {"dlc.ESM", 0x831}, 0, 0, 0), RADICLE_STATUS_OK);
+  const auto out = (root_ / "Out.esp").string();
+  ASSERT_EQ(radicle_plugin_write_file(patch, out.c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(patch);
+  std::vector<std::string> masters;
+  for (const auto& master : fo4::read_plugin_file(out).header.masters) masters.emplace_back(master.key.filename());
+  EXPECT_EQ(masters, (std::vector<std::string>{"Master.esm", "DLC.esm", "Light.esl"}));
+
+  ASSERT_EQ(radicle_plugin_read_file(stray_path.string().c_str(), &patch), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_placed_ownership(patch, env, ref, {"DLC.esm", 0x831}, 0, 0, 0),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_plugin_destroy(patch);
+  radicle_env_destroy(env);
+}
+
 TEST_F(RefFieldsTest, CApiAddsMastersForNewLinksAndKeepsLoadOrder) {
   std::vector<std::string> utf8;
   for (const auto& path : paths_) utf8.push_back(path.string());

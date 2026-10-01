@@ -100,8 +100,9 @@ Subrecord& put(Record& record, Signature field, std::vector<std::byte> data) {
 }
 
 std::uint32_t encode(const Plugin& plugin, const std::optional<FormKey>& key) {
-  if (!key || key->owner().empty()) return 0;
+  if (!key || (key->owner().empty() && key->local().value() == 0)) return 0;
   const auto& owner = key->owner();
+  if (owner.empty()) throw PlacedReferenceError("form key " + key->to_string() + " has no plugin name");
   const bool known = owner == plugin.key ||
                      std::any_of(plugin.header.masters.begin(), plugin.header.masters.end(),
                                  [&](const MasterReference& master) { return master.key == owner; });
@@ -109,7 +110,12 @@ std::uint32_t encode(const Plugin& plugin, const std::optional<FormKey>& key) {
     throw PlacedReferenceError(std::string(owner.filename()) + " is not a master of " +
                                std::string(plugin.key.filename()));
   }
-  return encode_plugin_form_id(*key, plugin_form_id_context(plugin)).value();
+  const auto context = plugin_form_id_context(plugin);
+  const auto raw = encode_plugin_form_id(*key, context);
+  if (resolve_plugin_form_id(raw, context) != *key) {
+    throw PlacedReferenceError("form key " + key->to_string() + " does not fit its plugin's form ID range");
+  }
+  return raw.value();
 }
 
 std::vector<std::byte> u32_bytes(std::uint32_t value) {
@@ -250,7 +256,7 @@ bool set_placed_reference_ownership(Plugin& plugin,
       std::copy(existing->data.begin(), existing->data.end(), data.begin());
     }
     write_u32(data, 0, encode(next, owner));
-    data[8] = (data[8] & std::byte{0xFE}) | std::byte{static_cast<std::uint8_t>(no_crime ? 1 : 0)};
+    data[8] = std::byte{static_cast<std::uint8_t>(no_crime ? 1 : 0)};
     put(record, sig("XOWN"), std::move(data));
     if (faction_rank) {
       put(record, sig("XRNK"), u32_bytes(static_cast<std::uint32_t>(*faction_rank)));
