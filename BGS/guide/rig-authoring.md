@@ -1,6 +1,6 @@
 # Skeleton, skin and physics tools
 
-Open **Skeleton / skin authoring** from the editor command bar.
+On **Home**, the **Authoring tools** section has **Open skeleton editor**, **Open skin editor** and **Open physics simulation** buttons. Each opens its respective tab. You can also select **Skeleton / skin authoring** from the **Animation** toolbar.
 
 ## Skeleton
 

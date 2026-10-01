@@ -21,6 +21,7 @@ internal static class WorkspaceSmoke
         Settings.TrySet("tour_done", "1", out _);
         ActivityRailSelectsExistingTabs();
         ProductionChromeLivesInTheShell();
+        HomeOpensAuthoringTools();
         LayoutAndHandlersRemainConnected();
         StandaloneSampleResolvesAdjacentSkeleton();
         TreeFilterDoesNotSilentlyDimTheGraph();
@@ -34,6 +35,7 @@ internal static class WorkspaceSmoke
     {
         _failed = 0;
         TopToolbarsLeaveTheWorkspaceClear();
+        HomeOpensAuthoringTools();
         LayoutAndHandlersRemainConnected();
         StandaloneSampleResolvesAdjacentSkeleton();
         return _failed;
@@ -82,6 +84,42 @@ internal static class WorkspaceSmoke
                 Dispatcher.UIThread.RunJobs();
                 CheckTrue($"{header} overflowing commands can be scrolled into view", scroll.Offset.X > 0);
             }
+        }
+        Smoke.CloseForTest(window);
+    }
+
+    private static void HomeOpensAuthoringTools()
+    {
+        var window = AppHost.CreateMainWindow();
+        window.Width = 1000;
+        window.Height = 740;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Click(window, "Home");
+        var home = (Control)Smoke.Find<TabControl>(window).First().SelectedContent!;
+        foreach (var (label, type, tab) in new[] {
+            ("Open skeleton editor", typeof(RigAuthoringWindow), "Skeleton"),
+            ("Open skin editor", typeof(RigAuthoringWindow), "Skin weights"),
+            ("Open physics simulation", typeof(RigAuthoringWindow), "Physics simulation"),
+            ("Open structure authoring", typeof(BehaviourStructureWindow), ""),
+            ("Open batch authoring", typeof(BatchAuthoringWindow), "") })
+        {
+            var button = Smoke.Find<Button>(home).SingleOrDefault(b => b.Content?.ToString() == label);
+            CheckTrue($"Home offers {label}", button != null && button.IsEffectivelyVisible && button.Bounds.Height > 0);
+            if (button == null) continue;
+            var card = button.GetVisualAncestors().OfType<Border>().First();
+            CheckTrue($"{label} fits its Home card",
+                button.TranslatePoint(new Point(button.Bounds.Width, 0), card)!.Value.X <= card.Bounds.Width - 12);
+            Smoke.Click(button);
+            Dispatcher.UIThread.RunJobs();
+            var editor = window.OwnedWindows.Single();
+            Check($"{label} opens its editor", type, editor.GetType());
+            if (tab.Length > 0)
+                Check($"{label} selects its tool", tab,
+                    ((TabItem)Smoke.Find<TabControl>(editor).Single().SelectedItem!).Header?.ToString());
+            editor.Close();
+            Dispatcher.UIThread.RunJobs();
+            Check("opening a tool keeps Home selected", EditorShell.Home, window.SelectedActivity);
         }
         Smoke.CloseForTest(window);
     }

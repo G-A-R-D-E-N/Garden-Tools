@@ -6,6 +6,7 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 ## Unreleased
 
+* Home now offers direct buttons for skeleton editing, skin weights, physics simulation, structure authoring and batch authoring. Rig shortcuts open the selected tool immediately.
 * Moved Home, Graph, Inspect, Animation and Project navigation to the top of the window. Each view has its own grouped command toolbar; wide toolbars scroll horizontally, while inspectors and the playback timeline stay beside the content they affect.
 * Removed duplicate workspace tab headers. Graph authoring tools live under Graph, skeleton/skin authoring under Animation, and About and assistant controls remain available in the top bar.
 * Added a Skeleton / skin authoring window with bone names, reference transforms, translation locks, parent changes, validation, undo/redo, and verified HKX save/reopen. Bone addition/removal and reorderings are supported for standalone skeleton files; dependent rigs refuse changes that require asset remapping.

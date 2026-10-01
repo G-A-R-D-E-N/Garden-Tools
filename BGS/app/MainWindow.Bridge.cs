@@ -287,10 +287,11 @@ public partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
         });
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var buttons = new WrapPanel();
         for (int i = 0; i < actions.Length; i++)
         {
             var button = i == 0 ? Ux.Primary(actions[i].Label) : Ux.Secondary(actions[i].Label);
+            button.Margin = new Thickness(0, 0, 6, 0);
             var go = actions[i].Go;
             button.Click += (_, _) => go();
             buttons.Children.Add(button);

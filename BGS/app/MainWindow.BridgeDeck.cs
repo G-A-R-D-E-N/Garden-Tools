@@ -150,6 +150,19 @@ public partial class MainWindow : Window
             _bridgeGroups[^1].Cards.Add(card);
         }
 
+        Section("Authoring tools");
+        Station("Skeleton and skin", "Edit skeleton bones and reference poses, or inspect and edit NIF vertex weights.",
+                "Animation → Skeleton / skin authoring.",
+                ("Open skeleton editor", () => new RigAuthoringWindow(this).Show(this)),
+                ("Open skin editor", () => new RigAuthoringWindow(this, 1).Show(this)));
+        Station("Physics simulation", "Preview gravity, collisions and joints using explicit simulation settings.",
+                "Animation → Skeleton / skin authoring → Physics simulation.",
+                ("Open physics simulation", () => new RigAuthoringWindow(this, 2).Show(this)));
+        Station("Graph authoring", "Author transitions, events and state machines, or queue animation states in a batch.",
+                "Graph → Structure authoring or Batch authoring.",
+                ("Open structure authoring", () => new BehaviourStructureWindow(this).Present()),
+                ("Open batch authoring", () => new BatchAuthoringWindow(this).Present()));
+
         Section("Open and inspect");
         Station("Tree", "Browse the whole file as a tree of objects, classes and clips.",
                 "Inspect → Tree on the top toolbar.",

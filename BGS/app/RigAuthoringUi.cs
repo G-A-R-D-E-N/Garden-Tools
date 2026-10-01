@@ -42,7 +42,7 @@ public sealed partial class RigAuthoringWindow : Window
     private bool _closeApproved;
     private bool _deciding;
 
-    public RigAuthoringWindow(MainWindow owner)
+    public RigAuthoringWindow(MainWindow owner, int selectedTab = 0)
     {
         _owner = owner;
         Title = "BGS Skeleton / Skin Authoring";
@@ -59,7 +59,7 @@ public sealed partial class RigAuthoringWindow : Window
         var root = new DockPanel { Margin = new Avalonia.Thickness(12), Background = Ux.BaseBrush };
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(_status);
-        root.Children.Add(new TabControl { ItemsSource = new[] {
+        root.Children.Add(new TabControl { SelectedIndex = selectedTab, ItemsSource = new[] {
             new TabItem { Header = "Skeleton", Content = SkeletonPanel() },
             new TabItem { Header = "Skin weights", Content = SkinPanel() },
             new TabItem { Header = "Physics simulation", Content = PhysicsPanel() }
