@@ -66,8 +66,9 @@ internal sealed partial class AssistantPane : Border
     private readonly Button _send = Ux.Primary("Send");
     private readonly Button _cancel = Ux.Secondary("Cancel");
     private readonly Border _approval = new();
+    private readonly TextBlock _approvalDescription = new() { TextWrapping = TextWrapping.Wrap, Foreground = Ux.WarnBrush };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap };
-    private readonly Button _approve = Ux.Primary("Apply approved edit");
+    private readonly Button _approve = Ux.Primary("Approve action");
     private readonly Button _reject = Ux.Secondary("Reject");
     private readonly TextBlock _chatHeader = new()
     {
@@ -162,6 +163,7 @@ internal sealed partial class AssistantPane : Border
                     Foreground = Ux.WarnBrush,
                     TextWrapping = TextWrapping.Wrap,
                 },
+                new ScrollViewer { MaxHeight = 140, Content = _approvalDescription },
                 approvalButtons,
             },
         };
@@ -329,8 +331,11 @@ internal sealed partial class AssistantPane : Border
         _cancel.IsVisible = busy;
         _modelButton.IsEnabled = !busy;
         _modelReset.IsEnabled = !busy;
+        _approve.IsEnabled = !busy;
+        _reject.IsEnabled = !busy;
     }
     public void SetApproval(bool visible) => _approval.IsVisible = visible;
+    public void SetApprovalDescription(string text) => _approvalDescription.Text = text;
 
     public bool ProgressVisible => _progress.IsVisible;
     public string ProgressText => _progressText.Text ?? "";

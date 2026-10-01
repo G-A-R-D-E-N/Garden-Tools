@@ -2,8 +2,35 @@
 
 ## Status
 
-The backend and initial assistant drawer are now present. The broader mutation catalog remains
-separate follow-up work.
+The backend and assistant drawer are present. The desktop assistant also exposes approved
+interactions with existing editor controls; typed semantic mutation tools remain separate.
+
+### Desktop control access
+
+`bgs.editor_state` returns visible controls, field values, choices and supported actions across
+the main editor, authoring windows and open menus. Filter by label/type with `query`, paginate
+controls with `offset`/`limit`, and paginate choices or scene items with `itemOffset`.
+Graph nodes/ports and skeleton bones/bodies report their current viewport coordinates.
+
+`bgs.editor_action` proposes one observed control interaction: buttons, text fields, selections,
+checkboxes, numeric values, expansion, scrolling, keys or viewport gestures. It requires explicit
+approval bound to that proposal and chat. Changed documents, fields, control availability, cameras
+or gesture geometry invalidate approval. Pause playback/simulation before selecting moving geometry.
+
+`bgs.editor_file` replaces native file pickers with explicit path proposals for HKX/NIF loading,
+comparison, archive browsing, script/game/mod folders and diff export. Export destinations stay
+inside the active project. Use the Window control ID returned by `editor_state`; native picker
+buttons have no direct assistant click action.
+
+These tools reuse desktop handlers and their validation, undo, backup and save behavior. Dispatch
+only means an interaction was sent. The assistant inspects state after approval before reporting
+the result, and any next action requires another approval. Queued prompts wait while approval is
+pending. Modal dialogs receive a separate approval window so their controls remain accessible.
+Account settings, password controls, chat contents, approval controls and clipboard shortcuts
+are excluded. No shell access is added.
+
+The desktop provider sessions share this tool catalog, including the authenticated CLI bridge.
+The separate headless MCP server retains its inspection-only catalog; it cannot operate an editor.
 
 Source implementation must follow the Ponytail proof-first/reuse-first workflow: https://github.com/dietrichgebert/ponytail.
 

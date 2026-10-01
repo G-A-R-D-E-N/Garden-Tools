@@ -26,6 +26,7 @@ internal static class WorkspaceSmoke
         StandaloneSampleResolvesAdjacentSkeleton();
         TreeFilterDoesNotSilentlyDimTheGraph();
         HkGridHeaderScrollsWithRows();
+        AssistantEditorSmoke.Run();
         File.Delete(Settings.SettingsPathForTest);
         Settings.SettingsPathForTest = null;
         return _failed;

@@ -4,6 +4,7 @@ This update brings skeleton and skin tools into the editor and adds interactive 
 
 ## Major changes
 
+- The assistant can operate editor and authoring controls through approved actions, including graph/rig gestures and explicit file paths. Existing asset checks and save behavior apply. Dispatch means an interaction was sent; the assistant must inspect the resulting editor state before claiming success. Credentials and approval controls are excluded.
 - Top toolbar scrollbars sit below their controls without overlapping buttons or fields.
 - Skeleton, skin and physics previews resize with the window, stay inside their viewport and offer Fit preview. Settings scroll separately from the preview.
 - Home includes an Authoring tools section with direct skeleton, skin, physics, structure and batch editor shortcuts.

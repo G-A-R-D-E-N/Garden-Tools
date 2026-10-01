@@ -235,7 +235,7 @@ internal static class MultiChatSmoke
             Check("switching to chat B rejects chat A's real pending mutation",
                 !tools.HasPendingApproval && !ui.ApprovalVisible);
 
-            Click(window, "Apply approved edit");
+            Click(window, "Approve action");
             Dispatcher.UIThread.RunJobs();
             Check("chat B cannot apply chat A's edit", !window.IsDirty && window.UndoStepsForTest == 0);
 

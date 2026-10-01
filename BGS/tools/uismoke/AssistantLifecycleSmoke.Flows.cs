@@ -60,7 +60,7 @@ internal static partial class AssistantLifecycleSmoke
             bool committed = ((IAssistantEditorDocument)window).TryCommit(advanced, out _);
             Check("the active document advanced before approval", committed);
 
-            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Apply approved edit")
+            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Approve action")
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Check("a stale approval is reported as not applied",
@@ -377,7 +377,7 @@ internal static partial class AssistantLifecycleSmoke
             Check("preview waits for explicit approval",
                 window.AssistantUiForTest.ApprovalVisible && !window.IsDirty);
 
-            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Apply approved edit")
+            Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Approve action")
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Check("approval uses the normal editor commit", window.IsDirty && window.UndoStepsForTest == 1);

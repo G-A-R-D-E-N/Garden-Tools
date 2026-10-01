@@ -48,6 +48,7 @@ public static class LifecycleSmoke
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions())
                 .SetupWithoutStarting();
             AssistantLifecycleSmoke.Run();
+            AssistantEditorSmoke.Run();
             return Smoke.FailedCount == 0 ? 0 : 1;
         }
 

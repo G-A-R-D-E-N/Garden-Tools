@@ -361,7 +361,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        var export = BehaviourCompareSession.CreateExport(result, SelectedDiffFilter());
         string extension = json ? ".json" : ".txt";
         string baseName = Path.GetFileNameWithoutExtension(_hkxPath);
         var picked = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
@@ -378,6 +377,14 @@ public partial class MainWindow : Window
 
         string? path = picked?.TryGetLocalPath();
         if (path == null) return;
+
+        await WriteDiff(path, json);
+    }
+
+    private async Task WriteDiff(string path, bool json)
+    {
+        if (_diffResult is not { } result) throw new InvalidOperationException("Compare two files before exporting a diff.");
+        var export = BehaviourCompareSession.CreateExport(result, SelectedDiffFilter());
 
         try
         {
