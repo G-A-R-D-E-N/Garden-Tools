@@ -52,6 +52,10 @@ public sealed class CodexAuthTests
         string[] methods = fixture.Server.Sent.Select(CodexSessionFixture.Method)
             .Where(method => method.Length > 0).ToArray();
         Assert.Equal("initialize", methods[0]);
+        JsonElement initialize = CodexSessionFixture.Parse(fixture.Server.Sent
+            .Single(line => CodexSessionFixture.Method(line) == "initialize"));
+        Assert.Equal(BuildInfo.Version, initialize.GetProperty("params")
+            .GetProperty("clientInfo").GetProperty("version").GetString());
         Assert.Equal("initialized", methods[1]);
         Assert.Contains("account/read", methods);
         Assert.True(fixture.Connection.Client.IsConnected);
