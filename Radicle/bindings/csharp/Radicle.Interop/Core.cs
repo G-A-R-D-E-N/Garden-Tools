@@ -57,6 +57,11 @@ public readonly record struct FormKey(string Plugin, uint LocalId)
     public static FormKey? FromNative(Native.FormKey key) =>
         key.Plugin == IntPtr.Zero ? null : new FormKey(Utf8.Read(key.Plugin)!, key.LocalId);
 
+    public bool Equals(FormKey other) =>
+        LocalId == other.LocalId && string.Equals(Plugin, other.Plugin, StringComparison.OrdinalIgnoreCase);
+
+    public override int GetHashCode() => HashCode.Combine(LocalId, StringComparer.OrdinalIgnoreCase.GetHashCode(Plugin));
+
     public override string ToString() => $"{LocalId:X6}:{Plugin}";
 }
 
