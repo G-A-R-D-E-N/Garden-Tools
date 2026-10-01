@@ -57,6 +57,16 @@ public class AbiGuardTests
     }
 
     [Fact]
+    public void ALibraryFromBeforeTheMaterialSwapExportsIsRejected()
+    {
+        var stub = Env("RADICLE_ABI_STUB_V1");
+        var result = FirstCallThroughAFreshCopyOfTheBindings(stub);
+        Assert.StartsWith(MismatchType, result);
+        Assert.Contains("reports Radicle ABI 1,", result);
+        Assert.Contains($"generated for ABI {RadicleNative.CompiledAbiVersion}", result);
+    }
+
+    [Fact]
     public void ARejectedLibraryIsUnloaded()
     {
         var stub = Env("RADICLE_ABI_STUB");
