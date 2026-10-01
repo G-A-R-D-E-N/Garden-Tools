@@ -220,10 +220,19 @@ jobs:
           $cache = Join-Path $env:USERPROFILE ".cache\garden-ci"
           [IO.File]::AppendAllText($env:GITHUB_ENV, "CI_SRC=$cache\src`nCI_BUILD=$cache\build`n")
 
+      - name: Stop builds left running by a cancelled run
+        shell: powershell
+        run: |
+          $all = Get-CimInstance Win32_Process
+          $kill = @($all | Where-Object { $_.Name -in 'cmake.exe', 'ctest.exe' -and $_.CommandLine -like '*\.cache\garden-ci\*' } | ForEach-Object ProcessId)
+          for ($i = 0; $i -lt $kill.Count; $i++) { $kill += @($all | Where-Object ParentProcessId -eq $kill[$i] | ForEach-Object ProcessId) }
+          $kill | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+          "Stopped $($kill.Count) leftover process(es)"
+
       - name: Update the persistent build checkout
         run: |
           if not exist "%CI_SRC%\.git" git init -q "%CI_SRC%" || exit /b 1
-          if exist "%CI_SRC%\.git\index.lock" del "%CI_SRC%\.git\index.lock"
+          if exist "%CI_SRC%\.git\*.lock" del /q "%CI_SRC%\.git\*.lock"
           git -C "%CI_SRC%" fetch -q --no-tags --depth=1 "%GITHUB_WORKSPACE%" HEAD || exit /b 1
           git -C "%CI_SRC%" checkout -q --force --detach FETCH_HEAD || exit /b 1
           git -C "%CI_SRC%" clean -q -ffdx || exit /b 1
@@ -231,7 +240,7 @@ jobs:
       - name: Build Windows static zlib dependency
         run: |
           set "ZLIB_DIR=%CI_BUILD%\zlib-%ZLIB_COMMIT%"
-          if exist "%ZLIB_DIR%\Release\zlibstatic.lib" exit /b 0
+          if exist "%ZLIB_DIR%\zlib.h" exit /b 0
           if exist "%ZLIB_DIR%-src" rmdir /s /q "%ZLIB_DIR%-src"
           git clone -q --filter=blob:none https://github.com/madler/zlib.git "%ZLIB_DIR%-src" || exit /b 1
           git -C "%ZLIB_DIR%-src" checkout -q %ZLIB_COMMIT% || exit /b 1
