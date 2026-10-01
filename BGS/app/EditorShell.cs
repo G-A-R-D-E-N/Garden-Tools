@@ -50,6 +50,7 @@ public sealed class EditorShell : Grid
     private readonly StackPanel _help = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
     private readonly ScrollViewer _toolbarScroll = new()
     {
+        AllowAutoHide = false,
         HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
         VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
     };
@@ -119,6 +120,7 @@ public sealed class EditorShell : Grid
             Padding = new Thickness(12, 8, 12, 8),
             Child = new ScrollViewer
             {
+                AllowAutoHide = false,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 Content = commandBand,

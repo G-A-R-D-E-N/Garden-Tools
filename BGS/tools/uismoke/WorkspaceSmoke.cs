@@ -76,6 +76,13 @@ internal static class WorkspaceSmoke
                 !button.GetVisualAncestors().Contains(tabs));
             var toolbar = Smoke.Find<Border>(shell).Single(border => border.Name == "WorkspaceToolbar");
             var scroll = (ScrollViewer)toolbar.Child!;
+            var horizontalBar = scroll.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ScrollBar>()
+                .Single(bar => bar.TemplatedParent == scroll && bar.Orientation == Avalonia.Layout.Orientation.Horizontal);
+            var presenter = scroll.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ScrollContentPresenter>()
+                .Single(content => content.TemplatedParent == scroll);
+            double contentBottom = presenter.TranslatePoint(new Point(0, presenter.Bounds.Height), scroll)!.Value.Y;
+            double scrollbarTop = horizontalBar.TranslatePoint(default, scroll)!.Value.Y;
+            CheckTrue($"{header} scrollbar has its own space below toolbar controls", contentBottom <= scrollbarTop + 0.5);
             CheckTrue($"{header} toolbar starts at its first command", scroll.Offset.X == 0);
             CheckTrue($"{header} ribbon leaves room for the editor", toolbar.Bounds.Height < 160 && tabs.Bounds.Height > 300);
             if (scroll.Extent.Width > scroll.Viewport.Width)
