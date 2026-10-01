@@ -37,7 +37,10 @@ internal sealed partial class AssistantPane : Border
         "Choose a model with the Model button; the gear holds the provider and API key.",
         "Type / for commands: /new, /clear, /model, /cancel, /help.",
         "Enter sends and Shift+Enter adds a line; you can queue the next message while it works.",
-        "Any edit BGS proposes waits for your approval before it is applied.",
+        "Describe your goal and name the target bone, node or field; open the relevant file first.",
+        "Each action waits for your approval. Review its target, value and path before choosing Approve action or Reject.",
+        "Check the result after approval; an action is not a confirmed edit or save.",
+        "Home > Take the tour includes the AI chat guide. Keep credentials in Settings, not chat.",
     };
     private readonly StackPanel _commandPanel = new() { Spacing = 1 };
     private readonly List<Border> _commandRows = new();

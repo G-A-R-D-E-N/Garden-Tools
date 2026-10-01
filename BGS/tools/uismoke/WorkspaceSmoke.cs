@@ -22,6 +22,7 @@ internal static class WorkspaceSmoke
         ActivityRailSelectsExistingTabs();
         ProductionChromeLivesInTheShell();
         HomeOpensAuthoringTools();
+        TourGuideSmoke.Run();
         LayoutAndHandlersRemainConnected();
         StandaloneSampleResolvesAdjacentSkeleton();
         TreeFilterDoesNotSilentlyDimTheGraph();

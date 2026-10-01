@@ -6,6 +6,8 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 ## Unreleased
 
+* The Home tour includes an AI chat guide for setup, requests, action approval and checking results before saving. The tour can be replayed after finishing or skipping it.
+
 * The assistant can read and propose interactions with editor and authoring controls, including graph and rig viewport gestures, using the existing handlers. Each action and named file/folder operation requires approval; stale actions are refused. Account, password and assistant approval controls are excluded.
 * Top toolbar scrollbars reserve their own space below controls, preventing overlap on all workspace tabs.
 * Rig previews fill the remaining window space and clip zoomed or panned geometry to the viewport. Skeleton, skin and physics tabs each offer Fit preview; settings scroll independently.
