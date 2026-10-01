@@ -137,6 +137,7 @@ internal static class RigAuthoringSmoke
         window.Width = window.MinWidth;
         window.Height = window.MinHeight;
         Dispatcher.UIThread.RunJobs();
+        Console.WriteLine($"Minimum rig viewport: {view.Bounds.Width:0} x {view.Bounds.Height:0}.");
         Require(view.Bounds.Width > 600 && view.Bounds.Height > 100,
             "minimum-size rig window must keep a usable viewport");
         var content = (Control)window.Content!;

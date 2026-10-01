@@ -224,8 +224,9 @@ public sealed partial class RigAuthoringWindow : Window
 
     private static Control AuthoringPanel(StackPanel settings, SkeletonView preview)
     {
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
-        root.Children.Add(new ScrollViewer { Content = settings, MaxHeight = 360 });
+        var root = new Grid { RowDefinitions = new RowDefinitions("*,Auto,*") };
+        root.RowDefinitions[0].MaxHeight = 360;
+        root.Children.Add(new ScrollViewer { Content = settings });
         var fit = Button("Fit preview", preview.Frame);
         fit.HorizontalAlignment = HorizontalAlignment.Left;
         fit.Margin = new Avalonia.Thickness(0, 6, 0, 6);
