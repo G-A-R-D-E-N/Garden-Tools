@@ -52,7 +52,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: radicle-linux-failure
           path: |
@@ -86,7 +86,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: fo4ide-native-linux-failure
           path: |
@@ -144,7 +144,7 @@ jobs:
       - name: Upload Windows binaries
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: radicle-windows-x64
           path: |
@@ -186,7 +186,7 @@ jobs:
       - name: Upload native Windows executable
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: fo4recordeditor-windows-x64
           path: build/fo4ide-win/bin/FO4RecordEditor.exe
