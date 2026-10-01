@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <string>
+#include <variant>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -51,6 +52,24 @@ Memory sample_memory() {
   return memory;
 }
 
+void tally(const fo4::Group& group, EnvBenchResult& result) {
+  ++result.group_count;
+  result.node_bytes += group.children.capacity() * sizeof(fo4::GroupChild);
+  for (const auto& child : group.children) {
+    if (const auto* nested = std::get_if<fo4::Group>(&child)) {
+      tally(*nested, result);
+      continue;
+    }
+    const auto& record = std::get<fo4::Record>(child);
+    result.payload_bytes += record.decompressed_payload.capacity();
+    result.node_bytes += record.subrecords.capacity() * sizeof(fo4::Subrecord);
+    for (const auto& subrecord : record.subrecords) {
+      ++result.subrecord_count;
+      result.subrecord_bytes += subrecord.data.capacity();
+    }
+  }
+}
+
 template <typename F>
 double time_ms(F&& body) {
   const auto start = std::chrono::steady_clock::now();
@@ -82,6 +101,11 @@ EnvBenchResult run_env_bench(const std::filesystem::path& data_dir,
   result.rss_after_load_kb = after.current_kb;
   result.peak_rss_after_load_kb = after.peak_kb;
   result.plugin_count = env.plugins().size();
+  for (std::size_t plugin = 0; plugin < result.plugin_count; ++plugin) {
+    const auto& loaded = env.plugin(plugin);
+    if (loaded.original_data) result.retained_file_bytes += loaded.original_data->size();
+    for (const auto& group : loaded.groups) tally(group, result);
+  }
 
   fo4::archive::AssetResolver assets;
   result.archives_ms = time_ms([&] {
@@ -116,7 +140,13 @@ void print(std::ostream& out, const EnvBenchResult& result) {
       << "Environment::load ms: " << result.load_ms << "\n"
       << "archives open ms:     " << result.archives_ms << "\n"
       << "StringTables::load ms: " << result.strings_ms << "\n"
-      << "record walk ms:       " << result.walk_ms << "\n";
+      << "record walk ms:       " << result.walk_ms << "\n"
+      << "retained file bytes:  " << result.retained_file_bytes << "\n"
+      << "payload bytes:        " << result.payload_bytes << "\n"
+      << "subrecord bytes:      " << result.subrecord_bytes << "\n"
+      << "subrecords:           " << result.subrecord_count << "\n"
+      << "groups:               " << result.group_count << "\n"
+      << "node bytes:           " << result.node_bytes << "\n";
 }
 
 }  // namespace radicle_bench

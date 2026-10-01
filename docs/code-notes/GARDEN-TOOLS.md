@@ -1227,3 +1227,27 @@ Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses ever
 ## Radicle/CMakeLists.txt:fo4_apply_warnings — warnings-as-errors only at top level
 
 `RADICLE_WARNINGS_AS_ERRORS` defaults to `PROJECT_IS_TOP_LEVEL`, the same way `RADICLE_BUILD_TESTS` does. Radicle's own CI still builds with `-Werror` / `/WX`. A consumer that pulls Radicle in with FetchContent (GardenEngine `opencw/native/radicle`) gets the warnings but not the hard failure. The case that forced this: GardenEngine CI run 554, job 1386, on GCC 15. GCC 15 raised a false `-Wmaybe-uninitialized` inside `std::optional<StaticCollectionPartView>` in `Radicle/src/forms/static_collection.cpp:decode_static_collection_parts`, and that failed the downstream build even though Radicle's own compilers accept the code.
+
+## Radicle/tools/env_bench/env_bench.cpp:tally — where Environment::load memory goes
+
+`run_env_bench` also reports what the loaded plugins hold: the file bytes each `Plugin::original_data` retains, `Record::decompressed_payload` capacity, `Subrecord::data` capacity, the subrecord count, the group count, and the `GroupChild`/`Subrecord` slot bytes (`node bytes`). `tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` asserts that every plugin byte is retained and that subrecords were counted.
+
+Official masters, `D:/SteamLibrary/steamapps/common/Fallout 4/Data`, 2026-09-28:
+
+| Build | Load time | Peak working set |
+|---|---|---|
+| Release | 4.2–5.9 s | 3.0 GB |
+| Debug | 28.8 s | 6.15 GB |
+
+The #114 brief's "~61.7 s / ~6.15 GB" matches the Debug peak exactly, so that figure was measured on a Debug build.
+
+Release breakdown for 482 MB of plugins, 2,192,230 records and 9,501,965 subrecords:
+- 460 MB of retained file bytes;
+- 502 MB of decompressed payloads;
+- 609 MB of subrecord data;
+- 804 MB of node slots;
+- about 650 MB of allocator overhead and environment indexes.
+
+Each record's bytes are held twice: once in the file bytes or the decompressed payload (kept for `record_original_bytes` and writeback), and again as one heap-allocated vector per subrecord. Making `Subrecord::data` a view into those buffers would remove the 609 MB copy and roughly 9.5 M allocations. That changes a type every reader and the writer use.
+
+Not done, because nothing in GardenEngine has failed on memory. The Fallen World profile (652 plugins) loads in 15 s at about 4.7 GB inside GardenEngine, and every #114 parity test runs in one process on that load.
