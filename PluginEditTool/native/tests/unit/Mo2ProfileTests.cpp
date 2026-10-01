@@ -7,6 +7,12 @@
 
 #include <fo4ide/mo2/Mo2Profile.hpp>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 namespace {
 
 std::filesystem::path tempRoot() {
@@ -98,6 +104,9 @@ TEST_CASE("MO2 profile resolves plugin winners in virtual data priority") {
 }
 
 TEST_CASE("MO2 profile resolves plugins in non-ANSI mod folders") {
+#if defined(_WIN32)
+    REQUIRE(GetACP() == CP_UTF8);
+#endif
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const std::u16string name{0x041C, 0x043E, 0x0434, 0x044B};
