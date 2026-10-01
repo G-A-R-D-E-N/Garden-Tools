@@ -1,12 +1,11 @@
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include <unistd.h>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -44,7 +43,9 @@ struct SourceRoot {
     std::filesystem::path dir;
 
     SourceRoot() : dir(std::filesystem::temp_directory_path() /
-                      ("fo4re-palette-" + std::to_string(::getpid()) + "-" +
+                      ("fo4re-palette-" +
+                       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+                       "-" +
                        std::to_string(reinterpret_cast<std::uintptr_t>(this)))) {
         std::filesystem::create_directories(dir);
     }
