@@ -12,6 +12,22 @@ constexpr Signature sig(const char (&text)[5]) {
   return Signature{text[0], text[1], text[2], text[3]};
 }
 
+std::optional<Signature> primary_model_field(const RecordRef& ref, char field) {
+  if (ref.record->header.signature == sig("SCOL")) return Signature{'M', 'O', 'D', field};
+  const auto path = primary_model_path(ref);
+  if (!path) return std::nullopt;
+  auto slot = '0';
+  if (ref.record->header.signature == sig("ARMO")) {
+    slot = '4';
+    for (const auto& sub : ref.record->subrecords) {
+      if (sub.signature != sig("MOD2")) continue;
+      if (path->data() == reinterpret_cast<const char*>(sub.data.data())) slot = '2';
+      break;
+    }
+  }
+  return slot == '0' ? Signature{'M', 'O', 'D', field} : Signature{'M', 'O', slot, field};
+}
+
 }  // namespace
 
 std::vector<MaterialSubstitution> decode_material_swap(const Environment& env, const RecordRef& ref) {
@@ -49,18 +65,13 @@ std::optional<FormKey> placed_material_swap(const Environment& env, const Record
 }
 
 std::optional<FormKey> primary_model_material_swap(const Environment& env, const RecordRef& ref) {
-  const auto path = primary_model_path(ref);
-  if (!path) return std::nullopt;
-  auto swap = sig("MODS");
-  if (ref.record->header.signature == sig("ARMO")) {
-    swap = sig("MO4S");
-    for (const auto& sub : ref.record->subrecords) {
-      if (sub.signature != sig("MOD2")) continue;
-      if (path->data() == reinterpret_cast<const char*>(sub.data.data())) swap = sig("MO2S");
-      break;
-    }
-  }
-  return Reader(env, ref).link(swap);
+  const auto field = primary_model_field(ref, 'S');
+  return field ? Reader(env, ref).link(*field) : std::nullopt;
+}
+
+std::optional<float> primary_model_color_remapping_index(const Environment& env, const RecordRef& ref) {
+  const auto field = primary_model_field(ref, 'C');
+  return field ? Reader(env, ref).f32(*field) : std::nullopt;
 }
 
 }  // namespace fo4::env

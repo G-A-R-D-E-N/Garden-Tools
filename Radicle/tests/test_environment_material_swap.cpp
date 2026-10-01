@@ -78,6 +78,12 @@ std::vector<Rec> fixture() {
       {"ARMO", 0x820, {{"MOD2", zstring("Male.nif")}, {"MO2S", word(0x800)},
                        {"MOD4", zstring("Female.nif")}, {"MO4S", word(0x801)}}},
       {"ARMO", 0x821, {{"MOD4", zstring("Female.nif")}, {"MO4S", word(0x801)}}},
+      {"ARMO", 0x822, {{"MOD2", zstring("Male.nif")}, {"MO2C", real(0.75f)},
+                       {"MOD4", zstring("Female.nif")}, {"MO4C", real(0.125f)}}},
+      {"STAT", 0x813, {{"MODL", zstring("Props\\Box.nif")}, {"MODC", real(0.25f)}, {"MODS", word(0x800)}}},
+      {"STAT", 0x814, {{"MODL", zstring("Props\\Box.nif")}, {"MODC", {std::byte{0}, std::byte{0}}}}},
+      {"STAT", 0x815, {{"MODC", real(0.5f)}}},
+      {"SCOL", 0x816, {{"MODL", zstring("SCOL\\Swaps.esm\\CM00000816.NIF")}, {"MODC", real(0.375f)}, {"MODS", word(0x800)}}},
       {"REFR", 0x830, {{"NAME", word(0x811)}, {"XMSP", word(0x800)}}},
       {"REFR", 0x831, {{"NAME", word(0x810)}}},
       {"REFR", 0x832, {{"NAME", word(0x810)}, {"XMSP", word(0x800)}, {"XMSP", word(0x801)}}},
@@ -144,6 +150,19 @@ TEST_F(MaterialSwapTest, FindsReferenceAndModelSwaps) {
   EXPECT_THROW(fo4::env::placed_material_swap(env, *env.winner(key(0x810))), fo4::env::WorldDecodeError);
 }
 
+TEST_F(MaterialSwapTest, ReadsThePrimaryModelColorRemappingIndex) {
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+  EXPECT_EQ(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x813))), std::optional<float>{0.25f});
+  EXPECT_FALSE(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x810))).has_value());
+  EXPECT_FALSE(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x815))).has_value());
+  EXPECT_EQ(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x822))), std::optional<float>{0.75f});
+  EXPECT_FALSE(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x821))).has_value());
+  EXPECT_THROW(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x814))), fo4::env::WorldDecodeError);
+  EXPECT_EQ(fo4::env::primary_model_material_swap(env, *env.winner(key(0x816))), key(0x800));
+  EXPECT_EQ(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x816))), std::optional<float>{0.375f});
+}
+
 TEST_F(MaterialSwapTest, CApiDecodesAndFrees) {
   const auto path = path_.string();
   const char* plugins[] = {path.c_str()};
@@ -168,5 +187,14 @@ TEST_F(MaterialSwapTest, CApiDecodesAndFrees) {
   ASSERT_EQ(radicle_env_winner(env, {"Swaps.esm", 0x811}, &record), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_record_primary_model_material_swap(env, record, &out), RADICLE_STATUS_OK);
   EXPECT_EQ(out.plugin, nullptr);
+
+  float index = 0.0f;
+  ASSERT_EQ(radicle_env_winner(env, {"Swaps.esm", 0x813}, &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_record_primary_model_color_remapping_index(env, record, &index), RADICLE_STATUS_OK);
+  EXPECT_EQ(index, 0.25f);
+  ASSERT_EQ(radicle_env_winner(env, {"Swaps.esm", 0x811}, &record), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_record_primary_model_color_remapping_index(env, record, &index), RADICLE_STATUS_NOT_FOUND);
+  ASSERT_EQ(radicle_env_winner(env, {"Swaps.esm", 0x814}, &record), RADICLE_STATUS_OK);
+  EXPECT_NE(radicle_record_primary_model_color_remapping_index(env, record, &index), RADICLE_STATUS_OK);
   radicle_env_destroy(env);
 }

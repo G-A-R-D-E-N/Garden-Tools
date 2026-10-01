@@ -39,4 +39,10 @@ public sealed unsafe partial class RadicleEnvironment
         Call.Check(RadicleNative.RecordPrimaryModelMaterialSwap(Handle, record.Handle, &key));
         return FormKey.FromNative(key);
     }
+
+    public float? PrimaryModelColorRemappingIndex(Record record)
+    {
+        float index;
+        return Call.Found(RadicleNative.RecordPrimaryModelColorRemappingIndex(Handle, record.Handle, &index)) ? index : null;
+    }
 }

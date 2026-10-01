@@ -21,4 +21,6 @@ std::optional<FormKey> placed_material_swap(const Environment& env, const Record
 
 std::optional<FormKey> primary_model_material_swap(const Environment& env, const RecordRef& ref);
 
+std::optional<float> primary_model_color_remapping_index(const Environment& env, const RecordRef& ref);
+
 }  // namespace fo4::env

@@ -79,4 +79,17 @@ radicle_status radicle_record_primary_model_material_swap(const radicle_env* env
   });
 }
 
+radicle_status radicle_record_primary_model_color_remapping_index(const radicle_env* env,
+                                                                 const radicle_record* record,
+                                                                 float* out_index) {
+  clear_error();
+  if (const auto status = require(env, record, out_index); status != RADICLE_STATUS_OK) return status;
+  return guarded("unknown exception while reading the model color remapping index", [&] {
+    const auto index = fo4::env::primary_model_color_remapping_index(env->value, *to_ref(record));
+    if (!index) return fail(RADICLE_STATUS_NOT_FOUND, "the primary model has no color remapping index");
+    *out_index = *index;
+    return RADICLE_STATUS_OK;
+  });
+}
+
 }  // extern "C"

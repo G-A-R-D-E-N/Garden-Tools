@@ -29,6 +29,9 @@ RADICLE_API radicle_status radicle_placed_reference_material_swap(const radicle_
 RADICLE_API radicle_status radicle_record_primary_model_material_swap(const radicle_env* env,
                                                                       const radicle_record* record,
                                                                       radicle_form_key* out_swap);
+RADICLE_API radicle_status radicle_record_primary_model_color_remapping_index(const radicle_env* env,
+                                                                             const radicle_record* record,
+                                                                             float* out_index);
 
 #ifdef __cplusplus
 }

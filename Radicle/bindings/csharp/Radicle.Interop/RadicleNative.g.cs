@@ -822,4 +822,7 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_primary_model_material_swap")]
     public static extern Status RecordPrimaryModelMaterialSwap(IntPtr env, IntPtr record, FormKey* out_swap);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_primary_model_color_remapping_index")]
+    public static extern Status RecordPrimaryModelColorRemappingIndex(IntPtr env, IntPtr record, float* out_index);
+
 }
