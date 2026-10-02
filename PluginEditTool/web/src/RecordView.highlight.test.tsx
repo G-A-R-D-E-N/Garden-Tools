@@ -55,4 +55,12 @@ describe('MCP field highlight', () => {
     expect(second.getAttribute('data-flash-seq')).not.toBe(firstSeq);
     expect(second).not.toBe(first);
   });
+
+  it('does not hold the flash end state over the row colours', async () => {
+    const fs = await vi.importActual<{ readFileSync: (path: string, enc: 'utf8') => string }>('node:fs');
+    const css = fs.readFileSync('src/RecordView.css', 'utf8');
+    const rules = [...css.matchAll(/\.rv-row-flash td\s*\{([^}]*)\}/g)].map(m => m[1]);
+    expect(rules).toHaveLength(2);
+    for (const rule of rules) expect(rule).not.toMatch(/forwards|both/);
+  });
 });
