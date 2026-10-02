@@ -1,14 +1,11 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <string_view>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
-#include <fo4ide/papyrus/Decompiler.hpp>
-#include <fo4ide/papyrus/Pex.hpp>
 
 #include "../helpers/ServiceTargetFakes.hpp"
 

@@ -4,7 +4,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -14,9 +13,6 @@
 
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/graph/GraphDocument.hpp>
-#include <fo4ide/papyrus/AnalysisService.hpp>
-#include <fo4ide/papyrus/Decompiler.hpp>
-#include <fo4ide/papyrus/Pex.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 #include "../helpers/GraphBuilder.hpp"
