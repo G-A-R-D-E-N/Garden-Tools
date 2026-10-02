@@ -272,3 +272,26 @@ jobs:
 
       - name: Test PluginEditTool native
         run: ctest --test-dir "%CI_BUILD%\fo4ide-msvc" -C Release --output-on-failure
+
+      - name: Build Windows static zlib dependency for Radicle (Debug)
+        run: |
+          set "ZLIB_DIR=%CI_BUILD%\zlib-%ZLIB_COMMIT%-debug"
+          if exist "%ZLIB_DIR%\zlib.h" exit /b 0
+          if exist "%ZLIB_DIR%-src" rmdir /s /q "%ZLIB_DIR%-src"
+          git clone -q --filter=blob:none https://github.com/madler/zlib.git "%ZLIB_DIR%-src" || exit /b 1
+          git -C "%ZLIB_DIR%-src" checkout -q %ZLIB_COMMIT% || exit /b 1
+          cmake -S "%ZLIB_DIR%-src" -B "%ZLIB_DIR%" -DZLIB_BUILD_EXAMPLES=OFF || exit /b 1
+          cmake --build "%ZLIB_DIR%" --config Debug --target zlibstatic || exit /b 1
+          cmake -E copy "%ZLIB_DIR%-src\zlib.h" "%ZLIB_DIR%\zlib.h" || exit /b 1
+
+      - name: Configure Radicle (Debug)
+        run: >-
+          cmake -S "%CI_SRC%\Radicle" -B "%CI_BUILD%\radicle-msvc-debug"
+          -DZLIB_INCLUDE_DIR="%CI_BUILD%\zlib-%ZLIB_COMMIT%-debug"
+          -DZLIB_LIBRARY="%CI_BUILD%\zlib-%ZLIB_COMMIT%-debug\Debug\zlibstaticd.lib"
+
+      - name: Build Radicle (Debug)
+        run: cmake --build "%CI_BUILD%\radicle-msvc-debug" --config Debug --parallel
+
+      - name: Test Radicle (Debug)
+        run: ctest --test-dir "%CI_BUILD%\radicle-msvc-debug" -C Debug --output-on-failure

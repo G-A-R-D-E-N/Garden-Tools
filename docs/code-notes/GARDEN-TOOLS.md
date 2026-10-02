@@ -1007,6 +1007,8 @@ The two Windows cross jobs build with clang-cl/xwin on the Linux runner and cann
 
 `PluginEditTool/native/tests/unit/RadiclePluginEditableTests.cpp:symlinkNotPermitted` makes the two Save As symlink tests skip when Windows refuses the directory symlink with ERROR_PRIVILEGE_NOT_HELD (1314), which happens without Developer Mode or elevation. MSVC does not map 1314 to `std::errc::operation_not_permitted`, so the code is checked directly. Any other symlink error still fails the test, and Linux always runs them.
 
+`.github/workflows/native-ci.yml:native-windows-tests` also builds and tests Radicle in Debug, after the Release suites, so MSVC debug-only checks (iterator debugging, CRT asserts) run in CI. Debug links against `/MDd`, so it needs its own zlib built with `--config Debug` in `zlib-<commit>-debug`; MSVC's zlib CMake adds the `d` postfix, so the library is `Debug\zlibstaticd.lib`. It uses the same persistent checkout and its own fixed build directory, `radicle-msvc-debug`, because `Radicle/CMakeLists.txt:find_package` needs fixed paths for incremental builds.
+
 ## Radicle/src/forms/placed_reference_edit.cpp / c_api_ref_fields.cpp — GardenEngine #114 writeback fields
 
 Eighth #114 slice, stacked on the writeback slice. It covers every field `ReferenceWriteback.Commit` sets beyond placement and scale:
