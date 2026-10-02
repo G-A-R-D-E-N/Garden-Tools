@@ -25,6 +25,14 @@ bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     return true;
 }
 
+bool optionalBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
+    value = false;
+    if (!args.is_array() || index >= args.size() || args[index].is_null()) return true;
+    if (!args[index].is_boolean()) return false;
+    value = args[index].get<bool>();
+    return true;
+}
+
 struct BatchItem {
     std::string source;
     std::string formKeyText;
@@ -47,6 +55,10 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
     }
     if (!boolArgument(arguments, 2, overwrite)) {
         return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
+    }
+    bool allowLosing = false;
+    if (!optionalBoolArgument(arguments, 3, allowLosing)) {
+        return std::unexpected(Error{"InvalidAllowLosingFlag", "Allow-losing flag must be boolean"});
     }
 
     nlohmann::json rawItems;
@@ -138,7 +150,34 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
                 {"failed", parseFailures.size()},
                 {"failures", std::move(parseFailures)},
                 {"requiresOverwrite", true},
-                {"existing", std::move(existing)}
+                {"existing", std::move(existing)},
+                {"requiresLoadOrderConfirmation", false},
+                {"losing", nlohmann::json::array()}
+            }.dump());
+        }
+    }
+
+    if (!allowLosing) {
+        nlohmann::json losing = nlohmann::json::array();
+        for (const auto& item : items) {
+            auto later = laterOverridesLocked(*target, item.key);
+            if (later.empty()) continue;
+            losing.push_back({
+                {"formKey", item.formKeyText},
+                {"source", item.source},
+                {"loadsAfter", std::move(later)}
+            });
+        }
+        if (!losing.empty()) {
+            return nlohmann::json(nlohmann::json{
+                {"total", rawItems.size()},
+                {"ok", 0},
+                {"failed", parseFailures.size()},
+                {"failures", std::move(parseFailures)},
+                {"requiresOverwrite", false},
+                {"existing", nlohmann::json::array()},
+                {"requiresLoadOrderConfirmation", true},
+                {"losing", std::move(losing)}
             }.dump());
         }
     }
@@ -211,7 +250,9 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
         {"failed", failures.size()},
         {"failures", std::move(failures)},
         {"requiresOverwrite", false},
-        {"existing", nlohmann::json::array()}
+        {"existing", nlohmann::json::array()},
+        {"requiresLoadOrderConfirmation", false},
+        {"losing", nlohmann::json::array()}
     }.dump());
 }
 

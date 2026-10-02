@@ -1,4 +1,5 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -38,8 +39,8 @@ bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
 }
 
 int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) return fallback;
-    return args[index].get<int>();
+    if (!args.is_array() || index >= args.size()) return fallback;
+    return core::jsonIntSaturated(args[index]).value_or(fallback);
 }
 
 std::string asciiLower(std::string_view value) {

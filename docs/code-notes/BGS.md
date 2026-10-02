@@ -1,5 +1,15 @@
 # BGS — code notes
 
+`BGS/app/MainWindow.Bridge.cs:StartTour` appends AI chat guidance targeting the existing settings and chat buttons, without opening settings or sending requests. Its completion callback clears the active-tour guard so Home can replay the guide after Skip or Done. `BGS/app/AssistantPane.cs:QuickStartLines` points chat users to the tour. `BGS/tools/uismoke/TourGuideSmoke.cs:Run` walks the ordered guide and replays it after Skip before finishing with Done.
+
+`BGS/app/AssistantEditor.cs:AssistantEditor` discovers visible controls in the main window, owned authoring windows and open menus. Control IDs and a state fingerprint bind proposals to observed state; handlers run on the UI thread after approval through the existing chat ownership gate. Dispatch is separate from verified mutation/save. Password controls and descendants, assistant panes, account settings and approval windows are excluded; clipboard shortcuts are refused. Graph positions and visible-world bounds support gestures. File proposals use the existing loaders/exporters in `BGS/app/MainWindow.AssistantFiles.cs:AssistantFile`, `BGS/app/MainWindow.Pose.cs:OpenArchive` and `BGS/app/MainWindow.Search.cs:WriteDiff` with path-specific approval.
+
+`BGS/app/AssistantTools.cs:ApprovePendingClipAnimation` retains the existing conversation result shape while dispatching editor actions. `BGS/app/AssistantUi.cs:OnSelectionChanged` supplies an excluded approval window when a modal disables the main pane. `BGS/app/AssistantApprovalWindow.cs:AssistantApprovalWindow` keeps its buttons outside tool discovery. `BGS/tools/uismoke/AssistantEditorSmoke.cs:Run` checks chat ownership, stale state, rejection, rig loading, workspace/rig tab discovery, viewport input and password exclusion without contacting a provider.
+
+`BGS/app/GraphView.Assistant.cs:AssistantItems` and `BGS/app/SkeletonView.Assistant.cs:AssistantItems` expose the same projected coordinates used by drawing and picking. Camera/geometry stamps bind gestures to observed positions; moving scenes must be paused before coordinate-based selection. `BGS/app/AssistantEditor.cs:Label` uses only window captions, preventing window content from exposing excluded chat/password descendants. Availability includes `Window.IsDialog`, since platform modal blocking does not change logical `IsEffectivelyEnabled`.
+
+`BGS/app/AssistantTools.cs:ApprovePendingAction` binds approval to a proposal identity. `BGS/app/AssistantUi.Composer.cs:SendNextQueued` waits at pending approval; `BGS/app/AssistantUi.cs:Approve` records an editor event and resumes result inspection after dispatch. `BGS/app/AssistantConversationController.cs:SendAsync` persists that continuation as a tool event instead of a user message. `BGS/app/MainWindow.AssistantFiles.cs:AssistantOpen` reuses the asynchronous discard dialog before opening dirty documents; the existing reload guard only skips the duplicate synchronous prompt after that decision. Assistant file-picker buttons use the path tool, while normal UI buttons are unchanged. Diff export stays within the active project directory.
+
 ## `src/Archive/ScanReport.cs` — headless-scan JSON contract (issue #192)
 
 `ScanReport` / `ScanFinding` / `ScanContext` are the machine-readable result of the headless scan
@@ -241,3 +251,45 @@ An animation file carries no ragdoll of its own; the character's sibling skeleto
 ## `BGS/app/MainWindow.Pose.cs:ShowConstraintInspection` — constraint limit readout
 
 The Playback summary line carries per-constraint limit inspection while a constraint is hovered or pinned (amber, like the constraint overlay), and restores the previous summary text and colour when the selection clears.
+
+## Skeleton reference-pose persistence
+
+`BGS/src/Hkx/NativeSave.cs:Compare` and `BGS/src/Hkx/NativeSave.Apply.cs:Apply` separate edit planning from binary application without changing the existing mutation gate. `BGS/tools/tests/SkeletonPoseSaveTests.cs:ReferencePoseEditCanUseTheVerifiedNativeSavePipeline` reproduces the missing qstransform-array save path using the shipped skeleton fixture. `BGS/src/Hkx/HavokClassLayouts.json` and `BGS/src/Hkx/HavokClassTypes.json` remain the authoritative schemas. `BGS/src/Hkx/SaveVerifier.cs:Verify` checks object counts and intended edits; shared storage requires the separate ownership guard below.
+
+## Rig editing and persistence
+
+`BGS/app/RigAuthoringUi.cs:RigAuthoringUi.Attach` mounts skeleton and skin controls through the production window factory. `BGS/src/Hkx/SkeletonDocument.cs:Edit` validates and rebuilds edits in memory before adding history; dependent bone indices remain stable, while pose padding and other skeleton fields are retained. `BGS/src/Hkx/PackfileObjects.cs:WriteStringAt` extends the existing append-and-repoint string writer to owned struct members such as bone names.
+
+`BGS/src/Nif/NifShape.cs:NifGeometry.ReadShape` records the existing reader's vertex skin spans. `BGS/src/Nif/SkinSave.cs:Apply` writes only those spans in a cloned BSVersion 130 source and verifies a reparse with half-precision quantization. Geometry, binding transforms and all other bytes remain unchanged. `BGS/src/Nif/SkinSave.cs:SkinDocument.Save` uses the existing source-stamp and backup transaction. `BGS/tools/uismoke/RigAuthoringSmoke.cs:Run` exercises the mounted controls, undo/redo, backups and saved-file reopening.
+
+## Interactive physics preview
+
+`BGS/src/Hkx/RagdollSimulation.cs:RagdollSimulation` uses BEPU 2.4.0 with explicit user-authored masses and uniform-density hull inertia. The engine receives the measured convex vertices and complete joint frames, refuses incomplete/unsupported geometry, and preserves BEPU's hull-centroid offset when converting between solver poses and displayed body origins. BEPU's version-tagged `ConvexHull`, `TwistLimit`, `SwingLimit`, `Hinge`, `Weld`, and self-contained demo source define this adapter's engine API.
+
+`BGS/app/RigAuthoringWindow.Physics.cs:SetJoints` explicitly authors preview limits rather than importing native angular atoms, motors, material settings or inertia. `BGS/src/Hkx/RagdollSimulation.Joints.cs:AddJoint` supports ball/socket, fixed, hinge, limited hinge, and cone/twist preview joints. This is a collision-based editor simulation, not a claim of equivalent Havok or game behavior. Adjacent bodies are filtered; nonadjacent bodies and the ground collide. Settings stay in the window and do not modify HKX bytes.
+
+`BGS/app/SkeletonView.Drop.cs` owns the existing constrained-drop approximation after a mechanical split. `BGS/app/SkeletonView.Simulation.cs:ShowSimulationFrames` renders the independent disposable simulation owner's frames. `BGS/app/RigAuthoringWindow.Physics.cs:StopPhysics` stops its UI timer and disposes native buffers on reset, replacement, failure or window close. `BGS/tools/tests/RagdollSimulationTests.cs` exercises off-origin rotated hulls, collisions, asymmetric hinge limits, input refusal, source preservation and repeated disposal.
+
+`BGS/src/Hkx/NativeSave.Ownership.cs:RequireUnaliasedArrays` rejects edits that would mutate or move fixups in array storage referenced by another owner. `BGS/tools/tests/SkeletonDocumentTests.cs:SharedBoneArrayIsRefusedWithoutChangingEitherSkeletonOrTheFile` first reproduced an unchecked shared bone array mutation using two skeletons in the measured fixture; rejection occurs before editing bytes or adding history. Numeric array edits append new storage and retain the old storage/fixups.
+
+`BGS/app/RigAuthoringWindow.Physics.cs:EnsureSimulation` freezes gravity/ground inputs while their simulation exists; Reset releases that owner before allowing changes. `BGS/tools/uismoke/RigAuthoringSmoke.cs:Run` checks this state and the Save/Discard/Cancel dirty-close paths.
+
+`BGS/src/Hkx/RagdollSimulation.cs:HullEdges` copies the solver hull's face edges and transforms them by the same rigid poses used for collision solving. `BGS/app/RigAuthoringWindow.Physics.cs:AdvancePhysics` feeds these into the existing mesh renderer. `BGS/app/SkeletonView.Rendering.cs:Render` also accepts mesh-only views without an animation pose. The physics proof includes rotated fixed frames and cone/twist limits; the shared-storage proof includes global references sourced in another section.
+
+## Top workspace toolbars
+
+`BGS/app/EditorShell.cs:EditorShell` disables auto-hiding overlays on the command and workspace scroll viewers so Fluent reserves a separate row for horizontal scrollbars. `BGS/tools/uismoke/WorkspaceSmoke.cs:TopToolbarsLeaveTheWorkspaceClear` compares the content presenter bottom with the scrollbar top on all eight editing views.
+
+`BGS/app/SkeletonView.cs:SkeletonView` clips all preview drawing to its control bounds. `BGS/app/RigAuthoringUi.cs:AuthoringPanel` separates scrollable settings from the expanding preview and connects Fit preview to the existing camera reset. `BGS/tools/uismoke/RigAuthoringSmoke.cs:ViewportFits` checks clipping, resize growth, scroll ownership and Fit zoom/pan reset on all three authoring tabs.
+
+`BGS/app/EditorShell.cs:EditorShell` hosts the five workspace selectors and a contextual command ribbon above the editor. `BGS/app/MainWindow.Layout.cs:RegisterToolbar` keeps the original control instances and handlers when moving commands out of workspace content. Inspectors and the playback timeline stay with the data they affect. Wide ribbons scroll horizontally instead of stacking over the viewport.
+
+`BGS/app/MainWindow.BridgeDeck.cs:BuildBridgeTab` exposes the existing authoring windows in Home's searchable tool cards. `BGS/app/RigAuthoringUi.cs:RigAuthoringWindow` accepts the initial tab so skin and physics shortcuts open their respective tools. `BGS/tools/uismoke/WorkspaceSmoke.cs:HomeOpensAuthoringTools` exercises all five launch buttons and verifies the selected rig tab while Home stays selected.
+
+## `BGS/src/Hkx/HkxBinaryReader.Spline.cs:ReadQuat` — spline rotation formats without a known layout fail closed
+
+The rotation quantization nibble of an `hkaSplineCompressedAnimation` track mask selects the quaternion encoding. The Creation Kit lists the enum as `POLAR32, THREECOMP40, THREECOMP48, THREECOMP24, STRAIGHT16, UNCOMPRESSED` (source:ReverseEng/Fallout4_Runtime_Research @ `1cc0179`, `Fallout4/CreationKit/ghidra-evidence/strings-asc.part-003.txt:17617-17622`), so format 3 is THREECOMP24 and format 4 is STRAIGHT16. Neither that repo nor `ReverseEng/commonlib_NonVR` (@ `dbaeca7`, which only carries `hkaSplineCompressedAnimation` RTTI/VTABLE IDs) gives their bit layout or byte width.
+
+`ReadQuat`, `BGS/src/Hkx/SplineQuat.cs:Read`/`Write` and `BGS/src/Hkx/SplineFormat.cs:RotWidth` used to send every unlisted format to the 40-bit codec through a `_ =>` arm. A THREECOMP24 or STRAIGHT16 track was then decoded as 5-byte THREECOMP40 values, which reads the wrong bytes, misaligns every later channel in the block and produces wrong rotations without an error; the encoder labelled 40-bit data as format 0, 3 or 4 (format 0 also truncated each 5-byte value to `RotWidth(0)` = 4 bytes). They now throw `NotSupportedException` for those formats, as `ParseHkx` already does for an unsupported packfile version. `HkxBinaryReader` keeps its POLAR32 reader (`Read32BitQuat`); the shared codec supports 1, 2 and 5 only. `SplineEncoder.cs:ReadRotation` looks the width up only after the identity early return, so an identity channel with any format nibble still decodes.
+
+Regressions: `BGS/tools/tests/AnimationSaveTransactionTests.cs:SplineEncoderRefusesRotationFormatsItCannotWrite` (formats 0, 3, 4) and `SplineDecodersRejectRotationFormatsWithoutAKnownLayout` (formats 3, 4, through `ParseHkx` and `SplineEncoder.Decode`). All five cases failed before the change.

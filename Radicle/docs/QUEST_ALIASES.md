@@ -81,7 +81,7 @@ constructed by manipulating runtime/file-index bits directly.
 | Unique Actor | `ALUA` | required `NPC_` FormID |
 | Location Alias Reference | `ALFA` + `ALRT` | alias i32 + required `LCRT` FormID |
 | External Alias Reference | optional `ALEQ` + required `ALEA` | optional `QUST` FormID + alias i32 |
-| Create Reference | `ALCO` + `ALCA` + `ALCL` | optional object FormID + alias i16 + create mode `0`/`0x8000` + level `0..3` (Easy/Medium/Hard/VeryHard; missing ALCL decodes as Easy; encode always writes ALCL) |
+| Create Reference | `ALCO` + `ALCA` + `ALCL` | optional object form ID + alias i16 + create mode `0`/`0x8000` + level `0..4` (Easy/Medium/Hard/VeryHard/None, as xEdit FO4 `wbInteger(ALCL, 'Level', ...)`; 113 vanilla quest aliases use None; missing ALCL decodes as Easy; encode always writes ALCL) |
 | Find Matching Near Alias | `ALNA` + `ALNT` | alias i32 + type `0`/`1` |
 | Find Matching From Event | `ALFE` + `ALFD` | event u32 + data u32 |
 | Find Matching Closest | `ALCC` | alias i32 (fill; before conditions) |
@@ -112,8 +112,8 @@ Collections reject conditions. `GetEventData` stays fail-closed.
 ## PluginEditTool JSON fill types
 
 `SetQuestAliases` authors every Fill Type Radicle already encodes. Nested objects
-fail closed on unknown keys. `createReference.level` is `Easy`/`Medium`/`Hard`/`VeryHard`
-or `0..3`. Existing `ALCL` outside that range fails coverage closed.
+fail closed on unknown keys. `createReference.level` is `Easy`/`Medium`/`Hard`/`VeryHard`/`None`
+or `0..4`. Existing `ALCL` outside that range fails coverage closed.
 
 ## Reference alias extras
 

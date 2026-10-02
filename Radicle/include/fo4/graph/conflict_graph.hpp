@@ -16,6 +16,7 @@ struct RecordVersion {
   PluginKey plugin;
   Signature signature{};
   std::size_t load_order{0};
+  bool partial_form{false};
 };
 
 struct ReferencedByHit {

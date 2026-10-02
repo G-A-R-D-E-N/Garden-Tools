@@ -77,6 +77,8 @@ Do not add new Mutagen-only behavior to the native rewrite. Missing record/schem
 
 Consumers that cannot link C++ directly can use `fo4/c_api.h`. It exposes opaque plugin handles, file/byte serialization, master-kind stamping, explicit master remapping, and UTF-8 FormKey/FormLink collection without allowing C++ exceptions to cross the ABI.
 
+Call `radicle_abi_version()` before any other entry point and reject the library if it does not equal the `RADICLE_ABI_VERSION` the consumer was compiled against.
+
 ## Verification
 
 Useful committed fixtures live under `Radicle/testdata/`. The GoogleTest suite covers parsing, compression/XXXX, FormKey resolution, runtime full/light load-order resolution, FormLinks, VMAD, writer behavior, C ABI behavior, master-kind stamping, and conflict/reference graph behavior.

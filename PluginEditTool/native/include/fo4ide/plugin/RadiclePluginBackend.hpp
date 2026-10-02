@@ -131,6 +131,8 @@ private:
 
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
+    std::vector<std::string> laterOverridesLocked(const LoadedPlugin& target,
+                                                  const fo4::FormKey& key) const;
     void stageLocalizationMutationLocked(LoadedPlugin& loaded, StagedLocalization staged);
     Result<void> persistPluginLocked(LoadedPlugin& loaded, const std::filesystem::path& output);
     Result<nlohmann::json> discardPlugin(const nlohmann::json& arguments);
@@ -159,6 +161,9 @@ private:
     // loaded plugins, mirroring WriteService.ResolveFk.
     std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;
     void ensureOwnerMaster(fo4::Plugin& plugin, const fo4::PluginKey& owner) const;
+    Result<fo4::FormKey> createProjectileLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
+    Result<fo4::FormKey> createExplosionLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
+    Result<fo4::FormKey> createHazardLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
 
     Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addElement(const nlohmann::json& arguments) override;
@@ -186,6 +191,7 @@ private:
     Result<nlohmann::json> getDependencies(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getProblems(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getHistory(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getPluginWorklist(const nlohmann::json& arguments) const;
     Result<nlohmann::json> searchRecords(const nlohmann::json& arguments) const;
     Result<nlohmann::json> scanConflicts() const;
     Result<nlohmann::json> scanBrokenRefs() const;

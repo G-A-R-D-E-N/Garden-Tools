@@ -36,6 +36,23 @@ bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     return true;
 }
 
+bool optionalBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
+    value = false;
+    if (!args.is_array() || index >= args.size() || args[index].is_null()) return true;
+    if (!args[index].is_boolean()) return false;
+    value = args[index].get<bool>();
+    return true;
+}
+
+std::string joinNames(const std::vector<std::string>& names) {
+    std::string out;
+    for (const auto& name : names) {
+        if (!out.empty()) out += ", ";
+        out += name;
+    }
+    return out;
+}
+
 std::string asciiLower(std::string_view value) {
     std::string out(value);
     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
@@ -696,6 +713,10 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
     if (!boolArgument(arguments, 3, overwrite)) {
         return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
     }
+    bool allowLosing = false;
+    if (!optionalBoolArgument(arguments, 4, allowLosing)) {
+        return std::unexpected(Error{"InvalidAllowLosingFlag", "Allow-losing flag must be boolean"});
+    }
 
     fo4::FormKey key;
     try {
@@ -733,6 +754,22 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
         });
     }
 
+    if (fo4::find_record(source->plugin, key) == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record is not present in " + sourceName + ": " + formKeyText
+        });
+    }
+    if (!allowLosing) {
+        const auto later = laterOverridesLocked(*target, key);
+        if (!later.empty()) {
+            return nlohmann::json(
+                "LOSES: " + target->name + " loads before " + joinNames(later) +
+                ", which also override " + formKeyText + ". The copied override will not win "
+                "until " + target->name + " loads after them.");
+        }
+    }
+
     try {
         auto mutated = target->plugin;
         const auto status = fo4::copy_record_as_override(mutated, source->plugin, key, overwrite);
@@ -764,6 +801,17 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CopyOverrideFailed", error.what()});
     }
+}
+
+std::vector<std::string> RadiclePluginBackend::laterOverridesLocked(
+    const LoadedPlugin& target,
+    const fo4::FormKey& key) const {
+    const auto targetIndex = static_cast<std::size_t>(&target - plugins_.data());
+    std::vector<std::string> later;
+    for (const auto& version : graph_.versions(key)) {
+        if (version.load_order > targetIndex) later.emplace_back(version.plugin.filename());
+    }
+    return later;
 }
 
 }

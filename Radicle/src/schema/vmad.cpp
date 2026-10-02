@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace fo4 {
@@ -47,6 +48,14 @@ public:
   void skip_wstring() {
     const auto n = u16();
     skip(n);
+  }
+
+  std::string wstring() {
+    const auto n = u16();
+    require(n);
+    std::string text(reinterpret_cast<const char*>(data_.data() + pos_), n);
+    pos_ += n;
+    return text;
   }
 
 private:
@@ -410,6 +419,121 @@ QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data) {
   layout.fragments = scan.quest_fragments;
   layout.aliases = scan.quest_aliases;
   return layout;
+}
+
+namespace {
+
+VmadProperty read_property(Slice& slice, std::int16_t object_format) {
+  VmadProperty property;
+  property.name = slice.wstring();
+  property.type = slice.u8();
+  property.flags = slice.u8();
+  switch (property.type) {
+    case k_type_object:
+      if (object_format == 2) {
+        slice.u16();
+        property.alias = slice.i16();
+        property.object = RawFormId{slice.u32()};
+      } else if (object_format == 1) {
+        property.object = RawFormId{slice.u32()};
+        property.alias = slice.i16();
+        slice.u16();
+      } else {
+        throw parse_error(slice.position(), "unknown VMAD object format");
+      }
+      return property;
+    case k_type_string:
+      property.text = slice.wstring();
+      return property;
+    case k_type_int:
+      property.integer = static_cast<std::int32_t>(slice.u32());
+      return property;
+    case k_type_float: {
+      const auto bits = slice.u32();
+      float value = 0.0f;
+      std::memcpy(&value, &bits, 4);
+      property.real = value;
+      return property;
+    }
+    case k_type_bool:
+      property.boolean = slice.u8() != 0;
+      return property;
+    default:
+      break;
+  }
+  if (property.type == k_type_struct || (property.type >= k_type_object_array &&
+                                         property.type <= k_type_struct_array)) {
+    Slice peek = slice;
+    property.element_count = peek.u32();
+  }
+  std::vector<std::size_t> ignored;
+  switch (property.type) {
+    case 0:
+      break;
+    case k_type_variable:
+    case k_type_variable_array:
+      throw UnsupportedVmadProperty{};
+    case k_type_struct:
+      walk_properties(slice, object_format, slice.u32(), ignored);
+      break;
+    case k_type_object_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) walk_object(slice, object_format, ignored);
+      break;
+    }
+    case k_type_string_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) slice.skip_wstring();
+      break;
+    }
+    case k_type_int_array:
+    case k_type_float_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) slice.u32();
+      break;
+    }
+    case k_type_bool_array:
+      slice.skip(slice.u32());
+      break;
+    case k_type_struct_array: {
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) walk_properties(slice, object_format, slice.u32(), ignored);
+      break;
+    }
+    default:
+      throw parse_error(slice.position(), "unknown VMAD property type");
+  }
+  return property;
+}
+
+}  // namespace
+
+VmadScripts read_vmad_scripts(std::span<const std::byte> data) {
+  Slice slice(data);
+  VmadScripts result;
+  result.version = slice.i16();
+  result.object_format = slice.i16();
+  const auto count = slice.u16();
+  for (std::uint16_t i = 0; i < count; ++i) {
+    VmadScript script;
+    script.name = slice.wstring();
+    if (!script.name.empty()) {
+      script.flags = slice.u8();
+      const auto properties = slice.u16();
+      for (std::uint16_t p = 0; p < properties; ++p) {
+        try {
+          script.properties.push_back(read_property(slice, result.object_format));
+        } catch (const UnsupportedVmadProperty&) {
+          result.unsupported = true;
+          result.scripts.push_back(std::move(script));
+          return result;
+        }
+      }
+    }
+    result.scripts.push_back(std::move(script));
+  }
+  result.trailing_bytes = data.size() - slice.position();
+  return result;
 }
 
 }  // namespace fo4

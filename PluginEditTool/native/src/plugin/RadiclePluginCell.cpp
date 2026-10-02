@@ -1,4 +1,5 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -36,8 +37,8 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 }
 
 std::optional<int> intArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) return std::nullopt;
-    return args[index].get<int>();
+    if (!args.is_array() || index >= args.size()) return std::nullopt;
+    return core::jsonInt(args[index]);
 }
 
 std::optional<float> floatArgument(const nlohmann::json& args, std::size_t index) {
@@ -293,7 +294,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPlacedReferencesAtGrid(
     if (worldId.empty() || !x.has_value() || !y.has_value()) {
         return std::unexpected(Error{
             "CellGridArgumentsMissing",
-            "GetPlacedReferencesAtGrid requires worldspace, grid X and grid Y"
+            "GetPlacedReferencesAtGrid requires a worldspace and 32-bit integer grid X and Y"
         });
     }
 

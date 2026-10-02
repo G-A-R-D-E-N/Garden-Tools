@@ -367,9 +367,7 @@ void decode_reference_fill(QuestAlias& alias,
         throw QuestError("QUST ALCL Level must be exactly four bytes");
       }
       level = read_u32(create_level->data);
-      if (level > 3u) {
-        throw QuestError("QUST ALCL Level must be 0..3 (Easy, Medium, Hard, VeryHard)");
-      }
+      if (level > 4u) throw QuestError("QUST ALCL Level must be 0..4 (Easy, Medium, Hard, VeryHard, None)");
     }
     alias.fill = QuestCreateReferenceFill{
         .object = decode_optional_form_key(*create_object, context, "ALCO Object"),
@@ -900,9 +898,7 @@ void insert_alias_fill(QuestAlias& alias,
           if (value.create_mode != 0 && value.create_mode != 0x8000u) {
             throw QuestError("QUST ALCA Create mode must be 0 (At) or 0x8000 (In)");
           }
-          if (value.level > 3u) {
-            throw QuestError("QUST ALCL Level must be 0..3 (Easy, Medium, Hard, VeryHard)");
-          }
+          if (value.level > 4u) throw QuestError("QUST ALCL Level must be 0..4 (Easy, Medium, Hard, VeryHard, None)");
           members.push_back(encoded_optional_form_key(k_alco, value.object, context));
           members.push_back(make_subrecord(
               k_alca, write_i16_u16(value.alias, value.create_mode)));

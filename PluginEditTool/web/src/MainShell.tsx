@@ -607,7 +607,9 @@ export default function MainShell() {
     setConflictBusy(true);
     try {
       const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
-      let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, false));
+      let overwrite = false;
+      let allowLosing = false;
+      let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
       if (res.requiresOverwrite) {
         const existing = Array.isArray(res.existing) ? res.existing : [];
         const sample = existing.slice(0, 5)
@@ -624,7 +626,28 @@ export default function MainShell() {
           setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
           return;
         }
-        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, true));
+        overwrite = true;
+        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
+      }
+      if (res.requiresLoadOrderConfirmation) {
+        const losing: { formKey: string; loadsAfter?: string[] }[] =
+          Array.isArray(res.losing) ? res.losing : [];
+        const sample = losing.slice(0, 5)
+          .map(x => `${x.formKey} (loses to ${(x.loadsAfter ?? []).join(', ')})`).join('\n');
+        const more = losing.length > 5 ? `\n...and ${losing.length - 5} more.` : '';
+        const proceed = await askConfirm({
+          title: 'Overrides will not win',
+          message: `${patch} loads before other plugins that override ${losing.length} of the ` +
+            `${res.total} selected records, so those copies will lose until ${patch} loads after them. ` +
+            `Nothing has been copied yet.\n\n${sample}${more}`,
+          confirmLabel: 'Copy anyway',
+        });
+        if (!proceed) {
+          setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
+          return;
+        }
+        allowLosing = true;
+        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
       }
       const firstFailure = Array.isArray(res.failures) && res.failures.length ? res.failures[0]?.reason : '';
       const failureNote = res.failed

@@ -2,6 +2,7 @@
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/signature.hpp"
 
 #include <bit>
@@ -87,7 +88,7 @@ std::string read_zstring(const Subrecord* subrecord) {
 
 PositionRotation read_transform(const Subrecord& data) {
   if (data.data.size() != 24) {
-    throw PlacedReferenceError("REFR/ACHR DATA must be exactly 24 bytes");
+    throw PlacedReferenceError("placed reference DATA must be exactly 24 bytes");
   }
   return PositionRotation{
       .x = read_f32_le(data.data, 0),
@@ -231,16 +232,16 @@ bool set_placed_reference_transform(
     if (target == nullptr && record.form_key == reference) target = &record;
   });
   if (target == nullptr) return false;
-  if (target->header.signature != k_refr && target->header.signature != k_achr) {
-    throw PlacedReferenceError("transform mutation requires a REFR or ACHR record");
+  if (!is_placed_reference_signature(target->header.signature)) {
+    throw PlacedReferenceError("transform mutation requires a placed-reference record");
   }
 
   auto* data = unique_subrecord(*target, k_data);
   if (data == nullptr) {
-    throw PlacedReferenceError("REFR/ACHR is missing required DATA position/rotation");
+    throw PlacedReferenceError("placed reference is missing required DATA position/rotation");
   }
   if (data->data.size() != 24) {
-    throw PlacedReferenceError("REFR/ACHR DATA must be exactly 24 bytes");
+    throw PlacedReferenceError("placed reference DATA must be exactly 24 bytes");
   }
 
   write_f32_le(data->data, 0, transform.x);

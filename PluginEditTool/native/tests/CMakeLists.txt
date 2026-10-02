@@ -83,6 +83,7 @@ fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginWorklistTests.cpp
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
     unit/RadiclePluginLifecycleTests.cpp
@@ -125,6 +126,10 @@ target_include_directories(
     fo4ide_test_plugin_backend
     PRIVATE "${PROJECT_SOURCE_DIR}/../../Radicle/tests"
 )
+target_compile_definitions(
+    fo4ide_test_plugin_backend
+    PRIVATE FO4IDE_RADICLE_TESTDATA_DIR="${PROJECT_SOURCE_DIR}/../../Radicle/testdata"
+)
 target_link_libraries(
     fo4ide_test_plugin_backend
     PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
@@ -154,6 +159,8 @@ catch_discover_tests(fo4ide_test_proj_expl_hazd PROPERTIES TIMEOUT 10)
 add_executable(
     fo4ide_test_quest_authoring
     unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestPartialFormTests.cpp
+    unit/RadiclePluginQuestCreateLevelTests.cpp
     unit/RadiclePluginDeferredLocalizationTests.cpp
     unit/RadiclePluginPendingLifecycleTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
@@ -197,6 +204,8 @@ add_dependencies(fo4ide_test_process fo4ide_fake_process)
 fo4ide_enable_warnings(fo4ide_test_process)
 fo4ide_enable_sanitizers(fo4ide_test_process)
 catch_discover_tests(fo4ide_test_process PROPERTIES TIMEOUT 10)
+
+fo4ide_use_utf8_code_page()
 
 if(FO4IDE_BUILD_HTTP)
     add_subdirectory(integration)

@@ -75,6 +75,11 @@ FormKey resolve_plugin_form_id(RawFormId raw, const PluginFormIdContext& context
                     " is outside this plugin's master table");
 }
 
+FormKey resolve_plugin_link(RawFormId raw, const PluginFormIdContext& context) {
+  if (raw.index_byte() > context.masters.size()) return FormKey{context.current_plugin, LocalFormId{raw.local_24()}};
+  return resolve_plugin_form_id(raw, context);
+}
+
 RawFormId encode_plugin_form_id(const FormKey& key, const PluginFormIdContext& dest) {
   if (key.owner().empty() && key.local().value() == 0) {
     return RawFormId{0};

@@ -1,4 +1,5 @@
 #include <fo4ide/app/AudioTarget.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <chrono>
 #include <cctype>
@@ -22,7 +23,7 @@ bool boolArgument(const nlohmann::json& args, std::size_t index) {
 }
 
 int intArgument(const nlohmann::json& args, std::size_t index) {
-    return args.is_array() && index < args.size() && args[index].is_number_integer() ? args[index].get<int>() : 0;
+    return args.is_array() && index < args.size() ? core::jsonInt(args[index]).value_or(0) : 0;
 }
 
 nlohmann::json serviceText(Result<std::string> result) {
