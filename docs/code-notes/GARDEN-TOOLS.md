@@ -547,6 +547,20 @@ Starvation: libstdc++ `shared_mutex` sits on reader-preferring `pthread_rwlock`,
 
 Known pre-existing race (also on main): `RadiclePluginBackend.cpp:RadiclePluginBackend::loadEnvironment` computes the Save-As roots with `isEditable`, which reads `dataDirectory_`, before it takes the Lifecycle lock; `setDataDirectory` writes that field under Lifecycle. The fix is to take the Lifecycle `OpLock` above the roots loop. It is deferred because `RadiclePluginBackend.cpp` is over the 750-line source limit, which refuses any change that does not shrink the file. Follow-up to #82 / PR #321: split the file, then move the lock.
 
+## PluginEditTool/native/src/plugin/RadiclePluginBackend.cpp — split into Queries / Conditions (#82)
+
+`RadiclePluginBackend.cpp` was 1299 lines, over the 750-line source limit, so no fix could land in it. It was split by responsibility with no behaviour change:
+
+- `RadiclePluginQueries.cpp`: the read-only query and conflict APIs `getEditablePlugins`, `getActivePlugins`, `getRecordTypeIndex`, `getLoadOrderSummary`, `getConflicts`, `getConflictMatrix`, `getReferencedBy`, `searchRecords`, `scanConflicts`, `scanBrokenRefs` and `listMasters`, plus their only-user helpers `pluginKind`, `containsInsensitive`, `subrecordValue`, `nthSubrecord`, `matrixStatuses`, `matrixDiffers` and `buildRawMatrixRows`.
+- `RadiclePluginConditions.cpp`: `getConditions`, `getConditionsAtPath`, `getConditionFunctions` and `getConditionRunOnTypes`.
+- `RadiclePluginSupport.hpp` (namespace `fo4ide::plugin::support`): the helpers those three files share, `stringArgument`, `editorId` and `asciiLower`, as `inline` functions, following the `RadiclePluginLifecycleFields.hpp` internal-header pattern. Other `RadiclePlugin*.cpp` files keep their own anonymous-namespace copies; folding them in is a separate cleanup.
+- `RadiclePluginBackend.cpp` keeps dispatch (`invoke`), the save-path trust checks, `loadEnvironment`, `getPlugins`/`getChildren`/`openRecord`, `openPlugin`/`savePlugin`/`discardPlugin`, `findPlugin` and `rebuildGraphLocked`.
+
+Comments that moved out of the source with the code:
+
+- `RadiclePluginQueries.cpp:RadiclePluginBackend::listMasters` computes master usage conservatively. A master is "used" when a record in the plugin is owned by it (an override), when a FormLink resolves into it, or when the plugin has VMAD that cannot be fully scanned. In that last case the link set may be incomplete, so every master is reported used rather than telling the user a load-order-relevant master is droppable. Each row exposes the resolved `kind` so clients and tests can catch a full/light mis-stamp before a later remap bakes in wrong FormIDs.
+- `RadiclePluginConditions.cpp:RadiclePluginBackend::getConditions` resolves the record by FormKey text first, then by editor ID over the loaded set, mirroring `WriteService.GetConditionsJsonCore` / `ResolveFk`. A `FormKey::parse` failure means the argument is not FormKey text, so it falls through to the editor-ID scan.
+
 ## Radicle/src/environment/environment.cpp:fo4::env::Environment — GardenEngine #114 load-order environment
 
 First slice of garden-engine/GardenEngine#114 (replace Mutagen with Radicle). It stands in for the Mutagen `ILinkCache`/`GameEnvironment` role that `opencw/Services/GameLoader.cs` and `Mo2ProfileLoader.cs` build. MO2 parsing stays in C#, which passes the ordered plugin paths in.
