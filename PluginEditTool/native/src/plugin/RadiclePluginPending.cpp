@@ -14,10 +14,15 @@ namespace fo4ide::plugin {
 #ifdef FO4IDE_TEST_HOOKS
 namespace {
 WriteOpLockedHook writeOpLockedHook = nullptr;
+WriteOpLockedHook saveIoLockedHook = nullptr;
 }
 
 void setWriteOpLockedHook(WriteOpLockedHook hook) {
     writeOpLockedHook = hook;
+}
+
+void setSaveIoLockedHook(WriteOpLockedHook hook) {
+    saveIoLockedHook = hook;
 }
 #endif
 
@@ -148,6 +153,10 @@ Result<void> RadiclePluginBackend::persistPluginLocked(
     LoadedPlugin& loaded, const std::filesystem::path& output) {
     try {
         StateReleased released;
+        std::unique_lock saveIo(saveIoMutex_);
+#ifdef FO4IDE_TEST_HOOKS
+        if (saveIoLockedHook != nullptr) saveIoLockedHook();
+#endif
         if (loaded.stagedLocalization.has_value()) {
             if (output != loaded.path) {
                 return std::unexpected(Error{
@@ -177,6 +186,7 @@ Result<void> RadiclePluginBackend::persistPluginLocked(
         }
         std::error_code ec;
         const auto writtenTime = std::filesystem::last_write_time(output, ec);
+        saveIo.unlock();
         CommitScope commit;
         loaded.path = output;
         loaded.loadedTime = writtenTime;

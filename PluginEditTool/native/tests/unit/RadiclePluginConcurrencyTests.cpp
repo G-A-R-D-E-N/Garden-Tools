@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <iterator>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -344,5 +345,53 @@ TEST_CASE("A losing-override check is not torn by a commit to a later plugin") {
           "Copied 000800:Master.esm as override in Left.esp.");
     CHECK(recordEditorId(backend, "Left.esp", "000800:Master.esm") == "SrcOverride");
     CHECK(recordEditorId(backend, "Late.esp", "000800:Master.esm") == "DonorOverride");
+    gate = nullptr;
+}
+
+TEST_CASE("Saves that resolve to one file serialize their file IO") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto alphaPath = root / "Alpha.esp";
+    const auto betaPath = root / "Beta.esp";
+    writeBytes(alphaPath, makeOverridePlugin(0x00000800, "AlphaSaved"));
+    writeBytes(betaPath, makeOverridePlugin(0x00000801, "BetaSaved"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugins(backend, {{"Alpha.esp", alphaPath}, {"Beta.esp", betaPath}});
+
+    HookGate state;
+    gate = &state;
+    fo4ide::plugin::setSaveIoLockedHook(&blockFirstWriter);
+    struct SaveHookReset {
+        ~SaveHookReset() { fo4ide::plugin::setSaveIoLockedHook(nullptr); }
+    } saveHookReset;
+
+    auto inPlace = std::async(std::launch::async, [&] {
+        return backend.invoke("backend.SavePlugin", nlohmann::json::array({"Beta.esp"}));
+    });
+    REQUIRE(waitForEntered(1));
+
+    auto saveAs = std::async(std::launch::async, [&] {
+        return backend.invoke("backend.SavePlugin",
+                              nlohmann::json::array({"Alpha.esp", betaPath.string()}));
+    });
+    CHECK(saveAs.wait_for(200ms) == std::future_status::timeout);
+    {
+        std::scoped_lock lock(state.mutex);
+        CHECK(state.entered == 1);
+    }
+
+    releaseGate();
+    REQUIRE(inPlace.wait_for(5s) == std::future_status::ready);
+    REQUIRE(saveAs.wait_for(5s) == std::future_status::ready);
+    CHECK(inPlace.get().has_value());
+    CHECK(saveAs.get().has_value());
+    CHECK_FALSE(state.timedOut);
+    CHECK(state.entered == 2);
+
+    std::ifstream saved(betaPath, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(saved)), std::istreambuf_iterator<char>());
+    CHECK(bytes.find("AlphaSaved") != std::string::npos);
+    CHECK(bytes.find("BetaSaved") == std::string::npos);
     gate = nullptr;
 }

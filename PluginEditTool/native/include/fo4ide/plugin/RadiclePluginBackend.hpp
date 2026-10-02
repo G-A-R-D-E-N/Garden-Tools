@@ -27,6 +27,7 @@ using LoadMo2AfterPendingCheckHook = void (*)();
 void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
 using WriteOpLockedHook = void (*)();
 void setWriteOpLockedHook(WriteOpLockedHook hook);
+void setSaveIoLockedHook(WriteOpLockedHook hook);
 #endif
 
 class RadiclePluginBackend final : public IPluginBackend {
@@ -220,6 +221,7 @@ private:
 
     mutable std::shared_mutex lifecycleMutex_;
     mutable std::shared_mutex stateMutex_;
+    std::mutex saveIoMutex_;
     std::vector<LoadedPlugin> plugins_;
     std::uint64_t mutationEpoch_{0};
     fo4::ConflictGraph graph_;
