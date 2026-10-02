@@ -30,11 +30,11 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
     }
 
     const auto esl = fo4::esl_eligibility(loaded->plugin);
-    const auto capacity = esl.capacity;
+    constexpr std::size_t capacity = 0x1000u - 0x800u;
     const auto nativeCount = esl.native_records;
     const auto outOfRange = esl.out_of_range;
 
-    if (esl.already_light()) {
+    if (esl.ids_fit_light_range()) {
         return nlohmann::json(
             "'" + name + "' is already ESL-compatible: all " +
             std::to_string(nativeCount) +
@@ -42,7 +42,7 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
             "Native compact_to_esl would be a no-op.");
     }
 
-    if (!esl.can_fit()) {
+    if (nativeCount > capacity) {
         return nlohmann::json(
             "'" + name + "' CANNOT fit the ESL compacted range: " +
             std::to_string(nativeCount) + " native record(s) exceed the " +

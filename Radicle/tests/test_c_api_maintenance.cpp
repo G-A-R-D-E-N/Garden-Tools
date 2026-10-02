@@ -93,7 +93,7 @@ TEST(CApiMaintenance, ReportsItmDeletedAndUnusedMasters) {
   ASSERT_EQ(radicle_env_esl_eligibility(env, "Patch.esp", &native, &out_of_range, &capacity), RADICLE_STATUS_OK);
   EXPECT_EQ(native, 1u);
   EXPECT_EQ(out_of_range, 0u);
-  EXPECT_EQ(capacity, 0x800u);
+  EXPECT_EQ(capacity, 0xFFEu);
 
   radicle_env_destroy(env);
   std::error_code ec;

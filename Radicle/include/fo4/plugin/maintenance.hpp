@@ -33,9 +33,9 @@ DeletedRecordCounts count_deleted_records(const Plugin& plugin);
 struct EslEligibility {
   std::size_t native_records{0};
   std::size_t out_of_range{0};
-  std::size_t capacity{0x800};
+  std::size_t capacity{0xFFE};
 
-  [[nodiscard]] bool already_light() const noexcept { return out_of_range == 0; }
+  [[nodiscard]] bool ids_fit_light_range() const noexcept { return out_of_range == 0; }
   [[nodiscard]] bool can_fit() const noexcept { return native_records <= capacity; }
 };
 
