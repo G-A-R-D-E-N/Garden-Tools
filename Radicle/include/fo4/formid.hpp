@@ -34,6 +34,7 @@ public:
   }
 
   constexpr bool is_null() const noexcept { return value_ == 0; }
+  constexpr bool is_none() const noexcept { return value_ == 0xFFFFFFFFu; }
   constexpr bool is_created() const noexcept { return index_byte() == 0xFF; }
   constexpr bool is_runtime_light() const noexcept { return index_byte() == 0xFE; }
 
