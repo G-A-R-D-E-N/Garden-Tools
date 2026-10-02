@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 namespace fo4 {
@@ -106,6 +107,45 @@ bool is_root(const Record& record) {
   return false;
 }
 
+bool is_complex(Signature signature) {
+  return signature == sig("DIAL") || signature == sig("WRLD") || signature == sig("CELL") || signature == sig("DOBJ");
+}
+
+const Subrecord* nth_sub(const Record& record, Signature signature, std::size_t ordinal) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == signature && ordinal-- == 0) return &sub;
+  }
+  return nullptr;
+}
+
+bool no_reach(const Record& record, const FormLinkHit& hit) {
+  static const std::set<std::pair<Signature, Signature>> whole_subrecords{
+      {sig("DIAL"), sig("QNAM")}, {sig("SMBN"), sig("PNAM")}, {sig("SMBN"), sig("SNAM")},
+      {sig("SMQN"), sig("PNAM")}, {sig("SMQN"), sig("SNAM")}, {sig("SMEN"), sig("PNAM")},
+      {sig("SMEN"), sig("SNAM")}, {sig("DLBR"), sig("QNAM")}, {sig("DLVW"), sig("QNAM")},
+      {sig("DLVW"), sig("BNAM")}, {sig("INFO"), sig("TPIC")}, {sig("INFO"), sig("PNAM")},
+      {sig("COBJ"), sig("BNAM")}, {sig("REGN"), sig("WNAM")}};
+  const auto owner = record.header.signature;
+  const auto sub = hit.subrecord;
+  if (whole_subrecords.contains({owner, sub})) return true;
+  if (sub == sig("CTDA")) return hit.offset == 12 || hit.offset == 16 || hit.offset == 24;
+  if (sub == sig("COED") || sub == sig("XOWN")) return hit.offset == 0;
+  if (sub == sig("XLOC")) return hit.offset == 4;
+  if ((owner == sig("ECZN") && sub == sig("DATA")) || (owner == sig("FACT") && sub == sig("XNAM"))) {
+    return hit.offset == 0;
+  }
+  if ((owner == sig("MISC") && sub == sig("CVPA")) || (owner == sig("COBJ") && sub == sig("FVPA"))) {
+    return hit.offset % 8 == 0;
+  }
+  if (sub == sig("PLDT") || sub == sig("PLVD") || sub == sig("PTDA")) {
+    const auto* data = nth_sub(record, sub, hit.subrecord_ordinal);
+    if (hit.offset != 4 || data == nullptr || data->data.size() < 4) return false;
+    const auto type = read_le(*data, 0, 4);
+    return type == 0 || type == 1 || (sub != sig("PTDA") && type == 4);
+  }
+  return false;
+}
+
 Graph build_graph(std::span<const Plugin* const> load_order) {
   Graph graph;
   std::map<FormKey, std::size_t> winner_plugin;
@@ -120,11 +160,16 @@ Graph build_graph(std::span<const Plugin* const> load_order) {
   }
   for (std::size_t index = 0; index < load_order.size(); ++index) {
     if (load_order[index] == nullptr) continue;
+    std::map<FormKey, const Record*> versions;
+    for (const auto* record : collect_records(*load_order[index])) versions[record->form_key] = record;
     for (const auto& hit : collect_form_links(*load_order[index])) {
+      const auto version = versions.find(hit.record);
       const auto owner = winner_plugin.find(hit.record);
-      if (owner == winner_plugin.end() || owner->second != index || hit.key.owner().empty()) continue;
-      graph.outgoing[hit.record].push_back(hit.key);
-      graph.incoming[hit.key].push_back({hit.record, graph.winners[hit.record]->header.signature, hit.subrecord});
+      if (version == versions.end() || owner == winner_plugin.end() || hit.key.owner().empty()) continue;
+      const auto& record = *version->second;
+      if (owner->second != index && !is_complex(record.header.signature)) continue;
+      if (!no_reach(record, hit)) graph.outgoing[hit.record].push_back(hit.key);
+      graph.incoming[hit.key].push_back({hit.record, record.header.signature, hit.subrecord});
     }
   }
   return graph;

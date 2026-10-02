@@ -139,12 +139,17 @@ Result<nlohmann::json> RadiclePluginBackend::findUnreachable(const nlohmann::jso
     }
 
     try {
+        const auto unreachable = fo4::find_unreachable(loadOrder, target);
         nlohmann::json rows = nlohmann::json::array();
-        for (const auto& item : fo4::find_unreachable(loadOrder, target)) {
-            if (rows.size() >= limit) break;
-            rows.push_back({{"FormKey", item.key.to_string()}, {"Signature", item.signature.to_string()}});
+        nlohmann::json bySignature = nlohmann::json::object();
+        for (const auto& item : unreachable) {
+            const auto signature = item.signature.to_string();
+            bySignature[signature] = bySignature.value(signature, 0) + 1;
+            if (rows.size() < limit) rows.push_back({{"FormKey", item.key.to_string()}, {"Signature", signature}});
         }
-        return nlohmann::json(rows.dump());
+        return nlohmann::json(nlohmann::json{
+            {"Total", unreachable.size()}, {"BySignature", std::move(bySignature)}, {"Records", std::move(rows)}
+        }.dump());
     } catch (const std::exception& error) {
         return std::unexpected(Error{"FindUnreachableFailed", error.what()});
     }

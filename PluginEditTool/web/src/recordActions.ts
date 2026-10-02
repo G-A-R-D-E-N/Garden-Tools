@@ -379,14 +379,13 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     const plug = matrix.Plugins[col];
     setStatus(`Building reachable info for ${plug}…`);
     try {
-      const rows: { FormKey: string; Signature: string }[] = JSON.parse(await b.FindUnreachable(plug, 5000));
-      const bySignature = new Map<string, number>();
-      for (const r of rows) bySignature.set(r.Signature, (bySignature.get(r.Signature) ?? 0) + 1);
-      setStatus(rows.length === 0 ? `Every record in ${plug} is reachable.`
-        : `${rows.length}${rows.length >= 5000 ? '+' : ''} unreachable record(s) in ${plug}: `
-          + [...bySignature].sort((a, c) => c[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(', ')
-          + '\n' + rows.slice(0, 20).map(r => `${r.Signature} ${r.FormKey}`).join('\n')
-          + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
+      const report: { Total: number; BySignature: Record<string, number>; Records: { FormKey: string; Signature: string }[] } =
+        JSON.parse(await b.FindUnreachable(plug, 20));
+      setStatus(report.Total === 0 ? `Every record in ${plug} is reachable.`
+        : `${report.Total} unreachable record(s) in ${plug}: `
+          + Object.entries(report.BySignature).sort((a, c) => c[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(', ')
+          + '\n' + report.Records.map(r => `${r.Signature} ${r.FormKey}`).join('\n')
+          + (report.Total > report.Records.length ? `\n…and ${report.Total - report.Records.length} more` : ''));
     } catch (e) { setStatus('Reachable info failed: ' + errorText(e)); }
   };
 
