@@ -453,6 +453,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CreateSeqFile") return backend_.createSeqFile(args);
         if (method == "ComparePluginTo") return backend_.comparePluginTo(args);
         if (method == "CheckForErrors") return backend_.checkForErrors(args);
+        if (method == "FindUnreachable") return backend_.findUnreachable(args);
         if (method == "LootCleaningReport") return backend_.lootCleaningReport(args);
         if (method == "RevertOverrides") {
             // args: [badPlugin, patchPlugin, signature, containsComponent, apply, limit]

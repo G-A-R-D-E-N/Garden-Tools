@@ -149,6 +149,7 @@ add_library(fo4
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
   src/graph/plugin_diff.cpp
+  src/graph/reachability.cpp
   src/environment/environment.cpp
   src/environment/world.cpp
   src/environment/placed.cpp
@@ -352,6 +353,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_remap_non_formid_slots.cpp
     tests/test_master_usage.cpp
     tests/test_plugin_diff.cpp
+    tests/test_reachability.cpp
     tests/test_maintenance.cpp
     tests/test_maintenance_nested.cpp
     tests/test_c_api_maintenance.cpp

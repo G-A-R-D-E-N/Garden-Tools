@@ -1315,6 +1315,10 @@ Produces a LOOT masterlist entry (`dirty:` or `clean:` cleaning data: `crc`, `ut
 
 xEdit "Copy as disabled override" is copy-as-override plus Initially Disabled (record flag `0x800`) on the copy only. Evidence is in `PluginEditTool/docs/xedit-copy-workflows.md`. The `LOSES:`/`EXISTS:` prompt results from `copyAsOverride` are returned unchanged, so an override that already existed in the target is never flagged. `kInitiallyDisabled` is bit 11 (`0x800`) of the record flags in xEdit `Core/wbDefinitionsFO4.pas` (`dev-4.1.6`, "Initially Disabled") and must stay equal to the constant in `RadiclePluginMaintenance.cpp`.
 
+## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::findUnreachable
+
+Read-only "Build reachable info" (#364): runs `fo4::find_unreachable` over the whole loaded load order and returns `Total`, `BySignature` (counts over every unreached record) and `Records` (FormKey and signature), the last capped at 500 by default and 100000 at most. It used to return only the capped rows, so the per-signature summary counted a sample (vanilla `Fallout4.esm` has 44,175 unreached records against a 5000 cap). Dispatched as `backend.FindUnreachable` through `PluginBackendTarget.cpp`; the context-menu action (`web/src/recordActions.ts:findUnreachable`) asks for 20 records and shows the total, the full per-signature counts, and those records.
+
 ## PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp:RadiclePluginBackend::updateOnam
 
 xEdit "Mark all files without ONAM as modified" and its ONAM-update tool mode (`xeMainForm.pas:mniMarkallfileswithoutONAMasmodifiedClick`, `UpdateAllOnam`, `dev-4.1.6`) only dirty the header so saving rewrites ONAM. Radicle already rebuilds ONAM for master-flagged plugins on write (`Radicle/src/plugin/writer.cpp:write_plugin`, `onam.cpp:rebuild_tes4_onam`), so this runs `rebuild_tes4_onam` on a copy and stages it only when the override list actually changes. Non-master plugins are refused because the writer never emits ONAM for them. Wired as `backend.UpdateOnam` through `PluginBackendTarget.cpp` and the record context menu (`web/src/recordActions.ts:updateOnam`).

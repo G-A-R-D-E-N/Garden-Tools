@@ -52,6 +52,7 @@ public:
     Result<nlohmann::json> createSeqFile(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> comparePluginTo(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> checkForErrors(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> findUnreachable(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> lootCleaningReport(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;

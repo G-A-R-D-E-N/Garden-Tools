@@ -20,7 +20,7 @@ export default function RecordContextMenu({
   const {
     copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
     deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq,
-    checkCircularLeveled, checkForErrors, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
+    checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
   } = actions;
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
@@ -103,6 +103,7 @@ export default function RecordContextMenu({
       <button onClick={() => createSeq(menu.col)}><FilePlus2 size={13} /> Create SEQ file</button>
       <button onClick={() => checkCircularLeveled(menu.col)}><ListFilter size={13} /> Check circular leveled lists</button>
       <button onClick={() => checkForErrors(menu.col)}><ListFilter size={13} /> Check for errors</button>
+      <button onClick={() => findUnreachable(menu.col)}><ListFilter size={13} /> Build reachable info</button>
       <button onClick={() => lootReport(menu.col)}><ListFilter size={13} /> LOOT cleaning report</button>
       <button onClick={() => updateOnam(menu.col)}><ListFilter size={13} /> Update ONAM</button>
       <button onClick={() => compareTo(menu.col)}><ListFilter size={13} /> Compare to...</button>

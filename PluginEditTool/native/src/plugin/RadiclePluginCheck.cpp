@@ -12,6 +12,7 @@
 #include <zlib.h>
 
 #include <fo4/graph/check_errors.hpp>
+#include <fo4/graph/reachability.hpp>
 #include <fo4/plugin/maintenance.hpp>
 
 namespace fo4ide::plugin {
@@ -111,6 +112,46 @@ Result<nlohmann::json> RadiclePluginBackend::lootCleaningReport(const nlohmann::
         return nlohmann::json(std::move(yaml));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"LootCleaningReportFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::findUnreachable(const nlohmann::json& arguments) const {
+    if (!arguments.is_array() || arguments.empty() || !arguments[0].is_string()) {
+        return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    }
+    const auto pluginName = arguments[0].get<std::string>();
+    std::size_t limit = 500;
+    if (arguments.size() > 1 && arguments[1].is_number_integer()) {
+        const auto raw = arguments[1].get<std::int64_t>();
+        if (raw > 0) limit = std::min<std::size_t>(static_cast<std::size_t>(raw), 100000);
+    }
+
+    std::scoped_lock lock(mutex_);
+    const auto* wanted = findPlugin(pluginName);
+    std::vector<const fo4::Plugin*> loadOrder;
+    std::size_t target = plugins_.size();
+    for (std::size_t index = 0; index < plugins_.size(); ++index) {
+        loadOrder.push_back(&plugins_[index].plugin);
+        if (wanted == &plugins_[index]) target = index;
+    }
+    if (target == plugins_.size()) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+
+    try {
+        const auto unreachable = fo4::find_unreachable(loadOrder, target);
+        nlohmann::json rows = nlohmann::json::array();
+        nlohmann::json bySignature = nlohmann::json::object();
+        for (const auto& item : unreachable) {
+            const auto signature = item.signature.to_string();
+            bySignature[signature] = bySignature.value(signature, 0) + 1;
+            if (rows.size() < limit) rows.push_back({{"FormKey", item.key.to_string()}, {"Signature", signature}});
+        }
+        return nlohmann::json(nlohmann::json{
+            {"Total", unreachable.size()}, {"BySignature", std::move(bySignature)}, {"Records", std::move(rows)}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"FindUnreachableFailed", error.what()});
     }
 }
 

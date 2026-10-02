@@ -33,6 +33,7 @@ export interface Backend {
   CompactToEsl(plugin: string): Promise<string>;
   CleanUnusedMasters(plugin: string, apply: boolean): Promise<string>;
   CheckForErrors(plugin: string, limit: number): Promise<string>;
+  FindUnreachable(plugin: string, limit: number): Promise<string>;
   LootCleaningReport(plugin: string): Promise<string>;
   UpdateOnam(plugin: string): Promise<string>;
   CopyAsDisabledOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;

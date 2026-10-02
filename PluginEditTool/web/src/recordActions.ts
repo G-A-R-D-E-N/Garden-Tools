@@ -374,6 +374,23 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     } catch (e) { setStatus('Check failed: ' + errorText(e)); }
   };
 
+  const findUnreachable = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    setStatus(`Building reachable info for ${plug}…`);
+    try {
+      const report: { Total: number; BySignature: Record<string, number>; Records: { FormKey: string; Signature: string }[] } =
+        JSON.parse(await b.FindUnreachable(plug, 20));
+      setStatus(report.Total === 0 ? `Every record in ${plug} is reachable.`
+        : `${report.Total} unreachable record(s) in ${plug}: `
+          + Object.entries(report.BySignature).sort((a, c) => c[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(', ')
+          + '\n' + report.Records.map(r => `${r.Signature} ${r.FormKey}`).join('\n')
+          + (report.Total > report.Records.length ? `\n…and ${report.Total - report.Records.length} more` : ''));
+    } catch (e) { setStatus('Reachable info failed: ' + errorText(e)); }
+  };
+
   const updateOnam = async (col: number) => {
     closeMenu();
     const b = back();
@@ -460,6 +477,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     checkCircularLeveled,
     compareTo,
     checkForErrors,
+    findUnreachable,
     lootReport,
     updateOnam,
     copyAsDisabledOverrideInto,
