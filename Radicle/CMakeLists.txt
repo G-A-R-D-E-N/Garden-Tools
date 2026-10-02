@@ -223,6 +223,11 @@ if(RADICLE_BUILD_TOOLS)
   target_link_libraries(fo4inspect PRIVATE fo4)
   fo4_apply_warnings(fo4inspect)
   fo4_apply_sanitizers(fo4inspect)
+  add_executable(radicle_env_bench tools/env_bench/main.cpp tools/env_bench/env_bench.cpp)
+  target_include_directories(radicle_env_bench PRIVATE tools)
+  target_link_libraries(radicle_env_bench PRIVATE fo4)
+  fo4_apply_warnings(radicle_env_bench)
+  fo4_apply_sanitizers(radicle_env_bench)
 endif()
 
 if(RADICLE_BUILD_TESTS)
@@ -344,9 +349,11 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
     tests/test_original_storage.cpp
+    tests/test_env_bench_real.cpp
+    tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
-  target_include_directories(fo4_tests PRIVATE tests)
+  target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
     FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
@@ -359,6 +366,18 @@ if(RADICLE_BUILD_TESTS)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests)
+  if(RADICLE_BUILD_TOOLS)
+    add_test(NAME radicle_env_bench_non_ansi_data_dir
+             COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
+                     -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/env_bench/non_ansi_data_dir.cmake)
+    add_test(NAME radicle_env_bench_unreadable_data_dir
+             COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/env_bench/unreadable_data_dir.cmake)
+    set_tests_properties(radicle_env_bench_unreadable_data_dir PROPERTIES SKIP_REGULAR_EXPRESSION "skipped: ")
+  endif()
 
   # C# bindings: the probe prints the C layout of every public struct for Radicle.Interop.Tests.
   add_executable(radicle_abi_layout_probe bindings/csharp/tests/abi_layout_probe.cpp)

@@ -1142,7 +1142,6 @@ The CELL lighting fill moved into `c_api_env_internal.hpp` (`to_c_lighting`), so
 - the C ABI.
 - `BaseRecordsRealData.DecodesEveryShippedBaseRecord` (with `FO4_DATA_DIR`): every LIGH, BNDS, LAYR, LGTM, CLMT, WTHR and SCOL in the seven official masters decodes; every WTHR has at least 17 color groups and 8 fog distances.
 
-
 ## Radicle/bindings/csharp — GardenEngine #114 C# bindings
 
 Tenth #114 slice, stacked on the base-record slice. This is the C# side GardenEngine will call in place of Mutagen. It lives in GARDEN-TOOLS next to the C ABI, so the two change together.
@@ -1199,6 +1198,25 @@ CTest runs them with `-DRADICLE_CSHARP_TESTS=ON`. The option is off by default s
   - Teleport returns false when the reference or its existing `XTEL` is absent. Primitive takes the stored `XPRM` bounds and returns false when the reference or its existing `XPRM` is absent. The activate-parent delay returns false when the reference or that activate parent is absent.
 - `Radicle.Interop.Tests/AbiLayoutTests.cs` reads `RADICLE_ABI_PROBE`, the built `abi_layout_probe` binary that prints C `sizeof`/`offsetof` lines. `Radicle.Interop.Tests/Fixtures.cs` is a minimal FO4 plugin writer (records and groups laid out as the engine reads them) and builds a GNRL v1 BA2 with stored chunks and a name table. The `EnvironmentTests.cs` fixture `Master.esm` holds STAT 000810 (model), WRLD 000800 with top cell 000801 and exterior cell 000802 (REFR 000803, ACHR 000804, LAND 000805), and interior CELL 000820 with REFR 000821; `Patch.esp` moves REFR 000803.
 - `tools/generate_interop.py`: arrays of pointers become numbered fields, fixed buffers take only primitives, and a handle or C string is already one pointer level. The generated files' headers say edits must go through the generator.
+
+## Radicle/tools/env_bench/env_bench.cpp:radicle_bench::run_env_bench — GardenEngine #114 load metrics
+
+Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses every plugin fully into memory, where Mutagen reads plugins over 1 MB lazily. This tool produces the numbers that decide whether Radicle needs lazy loading.
+
+- **Shared helper.** `run_env_bench` lives under `tools/`, not in the `fo4` library. `radicle_env_bench` (`tools/env_bench/main.cpp`) and `tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` both compile it, so the CLI and the test measure the same thing.
+- **Non-ANSI Data folders.** `Radicle/tools/env_bench/main.cpp:wmain` takes its arguments as wide strings on Windows, which fixes a non-ANSI Data folder. (A plugin file whose own name is outside the ANSI code page still fails in `Radicle/src/plugin/reader.cpp:read_plugin_from_owned_bytes`, which keys the plugin through `path::string()`.) With a narrow `main`, Windows converts `argv` through the ANSI code page, so a folder such as `env-bench-Žluť-ж` arrived as `env-bench-Älut-?` and `file_size` failed. The "no official masters" message prints the folder with `u8string()`, because `path::string()` throws for a name outside the ANSI code page. `tools/env_bench/non_ansi_data_dir.cmake` (CTest `radicle_env_bench_non_ansi_data_dir`) runs the tool on such a folder holding `testdata/SlowTime.esp`; it failed before `wmain` and passes after.
+- **Errors.** `Radicle/tools/env_bench/main.cpp:wmain` runs `default_masters` inside its `try`. `std::filesystem::exists` throws for any stat error other than "not found" (for example EACCES on a folder the user cannot read), and before this the exception escaped `main` and terminated the process. CTest `radicle_env_bench_unreadable_data_dir` (`tools/env_bench/unreadable_data_dir.cmake`) locks a folder and expects exit 1 with an `error:` line; it reports skipped on Windows, because a POSIX permission change does not lock a folder there, and when permissions are not enforced (root).
+- **What is timed:**
+  - `Environment::load` over the given plugins (default: the official masters present);
+  - `archive_load_order` + `AssetResolver::open` over the vanilla `Fallout4 - *.ba2` archives only;
+  - `StringTables::load(env, <Data>/Strings, "en", &assets)`;
+  - a walk of every `plugin_records` entry.
+- **Memory (`sample_memory`).**
+  - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
+  - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
+  - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
+- **Test.** Gated on `FO4_DATA_DIR`; CI has no game files and skips. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+- **Limits.** Archives and string tables are opened for `Fallout4.esm` only, so `archives_ms` and `strings_ms` leave out the DLC archives and their string tables even when the DLC masters are loaded (the installed game has no loose `Strings` folder, and each DLC's tables, such as `Strings/DLCRobot_en.STRINGS`, are only inside its `- Main.ba2`); `load_ms` covers every listed plugin. `tests/test_env_bench_real.cpp` reads `FO4_DATA_DIR` with `std::getenv`, so on Windows a Data path outside the ANSI code page makes the test skip; the standalone tool takes wide arguments.
 
 ## Radicle/src/c_api_version.cpp:radicle_abi_version — C ABI generation probe
 
