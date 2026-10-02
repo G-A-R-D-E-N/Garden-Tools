@@ -20,7 +20,7 @@ struct RecordDiff {
   RecordChange change{RecordChange::changed};
   bool header_changed{false};
   // source:fo4/plugin/container.hpp Subrecord; each differing signature must appear once.
-  std::vector<Signature> changed_subrecords;
+  std::vector<Signature> changed_subrecords{};
 };
 
 std::vector<RecordDiff> diff_plugins(const Plugin& before, const Plugin& after);
