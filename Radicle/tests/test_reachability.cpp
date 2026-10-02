@@ -58,7 +58,7 @@ fo4::Plugin make_game() {
   fo4::test::end_group(out, cells);
   top_record(out, "QUST", 0x806, {{"DNAM", u16(0x1)}});
   top_record(out, "GMST", 0x807, {});
-  return fo4::read_plugin(out.bytes, "Game.esm");
+  return fo4::read_plugin(out.bytes, "Fallout4.esm");
 }
 
 std::vector<std::string> unreachable(const fo4::Plugin& plugin) {
@@ -72,6 +72,20 @@ std::vector<std::string> unreachable(const fo4::Plugin& plugin) {
 
 TEST(Reachability, ReportsRecordsNoRootReaches) {
   EXPECT_EQ(unreachable(make_game()),
-            (std::vector<std::string>{"000801:Game.esm", "000803:Game.esm", "000804:Game.esm",
-                                      "000805:Game.esm"}));
+            (std::vector<std::string>{"000801:Fallout4.esm", "000803:Fallout4.esm", "000804:Fallout4.esm",
+                                      "000805:Fallout4.esm"}));
+}
+
+TEST(Reachability, LowIdsInACustomFirstMasterAreNotEngineRoots) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  top_record(out, "KYWD", 0x014, {});
+  const auto plugin = fo4::read_plugin(out.bytes, "CustomMaster.esm");
+  EXPECT_EQ(unreachable(plugin), std::vector<std::string>{"000014:CustomMaster.esm"});
 }

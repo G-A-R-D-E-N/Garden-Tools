@@ -9,6 +9,7 @@
 #include <deque>
 #include <map>
 #include <set>
+#include <string_view>
 #include <variant>
 
 namespace fo4 {
@@ -16,6 +17,7 @@ namespace {
 
 constexpr std::uint32_t k_first_non_hardcoded_id = 0x800;
 constexpr std::uint16_t k_race_weights_form_version = 109;
+constexpr std::string_view k_game_master = "Fallout4.esm";
 
 Signature sig(const char* text) { return Signature::from_string(text); }
 
@@ -144,7 +146,7 @@ std::vector<UnreachableRecord> find_unreachable(std::span<const Plugin* const> l
                                                 std::size_t plugin_index) {
   if (plugin_index >= load_order.size() || load_order[plugin_index] == nullptr) return {};
   const auto graph = build_graph(load_order);
-  const PluginKey game_master = load_order.front() != nullptr ? load_order.front()->key : PluginKey{};
+  const auto game_master = PluginKey::from_filename(k_game_master);
 
   std::set<FormKey> reached;
   std::deque<FormKey> queue;
