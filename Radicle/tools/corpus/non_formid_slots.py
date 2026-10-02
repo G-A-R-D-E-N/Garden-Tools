@@ -1,4 +1,4 @@
-"""Usage: non_formid_slots.py <fo4inspect> <Fallout 4 Data dir> <wbDefinitionsFO4.pas> <output .inc>
+"""Usage: non_formid_slots.py <fo4inspect> <Fallout 4 Data dir> <wbDefinitionsFO4.pas> <output .inc> [wbDefinitionsCommon.pas]
 
 fo4inspect must be built with an empty non_formid_slots.inc so the scan sees every candidate slot.
 """
@@ -13,7 +13,7 @@ import sys
 OFFICIAL = re.compile(r"^(Fallout4\.esm|DLC[A-Za-z0-9]+\.esm|cc[A-Z]{3}FO4\d{3}-[A-Za-z0-9_]+\.esl)$")
 SCALAR_TYPES = {"wbFloat", "wbInteger", "wbString", "wbLString", "wbRGBA", "wbByteRGBA", "wbFloatRGBA", "wbByteArray",
                 "wbByteColors", "wbByteABGR", "wbFloatColors", "wbLStringKC", "wbStringKC",
-                "wbLenString", "wbStringForward"}
+                "wbLenString", "wbStringForward", "wbUnknown"}
 
 
 def inspect(tool, command, path):
@@ -45,46 +45,57 @@ def record_blocks(defs):
 STRUCTURAL = {"wbStruct", "wbRStruct", "wbArray", "wbArrayS", "wbRArray", "wbEnum", "wbFlags", "wbEmpty"}
 
 
+HELPERS = {}
+
+
 def helper_body(defs, name):
-    m = re.search(r"\b" + re.escape(name) + r"\s*:=", defs)
-    if not m:
-        return None
-    paren = defs.index("(", m.end())
-    return defs[m.end():paren] + bracket_span(defs, paren)
+    if name not in HELPERS:
+        m = (re.search(r"\b" + re.escape(name) + r"\s*:=", defs) or
+             re.search(r"\bfunction\s+" + re.escape(name) + r"\s*:\s*\w+\s*;\s*begin\s*Result\s*:=", defs))
+        HELPERS[name] = None
+        if m and "(" in defs[m.end():m.end() + 200]:
+            paren = defs.index("(", m.end())
+            HELPERS[name] = defs[m.end():paren] + bracket_span(defs, paren)
+    return HELPERS[name]
 
 
-def helper_is_scalar(defs, name, depth=0):
-    body = helper_body(defs, name)
-    if body is None or depth > 8 or "wbFormID" in body or "wbUnion" in body:
+def span_is_scalar(defs, span, depth=0):
+    if depth > 8 or "wbFormID" in span or "wbUnion" in span:
         return False
-    for ident in set(re.findall(r"\bwb\w+", body)) - SCALAR_TYPES - STRUCTURAL - {name}:
-        if not helper_is_scalar(defs, ident, depth + 1):
+    for ident in set(re.findall(r"\bwb\w+", span)) - SCALAR_TYPES - STRUCTURAL:
+        body = helper_body(defs, ident)
+        if body is not None and not span_is_scalar(defs, body, depth + 1):
             return False
     return True
 
 
-def slot_is_scalar(defs, block, subrecord):
-    """True only when every definition of `subrecord` in the record is provably not a form ID."""
+def direct_verdicts(defs, text, subrecord):
     verdicts = []
-    for m in re.finditer(r"(wb\w+)\(\s*" + subrecord + r"\s*[,)]", block):
+    for m in re.finditer(r"(wb\w+)\(\s*" + subrecord + r"\s*[,)]", text):
         kind = m.group(1)
         if kind in SCALAR_TYPES:
             verdicts.append(True)
         elif kind in {"wbStruct", "wbUnion", "wbArray", "wbArrayS"}:
-            verdicts.append("wbFormID" not in bracket_span(block, m.end(1)))
+            verdicts.append(span_is_scalar(defs, bracket_span(text, m.end(1))))
         else:
             verdicts.append(False)
+    return verdicts
+
+
+def slot_is_scalar(defs, block, subrecord):
+    """True only when every definition of `subrecord` in the record is provably not a form ID."""
+    verdicts = direct_verdicts(defs, block, subrecord)
     if not verdicts:
-        for helper in re.findall(r"\b(wb\w*" + subrecord + r"\w*)\b", block):
+        for helper in sorted(set(re.findall(r"\b(wb\w+)\b", block)) - SCALAR_TYPES - STRUCTURAL):
             body = helper_body(defs, helper)
-            if body is not None and re.search(r"\(\s*" + subrecord + r"\s*,", body):
-                verdicts.append(helper_is_scalar(defs, helper))
+            if body is not None:
+                verdicts.extend(direct_verdicts(defs, body, subrecord))
     return bool(verdicts) and all(verdicts)
 
 
 def main():
     tool, data_dir, defs_path, output = sys.argv[1], pathlib.Path(sys.argv[2]), sys.argv[3], pathlib.Path(sys.argv[4])
-    defs = open(defs_path, encoding="utf-8", errors="replace").read()
+    defs = "\n".join(open(path, encoding="utf-8", errors="replace").read() for path in [defs_path, *sys.argv[5:]])
     defs = re.sub(r"\{[^{}$]*\}", "", defs)
     defs = re.sub(r"//[^\n]*", "", defs)
     blocks = record_blocks(defs)
