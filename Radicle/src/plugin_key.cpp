@@ -1,5 +1,7 @@
 #include "fo4/plugin_key.hpp"
 
+#include "fo4/text/encoding.hpp"
+
 #include <cctype>
 #include <string>
 
@@ -8,19 +10,6 @@ namespace {
 
 char ascii_lower(char ch) noexcept {
   return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-}
-
-int compare_insensitive(std::string_view a, std::string_view b) noexcept {
-  const auto n = a.size() < b.size() ? a.size() : b.size();
-  for (std::size_t i = 0; i < n; ++i) {
-    const auto ca = ascii_lower(a[i]);
-    const auto cb = ascii_lower(b[i]);
-    if (ca < cb) return -1;
-    if (ca > cb) return 1;
-  }
-  if (a.size() < b.size()) return -1;
-  if (a.size() > b.size()) return 1;
-  return 0;
 }
 
 std::string filename_only(std::string_view path) {
@@ -38,11 +27,11 @@ PluginKey PluginKey::from_filename(std::string_view filename) {
 }
 
 bool operator==(const PluginKey& a, const PluginKey& b) noexcept {
-  return compare_insensitive(a.filename_, b.filename_) == 0;
+  return text::equals_folded(a.filename_, b.filename_);
 }
 
 bool operator<(const PluginKey& a, const PluginKey& b) noexcept {
-  return compare_insensitive(a.filename_, b.filename_) < 0;
+  return text::compare_folded(a.filename_, b.filename_) < 0;
 }
 
 bool PluginKey::looks_light() const noexcept {
@@ -55,12 +44,7 @@ bool PluginKey::looks_light() const noexcept {
 }
 
 std::size_t hash_value(const PluginKey& key) noexcept {
-  std::size_t h = 14695981039346656037ull;
-  for (const char ch : key.filename()) {
-    h ^= static_cast<unsigned char>(ascii_lower(ch));
-    h *= 1099511628211ull;
-  }
-  return h;
+  return text::hash_folded(key.filename());
 }
 
 }  // namespace fo4

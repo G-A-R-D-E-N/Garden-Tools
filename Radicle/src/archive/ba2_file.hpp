@@ -2,6 +2,7 @@
 
 #include "fo4/archive/ba2.hpp"
 #include "fo4/io/path_text.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <cstddef>
 #include <filesystem>
@@ -24,6 +25,19 @@ inline std::vector<std::byte> read_file_bytes(const std::filesystem::path& path)
     if (!stream) throw Ba2Error("could not read BA2: " + name);
   }
   return bytes;
+}
+
+template <class Entry>
+std::vector<std::string> stored_ba2_paths(const std::vector<Entry>& entries, bool has_string_table) {
+  std::vector<std::string> stored;
+  if (!has_string_table) return stored;
+  stored.reserve(entries.size());
+  for (const auto& entry : entries) {
+    auto bytes = text::utf8_to_windows1252(entry.path);
+    if (!bytes) throw Ba2Error("BA2 entry path is not UTF-8 text representable in Windows-1252: " + entry.path);
+    stored.push_back(std::move(*bytes));
+  }
+  return stored;
 }
 
 }  // namespace fo4::archive::detail

@@ -13,6 +13,7 @@ public:
   static constexpr value_type localized = 1u << 7;
   static constexpr value_type small_file = 1u << 9;
   static constexpr value_type persistent = 1u << 10;
+  static constexpr value_type partial_form = 1u << 14;
   static constexpr value_type compressed = 1u << 18;
 
   constexpr RecordFlags() noexcept = default;

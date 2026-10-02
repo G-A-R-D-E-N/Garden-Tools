@@ -5,23 +5,44 @@
 #include "fo4/archive/assets.hpp"
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/world.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <exception>
+#include <mutex>
 #include <new>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 struct radicle_env {
   fo4::env::Environment value;
   std::vector<std::string> paths;
+  mutable std::mutex text_mutex;
+  mutable std::unordered_map<const char*, std::string> text;
 };
 
 namespace radicle_c_env_detail {
 
 using namespace radicle_c_detail;
+
+inline const char* stored_text(const radicle_env& env, std::string_view stored) {
+  if (std::all_of(stored.begin(), stored.end(), [](char ch) { return static_cast<unsigned char>(ch) < 0x80; })) {
+    return stored.data();
+  }
+  const std::lock_guard lock(env.text_mutex);
+  auto [it, inserted] = env.text.try_emplace(stored.data());
+  if (inserted) it->second = fo4::text::windows1252_to_utf8(stored);
+  return it->second.c_str();
+}
+
+inline const char* stored_text(const radicle_env& env, const std::optional<std::string_view>& stored) {
+  return stored ? stored_text(env, *stored) : nullptr;
+}
 
 inline const fo4::env::RecordRef* to_ref(const radicle_record* record) {
   return reinterpret_cast<const fo4::env::RecordRef*>(record);

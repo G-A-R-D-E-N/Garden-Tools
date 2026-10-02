@@ -2,6 +2,7 @@
 
 #include "fo4/archive/ba2_hash.hpp"
 #include "fo4/io/path_text.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <array>
 #include <cstring>
@@ -186,27 +187,28 @@ Ba2Reader Ba2Reader::open(const std::filesystem::path& path) {
     reader.entries_.push_back(std::move(entry));
   }
 
-  if (reader.has_name_table_) {
-    file.seek(name_table_offset);
-    for (auto& entry : reader.entries_) {
-      const auto length = file.u16();
-      entry.path.resize(length);
-      if (length != 0) file.read(entry.path.data(), length);
-    }
-  }
-
   reader.by_path_.reserve(reader.entries_.size());
+  if (reader.has_name_table_) file.seek(name_table_offset);
   for (std::size_t index = 0; index < reader.entries_.size(); ++index) {
-    const auto& entry = reader.entries_[index];
-    auto key = reader.has_name_table_ ? normalize_ba2_path(entry.path)
-                                      : hash_key(entry.name_hash, entry.extension_hash, entry.directory_hash);
+    auto& entry = reader.entries_[index];
+    std::string key;
+    if (reader.has_name_table_) {
+      std::string stored(file.u16(), '\0');
+      if (!stored.empty()) file.read(stored.data(), stored.size());
+      key = normalize_ba2_path(stored);
+      entry.path = text::windows1252_to_utf8(stored);
+    } else {
+      key = hash_key(entry.name_hash, entry.extension_hash, entry.directory_hash);
+    }
     reader.by_path_.emplace(std::move(key), index);
   }
   return reader;
 }
 
 std::optional<std::size_t> Ba2Reader::find(std::string_view path) const {
-  const auto it = by_path_.find(lookup_key(has_name_table_, path));
+  const auto stored = text::utf8_to_windows1252(path);
+  if (!stored) return std::nullopt;
+  const auto it = by_path_.find(lookup_key(has_name_table_, *stored));
   if (it == by_path_.end()) return std::nullopt;
   return it->second;
 }

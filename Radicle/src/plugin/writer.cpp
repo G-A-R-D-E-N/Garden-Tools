@@ -5,6 +5,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <zlib.h>
 
@@ -242,7 +243,9 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
   bool masters_written = false;
   auto write_masters = [&] {
     for (const auto& master : masters) {
-      next.push_back(zstring_subrecord(sig_mast, master.key.filename()));
+      const auto name = text::utf8_to_windows1252(master.key.filename());
+      if (!name) throw std::runtime_error("master name is not representable in Windows-1252: " + std::string(master.key.filename()));
+      next.push_back(zstring_subrecord(sig_mast, *name));
       next.push_back(data_size_subrecord(master.data_size));
     }
     masters_written = true;
