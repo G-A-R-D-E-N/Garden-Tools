@@ -1362,3 +1362,6 @@ Every MCP write that names a field bumps `aiHighlightSeq` in `MainShell`'s messa
 
 Main's behaviour before this (traced on `ffd3a341`): `MainShell` holds the field for 3 s; `RecordView` copied it into `flashedField` in an effect and cleared it after 1.8 s. Main re-flashed the same field only once the 3 s `MainShell` timer had expired, or when the MCP write opened a different record (the `recordLoading` swap remounts `RecordView`). A second write to the same field within 3 s showed nothing. The counter keeps every case where main flashed and also flashes that repeat. `RecordView.highlight.test.tsx` drives two `McpLive` messages through `MainShell` and checks `data-flash-seq` changes and the `<tr>` is a new element.
 
+## PluginEditTool/web/src/errors.ts:errorMessage, errorText — host-call rejection text
+
+`errorMessage` takes anything a host call can reject with: an `Error`, a plain object carrying `message`, or a bare value. It returns the message text, or `undefined` when there is none, so callers keep their own fallback. `errorText` is the common fallback, `errorMessage(e) ?? String(e)`.
