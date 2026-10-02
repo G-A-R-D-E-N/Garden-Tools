@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight, ChevronDown, Database, FileBox } from 'lucide-react';
 import type { AppInterop } from '../backend';
-import { errorMessage } from '../errors';
+import { errorText } from '../errors';
 
 export interface RecordNode {
   Key: string;
@@ -28,7 +28,7 @@ export default function ExplorerTree({ path, node, backend, onOpenRecord }: { pa
           const json = await backend.GetChildren(path);
           setChildren(JSON.parse(json));
         } catch (err) {
-          setLoadError(errorMessage(err) ?? String(err));
+          setLoadError(errorText(err));
         } finally {
           setLoading(false);
         }

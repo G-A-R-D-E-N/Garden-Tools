@@ -56,6 +56,24 @@ describe('MCP field highlight', () => {
     expect(second).not.toBe(first);
   });
 
+  it('keeps the same row node when the highlight clears', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<DialogProvider><MainShell /></DialogProvider>);
+      await highlight();
+      await screen.findByText('New');
+      const before = flashedRow();
+      expect(before.classList.contains('rv-row-flash')).toBe(true);
+
+      await act(async () => { vi.advanceTimersByTime(3000); });
+      const after = flashedRow();
+      expect(after.classList.contains('rv-row-flash')).toBe(false);
+      expect(after).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not hold the flash end state over the row colours', async () => {
     const fs = await vi.importActual<{ readFileSync: (path: string, enc: 'utf8') => string }>('node:fs');
     const css = fs.readFileSync('src/RecordView.css', 'utf8');

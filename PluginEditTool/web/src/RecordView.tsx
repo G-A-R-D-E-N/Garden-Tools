@@ -18,7 +18,7 @@ import {
   SEV_ORDER,
 } from './recordStatus';
 import './RecordView.css';
-import { errorMessage } from './errors';
+import { errorText } from './errors';
 
 export type RecordTab = 'grid' | 'fields' | 'conflicts' | 'references' | 'history' | 'dependencies';
 
@@ -83,6 +83,9 @@ export default function RecordView(
   };
 
   const flashing = (r: ConflictFieldRow) => !!highlightField && r.Field === highlightField;
+  const [flashKey, setFlashKey] = useState({ field: highlightField, seq: highlightSeq });
+  if (highlightField && highlightSeq !== flashKey.seq) setFlashKey({ field: highlightField, seq: highlightSeq });
+  const rowKey = (r: ConflictFieldRow, ri: number) => r.Field === flashKey.field ? `${ri}:${flashKey.seq}` : ri;
   const [prevFormKey, setPrevFormKey] = useState(matrix.FormKey);
 
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -230,7 +233,7 @@ export default function RecordView(
     try {
       setStatus(await b.SetField(matrix.Plugins[col], matrix.FormKey, r.Field, value));
       await onReload();
-    } catch (e) { setStatus('Edit failed: ' + (errorMessage(e) ?? String(e))); }
+    } catch (e) { setStatus('Edit failed: ' + errorText(e)); }
   };
 
   useEffect(() => {
@@ -321,7 +324,7 @@ export default function RecordView(
         {gridRows.length === 0 ? (
           <tr><td className="rv-empty" colSpan={visibleCols.length + 1}>No fields match.</td></tr>
         ) : gridRows.map((r, ri) => (
-          <tr key={flashing(r) ? `${ri}:${highlightSeq}` : ri} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
+          <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
             <td
               className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
               onDoubleClick={() => r.HasChildren && toggle(r)}
@@ -507,7 +510,7 @@ export default function RecordView(
                             </td>
                           </tr>
                           {!collapsed && g.rows.map((r, ri) => (
-                            <tr key={flashing(r) ? `${ri}:${highlightSeq}` : ri} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
+                            <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
                               <td
                                 className="rv-prop-col rv-sticky"
                                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
