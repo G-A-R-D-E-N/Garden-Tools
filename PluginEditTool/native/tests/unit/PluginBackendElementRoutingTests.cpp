@@ -46,6 +46,11 @@ public:
         routed = "ClearElement";
         return nlohmann::json("cleared");
     }
+
+    fo4ide::Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json& args) override {
+        routed = "CleanUnusedMasters:" + args.dump();
+        return nlohmann::json("cleaned");
+    }
 };
 
 }  // namespace
@@ -64,4 +69,14 @@ TEST_CASE("PluginBackendTarget routes legacy ElementService calls to native elem
     CHECK(backend.routed == "MoveElement");
     REQUIRE(target.invoke("ClearElement", nlohmann::json::array()).has_value());
     CHECK(backend.routed == "ClearElement");
+}
+
+TEST_CASE("PluginBackendTarget routes the masters panel Clean Masters call") {
+    ElementRoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "masters");
+
+    REQUIRE(target.invoke("CleanUnused", nlohmann::json::array({"Mod.esp", false})).has_value());
+    CHECK(backend.routed == R"(CleanUnusedMasters:["Mod.esp",false])");
+    REQUIRE(target.invoke("List", nlohmann::json::array({"Mod.esp"})).has_value());
+    CHECK(backend.routed == "masters.List");
 }

@@ -137,11 +137,16 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     closeMenu();
     const b = back();
     if (!b) return;
-    if (!await askConfirm({ title: 'Clean Masters', confirmLabel: 'Remove unused',
-      message: `Remove every master ${matrix.Plugins[col]} does not reference?\n\nMasters are kept when the plugin has script data that cannot be fully scanned.` })) return;
-    setStatus('Cleaning masters…');
-    try { setStatus(await b.CleanUnusedMasters(matrix.Plugins[col])); await onReload(); }
-    catch (e) { setStatus('Clean masters failed: ' + errorText(e)); }
+    const plug = matrix.Plugins[col];
+    try {
+      const preview = await b.CleanUnusedMasters(plug, false);
+      if (!preview.startsWith('DRY RUN:')) { setStatus(preview); return; }
+      if (!await askConfirm({ title: 'Clean Masters', confirmLabel: 'Remove unused',
+        message: preview.replace('DRY RUN: would remove', 'Remove') + '\n\nSave Plugin afterwards to write the change.' })) return;
+      setStatus('Cleaning masters…');
+      setStatus(await b.CleanUnusedMasters(plug, true));
+      await onReload();
+    } catch (e) { setStatus('Clean masters failed: ' + errorText(e)); }
   };
 
   const cleanPlugin = async (col: number) => {

@@ -33,7 +33,6 @@ struct CheckFinding {
   PluginKey plugin;
   FormKey record;
   Signature subrecord{};
-  // source:fo4/schema/form_links.hpp FormLinkHit::offset, the byte offset inside the subrecord.
   std::size_t offset{0};
   FormKey target;
   std::string message;

@@ -86,21 +86,6 @@ fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
     return found;
 }
 
-bool eraseTopLevelRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
-    for (auto& group : plugin.groups) {
-        if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-        for (auto it = group.children.begin(); it != group.children.end(); ++it) {
-            const auto* record = std::get_if<fo4::Record>(&*it);
-            if (record == nullptr || record->form_key != key) continue;
-            group.children.erase(it);
-            plugin.original_range.clear();
-            plugin.original_structure_fingerprint = 0;
-            return true;
-        }
-    }
-    return false;
-}
-
 fo4::PluginKind maintenanceOwnerKind(const fo4::Plugin& source,
                                      const fo4::PluginKey& owner) {
     if (owner == source.key) {
@@ -429,19 +414,15 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
         std::size_t scanned = 0;
 
         try {
-            for (const auto& group : loaded->plugin.groups) {
-                if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-                for (const auto& child : group.children) {
-                    const auto* record = std::get_if<fo4::Record>(&child);
-                    if (record != nullptr && !record->form_key.owner().empty()) ++scanned;
-                }
-            }
+            fo4::visit_records(loaded->plugin, [&](const fo4::Record& record) {
+                if (record.header.signature != fo4::sig_tes4 && !record.form_key.owner().empty()) ++scanned;
+            });
             std::vector<const fo4::Plugin*> loadOrder;
             for (std::size_t index = 0; index <= currentIndex; ++index) {
                 loadOrder.push_back(&plugins_[index].plugin);
             }
             for (const auto& item : fo4::find_identical_to_master(loadOrder, currentIndex, limit)) {
-                const auto* record = topLevelRecord(loaded->plugin, item.key);
+                const auto* record = fo4::find_record(loaded->plugin, item.key);
                 identical.push_back({
                     .key = item.key,
                     .editorId = record == nullptr ? std::string{} : recordEditorId(*record),
@@ -476,10 +457,9 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             }
 
             auto mutated = loaded->plugin;
-            std::size_t removed = 0;
-            for (const auto& item : identical) {
-                if (eraseTopLevelRecord(mutated, item.key)) ++removed;
-            }
+            std::vector<fo4::FormKey> keys;
+            for (const auto& item : identical) keys.push_back(item.key);
+            const auto removed = fo4::remove_records(mutated, keys);
             if (removed != 0) {
                 stagePluginMutationLocked(*loaded, std::move(mutated));
             }

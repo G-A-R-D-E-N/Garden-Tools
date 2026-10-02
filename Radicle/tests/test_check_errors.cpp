@@ -116,17 +116,17 @@ TEST(CheckErrors, ReportsEachLinkProblemOnce) {
   EXPECT_EQ(wrong_type[0].offset, 4u);
 
   const auto unresolved = of_code(findings, fo4::CheckCode::unresolved_link);
-  ASSERT_EQ(unresolved.size(), 1u);
+  ASSERT_EQ(unresolved.size(), 2u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000803:Check.esp"));
+  EXPECT_EQ(unresolved[1].target, fo4::FormKey::parse("000900:Check.esp"));
+  EXPECT_EQ(unresolved[1].offset, 16u);
 
   const auto deleted = of_code(findings, fo4::CheckCode::deleted_target);
   ASSERT_EQ(deleted.size(), 1u);
   EXPECT_EQ(deleted[0].target, fo4::FormKey::parse("000806:Check.esp"));
   EXPECT_EQ(deleted[0].severity, fo4::CheckSeverity::warning);
 
-  const auto invalid = of_code(findings, fo4::CheckCode::invalid_master_index);
-  ASSERT_EQ(invalid.size(), 1u);
-  EXPECT_EQ(invalid[0].offset, 16u);
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::invalid_master_index).empty());
 }
 
 TEST(CheckErrors, ReportsLeveledListCycleOnce) {
@@ -179,7 +179,7 @@ TEST(CheckErrors, CodeNamesAreStable) {
   EXPECT_EQ(fo4::check_severity_name(fo4::CheckSeverity::warning), "warning");
 }
 
-TEST(CheckErrors, VanillaMastersHaveNoWrongTypeLinks) {
+TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
   const char* data = std::getenv("FO4_DATA_DIR");
   if (!data) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
   const std::filesystem::path dir{data};
@@ -193,7 +193,53 @@ TEST(CheckErrors, VanillaMastersHaveNoWrongTypeLinks) {
     ADD_FAILURE() << wrong_type[i].record.to_string() << " " << wrong_type[i].message;
   }
   EXPECT_TRUE(wrong_type.empty()) << wrong_type.size() << " wrong_target_type findings";
-  for (const auto& finding : of_code(findings, fo4::CheckCode::invalid_master_index)) {
-    EXPECT_EQ(finding.severity, fo4::CheckSeverity::warning);
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::invalid_master_index).empty());
+  for (const auto& finding : findings) EXPECT_NE(finding.severity, fo4::CheckSeverity::error) << finding.message;
+}
+
+TEST(CheckErrors, PastMasterTableLinkToOwnRecordIsValid) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  write_misc_with_keywords(out, 0x000801, {0x05000800});
+  const auto plugin = fo4::read_plugin(out.bytes, "Owner.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(fo4::check_load_order(load_order).empty());
+}
+
+TEST(CheckErrors, HardcodedEngineFormsAreNotUnresolved) {
+  fo4::test::ByteWriter game;
+  write_header(game, {});
+  write_empty_record(game, "KYWD", 0x000800);
+  const auto master = fo4::read_plugin(game.bytes, "Game.esm");
+  fo4::test::ByteWriter out;
+  write_header(out, "Game.esm");
+  write_misc_with_keywords(out, 0x01000801, {0x00000014, 0x00000900});
+  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
+  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000900:Game.esm"));
+}
+
+TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_misc_with_keywords(out, 0x000801, {0x000901});
+  const auto group = fo4::test::begin_group(out, "INNR", 0);
+  const auto record = fo4::test::begin_record(out, "INNR", 0, 0x000802);
+  fo4::test::ByteWriter wnam;
+  wnam.u32(0x000900);
+  fo4::test::write_subrecord(out, "WNAM", wnam.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 2u);
+  for (const auto& finding : unresolved) {
+    EXPECT_EQ(finding.severity, finding.subrecord.to_string() == "KWDA" ? fo4::CheckSeverity::error
+                                                                          : fo4::CheckSeverity::warning)
+        << finding.message;
   }
 }

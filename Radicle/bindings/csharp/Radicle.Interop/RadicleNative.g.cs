@@ -829,4 +829,13 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_primary_model_color_remapping_index")]
     public static extern Status RecordPrimaryModelColorRemappingIndex(IntPtr env, IntPtr record, float* out_index);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_identical_to_master")]
+    public static extern Status EnvIdenticalToMaster(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_deleted_counts")]
+    public static extern Status EnvDeletedCounts(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_records, nuint* out_references, nuint* out_navmeshes);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_unused_masters")]
+    public static extern Status EnvUnusedMasters(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, IntPtr** out_strings, nuint* out_count, int* out_complete);
+
 }

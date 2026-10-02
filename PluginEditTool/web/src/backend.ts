@@ -31,7 +31,7 @@ export interface Backend {
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
-  CleanUnusedMasters(plugin: string): Promise<string>;
+  CleanUnusedMasters(plugin: string, apply: boolean): Promise<string>;
   CheckForErrors(plugin: string, limit: number): Promise<string>;
   LootCleaningReport(plugin: string): Promise<string>;
   CopyAsDisabledOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
@@ -369,6 +369,7 @@ export interface MastersHost {
 
   Reorder(plugin: string, orderJson: string): Promise<string>;
   SetLight(plugin: string, light: boolean): Promise<string>;
+  CleanUnused(plugin: string, apply: boolean): Promise<string>;
   SavePlugin(plugin: string): Promise<string>;
 }
 
