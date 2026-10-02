@@ -211,7 +211,7 @@ bool set_placed_reference_comments(Plugin& plugin,
   }
   return simple(plugin, reference, [&](Plugin&, Record& record) {
     single(record, sig("MNAM"));
-    if (!comments) {
+    if (!comments || comments->empty()) {
       erase_all(record, sig("MNAM"));
       return;
     }

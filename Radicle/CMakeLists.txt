@@ -94,6 +94,7 @@ endfunction()
 
 add_library(fo4
   src/plugin_key.cpp
+  src/text/encoding.cpp
   src/formid.cpp
   src/archive/ba2.cpp
   src/archive/ba2_hash.cpp
@@ -361,6 +362,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
     tests/test_env_bench_real.cpp
+    tests/test_text_boundary.cpp
     tests/test_parity_dds.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp

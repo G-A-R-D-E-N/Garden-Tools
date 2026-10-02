@@ -4,6 +4,7 @@
 #include "fo4/io/path_text.hpp"
 
 #include "fo4/plugin/reader.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -26,14 +27,13 @@ constexpr Signature k_land{'L', 'A', 'N', 'D'};
 
 using io::utf8;
 
-char ascii_lower(char ch) noexcept {
-  return (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
+bool ascii(std::string_view value) noexcept {
+  return std::all_of(value.begin(), value.end(), [](char ch) { return static_cast<unsigned char>(ch) < 0x80; });
 }
 
-bool iequals(std::string_view a, std::string_view b) noexcept {
-  return a.size() == b.size() &&
-         std::equal(a.begin(), a.end(), b.begin(),
-                    [](char x, char y) { return ascii_lower(x) == ascii_lower(y); });
+bool stored_text_equals(std::string_view a, std::string_view b) {
+  if (ascii(a) && ascii(b)) return text::equals_folded(a, b);
+  return text::equals_folded(text::windows1252_to_utf8(a), text::windows1252_to_utf8(b));
 }
 
 const Subrecord* first_subrecord(const Record& record, Signature signature) noexcept {
@@ -216,7 +216,7 @@ void Environment::index_group(std::size_t plugin,
 
 std::optional<std::size_t> Environment::find_plugin(std::string_view filename) const {
   for (std::size_t index = 0; index < plugins_.size(); ++index) {
-    if (iequals(plugins_[index].key.filename(), filename)) return index;
+    if (text::equals_folded(plugins_[index].key.filename(), filename)) return index;
   }
   return std::nullopt;
 }
@@ -241,7 +241,7 @@ const RecordRef* Environment::find_by_editor_id(std::string_view editor_id,
         if (ref.plugin != index) continue;
         if (signature && ref.record->header.signature != *signature) continue;
         const auto edid = editor_id_of(*ref.record);
-        if (edid && iequals(*edid, editor_id)) return &ref;
+        if (edid && stored_text_equals(*edid, editor_id)) return &ref;
       }
     }
   }

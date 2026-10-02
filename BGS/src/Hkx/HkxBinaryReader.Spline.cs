@@ -141,7 +141,7 @@ public partial class HkxBinaryReader
                 var rotFrames = new List<Quaternion>(framesInBlock);
                 string rotType = mask.GetRotType();
                 int qfmt   = mask.RotQuant;
-                int qalign = qfmt == 1 || qfmt == 3 ? 1 : (qfmt == 2 || qfmt == 4 ? 2 : 4);
+                int qalign = qfmt == 1 ? 1 : (qfmt == 2 ? 2 : 4);
 
                 if (rotType == "spline")
                 {
@@ -296,7 +296,8 @@ public partial class HkxBinaryReader
             1 => Read40BitQuat(data, ref off),
             2 => Read48BitQuat(data, ref off),
             5 => ReadUncompressedQuat(data, ref off),
-            _ => Read40BitQuat(data, ref off),
+            _ => throw new NotSupportedException(
+                $"spline rotation quantization {fmt} is not decoded (only 0, 1, 2 and 5 are), so the animation was not read"),
         };
     }
 
