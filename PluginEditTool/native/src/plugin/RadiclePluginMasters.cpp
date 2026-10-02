@@ -123,6 +123,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
         if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;
         loaded->plugin = std::move(mutated);
         loaded->dirty = true;
+        ++mutationEpoch_;
 
         std::vector<fo4::MasterDescriptor> known;
         known.reserve(plugins_.size());
