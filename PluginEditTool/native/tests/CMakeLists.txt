@@ -74,6 +74,7 @@ fo4ide_add_test(fo4ide_test_papyrus_security unit/PapyrusSecurityTests.cpp fo4id
 fo4ide_add_test(fo4ide_test_papyrus_symbols unit/PapyrusSymbolsTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_analysis unit/PapyrusAnalysisServiceTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_papyrus_target unit/PapyrusTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_backend_target unit/PluginBackendTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_element_routing unit/PluginBackendElementRoutingTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
