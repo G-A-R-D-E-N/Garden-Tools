@@ -381,8 +381,8 @@ TEST_CASE("Native CopyAsDisabledOverride leaves an existing override untouched")
 
     const auto message = textResult(backend.copyAsDisabledOverride(args));
     CHECK(message.starts_with("EXISTS:"));
-    const auto* copy = fo4::find_record(fo4::read_plugin_file(targetPath),
-                                        fo4::FormKey::parse("000800:Master.esm"));
+    const auto reloaded = fo4::read_plugin_file(targetPath);
+    const auto* copy = fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm"));
     REQUIRE(copy != nullptr);
     CHECK((copy->header.flags.value() & 0x00000800u) == 0);
 }
