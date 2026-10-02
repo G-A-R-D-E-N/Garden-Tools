@@ -285,6 +285,22 @@ void print_check(const std::vector<std::string>& paths) {
   std::cout << "  ]\n}\n";
 }
 
+void print_unreachable(const std::vector<std::string>& paths) {
+  std::vector<fo4::Plugin> plugins;
+  plugins.reserve(paths.size());
+  for (const auto& path : paths) plugins.push_back(fo4::read_plugin_file(path));
+  std::vector<const fo4::Plugin*> load_order;
+  for (const auto& plugin : plugins) load_order.push_back(&plugin);
+  const auto rows = fo4::find_unreachable(load_order, load_order.size() - 1);
+  std::cout << "{\n  \"unreachable\": [\n";
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    std::cout << "    {\"record\": " << json_string(rows[i].key.to_string())
+              << ", \"signature\": " << json_string(rows[i].signature.to_string()) << "}"
+              << (i + 1 != rows.size() ? ",\n" : "\n");
+  }
+  std::cout << "  ]\n}\n";
+}
+
 void print_itm(const std::vector<std::string>& paths) {
   std::vector<fo4::Plugin> plugins;
   plugins.reserve(paths.size());
@@ -370,7 +386,7 @@ void usage() {
   std::cerr << "usage: fo4inspect [header|groups|records|record|masters|raw|summary|write|"
                "formlinks] plugin.esp [formid|out.esp]\n";
   std::cerr << "       fo4inspect [udr|unused-masters] plugin.esp\n"
-               "       fo4inspect [check|itm] master.esm ... plugin.esp\n"
+               "       fo4inspect [check|itm|unreachable] master.esm ... plugin.esp\n"
                "       fo4inspect diff before.esp after.esp\n";
 }
 
@@ -398,6 +414,10 @@ int main(int argc, char** argv) {
 
     if (command == "diff" && argc == 4) {
       print_diff(argv[2], argv[3]);
+      return 0;
+    }
+    if (command == "unreachable") {
+      print_unreachable(std::vector<std::string>(argv + 2, argv + argc));
       return 0;
     }
     if (command == "itm") {

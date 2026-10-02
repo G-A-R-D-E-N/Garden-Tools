@@ -115,6 +115,7 @@ add_executable(
     unit/RadiclePluginBatchMutationTests.cpp
     unit/RadiclePluginAddMastersTests.cpp
     unit/RadiclePluginItmNestedTests.cpp
+    unit/RadiclePluginReachableTests.cpp
     unit/RadiclePluginReadApiTests.cpp
     unit/RadiclePluginEslTests.cpp
     unit/RadiclePluginEditableTests.cpp

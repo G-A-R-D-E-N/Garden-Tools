@@ -1313,3 +1313,7 @@ Produces a LOOT masterlist entry (`dirty:` or `clean:` cleaning data: `crc`, `ut
 ## PluginEditTool/native/src/plugin/RadiclePluginDisabledOverride.cpp:RadiclePluginBackend::copyAsDisabledOverride
 
 xEdit "Copy as disabled override" is copy-as-override plus Initially Disabled (record flag `0x800`) on the copy only. Evidence is in `PluginEditTool/docs/xedit-copy-workflows.md`. The `LOSES:`/`EXISTS:` prompt results from `copyAsOverride` are returned unchanged, so an override that already existed in the target is never flagged. `kInitiallyDisabled` is bit 11 (`0x800`) of the record flags in xEdit `Core/wbDefinitionsFO4.pas` (`dev-4.1.6`, "Initially Disabled") and must stay equal to the constant in `RadiclePluginMaintenance.cpp`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::findUnreachable
+
+Read-only "Build reachable info" (#364): runs `fo4::find_unreachable` over the whole loaded load order and returns the chosen plugin's unreached records (FormKey and signature), capped at 500 by default and 100000 at most. Dispatched as `backend.FindUnreachable` through `PluginBackendTarget.cpp`; the context-menu action (`web/src/recordActions.ts:findUnreachable`) shows counts per signature and the first 20 records.

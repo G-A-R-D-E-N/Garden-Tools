@@ -372,6 +372,24 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     } catch (e) { setStatus('Check failed: ' + errorText(e)); }
   };
 
+  const findUnreachable = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    setStatus(`Building reachable info for ${plug}…`);
+    try {
+      const rows: { FormKey: string; Signature: string }[] = JSON.parse(await b.FindUnreachable(plug, 5000));
+      const bySignature = new Map<string, number>();
+      for (const r of rows) bySignature.set(r.Signature, (bySignature.get(r.Signature) ?? 0) + 1);
+      setStatus(rows.length === 0 ? `Every record in ${plug} is reachable.`
+        : `${rows.length}${rows.length >= 5000 ? '+' : ''} unreachable record(s) in ${plug}: `
+          + [...bySignature].sort((a, c) => c[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(', ')
+          + '\n' + rows.slice(0, 20).map(r => `${r.Signature} ${r.FormKey}`).join('\n')
+          + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
+    } catch (e) { setStatus('Reachable info failed: ' + errorText(e)); }
+  };
+
   const lootReport = async (col: number) => {
     closeMenu();
     const b = back();
@@ -450,6 +468,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     checkCircularLeveled,
     compareTo,
     checkForErrors,
+    findUnreachable,
     lootReport,
     copyAsDisabledOverrideInto,
     copyText,

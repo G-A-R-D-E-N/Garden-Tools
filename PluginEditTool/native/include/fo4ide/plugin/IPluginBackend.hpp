@@ -129,6 +129,12 @@ public:
             "Native check for errors is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> findUnreachable(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "FindUnreachableUnavailable",
+            "Native reachable-info analysis is unavailable for this backend"
+        });
+    }
 
     virtual Result<nlohmann::json> comparePluginTo(const nlohmann::json&) const {
         return std::unexpected(Error{
