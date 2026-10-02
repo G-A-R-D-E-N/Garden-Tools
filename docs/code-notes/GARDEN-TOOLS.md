@@ -1347,3 +1347,7 @@ Split out of `dialogs.tsx` and `Shell/StatusBar.tsx` so those files export only 
 ## PluginEditTool/web/src/util/cellInstances.ts:applyHidden, Shell/ExplorerTree.tsx:ExplorerTree
 
 Moved out of `CellViewport.tsx` and `MainShell.tsx` unchanged so each of those over-750-line files shrinks when touched (source line-limit guard). `cellInstances.ts` holds the instanced-mesh hide/visibility/selection helpers and `InstanceRef`; `ExplorerTree.tsx` is the lazy plugin/record tree. Tranche 2 also moved RecordView's conflict-status tables to `Workspace/conflictStatus.ts`; main had already moved the same code to `recordStatus.ts` (#317), so the merge of the updated #318 dropped `conflictStatus.ts` and `RecordView.tsx` imports from `recordStatus.ts` only.
+
+## PluginEditTool/web/src/errors.ts:errorMessage, errorText — host-call rejection text
+
+`errorMessage` takes anything a host call can reject with: an `Error`, a plain object carrying `message`, or a bare value. It returns the message text, or `undefined` when there is none, so callers keep their own fallback. `errorText` is the common fallback, `errorMessage(e) ?? String(e)`.
