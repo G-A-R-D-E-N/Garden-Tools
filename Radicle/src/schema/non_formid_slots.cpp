@@ -24,10 +24,31 @@ bool pack_data_input_value(const Record& record, const Subrecord& subrecord) noe
          record.subrecords[index - 1].signature == k_sig_anam;
 }
 
+constexpr Signature k_sig_scen = Signature::from_string("SCEN");
+constexpr Signature k_sig_tnam = Signature::from_string("TNAM");
+constexpr Signature k_sig_htid = Signature::from_string("HTID");
+constexpr int k_scene_action_radio = 6;
+
+// source:wbDefinitionsFO4.pas SCEN Actions; the action type must come from the open 2-byte ANAM.
+bool scene_action_scalar(const Record& record, const Subrecord& subrecord) noexcept {
+  if (record.header.signature != k_sig_scen ||
+      (subrecord.signature != k_sig_tnam && subrecord.signature != k_sig_htid)) {
+    return false;
+  }
+  int action = -1;
+  for (const auto& sub : record.subrecords) {
+    if (&sub == &subrecord) break;
+    if (sub.signature != k_sig_anam) continue;
+    action = sub.data.size() == 2 ? static_cast<int>(sub.data[0]) | static_cast<int>(sub.data[1]) << 8 : -1;
+  }
+  if (action < 0) return false;
+  return subrecord.signature == k_sig_tnam || action != k_scene_action_radio;
+}
+
 }  // namespace
 
 bool corpus_non_formid_slot(const Record& record, const Subrecord& subrecord) noexcept {
-  if (pack_data_input_value(record, subrecord)) return true;
+  if (pack_data_input_value(record, subrecord) || scene_action_scalar(record, subrecord)) return true;
   return std::find(std::begin(k_non_formid_slots), std::end(k_non_formid_slots),
                    std::pair{record.header.signature, subrecord.signature}) !=
          std::end(k_non_formid_slots);
