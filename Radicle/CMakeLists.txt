@@ -231,9 +231,11 @@ if(RADICLE_BUILD_TOOLS)
   fo4_apply_warnings(radicle_env_bench)
   fo4_apply_sanitizers(radicle_env_bench)
   add_executable(radicle_parity_dump tools/parity/main.cpp)
+  target_include_directories(radicle_parity_dump PRIVATE tools)
   target_link_libraries(radicle_parity_dump PRIVATE fo4)
   fo4_apply_warnings(radicle_parity_dump)
   add_executable(radicle_parity_writeback tools/parity/writeback.cpp)
+  target_include_directories(radicle_parity_writeback PRIVATE tools)
   target_link_libraries(radicle_parity_writeback PRIVATE fo4 radicle_c)
   fo4_apply_warnings(radicle_parity_writeback)
 endif()
@@ -359,6 +361,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
     tests/test_env_bench_real.cpp
+    tests/test_parity_dds.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
@@ -386,6 +389,12 @@ if(RADICLE_BUILD_TESTS)
                      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/env_bench/unreadable_data_dir.cmake)
     set_tests_properties(radicle_env_bench_unreadable_data_dir PROPERTIES SKIP_REGULAR_EXPRESSION "skipped: ")
+    add_test(NAME radicle_parity_tools
+             COMMAND ${CMAKE_COMMAND} -DWRITEBACK=$<TARGET_FILE:radicle_parity_writeback>
+                     -DDUMP=$<TARGET_FILE:radicle_parity_dump>
+                     -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/parity_tools.cmake)
   endif()
 
   # C# bindings: the probe prints the C layout of every public struct for Radicle.Interop.Tests.

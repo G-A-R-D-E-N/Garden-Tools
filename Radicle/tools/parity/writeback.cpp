@@ -2,6 +2,7 @@
 #include "fo4/c_api_env.h"
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/placed.hpp"
+#include "parity/common.hpp"
 
 #include <bit>
 #include <cstdint>
@@ -19,6 +20,7 @@ namespace {
 
 using fo4::FormKey;
 using fo4::env::Environment;
+using fo4::io::utf8;
 
 constexpr std::uint32_t k_player_faction = 0x01C21C;
 
@@ -38,21 +40,11 @@ std::string key(const std::optional<FormKey>& k) { return k ? key(*k) : "-"; }
 
 std::string vec(const fo4::env::Vec3& v) { return std::format("{},{},{}", hexf(v[0]), hexf(v[1]), hexf(v[2])); }
 
-std::vector<std::filesystem::path> read_order(const char* file) {
-  std::vector<std::filesystem::path> paths;
-  std::ifstream in(file);
-  for (std::string line; std::getline(in, line);) {
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    const auto tab = line.find('\t');
-    if (tab != std::string::npos) paths.emplace_back(line.substr(tab + 1));
-  }
-  return paths;
-}
-
-std::vector<Edit> read_edits(const char* file) {
+std::vector<Edit> read_edits(const std::filesystem::path& file) {
   std::vector<Edit> edits;
   std::ifstream in(file);
   for (std::string line; std::getline(in, line);) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
     const auto a = line.find('\t');
     const auto b = line.find('\t', a + 1);
     edits.push_back({FormKey::parse(line.substr(0, a)), line.substr(a + 1, b - a - 1), FormKey::parse(line.substr(b + 1))});
@@ -60,7 +52,7 @@ std::vector<Edit> read_edits(const char* file) {
   return edits;
 }
 
-int pick(const Environment& env, const char* out_file) {
+int pick(const Environment& env, const std::filesystem::path& out_file) {
   std::map<std::string, std::vector<FormKey>> buckets;
   for (const auto* cell : env.plugin_records(0)) {
     if (cell->record->header.signature.view() != "CELL") continue;
@@ -95,10 +87,10 @@ void check(radicle_status status, const char* what) {
   if (status != RADICLE_STATUS_OK) throw std::runtime_error(std::format("{}: {}", what, radicle_last_error()));
 }
 
-int apply(const Environment& env, const std::vector<std::filesystem::path>& order, const char* edits_file,
-          const char* out_file) {
+int apply(const Environment& env, const std::vector<std::filesystem::path>& order, const std::filesystem::path& edits_file,
+          const std::filesystem::path& out_file) {
   std::vector<std::string> path_strings;
-  for (const auto& p : order) path_strings.push_back(p.string());
+  for (const auto& p : order) path_strings.push_back(utf8(p));
   std::vector<const char*> paths;
   for (const auto& p : path_strings) paths.push_back(p.c_str());
   radicle_env* cenv = nullptr;
@@ -149,13 +141,13 @@ int apply(const Environment& env, const std::vector<std::filesystem::path>& orde
     }
     if (!original.activate_parents.empty()) check(radicle_plugin_set_placed_activate_parent_delay(plugin, ref, 0, 0.5f), "activate");
   }
-  check(radicle_plugin_write_file(plugin, out_file), "write");
+  check(radicle_plugin_write_file(plugin, utf8(out_file).c_str()), "write");
   radicle_plugin_destroy(plugin);
   radicle_env_destroy(cenv);
   return 0;
 }
 
-int dump(const Environment& env, const char* edits_file, const char* out_file) {
+int dump(const Environment& env, const std::filesystem::path& edits_file, const std::filesystem::path& out_file) {
   std::ofstream out(out_file, std::ios::binary);
   const auto last = env.plugins().size() - 1;
   for (const auto& e : read_edits(edits_file)) {
@@ -185,19 +177,25 @@ int dump(const Environment& env, const char* edits_file, const char* out_file) {
   return 0;
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
-  if (argc != 4 && argc != 5) {
+int run(const radicle_parity::Args& args) {
+  if (args.size() != 4 && args.size() != 5) {
     std::cerr << "usage: radicle_parity_writeback pick <order> <edits.tsv> | apply <order> <edits.tsv> <out.esp> | "
                  "dump <order> <edits.tsv> <out.tsv>\n";
     return 2;
   }
-  const std::string mode = argv[1];
-  const auto order = read_order(argv[2]);
+  const auto mode = utf8(args[1]);
+  const auto order = radicle_parity::read_order(args[2]);
   const auto env = Environment::load(order);
-  if (mode == "pick") return pick(env, argv[3]);
-  if (mode == "apply" && argc == 5) return apply(env, order, argv[3], argv[4]);
-  if (mode == "dump" && argc == 5) return dump(env, argv[3], argv[4]);
+  if (mode == "pick") return pick(env, args[3]);
+  if (mode == "apply" && args.size() == 5) return apply(env, order, args[3], args[4]);
+  if (mode == "dump" && args.size() == 5) return dump(env, args[3], args[4]);
   return 2;
 }
+
+}  // namespace
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) { return radicle_parity::guarded_main(argc, argv, run); }
+#else
+int main(int argc, char** argv) { return radicle_parity::guarded_main(argc, argv, run); }
+#endif

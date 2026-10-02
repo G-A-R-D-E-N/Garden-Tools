@@ -14,7 +14,7 @@ Source: TES5Edit dev-4.1.6 `Core/wbImplementation.pas`, `PluginEditTool/Mutagen/
 
 ## Parity dump tool
 
-`Radicle/tools/parity/main.cpp:main` (`radicle_parity_dump <versions|cells|world> <order.tsv> <out-dir>`) is Radicle's side of the GardenEngine #114 parity checks. It loads a resolved MO2 order (`name<TAB>path` per line, lowest priority first) and writes sorted TSV files. The rows are shaped like GardenEngine's consumers read them:
+`Radicle/tools/parity/main.cpp:run` (`radicle_parity_dump <versions|cells|world> <order.tsv> <out-dir>`, `names <order.tsv> <out-dir> <data-dir>`, `ba2 <archives.txt> <out-dir> [max-mb]`, `ba2x <archive.ba2> <entry> <out-file>`) is Radicle's side of the GardenEngine #114 parity checks. It loads a resolved MO2 order (`name<TAB>path` per line, lowest priority first) and writes sorted TSV files. The rows are shaped like GardenEngine's consumers read them:
 - plugins and record version chains (GameLoader)
 - merged cell children with base, transform, flags, enable parent and model (CellService)
 - worldspace info, grid-keyed exterior cells and winning LAND layers (WorldspaceService, TerrainService)
@@ -55,3 +55,11 @@ Fallen World modlist results, 2026-09-27: 414 archives, 99 GB, covering GNRL and
 `Radicle/tools/parity/writeback.cpp:apply` repeats GardenEngine's `ReferenceWriteback.Commit` through the C ABI, the path the migrated consumer will call. It creates `OpenCommonwealth.esp`, copies each placed reference as an override, and sets the edited fields: transform, scale, EditorID, record flags, and, for REFR, comments, location, ownership, enable parent, linked refs, teleport, primitive and activate-parent delay. `pick` chooses Fallout4.esm references that carry each optional field, and `dump` reloads a saved plugin over the masters and prints the decoded overrides.
 
 A Mutagen capture of the same edits, written with GardenEngine's logic, decodes identically on all 10 references (2 ACHR, 8 REFR) from the 2026-09-27 run. One difference remains: a teleport rotation component stored as -0.0. Radicle leaves it untouched; Mutagen rewrites it as +0.0. Mutagen also reads Radicle's plugin back as the winning override. The edit uses stored XPRM bounds + 1 on the Radicle side and + 2 on the Mutagen side, because Mutagen doubles XPRM bounds on read (`Radicle/include/fo4/environment/placed.hpp:Primitive`).
+
+## Parity tool arguments, paths and errors
+
+`Radicle/tools/parity/common.hpp:guarded_main` is the entry point of both tools: `wmain` on Windows, so arguments arrive as UTF-16 paths, and a catch that prints `error: ` and returns 1. `read_order` builds each path from the order file's bytes as UTF-8 (`utf8_path`), and `Radicle/tools/parity/writeback.cpp:apply` passes paths to the C ABI through `fo4::io::utf8`, which `Radicle/src/c_api.cpp:utf8_path` expects. Before, the tools used `char** argv` and `std::string` paths, which Windows decodes in the ANSI code page, and `apply` handed `path::string()` to the C ABI. With a Data folder named `parity-Žluť-ж`, `apply` aborted with 0xC0000409: `ж` has no ANSI form, so `string()` threw and nothing caught it. Malformed edits (`FormKey::parse`) and `ba2x` with three arguments (null `argv[4]` into `ofstream`) also aborted. Regression: `Radicle/tools/parity/parity_tools.cmake` (ctest `radicle_parity_tools`), which failed before the fix.
+
+`Radicle/tools/parity/common.hpp:dds_payload` returns `-` when a DDS is shorter than its header. A 128 to 147-byte entry with a DX10 FourCC used to take `subspan(148)` past the end and hash out-of-bounds memory. Regression: `Radicle/tests/test_parity_dds.cpp:Dx10HeaderLongerThanTheFileIsNotAPayload`, which crashed with 0xC0000005 before the fix.
+
+`Radicle/tools/parity/writeback.cpp:read_edits` strips a trailing CR, the same as `read_order`.

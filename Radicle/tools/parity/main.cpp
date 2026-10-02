@@ -4,6 +4,7 @@
 #include "fo4/environment/strings.hpp"
 #include "fo4/environment/terrain.hpp"
 #include "fo4/environment/world.hpp"
+#include "parity/common.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -17,6 +18,7 @@
 #include <map>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,6 +28,10 @@ namespace {
 using fo4::FormKey;
 using fo4::env::Environment;
 using fo4::env::RecordRef;
+using radicle_parity::dds_payload;
+using radicle_parity::fnv;
+using radicle_parity::utf8_path;
+using fo4::io::utf8;
 
 std::string lower(std::string_view text) {
   std::string out(text);
@@ -44,13 +50,6 @@ std::string hexf(float v) { return std::format("{:08X}", std::bit_cast<std::uint
 
 std::string hexf(const std::optional<float>& v) { return v ? hexf(*v) : "-"; }
 
-std::string fnv(std::span<const std::byte> data, bool present) {
-  if (!present) return "-";
-  std::uint64_t h = 0xCBF29CE484222325ull;
-  for (const auto b : data) h = (h ^ std::to_integer<std::uint8_t>(b)) * 0x100000001B3ull;
-  return std::format("{:016X}", h);
-}
-
 std::string text(const std::optional<std::string_view>& v) { return v && !v->empty() ? lower(*v) : "-"; }
 
 void write(const std::filesystem::path& dir, const char* name, std::vector<std::string> lines) {
@@ -58,17 +57,6 @@ void write(const std::filesystem::path& dir, const char* name, std::vector<std::
   std::sort(lines.begin(), lines.end());
   std::ofstream out(dir / name, std::ios::binary);
   for (const auto& line : lines) out << line << '\n';
-}
-
-std::vector<std::filesystem::path> read_order(const char* file) {
-  std::vector<std::filesystem::path> paths;
-  std::ifstream in(file);
-  for (std::string line; std::getline(in, line);) {
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    const auto tab = line.find('\t');
-    if (tab != std::string::npos) paths.emplace_back(line.substr(tab + 1));
-  }
-  return paths;
 }
 
 std::set<FormKey> keys_of(const Environment& env, std::string_view signature) {
@@ -214,35 +202,7 @@ std::string archive_entry_path(std::string_view path) {
   return out;
 }
 
-std::string dds_format(std::span<const std::byte> dds) {
-  const std::string fourcc(reinterpret_cast<const char*>(dds.data()) + 84, 4);
-  if (fourcc == "DXT1") return "bc1";
-  if (fourcc == "DXT3") return "bc2";
-  if (fourcc == "DXT5") return "bc3";
-  if (fourcc == "ATI1" || fourcc == "BC4U") return "bc4u";
-  if (fourcc == "ATI2" || fourcc == "BC5U") return "bc5u";
-  if (fourcc == "BC4S") return "bc4s";
-  if (fourcc == "BC5S") return "bc5s";
-  if (fourcc != "DX10" || dds.size() < 148) return "fourcc:" + fourcc;
-  std::uint32_t dxgi = 0;
-  std::memcpy(&dxgi, dds.data() + 128, 4);
-  if (dxgi >= 70 && dxgi <= 72) return "bc1";
-  if (dxgi >= 73 && dxgi <= 75) return "bc2";
-  if (dxgi >= 76 && dxgi <= 78) return "bc3";
-  if (dxgi == 79 || dxgi == 80) return "bc4u";
-  if (dxgi == 81) return "bc4s";
-  if (dxgi == 82 || dxgi == 83) return "bc5u";
-  if (dxgi == 84) return "bc5s";
-  return std::format("dxgi:{}", dxgi);
-}
-
-std::string dds_payload(std::span<const std::byte> dds) {
-  if (dds.size() < 128 || std::memcmp(dds.data(), "DDS ", 4) != 0) return "-";
-  const std::size_t header = std::memcmp(dds.data() + 84, "DX10", 4) == 0 ? 148 : 128;
-  return std::format("{}/{}:{}", dds_format(dds), dds.size() - header, fnv(dds.subspan(header), true));
-}
-
-int dump_ba2(const char* list, const std::filesystem::path& out, std::uint64_t max_bytes) {
+int dump_ba2(const std::filesystem::path& list, const std::filesystem::path& out, std::uint64_t max_bytes) {
   std::vector<std::string> index;
   std::vector<std::string> content;
   std::ifstream in(list);
@@ -251,8 +211,8 @@ int dump_ba2(const char* list, const std::filesystem::path& out, std::uint64_t m
     const auto file = line.substr(0, tab);
     const auto name = archive_entry_path(file);
     try {
-      const auto reader = fo4::archive::Ba2Reader::open(file);
-      const bool hash = std::filesystem::file_size(file) <= max_bytes;
+      const auto reader = fo4::archive::Ba2Reader::open(utf8_path(file));
+      const bool hash = std::filesystem::file_size(utf8_path(file)) <= max_bytes;
       for (std::size_t i = 0; i < reader.entries().size(); ++i) {
         const auto& entry = reader.entries()[i];
         index.push_back(std::format("{}\t{}", name, archive_entry_path(entry.path)));
@@ -269,27 +229,38 @@ int dump_ba2(const char* list, const std::filesystem::path& out, std::uint64_t m
   return 0;
 }
 
-}  // namespace
+int usage() {
+  std::cerr << "usage: radicle_parity_dump <versions|cells|world> <order.tsv> <out-dir> | names <order.tsv> <out-dir> <data-dir> | "
+               "ba2 <archives.txt> <out-dir> [max-mb] | ba2x <archive.ba2> <entry> <out-file>\n";
+  return 2;
+}
 
-int main(int argc, char** argv) {
-  if (argc != 4 && argc != 5) {
-    std::cerr << "usage: radicle_parity_dump <versions|cells|world|names|ba2> <order.tsv|archives.txt> <out-dir> [data-dir|max-mb]\n";
-    return 2;
-  }
-  const std::string mode = argv[1];
+int run(const radicle_parity::Args& args) {
+  if (args.size() != 4 && args.size() != 5) return usage();
+  const auto mode = utf8(args[1]);
   if (mode == "ba2x") {
-    const auto reader = fo4::archive::Ba2Reader::open(argv[2]);
-    const auto bytes = reader.extract(reader.find(argv[3]).value());
-    std::ofstream(argv[4], std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    if (args.size() != 5) return usage();
+    const auto reader = fo4::archive::Ba2Reader::open(args[2]);
+    const auto entry = reader.find(utf8(args[3]));
+    if (!entry) throw std::runtime_error(utf8(args[3]) + " is not in " + utf8(args[2]));
+    const auto bytes = reader.extract(*entry);
+    std::ofstream(args[4], std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     return 0;
   }
-  if (mode == "ba2") return dump_ba2(argv[2], argv[3], argc == 5 ? std::stoull(argv[4]) << 20 : 0);
-  const auto paths = read_order(argv[2]);
-  const auto env = Environment::load(paths);
-  if (mode == "versions") dump_versions(env, argv[3]);
-  else if (mode == "cells") dump_cells(env, argv[3]);
-  else if (mode == "world") dump_world(env, argv[3]);
-  else if (mode == "names" && argc == 5) dump_names(env, argv[3], argv[4]);
-  else return 2;
+  if (mode == "ba2") return dump_ba2(args[2], args[3], args.size() == 5 ? std::stoull(utf8(args[4])) << 20 : 0);
+  const auto env = Environment::load(radicle_parity::read_order(args[2]));
+  if (mode == "versions") dump_versions(env, args[3]);
+  else if (mode == "cells") dump_cells(env, args[3]);
+  else if (mode == "world") dump_world(env, args[3]);
+  else if (mode == "names" && args.size() == 5) dump_names(env, args[3], args[4]);
+  else return usage();
   return 0;
 }
+
+}  // namespace
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) { return radicle_parity::guarded_main(argc, argv, run); }
+#else
+int main(int argc, char** argv) { return radicle_parity::guarded_main(argc, argv, run); }
+#endif
