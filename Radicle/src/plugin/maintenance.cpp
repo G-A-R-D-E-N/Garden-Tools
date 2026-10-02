@@ -1,11 +1,13 @@
 #include "fo4/plugin/maintenance.hpp"
 
+#include "fo4/plugin/placement.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/schema/form_links.hpp"
 
 #include <exception>
+#include <map>
 #include <set>
 #include <utility>
 #include <variant>
@@ -61,14 +63,22 @@ struct ItmScan {
   const Plugin& plugin;
   PluginFormIdContext context;
   std::vector<IdenticalToMaster> out;
+  std::map<std::size_t, std::map<FormKey, RecordPlacement>> placements{};
 
-  const Plugin* identical_previous(const Record& record) const {
+  const RecordPlacement& placement_in(std::size_t index, const FormKey& key) {
+    auto [it, inserted] = placements.try_emplace(index);
+    if (inserted) it->second = record_placements(*load_order[index]);
+    return it->second[key];
+  }
+
+  const Plugin* identical_previous(const Record& record) {
     if (record.form_key.owner().empty() || record.form_key.owner() == plugin.key) return nullptr;
     for (std::size_t index = plugin_index; index-- > 0;) {
       const auto* earlier = load_order[index];
       if (earlier == nullptr) continue;
       const auto* previous = find_record(*earlier, record.form_key);
       if (previous == nullptr) continue;
+      if (placement_in(index, record.form_key) != placement_in(plugin_index, record.form_key)) return nullptr;
       return previous_normalizes_equal(record, *previous, *earlier, plugin_form_id_context(*earlier),
                                        context)
                  ? earlier
@@ -125,7 +135,7 @@ std::vector<IdenticalToMaster> find_identical_to_master(std::span<const Plugin* 
                                                         std::size_t limit) {
   if (plugin_index >= load_order.size() || load_order[plugin_index] == nullptr) return {};
   const auto& plugin = *load_order[plugin_index];
-  ItmScan scan{load_order, plugin_index, plugin, plugin_form_id_context(plugin), {}};
+  ItmScan scan{load_order, plugin_index, plugin, plugin_form_id_context(plugin), {}, {}};
   for (const auto& group : plugin.groups) scan.scan(group);
   if (limit != 0 && scan.out.size() > limit) scan.out.resize(limit);
   return std::move(scan.out);
