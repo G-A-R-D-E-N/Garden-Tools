@@ -207,6 +207,7 @@ int dump_ba2(const std::filesystem::path& list, const std::filesystem::path& out
   std::vector<std::string> content;
   std::ifstream in(list);
   for (std::string line; std::getline(in, line);) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
     const auto tab = line.find('\t');
     const auto file = line.substr(0, tab);
     const auto name = archive_entry_path(file);
