@@ -27,7 +27,7 @@ struct Cleanup {
     }
 };
 
-std::vector<std::byte> miscPlugin(std::string_view editorId) {
+std::vector<std::byte> miscPlugin(std::string_view editorId, std::vector<std::byte> data = {}) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
     fo4::test::ByteWriter hedr;
@@ -39,9 +39,12 @@ std::vector<std::byte> miscPlugin(std::string_view editorId) {
     const auto group = fo4::test::begin_group(out, "MISC", 0);
     const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000810);
     fo4::test::write_subrecord(out, "EDID", editorId);
-    fo4::test::ByteWriter value;
-    value.u32(0x0000002A);
-    fo4::test::write_subrecord(out, "DATA", value.bytes);
+    if (data.empty()) {
+        fo4::test::ByteWriter value;
+        value.u32(0x0000002A);
+        data = value.bytes;
+    }
+    fo4::test::write_subrecord(out, "DATA", data);
     fo4::test::end_record(out, record);
     fo4::test::end_group(out, group);
     return out.bytes;
@@ -62,7 +65,7 @@ nlohmann::json detail(fo4ide::plugin::RadiclePluginBackend& backend,
     return nlohmann::json::parse(result->get<std::string>());
 }
 
-}  // namespace
+}
 
 TEST_CASE("Native ComparePluginTo returns both versions of one record side by side") {
     const auto root = tempRoot();
@@ -84,8 +87,28 @@ TEST_CASE("Native ComparePluginTo returns both versions of one record side by si
     CHECK(sides["Before"][1].at("Hex") == "2A 00 00 00");
     CHECK(sides["After"][1].at("Hex") == "2A 00 00 00");
     CHECK(sides["After"][1].at("Size") == 4);
+    CHECK(sides.at("Differs") == nlohmann::json::array({true, false}));
 
     const auto missing = detail(backend, root / "backup" / "Old.esp", "000999:Target.esp");
     CHECK(missing.at("Before").is_null());
     CHECK(missing.at("After").is_null());
+}
+
+TEST_CASE("Native ComparePluginTo marks a subrecord that differs only past the hex preview") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    std::vector<std::byte> current(80, std::byte{0});
+    auto older = current;
+    older[70] = std::byte{1};
+    writeBytes(root / "Target.esp", miscPlugin(std::string_view{"Same\0", 5}, current));
+    writeBytes(root / "Old.esp", miscPlugin(std::string_view{"Same\0", 5}, older));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({
+        {{"name", "Target.esp"}, {"path", (root / "Target.esp").string()}, {"source", "test"},
+         {"resolved", true}}})}}).has_value());
+
+    const auto sides = detail(backend, root / "Old.esp", "000810:Target.esp");
+    CHECK(sides["Before"][1].at("Hex") == sides["After"][1].at("Hex"));
+    CHECK(sides.at("Differs") == nlohmann::json::array({false, true}));
 }

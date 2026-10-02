@@ -99,10 +99,23 @@ Result<nlohmann::json> RadiclePluginBackend::comparePluginTo(const nlohmann::jso
         const auto formKeyText = compareStringArgument(arguments, 2);
         if (!formKeyText.empty()) {
             const auto key = fo4::FormKey::parse(formKeyText);
+            const auto* before = fo4::find_record(other, key);
+            const auto* after = fo4::find_record(loaded->plugin, key);
+            const auto at = [](const fo4::Record* record, std::size_t i) {
+                return record != nullptr && i < record->subrecords.size() ? &record->subrecords[i] : nullptr;
+            };
+            const auto count = std::max(before ? before->subrecords.size() : 0, after ? after->subrecords.size() : 0);
+            nlohmann::json differs = nlohmann::json::array();
+            for (std::size_t i = 0; i < count; ++i) {
+                const auto* a = at(before, i);
+                const auto* b = at(after, i);
+                differs.push_back(a == nullptr || b == nullptr || a->signature != b->signature || a->data != b->data);
+            }
             return nlohmann::json(nlohmann::json{
                 {"FormKey", key.to_string()},
-                {"Before", subrecordRows(fo4::find_record(other, key))},
-                {"After", subrecordRows(fo4::find_record(loaded->plugin, key))}
+                {"Before", subrecordRows(before)},
+                {"After", subrecordRows(after)},
+                {"Differs", std::move(differs)}
             }.dump());
         }
         nlohmann::json rows = nlohmann::json::array();
