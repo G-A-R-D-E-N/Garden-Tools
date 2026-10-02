@@ -33,17 +33,16 @@ public static class SplineFormat
 
     public static int RotWidth(int format) => format switch
     {
-        0 => 4,
         1 => 5,
         2 => 6,
         5 => 16,
-        _ => 5,
+        _ => throw SplineQuat.Unsupported(format),
     };
 
     public static int RotAlign(int format) => format switch
     {
-        1 or 3 => 1,
-        2 or 4 => 2,
+        1 => 1,
+        2 => 2,
         _ => 4,
     };
 

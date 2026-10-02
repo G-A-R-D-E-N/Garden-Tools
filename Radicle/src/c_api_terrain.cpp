@@ -90,9 +90,9 @@ radicle_status radicle_texture_set_get_info(const radicle_env* env,
     const auto data = fo4::env::decode_texture_set(env->value, *to_ref(record));
     radicle_texture_set_info info{};
     for (std::size_t slot = 0; slot < 8; ++slot) {
-      info.textures[slot] = data.textures[slot] ? data.textures[slot]->data() : nullptr;
+      info.textures[slot] = stored_text(*env, data.textures[slot]);
     }
-    info.material = data.material ? data.material->data() : nullptr;
+    info.material = stored_text(*env, data.material);
     if (data.flags) {
       info.has_flags = 1;
       info.flags = *data.flags;
@@ -125,7 +125,7 @@ radicle_status radicle_env_landscape_texture_diffuse(const radicle_env* env,
     if (!key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "invalid FormKey");
     const auto path = fo4::env::landscape_texture_diffuse(env->value, *key);
     if (!path) return fail(RADICLE_STATUS_NOT_FOUND, "landscape texture has no diffuse path");
-    *out_path = path->data();
+    *out_path = stored_text(*env, *path);
     return RADICLE_STATUS_OK;
   });
 }

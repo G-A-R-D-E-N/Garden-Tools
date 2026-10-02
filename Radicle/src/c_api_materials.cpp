@@ -38,8 +38,8 @@ radicle_status radicle_material_swap_decode(const radicle_env* env,
     holder->data = fo4::env::decode_material_swap(env->value, *to_ref(record));
     for (const auto& s : holder->data) {
       radicle_material_substitution c{};
-      c.original_material = s.original_material.data();
-      c.replacement_material = s.replacement_material ? s.replacement_material->data() : nullptr;
+      c.original_material = stored_text(*env, s.original_material);
+      c.replacement_material = stored_text(*env, s.replacement_material);
       set_optional(s.color_remapping_index, c.has_color_remapping_index, c.color_remapping_index);
       holder->substitutions.push_back(c);
     }

@@ -92,7 +92,9 @@ radicle_status radicle_plugin_set_placed_editor_id(radicle_plugin* plugin,
   const auto key = to_form_key(reference);
   if (plugin == nullptr || !key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid reference are required");
   return run(plugin, "unknown exception while setting EditorID", [&](fo4::Plugin& next) {
-    return found(fo4::forms::set_placed_reference_editor_id(next, *key, editor_id == nullptr ? "" : editor_id));
+    const auto stored = fo4::text::utf8_to_windows1252(editor_id == nullptr ? "" : editor_id);
+    if (!stored) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "EditorID is not valid UTF-8 text representable in Windows-1252");
+    return found(fo4::forms::set_placed_reference_editor_id(next, *key, *stored));
   });
 }
 
@@ -110,7 +112,11 @@ radicle_status radicle_plugin_set_placed_comments(radicle_plugin* plugin, radicl
   const auto key = to_form_key(reference);
   if (plugin == nullptr || !key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid reference are required");
   return run(plugin, "unknown exception while setting comments", [&](fo4::Plugin& next) {
-    const auto value = comments == nullptr ? std::nullopt : std::optional<std::string_view>{comments};
+    const auto stored = comments == nullptr ? std::nullopt : fo4::text::utf8_to_windows1252(comments);
+    if (comments != nullptr && !stored) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "comments are not valid UTF-8 text representable in Windows-1252");
+    }
+    const auto value = stored ? std::optional<std::string_view>{*stored} : std::nullopt;
     return found(fo4::forms::set_placed_reference_comments(next, *key, value));
   });
 }
