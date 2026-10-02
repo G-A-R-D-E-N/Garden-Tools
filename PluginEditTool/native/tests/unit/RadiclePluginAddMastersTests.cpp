@@ -478,6 +478,20 @@ TEST_CASE("Native UpdateOnam stages a missing ONAM for a master-flagged plugin")
         fo4::test::end_record(out, record);
         fo4::test::end_group(out, group);
     };
+    const auto writeCellArrow = [](fo4::test::ByteWriter& out) {
+        const auto cells = fo4::test::begin_group(out, "CELL", 0);
+        const auto cell = fo4::test::begin_record(out, "CELL", 0, 0x00000801);
+        fo4::test::end_record(out, cell);
+        const auto children = fo4::test::begin_group(out, "CELL", 6);
+        out.patch_u32(children + 8, 0x00000801);
+        const auto temporary = fo4::test::begin_group(out, "CELL", 9);
+        out.patch_u32(temporary + 8, 0x00000801);
+        const auto arrow = fo4::test::begin_record(out, "PARW", 0, 0x00000802);
+        fo4::test::end_record(out, arrow);
+        fo4::test::end_group(out, temporary);
+        fo4::test::end_group(out, children);
+        fo4::test::end_group(out, cells);
+    };
     const auto header = [](fo4::test::ByteWriter& out, bool withMaster) {
         const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
         fo4::test::ByteWriter hedr;
@@ -497,10 +511,12 @@ TEST_CASE("Native UpdateOnam stages a missing ONAM for a master-flagged plugin")
     fo4::test::ByteWriter master;
     header(master, false);
     writeDial(master, 0x00000800);
+    writeCellArrow(master);
     writeBytes(masterPath, master.bytes);
     fo4::test::ByteWriter patch;
     header(patch, true);
     writeDial(patch, 0x00000800);
+    writeCellArrow(patch);
     writeBytes(patchPath, patch.bytes);
     writeBytes(root / "Target.esp", makeTarget());
 
@@ -518,12 +534,13 @@ TEST_CASE("Native UpdateOnam stages a missing ONAM for a master-flagged plugin")
     CHECK(notMaster == "Target.esp is not master-flagged; the game ignores ONAM there.");
 
     const auto staged = textResult(backend.updateOnam(nlohmann::json::array({"Patch.esm"})));
-    CHECK(staged == "Rebuilt ONAM in Patch.esm (1 override(s)). SavePlugin to persist.");
+    CHECK(staged == "Rebuilt ONAM in Patch.esm (2 override(s)). SavePlugin to persist.");
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esm"})).has_value());
     const auto saved = fo4::read_plugin_file(patchPath);
-    REQUIRE(saved.header.overrides.size() == 1);
+    REQUIRE(saved.header.overrides.size() == 2);
     CHECK(saved.header.overrides[0].value() == 0x00000800u);
+    CHECK(saved.header.overrides[1].value() == 0x00000802u);
 
     const auto again = textResult(backend.updateOnam(nlohmann::json::array({"Patch.esm"})));
     CHECK(again == "ONAM in Patch.esm is already up to date.");

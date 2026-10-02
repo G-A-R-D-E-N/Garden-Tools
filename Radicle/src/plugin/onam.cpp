@@ -38,7 +38,7 @@ bool participates_in_fo4_onam(Signature signature) {
          signature == Signature::from_string("PGRE") ||
          signature == Signature::from_string("PMIS") ||
          signature == Signature::from_string("ACHR") ||
-         signature == Signature::from_string("ACRE") ||
+         signature == Signature::from_string("PARW") ||
          signature == Signature::from_string("PBEA") ||
          signature == Signature::from_string("PFLA") ||
          signature == Signature::from_string("PCON") ||
