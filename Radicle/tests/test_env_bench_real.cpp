@@ -28,8 +28,17 @@ TEST(EnvBenchRealData, LoadsOfficialMasters) {
   RecordProperty("archives_ms", std::to_string(result.archives_ms));
   RecordProperty("strings_ms", std::to_string(result.strings_ms));
   RecordProperty("walk_ms", std::to_string(result.walk_ms));
+  RecordProperty("retained_file_bytes", std::to_string(result.retained_file_bytes));
+  RecordProperty("payload_bytes", std::to_string(result.payload_bytes));
+  RecordProperty("subrecord_bytes", std::to_string(result.subrecord_bytes));
+  RecordProperty("subrecords", std::to_string(result.subrecord_count));
+  RecordProperty("node_bytes", std::to_string(result.node_bytes));
 
   EXPECT_EQ(result.plugin_count, plugins.size());
   EXPECT_GT(result.plugin_bytes, 0u);
   EXPECT_GT(result.record_count, 0u);
+  EXPECT_EQ(result.retained_file_bytes, result.plugin_bytes);
+  EXPECT_GT(result.subrecord_count, result.record_count);
+  EXPECT_GT(result.subrecord_bytes, 0u);
+  EXPECT_EQ(result.payload_bytes, 0u);
 }

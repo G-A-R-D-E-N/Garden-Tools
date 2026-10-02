@@ -19,6 +19,7 @@ option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_BUILD_TESTS "Build Radicle tests" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_INSTALL "Generate Radicle install/export rules" ${PROJECT_IS_TOP_LEVEL})
+option(RADICLE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_custom_target(radicle_schema_check ALL
@@ -74,9 +75,9 @@ add_custom_target(radicle_condition_scope_schema_check ALL
 
 function(fo4_apply_warnings target)
   if(MSVC)
-    target_compile_options(${target} PRIVATE /W4 /permissive- /WX)
+    target_compile_options(${target} PRIVATE /W4 /permissive- $<$<BOOL:${RADICLE_WARNINGS_AS_ERRORS}>:/WX>)
   else()
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic $<$<BOOL:${RADICLE_WARNINGS_AS_ERRORS}>:-Werror>)
   endif()
 endfunction()
 
@@ -148,6 +149,7 @@ add_library(fo4
   src/environment/terrain.cpp
   src/environment/strings.cpp
   src/environment/base_records.cpp
+  src/environment/material_swap.cpp
 )
 
 if(TARGET radicle_schema_check)
@@ -175,7 +177,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -228,6 +230,14 @@ if(RADICLE_BUILD_TOOLS)
   target_link_libraries(radicle_env_bench PRIVATE fo4)
   fo4_apply_warnings(radicle_env_bench)
   fo4_apply_sanitizers(radicle_env_bench)
+  add_executable(radicle_parity_dump tools/parity/main.cpp)
+  target_include_directories(radicle_parity_dump PRIVATE tools)
+  target_link_libraries(radicle_parity_dump PRIVATE fo4)
+  fo4_apply_warnings(radicle_parity_dump)
+  add_executable(radicle_parity_writeback tools/parity/writeback.cpp)
+  target_include_directories(radicle_parity_writeback PRIVATE tools)
+  target_link_libraries(radicle_parity_writeback PRIVATE fo4 radicle_c)
+  fo4_apply_warnings(radicle_parity_writeback)
 endif()
 
 if(RADICLE_BUILD_TESTS)
@@ -348,8 +358,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
+    tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
     tests/test_env_bench_real.cpp
+    tests/test_parity_dds.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
@@ -377,12 +389,26 @@ if(RADICLE_BUILD_TESTS)
                      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/env_bench/unreadable_data_dir.cmake)
     set_tests_properties(radicle_env_bench_unreadable_data_dir PROPERTIES SKIP_REGULAR_EXPRESSION "skipped: ")
+    add_test(NAME radicle_parity_tools
+             COMMAND ${CMAKE_COMMAND} -DWRITEBACK=$<TARGET_FILE:radicle_parity_writeback>
+                     -DDUMP=$<TARGET_FILE:radicle_parity_dump>
+                     -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/parity_tools.cmake)
   endif()
 
   # C# bindings: the probe prints the C layout of every public struct for Radicle.Interop.Tests.
   add_executable(radicle_abi_layout_probe bindings/csharp/tests/abi_layout_probe.cpp)
   target_include_directories(radicle_abi_layout_probe PRIVATE include)
   fo4_apply_warnings(radicle_abi_layout_probe)
+
+  add_library(radicle_abi_stub SHARED bindings/csharp/tests/abi_stub.cpp)
+  target_include_directories(radicle_abi_stub PRIVATE include)
+  target_compile_definitions(radicle_abi_stub PRIVATE RADICLE_C_BUILD "RADICLE_ABI_STUB_VERSION=RADICLE_ABI_VERSION+1u")
+  # ABI 1 is the last generation without the material swap exports.
+  add_library(radicle_abi_stub_v1 SHARED bindings/csharp/tests/abi_stub.cpp)
+  target_include_directories(radicle_abi_stub_v1 PRIVATE include)
+  target_compile_definitions(radicle_abi_stub_v1 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=1u)
 
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(Python3_Interpreter_FOUND)
@@ -417,6 +443,6 @@ if(RADICLE_BUILD_TESTS)
              COMMAND ${DOTNET_EXECUTABLE} test ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/Radicle.Interop.Tests
                      --nologo -v q)
     set_tests_properties(radicle_csharp_bindings PROPERTIES
-      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>")
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
   endif()
 endif()

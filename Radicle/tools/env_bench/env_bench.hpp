@@ -19,6 +19,12 @@ struct EnvBenchResult {
   double archives_ms{0};
   double strings_ms{0};
   double walk_ms{0};
+  std::uintmax_t retained_file_bytes{0};
+  std::uintmax_t payload_bytes{0};
+  std::uintmax_t subrecord_bytes{0};
+  std::uintmax_t subrecord_count{0};
+  std::uintmax_t group_count{0};
+  std::uintmax_t node_bytes{0};
 };
 
 std::vector<std::filesystem::path> default_masters(const std::filesystem::path& data_dir);
