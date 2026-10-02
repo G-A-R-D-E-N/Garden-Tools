@@ -34,6 +34,7 @@ export interface Backend {
   CleanUnusedMasters(plugin: string, apply: boolean): Promise<string>;
   CheckForErrors(plugin: string, limit: number): Promise<string>;
   LootCleaningReport(plugin: string): Promise<string>;
+  UpdateOnam(plugin: string): Promise<string>;
   CopyAsDisabledOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
   ComparePluginTo(plugin: string, otherPath: string): Promise<string>;
   CheckEslEligibility(plugin: string): Promise<string>;

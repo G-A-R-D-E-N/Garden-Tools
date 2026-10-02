@@ -372,6 +372,14 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     } catch (e) { setStatus('Check failed: ' + errorText(e)); }
   };
 
+  const updateOnam = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    try { setStatus(await b.UpdateOnam(matrix.Plugins[col])); await onReload(); }
+    catch (e) { setStatus('ONAM update failed: ' + errorText(e)); }
+  };
+
   const lootReport = async (col: number) => {
     closeMenu();
     const b = back();
@@ -451,6 +459,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     compareTo,
     checkForErrors,
     lootReport,
+    updateOnam,
     copyAsDisabledOverrideInto,
     copyText,
     elementAction,
