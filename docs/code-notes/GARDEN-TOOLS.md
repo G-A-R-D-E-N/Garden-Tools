@@ -1080,7 +1080,7 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 
 **Shipped data.** Every placed reference in the seven official masters stores `XTEL` as 36 bytes, `XPRM` 32, `XOWN` 12, `XESP` 8, `XAPR` 8 and `XSCL` 4, all sizes these edits accept. No shipped `EDID` or `MNAM` on a placed reference has a byte above 0x7F.
 
-**String encoding.** The C++ setters store the bytes they are given. The C ABI setters (`radicle_plugin_set_placed_editor_id`, `radicle_plugin_set_placed_comments`) take UTF-8 and store Windows-1252 through `Radicle/src/text/encoding.cpp:utf8_to_windows1252`, returning `INVALID_ARGUMENT` for text Windows-1252 cannot hold; see the encoding boundary section below.
+**String encoding.** The C++ setters store the bytes they are given. The C ABI setters (`radicle_plugin_set_placed_editor_id`, `radicle_plugin_set_placed_comments`) take UTF-8 and store Windows-1252 through `Radicle/src/text/encoding.cpp:utf8_to_windows1252`, returning `INVALID_ARGUMENT` for text Windows-1252 cannot hold; see the encoding boundary section below. `set_placed_reference_comments` treats an empty string like `nullopt` and removes `MNAM`, as the contract above and `set_placed_reference_editor_id` already did: it used to write an `MNAM` holding one NUL, which reloads as an empty comment instead of none (GardenEngine's `ReferenceWriteback.Commit` passes null for blank comments, so it never sent `""`). Regression: `Radicle/tests/test_environment_ref_fields.cpp:EmptyCommentsRemoveMnamAndSurviveReload`, which failed before the fix through both the C++ and the C ABI path.
 
 ## Radicle/src/environment/base_records.cpp / c_api_base_records.cpp — GardenEngine #114 base-record getters
 

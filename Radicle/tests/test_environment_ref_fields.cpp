@@ -345,6 +345,23 @@ TEST_F(RefFieldsTest, NoCrimeWritesAWholeBoolByte) {
             (bytes({0x00, 0x11, 0x22, 0x33})));
 }
 
+TEST_F(RefFieldsTest, EmptyCommentsRemoveMnamAndSurviveReload) {
+  const auto refr = key("Master.esm", 0x821);
+  ASSERT_TRUE(fo4::forms::set_placed_reference_comments(patch_, refr, std::string_view{"note"}));
+  ASSERT_TRUE(fo4::forms::set_placed_reference_comments(patch_, refr, std::string_view{}));
+  EXPECT_EQ(find_sub(*fo4::find_record(patch_, refr), "MNAM"), nullptr);
+  ASSERT_TRUE(fo4::forms::set_placed_reference_comments(patch_, refr, std::string_view{"note"}));
+  const auto path = (root_ / "Patch.esp").string();
+  fo4::write_plugin_file(patch_, path);
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.c_str(), &patch), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_plugin_set_placed_comments(patch, {"Master.esm", 0x821}, ""), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_plugin_write_file(patch, path.c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(patch);
+  const auto reloaded = reload(fo4::read_plugin_file(path));
+  EXPECT_FALSE(fo4::env::decode_placed_reference(reloaded, *reloaded.winner(refr)).comments.has_value());
+}
+
 TEST_F(RefFieldsTest, CApiWritesTextAsWindows1252) {
   const auto path = (root_ / "Patch.esp").string();
   fo4::write_plugin_file(patch_, path);
