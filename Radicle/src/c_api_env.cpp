@@ -177,7 +177,8 @@ radicle_status radicle_env_find_editor_id(const radicle_env* env,
       if (!filter) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "signature must be four characters");
     }
     const auto stored = fo4::text::utf8_to_windows1252(editor_id);
-    const auto* ref = stored ? env->value.find_by_editor_id(*stored, filter) : nullptr;
+    if (!stored) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "EditorID is not valid UTF-8 text representable in Windows-1252");
+    const auto* ref = env->value.find_by_editor_id(*stored, filter);
     if (ref == nullptr) return fail(RADICLE_STATUS_NOT_FOUND, "EditorID is not in the load order");
     *out_record = to_handle(ref);
     return RADICLE_STATUS_OK;

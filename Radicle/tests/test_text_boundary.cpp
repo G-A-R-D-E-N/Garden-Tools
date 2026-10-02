@@ -188,6 +188,9 @@ TEST_F(TextBoundaryTest, CApiTextIsUtf8) {
 
   const radicle_record* found = nullptr;
   ASSERT_EQ(radicle_env_find_editor_id(env, "CAF\xC3\x89", nullptr, &found), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_env_find_editor_id(env, "\xD0\xB6", nullptr, &found), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_find_editor_id(env, "CAF\xC3", nullptr, &found), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(found, nullptr);
 
   const radicle_record* light = nullptr;
   ASSERT_EQ(radicle_env_winner(env, {k_cafe_esm.c_str(), 0x801}, &light), RADICLE_STATUS_OK);
