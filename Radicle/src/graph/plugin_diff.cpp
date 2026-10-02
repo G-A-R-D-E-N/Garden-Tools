@@ -1,5 +1,6 @@
 #include "fo4/graph/plugin_diff.hpp"
 
+#include "fo4/plugin/placement.hpp"
 #include "fo4/plugin/reader.hpp"
 
 #include <algorithm>
@@ -49,6 +50,7 @@ RecordDiff make_diff(const Record& record, RecordChange change) {
                     .signature = record.header.signature,
                     .change = change,
                     .header_changed = false,
+                    .placement_changed = false,
                     .changed_subrecords = {}};
 }
 
@@ -82,6 +84,8 @@ RecordDiff compare(const Record& before, const Record& after) {
 std::vector<RecordDiff> diff_plugins(const Plugin& before, const Plugin& after) {
   const auto old_records = index_records(before);
   const auto new_records = index_records(after);
+  const auto old_places = record_placements(before);
+  const auto new_places = record_placements(after);
   std::vector<RecordDiff> out;
   for (const auto& [key, record] : new_records) {
     const auto old = old_records.find(key);
@@ -90,7 +94,14 @@ std::vector<RecordDiff> diff_plugins(const Plugin& before, const Plugin& after) 
       continue;
     }
     auto diff = compare(*old->second, *record);
-    if (diff.header_changed || !diff.changed_subrecords.empty()) out.push_back(std::move(diff));
+    const auto old_place = old_places.find(key);
+    const auto new_place = new_places.find(key);
+    diff.placement_changed = (old_place == old_places.end()) != (new_place == new_places.end()) ||
+                             (old_place != old_places.end() && new_place != new_places.end() &&
+                              old_place->second != new_place->second);
+    if (diff.header_changed || diff.placement_changed || !diff.changed_subrecords.empty()) {
+      out.push_back(std::move(diff));
+    }
   }
   for (const auto& [key, record] : old_records) {
     if (!new_records.contains(key)) {

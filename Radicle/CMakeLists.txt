@@ -131,6 +131,7 @@ add_library(fo4
   src/plugin/mutation.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
+  src/plugin/placement.cpp
   src/plugin/onam.cpp
   src/plugin/writer.cpp
   src/schema/condition_scopes.cpp

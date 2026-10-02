@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <string_view>
 #include <map>
 #include <optional>
 #include <set>
@@ -86,6 +87,7 @@ struct FindingSink {
 };
 
 constexpr std::uint32_t k_first_non_hardcoded_id = 0x800;
+constexpr std::string_view k_game_master = "Fallout4.esm";
 
 void check_links(const Plugin& plugin,
                  const std::map<FormKey, Signature>& record_signatures,
@@ -94,7 +96,7 @@ void check_links(const Plugin& plugin,
                  FindingSink& sink) {
   for (const auto& hit : collect_form_links(plugin)) {
     if (sink.full()) return;
-    if (hit.raw.is_null()) continue;
+    if (hit.raw.is_null() || hit.raw.is_none()) continue;
 
     CheckFinding finding;
     finding.plugin = plugin.key;
@@ -249,8 +251,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
 
   const auto winners = winning_records(load_order);
   FindingSink sink{options.limit, {}};
-  const PluginKey game_master =
-      !load_order.empty() && load_order.front() != nullptr ? load_order.front()->key : PluginKey{};
+  const auto game_master = PluginKey::from_filename(k_game_master);
 
   for (const auto* plugin : load_order) {
     if (plugin == nullptr || !selected(plugin->key)) continue;
