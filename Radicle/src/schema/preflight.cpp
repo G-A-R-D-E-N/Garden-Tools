@@ -181,14 +181,16 @@ std::vector<PreflightIssue> preflight_record(const Record& record) {
     std::size_t ordinal = 0;
     for (const auto& subrecord : record.subrecords) {
       if (subrecord.signature != descriptor.subrecord) continue;
-      if (subrecord.data.size() != 4) {
+      const bool packed = descriptor.storage == FormLinkListStorage::packed_array;
+      if (packed ? subrecord.data.size() % 4 != 0 : subrecord.data.size() != 4) {
         issues.push_back(field_issue(
             record,
             std::string(descriptor.path) + "[" + std::to_string(ordinal) + "]",
             "invalid_formlink_list_storage",
             descriptor.record.to_string() + " " +
                 descriptor.subrecord.to_string() +
-                " FormLink list element must be exactly four bytes",
+                (packed ? " packed FormLink list must be a multiple of four bytes"
+                        : " FormLink list element must be exactly four bytes"),
             PreflightSeverity::error));
       }
       ++ordinal;

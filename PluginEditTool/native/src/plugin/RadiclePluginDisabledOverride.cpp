@@ -9,7 +9,6 @@
 namespace fo4ide::plugin {
 namespace {
 
-// source:Core/wbDefinitionsFO4.pas (dev-4.1.6) record flag bit 11 'Initially Disabled'; must match RadiclePluginMaintenance.cpp.
 constexpr std::uint32_t kCopyInitiallyDisabled = 0x00000800u;
 
 }  // namespace

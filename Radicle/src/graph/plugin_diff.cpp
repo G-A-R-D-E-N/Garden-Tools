@@ -26,8 +26,34 @@ bool same_payloads(const std::vector<const std::vector<std::byte>*>& a,
                     [](const auto* x, const auto* y) { return *x == *y; });
 }
 
+bool same_subrecord(const Subrecord& a, const Subrecord& b) {
+  return a.signature == b.signature && a.data == b.data;
+}
+
+void add_reordered(const Record& before, const Record& after, std::vector<Signature>& out) {
+  const auto& a = before.subrecords;
+  const auto& b = after.subrecords;
+  std::size_t head = 0;
+  while (head < a.size() && head < b.size() && same_subrecord(a[head], b[head])) ++head;
+  std::size_t tail = 0;
+  while (tail < a.size() - head && tail < b.size() - head &&
+         same_subrecord(a[a.size() - 1 - tail], b[b.size() - 1 - tail])) {
+    ++tail;
+  }
+  for (std::size_t i = head; i < a.size() - tail; ++i) out.push_back(a[i].signature);
+  for (std::size_t i = head; i < b.size() - tail; ++i) out.push_back(b[i].signature);
+}
+
+RecordDiff make_diff(const Record& record, RecordChange change) {
+  return RecordDiff{.key = record.form_key,
+                    .signature = record.header.signature,
+                    .change = change,
+                    .header_changed = false,
+                    .changed_subrecords = {}};
+}
+
 RecordDiff compare(const Record& before, const Record& after) {
-  RecordDiff diff{after.form_key, after.header.signature, RecordChange::changed};
+  auto diff = make_diff(after, RecordChange::changed);
   constexpr auto ignored = RecordFlags::compressed;
   diff.header_changed = before.header.signature != after.header.signature ||
                         (before.header.flags.value() & ~ignored) !=
@@ -43,7 +69,11 @@ RecordDiff compare(const Record& before, const Record& after) {
   for (const auto& [signature, payloads] : old_subs) {
     if (!new_subs.contains(signature)) diff.changed_subrecords.push_back(signature);
   }
+  if (diff.changed_subrecords.empty()) add_reordered(before, after, diff.changed_subrecords);
   std::sort(diff.changed_subrecords.begin(), diff.changed_subrecords.end());
+  diff.changed_subrecords.erase(
+      std::unique(diff.changed_subrecords.begin(), diff.changed_subrecords.end()),
+      diff.changed_subrecords.end());
   return diff;
 }
 
@@ -56,7 +86,7 @@ std::vector<RecordDiff> diff_plugins(const Plugin& before, const Plugin& after) 
   for (const auto& [key, record] : new_records) {
     const auto old = old_records.find(key);
     if (old == old_records.end()) {
-      out.push_back({key, record->header.signature, RecordChange::added});
+      out.push_back(make_diff(*record, RecordChange::added));
       continue;
     }
     auto diff = compare(*old->second, *record);
@@ -64,7 +94,7 @@ std::vector<RecordDiff> diff_plugins(const Plugin& before, const Plugin& after) 
   }
   for (const auto& [key, record] : old_records) {
     if (!new_records.contains(key)) {
-      out.push_back({key, record->header.signature, RecordChange::removed});
+      out.push_back(make_diff(*record, RecordChange::removed));
     }
   }
   return out;

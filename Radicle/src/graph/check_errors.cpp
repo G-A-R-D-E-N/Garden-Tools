@@ -6,6 +6,7 @@
 #include "fo4/schema/preflight.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <set>
@@ -56,7 +57,6 @@ std::optional<SlotTargets> slot_targets(Signature record,
   }
   for (const auto& list : schema::k_generated_formlink_lists) {
     if (list.record != record || list.subrecord != subrecord) continue;
-    // source:formlink_lists.cpp packed_element_count, per-subrecord slots sit at offset 0 and packed elements every 4 bytes.
     const bool slot_matches = list.storage == schema::FormLinkListStorage::per_subrecord
                                   ? offset == 0
                                   : offset % 4 == 0;
@@ -85,9 +85,12 @@ struct FindingSink {
   }
 };
 
+constexpr std::uint32_t k_first_non_hardcoded_id = 0x800;
+
 void check_links(const Plugin& plugin,
                  const std::map<FormKey, Signature>& record_signatures,
                  const std::map<FormKey, WinnerInfo>& winners,
+                 const PluginKey& game_master,
                  FindingSink& sink) {
   for (const auto& hit : collect_form_links(plugin)) {
     if (sink.full()) return;
@@ -100,17 +103,19 @@ void check_links(const Plugin& plugin,
     finding.offset = hit.offset;
     finding.target = hit.key;
 
-    if (hit.key.owner().filename().empty() ||
-        hit.raw.index_byte() > plugin.header.masters.size()) {
+    if (hit.key.owner().filename().empty()) {
       finding.code = CheckCode::invalid_master_index;
       finding.severity = CheckSeverity::warning;
-      finding.message = hit.subrecord.to_string() +
-                        " holds a form ID whose master index has no MAST entry; the game reads it as this plugin's";
+      finding.message = hit.subrecord.to_string() + " holds a form ID that does not resolve to any plugin";
       sink.add(std::move(finding));
       continue;
     }
 
     const auto target = winners.find(hit.key);
+    if (target == winners.end() && hit.key.owner() == game_master &&
+        hit.key.local().value() < k_first_non_hardcoded_id) {
+      continue;
+    }
     if (target == winners.end()) {
       finding.code = CheckCode::unresolved_link;
       finding.severity = CheckSeverity::error;
@@ -242,6 +247,8 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
 
   const auto winners = winning_records(load_order);
   FindingSink sink{options.limit, {}};
+  const PluginKey game_master =
+      !load_order.empty() && load_order.front() != nullptr ? load_order.front()->key : PluginKey{};
 
   for (const auto* plugin : load_order) {
     if (plugin == nullptr || !selected(plugin->key)) continue;
@@ -249,7 +256,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     for (const auto* record : collect_records(*plugin)) {
       record_signatures[record->form_key] = record->header.signature;
     }
-    check_links(*plugin, record_signatures, winners, sink);
+    check_links(*plugin, record_signatures, winners, game_master, sink);
     check_preflight(*plugin, sink);
   }
 

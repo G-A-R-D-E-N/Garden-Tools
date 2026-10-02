@@ -1300,7 +1300,7 @@ Reads the comparison file read-only and never adds it to `plugins_`, so it canno
 
 ## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RemoveIdenticalToMaster
 
-ITM detection now calls `Radicle/src/plugin/maintenance.cpp:fo4::find_identical_to_master` (#360). The old `previousVersionNormalizesEqual` copied the whole plugin and rescanned every link of the earlier plugin (`copy_record_as_override`) for each candidate record. The Radicle version remaps only the earlier record into the current plugin's master context and compares flags and subrecords in order, with the same verdicts. The "checked" count still counts top-level records with an owner.
+ITM detection now calls `Radicle/src/plugin/maintenance.cpp:fo4::find_identical_to_master` (#360). The old `previousVersionNormalizesEqual` copied the whole plugin and rescanned every link of the earlier plugin (`copy_record_as_override`) for each candidate record. The Radicle version remaps only the earlier record into the current plugin's master context and compares flags and subrecords in order, with the same verdicts. Detection and removal cover nested records (REFR/ACHR in cell children, INFO in topic children, world children) through `fo4::remove_records`; see `Radicle/docs/code-notes/Radicle.md` on `find_identical_to_master`. The "checked" count is every record with an owner, nested ones included. Main only scanned and erased records directly under top-level groups, so it missed nested ITMs and could report an ITM CELL whose references differ.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::checkForErrors
 
@@ -1312,4 +1312,4 @@ Produces a LOOT masterlist entry (`dirty:` or `clean:` cleaning data: `crc`, `ut
 
 ## PluginEditTool/native/src/plugin/RadiclePluginDisabledOverride.cpp:RadiclePluginBackend::copyAsDisabledOverride
 
-xEdit "Copy as disabled override" is copy-as-override plus Initially Disabled (record flag `0x800`) on the copy only. Evidence is in `PluginEditTool/docs/xedit-copy-workflows.md`. The `LOSES:`/`EXISTS:` prompt results from `copyAsOverride` are returned unchanged, so an override that already existed in the target is never flagged.
+xEdit "Copy as disabled override" is copy-as-override plus Initially Disabled (record flag `0x800`) on the copy only. Evidence is in `PluginEditTool/docs/xedit-copy-workflows.md`. The `LOSES:`/`EXISTS:` prompt results from `copyAsOverride` are returned unchanged, so an override that already existed in the target is never flagged. `kInitiallyDisabled` is bit 11 (`0x800`) of the record flags in xEdit `Core/wbDefinitionsFO4.pas` (`dev-4.1.6`, "Initially Disabled") and must stay equal to the constant in `RadiclePluginMaintenance.cpp`.

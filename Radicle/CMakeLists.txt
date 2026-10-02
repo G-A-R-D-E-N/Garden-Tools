@@ -352,6 +352,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_master_usage.cpp
     tests/test_plugin_diff.cpp
     tests/test_maintenance.cpp
+    tests/test_maintenance_nested.cpp
     tests/test_ba2.cpp
     tests/test_ba2_hardening.cpp
     tests/test_ba2_texture.cpp
