@@ -30,4 +30,15 @@ std::size_t remove_records(Plugin& plugin, std::span<const FormKey> keys);
 
 DeletedRecordCounts count_deleted_records(const Plugin& plugin);
 
+struct EslEligibility {
+  std::size_t native_records{0};
+  std::size_t out_of_range{0};
+  std::size_t capacity{0xFFE};
+
+  [[nodiscard]] bool ids_fit_light_range() const noexcept { return out_of_range == 0; }
+  [[nodiscard]] bool can_fit() const noexcept { return native_records <= capacity; }
+};
+
+EslEligibility esl_eligibility(const Plugin& plugin);
+
 }  // namespace fo4

@@ -138,9 +138,13 @@ bool erase_record(Group& group, const FormKey& record_key) {
 
 }  // namespace
 
+bool allows_hardcoded_range(const Plugin& plugin) {
+  return plugin.header.version >= 1.0f && !plugin.header.masters.empty();
+}
+
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin) {
   if (plugin.header.tes4_flags.is_small_file()) {
-    return {k_first_light_local_id, k_light_local_mask};
+    return {allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id, k_light_local_mask};
   }
   return {k_first_full_local_id, k_full_local_mask};
 }
