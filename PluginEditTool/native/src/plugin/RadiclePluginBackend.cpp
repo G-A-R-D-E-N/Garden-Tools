@@ -286,6 +286,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 
     const auto loadedCount = loaded.size();
     {
+        OpLock lock(*this, OpLock::Mode::Lifecycle);
         // Capture the Save-As roots from this trusted snapshot once. They
         // stay fixed until the next LoadMo2; OpenPlugin can never add to or
         // move them.
@@ -301,7 +302,6 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             if (rootEc || root.empty()) continue;  // fail closed: no root
             if (uniqueRoots.insert(root).second) roots.push_back(root);
         }
-        OpLock lock(*this, OpLock::Mode::Lifecycle);
         const bool consentStale = mutationEpoch_ != consentEpoch;
         const auto pendingList = dirtyPluginListLocked();
         if (consentStale || (!discardPending && !pendingList.empty())) {
