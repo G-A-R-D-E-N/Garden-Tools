@@ -7,6 +7,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/plugin_key.hpp"
+#include "fo4/text/encoding.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -119,6 +120,14 @@ protected:
 TEST(TextBoundary, PluginKeysIgnoreNonAsciiCase) {
   EXPECT_EQ(fo4::PluginKey::from_filename("\xC3\x89gout.esp"), fo4::PluginKey::from_filename("\xC3\xA9gout.esp"));
   EXPECT_FALSE(fo4::PluginKey::from_filename("\xC3\x89gout.esp") < fo4::PluginKey::from_filename("\xC3\xA9gout.esp"));
+}
+
+TEST(TextBoundary, FoldMatchesDotnetOrdinalIgnoreCase) {
+  EXPECT_FALSE(fo4::text::equals_folded("\xC4\xB1", "I"));
+  EXPECT_FALSE(fo4::text::equals_folded("\xC5\xBF", "s"));
+  EXPECT_TRUE(fo4::text::equals_folded("\xE1\xBE\x80", "\xE1\xBE\x88"));
+  EXPECT_TRUE(fo4::text::equals_folded("\xF0\x90\x90\x80", "\xF0\x90\x90\xA8"));
+  EXPECT_EQ(fo4::text::hash_folded("\xF0\x90\x90\x80"), fo4::text::hash_folded("\xF0\x90\x90\xA8"));
 }
 
 TEST(TextBoundary, MasterNamesAreWrittenAsWindows1252) {
