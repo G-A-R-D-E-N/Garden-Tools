@@ -1,4 +1,6 @@
 #include "fo4/schema/form_links.hpp"
+
+#include "non_formid_slots.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 
 #include "fo4/plugin/reader.hpp"
@@ -568,7 +570,8 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     return;
   }
-  if (is_listed_formid_signature(sub.signature) && sub.data.size() == 4) {
+  if (is_listed_formid_signature(sub.signature) && sub.data.size() == 4 &&
+      !schema::corpus_non_formid_slot(record, sub)) {
     fn(0);
     return;
   }
