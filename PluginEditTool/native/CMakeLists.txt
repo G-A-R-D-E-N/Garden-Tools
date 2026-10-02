@@ -21,6 +21,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(Dependencies)
 include(CompilerWarnings)
 include(Sanitizers)
+include(Utf8CodePage)
 
 # The cell geometry batch runs niftool over many meshes on a bounded worker
 # pool, so the app library uses std::thread (needs pthreads on POSIX).

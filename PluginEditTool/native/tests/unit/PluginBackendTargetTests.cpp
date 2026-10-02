@@ -7,7 +7,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4ide/app/PluginBackendTarget.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
+
+#include "../../src/app/ServiceTargetSupport.hpp"
 
 namespace {
 
@@ -220,6 +223,19 @@ TEST_CASE("Legacy ResolveConflict maps to copy-as-override without forced overwr
     CHECK(backend.invokedBackendArguments[1] == "000800:Base.esp");
     CHECK(backend.invokedBackendArguments[2] == "Patch.esp");
     CHECK(backend.invokedBackendArguments[3] == false);
+}
+
+TEST_CASE("Legacy ResolveConflict forwards an explicit allow-losing opt-in") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto result = target.invoke(
+        "ResolveConflict",
+        nlohmann::json::array({"000800:Base.esp", "Winner.esp", "Patch.esp", true}));
+    REQUIRE(result.has_value());
+    REQUIRE(backend.invokedBackendArguments.size() == 5);
+    CHECK(backend.invokedBackendArguments[3] == false);
+    CHECK(backend.invokedBackendArguments[4] == true);
 }
 
 TEST_CASE("Native copy workflows create a missing target before mutation") {
@@ -469,4 +485,36 @@ TEST_CASE("Cell GetPlugins reuses the native environment plugin list") {
     REQUIRE(plugins.size() == 1);
     CHECK(plugins[0].at("Key") == "Patch.esp");
     CHECK(backend.invokedOperation == "appInterop.GetPlugins");
+}
+
+TEST_CASE("JSON int helpers refuse or saturate values outside int") {
+    using fo4ide::core::jsonInt;
+    using fo4ide::core::jsonIntSaturated;
+    CHECK(jsonInt(nlohmann::json(-2147483648LL)) == -2147483647 - 1);
+    CHECK_FALSE(jsonInt(nlohmann::json(4294967263ULL)).has_value());
+    CHECK_FALSE(jsonInt(nlohmann::json(-2147483649LL)).has_value());
+    CHECK_FALSE(jsonInt(nlohmann::json(1.0)).has_value());
+    CHECK_FALSE(jsonInt(nlohmann::json(true)).has_value());
+    CHECK(jsonIntSaturated(nlohmann::json(18446744073709551615ULL)) == 2147483647);
+    CHECK(jsonIntSaturated(nlohmann::json(-9223372036854775807LL - 1)) == -2147483647 - 1);
+    CHECK(jsonIntSaturated(nlohmann::json(42)) == 42);
+}
+
+TEST_CASE("Service number arguments truncate in-range floats and refuse the rest") {
+    using fo4ide::app::support::intNumberArgument;
+    const auto args = nlohmann::json::array({12.9, 1e20, -1e20, 7, 4294967297ULL, "3"});
+    CHECK(intNumberArgument(args, 0, -1) == 12);
+    CHECK(intNumberArgument(args, 1, -1) == -1);
+    CHECK(intNumberArgument(args, 2, -1) == -1);
+    CHECK(intNumberArgument(args, 3, -1) == 7);
+    CHECK(intNumberArgument(args, 4, -1) == -1);
+    CHECK(intNumberArgument(args, 5, -1) == -1);
+    CHECK(intNumberArgument(nlohmann::json::array(), 0, -1) == -1);
+    CHECK(intNumberArgument(args, 1, -1, true) == 2147483647);
+    CHECK(intNumberArgument(args, 2, -1, true) == -2147483647 - 1);
+    CHECK(intNumberArgument(args, 4, -1, true) == 2147483647);
+    CHECK(intNumberArgument(args, 0, -1, true) == 12);
+    CHECK(intNumberArgument(nlohmann::json::array({-2147483648.5}), 0, -1) == -2147483647 - 1);
+    CHECK(intNumberArgument(nlohmann::json::array({2147483647.5}), 0, -1) == 2147483647);
+    CHECK(intNumberArgument(nlohmann::json::array({2147483648.0}), 0, -1) == -1);
 }

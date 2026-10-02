@@ -42,7 +42,7 @@ import type {
   AppInterop, ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
 } from './backend';
 import type { RecordTab } from './RecordView';
-import { errorMessage } from './errors';
+import { errorMessage, errorText } from './errors';
 import ExplorerTree, { type RecordNode } from './Shell/ExplorerTree';
 
 export default function MainShell() {
@@ -194,8 +194,7 @@ export default function MainShell() {
 
   const [aiHighlightField, setAiHighlightField] = useState('');
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-
+  const [aiHighlightSeq, setAiHighlightSeq] = useState(0);
 
   const openRecordRef = useRef(openRecord);
   const reloadMatrixRef = useRef<() => Promise<void>>(async () => {});
@@ -275,8 +274,6 @@ export default function MainShell() {
     };
     window.addEventListener('unhandledrejection', handleRejection);
 
-
-
     const onMessage = (e: MessageEvent) => {
       const data = (typeof e.data === 'string' ? JSON.parse(e.data) : e.data) as HostMessage | null;
       if (!data || !data.Type) return;
@@ -293,13 +290,13 @@ export default function MainShell() {
           if (cur && cur.matrix.FormKey === ev.Record) {
             reloadMatrixRef.current();
           } else {
-
             openByFormKeyRef.current(ev.Record, ev.Plugin);
           }
 
           if (ev.Field) {
             if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
             setAiHighlightField(ev.Field);
+            setAiHighlightSeq(s => s + 1);
             setRecordTab('grid');
             highlightTimerRef.current = setTimeout(() => setAiHighlightField(''), 3000);
           }
@@ -524,7 +521,7 @@ export default function MainShell() {
 
   const loadConflicts = () => window.chrome?.webview?.hostObjects?.backend?.GetConflicts()
     .then(raw => setConflicts(JSON.parse(raw)))
-    .catch(e => { setErrorStr(errorMessage(e) ?? String(e)); setConflicts([]); });
+    .catch(e => { setErrorStr(errorText(e)); setConflicts([]); });
 
 
   useEffect(() => {
@@ -548,11 +545,12 @@ export default function MainShell() {
     setConflictBusy(true);
     try {
       const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
-      let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, false));
+      let overwrite = false;
+      let allowLosing = false;
+      let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
       if (res.requiresOverwrite) {
-        const existing = Array.isArray(res.existing) ? res.existing : [];
-        const sample = existing.slice(0, 5)
-          .map((x: any) => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
+        const existing: { formKey: string; editorId?: string }[] = Array.isArray(res.existing) ? res.existing : [];
+        const sample = existing.slice(0, 5).map(x => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
         const more = existing.length > 5 ? `\n...and ${existing.length - 5} more.` : '';
         const proceed = await askConfirm({
           title: 'Overwrite existing overrides?',
@@ -565,7 +563,28 @@ export default function MainShell() {
           setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
           return;
         }
-        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, true));
+        overwrite = true;
+        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
+      }
+      if (res.requiresLoadOrderConfirmation) {
+        const losing: { formKey: string; loadsAfter?: string[] }[] =
+          Array.isArray(res.losing) ? res.losing : [];
+        const sample = losing.slice(0, 5)
+          .map(x => `${x.formKey} (loses to ${(x.loadsAfter ?? []).join(', ')})`).join('\n');
+        const more = losing.length > 5 ? `\n...and ${losing.length - 5} more.` : '';
+        const proceed = await askConfirm({
+          title: 'Overrides will not win',
+          message: `${patch} loads before other plugins that override ${losing.length} of the ` +
+            `${res.total} selected records, so those copies will lose until ${patch} loads after them. ` +
+            `Nothing has been copied yet.\n\n${sample}${more}`,
+          confirmLabel: 'Copy anyway',
+        });
+        if (!proceed) {
+          setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
+          return;
+        }
+        allowLosing = true;
+        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
       }
       const firstFailure = Array.isArray(res.failures) && res.failures.length ? res.failures[0]?.reason : '';
       const failureNote = res.failed
@@ -952,6 +971,7 @@ export default function MainShell() {
                   activeTab={recordTab}
                   onTabChange={setRecordTab}
                   highlightField={aiHighlightField}
+                  highlightSeq={aiHighlightSeq}
                   onPluginsChanged={() => { void refreshPlugins(); }}
                 />
               ) : (

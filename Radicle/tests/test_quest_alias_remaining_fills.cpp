@@ -136,6 +136,25 @@ TEST(QuestAliasRemainingFills, CreateReferenceRoundTripsMasterObjectAndALCA) {
   EXPECT_EQ(raw[6].signature.to_string(), "ALED");
 }
 
+TEST(QuestAliasRemainingFills, CreateReferenceRoundTripsTheNoneLevel) {
+  auto plugin = fo4::read_plugin(empty_quest_plugin(), "Patch.esp");
+  const auto quest = fo4::FormKey::parse("000800:Patch.esp");
+  auto creation = reference_alias(1);
+  creation.fill = fo4::forms::QuestCreateReferenceFill{
+      .object = std::nullopt,
+      .alias = 0,
+      .create_mode = 0,
+      .level = 4,
+  };
+  fo4::forms::add_quest_alias(plugin, quest, creation);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto aliases = fo4::forms::decode_quest_aliases(reread, quest);
+  ASSERT_EQ(aliases.aliases.size(), 1u);
+  const auto* fill = std::get_if<fo4::forms::QuestCreateReferenceFill>(&aliases.aliases[0].fill);
+  ASSERT_NE(fill, nullptr);
+  EXPECT_EQ(fill->level, 4u);
+}
+
 TEST(QuestAliasRemainingFills, MatchingReferenceSelectorsRoundTripDistinctly) {
   auto plugin = fo4::read_plugin(empty_quest_plugin(), "Patch.esp");
   const auto quest = fo4::FormKey::parse("000800:Patch.esp");
@@ -229,7 +248,7 @@ TEST(QuestAliasRemainingFills, RejectsInvalidAuthoredEnumsAndMixedMatchingSelect
       .object = std::nullopt,
       .alias = 0,
       .create_mode = 0,
-      .level = 4,
+      .level = 5,
   };
   EXPECT_THROW(
       static_cast<void>(fo4::forms::encode_quest_alias(plugin, create)),

@@ -111,7 +111,7 @@ struct Cleanup {
 
 const nlohmann::json* field(const nlohmann::json& document, std::string_view name) {
     for (const auto& row : document.at("fields")) {
-        if (row.at("name") == name) return &row;
+        if (row.at("name").get_ref<const std::string&>() == name) return &row;
     }
     return nullptr;
 }

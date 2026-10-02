@@ -1,4 +1,5 @@
 #include <fo4ide/app/PluginBackendTarget.hpp>
+#include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
 #include <charconv>
@@ -21,8 +22,8 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
 }
 
 int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_number_integer()) return fallback;
-    return args[index].get<int>();
+    if (!args.is_array() || index >= args.size()) return fallback;
+    return core::jsonIntSaturated(args[index]).value_or(fallback);
 }
 
 bool boolArgument(const nlohmann::json& args, std::size_t index, bool fallback = false) {
@@ -356,14 +357,14 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "ResolveConflict") {
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
-            auto operation = backend_.invokeBackend(
-                "CopyAsOverride",
-                nlohmann::json::array({
-                    stringArgument(args, 1),
-                    stringArgument(args, 0),
-                    ensured->name,
-                    false
-                }));
+            auto copyArgs = nlohmann::json::array({
+                stringArgument(args, 1),
+                stringArgument(args, 0),
+                ensured->name,
+                false
+            });
+            if (args.is_array() && args.size() > 3) copyArgs.push_back(args[3]);
+            auto operation = backend_.invokeBackend("CopyAsOverride", copyArgs);
             return finishAutoCreatedTarget(
                 backend_, *ensured, std::move(operation), "Copied ", "Replaced ");
         }

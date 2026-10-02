@@ -54,8 +54,10 @@ Every record keeps:
 - parsed `Subrecord` list (including unknown signatures)
 - an `OriginalByteRange` covering the on-disk header + payload
 
-Compressed records also keep `decompressed_payload`. The original compressed
-bytes stay in the plugin source and are addressed through the record range.
+Compressed records are inflated once while parsing and the inflated buffer is
+dropped after the subrecords are copied out; `decompressed_payload` stays empty.
+The original compressed bytes stay in the plugin source and are addressed
+through the record range.
 
 Unknown data is never dropped. If a field's meaning is uncertain, it stays in the raw subrecord bytes and is listed in `OPEN_QUESTIONS.md`.
 
