@@ -87,9 +87,10 @@ public static class SplineQuat
     {
         switch (format)
         {
+            case 1: Write40(q, into, at); break;
             case 2: Write48(q, into, at); break;
             case 5: WritePlain(q, into, at); break;
-            default: Write40(q, into, at); break;
+            default: throw Unsupported(format);
         }
     }
 
@@ -143,10 +144,14 @@ public static class SplineQuat
 
     public static Quaternion Read(int format, byte[] from, int at) => format switch
     {
+        1 => Read40(from, at),
         2 => Read48(from, at),
         5 => ReadPlain(from, at),
-        _ => Read40(from, at),
+        _ => throw Unsupported(format),
     };
+
+    internal static NotSupportedException Unsupported(int format) =>
+        new($"spline rotation quantization {format} is not supported (only 1, 2 and 5 are)");
 
     public static float AngleBetween(Quaternion a, Quaternion b)
     {

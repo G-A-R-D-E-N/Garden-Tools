@@ -403,6 +403,7 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "backend.GetProblems") return getProblems(arguments);
     if (operation == "backend.GetDependencies") return getDependencies(arguments);
     if (operation == "backend.GetHistory") return getHistory(arguments);
+    if (operation == "backend.GetPluginWorklist") return getPluginWorklist(arguments);
     if (operation == "masters.GetPlugins") return getEditablePlugins();
     if (operation == "masters.List") return listMasters(arguments);
     if (operation == "masters.Reorder") return reorderMasters(arguments);

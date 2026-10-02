@@ -1,11 +1,13 @@
 #pragma once
 
+#include "fo4/formid.hpp"
 #include "fo4/signature.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace fo4 {
@@ -63,5 +65,38 @@ struct QuestVmadLayout {
 };
 
 QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data);
+
+struct VmadProperty {
+  std::string name;
+  std::uint8_t type{0};
+  std::uint8_t flags{0};
+  std::optional<RawFormId> object;
+  std::optional<std::int16_t> alias;
+  std::optional<std::string> text;
+  std::optional<std::int32_t> integer;
+  std::optional<float> real;
+  std::optional<bool> boolean;
+  // Leading u32 count of struct and array properties.
+  std::optional<std::uint32_t> element_count;
+};
+
+struct VmadScript {
+  std::string name;
+  std::uint8_t flags{0};
+  std::vector<VmadProperty> properties;
+};
+
+struct VmadScripts {
+  std::int16_t version{0};
+  std::int16_t object_format{0};
+  std::vector<VmadScript> scripts;
+  // A Variable (6/16) property stops decoding; scripts up to that property are kept.
+  bool unsupported{false};
+  // Bytes after the script list, e.g. record-specific fragment data.
+  std::size_t trailing_bytes{0};
+};
+
+// Reads the leading script list of any VMAD; throws fo4::parse_error on truncated or unknown data.
+VmadScripts read_vmad_scripts(std::span<const std::byte> data);
 
 }  // namespace fo4

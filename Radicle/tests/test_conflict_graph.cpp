@@ -17,7 +17,8 @@ std::vector<std::byte> make_plugin(
     std::string_view master,
     std::string_view signature,
     std::uint32_t form_id,
-    std::optional<std::uint32_t> name_link = std::nullopt) {
+    std::optional<std::uint32_t> name_link = std::nullopt,
+    std::uint32_t flags = 0) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
@@ -43,7 +44,7 @@ std::vector<std::byte> make_plugin(
   fo4::test::end_record(out, tes4);
 
   const auto group = fo4::test::begin_group(out, signature, 0);
-  const auto record = fo4::test::begin_record(out, signature, 0, form_id);
+  const auto record = fo4::test::begin_record(out, signature, flags, form_id);
   if (name_link.has_value()) {
     fo4::test::ByteWriter link;
     link.u32(*name_link);
@@ -115,4 +116,29 @@ TEST(ConflictGraph, TracksInboundAndOutboundFormLinks) {
   EXPECT_EQ(outbound[0].target, target);
   EXPECT_EQ(outbound[0].plugin.filename(), "Reference.esp");
   EXPECT_EQ(outbound[0].subrecord.to_string(), "NAME");
+}
+
+TEST(ConflictGraph, PartialFormOverridesKeepHistoryButDoNotWin) {
+  constexpr std::uint32_t partial = 0x4000;
+  const auto base = fo4::read_plugin(make_plugin({}, "QUST", 0x800), "Base.esp");
+  const auto full = fo4::read_plugin(make_plugin("Base.esp", "QUST", 0x800), "Full.esp");
+  const auto part = fo4::read_plugin(make_plugin("Base.esp", "QUST", 0x800, std::nullopt, partial), "Partial.esp");
+  const auto key = fo4::FormKey::parse("000800:Base.esp");
+
+  const std::array<const fo4::Plugin*, 3> order{&base, &full, &part};
+  const auto graph = fo4::ConflictGraph::build(order);
+  ASSERT_EQ(graph.versions(key).size(), 3u);
+  EXPECT_EQ(graph.versions(key)[2].plugin.filename(), "Partial.esp");
+  ASSERT_NE(graph.winner(key), nullptr);
+  EXPECT_EQ(graph.winner(key)->plugin.filename(), "Full.esp");
+  const auto conflicts = graph.conflicts();
+  EXPECT_NE(std::find(conflicts.begin(), conflicts.end(), key), conflicts.end());
+
+  const std::array<const fo4::Plugin*, 2> only_partial{&base, &part};
+  EXPECT_EQ(fo4::ConflictGraph::build(only_partial).winner(key)->plugin.filename(), "Base.esp");
+
+  const auto weap = fo4::read_plugin(make_plugin({}, "WEAP", 0x800), "Base.esp");
+  const auto flagged = fo4::read_plugin(make_plugin("Base.esp", "WEAP", 0x800, std::nullopt, partial), "Partial.esp");
+  const std::array<const fo4::Plugin*, 2> weapons{&weap, &flagged};
+  EXPECT_EQ(fo4::ConflictGraph::build(weapons).winner(key)->plugin.filename(), "Partial.esp");
 }

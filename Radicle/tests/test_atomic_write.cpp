@@ -101,6 +101,16 @@ TEST(AtomicWrite, ReplacePrimitiveFailureLeavesExistingDestinationIntact) {
   EXPECT_FALSE(stray_temp_files);
 }
 
+TEST(AtomicWrite, WritesNonAnsiFileNames) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  std::filesystem::create_directories(root);
+  const auto target = root / std::filesystem::path(std::u16string{0x041C, 0x043E, 0x0434, 0x044B, u'.', u'b', u'a', u'2'});
+  fo4::io::write_file_atomic(target, bytes("payload"));
+  EXPECT_EQ(read_text(target), "payload");
+  EXPECT_EQ(std::distance(std::filesystem::directory_iterator(root), std::filesystem::directory_iterator()), 1);
+}
+
 }
 
 // Regression: moving a StagedFile must transfer exclusive ownership of the

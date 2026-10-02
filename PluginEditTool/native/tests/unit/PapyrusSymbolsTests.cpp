@@ -34,7 +34,7 @@ struct SourceRoot {
     std::string write(const std::string& name, const std::string& content) {
         const auto file = (std::filesystem::path(path) / name).string();
         std::filesystem::create_directories(std::filesystem::path(file).parent_path());
-        std::ofstream out(file);
+        std::ofstream out(file, std::ios::binary);
         out << content;
         return file;
     }

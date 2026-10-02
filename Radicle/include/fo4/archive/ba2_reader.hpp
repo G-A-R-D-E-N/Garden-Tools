@@ -1,0 +1,65 @@
+#pragma once
+
+#include "fo4/archive/ba2.hpp"
+#include "fo4/archive/ba2_texture.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
+namespace fo4::archive {
+
+enum class Ba2Kind : std::uint8_t {
+  general,
+  texture,
+};
+
+struct Ba2ChunkLocation {
+  std::uint64_t offset{0};
+  std::uint32_t packed_size{0};
+  std::uint32_t unpacked_size{0};
+  std::uint16_t mip_first{0};
+  std::uint16_t mip_last{0};
+};
+
+struct Ba2EntryInfo {
+  std::string path;
+  std::uint32_t name_hash{0};
+  std::uint32_t extension_hash{0};
+  std::uint32_t directory_hash{0};
+  std::uint8_t unknown{0};
+  Ba2TextureInfo texture;
+  std::vector<Ba2ChunkLocation> chunks;
+
+  std::uint64_t unpacked_size() const noexcept;
+};
+
+// Immutable after open; extraction opens its own stream, so const members are thread-safe.
+class Ba2Reader {
+public:
+  static Ba2Reader open(const std::filesystem::path& path);
+
+  const std::filesystem::path& path() const noexcept { return path_; }
+  Ba2Kind kind() const noexcept { return kind_; }
+  std::uint32_t version() const noexcept { return version_; }
+  bool has_name_table() const noexcept { return has_name_table_; }
+  const std::vector<Ba2EntryInfo>& entries() const noexcept { return entries_; }
+
+  std::optional<std::size_t> find(std::string_view path) const;
+  std::vector<std::byte> extract(std::size_t index) const;
+
+private:
+  std::filesystem::path path_;
+  Ba2Kind kind_{Ba2Kind::general};
+  std::uint32_t version_{0};
+  bool has_name_table_{false};
+  std::vector<Ba2EntryInfo> entries_;
+  std::unordered_map<std::string, std::size_t> by_path_;
+};
+
+}  // namespace fo4::archive

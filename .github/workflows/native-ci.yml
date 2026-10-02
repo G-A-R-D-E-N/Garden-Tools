@@ -1,9 +1,10 @@
 name: native-ci
 
-# Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runner
-# (label `garden`). Hosted runners are intentionally avoided: both orgs are over
-# the Free Actions minutes allowance (GHRUNNER#24), and hosted jobs fail silently
-# once exhausted. Self-hosted minutes are free. Pull requests run through the
+# Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runners:
+# Linux (label `garden`) and Windows (`native-windows-tests`). Hosted runners
+# are intentionally avoided: both orgs are over the Free Actions minutes
+# allowance (GHRUNNER#24), and hosted jobs fail silently once exhausted.
+# Self-hosted minutes are free. Pull requests run through the
 # pull_request trigger only; work-branch push runs are intentionally omitted so
 # one PR commit does not consume two self-hosted CI slots.
 
@@ -52,7 +53,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: radicle-linux-failure
           path: |
@@ -86,7 +87,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: fo4ide-native-linux-failure
           path: |
@@ -102,8 +103,8 @@ jobs:
     # Cross-compiles the Windows x64 build from Linux with clang-cl + the xwin
     # CRT/SDK (GHRUNNER#17) -- the same method used elsewhere on this host. Wine
     # is retired, so Windows binaries cannot be executed here: this job proves
-    # the code COMPILES and LINKS for Windows (tests OFF). Native MSVC/WebView2
-    # test execution still needs a real Windows runner if ever wanted.
+    # the code COMPILES and LINKS for Windows (tests OFF). native-windows-tests
+    # runs the tests with MSVC on the Windows runner.
     #
     # The xwin sysroot does not provide zlib, so this lane builds the pinned
     # static zlib dependency first and points find_package(ZLIB) at it.
@@ -144,7 +145,7 @@ jobs:
       - name: Upload Windows binaries
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: radicle-windows-x64
           path: |
@@ -160,8 +161,8 @@ jobs:
     # The native host now fetches the pinned WebView2 SDK itself. This lane also
     # forces the pinned zlib fallback used by package.ps1, so the build matches
     # a clean Windows release machine rather than depending on host packages.
-    # Tests are build-only because the self-hosted runner is Linux and Wine is
-    # intentionally retired.
+    # Tests are OFF here; native-windows-tests runs them with MSVC on the Windows
+    # runner.
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v7
@@ -186,9 +187,88 @@ jobs:
       - name: Upload native Windows executable
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: fo4recordeditor-windows-x64
           path: build/fo4ide-win/bin/FO4RecordEditor.exe
           if-no-files-found: warn
           retention-days: 7
+
+  native-windows-tests:
+    name: Native tests (Windows, MSVC)
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+    env:
+      ZLIB_COMMIT: 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Find MSVC and CMake
+        shell: powershell
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "Visual Studio is not installed on this runner" }
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "No Visual Studio install with the C++ x64 tools on this runner" }
+          $bin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          if (-not (Test-Path "$bin\cmake.exe")) { throw "Visual Studio at $vs has no C++ CMake tools component" }
+          [IO.File]::AppendAllText($env:GITHUB_PATH, "$bin`n")
+          $cache = Join-Path $env:USERPROFILE ".cache\garden-ci"
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "CI_SRC=$cache\src`nCI_BUILD=$cache\build`n")
+
+      - name: Stop builds left running by a cancelled run
+        shell: powershell
+        run: |
+          $all = Get-CimInstance Win32_Process
+          $kill = @($all | Where-Object { $_.Name -in 'cmake.exe', 'ctest.exe', 'git.exe' -and $_.CommandLine -like '*\.cache\garden-ci\*' } | ForEach-Object ProcessId)
+          for ($i = 0; $i -lt $kill.Count; $i++) { $kill += @($all | Where-Object ParentProcessId -eq $kill[$i] | ForEach-Object ProcessId) }
+          $kill | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+          "Stopped $($kill.Count) leftover process(es)"
+
+      - name: Update the persistent build checkout
+        run: |
+          if not exist "%CI_SRC%\.git" git init -q "%CI_SRC%" || exit /b 1
+          if exist "%CI_SRC%\.git\*.lock" del /q "%CI_SRC%\.git\*.lock"
+          git -C "%CI_SRC%" fetch -q --no-tags --depth=1 "%GITHUB_WORKSPACE%" HEAD || exit /b 1
+          git -C "%CI_SRC%" checkout -q --force --detach FETCH_HEAD || exit /b 1
+          git -C "%CI_SRC%" clean -q -ffdx || exit /b 1
+
+      - name: Build Windows static zlib dependency
+        run: |
+          set "ZLIB_DIR=%CI_BUILD%\zlib-%ZLIB_COMMIT%"
+          if exist "%ZLIB_DIR%\zlib.h" exit /b 0
+          if exist "%ZLIB_DIR%-src" rmdir /s /q "%ZLIB_DIR%-src"
+          git clone -q --filter=blob:none https://github.com/madler/zlib.git "%ZLIB_DIR%-src" || exit /b 1
+          git -C "%ZLIB_DIR%-src" checkout -q %ZLIB_COMMIT% || exit /b 1
+          cmake -S "%ZLIB_DIR%-src" -B "%ZLIB_DIR%" -DZLIB_BUILD_EXAMPLES=OFF || exit /b 1
+          cmake --build "%ZLIB_DIR%" --config Release --target zlibstatic || exit /b 1
+          cmake -E copy "%ZLIB_DIR%-src\zlib.h" "%ZLIB_DIR%\zlib.h" || exit /b 1
+
+      - name: Configure Radicle
+        run: >-
+          cmake -S "%CI_SRC%\Radicle" -B "%CI_BUILD%\radicle-msvc"
+          -DZLIB_INCLUDE_DIR="%CI_BUILD%\zlib-%ZLIB_COMMIT%"
+          -DZLIB_LIBRARY="%CI_BUILD%\zlib-%ZLIB_COMMIT%\Release\zlibstatic.lib"
+
+      - name: Build Radicle
+        run: cmake --build "%CI_BUILD%\radicle-msvc" --config Release --parallel
+
+      - name: Test Radicle
+        run: ctest --test-dir "%CI_BUILD%\radicle-msvc" -C Release --output-on-failure
+
+      - name: Configure PluginEditTool native
+        run: >-
+          cmake -S "%CI_SRC%\PluginEditTool\native" -B "%CI_BUILD%\fo4ide-msvc"
+          -DFO4IDE_BUILD_TESTS=ON
+          -DFO4IDE_BUILD_HTTP=ON
+          -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
+
+      - name: Build PluginEditTool native
+        run: cmake --build "%CI_BUILD%\fo4ide-msvc" --config Release --parallel
+
+      - name: Test PluginEditTool native
+        run: ctest --test-dir "%CI_BUILD%\fo4ide-msvc" -C Release --output-on-failure

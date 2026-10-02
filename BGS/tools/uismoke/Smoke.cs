@@ -2848,6 +2848,8 @@ public static class Smoke
         Console.WriteLine($"  {(value ? "ok  " : "FAIL")}  {what}");
     }
 
+    internal static int FailedCount => _failed;
+
     private static string WriteOneClip(string name)
     {
         string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), name + ".hkx");

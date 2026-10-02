@@ -114,6 +114,14 @@ TEST_CASE("PluginEditTool creates a new exterior CELL in the WRLD hierarchy") {
         nlohmann::json::array({"Patch.esp", "CELL", payload})));
     CHECK(created.at("signature") == "CELL");
     CHECK(created.at("formKey") == "000900:Patch.esp");
+    CHECK(backend.getPlacedReferencesAtGrid(
+        nlohmann::json::array({"000800:Patch.esp", -33, 32})).has_value());
+    const auto wrapped = backend.getPlacedReferencesAtGrid(
+        nlohmann::json::array({"000800:Patch.esp", 4294967263u, 32}));
+    REQUIRE_FALSE(wrapped.has_value());
+    CHECK(wrapped.error().type == "CellGridArgumentsMissing");
+    CHECK_FALSE(backend.getPlacedReferencesAtGrid(
+        nlohmann::json::array({"000800:Patch.esp", -33, -2147483649LL})).has_value());
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
@@ -181,5 +189,15 @@ TEST_CASE("PluginEditTool rejects invalid exterior CELL payloads before writing"
         }));
     REQUIRE_FALSE(outOfBounds.has_value());
     CHECK(outOfBounds.error().type == "CellCreateFailed");
+
+    const auto wrapped = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "CELL",
+            nlohmann::json{{"worldspace", "000800:Patch.esp"}, {"x", 18446744073709551583ULL}, {"y", 32}}
+        }));
+    REQUIRE_FALSE(wrapped.has_value());
+    CHECK(wrapped.error().type == "InvalidRecordCreationPayload");
     CHECK(readBytes(path) == before);
 }
