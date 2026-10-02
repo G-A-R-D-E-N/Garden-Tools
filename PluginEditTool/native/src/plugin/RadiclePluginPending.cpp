@@ -43,7 +43,7 @@ std::vector<std::byte> readFileBytes(const std::filesystem::path& path) {
 thread_local RadiclePluginBackend::OpLock* RadiclePluginBackend::OpLock::current = nullptr;
 
 RadiclePluginBackend::OpLock::OpLock(const RadiclePluginBackend& backend, Mode mode,
-                                     std::initializer_list<std::string_view> names)
+                                     const std::vector<std::string_view>& names)
     : backend(backend), mode(mode), previous(current) {
     if (mode == Mode::Lifecycle) {
         backend.lifecycleMutex_.lock();

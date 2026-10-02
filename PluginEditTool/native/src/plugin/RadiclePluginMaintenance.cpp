@@ -165,7 +165,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             });
         }
 
-        OpLock lock(*this, OpLock::Mode::Write, {targetPluginName});
+        OpLock lock(*this, OpLock::Mode::Write, {targetPluginName, sourcePluginName});
         auto* target = findPlugin(targetPluginName);
         if (target == nullptr) {
             return std::unexpected(Error{

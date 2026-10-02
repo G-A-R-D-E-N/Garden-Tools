@@ -112,7 +112,9 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
         }
     }
 
-    OpLock lock(*this, OpLock::Mode::Write, {targetName});
+    std::vector<std::string_view> owners{targetName};
+    for (const auto& item : items) owners.push_back(item.source);
+    OpLock lock(*this, OpLock::Mode::Write, owners);
     auto* target = findPlugin(targetName);
     if (target == nullptr) {
         return std::unexpected(Error{

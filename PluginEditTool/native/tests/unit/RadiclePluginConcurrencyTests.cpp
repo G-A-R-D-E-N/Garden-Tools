@@ -277,7 +277,7 @@ TEST_CASE("Reversed two-plugin CopyAsOverride does not deadlock") {
     const auto copyLoop = [&](const char* source, const char* formKey, const char* target) {
         for (int i = 0; i < k_iterations; ++i) {
             const auto copied = backend.invokeBackend(
-                "CopyAsOverride", nlohmann::json::array({source, formKey, target, true}));
+                "CopyAsOverride", nlohmann::json::array({source, formKey, target, true, true}));
             if (!copied.has_value()) ++failures;
         }
     };
@@ -292,4 +292,57 @@ TEST_CASE("Reversed two-plugin CopyAsOverride does not deadlock") {
 
     CHECK(recordEditorId(backend, "Right.esp", "000800:Master.esm") == "LeftOverride");
     CHECK(recordEditorId(backend, "Left.esp", "000900:Master.esm") == "RightOverride");
+}
+
+TEST_CASE("A losing-override check is not torn by a commit to a later plugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto srcPath = root / "Src.esp";
+    const auto donorPath = root / "Donor.esp";
+    const auto leftPath = root / "Left.esp";
+    const auto latePath = root / "Late.esp";
+    writeBytes(srcPath, makeOverridePlugin(0x00000800, "SrcOverride"));
+    writeBytes(donorPath, makeOverridePlugin(0x00000800, "DonorOverride"));
+    writeBytes(leftPath, makeOverridePlugin(0x00000900, "LeftOther"));
+    writeBytes(latePath, makeOverridePlugin(0x00000901, "LateOther"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugins(backend, {{"Src.esp", srcPath},
+                          {"Donor.esp", donorPath},
+                          {"Left.esp", leftPath},
+                          {"Late.esp", latePath}});
+
+    HookGate state;
+    gate = &state;
+    HookGuard hook(&blockFirstWriter);
+
+    auto left = std::async(std::launch::async, [&] {
+        return backend.invokeBackend(
+            "CopyAsOverride",
+            nlohmann::json::array({"Src.esp", "000800:Master.esm", "Left.esp", false}));
+    });
+    REQUIRE(waitForEntered(1));
+
+    auto late = std::async(std::launch::async, [&] {
+        return backend.invokeBackend(
+            "CopyAsOverride",
+            nlohmann::json::array({"Donor.esp", "000800:Master.esm", "Late.esp", false}));
+    });
+    CHECK(waitForEntered(2));
+    CHECK(late.wait_for(200ms) == std::future_status::timeout);
+
+    releaseGate();
+    REQUIRE(left.wait_for(5s) == std::future_status::ready);
+    REQUIRE(late.wait_for(5s) == std::future_status::ready);
+    const auto leftResult = left.get();
+    const auto lateResult = late.get();
+    REQUIRE(leftResult.has_value());
+    REQUIRE(lateResult.has_value());
+    CHECK_FALSE(state.timedOut);
+
+    CHECK(leftResult->get<std::string>() ==
+          "Copied 000800:Master.esm as override in Left.esp.");
+    CHECK(recordEditorId(backend, "Left.esp", "000800:Master.esm") == "SrcOverride");
+    CHECK(recordEditorId(backend, "Late.esp", "000800:Master.esm") == "DonorOverride");
+    gate = nullptr;
 }

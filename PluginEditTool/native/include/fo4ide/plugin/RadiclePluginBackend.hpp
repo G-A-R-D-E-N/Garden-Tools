@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -91,7 +90,7 @@ private:
     public:
         enum class Mode { Read, Write, Lifecycle };
         OpLock(const RadiclePluginBackend& backend, Mode mode,
-               std::initializer_list<std::string_view> owners = {});
+               const std::vector<std::string_view>& owners = {});
         ~OpLock();
         OpLock(const OpLock&) = delete;
         OpLock& operator=(const OpLock&) = delete;
