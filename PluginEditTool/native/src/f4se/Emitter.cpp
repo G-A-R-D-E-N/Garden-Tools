@@ -1,13 +1,13 @@
 #include <fo4ide/f4se/Emitter.hpp>
 
-#include <algorithm>
-
 #include <fo4ide/f4se/BindingValidator.hpp>
 #include <fo4ide/f4se/CppEmitter.hpp>
 #include <fo4ide/f4se/PapyrusHeaderEmitter.hpp>
 #include <fo4ide/f4se/PluginEmitter.hpp>
 #include <fo4ide/f4se/RegionMerge.hpp>
 #include <fo4ide/f4se/RegistrationExtractor.hpp>
+
+#include <algorithm>
 
 namespace fo4ide::f4se {
 

@@ -57,8 +57,9 @@ private:
         std::string_view topFolder);
     std::optional<std::filesystem::path> scanAndLookup(
         const std::vector<std::filesystem::path>& roots,
-        const std::vector<std::string>& keys);
-    void ensureRootScanned(const std::filesystem::path& root);
+        const std::vector<std::string>& keys,
+        const std::optional<std::filesystem::path>& shallowRoot = std::nullopt);
+    void ensureRootScanned(const std::filesystem::path& root, bool recursive = true);
     std::optional<std::filesystem::path> extractFromArchive(
         const std::filesystem::path& archivePath,
         std::string_view innerKey);
@@ -92,6 +93,7 @@ private:
     std::map<std::string, std::string> index_;      // key -> archive path
     std::set<std::string> scannedArchives_;         // lowercased archive paths
     std::set<std::filesystem::path> scannedRoots_;
+    std::set<std::filesystem::path> shallowScannedRoots_;
 
     // Guarded by keyLocksMutex_; entries created on demand.
     mutable std::mutex keyLocksMutex_;

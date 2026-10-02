@@ -437,14 +437,14 @@ public static class SplineEncoder
         List<Quaternion> into, int blockStart)
     {
         var kind = SplineFormat.RotKind(flags);
-        int width = SplineFormat.RotWidth(format);
-
         if (kind == SplineFormat.Channel.Identity)
         {
             for (int f = 0; f < inBlock; f++) into.Add(Quaternion.Identity);
             at = blockStart + SplineFormat.Align(at - blockStart, 4);
             return;
         }
+
+        int width = SplineFormat.RotWidth(format);
 
         if (kind == SplineFormat.Channel.Static)
         {

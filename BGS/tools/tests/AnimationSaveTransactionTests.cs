@@ -129,6 +129,39 @@ public sealed class AnimationSaveTransactionTests
         Assert.Equal(fromPath.Bytes, fromBytes.Bytes);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void SplineEncoderRefusesRotationFormatsItCannotWrite(int format)
+    {
+        using var scope = new AnimationScope(spline: true);
+        byte[] source = File.ReadAllBytes(scope.Path);
+        Assert.Throws<NotSupportedException>(() => NativeAnimation.Recompress(
+            source, scope.Animation, new SplineEncoder.Options { RotationFormat = format }));
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void SplineDecodersRejectRotationFormatsWithoutAKnownLayout(int format)
+    {
+        using var scope = new AnimationScope(spline: true);
+        byte[] written = NativeAnimation.Recompress(File.ReadAllBytes(scope.Path), scope.Animation).Bytes;
+        var blob = SplineEncoder.Encode(scope.Animation);
+        int mask = blob.BlockOffsets[0] + SplineFormat.QuantByte;
+        byte[] data = blob.Data.ToArray();
+        data[mask] = (byte)((data[mask] & ~0x3C) | (format << 2));
+        int at = written.AsSpan().IndexOf(blob.Data);
+        Assert.True(at >= 0, "the recompressed file does not hold the encoded blob");
+        data.CopyTo(written, at);
+
+        Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ParseHkx(written));
+        Assert.Throws<NotSupportedException>(() => SplineEncoder.Decode(
+            data, blob.BlockOffsets, 1, scope.Animation.NumFrames, blob.MaskAndQuantizationSize,
+            blob.MaxFramesPerBlock, new HkxAnimationData()));
+    }
+
     private sealed class AnimationScope : IDisposable
     {
         private readonly string _root =

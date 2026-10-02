@@ -312,4 +312,62 @@ std::optional<std::vector<std::size_t>> packed_formid_array_offsets(const Record
   return offsets;
 }
 
+bool is_placed_reference_signature(Signature signature) noexcept {
+  for (const auto* text : {"REFR", "ACHR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"}) {
+    if (signature == Signature::from_string(text)) return true;
+  }
+  return false;
+}
+
+std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Record& record,
+                                                                       const Subrecord& sub,
+                                                                       bool strict_remap) {
+  if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
+  // stride: bytes per element; slots: form ID offsets within one element; exact: payload must be one element.
+  struct Layout {
+    const char* signature;
+    std::size_t stride;
+    std::initializer_list<std::size_t> slots;
+    bool exact;
+    std::size_t short_size;
+  };
+  static const Layout k_layouts[] = {
+      {"XPOD", 8, {0, 4}, false, 0},  // Portal Data: array of {Origin, Destination}
+      {"XORD", 4, {0}, false, 0},     // Linked Occlusion References
+      {"XLRT", 4, {0}, false, 0},     // Location Ref Type
+      {"XPWR", 8, {0}, true, 4},      // Reflected/Refracted By: {Reference, Type}
+      {"XAPR", 8, {0}, true, 0},      // Activate Parent Ref: {Reference, Delay}
+      {"XPLK", 8, {0}, true, 4},      // Spline Connection: {Ref, Unknown}
+      {"XWPN", 12, {0, 4, 8}, true, 0},  // Power Grid Connection: {Node 1, Node 2, Line}
+  };
+  for (const auto& layout : k_layouts) {
+    if (sub.signature != Signature::from_string(layout.signature)) continue;
+    const auto size = sub.data.size();
+    const bool valid = layout.exact ? size == layout.stride || (layout.short_size != 0 && size == layout.short_size)
+                                    : size % layout.stride == 0;
+    if (!valid) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed placed-reference " + sub.signature.to_string() +
+                          " payload");
+      }
+      return std::vector<std::size_t>{};
+    }
+    std::vector<std::size_t> offsets;
+    for (std::size_t base = 0; base < sub.data.size(); base += layout.stride) {
+      for (const auto slot : layout.slots) {
+        if (base + slot + 4 <= size) offsets.push_back(base + slot);
+      }
+    }
+    return offsets;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
+                                                            const Subrecord& sub,
+                                                            bool strict_remap) {
+  if (auto packed = packed_formid_array_offsets(record, sub, strict_remap)) return packed;
+  return placed_reference_formid_offsets(record, sub, strict_remap);
+}
+
 }

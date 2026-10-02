@@ -49,7 +49,7 @@ std::vector<std::byte> qsta(std::int32_t alias, std::uint32_t flags, std::uint32
 
 // A quest carrying all three arrays, so every mutation has neighbours to
 // disturb: stages 10/20, objectives 1/2, and two aliases.
-std::vector<std::byte> make_quest() {
+std::vector<std::byte> make_quest(std::uint32_t flags = 0) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0x80, 0);
   fo4::test::ByteWriter hedr;
@@ -60,7 +60,7 @@ std::vector<std::byte> make_quest() {
   fo4::test::end_record(out, tes4);
 
   const auto grup = fo4::test::begin_group(out, "QUST", 0);
-  const auto rec = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+  const auto rec = fo4::test::begin_record(out, "QUST", flags, 0x00000800);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Q\0", 2});
   fo4::test::write_subrecord(out, "DNAM", u32_of(0));
 
@@ -95,7 +95,9 @@ std::vector<std::byte> make_quest() {
 }
 
 fo4::FormKey key() { return fo4::FormKey::parse("000800:Q.esp"); }
-fo4::Plugin load() { return fo4::read_plugin(make_quest(), "Q.esp"); }
+fo4::Plugin load(std::uint32_t flags = 0) {
+  return fo4::read_plugin(make_quest(flags), "Q.esp");
+}
 
 std::vector<std::string> signatures(const fo4::Plugin& plugin) {
   const auto* record = fo4::find_record(plugin, key());
@@ -136,7 +138,79 @@ std::vector<std::byte> vmad_stage_fragment() {
   return vmad.bytes;
 }
 
+fo4::Plugin load_edid_vmad_quest(std::uint32_t flags) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0x80, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto grup = fo4::test::begin_group(out, "QUST", 0);
+  const auto rec = fo4::test::begin_record(out, "QUST", flags, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Q\0", 2});
+  fo4::test::write_subrecord(out, "VMAD", vmad_stage_fragment());
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+  return fo4::read_plugin(out.bytes, "Q.esp");
+}
+
 }  // namespace
+
+TEST(QuestAuthoring, PartialFormVmadKeepsMasterStageFragmentsOnUnchangedRewrite) {
+  auto plugin = load_edid_vmad_quest(0x4000);
+  const auto before = signatures(plugin);
+  const auto vmad_before = fo4::find_record(plugin, key())->subrecords[1].data;
+
+  const auto stages = fo4::forms::decode_quest_stages(plugin, key());
+  EXPECT_TRUE(stages.stages.empty());
+  fo4::forms::write_quest_stages(plugin, key(), stages);
+  const auto objectives = fo4::forms::decode_quest_objectives(plugin, key());
+  fo4::forms::write_quest_objectives(plugin, key(), objectives);
+
+  EXPECT_EQ(signatures(plugin), before);
+  EXPECT_EQ(fo4::find_record(plugin, key())->subrecords[1].data, vmad_before);
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  EXPECT_EQ(signatures(reloaded), before);
+  EXPECT_EQ(fo4::find_record(reloaded, key())->subrecords[1].data, vmad_before);
+  EXPECT_TRUE(fo4::forms::decode_quest_stages(reloaded, key()).stages.empty());
+}
+
+TEST(QuestAuthoring, PartialFormVmadRefusesStagesItCannotBind) {
+  auto partial = load_edid_vmad_quest(0x4000);
+  const auto partial_before = fo4::write_plugin(partial);
+  fo4::forms::QuestStages added;
+  added.stages.emplace_back().index = 20;
+  EXPECT_THROW(fo4::forms::write_quest_stages(partial, key(), added),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(partial), partial_before);
+
+  auto full = load_edid_vmad_quest(0);
+  const auto full_before = fo4::write_plugin(full);
+  const auto none = fo4::forms::decode_quest_stages(full, key());
+  EXPECT_THROW(fo4::forms::write_quest_stages(full, key(), none),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(full), full_before);
+}
+
+TEST(QuestAuthoring, PartialFormWithLocalStagesKeepsVmadValidation) {
+  auto plugin = load(0x4000);
+  auto& record = std::get<fo4::Record>(plugin.groups.front().children.front());
+  const auto vmad = vmad_stage_fragment();
+  record.subrecords.insert(record.subrecords.begin() + 1,
+                          fo4::Subrecord{fo4::sig_vmad, vmad, false});
+
+  auto stages = fo4::forms::decode_quest_stages(plugin, key());
+  fo4::forms::write_quest_stages(plugin, key(), stages);
+  EXPECT_EQ(fo4::find_record(plugin, key())->subrecords[1].data, vmad);
+
+  const auto before = fo4::write_plugin(plugin);
+  stages.stages.clear();
+  EXPECT_THROW(fo4::forms::write_quest_stages(plugin, key(), stages),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
 
 TEST(QuestAuthoring, RewritingUnchangedArraysIsByteExact) {
   auto plugin = load();

@@ -19,6 +19,7 @@ option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_BUILD_TESTS "Build Radicle tests" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_INSTALL "Generate Radicle install/export rules" ${PROJECT_IS_TOP_LEVEL})
+option(RADICLE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_custom_target(radicle_schema_check ALL
@@ -74,9 +75,9 @@ add_custom_target(radicle_condition_scope_schema_check ALL
 
 function(fo4_apply_warnings target)
   if(MSVC)
-    target_compile_options(${target} PRIVATE /W4 /permissive- /WX)
+    target_compile_options(${target} PRIVATE /W4 /permissive- $<$<BOOL:${RADICLE_WARNINGS_AS_ERRORS}>:/WX>)
   else()
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic $<$<BOOL:${RADICLE_WARNINGS_AS_ERRORS}>:-Werror>)
   endif()
 endfunction()
 
@@ -93,10 +94,13 @@ endfunction()
 
 add_library(fo4
   src/plugin_key.cpp
+  src/text/encoding.cpp
   src/formid.cpp
   src/archive/ba2.cpp
   src/archive/ba2_hash.cpp
   src/archive/ba2_texture.cpp
+  src/archive/ba2_reader.cpp
+  src/archive/assets.cpp
   src/binary/cursor.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
@@ -104,6 +108,7 @@ add_library(fo4
   src/forms/components.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
+  src/forms/placed_reference_edit.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather_concept.cpp
@@ -139,6 +144,13 @@ add_library(fo4
   src/schema/scalar.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
+  src/environment/environment.cpp
+  src/environment/world.cpp
+  src/environment/placed.cpp
+  src/environment/terrain.cpp
+  src/environment/strings.cpp
+  src/environment/base_records.cpp
+  src/environment/material_swap.cpp
 )
 
 if(TARGET radicle_schema_check)
@@ -166,7 +178,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -175,6 +187,7 @@ set_target_properties(radicle_c PROPERTIES
   SOVERSION ${PROJECT_VERSION_MAJOR})
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
+target_sources(radicle_c PRIVATE src/c_api_version.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -213,6 +226,19 @@ if(RADICLE_BUILD_TOOLS)
   target_link_libraries(fo4inspect PRIVATE fo4)
   fo4_apply_warnings(fo4inspect)
   fo4_apply_sanitizers(fo4inspect)
+  add_executable(radicle_env_bench tools/env_bench/main.cpp tools/env_bench/env_bench.cpp)
+  target_include_directories(radicle_env_bench PRIVATE tools)
+  target_link_libraries(radicle_env_bench PRIVATE fo4)
+  fo4_apply_warnings(radicle_env_bench)
+  fo4_apply_sanitizers(radicle_env_bench)
+  add_executable(radicle_parity_dump tools/parity/main.cpp)
+  target_include_directories(radicle_parity_dump PRIVATE tools)
+  target_link_libraries(radicle_parity_dump PRIVATE fo4)
+  fo4_apply_warnings(radicle_parity_dump)
+  add_executable(radicle_parity_writeback tools/parity/writeback.cpp)
+  target_include_directories(radicle_parity_writeback PRIVATE tools)
+  target_link_libraries(radicle_parity_writeback PRIVATE fo4 radicle_c)
+  fo4_apply_warnings(radicle_parity_writeback)
 endif()
 
 if(RADICLE_BUILD_TESTS)
@@ -322,10 +348,26 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_texture.cpp
     tests/test_localized_strings.cpp
     tests/test_c_api.cpp
+    tests/test_environment.cpp
+    tests/test_environment_world.cpp
+    tests/test_environment_placed.cpp
+    tests/test_environment_terrain.cpp
+    tests/test_environment_strings.cpp
+    tests/test_ba2_reader.cpp
+    tests/test_ba2_real.cpp
+    tests/test_environment_writeback.cpp
+    tests/test_writeback_real.cpp
+    tests/test_environment_ref_fields.cpp
+    tests/test_environment_base_records.cpp
+    tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
+    tests/test_env_bench_real.cpp
+    tests/test_text_boundary.cpp
+    tests/test_parity_dds.cpp
+    tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
-  target_include_directories(fo4_tests PRIVATE tests)
+  target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
     FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
@@ -334,7 +376,75 @@ if(RADICLE_BUILD_TESTS)
   target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
   fo4_apply_warnings(fo4_tests)
   fo4_apply_sanitizers(fo4_tests)
+  target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests)
+  if(RADICLE_BUILD_TOOLS)
+    add_test(NAME radicle_env_bench_non_ansi_data_dir
+             COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
+                     -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/env_bench/non_ansi_data_dir.cmake)
+    add_test(NAME radicle_env_bench_unreadable_data_dir
+             COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/env_bench/unreadable_data_dir.cmake)
+    set_tests_properties(radicle_env_bench_unreadable_data_dir PROPERTIES SKIP_REGULAR_EXPRESSION "skipped: ")
+    add_test(NAME radicle_parity_tools
+             COMMAND ${CMAKE_COMMAND} -DWRITEBACK=$<TARGET_FILE:radicle_parity_writeback>
+                     -DDUMP=$<TARGET_FILE:radicle_parity_dump>
+                     -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/parity_tools.cmake)
+  endif()
+
+  # C# bindings: the probe prints the C layout of every public struct for Radicle.Interop.Tests.
+  add_executable(radicle_abi_layout_probe bindings/csharp/tests/abi_layout_probe.cpp)
+  target_include_directories(radicle_abi_layout_probe PRIVATE include)
+  fo4_apply_warnings(radicle_abi_layout_probe)
+
+  add_library(radicle_abi_stub SHARED bindings/csharp/tests/abi_stub.cpp)
+  target_include_directories(radicle_abi_stub PRIVATE include)
+  target_compile_definitions(radicle_abi_stub PRIVATE RADICLE_C_BUILD "RADICLE_ABI_STUB_VERSION=RADICLE_ABI_VERSION+1u")
+  # ABI 1 is the last generation without the material swap exports.
+  add_library(radicle_abi_stub_v1 SHARED bindings/csharp/tests/abi_stub.cpp)
+  target_include_directories(radicle_abi_stub_v1 PRIVATE include)
+  target_compile_definitions(radicle_abi_stub_v1 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=1u)
+
+  find_package(Python3 COMPONENTS Interpreter QUIET)
+  if(Python3_Interpreter_FOUND)
+    # Fails when fo4/c_api*.h changed without regenerating the committed C# interop and probe.
+    set(_interop_dir ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp)
+    set(_interop_out ${CMAKE_CURRENT_BINARY_DIR}/interop_check)
+    add_test(NAME radicle_csharp_interop_up_to_date
+             COMMAND ${CMAKE_COMMAND}
+                     -DPYTHON=${Python3_EXECUTABLE}
+                     -DGENERATOR=${_interop_dir}/tools/generate_interop.py
+                     -DINCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/include
+                     -DOUT_DIR=${_interop_out}
+                     -DCOMMITTED_CS=${_interop_dir}/Radicle.Interop/RadicleNative.g.cs
+                     -DCOMMITTED_PROBE=${_interop_dir}/tests/abi_layout_probe.cpp
+                     -P ${_interop_dir}/tools/check_generated.cmake)
+    add_test(NAME radicle_csharp_interop_check_ignores_line_endings
+             COMMAND ${CMAKE_COMMAND}
+                     -DPYTHON=${Python3_EXECUTABLE}
+                     -DGENERATOR=${_interop_dir}/tools/generate_interop.py
+                     -DINCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/include
+                     -DOUT_DIR=${_interop_out}-eol
+                     -DCOMMITTED_CS=${_interop_dir}/Radicle.Interop/RadicleNative.g.cs
+                     -DCOMMITTED_PROBE=${_interop_dir}/tests/abi_layout_probe.cpp
+                     -DCHECK=${_interop_dir}/tools/check_generated.cmake
+                     -P ${_interop_dir}/tools/check_generated_eol.cmake)
+  endif()
+
+  option(RADICLE_CSHARP_TESTS "Run the C# binding tests with dotnet (needs the .NET 8 SDK and NuGet access)" OFF)
+  if(RADICLE_CSHARP_TESTS)
+    find_program(DOTNET_EXECUTABLE dotnet REQUIRED)
+    add_test(NAME radicle_csharp_bindings
+             COMMAND ${DOTNET_EXECUTABLE} test ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/Radicle.Interop.Tests
+                     --nologo -v q)
+    set_tests_properties(radicle_csharp_bindings PROPERTIES
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
+  endif()
 endif()

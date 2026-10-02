@@ -6,9 +6,48 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 ## Unreleased
 
+## 1.3.0
+
+October 1, 2026
+
+* The Home tour includes an AI chat guide for setup, requests, action approval and checking results before saving. The tour can be replayed after finishing or skipping it.
+
+* The assistant can read and propose interactions with editor and authoring controls, including graph and rig viewport gestures, using the existing handlers. Each action and named file/folder operation requires approval; stale actions are refused. Account, password and assistant approval controls are excluded.
+* Top toolbar scrollbars reserve their own space below controls, preventing overlap on all workspace tabs.
+* Rig previews fill the remaining window space and clip zoomed or panned geometry to the viewport. Skeleton, skin and physics tabs each offer Fit preview; settings scroll independently.
+* Home now offers direct buttons for skeleton editing, skin weights, physics simulation, structure authoring and batch authoring. Rig shortcuts open the selected tool immediately.
+* Moved Home, Graph, Inspect, Animation and Project navigation to the top of the window. Each view has its own grouped command toolbar; wide toolbars scroll horizontally, while inspectors and the playback timeline stay beside the content they affect.
+* Removed duplicate workspace tab headers. Graph authoring tools live under Graph, skeleton/skin authoring under Animation, and About and assistant controls remain available in the top bar.
+* Added a Skeleton / skin authoring window with bone names, reference transforms, translation locks, parent changes, validation, undo/redo, and verified HKX save/reopen. Bone addition/removal and reorderings are supported for standalone skeleton files; dependent rigs refuse changes that require asset remapping.
+* Added Fallout 4 NIF vertex influence editing, shape-wide normalization and pruning, bone-weight copying, mirror matching, a mesh preview, and verified weight-only save/reopen with backups and external-change protection.
+* Added interactive BEPU physics preview with measured convex hulls, gravity, ground and body collisions, fixed/ball/hinge/cone/twist preview joints, pause/step/reset, and body impulses. Masses and preview joint limits are explicitly authored in the window; uniform-density inertia and preview settings do not reproduce or modify native Havok solver settings.
+* Added mounted editor and simulation lifecycle checks to both CI platforms.
+
+## 1.2.0
+
+October 1, 2026
+
 * Editor workspace: a left activity rail (Home, Graph, Inspect, Animation, Project) with contextual secondary views, and one command bar for Open, Save, Undo, Redo and validation. Tree expand/collapse and the object filter live on Inspect → Tree. Graph find is a separate field on the Graph toolbar.
 * Batch authoring and About sit in the command bar on the production window path, not on a second top strip.
 * Tree/grid column headers now scroll horizontally with their rows.
+* Added a bounded read-only stdio MCP server for behavior, object, animation, project-chain, project-search, and project-check inspection, plus a side-effect-free clip-animation preview.
+* Added an optional in-app Assistant drawer with an OpenAI-compatible provider boundary, bounded editor context, cancellation, and sequential tool execution.
+* Assistant clip changes require explicit UI approval and remain bound to the exact active-document revision, object, old value, and new value; normal undo and verified save behavior remain in force.
+* External MCP has no write-capable tool, shell/process access, arbitrary filesystem write, or caller-controlled approval path.
+* Bridge layout and drag-and-drop handling are platform-safe alongside the Assistant drawer, with deterministic mounted-turret mesh auto-resolution.
+* Structure authoring now covers supported transition conditions, enter/exit notify events, global events, and non-empty state-machine creation and attachment through the verified save/reopen path.
+* Playback resolves adjacent skeletons and matching mounted-turret meshes deterministically, including platform-safe single-file and multi-file Bridge drops.
+* The ragdoll inspector exposes measured body frames, centres of mass, pivots, limits, engineering labels, and animation-to-ragdoll mapping; pinned body-frame distance measurement refuses self-pairs and stale selections.
+* Drop/Recover remains a constrained engineering preview with lifecycle reset and stale-state protections rather than a full physics simulation.
+* The workspace shell groups existing tools under Home, Graph, Inspect, Animation, and Project activities, keeps contextual secondary views reachable, and keeps command controls accessible at narrow widths.
+
+### Current release boundaries
+
+* Ragdoll support is inspection and constrained preview only: measured bodies, shapes, constraints, bone bindings, frames, and animation mappings are displayed, but ragdoll authoring, body collision solving, and full Havok dynamics are not implemented.
+* Cloth support is inspection and validation only: bounded cloth structures and references can be read and checked, but cloth simulation, mesh deformation, cloth authoring, and cloth save/write-back are not implemented.
+* Drop/Recover follows measured poses as an engineering preview; it is not a Havok solver, body-collision simulation, cloth interaction, or in-game behavior substitute.
+* Skeleton-mapper serialization/write-back and chain mapper authoring remain incomplete; automatic bone pairing is not proven.
+* Havok 2018 support remains incomplete, and unsupported layouts or conversions remain read-only or are refused.
 
 ## 1.1.0
 

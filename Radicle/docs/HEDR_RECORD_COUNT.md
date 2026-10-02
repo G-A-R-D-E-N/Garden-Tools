@@ -1,6 +1,6 @@
 # HEDR record-count rebuild rule
 
-Radicle recomputes TES4 `HEDR` record count whenever a plugin is rebuilt. A completely clean plugin still returns its preserved source range unchanged, so merely reading and writing a plugin does not normalize its stored count.
+Radicle recomputes TES4 `HEDR` record count when TES4 is rebuilt or the record/group counts change. A clean plugin returns its preserved source range unchanged. A mixed write with unchanged structure and preserved TES4 also retains its stored count.
 
 ## Proven rule
 
@@ -24,7 +24,7 @@ This independently matches the existing real `FW_HeatherSurvivalPatch.esp` obser
 
 ## Radicle behavior
 
-`write_plugin` follows the same rule only on a dirty/rebuilt plugin:
+`write_plugin` follows the same rule when TES4 is dirty or the structure fingerprint changes:
 
 - recursively count every top-level and nested `Group` as one;
 - count every group child `Record` as one;
@@ -39,6 +39,8 @@ The HEDR patch is applied to a TES4 copy during serialization, so the const inpu
 `tests/test_hedr_count.cpp` covers both sides of the contract:
 
 - a clean plugin with a deliberately stale stored count remains byte-identical;
-- a dirty plugin containing a top-level group, major record, nested group, and nested major record rebuilds HEDR to `4`.
+- a dirty plugin containing a top-level group, major record, nested group, and nested major record rebuilds HEDR to `4`;
+- both committed real fixtures (`FW_HeatherSurvivalPatch.esp`, `SlowTime.esp`) store exactly the recursive count, computed independently of the writer from `collect_records`/`collect_groups`; after deliberately corrupting their in-memory HEDR counts, a forced rebuild restores that value;
+- with `FO4_DATA_DIR` set, every official master present (`Fallout4.esm`, the DLC masters including the WRLD-heavy `DLCCoast.esm`/`DLCNukaWorld.esm`) and every `.esl` in Data is rebuilt and its emitted HEDR is checked against the independently computed recursive count. Stored and recursive counts are recorded separately as test properties. Stored metadata need not already be canonical. The test skips when game data is absent.
 
-Issue #19 still asks for a third real ESL/WRLD-heavy sample as an additional fixture-level cross-check. That sample remains useful, but the binary writer rule itself is no longer inferred solely from the existing fixtures.
+`tests/test_hedr_count.cpp:OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent` was checked against Steam build 24564252 (Fallout 4 1.11.240). Its `Fallout4.esm` stores 1,741,853, while an independent streaming scan and Radicle both count 1,549,276 non-TES4 records plus 112,381 groups, totaling 1,661,657. `DLCCoast.esm` and `DLCNukaWorld.esm` store their recursive totals, 320,320 and 282,868. These observations do not establish why the base master's stored count differs. The rebuild oracle remains xEdit's `TwbFile.PrepareSave`, not the input's stored value.
