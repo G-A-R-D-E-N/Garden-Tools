@@ -49,7 +49,9 @@ std::vector<std::byte> cellPlugin(bool withMaster, std::string_view refEdid) {
     fo4::test::write_subrecord(out, "EDID", std::string_view{"Cell\0", 5});
     fo4::test::end_record(out, cell);
     const auto children = fo4::test::begin_group(out, "CELL", 6);
+    out.patch_u32(children + 8, 0x800);
     const auto temporary = fo4::test::begin_group(out, "CELL", 9);
+    out.patch_u32(temporary + 8, 0x800);
     const auto refr = fo4::test::begin_record(out, "REFR", 0, 0x00000801);
     fo4::test::write_subrecord(out, "EDID", refEdid);
     fo4::test::end_record(out, refr);

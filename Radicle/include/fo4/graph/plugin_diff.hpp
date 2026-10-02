@@ -19,6 +19,7 @@ struct RecordDiff {
   Signature signature{};
   RecordChange change{RecordChange::changed};
   bool header_changed{false};
+  bool placement_changed{false};
   std::vector<Signature> changed_subrecords{};
 };
 

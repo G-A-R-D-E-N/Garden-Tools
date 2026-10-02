@@ -78,6 +78,7 @@ Result<nlohmann::json> RadiclePluginBackend::comparePluginTo(const nlohmann::jso
                 {"Signature", diff.signature.to_string()},
                 {"Change", changeName(diff.change)},
                 {"HeaderChanged", diff.header_changed},
+                {"PlacementChanged", diff.placement_changed},
                 {"Subrecords", std::move(subrecords)}
             });
         }

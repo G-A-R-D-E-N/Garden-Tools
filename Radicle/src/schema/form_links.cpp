@@ -731,7 +731,7 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
         hit.subrecord_ordinal = ordinal;
         hit.offset = offset;
         hit.raw = RawFormId{read_u32(sub.data, offset)};
-        if (!hit.raw.is_null()) {
+        if (!hit.raw.is_null() && !hit.raw.is_none()) {
           try {
             hit.key = resolve_plugin_link(hit.raw, context);
           } catch (const FormIdError&) {
