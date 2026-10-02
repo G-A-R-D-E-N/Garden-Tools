@@ -3,6 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -217,6 +218,24 @@ TEST_CASE("Radicle archive backend extracts selected entries under the chosen ro
     CHECK(readBytes(output / "Scripts" / "Quest.pex") == bytes("script payload"));
 }
 
+TEST_CASE("Radicle archive backend extracts into a non-ANSI output folder") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = writeArchive(root, "extract.ba2", {entry("Meshes\\Thing.nif", "mesh payload")});
+    const auto output = root / std::filesystem::path(std::u16string{0x041C, 0x043E, 0x0434, 0x044B});
+    const auto text = output.u8string();
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const nlohmann::json args{
+        {"archivePath", path.string()},
+        {"innerPaths", nlohmann::json::array({"Meshes\\Thing.nif"})},
+        {"outputDirectory", std::string(text.begin(), text.end())}
+    };
+    const auto result = backend.invoke("extractSelected", args);
+    REQUIRE(result.has_value());
+    CHECK(readBytes(output / "Meshes" / "Thing.nif") == bytes("mesh payload"));
+}
+
 TEST_CASE("Radicle archive backend rejects traversal before writing extraction output") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -406,4 +425,35 @@ TEST_CASE("Radicle archive backend compares GNRL and DX10 archives by content") 
     CHECK(result->at("identicalCount") == 0);
     CHECK(result->at("removed") == nlohmann::json::array({"Shared.txt"}));
     CHECK(result->at("added") == nlohmann::json::array({"Shared.dds"}));
+}
+
+TEST_CASE("Radicle archive backend lists and extracts Windows-1252 entry names as UTF-8") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = writeArchive(root, "voices.ba2", {entry("Sound\\Voice\\MarXa_F.fuz", "voice")});
+    auto data = readBytes(path);
+    const std::string_view placeholder = "MarXa_F";
+    const auto at = std::search(data.begin(), data.end(), placeholder.begin(), placeholder.end(),
+                                [](std::byte b, char c) { return b == static_cast<std::byte>(c); });
+    REQUIRE(at != data.end());
+    *(at + 3) = std::byte{0xED};
+    std::ofstream(path, std::ios::binary | std::ios::trunc)
+        .write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+    const std::string name = "Sound\\Voice\\Mar\xC3\xAD" "a_F.fuz";
+
+    fo4ide::archive::RadicleArchiveBackend backend;
+    const auto listed = backend.invoke("list", listArguments(path));
+    REQUIRE(listed.has_value());
+    CHECK(listed->at("entries")[0].at("path") == name);
+    CHECK_NOTHROW(listed->dump());
+
+    const auto output = root / "out";
+    const nlohmann::json args{
+        {"archivePath", path.string()},
+        {"innerPaths", nlohmann::json::array({name})},
+        {"outputDirectory", output.string()}
+    };
+    const auto extracted = backend.invoke("extractSelected", args);
+    REQUIRE(extracted.has_value());
+    CHECK(readBytes(output / "Sound" / "Voice" / std::filesystem::path(std::u8string(u8"Mar\u00EDa_F.fuz"))) == bytes("voice"));
 }

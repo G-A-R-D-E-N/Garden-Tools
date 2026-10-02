@@ -1,4 +1,4 @@
-import type { ConflictFieldRow } from '../backend';
+import type { ConflictFieldRow } from './backend';
 
 export const defaultExpanded = (r: ConflictFieldRow) => !(r.IsSummary || r.DisplayLabel.startsWith('['));
 
@@ -39,6 +39,7 @@ export const LEVEL_BADGES: Record<string, { label: string; cls: string }> = {
   onlyone:    { label: 'Single Record', cls: 'rv-lvl-onlyone' },
 };
 
+
 export const LEGEND_ROWS: { cls: string; label: string }[] = [
   { cls: 'rv-s-none', label: 'No conflict' },
   { cls: 'rv-s-benign', label: 'Benign conflict' },
@@ -46,6 +47,7 @@ export const LEGEND_ROWS: { cls: string; label: string }[] = [
   { cls: 'rv-s-conflict', label: 'Conflict' },
   { cls: 'rv-s-critical', label: 'Critical conflict' },
 ];
+
 
 export const LEGEND_CELLS: { cls: string; label: string }[] = [
   { cls: 'rv-c-notdefined', label: 'Not defined' },

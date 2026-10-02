@@ -4,6 +4,16 @@
 
 Concept-level validation note: recognized payloads with unsupported extents must fail closed before FormID discovery or remapping. This note does not assert a new runtime or file-layout fact.
 
+## Real-data HEDR acceptance and Windows test portability
+
+`Radicle/tests/test_hedr_count.cpp:CommittedRealPluginsRebuildStaleCounts` independently counts each committed fixture, checks its stored metadata, and poisons the in-memory HEDR count before rebuilding. This prevents a writer that merely preserves the stored count from passing real-fixture acceptance. `recursive_hedr_count` combines the reader's record/group traversals rather than calling the writer's counter. `official_hedr_samples` includes the seven named official masters and every Data `.esl`.
+
+`PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::addDataRoots` retains candidate roots only when their ancestry reaches a Data folder; otherwise recursive BA2 discovery could climb to the filesystem root. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver does not scan archives above a NIF that has no Data ancestor` puts an unrelated archive outside the NIF tree, while the companion Data-folder case verifies supported fallback.
+
+`Radicle/tests/test_hedr_count.cpp:rebuilt_hedr_count` mutates the test-owned plugin instead of copying its full record graph, then parses only the serialized TES4 prefix. This preserves the rebuilt-header assertion without retaining a second full master graph. `OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent` compares against the independently traversed structure because an installed official master can carry a different stored count; see `Radicle/docs/HEDR_RECORD_COUNT.md` for the pinned xEdit oracle and observed sample counts.
+
+`PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:GraphTarget serializes concurrent RPC access to its compiler cache` explicitly discards RPC results because this concurrency check detects thrown exceptions. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver resolves loose NIFs and NIFs inside BA2s` checks file identity with `std::filesystem::equivalent`, since a case-insensitive filesystem can resolve the correct file while retaining the requested lowercase spelling.
+
 ## Radicle/src/schema/form_links.cpp:visit_link_offsets — DOBJ/DNAM proof (#287)
 
 The layout below is verified from the documentation and open-source schema:
@@ -180,6 +190,54 @@ The worker pool uses `std::jthread`, not `std::thread`, and the spawn loop is wr
 
 The niftool `geo` output is embedded as-is when it is a JSON object (mirrors the C# `JRaw` path); otherwise it is surfaced as an error entry. Unlike the C#, the parse is validated (`parse(..., nullptr, false)` + `is_discarded()`) so a malformed but `{`-leading output cannot corrupt the whole batch payload.
 
+## PluginEditTool/web/src/util/cellGrid.ts:parseCellGridCoordinate — Cell Viewer grid integers (#283)
+
+### Trace
+
+`PluginEditTool/web/src/CellPanel.tsx` used `Number.parseInt(gridX, 10)` and `Number.parseInt(gridY, 10)` in both exterior-grid loading and exterior CELL creation. JavaScript accepts a numeric prefix, so `12abc` became `12` and `1.5` became `1` before the native backend saw the request.
+
+The same permissive check also controlled both grid action buttons.
+
+### Fix
+
+`PluginEditTool/web/src/util/cellGrid.ts:parseCellGridCoordinate` accepts only a complete optional-sign plus decimal-digit token within the signed 32-bit CELL grid range. Both load/create paths and both button guards in `PluginEditTool/web/src/CellPanel.tsx` use the same parser.
+
+The int32 bound matches the native grid arguments. `PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:intArgument` previously converted `GetPlacedReferencesAtGrid` coordinates with an unchecked `get<int>()`, so an out-of-range safe integer such as `4294967297` wrapped to a different cell; it now refuses them. Create range-checks through `RadiclePluginLifecycle.cpp:lifecycleSignedField`.
+
+The native backend remains authoritative for Fallout 4 coordinate range and CELL semantics. This change only prevents the frontend from silently changing the user's token before dispatch.
+
+### Proof
+
+The current branch carries the regression in `f8dd7b3d` before the implementation in `f29d22d6`. Before the implementation, the requested helper did not exist and the `Number.parseInt` behavior reproduced the defect:
+
+- `12abc` -> `12`
+- `1.5` -> `1`
+
+Post-fix parser checks in `PluginEditTool/web/src/CellPanel.test.ts` cover signed integer acceptance at both int32 bounds plus suffix, decimal, exponent, whitespace, empty, and out-of-range refusal.
+
+`PluginEditTool/web/src/CellPanelGrid.test.tsx:Cell Viewer exterior grid dispatch` renders the real panel with a simulated native bridge and plugin picker. Invalid persisted X or Y disables both actions and Enter sends no load request. Correcting an invalid value restores loading. Signed coordinates reach CreateRecord, SavePlugin and the subsequent grid reload unchanged. This verifies React dispatch; it does not verify live WebView2 or in-game behavior.
+
+`PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:intArgument` also refuses integers outside `int`, so `GetPlacedReferencesAtGrid` reports `CellGridArgumentsMissing` instead of wrapping; `PluginEditTool/native/tests/unit/RadiclePluginExteriorCellTests.cpp:PluginEditTool creates a new exterior CELL in the WRLD hierarchy` checks that `4294967263` no longer resolves the cell at X=-33.
+
+`PluginEditTool/native/include/fo4ide/core/JsonInt.hpp:jsonInt` is the shared strict range check: it refuses non-integers, unsigned values above `INT_MAX` and signed values outside `int`. `jsonIntSaturated` clamps into `int` instead. Grid lookup (`src/plugin/RadiclePluginCell.cpp:intArgument`), audio bitrate (`src/app/AudioTarget.cpp:intArgument`, fallback 0 = encoder default) and graph schema (`src/graph/GraphDocument.cpp:tryDeserialize`) use the strict form. Paging limits use the saturating form (`src/app/ArchiveTarget.cpp:intArgument`, `src/app/PluginBackendTarget.cpp:intArgument`, `src/plugin/RadiclePluginOverridePatch.cpp:intArgument`, `src/archive/RadicleArchiveBackend.cpp:intField`), so an oversized limit becomes the backend maximum rather than one row or a wrapped value. `tests/unit/PluginBackendTargetTests.cpp:JSON int helpers refuse or saturate values outside int` checks both. A present graph schema that is not an `int` (float, string, out of range) is refused as a malformed document rather than silently loading as the current schema (`tests/unit/GraphDocumentTests.cpp:A document whose schema is not an integer is refused`). A missing archive `List`/`ExtractAll` limit falls back to the backend defaults (2000 and 5000) instead of 0, which the backend would clamp to one row. `src/plugin/ConditionCodec.cpp` `applyParam` keeps its `get<std::int32_t>()` on purpose: condition parameters that hold form IDs are stored as the unsigned bit pattern in a signed field. `src/app/ServiceTargetSupport.hpp:intNumberArgument` covers the JSON numbers that `src/app/PapyrusTarget.cpp` (`SymbolAt` position) and `src/app/GraphTarget.cpp` (`SearchPalette` limit) accept: integers go through the strict `jsonInt` check and in-range floats are truncated as before, while non-finite values take the fallback instead of the undefined double-to-int conversion. Out-of-range values take the fallback for the `SymbolAt` position and saturate for the `SearchPalette` limit (its `saturate` flag), matching the other paging limits. `src/plugin/RadiclePluginLifecycleFields.hpp:lifecycleSignedField` refuses unsigned JSON values above `INT64_MAX` before its signed range check, so 18446744073709551583 is no longer accepted as x = -33.
+
+## PluginEditTool/native/src/app/ServiceTargets.cpp split — PapyrusTarget, GraphTarget, ServiceTargetSupport
+
+`src/app/ServiceTargets.cpp` was split along its target classes to stay under the 750-line source limit: `SettingsTarget`, `NifTarget` and `CellTarget` stay there, `PapyrusTarget` moved to `src/app/PapyrusTarget.cpp`, and `GraphTarget` to `src/app/GraphTarget.cpp`. Helpers used by more than one target (`trim`, argument readers, `pathResult`, base64 decoding, staging directories, file text I/O, `toLower`, `isWhitespace`) live as inline functions in `src/app/ServiceTargetSupport.hpp` (`fo4ide::app::support`), which includes only what those helpers need; each target file includes its own project headers, and helpers used by one target stay in that file's anonymous namespace. Behaviour is unchanged apart from `intNumberArgument` above.
+
+Explanations moved out of the source during the split:
+- `src/app/PapyrusTarget.cpp:extractScriptName` mirrors PapyrusService.ExtractScriptName: the first non-comment line, if it starts with ScriptName, contributes its second token.
+- `src/app/PapyrusTarget.cpp:namespacedOutPath` mirrors PapyrusService.NamespacedOutPath: namespaced scripts (Foo:Bar) are written into namespace subfolders so they recompile as-is.
+- `src/app/PapyrusTarget.cpp:diagnoseDependencies` mirrors PapyrusService.DiagnoseDependencies: it mines unresolved symbols out of PapyrusCompiler.exe output and maps known script extenders to Nexus pages.
+- `src/app/PapyrusTarget.cpp:PapyrusTarget::compile` ports PapyrusService.Compile: validation, engine selection, then either the built-in engine (PapyrusAnalysisService.Compile) or the Creation Kit process path when a PapyrusCompiler.exe is configured. Its `workDir` / `target` pair mirrors the C# layout sniffing.
+- `src/app/PapyrusTarget.cpp:PapyrusTarget::decompile` ports PapyrusService.Decompile: a single file (written, or a NOT SAVED preview) or a whole folder of .pex, with namespaced output paths so scripts recompile as-is.
+- `src/app/GraphTarget.cpp:graphScriptRoots` ports GraphInterop.Roots(): the Papyrus base-import directories that exist. `describeNodeDefinition`, `describeGraphDiagnostic` and `graphDiagnosticsJson` port GraphInterop.Describe(NodeDefinition), Describe(GraphDiagnostic) and Diagnostics() (the `{ diagnostics, ok }` payload).
+- `src/app/GraphTarget.cpp:GraphTarget::invoke` locks the whole target because the RPC dispatcher runs `invoke()` concurrently and `compiler()`/`Refresh` mutate `index_`, `compiler_` and `rootsKey_`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp split — RadiclePluginLifecycleFields, RadiclePluginProjExplHazd
+
+`src/plugin/RadiclePluginLifecycle.cpp` was split to stay under the 750-line source limit. Its payload field readers and validators (`lifecycleSignedField`, `lifecycleUnsignedField`, `optionalStringField`, `checkLoadedSlot`, `validateProvidedScalars`, …) moved into `src/plugin/RadiclePluginLifecycleFields.hpp` (`fo4ide::plugin::lifecycle`, inline); apart from the `lifecycleSignedField` unsigned guard described above, their bodies are unchanged. The PROJ, EXPL and HAZD branches of `RadiclePluginBackend::createRecord` moved into private members `RadiclePluginBackend::createProjectileLocked`, `createExplosionLocked` and `createHazardLocked` in `src/plugin/RadiclePluginProjExplHazd.cpp`; they return the created key or the same validation error, and `ProjExplHazdError` still propagates to `createRecord`'s catch. They run under `createRecord`'s lock and mutate only the working plugin copy it passes in.
+
 ## Native write model — deferred persistence (#174)
 
 Ordinary record-edit RPCs stage in-memory dirty state via `stagePluginMutationLocked` and require `SavePlugin` to persist. Localized QUST CNAM table changes stage DLSTRINGS through `stagedLocalization` and flush on the same explicit save path (`persistPluginLocked` + dependency-first write). `DiscardPlugin` restores the last persisted snapshot without writing disk. See `docs/code-notes/174c-pending-lifecycle-audit.md` and the `#174C pending lifecycle` note below.
@@ -187,6 +245,24 @@ Ordinary record-edit RPCs stage in-memory dirty state via `stagePluginMutationLo
 ## PluginEditTool/native/src/plugin/RadiclePluginOverridePatch.cpp:createMergedPatch — overwrite
 
 `copy_record_as_override` is called with `overwrite=false`. The C# oracle routes `CreateMergedPatch` through `ResolveConflict` with its default `overwrite=false`, which refuses a record the patch already contains (the result is not "Copied", so it is counted as a failure, not a forward). With `overwrite=false` the native op leaves an existing patch record intact and reports it as "already present in the patch" instead of silently replacing it.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:RadiclePluginBackend::laterOverridesLocked — #40 losing overrides
+
+`laterOverridesLocked` reads the existing graph's definition chain after the target's index in `plugins_`. `RadiclePluginBackend.cpp:rebuildGraphLocked` builds the graph in that same order. Copying into the target does not move it in load order. `RadiclePluginMutation.cpp:copyAsOverride` validates source presence before returning `LOSES:` and leaves pending state unchanged until consent. Its `optionalBoolArgument` and the corresponding helper in `RadiclePluginBatchMutation.cpp` default absent/null consent to false and reject other non-booleans.
+
+`PluginEditTool/native/src/plugin/RadiclePluginBatchMutation.cpp:copyAsOverrideMany` asks about overwrite before losing load order. `PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke` forwards ResolveConflict's optional fourth argument as CopyAsOverride's fifth argument. Omitted consent retains the existing call shape.
+
+`PluginEditTool/web/src/RecordView.tsx:copyInto` asks about losing load order before overwrite and carries consent through the retry. `MainShell.tsx:batchCopyAsOverride` retains overwrite consent while asking about losing order. `ConflictResolver.tsx:handleResolve` retries with consent only after confirmation. These fields are declared in `backend.ts:Backend`.
+
+`PluginEditTool/web/src/overrideConfirmation.test.tsx` renders the three real components with the real confirmation dialog and a simulated native bridge. It checks cancellation without retry, explicit consent, and preservation of consent across both prompt sequences. The plugin picker is stubbed to select a fixed target. This is component acceptance, not WebView2 or game-runtime proof.
+
+`PluginEditTool/native/tests/unit/RadiclePluginMutationTests.cpp` and `RadiclePluginBatchMutationTests.cpp` place the empty target before the source definition to exercise refusal without mutation and consent to a losing copy. The graph still reports the later source as winner.
+
+`PluginEditTool/native/src/assets/TextureResolver.cpp:addDataRoots` adds recursive BA2 scan roots only when the climb reaches a Data ancestor. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp` places an archive beside the NIF tree to detect accidental ancestor discovery. The loose-NIF assertion compares filesystem identity because Windows lookup can return different filename casing.
+
+`PluginEditTool/native/src/plugin/RadiclePluginDeepCopy.cpp:RadiclePluginBackend::deepCopyAsOverride` applies the same rule to every record in the deep-copy set. The dry run lists the records that would lose; apply returns `LOSES:` before the `EXISTS:` overwrite check unless the optional seventh argument (`allowLosing`, after `maxRecords`) is true, matching the single-copy prompt order. `PluginEditTool/native/tests/unit/RadiclePluginDeepCopyTests.cpp:Native DeepCopyAsOverride requires consent before writing overrides that will lose` covers preview, refusal without mutation, and opt-in. `deepOptionalBoolArgument` treats an absent or null `allowLosing` as false and rejects any other non-boolean with `InvalidAllowLosingFlag`, like `RadiclePluginMutation.cpp:optionalBoolArgument`, so a malformed consent value fails loudly instead of being read as a refusal.
+
+`PluginEditTool/web/src/recordActions.ts:useRecordActions` holds the RecordView context-menu operations (including the deep-copy consent retry), `PluginEditTool/web/src/RecordContextMenu.tsx` renders that menu, and `PluginEditTool/web/src/recordStatus.ts` holds the pure cell-status and legend tables. They were split out of `PluginEditTool/web/src/RecordView.tsx` so it stays under the 750-line source limit; behavior is unchanged and `PluginEditTool/web/src/overrideConfirmation.test.tsx` exercises both the record copy and deep copy consent flows through the real menu.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginOverridePatch.cpp:revertOverrides — overwrite
 
@@ -382,6 +458,20 @@ The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePlug
 
 # Native Windows launch
 
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getPluginWorklist
+
+The worklist walks the selected plugin's records against the existing conflict graph. Depth counts loaded definitions before this plugin; later definitions determine the winner and losing rows. Counts apply the signature filter before the kind filter and pagination. `OriginLoaded` describes whether the owning plugin is loaded, even when it has no definition of this record. `sizeArgument` clamps unsigned JSON pagination values before conversion so they cannot wrap into negative defaults.
+
+`PluginEditTool/native/tests/unit/RadiclePluginWorklistTests.cpp` covers synthetic chains, filters, pages, a missing origin, an origin loaded without a record, unsigned pagination, unsaved copy/discard, and the committed Heather fixture. `PluginEditTool/native/tests/native_mcp_smoke.py:main` exercises the same query through the stdio host after in-memory record creation.
+
+`PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::addDataRoots` retains the inherited Data-ancestor restriction. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp` verifies archive resolution within Data and refusal to scan unrelated ancestors.
+
+`PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveFromArchives` keeps an explicit NIF-panel texture root as its own scan root when it has no Data ancestor, so a user-chosen folder such as an unpacked mod still has its own archives scanned; only the climb above it is refused. That explicit root goes to `TextureResolver::scanAndLookup` as a shallow root and `ensureRootScanned(root, false)` reads only its top level, so no spelling of a drive root, UNC share, `C:\.` or cache folder can start a recursive crawl; `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver scans an explicit texture root without a Data ancestor only at its top level` fails if the scan recurses. `TextureResolver::ensureRootScanned` memoises shallow scans in `shallowScannedRoots_`, separate from `scannedRoots_`, so the shallow root is listed once and a later recursive scan of the same folder still runs (reachable when the texture root carries trailing whitespace, which defeats the Data-ancestor test but not the trimmed scan key); `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver still scans a folder recursively after a shallow scan of it` fails with a shared set. `PluginEditTool/native/tests/unit/TextureResolverTests.cpp:Texture resolver scans an explicit texture root that has no Data ancestor` fails without that fallback.
+
+`PluginEditTool/native/tests/unit/TextureResolverTests.cpp` checks a loose NIF with `std::filesystem::equivalent`, since a Windows lookup can preserve the query's casing rather than the directory entry's casing.
+
+`Radicle/src/graph/conflict_graph.cpp:ConflictGraph::winner` selects the last loaded definition. This worklist exposes that existing graph behavior. Pinned [xEdit](https://github.com/TES5Edit/TES5Edit/blob/9fb016884bec138ea6c7b872cec831537d464c3e/Core/wbImplementation.pas#L11278) excludes partial forms in `TwbMainRecord.GetIsWinningOverride`; partial-form winner parity is not introduced by this query. No engine layout or runtime behavior is inferred from these source rules.
+
 - `PluginEditTool/web/src/hostbridge.ts:install` supplies the existing HTTP transport for the native host's loopback HTTP page, including when WebView2 exposes its default `chrome.webview` object. The legacy C# host serves `https://app.local` and retains its registered host objects. `PluginEditTool/web/src/hostbridge.test.ts` covers both transports.
 
 - `PluginEditTool/native/tests/native_mcp_smoke.py:main` exercises the executable with an isolated MO2 profile and settings directory. It checks plugin discovery, pending edits, failed-edit preservation, explicit save, reload, discard, and invalid startup arguments. Pass `--build-dir` and optionally `--cmake` to include the Release host build.
@@ -389,6 +479,8 @@ The test-only localization hook in `PluginEditTool/native/tests/unit/RadiclePlug
 - `PluginEditTool/native/apps/fo4ide/main.cpp:main` loads an explicitly requested MO2 instance through the existing `appInterop.OpenMo2Profile` route before serving requests. Invalid arguments or load failures stop startup.
 - `PluginEditTool/native/apps/fo4ide/McpTools.cpp:registerPluginTools` exposes existing native plugin operations. `save_plugin` uses the existing in-place SavePatch route. `reload_mo2_profile` reloads the active profile and fails closed on pending edits unless `discard_pending` is true. Desktop and stdio sessions have separate pending state; reload after another session saves. Record creation retains the backend's supported-type and payload restrictions. `get_record` returns the existing record matrix; `list_records_summary` supplies decoded grid values and editable column paths.
 - `PluginEditTool/native/include/fo4ide/graph/NodeDefinition.hpp:NodeDefinition::pin` and `PluginEditTool/native/src/graph/GraphDocument.cpp:GraphDocument::node` use distinct parameter names to avoid member-shadowing errors in the MSVC build.
+
+`PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getPluginWorklist` upper-cases the optional signature before matching, so an MCP caller passing `misc` gets the MISC rows instead of a silent empty page; `PluginEditTool/native/tests/unit/RadiclePluginWorklistTests.cpp:Plugin worklist filters by kind and signature and pages without changing counts` checks the lowercase form.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginPending.cpp — #174C pending lifecycle
 
@@ -429,6 +521,813 @@ Fallout4.esm (`D:\Fallout4Backup\Fallout 4\Data\Fallout4.esm`) uncompressed top-
 
 For `Radicle/src/schema/form_link_mixed.cpp:packed_formid_array_offsets`, the local commonlib_NonVR reference confirms the distinct runtime form types for OMOD, EQUP, and MUSC. Runtime member shape does not independently prove plugin subrecord serialization, xEdit definitions, or quoted RVAs; those claims remain concept-level here and are not shipped as runtime offset evidence.
 
+## Radicle/src/environment/environment.cpp:fo4::env::Environment — GardenEngine #114 load-order environment
+
+First slice of garden-engine/GardenEngine#114 (replace Mutagen with Radicle). It stands in for the Mutagen `ILinkCache`/`GameEnvironment` role that `opencw/Services/GameLoader.cs` and `Mo2ProfileLoader.cs` build. MO2 parsing stays in C#, which passes the ordered plugin paths in.
+
+- **Load.** `Environment::load(paths)` reads every path in order and stamps master light/full kinds from the loaded set, as `RadiclePluginBackend::loadEnvironment` does. It then indexes every record version by `FormKey`. The load fails closed on an unreadable file, a duplicate filename, or the same FormKey twice inside one plugin. The engine's behaviour for an in-plugin duplicate is unproven, so the index refuses it instead of picking one copy.
+- **Unresolved masters.** A master that does not load earlier than its dependent plugin is reported in `PluginInfo::unresolved_masters`, not rejected. Mo2ProfileLoader already prepends the implicit masters and throws only when `Fallout4.esm` is missing.
+- **Versions.** `versions()` is ordered lowest priority first, with the winner last. This matches `GameLoader.GetRecordContexts`, which reverses `ResolveAllSimpleContexts`.
+- **EditorID lookup.** `find_by_editor_id` matches the vendored Mutagen link cache (`Mutagen.Bethesda.Core/Plugins/Cache/Internals/Implementations/Internal/InternalImmutableLoadOrderLinkCache.cs` and `ImmutableLoadOrderLinkCacheCategory.cs`):
+  - It walks plugins from the highest priority down.
+  - It indexes every record *version* under that version's own EDID; the first match wins.
+  - Matching is `StringComparer.OrdinalIgnoreCase`.
+  - Blank or whitespace-only EDIDs never match.
+  - Consequence: an EDID that a later override renamed still resolves to the older, lower-priority version, exactly as `GameLoader.ResolveCellId` sees it today.
+- **`winners_of(signature)`.** Groups winners by the highest-priority plugin that holds them, then by on-disk order. This is the output order of Mutagen's `OverrideMixIns.WinningOverrides` over `PriorityOrder`.
+  - One difference: `WinningOverrides` skips deleted winners by default, but `winners_of` keeps them. Callers filter on `RecordMetadata::deleted`.
+  - GardenEngine's current callers (`ListWorldspaces`, `CollectUniqueNifPaths`) enumerate each mod's records and resolve the winner themselves; they do not call `WinningOverrides`.
+- **`metadata()`.** Decodes only the generic surfaces:
+  - EDID and MODL as NUL-terminated strings; a malformed payload is reported as absent.
+  - OBND as six `int16`.
+  - The deleted flag, bit 5.
+  - FULL. In a localized plugin, FULL is always a four-byte string ID: xEdit FO4 defines one `wbFULL` lstring for every record type, and Mutagen reads every FULL through `StringsSource.Normal`. Otherwise FULL is inline text.
+  - String-table resolution and record-specific model fields (ARMO world models, SCOL) are later #114 slices. `ModelPathResolver.PrimaryModelPath` special-cases both.
+
+`Radicle/src/c_api_env.cpp` is the C ABI over this (`fo4/c_api_env.h`):
+
+- Records are borrowed `radicle_record*` handles into the immutable index. All strings point into plugin bytes, so there are no per-query allocations except the record arrays, which are freed with `radicle_free_record_array`.
+- It shares `radicle_last_error` and the error helpers with `c_api.cpp` through `src/c_api_internal.hpp`.
+
+`Radicle/tests/test_environment.cpp` covers:
+
+- winner and version order;
+- EDID rename and case handling;
+- enumeration order;
+- light, master and unresolved-master reporting;
+- fail-closed loads;
+- FULL/OBND/deleted decoding;
+- the C ABI round trip and its error statuses.
+
+## Radicle/src/environment/world.cpp:fo4::env::decode_worldspace / decode_cell — GardenEngine #114 WRLD/CELL read surface
+
+Second #114 slice, stacked on the environment slice. It covers what `WorldspaceService`, `CellService` and `CellCompiler` read from WRLD/CELL.
+
+**Containment index.** `Environment::load` walks the groups itself, instead of `visit_records`, and stamps every `RecordRef` with three things:
+- the type of the group that directly holds it;
+- the enclosing WRLD, taken from the world-children group label (type 1);
+- the enclosing CELL, taken from the cell-children group label (type 6).
+
+Labels resolve through the plugin's own master table, so master-owned worlds and cells land on the right FormKey. An unresolvable or null label fails the load. After the walk, per-container member lists are built in load order, so the hierarchy queries never scan the whole load order.
+
+**Hierarchy queries:**
+- **`worldspace_top_cell`**: the CELL held directly by the world-children group, taken from the highest-priority plugin.
+- **`worldspace_cells`**: every CELL in an exterior sub-block (type 5) under the world. Each entry is the version from the highest plugin that lists it, ordered by that plugin and then on-disk order. `WorldspaceService.ListExteriorCells` iterates WRLD overrides from low to high priority and keeps the last cell per grid; iterating this list and keeping the last cell per grid gives the same result.
+- **`interior_cells`**: winning CELLs whose winning version sits in an interior sub-block (type 3).
+- **`cell_children`**: mirrors `CellService.GetPlacedReferencesJson`. It walks the persistent (8) and temporary (9) children of every version of the cell, from low to high priority:
+  - a later copy replaces an earlier one;
+  - a copy with the deleted flag removes the child;
+  - the list keeps first-insertion order;
+  - every signature is returned (LAND and NAVM included); consumers filter by signature;
+  - a child whose winning version sits in another cell is left out, so a reference a later plugin moves appears only in its new cell.
+- **`cell_landscape`**: mirrors `WorldspaceService.ResolveWinningLandscape`. It returns the LAND held by the highest-priority cell version that has one.
+
+**Layouts**, from xEdit FO4 at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `Core/wbDefinitionsFO4.pas` `wbRecord(WRLD` and `wbRecord(CELL`, plus `Core/wbDefinitionsCommon.pas` `wbWorldLandData`, `wbWorldObjectBounds`, `wbCellGrid`, `wbAmbientColors` and `wbByteColors`.
+- **WRLD:**
+  - PNAM is a `u16` of parent-use flags.
+  - DNAM is two floats: default land height and default water height.
+  - NAM0 and NAM9 are two floats each. They are returned as stored; xEdit only scales them by 1/4096 for display.
+  - DATA is a `u8` of flags.
+- **CELL:**
+  - DATA is a `u16` of flags. A one-byte DATA is accepted and zero-extended.
+  - XCLC is `i32 x`, `i32 y`, then an optional `u8` of land flags and 3 unused bytes, so it is 8 or 12 bytes.
+- **CELL XCLL:**
+  - Ten fixed members come first: three RGBx byte colors (ambient, directional, fog near), fog near, fog far, directional rotation XY and Z (`i32`), directional fade, clip distance and fog power.
+  - Then the directional ambient block: six RGBx colors, plus specular and fresnel power from form version 30. That is 24 bytes before form version 30 and 32 bytes from it.
+  - Then the optional tail: fog far color, fog max, light fade begin and end, and `u32` inherits.
+  - A payload shorter than its required members fails closed.
+  - The tail members beyond inherits are not decoded yet.
+
+**Checked against the vendored Mutagen** (`opencw/third_party/Mutagen`, `Mutagen.Bethesda.Fallout4/Records/Major Records/`):
+- **NAM0/NAM9.** `Worldspace.cs` `FillBinaryObjectBoundsMinCustom` / `…MaxCustom` divide the stored floats by 4096. Radicle returns them as stored, so the GardenEngine binding must divide by 4096 to reproduce `ObjectBoundsMin` and `ObjectBoundsMax`.
+- **XCLL.** `CellLighting_Generated.cs` always reads a 32-byte `AmbientColors`. Every Fallout 4 record has form version 30 or higher, so the xEdit form-version rule used here produces the same offsets. The member order and the Inherits bit values match `CellLighting.cs`.
+- **CELL DATA.** Read at its actual length, 1 or 2 bytes, as done here.
+- **XCLC.** Mutagen reads 12 bytes and keeps a raw 4-byte value in `CellGrid.Flag`. Only byte 8 carries the land flags (xEdit `wbCellGrid`: `u8` plus 3 unused bytes), and that byte is what is exposed here.
+
+`Radicle/src/c_api_world.cpp` is the C ABI over this: `radicle_worldspace_get_info`, `radicle_cell_get_info`, `radicle_record_get_container`, and the hierarchy queries. Link fields borrow their owner name from `Environment::stable_owner`, a set of every plugin and master name. A link whose plugin is NULL is absent. `Radicle/tests/test_environment_world.cpp` builds a two-plugin WRLD/CELL fixture covering: top cell, exterior block/sub-block, interior block, persistent and temporary children, a deleted child override, and a LAND override. It also tests malformed and wrong-signature decodes and the C ABI.
+
+## Radicle/src/environment/placed.cpp:fo4::env::decode_placed_reference / primary_model_path — GardenEngine #114 placed references and model paths
+
+Third #114 slice, stacked on the WRLD/CELL slice. It covers every placed-reference field `CellService.GetPlacedReferencesJson` and `ReferenceWriteback` touch, plus `ModelPathResolver.PrimaryModelPath`.
+
+**Scope.** `decode_placed_reference` accepts REFR, ACHR and the placed trap family (PARW, PBAR, PBEA, PCON, PFLA, PHZD, PMIS, PGRE). This matches the record types Mutagen's `Cell.ParseTypical` dispatches.
+
+**Sections.** The decode is sequential because several signatures change meaning with the anchor before them (xEdit FO4 `wbRefRecord(REFR` / `wbRefRecord(ACHR` at pin `9fb016884bec138ea6c7b872cec831537d464c3e`):
+- `XMRK` opens the map-marker section: `FNAM` flags, `FULL` name, `TNAM` type.
+- `XRMR` opens the room section: `LNAM` lighting template, `INAM` image space, `XLRM` linked rooms. Mutagen's `FillBinaryBoundDataCustom` reads the same members after XRMR.
+- `XPRD` opens a patrol: `XPPA`, `INAM` idle, `PDTO` topics, and on ACHR a `TNAM` topic.
+
+Any of those signatures outside its section fails closed. Every other listed field is sized exactly: a wrong size or an unexpected repeat throws `WorldDecodeError`. Unknown subrecords are ignored (they stay in the plugin untouched).
+
+**Layouts** agree between xEdit and the vendored Mutagen:
+- **Link and flag fields:**
+  - `XESP`: 4 or 8 bytes, FormID then `u8` flags.
+  - `XOWN`: 4 or 12 bytes, FormID, 4 unused bytes, then a no-crime byte.
+  - `XLKR`: 8 bytes as keyword + reference, or 4 bytes as keyword only, leaving `reference` empty (Mutagen `LinkedReferencesBinaryCreateTranslation.FillBinaryStructs` fills `KeywordOrReference` and stops at the `<Break>`).
+  - `XAPR`: FormID + `f32` delay.
+- **Geometry fields:**
+  - `XTEL`: door, position, rotation, `u32` flags, and at 36 bytes the transition-interior CELL. xEdit lists that member; a 32-byte form is also accepted.
+  - `XPRM`: bounds `vec3`, colour RGB floats plus one float Mutagen reads as `Unknown` (`PlacedPrimitive_Generated.cs`, `ColorBinaryType.NoAlphaFloat`), `u32` type. `Primitive::color[3]` and `radicle_placed_ref.primitive_color[3]` hold that float, not alpha. Bounds are returned as stored; Mutagen `PlacedPrimitive.FillBinaryBoundsCustom` and xEdit both double them.
+  - `XBSD`: slack, thickness, half extents, then an optional wind-detached byte.
+  - `XPTL`: width, height, position, quaternion.
+- **Comments.** `MNAM` holds comments on REFR and the traps.
+
+**Scripts.** `VMAD` goes through the new `fo4::read_vmad_scripts` (`Radicle/src/schema/vmad.cpp`), which shares the existing VMAD walker:
+- It returns script names, flags and properties.
+- Values are kept for object (FormID and alias), string, int, float and bool. Structs and arrays report their leading count.
+- A Variable property (type 6 or 16) stops decoding with `unsupported` set. Mutagen throws `NotImplemented` there.
+
+**Model path.** `primary_model_path` mirrors `ModelPathResolver.PrimaryModelPath`:
+- SCOL has none.
+- ARMO uses its world model: `MOD2` (male), then `MOD4` (female). ARMO `MODL` is an armature FormID, not a path.
+- Only the model-bearing signatures in `primary_model_path`'s `modeled` list use their first `MODL`: ACTI, ADDN, ALCH, AMMO, ANIO, ARTO, BOOK, BPTD, CAMS, CLMT, CONT, DOOR, EFSH, EXPL, FLOR, FURN, GRAS, HAZD, HDPT, IDLM, INGR, IPCT, KEYM, LIGH, LVLN, MATO, MISC, MSTT, NOTE, OMOD, PROJ, STAT, TACT, TERM, TREE, WEAP. These are the FO4 major records whose Mutagen getter implements `IModeledGetter` (checked in the vendored `Mutagen.Bethesda.Fallout4/Records/Major Records/*_Generated.cs`), which is the test GardenEngine's Mutagen `ModelPathResolver.PrimaryModelPath` used. RACE, ARMA, WTHR and WRLD have `Model` fields but do not implement it, so they report no model.
+- The text is cut at the first NUL, like Mutagen's zero-terminated string read. Empty or unterminated text counts as no model.
+
+`Environment::metadata().model` now uses the same rule.
+
+**C ABI.** `Radicle/src/c_api_placed.cpp` provides `radicle_placed_ref_decode` / `radicle_placed_ref_free`:
+- It returns one heap view that owns every array.
+- The opaque `internal` pointer lets the free call find that owner.
+
+`radicle_record_primary_model_path` exposes the model rule.
+
+**Tests.** `Radicle/tests/test_environment_placed.cpp` covers:
+- a REFR carrying every field;
+- ACHR patrol and level modifier;
+- a PHZD;
+- section and size failures;
+- a Variable VMAD;
+- model-path parity;
+- the C ABI.
+
+## Radicle/src/environment/environment.cpp / placed.cpp — review repairs on main after #322-#324 (GardenEngine #114)
+
+#322-#324 were merged to `main` without the fixes that later stack PRs carry. This branch ports four of #336's fixes and fixes the review findings on the merged code. Each change has a regression test.
+
+Source: the vendored Mutagen in GardenEngine `opencw/third_party/Mutagen` (files cited per item) and the regression tests named per item, each of which fails against `main` at `a041442e`.
+
+- `Radicle/src/environment/environment.cpp:decode_record_name` ignores a `FULL` between `OBTE` and `STOP`. Mutagen reads that span as the `ObjectTemplates` list (`Armor.xml`, `counterRecType="OBTE"`, `endMarker="STOP"`), whose entries carry their own `FULL` name (`ObjectTemplate.xml`). Ported from #336. Test: `test_environment.cpp:NameIgnoresObjectTemplateCombinationFull`.
+- `Radicle/src/environment/environment.cpp:Environment::resolve_link` resolves a link whose master index is past the plugin's master table (including `0xFF`) to the plugin itself, as Mutagen `Plugins/Masters/SeparatedMasterPackage.cs:GetFormKey` does for any index at or past the master count. Because both decoders only resolve links through it, they no longer let `FormIdError` escape, so `decode_placed_reference` and the WRLD/CELL decoders throw only `WorldDecodeError` as documented. Ported from #336. Test: `test_environment_placed.cpp:LinkPastTheMasterTableResolvesToTheOwningPlugin`.
+- `Radicle/src/environment/environment.cpp:Environment::index_group` used to skip every record whose own header form ID failed to resolve, so such a record vanished from `winner`, `versions`, `find_by_editor_id` and `winners_of` with no error. A null form ID is still skipped; any other unresolvable one now fails the load with an `EnvironmentError` naming the form ID, the plugin, the index and the master count. Ported from #336. Test: `test_environment.cpp:RejectsRecordWhoseMasterIndexIsPastTheMasterTable`.
+- `Radicle/src/environment/placed.cpp:primary_model_path` reads `MODL` only for the model-bearing signatures listed above. Ported from #336. Test: `test_environment_placed.cpp:PrimaryModelPathIgnoresModlOnRecordsWithoutAModel`.
+- `Radicle/src/environment/environment.cpp:Environment::load` rethrows `std::bad_alloc` instead of wrapping it, so `radicle_env_load` reports `RADICLE_STATUS_OUT_OF_MEMORY` rather than `PARSE_ERROR`. Every `EnvironmentError` message now writes paths through the local `utf8` helper (`path.u8string()`). `path.string()` throws `std::system_error` on MSVC for characters outside the ANSI code page, which replaced the real error with `INTERNAL_ERROR` and dropped the plugin path that GardenEngine's `GameLoader.LoadRadicle` searches for to skip a broken plugin. Test: `test_environment.cpp:LoadErrorsNameNonAnsiPathsInUtf8`.
+  - That test builds the folder name from UTF-16 code units. MSVC reads the Radicle test sources as the ANSI code page (no `/utf-8`), so the original raw `u8"…"` literal became a folder name made of ANSI characters: `path.string()` never threw and the test only checked the message encoding. With the real name it fails on MSVC with `std::system_error` against the old `Environment::load` and passes with the helper.
+- `Radicle/src/environment/environment.cpp:Environment::cell_children` drops a child whose winning version is in another cell (see the `cell_children` notes above). The GardenEngine Mutagen reference (`MutagenCellService.cs`) keeps such a reference in both cells, so `CellServiceParityTests` will report moved references as a difference once GardenEngine pins a Radicle with this change. Test: `test_environment_world.cpp:AReferenceMovedToAnotherCellLeavesItsOldCell`.
+- `Radicle/src/environment/placed.cpp:decode_placed_reference` stores a 4-byte `XLKR` as the keyword, matching Mutagen and GardenEngine's previous `CellService` output, which the XLKR note above already claimed. Test: `test_environment_placed.cpp:DecodesObjectReferenceFields` and `CApiDecodesPlacedReferences`.
+- `Radicle/include/fo4/environment/placed.hpp:Script::name` and `ScriptProperty::name` are owned strings. They were views into `Scripts::raw`, so a copy of `PlacedReferenceData` kept pointers into the original, which dangled once it was destroyed. Test: the copy check at the end of `test_environment_placed.cpp:DecodesObjectReferenceFields`.
+- `Radicle/include/fo4/c_api_env.h:radicle_placed_ref` lost its lifetime comment, which claimed every pointer lives until `radicle_placed_ref_free`. The arrays do. `comments`, `map_marker_name_text`, script and property names from `raw`, and every `radicle_form_key.plugin` point into the environment and live until `radicle_env_destroy`.
+- Not changed: `Radicle/src/environment/environment.cpp:zstring_view` still requires exactly one trailing NUL for EDID and FULL, where Mutagen `BinaryStringUtility.ProcessNullTermination` cuts at the first NUL. Matching it would turn the 4-byte binary FULL that `MetadataDecodesNamesBoundsAndFlags` treats as malformed into one-character text. No real plugin in the 644-plugin Fallen World parity run was affected.
+
+## Radicle/src/environment/terrain.cpp:fo4::env::decode_landscape / landscape_texture_diffuse — GardenEngine #114 terrain surface
+
+Fourth #114 slice, stacked on the placed-reference slice. It covers the LAND, LTEX and TXST data that `TerrainService`, `TerrainTextureBaker` and `CellService` read. Godot mesh and splatmap building stays in GardenEngine.
+
+**LAND layouts.** These follow xEdit FO4 `wbRecord(LAND` plus `wbLandHeights`, `wbLandNormals`, `wbLandColors` and `wbLandLayers` in `Core/wbDefinitionsCommon.pas` (pin `9fb016884bec138ea6c7b872cec831537d464c3e`). The vendored Mutagen (`Landscape_Generated.cs`, `AlphaLayer_Generated.cs`) agrees on every size:
+- `DATA` is a `u32` of flags.
+- `VHGT` is 1096 bytes: an `f32` offset, 33×33 height bytes, then 3 unused bytes. The two readers disagree on sign: xEdit reads the height bytes as `s8`, Mutagen as `u8`. The bytes are returned untouched, and GardenEngine keeps its own signed-delta ×8 accumulation.
+- `VNML` and `VCLR` are 33×33×3 bytes each.
+- All grids are row-major, y outer and x inner, which matches Mutagen's `Array2dBinaryTranslation`.
+
+**Layers:**
+- `BTXT` (base) and `ATXT` (alpha) share an 8-byte header: LTEX form ID, quadrant `u8` (0–3), an unused byte, and a 16-bit layer number.
+  - Source: the vendored Mutagen `Mutagen.Bethesda.Fallout4/Records/Major Records/LayerHeader_Generated.cs` reads the texture link at 0x0 (4 bytes), `Quadrant` at 0x4 (1 byte), `Unused` at 0x5 and `LayerNumber` as `u16` at 0x6. `Radicle/src/environment/terrain.cpp:decode_landscape` reads the same offsets.
+  - The layer number is returned as raw bits; xEdit reads it as `s16`, Mutagen as `u16`.
+  - A quadrant above 3 fails.
+- `VTXT` must directly follow its `ATXT` and be a multiple of 8 bytes: `u16` position, 2 unused bytes, `f32` opacity.
+  - It is returned raw, like Mutagen's `AlphaLayerData`.
+  - A `VTXT` anywhere else fails.
+- An `ATXT` without `VTXT` is valid; its alpha is empty.
+
+**Texture chain:**
+- LTEX `TNAM` links the texture set.
+- TXST has eight string slots, `TX00`–`TX07` in slot order, plus `MNAM` material, `DNAM` `u16` flags, and the width/height/depth/shininess prefix of `DODT` (xEdit `wbDODT`, Mutagen `Decal.xml`).
+  - `Radicle/include/fo4/environment/terrain.hpp:TextureSetData::textures` slots are diffuse, normal/gloss, wrinkles, glow, height, environment, multilayer and smooth spec.
+- `landscape_texture_diffuse` walks winning LTEX → `TNAM` → winning TXST → `TX00`, which is `TerrainTextureBaker.Resolve`'s chain. It gives nothing when any link or the path is missing.
+- `decode_landscape`, `decode_landscape_texture_set` and `decode_texture_set` throw `WorldDecodeError` on a wrong signature or a malformed subrecord that is present.
+
+**C ABI.** `Radicle/src/c_api_terrain.cpp` provides:
+- `radicle_landscape_decode` / `radicle_landscape_free`: one owned view whose grids and alpha payloads point into plugin bytes;
+  - `radicle_landscape` `heights`, `normals` and `colors` are the row-major 33×33 grids, NULL when the subrecord is absent;
+  - `radicle_land_layer::alpha` is the raw VTXT payload, NULL for base layers.
+- `radicle_landscape_texture_get_set`: the LTEX `TNAM`; the out key's `plugin` is NULL when it is absent.
+- `radicle_texture_set_get_info`:
+  - `textures` is `TX00`–`TX07`, NULL for absent slots. The strings are views into plugin bytes that end at a NUL the decoder located, so they are valid C strings.
+  - `decal` holds min width, max width, min height, max height, depth and shininess; only the first `decal_count` are present.
+- `radicle_env_landscape_texture_diffuse`: `RADICLE_STATUS_NOT_FOUND` when any link or the path is missing.
+
+**Tests.** `Radicle/tests/test_environment_terrain.cpp` covers:
+- a full LAND;
+- orphan `VTXT`, `VHGT` size and quadrant failures;
+- the LTEX/TXST chain, including missing links;
+- the C ABI.
+
+## Radicle/src/environment/strings.cpp:fo4::env::StringTables / string_source — GardenEngine #114 localization
+
+Fifth #114 slice, stacked on the terrain slice. It replaces Mutagen's `StringsFolderLookupOverlay` for loose string files. Reading strings out of BA2 archives waits for the BA2 slice.
+
+**Which table a field uses.** `string_source` sends these fields to `.DLSTRINGS`:
+- `DESC`, except in `LSCR`;
+- `QUST CNAM` and `BOOK CNAM`.
+
+Every `INFO` field except `RNAM` goes to `.ILSTRINGS`, and everything else to `.STRINGS`. Sources:
+- This is xEdit's `TwbLocalizationHandler.LocalizedValueDecider` in `Core/wbLocalization.pas` (pin `9fb016884bec138ea6c7b872cec831537d464c3e`).
+- Mutagen upstream (`Mutagen.Bethesda.Fallout4/Records/**/*.xml`, commit `5f8f1adeac2c4aaba59d06779340c7aec3da24c5`) declares the same thing per field:
+  - `translated="DL"` on every Fallout 4 `DESC` except `LoadScreen.xml` (`Normal`), and on `Quest.xml`/`Book.xml` `CNAM`;
+  - `translated="IL"` only on `DialogResponses.xml` `NAM1`.
+- The vendored copy in GardenEngine (`opencw/third_party/Mutagen/Mutagen.Bethesda.Fallout4/Records`) agrees: `translated="DL"` on every `DESC` except `LoadScreen.xml` (`Normal`) and on `Quest.xml`/`Book.xml` `CNAM`; `translated="IL"` only on `DialogResponses.xml` `NAM1`; `DialogResponses.xml` `RNAM` is `Normal`.
+- `Radicle/src/environment/strings.cpp:string_source` is the xEdit rule, which sends every `INFO` field except `RNAM` to IL. Mutagen only marks the fields it localizes, and the other `INFO` strings (`NAM2` script notes, `NAM3` edits, `NAM4` alternate lip text) carry no `translated` attribute, so the two agree on every localized field and differ only for fields that are never looked up in a string table.
+- `Radicle/src/environment/strings.cpp:string_source_extension` gives the upper-case extension without the dot: `STRINGS`, `DLSTRINGS` or `ILSTRINGS`.
+
+**File discovery:**
+- For each plugin with the TES4 localized flag, the loader looks for `<strings_dir>/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>`.
+- The whole name is matched case-insensitively. This matches Mutagen's `StringsFolderLookupFactory`, which compares mod names with `OrdinalIgnoreCase` and lower-cases the language, and Windows file semantics.
+- The language is the ISO token Mutagen's `StringsUtility.GetIsoLanguageString` uses for Fallout 4 (`en`, `de`, `fr`, `it`, `es`, `esmx`, `pl`, `ru`, `ja`, `cn`, `zhhans`, `ptbr`). Any alphanumeric token is accepted, so callers pick the language, with English as the Mutagen default.
+- A missing directory or file means that table is absent. Mutagen likewise skips it, and a lookup then fails.
+- Two files whose names differ only by case, where that name is actually needed, fail. This can only happen on case-sensitive filesystems.
+- `Radicle/src/environment/strings.cpp:list_directory` keys the regular files by their lower-cased UTF-8 name. Lower-casing is ASCII-only, where Mutagen's `OrdinalIgnoreCase` also folds non-ASCII letters.
+- Every path in `strings.cpp` is turned into text through the local `utf8` helper (`path.u8string()`), as in `environment.cpp`. With `path.string()`, MSVC threw `std::system_error` for any file in the strings directory whose name has characters outside the ANSI code page, so one unrelated file broke the whole load (`radicle_strings_load` returned `INTERNAL_ERROR`). Test: `test_environment_strings.cpp:HandlesNonAnsiFileNames`, which builds its names from UTF-16 code units because MSVC reads the test sources as the ANSI code page (no `/utf-8`), so a raw non-ASCII `u8` literal becomes a different, ANSI-representable name.
+
+**Error timing.** A malformed table fails the whole load with `EnvironmentError`. Mutagen parses lazily and throws on the first lookup, so Radicle reports the same bad file earlier.
+
+**Lookups:**
+- Text always comes from the table of the plugin that owns that record version. An override in `Patch.esp` resolves in `Patch_<lang>.*`, not in the master's table, like Mutagen's per-mod `StringsFolderLookupOverlay`.
+- `resolve_name` returns inline `FULL` text unchanged for plugins that are not localized. For a string ID, it reads the owning plugin's Normal table.
+
+**Encoding.** Text is returned as raw bytes, NUL-terminated for the C ABI, and the caller decodes it. Mutagen's `MutagenEncoding.GetSkyrimSeEncoding` covers Fallout 4:
+- English is Windows-1252.
+- Other Western languages try UTF-8 and fall back to 1252.
+- Czech, Hungarian and Polish try UTF-8, then 1250; Russian tries UTF-8, then 1251; Japanese tries UTF-8, then 932.
+- Greek tries UTF-8, then 1253; Turkish tries UTF-8, then 1254; Arabic tries UTF-8, then 1256.
+- Chinese, Korean and Thai are UTF-8.
+
+The C# binding should apply the same table, so no language choice is built into the SDK.
+
+**C ABI.** `Radicle/src/c_api_strings.cpp` provides:
+- `radicle_string_source_for`: both signatures must be four characters.
+- `radicle_strings_load` / `radicle_strings_destroy`. The environment must outlive the handle. Missing files are skipped; a malformed table fails with `RADICLE_STATUS_PARSE_ERROR`. The handle is immutable, and borrowed text stays valid until `radicle_strings_destroy`.
+- `radicle_strings_table_path`: the loaded table's UTF-8 path (`radicle_strings::paths`, indexed [plugin][source] like `StringTables::tables_`), or `RADICLE_STATUS_NOT_FOUND` when that plugin and source have none.
+- `radicle_strings_lookup`: raw NUL-terminated bytes and their size from the plugin's own table; the encoding follows the language and is left to the caller.
+- `radicle_strings_resolve_name`: the record version's `FULL`, inline or looked up in the owning plugin's Normal table; `RADICLE_STATUS_NOT_FOUND` when it is absent, malformed or unresolved.
+
+**Tests.** `Radicle/tests/test_environment_strings.cpp` covers:
+- the field rules;
+- case-insensitive discovery and language selection;
+- owning-plugin resolution for an override;
+- inline names, a missing ID and a missing directory;
+- a malformed table and bad language tokens;
+- non-ANSI file and directory names (`test_environment_strings.cpp:HandlesNonAnsiFileNames`);
+- the C ABI.
+
+## Radicle/src/archive/ba2_reader.cpp:fo4::archive::Ba2Reader / assets.cpp:AssetResolver — GardenEngine #114 BA2 surface
+
+Sixth #114 slice, stacked on the localization slice. It covers the BA2 C ABI, asset precedence, and string tables stored inside archives.
+
+**Why a second reader.** `read_ba2_general_file` and `read_ba2_texture_file` load the whole archive into memory, which is fine for authoring small archives. Vanilla `Fallout4 - Meshes.ba2` and the texture archives run to gigabytes.
+
+`Ba2Reader::open` reads only three things from disk: the 24-byte header, the entry and chunk table, and the name table. It checks every chunk's range against the file size up front. `extract` then seeks to and reads only the chunks it needs. It opens its own stream on each call, so a const reader can be used from several threads without locks.
+
+Decompression and DDS rebuilding are the existing `extract_ba2_general_entry` / `extract_ba2_texture_entry`, so both readers share one DX10 → DDS header path and the same 1 GiB extraction cap.
+
+**Lookup.** Paths are matched with `normalize_ba2_path`, so case and separator don't matter. An archive without a name table is searched by `compute_ba2_hashes` instead. When one archive lists the same path twice, the first entry wins.
+
+**Load order.** `archive_load_order` builds the list, lowest priority first:
+- INI-listed names, in listed order. Reading `Fallout4.ini` (`sResourceArchiveList`/`sResourceArchiveList2` in Mutagen's `GetArchiveIniListings`) stays with the caller, as does MO2 profile parsing.
+- Then, for each plugin in load order, `<stem>.ba2`, followed by `<stem> - *.ba2` in case-insensitive ascending order.
+
+Details:
+- Names match case-insensitively. Files that are missing on disk are skipped.
+- An archive that is both INI-listed and plugin-named appears once, at its INI position, as in Mutagen's `CachedArchiveListingDetailsProvider` comparer.
+- Which plugin archives apply follows Mutagen's `CheckArchiveApplicability`: an exact stem match, or the stem before the last ` - `.
+  - `Radicle/src/archive/assets.cpp:archive_load_order` used to accept any `<stem> - *.ba2`, so `Mod - Patch - Main.ba2` was mounted at `Mod.esp`'s position (and even without `Mod - Patch.esp`). It now compares the name before the last ` - `, as Mutagen does. Test: `test_ba2_reader.cpp:SuffixedArchivesBelongToTheNameBeforeTheLastSeparator`.
+  - One deliberate difference: an empty suffix (`Mod - .ba2`) is not applied, where Mutagen's rule would accept it.
+- Mutagen orders the ` - ` suffixes of one plugin in descending ordinal order. Radicle uses ascending order. Each vanilla/DLC plugin's suffixed archives (`Main`, `Textures`, `Voices_*`) hold different paths, so the order does not change any lookup.
+
+**Precedence.** `AssetResolver::locate` checks loose files under `data_dir` first. It then searches the archives from highest priority down, so the last-mounted archive wins, as the game resolves them.
+
+Mutagen differs:
+- `GameAssetProvider` also checks loose files before archives.
+- But `ArchiveAssetProvider` returns the *first* archive in its applicable order that has the path. INI archives come first there, then plugin archives in ascending load order, so Mutagen resolves a conflicting path to the lowest-priority archive.
+
+GardenEngine needs what the game shows, so Radicle follows the game. This only differs from Mutagen for paths that more than one archive provides.
+
+**Path rules:**
+- Asset paths are normalized to lower case with `/` separators.
+- A leading separator and a leading `data/` are dropped, like Mutagen's `DataRelativePath`.
+- Empty paths and `.`/`..` components are rejected with `AssetPathError`, so a lookup cannot escape `data_dir`.
+- On case-sensitive filesystems, loose lookup matches each path component case-insensitively. An exact match is tried first, and when several case variants exist the lexically smallest wins.
+
+**Strings in archives.** `StringTables::load` takes an optional `AssetResolver`. For each table not found loose, it looks up `Strings/<stem>_<lang>.<EXT>` in the archives, highest priority first.
+- Mutagen's `StringsFolderLookupFactory` also checks loose files first. It then walks the INI archives plus that plugin's own archives and keeps the first hit.
+- String table names are specific to one plugin, so both approaches find the same file in real setups.
+- `table_path` reports an archived table as `<archive path>/<entry path>`.
+
+**C ABI.** `Radicle/src/c_api_archive.cpp` provides:
+- `radicle_ba2_open` / `close`, `get_info`, `get_entry`, `find`, `extract` (free with `radicle_free_bytes`);
+- `radicle_archive_load_order`;
+- `radicle_assets_open` / `destroy`, `archive_count`, `get_archive` (borrowed readers), `locate`, `read`;
+- `radicle_strings_load_with_assets`.
+
+`Ba2Error` maps to `PARSE_ERROR` and `AssetPathError` to `INVALID_ARGUMENT`. `copy_strings` moved from `c_api.cpp`'s anonymous namespace into `radicle_c_detail` so this file can share it.
+
+**Error paths.** Every Radicle error message that names a path goes through `Radicle/include/fo4/io/path_text.hpp:fo4::io::utf8` (`path.u8string()`). This includes the BA2 readers (`ba2_reader.cpp`, `assets.cpp:AssetResolver::read`), `environment.cpp`, `strings.cpp`, `plugin/reader.cpp:read_plugin_file` and `io/atomic_write.cpp`. It replaced four identical local copies. With `path.string()`, MSVC threw `std::system_error` for characters outside the ANSI code page, replacing the `Ba2Error` (`PARSE_ERROR`) with `INTERNAL_ERROR`. Test: `test_ba2_reader.cpp:ErrorsNameNonAnsiPathsInUtf8`. The older whole-file readers in `ba2.cpp` and `ba2_texture.cpp` now share `Radicle/src/archive/ba2_file.hpp:read_file_bytes`, which writes the path the same way; it replaced two identical copies that used `path.string()`. `read_plugin_file` (missing or unreadable plugin) and `write_file_atomic` (failed replace) had the same `path.string()` problem, so a plugin load or save under a non-ANSI folder raised `std::system_error` instead of naming the file; the same test covers both. `Radicle/src/io/atomic_write.cpp:temp_sibling` builds the staging name by appending to the destination path instead of narrowing its file name. Before, every atomic write to a file whose own name is non-ANSI raised `std::system_error`: plugins, BA2 archives and strings files written through the C API or PluginEditTool's plugin backend, which pass UTF-8 paths. PluginEditTool's archive extraction builds its paths from ANSI strings, so it never reached this. Test: `test_atomic_write.cpp:WritesNonAnsiFileNames`. One success path still narrows the file name: `reader.cpp` (`PluginKey::from_filename`), so loading a plugin whose own name is non-ANSI (not its folder) still throws; the game cannot load such plugin names under the ANSI code page either.
+
+**Contracts** (moved from source comments when the slice was restacked):
+- `Radicle/include/fo4/archive/ba2_reader.hpp:Ba2Reader::open` throws `Ba2Error` on anything malformed. `Ba2EntryInfo::path` is the name-table path as stored and is empty when the archive has no name table; the texture header is meaningful only for DX10 archives. The reader's index maps the normalized path, or the packed hashes for archives without names, to the entry index.
+- `Ba2Reader::extract` returns the decompressed payload; DX10 entries come back as a complete DDS file. `Radicle/src/archive/ba2_reader.cpp` keeps the DDS header rebuild on for named entries; unnamed archives only hold DDS payloads in DX10 form.
+- `Radicle/include/fo4/archive/assets.hpp:AssetResolver::open` takes the archives lowest priority first and reads each index at open. An empty `data_dir` disables loose lookup. `AssetLocation`'s indexes point into `archives()` and that archive's `entries()`.
+- `Radicle/src/archive/assets.cpp` lists the regular files directly in a directory as (lower-cased name, path), sorted by lower-cased name.
+- `Radicle/include/fo4/c_api_env.h`:
+  - `radicle_ba2_entry_info.path` is borrowed and empty for archives without a name table; the texture fields are zero for GNRL. `radicle_ba2_find` gives `RADICLE_STATUS_NOT_FOUND` when absent. `radicle_ba2_extract` bytes are freed with `radicle_free_bytes`.
+  - `radicle_archive_load_order`'s result is freed with `radicle_free_string_array`.
+  - `radicle_assets_open` takes `archive_paths` lowest priority first; `data_dir` may be NULL to disable loose lookup. The handle owns its readers.
+  - `radicle_assets_get_archive` returns a reader borrowed until `radicle_assets_destroy`; it is never passed to `radicle_ba2_close`.
+  - `radicle_assets_locate` gives `RADICLE_STATUS_INVALID_ARGUMENT` for empty or `.`/`..` paths and `NOT_FOUND` when nothing provides the path. `archive_index`/`entry_index` are meaningful only for `RADICLE_ASSET_ARCHIVE`.
+  - `radicle_assets_read` returns the winning copy's bytes (freed with `radicle_free_bytes`); `out_location` may be NULL.
+  - `radicle_strings_load_with_assets` is `radicle_strings_load` plus the archive fallback; `assets` may be NULL. `radicle_strings_table_path` gives the UTF-8 loose path or `<archive>/<entry>` for an archived table.
+- `Radicle/src/c_api_env_internal.hpp` holds the loader shared by `radicle_strings_load` and `radicle_strings_load_with_assets`; it clears the error itself.
+
+**Tests.** `Radicle/tests/test_ba2_reader.cpp` covers:
+- GNRL and DX10 archives, stored and zlib chunks, with extraction checked against the in-memory reader;
+- hash lookup without a name table;
+- truncated, wrong-tag, out-of-range-chunk and oversized-count archives;
+- load order;
+- loose/archive precedence and path rules;
+- string tables from an archive, with a loose override;
+- the C ABI.
+
+`Radicle/tests/test_ba2_real.cpp` is the real-file proof, gated on `FO4_DATA_DIR`:
+- It opens every vanilla `Fallout4 - *.ba2`, extracts a NIF (checks the `Gamebryo File Format` magic) and a DDS (checks `DDS `).
+- It resolves WRLD `0000003C` to "Commonwealth" through `Strings/Fallout4_en.STRINGS` in the archives.
+- Setting `FO4_BA2_EXTRACT_ALL=1` also extracts every vanilla entry.
+
+# Asset path validation
+
+`Radicle/src/archive/assets.cpp:normalize_asset_path` rejects colons before joining path components to the Data directory. A drive-qualified component can replace that directory on Windows; colons also select alternate data streams. `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.RejectsDriveAndStreamPaths` covers both loose-file and archive lookup entry points. A Windows C ABI reproduction read a temporary sentinel outside Data before the guard and must return `RADICLE_STATUS_INVALID_ARGUMENT` afterward.
+
+## Radicle/src/forms/quest_vmad.cpp:sync_quest_vmad_stages — QUST Partial Form stage fragments
+
+Shipped DLC overrides `DLCCoast.esm 0AE51C:Fallout4.esm` (BoS301) and `DLCNukaWorld.esm 05DEE4:Fallout4.esm` (Min01) carry record flag `0x4000` and only `EDID` + `VMAD`: no `INDX`, `QSDT` or any other stage member. xEdit dev-4.1.6 (`9fb016884bec138ea6c7b872cec831537d464c3e`, `Core/wbDefinitionsFO4.pas`, `wbRecord(QUST ...)`) names that flag `{0x00004000} 14, 'Partial Form'`. Its `wbVMADFragmentedQUST` fragment struct is `Quest Stage` u32, `Quest Stage Index` u32, unknown u8, `ScriptName`, `FragmentName`, and it does not cross-check fragment stages against `INDX`. Decoded with `Radicle/src/schema/vmad.cpp:walk_quest_extra` rules, every fragment stage in both overrides (38 in BoS301, for example 355; 34 in Min01, for example 1110, 2100, and 100/1500 with stage index 1) is an `INDX` stage of the Fallout4.esm master record. BoS301's override VMAD has the same size as the master's (6509 bytes) with reordered fragments. Min01's is 4697 bytes against the master's 4718. The fragments therefore bind master stages that the partial override does not carry.
+
+`sync_quest_vmad_stages` handles only that case. When the record has flag `0x4000` and decodes no stages, an empty replacement leaves VMAD untouched. Any non-empty replacement throws, because what a partial form's own `INDX` does against the master stage list is not established. Non-partial records, and partial forms that carry their own stages, keep the existing identity and body-match check. `0x4000` is record-type-specific in FO4 (other records use bit 14 differently), so the constant stays local to this file rather than in `fo4::RecordFlags`. Regressions: `Radicle/tests/test_quest_authoring.cpp` `PartialFormVmadKeepsMasterStageFragmentsOnUnchangedRewrite` (red before the fix with the real-data message) and `PartialFormVmadRefusesStagesItCannotBind`; real-data `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` is green.
+
+Further comparison against the same pinned [xEdit source](https://github.com/TES5Edit/TES5Edit/blob/9fb016884bec138ea6c7b872cec831537d464c3e/Core/wbDefinitionsFO4.pas#L936) confirms that `wbConditionQuestStageToStr` uses the winning override only when it is not a partial form; if the selected quest is itself partial, it selects `MasterOrSelf`. This supports retaining fragments whose stages are absent from the partial override. Adding stages remains TODO-verify against plugin-load behavior; runtime stage-execution evidence alone does not establish how partial-form stage arrays are combined.
+
+`Radicle/tests/test_quest_authoring.cpp:PartialFormVmadKeepsMasterStageFragmentsOnUnchangedRewrite` also checks serialization/reload, `PartialFormVmadRefusesStagesItCannotBind` checks rejection leaves serialized bytes unchanged, and `PartialFormWithLocalStagesKeepsVmadValidation` checks the partial-form flag does not bypass binding validation when local stages exist.
+
+`PluginEditTool/native/tests/unit/RadiclePluginQuestPartialFormTests.cpp:Native SetQuestStages preserves partial-form master fragments through save and reload` exercises the JSON backend and explicit save path. An empty replacement preserves the partial flag and the EDID/VMAD members after reload. Adding even the fragment's existing master-stage number is refused; saving after that refusal must leave the file unchanged. `Radicle/tests/test_quest_authoring_real.cpp:PartialFormMasterFragmentsSurviveSerialization` targets the two DLC overrides identified above rather than relying on the general corpus sampler to select them, and checks their full subrecord snapshots after serialization/reload. Both checks validate file preservation, not runtime stage merging.
+
+## Radicle/src/plugin/mutation.cpp:copy_record_as_override — editing stages from a partial quest
+
+For stage authoring, explicitly select a full source record and use native `PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:copyAsOverride` with `CopyAsOverride([sourcePlugin, formKey, targetPlugin, true])` before `SetQuestStages`. The overwrite replaces the whole partial record, including its VMAD, with the selected source and remaps FormIDs; it does not combine the partial VMAD with the source's stages. The source must be nonpartial and appropriate for the target's master chain. Radicle's explicit operation does not automatically select that source. This matches the full-record restoration approach in pinned [xEdit `TwbMainRecord.SetIsPartialForm`](https://github.com/TES5Edit/TES5Edit/blob/9fb016884bec138ea6c7b872cec831537d464c3e/Core/wbImplementation.pas#L14602), which restores a visible nonpartial master when clearing the partial flag.
+
+`PluginEditTool/native/tests/unit/RadiclePluginQuestPartialFormTests.cpp:Native full master override makes partial quest stages editable` verifies that overwrite=false keeps the partial-stage rejection, explicit overwrite clears the partial flag, a stage renumber updates only its VMAD binding, and a new stage can be added. Save/reload retains the master's other quest members, leaves the source file unchanged, and retains rejection of removing a bound stage without a replacement. This is file-authoring coverage; partial records with local stages or without fragment bindings remain outside the new exception, and game-runtime acceptance is not claimed.
+## BGS assistant boundary and mesh discovery (PR 311)
+
+`BGS/app/OpencodeCli.cs:OpencodeCli.McpBoundaryHolds` requires the BGS server before examining configured servers. `BGS/tools/tests/OpencodeCliTests.cs:TheResolvedBoundaryRejectsAMissingBgsBridge` failed for an empty map and a map containing only disabled foreign servers before the guard; both now pass.
+
+`BGS/src/Hkx/MeshLookup.cs:MeshLookup.OnDisk` enumerates at most 4097 filesystem entries, including directories and non-mesh files, and refuses automatic selection when the 4096-entry budget is exceeded. Reparse points are excluded. The complete bounded candidate set is collected before reading models, so truncation cannot select an arbitrary partial result. Larger folders require explicit Mesh selection. `BGS/tools/tests/MeshSearchBudgetTests.cs:NonMeshEntriesCountTowardTheSearchLimit` failed before the bound. The original full UI smoke stalled after initial window checks while auto-discovery traversed the temporary root; its log is under `BGS/tools/tests/bin/uismoke-baseline.log` in this task worktree.
+
+`BGS/app/AssistantCommandRunner.cs:AssistantCommandRunner.DefaultRunAsync` passes prompt arguments only to native executables. Locally verified npm Claude shims resolve to `node_modules/@anthropic-ai/claude-code/bin/claude.exe`; other shell scripts are refused rather than sent through cmd.exe. `BGS/tools/tests/AssistantCommandRunnerTests.cs:ShellShimsCannotInterpretPromptTextAsCommands` failed before removing shell execution and passes afterward.
+
+`BGS/app/AssistantConversationController.cs:AssistantConversationController.ClearActive` reports persistence failure without changing messages/session; successful clear invalidates and disposes the session before the next request. `BGS/tools/tests/MultiChatControllerTests.cs:ClearingChatDisposesItsSessionAndStartsFresh` and `FailedClearPreservesChatAndSession` both failed before remediation. `BGS/app/AssistantUi.Provider.cs:AssistantUi.SelectModel` and `BGS/app/AssistantUi.Api.cs:AssistantUi.ChooseApiKey,ChooseBaseUrl` reset cached idle sessions after setting changes and refuse changes during a request. `BGS/tools/uismoke/AssistantLifecycleSmoke.Fixes.cs:ProviderChangesResetIdleSessions` exercises these production handlers.
+
+`BGS/app/AssistantUi.cs:AssistantUi.SendNow` displays sanitized provider error details outside saved assistant history; `BGS/tools/uismoke/AssistantLifecycleSmoke.Fixes.cs:ProviderFailuresKeepTheirActionableDetail` verifies this. `BGS/app/OpencodeModelCatalog.cs:OpencodeModelCatalog.Parse` gives the plain-text fallback its provider identity, so selection routes to OpenCode instead of silently doing nothing.
+
+`BGS/app/CodexAssistantConnection.cs:CodexAssistantConnection.ConnectAsync` and `BGS/app/CodexAssistantSession.cs:CodexAssistantSession.SendAsync` were exercised through the installed production app-server with the existing signed-in ChatGPT account. The advertised gpt-6-luna model returned BGS_LIVE_OK, status ok, zero tools. A configured model absent from that catalog was refused. This proves account read and a live isolated thread round-trip, not browser/device-code login, logout, or re-login. Logs are under `BGS/tools/tests/bin/live-proof-model.log` in this task worktree. Windows Release unit suite: 930 passed. Full UI smoke: 321 checks passed; assistant and multi-chat modes are validated separately.
+
+`BGS/tools/uismoke/AssistantLifecycleSmoke.cs:AssistantLifecycleSmoke.Pump` allows ten seconds for asynchronous UI work. A timed queued-turn reproduction measured more than four seconds between gate release and the provider continuation, before persistence or UI dispatch, exceeding the old three-second test deadline. Queue production code remains unchanged; explicit assistant and multi-chat smoke modes cover those flows.
+
+`BGS/tools/tests/MultiChatControllerTests.SessionLifecycle.cs:MultiChatControllerTests` groups session disposal, reset, logout, and server replacement proofs in the existing partial test class so the controller suite stays within the source-size limit. Test ownership, fixtures, and behavior are unchanged.
+
+`BGS/app/AssistantChatStore.cs:AssistantChatStore.All` sorts loaded summaries by their persisted UpdatedUtc timestamp. Filesystem write times can tie or be changed by copying files. `BGS/tools/tests/AssistantChatStoreTests.cs:EnumerationReturnsSavedChatsSortedByUpdatedUtcDescending` now reverses the filesystem timestamps to reproduce the former incorrect order deterministically.
+## BGS skeleton and skin authoring validation (PR 161)
+
+`BGS/src/Nif/SkinEdit.cs:SkinEdit.SetInfluences` rejects all non-finite incoming weights before filtering or mutating a vertex. `BGS/tools/tests/SkinEditingProofTests.cs:NonFiniteWeightsAreRejectedWithoutChangingTheVertex` failed for NaN and both infinities before the guard and passes after it.
+
+`BGS/src/Hkx/SkeletonAuthoring.cs:SkeletonEdit.Subtree` tracks visited bones so AddBone and Reparent reject an existing parent cycle before modifying the rig. `BGS/tools/tests/SkeletonAuthoringProofTests.cs:ExistingParentCyclesAreRejectedBeforeMutation` covers both callers and checks the original arrays survive refusal. These are library authoring APIs; this PR adds no editor or NIF save workflow.
+
+`BGS/src/Nif/SkinEdit.cs:SkinEdit.CheckedInfluences` validates all proposed batch output before `Prune`, `CopyWeights`, or `BGS/src/Nif/SkinEdit.Mirror.cs:SkinEdit.MirrorWeights` writes any vertex. `SkinEdit.WriteInfluences` applies already-checked slots without repeating normalization. `BGS/tools/tests/SkinEditingProofTests.cs:InvalidLaterVertexDoesNotLeaveAnEarlierVertexChanged` failed for all three operations before staging writes and passes afterward; an independent two-vertex NaN copy reproduction also leaves both vertices unchanged. Windows Release suite: 636 passed.
+
+## BGS CI and 1.2.0 packaging
+
+`.github/workflows/bgs-ci.yml:verify` matches the registered Windows runner labels self-hosted/Windows/X64; that runner does not advertise garden. The Linux runner retains its garden label. Forgejo run 1218 job 2742 failed before checkout because the default mirror had no actions/github-script repository. Package verification now uses Python rather than that action. SDK setup uses the official setup-dotnet source and a task-owned temporary directory. CI also restores/builds MCP and runs the previously separate assistant, multi-chat, and layout modes.
+
+`BGS/tools/ci/package.py:main` checks the published version, exact commit prefix, and runtime against `BGS/app/BehaviourStudio.csproj:Version` and CI inputs, removes PDB files only within a resolved BGS output directory, and writes build-info.json. Its optional archive creates a fresh ZIP and SHA-256 sidecar for release delivery. `BGS/RELEASE-NOTES.md` and `BGS/CHANGELOG.md` identify version 1.2.0; browser login and real replies from non-Codex providers remain separate manual acceptance boundaries.
+
+`BGS/app/CodexAppServerClient.cs:CodexAppServerClient` defaults its handshake client version to BuildInfo.Version instead of the previous fixed 1.1.0. `BGS/tools/tests/CodexAuthTests.cs:HandshakeRunsInitializeThenInitializedBeforeAccountRead` checks the version sent on the wire; explicit client-version overrides remain supported.
+
+## Radicle/src/c_api_writeback.cpp / forms/placed_reference*.cpp / schema/form_link_mixed.cpp:placed_reference_formid_offsets — GardenEngine #114 reference writeback
+
+Seventh #114 slice, stacked on the BA2 slice. It replaces Mutagen's workflow of `GetOrAddAsOverride`, editing `Placement`/`Scale`, then `WriteToBinary`, for references GardenEngine's editor changes.
+
+**form ID remap gap.** The shared remap and link collection in `visit_link_offsets` never recognized seven form ID-bearing placed-reference subrecords. Before this slice, `copy_placed_reference_as_override` and `remap_plugin_masters` therefore:
+- left these fields' master indexes unchanged whenever the destination master table differed;
+- left their owners out of the masters they add.
+
+The fields, all from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`), `wbRefRecord(REFR` and `ReferenceRecord`:
+
+| Subrecord | Layout | Size rule |
+| --- | --- | --- |
+| `XPOD` Portal Data | array of {Origin, Destination} | multiple of 8 |
+| `XORD` Linked Occlusion References | form ID array | multiple of 4 |
+| `XLRT` Location Ref Type | form ID array | multiple of 4 |
+| `XPWR` Reflected/Refracted By | {Reference, Type} | exactly 8 |
+| `XAPR` Activate Parent Ref | {Reference, Delay} | exactly 8 |
+| `XPLK` Spline Connection | {Ref, Unknown} | exactly 8 |
+| `XWPN` Power Grid Connection | {Node 1, Node 2, Line} | exactly 12 |
+
+`placed_reference_formid_offsets` handles these for the ten placed signatures only, because other record types reuse some of these names. A strict remap throws `FormIdError` when a payload's size breaks its rule, instead of leaving stale IDs.
+
+`is_placed_reference_signature` is now the one shared list; `fo4::env` re-exports it. This also fixes PluginEditTool's placed-reference copies, and its native suite still passes.
+
+**Wider copy/edit support.**
+- `copy_placed_reference_as_override` / `_as_new` and `set_placed_reference_transform` now accept all ten placed signatures (REFR, ACHR, PGRE, PHZD, PMIS, PARW, PBAR, PBEA, PCON, PFLA). They share the CELL containment path, and the 24-byte `DATA` layout is identical across them.
+- `set_placed_reference_scale` sets `XSCL`, inserting it directly before `DATA` when absent (xEdit field order), or removes it for `nullopt`, which is Mutagen's nullable `Scale`. Duplicate or malformed `XSCL` fails without changing anything.
+
+**Plugin creation and master order.**
+- `make_empty_plugin` moves PluginEditTool's `makeEmptyPlugin` header into Radicle: HEDR 1.0 / 0 / `0x800`, form version 131, and the ESM flag for `.esm` or ESM|ESL for `.esl`.
+- Copies add masters in `std::set<PluginKey>` order, which is alphabetical, not load order. `sort_plugin_masters` reorders them to follow a load order through `remap_plugin_masters`, so records, group labels and links are all re-encoded. It throws when a master is not in the load order.
+
+**C ABI.** The source is any record version from the environment; its plugin is `Environment::plugin(ref.plugin)`. `Radicle/src/c_api_writeback.cpp` provides:
+- `radicle_plugin_create`;
+- `radicle_plugin_copy_placed_ref_override` (inserted/replaced/already-exists status);
+- `radicle_plugin_copy_placed_ref_new`. The returned key borrows the destination plugin's filename.
+- `radicle_plugin_set_placed_transform` / `_set_placed_scale`;
+- `radicle_plugin_sort_masters`.
+
+`PlacedReferenceError` maps to `INVALID_ARGUMENT`, and a missing target to `NOT_FOUND`. `struct radicle_plugin` moved into `c_api_internal.hpp` so both C files share it.
+
+**Audit fixes after the restack.** A real-data check (`Radicle/tests/test_writeback_real.cpp:WritebackRealData.CopiedDlcReferencesKeepEveryLinkWhenMastersMove`, gated on `FO4_DATA_DIR`) copies `DLCRobot.esm` placed references into a patch whose master order differs, then writes and reloads it. It selects every reference that carries one of the seven new subrecords, every reference holding a link past the master table, and a 1-in-25 sample of the other linked references. It compares both the decoded links and every raw link hit (record, subrecord, ordinal, offset). It found three failures:
+- `Radicle/src/schema/form_link_mixed.cpp:placed_reference_formid_offsets` required `XPLK` and `XPWR` to be exactly 8 bytes. Both have a `<Break />` after the reference in the vendored Mutagen (`SplineConnection.xml`, `WaterReflection.xml`), so a 4-byte reference-only payload is valid; 244 vanilla `XPLK` subrecords are 4 bytes, and copying any of them threw. The layout table now accepts the short size and emits only slots that fit. Test: `test_environment_writeback.cpp:AcceptsReferenceOnlySplineAndReflectionLinks`.
+- Vanilla data holds links whose master index is past the plugin's master table (for example `DLCRobot.esm` REFR 00272E `XRFG` = `0x02013491` with one master). `Environment::resolve_link` already reads those as the owning plugin, as Mutagen does, but the remap and link collection went through the strict `resolve_plugin_form_id` and threw. `Radicle/src/formid.cpp:resolve_plugin_link` now holds that rule; `Environment::resolve_link` and every link site in `Radicle/src/schema/form_links.cpp` (`remap_raw`, link collection, retargeting, the COED owner) use it. Record header identities and group labels stay strict. Test: `test_environment_writeback.cpp:LinksPastTheMasterTableStayWithTheOwningPlugin`.
+- XOWN (ownership) was never remapped in any record, a bug that already existed on main: copying `DLCRobot.esm` ACHR `010F58` turned its owner `010004:DLCRobot.esm` into `010004:Fallout4.esm`. `Radicle/include/fo4/schema/structured_formids.inc` now lists XOWN with the form ID at offset 0. The layout (source:xEdit `wbDefinitionsCommon.pas` `wbOwnership`) is: owner, 4 unused bytes, a u8 No Crime flag, 3 unused bytes, 12 bytes in total, which is what every vanilla XOWN uses. Test: `Radicle/tests/test_environment_writeback.cpp:RewritesTheOwnershipOwner`.
+- To keep `form_links.cpp` under the 750-line limit, `visit_link_offsets` reaches the packed and placed layouts through one entry point, `form_link_mixed.cpp:mixed_formid_offsets`.
+
+**Contracts** (moved from source comments when the slice was restacked):
+- `Radicle/include/fo4/forms/placed_reference.hpp:copy_placed_reference_as_override` copies any of the ten placed signatures, recreating its CELL/WRLD containment and adding masters. `set_placed_reference_transform` rejects a missing, duplicate or malformed `DATA` without changing the plugin. `set_placed_reference_scale` inserts `XSCL` directly before `DATA` when absent (xEdit FO4 REFR order), removes it for `nullopt`, and returns false when the record is missing. The older header comments on the first two still say REFR/ACHR.
+- `Radicle/include/fo4/plugin/writer.hpp:sort_plugin_masters` reorders masters to follow `load_order`, keeping each master's kind, and throws `FormIdError` when a master is not listed. `make_empty_plugin` writes only TES4, as described above.
+- `Radicle/include/fo4/schema/form_link_mixed.hpp:placed_reference_formid_offsets` gives `nullopt` when the subrecord is not one of the seven listed above.
+- `Radicle/include/fo4/c_api_env.h`:
+  - `radicle_plugin_create`: TES4 only, next form ID `0x800`, ESM flag for `.esm` and ESM|ESL for `.esl`.
+  - `radicle_plugin_copy_placed_ref_override`: copies this record version into the plugin as an override, recreating its CELL/WRLD containment and adding masters. The plugin is unchanged unless `RADICLE_STATUS_OK` is returned.
+  - `radicle_plugin_copy_placed_ref_new`: copies it as a new reference owned by the plugin. `out_key.plugin` is borrowed from the plugin and stays valid until the next call that modifies or destroys it. `NOT_FOUND` when the plugin lacks the parent CELL.
+  - `radicle_plugin_set_placed_transform`: rewrites `DATA` position and rotation (radians); `NOT_FOUND` when the plugin has no such record.
+  - `radicle_plugin_set_placed_scale`: sets `XSCL`, or removes it when `has_scale` is 0; `NOT_FOUND` when the plugin has no such record.
+  - `radicle_plugin_sort_masters`: reorders the plugin's masters to follow the environment's load order; `INVALID_ARGUMENT` when a master is not loaded.
+- `Radicle/tests/test_environment_writeback.cpp` fixtures: `Master.esm` has exterior cell 000801 in WRLD 000800 with refs 000802/000803 and interior cell 000820 with ref 000821; `Other.esm` has interior cell 000850 with ref 000851; `DLC.esm` (master `Master.esm`) has interior cell 01000840 with ref 01000841, whose links point at DLC and Master records. In the patch, `Master.esm` moves from master index 0 to 1 and `DLC.esm` from 1 to 2, so its bytes are rewritten.
+
+**Tests.** `Radicle/tests/test_environment_writeback.cpp` covers:
+- **Raw remap.** Moving DLC.esm from master index 1 to 2 rewrites every new slot and leaves non-form ID struct members alone. A malformed `XAPR` throws.
+- **C++ save/reload parity.** It overrides refs from three masters, copies one as new, and edits transform and scale. It then sorts masters, writes, rereads (byte-identical rewrite) and reloads the environment. Decoded links match the source, edits are applied, and cell children merge the patch copy.
+- **C ABI round trip.** The same flow runs through the C ABI.
+
+With `placed_reference_formid_offsets` disabled, the remap and parity tests fail.
+
+## PluginEditTool/native/cmake/Utf8CodePage.cmake:fo4ide_use_utf8_code_page — UTF-8 process code page
+
+Every PluginEditTool executable (`FO4RecordEditor.exe` and the test executables) embeds `PluginEditTool/native/cmake/utf8.manifest`, which sets `activeCodePage` to UTF-8. `fo4ide_use_utf8_code_page()` adds the manifest to every executable target in the directory it is called from (`apps/fo4ide`, `tests`, `tests/integration`).
+
+PluginEditTool's strings are UTF-8 (they come from and go back to JSON), but on MSVC `std::filesystem::path(std::string)` and `path::string()` convert through the process ANSI code page. Before the manifest:
+- a non-ASCII folder or file name from a request (even `Café`) decoded to the wrong path, so `RadicleArchiveBackend.cpp` extraction wrote into a garbled folder;
+- any `path::string()` on a name outside the ANSI code page threw `std::system_error`, for example `Mo2Profile.cpp:indexFolder` when a scanned folder held such a file (the whole profile load failed), or the `RadiclePluginSeq.cpp` report after a successful write.
+
+There are about 270 such conversions across 43 files; the manifest makes all of them UTF-8 instead of patching each. Windows applies `activeCodePage` from Windows 10 version 1903; older Windows ignores it and keeps the previous behaviour. `RadiclePluginBackend.cpp:utf8Path` and `RadiclePluginSeq.cpp:seqUtf8Path` still convert explicitly, which stays correct either way.
+
+A plugin name written to `plugins.txt` in a legacy code page (non-ASCII, not UTF-8) still does not work: before, it matched the file and then failed in `utf8Path` or when returned in JSON (nlohmann `dump()` is strict); now `PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile` reports it in `missingPlugins`. The manifest does not change the console code page or child processes, so output from child tools such as the Papyrus compiler is still in their own code page. `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders` also checks `GetACP() == CP_UTF8` on Windows, so it fails if the test executables stop receiving the manifest. Nothing checks other executables: one added below the `fo4ide_use_utf8_code_page()` call in its directory would miss it, so keep the call last.
+
+Tests: `Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders`, `RadicleArchiveBackendTests.cpp:Radicle archive backend extracts into a non-ANSI output folder`, `RadiclePluginSeqTests.cpp:Native CreateSeqFile reports a plugin folder with non-ANSI characters`. All three failed before the manifest on ANSI code page 1252.
+
+## .github/workflows/native-ci.yml:native-windows-tests — native tests on Windows with MSVC
+
+The two Windows cross jobs build with clang-cl/xwin on the Linux runner and cannot execute anything. `native-windows-tests` runs on the registered Windows runner (`self-hosted, Windows, X64`, the runner `bgs-ci.yml:verify` already uses) and builds and runs the Radicle and PluginEditTool native ctest suites with MSVC. It finds Visual Studio with vswhere and puts its bundled CMake on the PATH, so the runner needs Visual Studio or Build Tools with the C++ x64 tools and the C++ CMake tools component; the step names what is missing. Radicle gets the same pinned zlib commit as `radicle-windows-cross`, and PluginEditTool uses its pinned FetchContent zlib as in `plugineditool-native-windows-cross`. Run steps use `cmd`; the step's exit code is the batch file's final errorlevel, so every fallible line ends in `|| exit /b 1`.
+
+`native-windows-tests` caches builds by building from a persistent checkout at `%USERPROFILE%\.cache\garden-ci\src` into persistent build directories under `%USERPROFILE%\.cache\garden-ci\build`, not from the workspace. A restored cache of build outputs would not help: the host-mode runner gives every job a new random workspace directory, and a fresh checkout gives every source a new timestamp, so MSBuild would recompile everything. The persistent checkout is updated with `git fetch` from the workspace and `git checkout --force`, which only rewrites files that differ from the previous run, so MSBuild recompiles only those and their dependents. FetchContent dependencies stay in the build directories. zlib is built once per pinned commit in `zlib-<commit>`, and `Radicle/CMakeLists.txt:find_package` (ZLIB) is pointed at that fixed directory; a per-run path would change every compile command and force a full rebuild. The zlib step treats `zlib.h`, the last file it writes, as its completion marker. `git clean -ffdx` drops stray files in the checkout.
+
+`.github/workflows/native-ci.yml` cancels in-progress runs on a new push, so `native-windows-tests` first recovers from a cancelled run. It stops any leftover cmake, ctest or git process whose command line points into `.cache\garden-ci`, along with its descendants, because a build still writing into the shared build directory could leave an object file newer than its new source, and MSBuild would then link stale code; an old git could likewise finish over the new checkout. See `Radicle/CMakeLists.txt:find_package` for the fixed-path requirement. It also deletes leftover `.git\*.lock` files (`index.lock`, `shallow.lock`, `HEAD.lock`), which would otherwise fail every later git step. See `Radicle/CMakeLists.txt:find_package` above for why the paths must stay fixed. This assumes the Windows runner runs one job at a time; two concurrent jobs would share the directories. If the cache is ever corrupted, delete `%USERPROFILE%\.cache\garden-ci` on the runner and the next run rebuilds it.
+
+`PluginEditTool/native/tests/unit/RadiclePluginEditableTests.cpp:symlinkNotPermitted` makes the two Save As symlink tests skip when Windows refuses the directory symlink with ERROR_PRIVILEGE_NOT_HELD (1314), which happens without Developer Mode or elevation. MSVC does not map 1314 to `std::errc::operation_not_permitted`, so the code is checked directly. Any other symlink error still fails the test, and Linux always runs them.
+
+## Radicle/src/forms/placed_reference_edit.cpp / c_api_ref_fields.cpp — GardenEngine #114 writeback fields
+
+Eighth #114 slice, stacked on the writeback slice. It covers every field `ReferenceWriteback.Commit` sets beyond placement and scale:
+- EditorID and record flags;
+- `Comments`, `LocationReference`, `Ownership`/`FactionRank` and `EnableParent`;
+- rebuilding `LinkedReferences`;
+- `ActivateParents[i].Delay`;
+- and, only when the field already exists, `TeleportDestination` and `Primitive`.
+
+**Field order.** New subrecords go before the first existing subrecord that xEdit FO4 lists after them:
+- REFR uses `wbRefRecord(REFR`, ACHR uses `wbRefRecord(ACHR`, and the projectiles/hazards use `ReferenceRecord` (pin `9fb016884bec138ea6c7b872cec831537d464c3e`).
+- `wbOwnership` expands to `XOWN`, `XRNK`, and `wbVec3PosRot(DATA)` sits before `MNAM`.
+- ACHR puts `XLKR` before `XESP`, and REFR after it.
+- Signatures missing from the list (for example `XACT`, `XRGD`/`XRGB`, `PDTO`, `FULL` and `XCZA`) are never used as anchors, so a new field can land after one of them. xEdit marks REFR, ACHR and `ReferenceRecord` as `.SetUnordered` and Mutagen parses these fields in any order, so this only affects layout, not loading.
+- `set_placed_reference_scale` moved here to use the same rule. On ACHR, `XSCL` now goes before `ONAM` instead of directly before `DATA`.
+
+**Payloads, from Mutagen upstream `Common Subrecords/*.xml` and xEdit:**
+- **`XOWN`:** Owner, `Int32 Unknown`, `NoCrime` as a 4-byte bool (`Ownership.xml`).
+  - An existing 4- or 12-byte value is widened to 12 bytes.
+  - The unknown word and the upper 3 bytes of the bool word are kept. The flag byte is written as exactly 0 or 1, the canonical bool Mutagen writes; Mutagen reads it as a first byte `>= 1` (`Ownership_Generated.cs`) and `Radicle/src/environment/placed.cpp:decode_placed_reference` as `!= 0`. Keeping other bits of an old byte left NoCrime set after clearing it.
+  - A cleared owner removes `XOWN` and `XRNK`, as Mutagen nulls both.
+- **`XESP`:** Reference, a `u8` flags byte, then 3 unknown bytes (`EnableParent.xml`). The unknown bytes are kept.
+- **`XLKR`:** {KeywordOrReference, Reference}, 8 bytes each (`LinkedReferences.xml`).
+  - A rebuild replaces every `XLKR` at the position of the first old one, or at the ordered position when there were none.
+- **`XTEL`:** door, position, rotation. It is written only when present; flags and the optional transition interior are kept.
+- **`XPRM`:** stored (undoubled) bounds and the type at offset 28. It is written only when present; colors and the unknown float are kept.
+- **`XAPR`:** delay at offset 4 of the n-th entry. Written only when that entry exists.
+- **EditorID and comments:** empty or `nullopt` removes the subrecord, as Mutagen writes nothing for a null string. Embedded NUL is rejected.
+- **Record flags:** the compression and persistent bits are kept. Persistence decides whether the ref sits in the CELL's persistent or temporary child group, and a flag edit must not leave it in the wrong one.
+
+**Masters.** A FormKey whose owner is neither the plugin nor one of its masters throws in C++. The C ABI resolves such owners through the environment:
+- It adds each one as a master with that plugin's full/light kind.
+- It then sorts masters into environment load order before the edit.
+- An owner the environment does not load is `INVALID_ARGUMENT`.
+- When the edited plugin is itself in the environment, an owner that loads after it is `INVALID_ARGUMENT`: it would become a master that loads later, or a circular master.
+- The new `MAST` entry takes the environment's spelling of the file name, not the caller's.
+- A `FormIdError` from the master remap or sort (an existing master the environment does not load, or the 255-master limit) is `INVALID_ARGUMENT`.
+
+**Form keys.** `Radicle/src/forms/placed_reference_edit.cpp:encode` rejects a key with no plugin name (for example `"Data/"`, which `PluginKey::from_filename` reduces to an empty name) unless it is the null key, and a named key with local 0 (it would encode as a null link; only a C key whose `plugin` is NULL means clear), and it round-trips every encoded form ID through `resolve_plugin_form_id`. A key that does not survive the round trip, such as a light-plugin local above 0xFFF that `encode_plugin_form_id` would mask to a different form, throws instead of writing the wrong link.
+
+**Atomicity.** Every edit works on a copy, and the plugin changes only on success; the C ABI copies again around master additions.
+
+**C++ contract (`Radicle/include/fo4/forms/placed_reference.hpp`).** Every `set_placed_reference_*` edit returns false (or `PresentFieldEdit::record_missing`) when the record is absent. It throws `PlacedReferenceError` for a non-placed record, a malformed existing field, or a FormKey whose owner is neither the plugin nor one of its masters; otherwise it leaves every other subrecord untouched.
+- `set_placed_reference_scale`: sets `XSCL`, or removes it for `nullopt`.
+- `set_placed_reference_editor_id`: sets `EDID`, or removes it for an empty id.
+- `set_placed_reference_record_flags`: replaces the header flags; the compression and persistent bits stay as stored.
+- `set_placed_reference_comments` / `set_placed_reference_location_reference`: set `MNAM` / `XLRL`, or remove them for `nullopt`.
+- `set_placed_reference_ownership`: sets `XOWN` (existing unknown bytes kept) and `XRNK`; a `nullopt` owner removes both and a `nullopt` rank removes `XRNK`.
+- `set_placed_reference_enable_parent`: sets `XESP` {parent, flags} (existing unknown bytes kept), or removes it for `nullopt`.
+- `set_placed_reference_linked_references`: replaces every `XLKR` with the given links in order; a `LinkedReferenceEdit::keyword` of `nullopt` writes a null form ID.
+- `set_placed_reference_teleport`, `set_placed_reference_primitive` and `set_placed_reference_activate_parent_delay` only change a field that already exists, as GardenEngine's writeback does, and return `field_absent` otherwise. Primitive bounds are the stored (undoubled) `XPRM` values that `decode_placed_reference` returns.
+- `Radicle/src/forms/placed_reference_edit.cpp:edit_placed` runs the edit on a copy and commits only when it returns true. `insertion_point` places a new subrecord before the first existing one that xEdit orders after it (`field_rank` uses xEdit FO4 order at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `wbRefRecord(REFR`, `wbRefRecord(ACHR` and `ReferenceRecord` for placed projectiles and hazards; signatures missing from the list are never anchors), and `single` treats a repeated field as malformed. `set_placed_reference_record_flags` keeps persistence (it decides the CELL child group) and compression (how the payload is stored). `set_placed_reference_ownership` follows Mutagen `Ownership.xml` (Owner, Int32 Unknown, NoCrime as a 4-byte bool); xEdit reads the flag from the low byte.
+
+**C ABI contract (`Radicle/include/fo4/c_api_env.h:radicle_plugin_set_placed_*`).** Each returns `NOT_FOUND` when the plugin lacks the record and `INVALID_ARGUMENT` for a non-placed record or a malformed field. Edits that take a FormKey add any owner `env` loads as a master and keep masters in `env` load order; an owner `env` does not load is `INVALID_ARGUMENT`. A key whose `plugin` is NULL means "clear"; any other key must be a valid FormKey.
+- `radicle_plugin_set_placed_record_flags` keeps the compression and persistent bits as stored.
+- `radicle_plugin_set_placed_comments` with `comments == NULL` removes `MNAM`.
+- `radicle_plugin_set_placed_ownership`: a cleared owner removes `XOWN` and `XRNK`; `has_rank == 0` removes `XRNK`.
+- `radicle_plugin_set_placed_linked_refs` replaces all `XLKR` in order; a cleared keyword writes a null form ID.
+- `radicle_plugin_set_placed_teleport`, `_primitive` and `_activate_parent_delay` only change a field that already exists and return `NOT_FOUND` when it does not. `_primitive` takes the stored `XPRM` bounds, as `radicle_placed_ref` reports them.
+- `Radicle/src/c_api_ref_fields.cpp:with_masters` adds owners `env` loads as masters, then orders masters by load order; `run` maps the C++ outcome and exceptions to a status; the plugin changes only on `OK`.
+
+**Test fixture (`Radicle/tests/test_environment_ref_fields.cpp`).** `Master.esm` has interior cell 000820 holding REFR 000821 (teleport, primitive, activate parents, links, ownership, enable parent) and ACHR 000822 (`ONAM`), plus FACT 000830, KYWD 000812 and LCTN 000813. `DLC.esm` adds FACT 01000831.
+
+**Tests.** `Radicle/tests/test_environment_ref_fields.cpp` covers:
+- all edits on REFR and ACHR, with exact subrecord order, kept unknown bytes, and the decoded values after a save and environment reload;
+- clearing each field;
+- bad input leaving the plugin byte-identical;
+- the C ABI, adding a DLC master for an owner and keeping masters in load order.
+
+**MSVC `/W4 /WX`.** `Radicle/tests/test_environment_ref_fields.cpp:RefFieldsTest::SetUp` named its loop variable `id`, shadowing the temp-directory `id` above it. MSVC reports C4456, which `/WX` turns into C2220, so `fo4_tests` did not build under the `native-windows-tests` job. The loop variable is now `form`.
+
+**Shipped data.** Every placed reference in the seven official masters stores `XTEL` as 36 bytes, `XPRM` 32, `XOWN` 12, `XESP` 8, `XAPR` 8 and `XSCL` 4, all sizes these edits accept. No shipped `EDID` or `MNAM` on a placed reference has a byte above 0x7F.
+
+**String encoding.** The C++ setters store the bytes they are given. The C ABI setters (`radicle_plugin_set_placed_editor_id`, `radicle_plugin_set_placed_comments`) take UTF-8 and store Windows-1252 through `Radicle/src/text/encoding.cpp:utf8_to_windows1252`, returning `INVALID_ARGUMENT` for text Windows-1252 cannot hold; see the encoding boundary section below. `set_placed_reference_comments` treats an empty string like `nullopt` and removes `MNAM`, as the contract above and `set_placed_reference_editor_id` already did: it used to write an `MNAM` holding one NUL, which reloads as an empty comment instead of none (GardenEngine's `ReferenceWriteback.Commit` passes null for blank comments, so it never sent `""`). Regression: `Radicle/tests/test_environment_ref_fields.cpp:EmptyCommentsRemoveMnamAndSurviveReload`, which failed before the fix through both the C++ and the C ABI path.
+
+## Radicle/src/environment/base_records.cpp / c_api_base_records.cpp — GardenEngine #114 base-record getters
+
+Ninth #114 slice, stacked on the writeback-fields slice. It covers the base records `CellService` resolves for placed references and sky setup, and the per-plugin record walk `AssetConverterMain.CollectUniqueNifPaths` does with `EnumerateMajorRecords()`.
+
+Layouts come from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`) and Mutagen upstream `Mutagen.Bethesda.Fallout4/Records` (`5f8f1adeac2c4aaba59d06779340c7aec3da24c5`):
+
+- **LIGH `DATA`:**
+  - Layout: Time, Radius, byte Color, Flags, Falloff, FOV, Near Clip, three flicker floats, Constant and Scalar (48 bytes, xEdit `SetOptionalFrom(10)`). Mutagen `Light.xml` then has a `Break`, Exponent, God Rays Near Clip and Value, another `Break`, and Weight, for 64 bytes in total. The shipped masters hold 48-, 60- and 64-byte `DATA`.
+  - `Radicle/src/environment/base_records.cpp:decode_light` fails a `DATA` shorter than 48 bytes, longer than 64, or ending inside a member (a size that is not a multiple of 4); before, a 50- or 68-byte `DATA` decoded silently, against the header's contract (`BaseRecordsTest.DecodesLightsSplinesAndLayers`, records 0x803/0x804). Optional members are read only when present.
+  - Flags are the raw xEdit/Mutagen `Light.Flag` bits.
+  - `FNAM` fade, `NAM0` gobo, `LNAM` lens and `WGDR` god rays sit beside `DATA`.
+- **BNDS `DNAM`:**
+  - Layout: `f32` default tiles, `u16` default slices, a 2-byte bool (tiles relative to length), three float colors, wind sensibility, then (Mutagen `Break`) wind flexibility.
+  - The payload must end on a member boundary (0/4/6/8/20/24/28 bytes). `TNAM` holds the texture set.
+  - The three-float color follows xEdit. Mutagen's `BendableSpline.xml` declares `DefaultColor` as `AlphaFloat` (four floats), which would put wind sensibility at offset 24 and leave wind flexibility past a `Break`. All 12 shipped BNDS `DNAM` are 28 bytes, and bytes 20 and 24 hold wind values such as 2.0/0.5 and 4.0/0.75 rather than a color alpha, so the shipped data matches xEdit. `Radicle/src/environment/base_records.cpp:decode_bendable_spline` reads the xEdit layout.
+- **LAYR:** `PNAM` parent layer.
+- **LGTM `DATA`:**
+  - Uses the CELL `XCLL` decoder, now parameterized by signature. The form-version-30 rule for the ambient block size applies to both.
+  - The word where `XCLL` stores Inherits is `wbUnused(4)` in LGTM, so `inherits` stays empty. `WGDR` holds the god rays.
+- **CLMT `WLST`:**
+  - An array of 12-byte {Weather, Chance `s32`, Global} entries; a size that is not a multiple of 12 fails.
+  - `FNAM`/`GNAM` hold the sun and glare textures.
+- **WTHR `NAM0`:**
+  - Color groups in `wbWeatherColors`/Mutagen `Weather.xml` order: sky upper, fog near, unknown, ambient, sunlight, sun, stars, sky lower, horizon, effect lighting, cloud LOD diffuse/ambient, fog far, sky statics, water multiplier, sun glare, moon glare, fog near/far high.
+  - Each group is 4-byte colors for 8 times from form version 111 (`wbWeatherTimeOfDay`), otherwise 4 times.
+  - The decoder returns a view with the group and time counts. A size that is not a whole number of groups, or fewer than 9 groups (Mutagen's first `Break`), fails.
+  - GardenEngine's `.Day` is time index 1.
+- **WTHR `FNAM`:** the fog distance floats in `wbWeatherFogDistance` order (day/night near, far, power, max, then the 119/120 height members), returned as an array.
+- **SCOL parts:**
+  - Each `ONAM` opens a part; each following `DATA` is an array of 28-byte placements (position, rotation, scale).
+  - Unlike `forms::decode_static_collection_parts`, null `ONAM` parts are kept, because Mutagen's `Parts` list keeps them; GardenEngine skips them when resolving models.
+  - A `DATA` without a preceding `ONAM` fails.
+- **`Environment::plugin_records`:** every record version a plugin holds, in on-disk order.
+
+**C ABI.** `Radicle/src/c_api_base_records.cpp` provides:
+- `radicle_env_plugin_records`;
+- `radicle_light_get_info`, `radicle_bendable_spline_get_info`, `radicle_layer_get_parent`, `radicle_lighting_template_get_info`;
+- owned views `radicle_climate_decode` / `radicle_weather_decode` / `radicle_static_collection_decode`, each with a matching `_free`. The WTHR color view points into plugin bytes.
+
+The CELL lighting fill moved into `c_api_env_internal.hpp` (`to_c_lighting`), so LGTM reuses `radicle_cell_lighting`.
+
+**C ABI contract (`Radicle/include/fo4/c_api_env.h`).**
+- `radicle_env_plugin_records` returns every record version `plugin_index` holds, in on-disk order; free the array with `radicle_free_record_array`. `Environment::plugin_records` returns an empty list for an unknown index.
+- `radicle_light_info::flags` holds the raw `Light.Flag` bits from xEdit/Mutagen: 0x8 flicker, 0x20 off by default, 0x80 pulse, 0x400 shadow spotlight, 0x800 shadow hemisphere, 0x1000 shadow omni, 0x4000 non-shadow spotlight, 0x100000 ambient only. `gobo` is the `NAM0` texture, or NULL when absent.
+- `radicle_weather_info::colors` is the raw `NAM0` view. Group `g` (0 sky upper, 1 fog near, 3 ambient, 4 sunlight, 7 sky lower, 8 horizon, 12 fog far, ...) at time `t` (0 sunrise, 1 day, 2 sunset, 3 night, 4-7 early/late sunrise/sunset) is R, G, B, unused at byte `(g * color_times + t) * 4`; NULL when absent. `fog_distances` holds the `FNAM` floats in order: day near, day far, night near, night far, day power, night power, day max, night max, then the height members.
+- `radicle_lighting_template_info::lighting.has_inherits` is always 0, because LGTM stores an unused word where `XCLL` stores Inherits (`Radicle/src/environment/world.cpp:decode_lighting`, shared by `XCLL` and LGTM `DATA`).
+- `radicle_layer_get_parent` returns `LAYR` `PNAM`; the key has `plugin == NULL` when there is no parent.
+- `radicle_static_collection_decode` returns every `ONAM` part in order, including null Static links (`plugin == NULL`).
+- The C++ decoders in `Radicle/include/fo4/environment/base_records.hpp` throw `WorldDecodeError` on a wrong signature or a malformed subrecord that is present. `Radicle/src/environment/base_records.cpp` takes the WTHR time count from xEdit `wbWeatherTimeOfDay` (8 from form version 111, 4 before); Mutagen breaks after Horizon (9 groups) and Moon Glare (17), and xEdit adds Fog Near/Far High at form version 119. BNDS `DNAM` members end at 4, 6, 8, 20, 24 and 28 bytes; any other size cuts a member.
+- The LGTM test fixture in `Radicle/tests/test_environment_base_records.cpp` is `XCLL`-shaped `DATA` at form version 131: 72 required bytes, then fog far color, max, fade begin/end and an unused word.
+
+**Tests.** `Radicle/tests/test_environment_base_records.cpp` covers:
+- full, short and malformed LIGH/BNDS;
+- LAYR with and without a parent;
+- LGTM, CLMT and 8-time/4-time WTHR (including a bad group count);
+- SCOL with null parts and orphan `DATA`;
+- plugin record order;
+- the C ABI.
+- `BaseRecordsRealData.DecodesEveryShippedBaseRecord` (with `FO4_DATA_DIR`): every LIGH, BNDS, LAYR, LGTM, CLMT, WTHR and SCOL in the seven official masters decodes; every WTHR has at least 17 color groups and 8 fog distances.
+
+## Radicle/bindings/csharp — GardenEngine #114 C# bindings
+
+Tenth #114 slice, stacked on the base-record slice. This is the C# side GardenEngine will call in place of Mutagen. It lives in GARDEN-TOOLS next to the C ABI, so the two change together.
+
+**Generated layer.** `tools/generate_interop.py` parses `fo4/c_api.h` and `fo4/c_api_env.h` and emits `Radicle.Interop/RadicleNative.g.cs`: 88 `DllImport` functions (87 before `radicle_abi_version`), every public struct as `LayoutKind.Sequential`, and the enums.
+
+Mapping rules:
+- **Scalars:** `size_t` becomes `nuint`, and C `int32_t` flags stay `int`.
+- **Arrays:** scalar arrays become `fixed` buffers; pointer arrays (`const char* textures[8]`) become numbered `IntPtr` fields.
+- **Pointers:**
+  - Handles and C strings are `IntPtr` at their first pointer level.
+  - Input `const char*` is a UTF-8 marshalled `string`.
+  - Deeper pointers stay typed, such as `IntPtr**` for record arrays and `Landscape**` for owned views.
+- **Coverage:** an unmapped type stops generation instead of being skipped, so the ABI cannot outgrow the binding silently.
+
+**Layout proof.** The same script emits `tests/abi_layout_probe.cpp`, built as `radicle_abi_layout_probe`, which prints C `sizeof`/`offsetof` for every struct member. `AbiLayoutTests` compares each line with `Marshal.SizeOf`/`OffsetOf`, and also checks that it covered every generated struct. Changing one generated `int` to `long` fails the test.
+
+**Staleness check.** `radicle_csharp_interop_up_to_date` regenerates into the build tree and compares with the committed files, ignoring line endings (`tools/check_generated.cmake` uses `compare_files --ignore-eol`): the generator writes the platform's line endings, and a Windows checkout may hold LF or CRLF depending on `core.autocrlf`. `radicle_csharp_interop_check_ignores_line_endings` (`tools/check_generated_eol.cmake`) runs the check against copies of the committed files with their line endings flipped; it failed before `--ignore-eol`. It runs wherever CTest finds Python 3, so a header change without regeneration fails CI.
+
+**Safe layer:**
+- `RadicleEnvironment`, `StringTables`, `Ba2Archive`, `AssetResolver` and `PluginFile` own their native handles through `IDisposable`.
+- Results are copied into managed records. Two things stay borrowed: a `Record` handle (valid while its environment lives) and the `Ba2Archive` that `AssetResolver.Archive` returns. That archive keeps its resolver and throws `ObjectDisposedException` once the resolver is disposed (`Radicle.Interop/Archives.cs:Ba2Archive.Handle`). `StringTables` likewise throws once the environment it was loaded from is disposed, because the native tables dereference that environment (`Radicle.Interop/Localization.cs:StringTables.Handle`). Before these checks, both cases read freed native memory. Tests: `LifetimeTests.ABorrowedArchiveFailsOnceItsResolverIsDisposed`, `LifetimeTests.StringTablesFailOnceTheirEnvironmentIsDisposed`.
+- Status codes map to `RadicleException` (status plus `radicle_last_error`), except lookups whose `NOT_FOUND` means "absent"; those return `null`/`false`.
+- `Record` is a borrowed handle, valid while its environment lives, like Mutagen's link cache records.
+- Native strings passed in are UTF-8 copies freed after each call.
+- `RadicleLibrary.SetPath` / `RADICLE_NATIVE_PATH` pick the library through `NativeLibrary.SetDllImportResolver`, so Godot can point at its bundled `radicle.dll`.
+  - **Registration.** `Radicle.Interop/Core.cs:RadicleLibrary` registers the resolver in its type initializer, which the runtime runs once under its own lock. `Radicle.Interop/RadicleNative.Init.cs` triggers it from `RadicleNative`'s static constructor, so even a direct `RadicleNative.*` call is resolved.
+  - **Caching.** The CLR calls the resolver for every P/Invoke method the first time that method binds, so `Resolve` loads the library once and returns the cached handle.
+  - **Late paths.** `SetPath` with a different path after that load throws `InvalidOperationException`.
+  - **Before.** A late `SetPath` silently sent later-bound methods to a second library, mixing handles across two copies of Radicle. A second thread could also call before the resolver existed. Test: `LifetimeTests.TheLibraryPathCannotChangeOnceTheLibraryIsLoaded` (before the fix, the late path also broke unrelated tests with `DllNotFoundException`).
+
+**Tests.** `Radicle.Interop.Tests` builds plugins, a GNRL BA2 and a STRINGS table in C#, and covers:
+- load order, versions and EditorID lookup;
+- plugin records, worlds, cells and cell children;
+- placed-reference decode;
+- the full `ReferenceWriteback` field set with save and reload;
+- archive precedence and archived strings;
+- sky and base records.
+
+CTest runs them with `-DRADICLE_CSHARP_TESTS=ON`. The option is off by default so CI does not depend on NuGet.
+
+**API contract of the safe layer** (formerly XML doc comments; the source-comment policy keeps them here):
+- `Radicle.Interop/Core.cs`: `RadicleLibrary` chooses where the native library loads from and must be set before the first call; `RadicleLibrary.SetPath` takes the full path of `libradicle.so` / `radicle.dll`, and `RADICLE_NATIVE_PATH` is used when it is unset. The UTF-8 marshaller owns copies of the strings passed to a native call for the duration of that call. The status helper maps OK to true, NOT_FOUND to false, and throws `RadicleException` for anything else. The array helpers copy a `radicle_record` array, a string array or a byte buffer and free it with `radicle_free_record_array`, `radicle_free_string_array` or `radicle_free_bytes`.
+- `Radicle.Interop/RadicleEnvironment.cs`: `RadicleEnvironment` is an immutable load order over `radicle_env` and is safe to query from several threads. Plugin paths and record versions are lowest priority first (winner last). `Record` is a borrowed record version, valid while its environment is alive. Terrain grids are 33x33 row-major copies, null when the subrecord is absent. Weather returns `NAM0` as groups x times colors, in the group order `radicle_weather_info` uses, plus the `FNAM` floats.
+- `Radicle.Interop/Archives.cs`: `Ba2Archive` is an index-only view; `Extract` reads one entry on demand, is safe from several threads, and returns decompressed bytes, with texture entries as complete DDS files. `AssetResolver` puts loose files over archives and later archives over earlier ones, as the game mounts them. Its archive order is INI-listed archives, then each plugin's `<stem>.ba2` and `<stem> - *.ba2`, lowest priority first; a null data directory disables loose lookup. Archives it hands out are borrowed: disposing one does nothing, and it dies with the resolver.
+- `Radicle.Interop/Localization.cs`: `StringTables` holds per-plugin tables for one language and returns text as the raw table bytes. The record name helper returns this version's `FULL`, either inline text or its string in the owning plugin's Normal table.
+- `Radicle.Interop/PlacedReferences.cs`: the decoded REFR/ACHR/placed projectile or hazard mirrors `radicle_placed_ref`.
+- `Radicle.Interop/PluginFile.cs`:
+  - `Create` makes an empty plugin; `.esm` sets the master flag and `.esl` sets master + light.
+  - `Write` is atomic: the file at the path is untouched on failure.
+  - `CopyPlacedOverride` (Mutagen's `GetOrAddAsOverride`) copies a record version with its CELL/WRLD containment and masters.
+  - Null removes `XSCL`; null or empty removes `EDID`.
+  - Record flags keep the compression and persistent bits as stored; a null owner removes ownership and faction rank.
+  - Teleport returns false when the reference or its existing `XTEL` is absent. Primitive takes the stored `XPRM` bounds and returns false when the reference or its existing `XPRM` is absent. The activate-parent delay returns false when the reference or that activate parent is absent.
+- `Radicle.Interop.Tests/AbiLayoutTests.cs` reads `RADICLE_ABI_PROBE`, the built `abi_layout_probe` binary that prints C `sizeof`/`offsetof` lines. `Radicle.Interop.Tests/Fixtures.cs` is a minimal FO4 plugin writer (records and groups laid out as the engine reads them) and builds a GNRL v1 BA2 with stored chunks and a name table. The `EnvironmentTests.cs` fixture `Master.esm` holds STAT 000810 (model), WRLD 000800 with top cell 000801 and exterior cell 000802 (REFR 000803, ACHR 000804, LAND 000805), and interior CELL 000820 with REFR 000821; `Patch.esp` moves REFR 000803.
+- `tools/generate_interop.py`: arrays of pointers become numbered fields, fixed buffers take only primitives, and a handle or C string is already one pointer level. The generated files' headers say edits must go through the generator.
+
+## Radicle/tools/env_bench/env_bench.cpp:radicle_bench::run_env_bench — GardenEngine #114 load metrics
+
+Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses every plugin fully into memory, where Mutagen reads plugins over 1 MB lazily. This tool produces the numbers that decide whether Radicle needs lazy loading.
+
+- **Shared helper.** `run_env_bench` lives under `tools/`, not in the `fo4` library. `radicle_env_bench` (`tools/env_bench/main.cpp`) and `tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` both compile it, so the CLI and the test measure the same thing.
+- **Non-ANSI Data folders.** `Radicle/tools/env_bench/main.cpp:wmain` takes its arguments as wide strings on Windows, which fixes a non-ANSI Data folder. (A plugin file whose own name is outside the ANSI code page still fails in `Radicle/src/plugin/reader.cpp:read_plugin_from_owned_bytes`, which keys the plugin through `path::string()`.) With a narrow `main`, Windows converts `argv` through the ANSI code page, so a folder such as `env-bench-Žluť-ж` arrived as `env-bench-Älut-?` and `file_size` failed. The "no official masters" message prints the folder with `u8string()`, because `path::string()` throws for a name outside the ANSI code page. `tools/env_bench/non_ansi_data_dir.cmake` (CTest `radicle_env_bench_non_ansi_data_dir`) runs the tool on such a folder holding `testdata/SlowTime.esp`; it failed before `wmain` and passes after.
+- **Errors.** `Radicle/tools/env_bench/main.cpp:wmain` runs `default_masters` inside its `try`. `std::filesystem::exists` throws for any stat error other than "not found" (for example EACCES on a folder the user cannot read), and before this the exception escaped `main` and terminated the process. CTest `radicle_env_bench_unreadable_data_dir` (`tools/env_bench/unreadable_data_dir.cmake`) locks a folder and expects exit 1 with an `error:` line; it reports skipped on Windows, because a POSIX permission change does not lock a folder there, and when permissions are not enforced (root).
+- **What is timed:**
+  - `Environment::load` over the given plugins (default: the official masters present);
+  - `archive_load_order` + `AssetResolver::open` over the vanilla `Fallout4 - *.ba2` archives only;
+  - `StringTables::load(env, <Data>/Strings, "en", &assets)`;
+  - a walk of every `plugin_records` entry.
+- **Memory (`sample_memory`).**
+  - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
+  - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
+  - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
+- **Test.** Gated on `FO4_DATA_DIR`; CI has no game files and skips. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+- **Limits.** Archives and string tables are opened for `Fallout4.esm` only, so `archives_ms` and `strings_ms` leave out the DLC archives and their string tables even when the DLC masters are loaded (the installed game has no loose `Strings` folder, and each DLC's tables, such as `Strings/DLCRobot_en.STRINGS`, are only inside its `- Main.ba2`); `load_ms` covers every listed plugin. `tests/test_env_bench_real.cpp` reads `FO4_DATA_DIR` with `std::getenv`, so on Windows a Data path outside the ANSI code page makes the test skip; the standalone tool takes wide arguments.
+
+## Radicle/src/c_api_version.cpp:radicle_abi_version — C ABI generation probe
+
+`Radicle/include/fo4/c_api.h:radicle_abi_version` returns `RADICLE_ABI_VERSION` (2 since the material swap exports; see the ABI 2 section below), the probe PR #277 proposed, carried into the environment stack so the C# bindings can reach it. A consumer calls it before any other entry point and refuses the library when it differs from the `RADICLE_ABI_VERSION` it was compiled against (`Radicle/docs/FO4IDE.md`). `Radicle/CMakeLists.txt` adds `src/c_api_version.cpp` to `radicle_c` and `tests/test_c_api_version.cpp` to `fo4_tests` with their own `target_sources` calls, so they do not conflict with the environment source lists. `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:AbiVersion` is regenerated from the combined headers; adding the probe without regenerating fails `radicle_csharp_interop_up_to_date`. The probe does not freeze the authoring API or add a capability registry.
+
+## Radicle/CMakeLists.txt:fo4_apply_warnings — warnings-as-errors only at top level
+
+`RADICLE_WARNINGS_AS_ERRORS` defaults to `PROJECT_IS_TOP_LEVEL`, the same way `RADICLE_BUILD_TESTS` does. Radicle's own CI still builds with `-Werror` / `/WX`. A consumer that pulls Radicle in with FetchContent (GardenEngine `opencw/native/radicle`) gets the warnings but not the hard failure. The case that forced this: GardenEngine CI run 554, job 1386, on GCC 15. GCC 15 raised a false `-Wmaybe-uninitialized` inside `std::optional<StaticCollectionPartView>` in `Radicle/src/forms/static_collection.cpp:decode_static_collection_parts`, and that failed the downstream build even though Radicle's own compilers accept the code.
+
+## Radicle/tools/env_bench/env_bench.cpp:tally — where Environment::load memory goes
+
+`run_env_bench` also reports what the loaded plugins hold: the file bytes each `Plugin::original_data` retains, `Record::decompressed_payload` capacity, `Subrecord::data` capacity, the subrecord count, the group count, and the `GroupChild`/`Subrecord` slot bytes (`node bytes`). `tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` asserts that every plugin byte is retained and that subrecords were counted.
+
+Official masters, `D:/SteamLibrary/steamapps/common/Fallout 4/Data`, 2026-09-28:
+
+| Build | Load time | Peak working set |
+|---|---|---|
+| Release | 4.2–5.9 s | 3.0 GB |
+| Debug | 28.8 s | 6.15 GB |
+
+The #114 brief's "~61.7 s / ~6.15 GB" matches the Debug peak exactly, so that figure was measured on a Debug build.
+
+Release breakdown for 482 MB of plugins, 2,192,230 records and 9,501,965 subrecords:
+- 460 MB of retained file bytes;
+- 502 MB of decompressed payloads;
+- 609 MB of subrecord data;
+- 804 MB of node slots;
+- about 650 MB of allocator overhead and environment indexes.
+
+Each record's bytes were held twice: once in the file bytes or the decompressed payload, and again as one heap-allocated vector per subrecord. Making `Subrecord::data` a view into those buffers would remove the 609 MB copy and roughly 9.5 M allocations. That changes a type every reader and the writer use.
+
+Not done, because nothing in GardenEngine has failed on memory. The Fallen World profile (652 plugins) loads in 15 s at about 4.7 GB inside GardenEngine, and every #114 parity test runs in one process on that load.
+
+## Radicle/src/plugin/reader.cpp:read_record — compressed payloads are not retained
+
+Nothing read `Record::decompressed_payload`; every writer only cleared it, because the writer re-emits records from `subrecords` and `record_original_bytes` slices the retained file bytes. `read_record` now inflates into a local buffer, and `parse_subrecords` copies out of it, so no view outlives the buffer. The field stays in `include/fo4/plugin/container.hpp`, because removing it means touching the files over 750 lines that clear it (`placed_reference_copy.cpp`, `formlink_lists.cpp`, `form_links.cpp`).
+
+Proof: `EnvBenchRealData.LoadsOfficialMasters` asserts `payload_bytes == 0`, the full `fo4_tests` suite passes (590 tests), and `RealPluginPreservation.UnmodifiedFallout4MasterIsByteIdentical` passes on real data. On the official masters (Release, 2026-09-28), peak working set fell from 3,097,288 KB to 2,567,404 KB and load time is unchanged at about 4.8–5.0 s.
+
+`QuestAliasRealData.DecodesEveryShippedQuest` and `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` fail with the same `QUST ALCL Level must be 0..3` errors on the unmodified reader, so those failures predate this change.
+
+## Radicle/src/environment/material_swap.cpp:decode_material_swap — MSWP substitutions for GardenEngine
+
+`decode_material_swap` returns each BNAM (original material) with the SNAM (replacement) and CNAM (color remapping index) that follow it, in record order. SNAM or CNAM before any BNAM, a repeated SNAM/CNAM inside one substitution, a CNAM that is not 4 bytes, or a path that is not one NUL-terminated string throws `WorldDecodeError`. FNAM is skipped because GardenEngine does not use it. Sources: the vendored Mutagen `Records/Major Records/MaterialSwap.cs` (`NewFormVersion = 112`) reads a record-level FNAM tree folder from form version 112, and before that requires every per-substitution FNAM to hold the same string; the raw bytes of `Fallout4.esm` `2489D9` (form version 131) read `EDID, FNAM "Interiors\Vault", BNAM, SNAM, BNAM, SNAM`.
+
+`placed_material_swap` reads XMSP on every placed-reference signature. `primary_model_material_swap` returns the swap stored with the model `primary_model_path` chose: MODS for modeled records, MO2S when an ARMO's male world model (MOD2) was chosen and MO4S when the female one (MOD4) was; nothing when the record has no primary model. SCOL is the exception: `primary_model_path` returns nothing for it (its MODL is the precombined mesh), but `primary_model_field` still reads its own MODS. The engine applies a collection's swap to the whole assembled SCOL (`ReverseEng/Fallout4_Runtime_Research` PR 2, `RE-Work/Runtime/material-swap-engine-behavior.md`, section 1e: `BGSStaticCollection` is a `BGSModelMaterialSwap`, swapForm at +0x98). Vanilla masters have 20 SCOL records with MODS and 30 with MODC.
+
+`Radicle/src/environment/material_swap.cpp:primary_model_color_remapping_index` reads the same model slot's C subrecord: MODC for modeled records and SCOL, and for ARMO the MODC inside the chosen world model (`armor_color_remapping_index`). xEdit defines the ARMO world models as `wbTexturedModel('World Model', [MOD2, MO2T], [wbMODC, wbMO2S, nil])` and the same with MOD4/MO4T/MO4S (source:TES5Edit dev-4.1.6 9fb016884bec `Core/wbDefinitionsFO4.pas`, ARMO). Mutagen's `Armor.xml` `WorldModel` maps MODL, MODT and MODS to the gendered signatures but not MODC, so it also reads MODC. MO2C exists only on ARMA (xEdit's `Biped Model`, Mutagen's `ArmorAddon.xml`); MO4C is on ARMA (`1st Person`) and in WEAP's `1st Person Model`, which `primary_model_path` does not choose. An earlier version of this function read MO2C/MO4C for ARMO and so returned nothing for every armor color index; `tests/test_environment_material_swap.cpp:ReadsThePrimaryModelColorRemappingIndex` (records 0x822 to 0x824) failed before the fix. A MODC belongs to the MOD2 or MOD4 it follows, so a male-only MODC is not the female model's index. The vanilla scan below found no ARMO MODC, so the fix changes no shipped record. It is exposed as `radicle_record_primary_model_color_remapping_index` (NOT_FOUND when absent) and `RadicleEnvironment.PrimaryModelColorRemappingIndex`. A C subrecord that is not exactly one 4-byte float throws `WorldDecodeError`. It is the engine's `BGSModelMaterialSwap::colorRemappingIndex` (+0x38, `FLT_MAX` when unset), which `BGSModelMaterialSwap::SwapMaterials` (OG RVA 0x53080) applies to every eligible geometry when no exact swap entry has a CNAM, even with no swap at all (research doc, sections 2c and 5.1). A scan of the vanilla masters found 325 MODC subrecords, all 4 bytes, placed after MODL and before MODT (207 STAT, 55 MSTT, 30 SCOL, 22 FURN, 8 ACTI, 2 ARTO, 1 ANIO), plus one ARMA MO3C. Proof: `tests/test_environment_material_swap.cpp:ReadsThePrimaryModelColorRemappingIndex` and `CApiDecodesAndFrees`; `bindings/csharp/Radicle.Interop.Tests/MaterialSwapTests.cs`.
+
+The C entry points live in `include/fo4/c_api_materials.h` / `src/c_api_materials.cpp` rather than `c_api_env.h`, which is over the 750-line edit limit; for the same reason XMSP is its own call (`radicle_placed_reference_material_swap`) instead of a field on `radicle_placed_reference`, so that struct's layout is unchanged. `bindings/csharp/tools/generate_interop.py` reads the new header, and the ABI probe includes it.
+
+Proof: `tests/test_environment_material_swap.cpp` (C++ and C API, including the malformed cases); `Radicle.Interop.Tests` ABI layout check; GardenEngine `MaterialSwapParityTests` on Fallen World matches Mutagen for 8,284 MSWP versions (19,821 substitutions), 6,779 model swap links and 308,440 reference swap links.
+
+## Radicle/bindings/csharp/Radicle.Interop/Core.cs:RadicleLibrary.Resolve — ABI guard (GardenEngine #114)
+
+Managed code used to trust whichever `radicle.dll` it found. `radicle_abi_version()` existed, but nothing compared it with the header the bindings were generated from, so a stale library beside newly generated bindings would fail as a corrupted struct read, or not at all. GardenEngine's CI probe compared the two, but normal startup did not.
+
+`Radicle/bindings/csharp/tools/generate_interop.py:parse` reads `RADICLE_ABI_VERSION` from `fo4/c_api.h` before it strips preprocessor lines, and `emit_cs` writes it as `RadicleNative.CompiledAbiVersion`. The committed `RadicleNative.g.cs` is checked against the header by the existing `radicle_csharp_interop_up_to_date` test, so the constant cannot drift.
+
+`RadicleLibrary.Resolve` is the DllImport resolver every wrapper type registers before its first native call, so it is the one place all entry points pass through. After it loads the library it calls `VerifyAbi`, which looks up `radicle_abi_version` with `NativeLibrary.TryGetExport` and calls it through a function pointer. It cannot use `RadicleNative.AbiVersion`, because binding that import would re-enter the resolver. A mismatch, or a library without the export, throws `RadicleAbiMismatchException`; the runtime propagates it to the caller of the first native call. The check runs once, on the load that caches `_handle`; later imports get the cached handle. A rejected library is not cached, so the next import loads and checks again. When it throws, `Resolve` calls `NativeLibrary.Free` on the handle it just loaded and rethrows. Without that the rejected DLL stayed mapped for the rest of the process and, on Windows, locked its file: `AbiGuardTests.ARejectedLibraryIsUnloaded` loads a copy of `radicle_abi_stub`, is refused, then deletes the copy, which failed with `UnauthorizedAccessException` before the fix.
+
+When no path is configured the resolver used to return zero and let the runtime probe. It now calls `NativeLibrary.TryLoad(name, assembly, searchPath)` itself so the guard covers that path too; the runtime does not re-enter the resolver for that call (checked with a copy of the bindings and a `radicle.dll` in its own folder: the real library returns its ABI, `radicle_abi_stub` throws). When `TryLoad` fails, `Resolve` still returns zero, and the runtime then asks `AssemblyLoadContext.LoadUnmanagedDll` and the `ResolvingUnmanagedDll` event. A library found that way is not checked. A host that resolves native libraries through its own load context (for example a plugin context reading `deps.json` native assets) must call `RadicleLibrary.SetPath` or set `RADICLE_NATIVE_PATH` to get the guard. This is documented rather than closed, because throwing there would break hosts whose only route to the library is their load context. `RadicleNative.Init.cs` gives the generated class a static constructor that registers the resolver, so a raw `RadicleNative` call made before any wrapper type is touched is guarded as well.
+
+Proof: `Radicle.Interop.Tests/AbiGuardTests.cs`. `TheFirstCallIntoALibraryWithAnotherAbiIsRejected` loads `radicle_abi_stub` (`bindings/csharp/tests/abi_stub.cpp`, which reports `RADICLE_ABI_VERSION + 1`) and gets `reports Radicle ABI 3 ... generated for ABI 2`. `TheFirstCallIntoALibraryThatIsNotRadicleIsRejected` loads `kernel32.dll`. With the `VerifyAbi` call removed from `Resolve`, both fail; with it, all 12 tests in the project pass.
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION — ABI 2 (GardenEngine #114)
+
+The material swap entry points in `include/fo4/c_api_materials.h` (`radicle_material_swap_decode`, `radicle_material_swap_free`, `radicle_placed_reference_material_swap`, `radicle_record_primary_model_material_swap`, `radicle_record_primary_model_color_remapping_index`) were added while `RADICLE_ABI_VERSION` stayed 1. A library built before them also reports 1, so `RadicleLibrary.Resolve` accepted it and the first material swap call threw `EntryPointNotFoundException` instead of `RadicleAbiMismatchException` at the first native call. Reproduced by loading a `radicle.dll` built from #333 (`43ffec22`) through the #336 bindings: `AbiVersion()` returned 1 and `MaterialSwapDecode` failed with `Unable to find an entry point named 'radicle_material_swap_decode'`.
+
+Any added, removed or changed export or public struct bumps `RADICLE_ABI_VERSION`; this one is ABI 2. After the bump the same #333 library is refused with `reports Radicle ABI 1, but Radicle.Interop was generated for ABI 2`.
+
+Proof: `Radicle/bindings/csharp/Radicle.Interop.Tests/AbiGuardTests.cs:ALibraryFromBeforeTheMaterialSwapExportsIsRejected` loads `radicle_abi_stub_v1` (`bindings/csharp/tests/abi_stub.cpp` built by `Radicle/CMakeLists.txt` with `RADICLE_ABI_STUB_VERSION=1u`). With `RADICLE_ABI_VERSION` set back to 1 and the bindings regenerated, that test fails because the stub is accepted; at 2 it passes.
+
+## PluginEditTool/native/tests/unit/PapyrusTargetTests.cpp — Papyrus compile tests do not depend on an installed Creation Kit
+
+`PapyrusTarget Compile uses the built-in engine with the Auto note` and `PapyrusTarget Compile with engine=creationkit and no exe explains itself` exercise the path where no `PapyrusCompiler.exe` is found. `src/app/PapyrusTarget.cpp:PapyrusTarget::compile` asks `src/tools/ToolLocator.cpp:Locator::resolve(Tool::PapyrusCompiler)`, which falls back to `Locator::fallout4Root` and, with no setting or `FALLOUT4_PATH`, to the Windows registry and a scan of every drive's Steam library. On a machine with the Creation Kit installed (for example `D:\SteamLibrary\steamapps\common\Fallout 4\Papyrus Compiler\PapyrusCompiler.exe`) both tests found that compiler and failed. They now set `Settings::fallout4Path` to their own empty temp root, as `tests/unit/ToolLocatorTests.cpp` already does, so the game install is never consulted. `PAPYRUS_COMPILER_PATH` and `PATH` are still searched; when either provides a compiler the tests `SKIP` with that reason instead of failing. Product behaviour is unchanged: Auto still prefers an installed Creation Kit compiler.
+
+The Papyrus target tests moved out of `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp` (916 lines, over the 750-line limit) into `tests/unit/PapyrusTargetTests.cpp`, built as `fo4ide_test_papyrus_target`. The fakes both files use (`tempRoot`, `Cleanup`, `touch`, `FakeRunner`, `ThrowingRunner`, `FakePlatform`) moved to `tests/helpers/ServiceTargetFakes.hpp` (`fo4ide::app::test`). The 36 test cases are unchanged apart from the two above. `PapyrusTargetTests.cpp:PapyrusTargetFixture` owns the `Locator` so the target's reference to it stays valid for the test body, and `PapyrusTargetTests.cpp:buildPex` compiles a trivial script with the built-in engine and returns the written `.pex` path, so the decompile tests exercise the real `PexFile` I/O.
+
+## Radicle/src/text/encoding.cpp — one text encoding boundary and one case fold
+
+Sources: Mutagen `Mutagen.Bethesda.Core/Plugins/Meta/GameConstants.cs` (FO4 `encodings: new(NonTranslated: MutagenEncoding._1252, NonLocalized: MutagenEncoding._1252)`), Mutagen `MasterReference_Generated.cs` (`ModKey.FromNameAndExtension(... _package.MetaData.Encodings.NonTranslated)` for `MAST`), Mutagen `ModKey` equality (`StringComparison.OrdinalIgnoreCase`).
+
+- `Radicle/src/text/encoding.cpp:windows1252_to_utf8` / `utf8_to_windows1252` convert between stored FO4 text and UTF-8. Bytes 0x80–0x9F use the Windows-1252 table; the five bytes that table leaves undefined (0x81, 0x8D, 0x8F, 0x90, 0x9D) map to the C1 code point of the same value, so every byte string round-trips. Encoding returns nothing for invalid UTF-8 or a character outside Windows-1252.
+- `Radicle/src/text/encoding.cpp:fold` / `compare_folded` / `equals_folded` / `hash_folded` implement .NET `OrdinalIgnoreCase` on UTF-8: each code point is replaced by .NET's ordinal uppercase mapping, then ASCII is lowered, so ASCII-only strings fold exactly as the old `ascii_lower` did and lower-case literals such as `.ba2` keep working. Lowering after uppercasing preserves the `OrdinalIgnoreCase` equivalence classes because uppercase mapping never yields `a`–`z`. Bytes that are not valid UTF-8 compare as themselves. The compare and hash walk both strings without allocating, because `PluginKey` ordering runs inside every `FormKey` map.
+- `Radicle/src/text/upper_table.inc` is generated by `Radicle/tools/gen_upper_table.cs` (`dotnet run Radicle/tools/gen_upper_table.cs -- <path>/upper_table.inc`, a .NET file-based program pinned to `net8.0`, the runtime the C# bindings target). It keeps every code point whose `Rune.ToUpperInvariant` differs and which `string.Equals(..., StringComparison.OrdinalIgnoreCase)` treats as equal to it: 1,422 pairs in 197 runs on .NET 8.0.30, supplementary planes included. That filter is why the table comes from .NET rather than a Unicode database: .NET's ordinal casing does not fold U+0131 (dotless i) to `I` or U+017F (long s) to `S`, and does fold the 27 Greek letters with ypogegrammeni whose full uppercase is two characters (for example U+1F80 to U+1F88). A table built from Python's `str.upper` disagreed with C# `FormKey` on those 29 characters and folded no supplementary letter. Regression: `Radicle/tests/test_text_boundary.cpp:FoldMatchesDotnetOrdinalIgnoreCase`, which failed all five checks with the Python table.
+
+**Where the boundary is applied.**
+- Plugin names are UTF-8 everywhere. `Radicle/src/plugin/reader.cpp:read_plugin` names a plugin from `fo4::io::utf8(path.filename())`; it used `path::string()`, which on Windows gives the ANSI code page, so the C ABI returned `Café.esm` for `Café.esm` and a UTF-8 FormKey for that plugin was `NOT_FOUND`. `Radicle/src/plugin/tes4.cpp:read_tes4` decodes `MAST` from Windows-1252 and `Radicle/src/plugin/writer.cpp:replace_master_subrecords` encodes it back, throwing for a name Windows-1252 cannot hold; the writer previously stored a UTF-8 key's bytes as given. The decode/encode pair round-trips every byte string, so unmodified plugins still rewrite byte-identically.
+- `Radicle/src/plugin_key.cpp:operator==`/`operator<`/`hash_value`, `Radicle/src/environment/environment.cpp:Environment::find_plugin`, `Radicle/src/environment/strings.cpp:list_directory`/`StringTables::load` and `Radicle/src/archive/assets.cpp:list_files`/`child`/`archive_load_order` use the shared fold. They used ASCII-only lowering (`std::tolower` in the C locale), so `Égout.esp` and `égout.esp` were different plugins, `CAFÉ_en.STRINGS` was not found for `Café.esm`, and `CAFÉ.ba2` was not loaded for it. C# `FormKey` already compared names with `OrdinalIgnoreCase`, so native and managed equality disagreed.
+- `Radicle/src/environment/environment.cpp:Environment::find_by_editor_id` compares stored EDIDs through `windows1252_to_utf8` and the fold, so `CAFÉ` finds `Café` (`C9` and `E9` are the same letter).
+- `Radicle/src/c_api_env_internal.hpp:stored_text` is the one place C ABI text output is converted. ASCII text is returned in place; other text is converted once per stored string into `radicle_env::text` under `radicle_env::text_mutex` and lives until `radicle_env_destroy`, so the existing lifetime rules are unchanged. It covers `radicle_record_info` `editor_id`/`name_text`/`model_path`, `radicle_placed_ref` `comments`/`map_marker_name_text`, `radicle_light_info::gobo`, the CLMT sun textures, MSWP material paths, TXST texture/material paths, `radicle_record_primary_model_path` and `radicle_env_landscape_texture_diffuse`. The last two first shipped returning the stored bytes, so the same record gave UTF-8 from `radicle_record_get_info` and Windows-1252 from `radicle_record_primary_model_path`; `test_text_boundary.cpp:CApiTextIsUtf8` now covers both with non-ASCII data and failed on them before. `Radicle/src/c_api_placed.cpp:build_view` converts VMAD script and property names and string values in the holder it owns. `radicle_env_find_editor_id` converts its query to Windows-1252 first and returns `INVALID_ARGUMENT` when it cannot, as the setters do; it used to return `NOT_FOUND`, so callers could not tell malformed or unrepresentable text from a missing EditorID. `test_text_boundary.cpp:CApiTextIsUtf8` checks an unrepresentable query (Cyrillic) and a truncated UTF-8 sequence, and failed on both before.
+
+- BA2 entry names follow the same rule. `Radicle/src/archive/ba2_reader.cpp:Ba2Reader::open`, `Radicle/src/archive/ba2.cpp:read_ba2_general` and `Radicle/src/archive/ba2_texture.cpp:read_ba2_texture` decode the name table from Windows-1252, so `Ba2EntryInfo::path`, `Ba2GeneralEntry::path`, `Ba2TextureEntry::path` and `radicle_ba2_entry_info::path` are UTF-8. `Ba2Reader::find` encodes its UTF-8 argument back and looks it up by the stored bytes (name table) or by `compute_ba2_hashes` over the stored bytes (hash-only archives); `Radicle/src/archive/ba2_file.hpp:stored_ba2_paths` encodes every path for both writers and throws for one Windows-1252 cannot hold. Data evidence (2026-10-02, installed game): of the 507,570 names in the vanilla BA2 name tables, exactly three are non-ASCII, all in `Fallout4 - Voices.ba2` (`Sound\Voice\Fallout4.esm\RobotMrHandy\María_F.fuz`, `María_M.fuz`, `Sánchez_F.fuz`), and all three are valid Windows-1252 and invalid UTF-8. How the engine hashes a non-ASCII archive path (`BSResource::ID::GenerateFromPath`) is not in `ReverseEng/commonlib_NonVR` or `ReverseEng/Fallout4_Runtime_Research`; hash-only lookups hash the stored bytes as before. Before this, the names stayed raw: `PluginEditTool/native/src/archive/RadicleArchiveBackend.cpp` put them into JSON, which throws `type_error.316` when serialised, so listing `Fallout4 - Voices.ba2` failed, and a UTF-8 entry path never matched. That backend now also builds extraction paths from UTF-8 (`safeRelativePath`). Regressions: `Radicle/tests/test_text_boundary.cpp:ArchiveNamesAreWindows1252` and `PluginEditTool/native/tests/unit/RadicleArchiveBackendTests.cpp` "lists and extracts Windows-1252 entry names as UTF-8", both failing before.
+Regressions, each failing before the change: `Radicle/tests/test_text_boundary.cpp:PluginKeysIgnoreNonAsciiCase`, `MasterNamesAreWrittenAsWindows1252`, `CApiTextIsUtf8`, `StringTablesAndAssetsMatchNonAsciiCase`, and `Radicle/tests/test_environment_ref_fields.cpp:CApiWritesTextAsWindows1252`.
+
+**Not covered.**
+- Localized string tables still return raw bytes with a size (`radicle_strings_lookup`); English tables are Windows-1252 and other languages differ, so decoding stays with the caller.
+- Text stored in any other code page decodes as Windows-1252, the same as in Mutagen. It round-trips byte-exactly but displays as the Windows-1252 reading of its bytes. Which code page a non-English Creation Kit writes is not verified.
+
+## Radicle/src/graph/conflict_graph.cpp:ConflictGraph::winner — Partial Form overrides do not win
+
+Source: TES5Edit dev-4.1.6 `9fb016884bec138ea6c7b872cec831537d464c3e`.
+- `Core/wbImplementation.pas:TwbMainRecord.GetWinningOverride` and `GetHighestOverrideOrSelf` walk the overrides from the highest load order down, skip every `IsPartialForm` override, and fall back to the master record when all overrides are partial. `GetIsWinningOverride` is false for a partial form.
+- `TwbMainRecord.GetIsPartialForm` is `mrDef.CanBePartial and GetFlags.IsPartialForm`; `TwbMainRecordStructFlags.IsPartialForm` tests `$00004000`. `Core/wbInterface.pas:TwbMainRecordDef.Create` sets `rdfCanBePartial` only when the record's flag definition names "Partial Form", which `Core/wbDefinitionsFO4.pas` does for CELL, DIAL, QUST and WRLD (bit 14 of LCTN is "Unknown 14").
+- `Core/wbConflict.pas` marks a partial form's missing fields `vnfIsPartialForm`/`vnfIgnore`, so they do not count as removals, and takes the last non-partial node as the value being compared. The fields a partial override does carry are still compared, so the override stays a conflict candidate.
+
+`ConflictGraph::build` sets `RecordVersion::partial_form` from `RecordFlags::partial_form` (`1u << 14`) for those four signatures. `versions()` keeps every version in load order and `conflicts()` still lists a key overridden only by partial forms; `winner()` returns the last non-partial override, or the first version when every override is partial. It used to return the last version, so PluginEditTool's override patch (`PluginEditTool/native/src/plugin/RadiclePluginOverridePatch.cpp`, which walks `conflicts()` and copies `winner()`) and every other `winner()` caller treated a partial CELL, DIAL, QUST or WRLD as the full winning record. Regression: `Radicle/tests/test_conflict_graph.cpp:PartialFormOverridesKeepHistoryButDoNotWin`; the two QUST winner checks failed before the fix and the WEAP check pins that bit 14 is ignored on other signatures.
+
+Not changed, by design: `Radicle/src/environment/environment.cpp:Environment::winner` (the GardenEngine read path) returns the last version, partial or not. That is Mutagen's rule, which GardenEngine's parity checks compare against: `Mutagen.Bethesda.Core/Plugins/Cache/Internals/Implementations/Internal/ImmutableLoadOrderLinkCacheCategory.cs:FillNextCacheDepth` fills the winner cache from the last listed mod backwards and keeps the first record it meets (`AddIfMissing`), and nothing under `Mutagen.Bethesda.Core/Plugins/Cache` tests `IsPartialForm` or the `0x4000` flag (Mutagen only uses `PartialFormFlag` while parsing subgroups, `Plugins/Binary/Translations/SubgroupsBinaryTranslation.cs`). xEdit's winner rule therefore applies to `ConflictGraph`, the conflict and patching view, and Mutagen's to `Environment`. Which one the game itself uses when it loads a partial form is not in `ReverseEng/commonlib_NonVR` or `ReverseEng/Fallout4_Runtime_Research` and stays unverified.
+
 ## PluginEditTool/web/src/CellViewport.tsx:CellViewport, MainShell.tsx:MainShell — latest-value refs (#77 tranche 2)
 
 The React Compiler `react-hooks/refs` rule forbids writing `ref.current` during render. Refs that mirror the latest prop/callback for long-lived three.js or host-message listeners are now updated in a dep-less `useLayoutEffect`, which runs before any passive `useEffect` in the same commit, so listeners never see a stale value. `MainShell`'s `reloadMatrixRef`/`openByFormKeyRef` are declared before the host-message effect that reads them (with no-op initial values) because the compiler's `immutability` rule rejects modifying a value an earlier effect already captured.
@@ -445,6 +1344,6 @@ The wireframe toggle mutates three.js materials owned by the main scene effect. 
 
 Split out of `dialogs.tsx` and `Shell/StatusBar.tsx` so those files export only components (`react-refresh/only-export-components`). `dialogs.tsx:DialogProvider` supplies `DialogContext` from `useDialogs.ts`.
 
-## PluginEditTool/web/src/util/cellInstances.ts:applyHidden, Shell/ExplorerTree.tsx:ExplorerTree, Workspace/conflictStatus.ts:resolveStatus
+## PluginEditTool/web/src/util/cellInstances.ts:applyHidden, Shell/ExplorerTree.tsx:ExplorerTree
 
-Moved out of `CellViewport.tsx`, `MainShell.tsx` and `RecordView.tsx` unchanged so each of those over-750-line files shrinks when touched (source line-limit guard). `cellInstances.ts` holds the instanced-mesh hide/visibility/selection helpers and `InstanceRef`; `ExplorerTree.tsx` is the lazy plugin/record tree; `conflictStatus.ts` holds the conflict-cell status resolution, severity filter sets and legend tables.
+Moved out of `CellViewport.tsx` and `MainShell.tsx` unchanged so each of those over-750-line files shrinks when touched (source line-limit guard). `cellInstances.ts` holds the instanced-mesh hide/visibility/selection helpers and `InstanceRef`; `ExplorerTree.tsx` is the lazy plugin/record tree. Tranche 2 also moved RecordView's conflict-status tables to `Workspace/conflictStatus.ts`; main had already moved the same code to `recordStatus.ts` (#317), so the merge of the updated #318 dropped `conflictStatus.ts` and `RecordView.tsx` imports from `recordStatus.ts` only.

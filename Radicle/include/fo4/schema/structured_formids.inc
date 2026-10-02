@@ -2,6 +2,8 @@
 // min_size is the smallest payload that still contains that slot.
 // CNTO: FormID item at 0, int32 count at 4. xEdit wbStructExSK(CNTO).
 {0x4F544E43u, 0, 8},   // CNTO
+// XOWN: FO4 ownership {Owner form ID, 4 unused, u8 No Crime, 3 unused}; xEdit wbOwnership in wbDefinitionsCommon.pas.
+{0x4E574F58u, 0, 4},   // XOWN
 // LVLO: uint16 level, uint16 unused, FormID at 4, uint16 count, uint8 chance, pad.
 {0x4F4C564Cu, 4, 8},   // LVLO
 // XTEL: destination door FormID at 0, then 6 floats (and optional flags).

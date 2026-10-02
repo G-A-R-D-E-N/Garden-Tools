@@ -1,6 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 
 #include "fo4/binary/cursor.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <cstring>
 #include <span>
@@ -63,7 +64,7 @@ PluginHeader parse_tes4_header(const Record& tes4) {
     } else if (sub.signature == sig_data) {
       MasterReference master;
       if (pending_master) {
-        master.key = PluginKey::from_filename(*pending_master);
+        master.key = PluginKey::from_filename(text::windows1252_to_utf8(*pending_master));
         master.kind = master.key.looks_light() ? PluginKind::light : PluginKind::full;
         pending_master.reset();
       }

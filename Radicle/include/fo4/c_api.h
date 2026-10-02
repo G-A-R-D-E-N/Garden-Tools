@@ -13,6 +13,8 @@
   #define RADICLE_API
 #endif
 
+#define RADICLE_ABI_VERSION 2u
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,7 +26,7 @@ typedef enum radicle_status {
   RADICLE_STATUS_INVALID_ARGUMENT = 1,
   RADICLE_STATUS_IO_ERROR = 2,
   RADICLE_STATUS_PARSE_ERROR = 3,
-  /* Reserved for future read APIs; no current entry point returns it. */
+  /* Returned by the environment lookups in c_api_env.h. */
   RADICLE_STATUS_NOT_FOUND = 4,
   RADICLE_STATUS_OUT_OF_MEMORY = 5,
   RADICLE_STATUS_INTERNAL_ERROR = 255
@@ -39,6 +41,8 @@ typedef struct radicle_master_descriptor {
   const char* filename;
   radicle_plugin_kind kind;
 } radicle_master_descriptor;
+
+RADICLE_API uint32_t radicle_abi_version(void);
 
 /*
  * Handles are owned by the caller and must be released with radicle_plugin_destroy.

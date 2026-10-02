@@ -5,6 +5,7 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/signature.hpp"
 
 #include <algorithm>
@@ -21,8 +22,6 @@ namespace {
 
 constexpr auto k_cell = Signature::from_string("CELL");
 constexpr auto k_wrld = Signature::from_string("WRLD");
-constexpr auto k_refr = Signature::from_string("REFR");
-constexpr auto k_achr = Signature::from_string("ACHR");
 constexpr auto k_qust = Signature::from_string("QUST");
 constexpr auto k_dial = Signature::from_string("DIAL");
 constexpr auto k_info = Signature::from_string("INFO");
@@ -664,9 +663,8 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
   if (located.record == nullptr) {
     return PlacedReferenceCopyStatus::source_missing;
   }
-  if (located.record->header.signature != k_refr &&
-      located.record->header.signature != k_achr) {
-    throw PlacedReferenceError("placed-reference override requires a REFR or ACHR source record");
+  if (!is_placed_reference_signature(located.record->header.signature)) {
+    throw PlacedReferenceError("placed-reference override requires a placed-reference source record");
   }
 
   const auto source_context = plugin_form_id_context(source);
@@ -776,7 +774,7 @@ PlacedReferenceCopyNewResult copy_placed_reference_as_new(
     return {PlacedReferenceCopyNewStatus::source_missing, {}};
   }
   const auto signature = located.record->header.signature;
-  if (signature != k_refr && signature != k_achr) {
+  if (!is_placed_reference_signature(signature)) {
     return {PlacedReferenceCopyNewStatus::unsupported_signature, {}};
   }
 
