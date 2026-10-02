@@ -34,6 +34,15 @@ const T* data_or_null(const std::vector<T>& values) {
 }
 
 void build_view(const radicle_env& env, PlacedHolder& holder) {
+  if (holder.data.scripts) {
+    for (auto& script : holder.data.scripts->raw.scripts) {
+      script.name = fo4::text::windows1252_to_utf8(script.name);
+      for (auto& property : script.properties) {
+        property.name = fo4::text::windows1252_to_utf8(property.name);
+        if (property.text) property.text = fo4::text::windows1252_to_utf8(*property.text);
+      }
+    }
+  }
   const auto& d = holder.data;
   auto& v = holder.view;
   const auto key = [&](const std::optional<fo4::FormKey>& value) { return to_c_key(env, value); };
@@ -96,7 +105,7 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
   v.activate_parents = data_or_null(holder.activate_parents);
   v.activate_parent_count = holder.activate_parents.size();
 
-  v.comments = d.comments ? d.comments->data() : nullptr;
+  v.comments = stored_text(env, d.comments);
   v.ignored_by_sandbox = d.ignored_by_sandbox ? 1 : 0;
   v.open_by_default = d.open_by_default ? 1 : 0;
 
@@ -113,7 +122,7 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
         break;
       case fo4::env::NameKind::inline_text:
         v.map_marker_name_kind = RADICLE_NAME_INLINE;
-        v.map_marker_name_text = marker.name.text.data();
+        v.map_marker_name_text = stored_text(env, marker.name.text);
         break;
       case fo4::env::NameKind::string_id:
         v.map_marker_name_kind = RADICLE_NAME_STRING_ID;

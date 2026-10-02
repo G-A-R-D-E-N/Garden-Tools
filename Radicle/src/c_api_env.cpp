@@ -176,7 +176,8 @@ radicle_status radicle_env_find_editor_id(const radicle_env* env,
       filter = to_signature(signature);
       if (!filter) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "signature must be four characters");
     }
-    const auto* ref = env->value.find_by_editor_id(editor_id, filter);
+    const auto stored = fo4::text::utf8_to_windows1252(editor_id);
+    const auto* ref = stored ? env->value.find_by_editor_id(*stored, filter) : nullptr;
     if (ref == nullptr) return fail(RADICLE_STATUS_NOT_FOUND, "EditorID is not in the load order");
     *out_record = to_handle(ref);
     return RADICLE_STATUS_OK;
@@ -225,14 +226,14 @@ radicle_status radicle_record_get_info(const radicle_env* env,
     out_info->plugin_index = meta.plugin;
     out_info->record_flags = meta.flags.value();
     out_info->deleted = meta.deleted ? 1 : 0;
-    out_info->editor_id = meta.editor_id ? meta.editor_id->data() : nullptr;
+    out_info->editor_id = stored_text(*env, meta.editor_id);
     switch (meta.name.kind) {
       case fo4::env::NameKind::absent:
         out_info->name_kind = RADICLE_NAME_ABSENT;
         break;
       case fo4::env::NameKind::inline_text:
         out_info->name_kind = RADICLE_NAME_INLINE;
-        out_info->name_text = meta.name.text.data();
+        out_info->name_text = stored_text(*env, meta.name.text);
         break;
       case fo4::env::NameKind::string_id:
         out_info->name_kind = RADICLE_NAME_STRING_ID;
@@ -242,7 +243,7 @@ radicle_status radicle_record_get_info(const radicle_env* env,
         out_info->name_kind = RADICLE_NAME_MALFORMED;
         break;
     }
-    out_info->model_path = meta.model ? meta.model->data() : nullptr;
+    out_info->model_path = stored_text(*env, meta.model);
     if (meta.bounds) {
       out_info->has_bounds = 1;
       for (int i = 0; i < 3; ++i) {

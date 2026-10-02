@@ -217,7 +217,7 @@ Plugin read_plugin_from_owned_bytes(
   plugin.original_data = std::move(original_data);
   plugin.original_range = OriginalByteRange{&bytes, 0, bytes.size()};
   if (!plugin.path.empty()) {
-    plugin.key = PluginKey::from_filename(plugin.path.filename().string());
+    plugin.key = PluginKey::from_filename(io::utf8(plugin.path.filename()));
   }
   binary::Cursor cursor{bytes};
   plugin.tes4 = read_record(cursor, &bytes);

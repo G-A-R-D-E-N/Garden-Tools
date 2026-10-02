@@ -27,9 +27,6 @@ struct CollectionHolder {
   std::vector<radicle_static_part> parts;
 };
 
-const char* c_text(const std::optional<std::string_view>& value) {
-  return value ? value->data() : nullptr;
-}
 
 radicle_status require(const radicle_env* env, const radicle_record* record, const void* out) {
   if (env == nullptr || record == nullptr || out == nullptr) {
@@ -91,7 +88,7 @@ radicle_status radicle_light_get_info(const radicle_env* env, const radicle_reco
       set_optional(d.weight, info.has_weight, info.weight);
     }
     set_optional(data.fade, info.has_fade, info.fade);
-    info.gobo = c_text(data.gobo);
+    info.gobo = stored_text(*env, data.gobo);
     info.lens = to_c_key(*env, data.lens);
     info.god_rays = to_c_key(*env, data.god_rays);
     *out_info = info;
@@ -165,8 +162,8 @@ radicle_status radicle_climate_decode(const radicle_env* env, const radicle_reco
     auto& v = holder->view;
     v.weathers = data_or_null(holder->weathers);
     v.weather_count = holder->weathers.size();
-    v.sun_texture = c_text(holder->data.sun_texture);
-    v.sun_glare_texture = c_text(holder->data.sun_glare_texture);
+    v.sun_texture = stored_text(*env, holder->data.sun_texture);
+    v.sun_glare_texture = stored_text(*env, holder->data.sun_glare_texture);
     v.internal = holder.get();
     *out_climate = &holder.release()->view;
     return RADICLE_STATUS_OK;

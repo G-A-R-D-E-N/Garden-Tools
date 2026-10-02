@@ -90,9 +90,9 @@ radicle_status radicle_texture_set_get_info(const radicle_env* env,
     const auto data = fo4::env::decode_texture_set(env->value, *to_ref(record));
     radicle_texture_set_info info{};
     for (std::size_t slot = 0; slot < 8; ++slot) {
-      info.textures[slot] = data.textures[slot] ? data.textures[slot]->data() : nullptr;
+      info.textures[slot] = stored_text(*env, data.textures[slot]);
     }
-    info.material = data.material ? data.material->data() : nullptr;
+    info.material = stored_text(*env, data.material);
     if (data.flags) {
       info.has_flags = 1;
       info.flags = *data.flags;

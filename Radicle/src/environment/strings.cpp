@@ -2,6 +2,7 @@
 
 #include "fo4/localization/strings.hpp"
 #include "fo4/io/path_text.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -16,12 +17,6 @@ constexpr Signature sig(const char (&text)[5]) {
 
 using io::utf8;
 
-std::string lower(std::string_view text) {
-  std::string out(text);
-  std::transform(out.begin(), out.end(), out.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return out;
-}
 
 localization::StringTableKind table_kind(StringSource source) noexcept {
   switch (source) {
@@ -51,7 +46,7 @@ std::unordered_map<std::string, std::vector<std::filesystem::path>> list_directo
   if (ec) throw EnvironmentError("could not list strings directory: " + utf8(dir));
   for (const auto& entry : it) {
     if (!entry.is_regular_file(ec)) continue;
-    files[lower(utf8(entry.path().filename()))].push_back(entry.path());
+    files[text::fold(utf8(entry.path().filename()))].push_back(entry.path());
   }
   return files;
 }
@@ -97,7 +92,7 @@ StringTables StringTables::load(const Environment& env,
     const auto prefix = plugin_stem(info.key.filename()) + "_" + result.language_ + ".";
     for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
       const auto name = prefix + std::string(string_source_extension(source));
-      const auto it = files.find(lower(name));
+      const auto it = files.find(text::fold(name));
       Table table;
       std::vector<std::byte> archived;
       if (it != files.end()) {

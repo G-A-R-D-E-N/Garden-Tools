@@ -1,6 +1,7 @@
 #include "fo4/archive/assets.hpp"
 
 #include "fo4/io/path_text.hpp"
+#include "fo4/text/encoding.hpp"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -28,7 +29,7 @@ std::vector<std::pair<std::string, std::filesystem::path>> list_files(const std:
   std::error_code ec;
   if (!std::filesystem::is_directory(dir, ec)) return files;
   for (const auto& entry : std::filesystem::directory_iterator(dir)) {
-    if (entry.is_regular_file(ec)) files.emplace_back(lower(utf8(entry.path().filename())), entry.path());
+    if (entry.is_regular_file(ec)) files.emplace_back(text::fold(utf8(entry.path().filename())), entry.path());
   }
   std::sort(files.begin(), files.end());
   return files;
@@ -44,7 +45,7 @@ std::optional<std::filesystem::path> child(const std::filesystem::path& dir, std
   std::optional<std::filesystem::path> found;
   for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
     const bool kind = want_dir ? entry.is_directory(ec) : entry.is_regular_file(ec);
-    if (!kind || lower(utf8(entry.path().filename())) != name) continue;
+    if (!kind || !text::equals_folded(utf8(entry.path().filename()), name)) continue;
     if (!found || entry.path() < *found) found = entry.path();
   }
   return found;
@@ -85,12 +86,12 @@ std::vector<std::filesystem::path> archive_load_order(const std::filesystem::pat
     if (added.insert(name).second) order.push_back(path);
   };
   for (const auto& listed : ini_archives) {
-    const auto wanted = lower(listed);
+    const auto wanted = text::fold(listed);
     const auto it = std::lower_bound(files.begin(), files.end(), std::make_pair(wanted, std::filesystem::path{}));
     if (it != files.end() && it->first == wanted) add(it->first, it->second);
   }
   for (const auto& plugin : plugins) {
-    auto stem = lower(plugin);
+    auto stem = text::fold(plugin);
     if (const auto dot = stem.rfind('.'); dot != std::string::npos) stem.resize(dot);
     for (const auto& [name, path] : files) {
       if (name == stem + ".ba2") add(name, path);
