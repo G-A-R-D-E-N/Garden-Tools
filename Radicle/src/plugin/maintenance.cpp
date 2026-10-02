@@ -160,4 +160,14 @@ DeletedRecordCounts count_deleted_records(const Plugin& plugin) {
   return counts;
 }
 
+EslEligibility esl_eligibility(const Plugin& plugin) {
+  EslEligibility out;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;
+    ++out.native_records;
+    if (record->form_key.local().value() > k_light_local_mask) ++out.out_of_range;
+  }
+  return out;
+}
+
 }  // namespace fo4

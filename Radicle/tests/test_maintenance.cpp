@@ -96,3 +96,15 @@ TEST(Maintenance, CountsDeletedRecordsAndNavmeshes) {
   EXPECT_EQ(counts.references, 1u);
   EXPECT_EQ(counts.navmeshes, 1u);
 }
+
+TEST(Maintenance, EslEligibilityCountsNativeRecordsOutsideTheLightRange) {
+  const auto plugin = make_plugin("Mod.esp", {"Base.esm"},
+                                  {{"KYWD", 0x00000800, std::string_view{"Override\0", 9}},
+                                   {"MISC", 0x01000900, std::string_view{"Small\0", 6}},
+                                   {"MISC", 0x01001000, std::string_view{"Large\0", 6}}});
+  const auto esl = fo4::esl_eligibility(plugin);
+  EXPECT_EQ(esl.native_records, 2u);
+  EXPECT_EQ(esl.out_of_range, 1u);
+  EXPECT_EQ(esl.capacity, 0x800u);
+  EXPECT_TRUE(esl.can_fit());
+}

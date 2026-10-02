@@ -72,3 +72,7 @@ Walks every group, nested ones included, bottom-up like xEdit `xeMainForm.pas:mn
 ## tools/inspect/main.cpp:print_udr
 
 `fo4inspect udr` lists deleted placed references (the records xEdit's Undelete and Disable References would fix) plus the deleted-record and deleted-navmesh counts from `count_deleted_records`.
+
+## src/plugin/maintenance.cpp:esl_eligibility
+
+Moved from `PluginEditTool/native/src/plugin/RadiclePluginEsl.cpp:checkEslEligibility` (#360) with the same rule: native records are the plugin's own (owner is the plugin, TES4 excluded); `out_of_range` counts native object IDs above `k_light_local_mask`; `capacity` is 0x800 (the 0x800-0xFFF range the PluginEditTool check used). C ABI: `radicle_env_esl_eligibility`.

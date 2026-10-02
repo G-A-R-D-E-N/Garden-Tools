@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-#include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/maintenance.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -29,22 +29,12 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
 
-    constexpr std::size_t capacity = 0x1000u - 0x800u;
-    std::size_t nativeCount = 0;
-    std::size_t outOfRange = 0;
+    const auto esl = fo4::esl_eligibility(loaded->plugin);
+    const auto capacity = esl.capacity;
+    const auto nativeCount = esl.native_records;
+    const auto outOfRange = esl.out_of_range;
 
-    for (const auto* record : fo4::collect_records(loaded->plugin)) {
-        if (record->header.signature == fo4::sig_tes4 ||
-            record->form_key.owner() != loaded->plugin.key) {
-            continue;
-        }
-        ++nativeCount;
-        if (record->form_key.local().value() > fo4::k_light_local_mask) {
-            ++outOfRange;
-        }
-    }
-
-    if (outOfRange == 0) {
+    if (esl.already_light()) {
         return nlohmann::json(
             "'" + name + "' is already ESL-compatible: all " +
             std::to_string(nativeCount) +
@@ -52,7 +42,7 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
             "Native compact_to_esl would be a no-op.");
     }
 
-    if (nativeCount > capacity) {
+    if (!esl.can_fit()) {
         return nlohmann::json(
             "'" + name + "' CANNOT fit the ESL compacted range: " +
             std::to_string(nativeCount) + " native record(s) exceed the " +
