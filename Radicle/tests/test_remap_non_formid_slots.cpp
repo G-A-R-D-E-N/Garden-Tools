@@ -172,3 +172,48 @@ TEST(RemapNonFormIdSlots, SceneActionScalarsStayButRadioSoundAndTemplateRemap) {
   }
   EXPECT_EQ(values, (std::vector<std::uint32_t>{0x40000000u, 0x02000001u, 0x01000ABCu, 0x01000123u}));
 }
+
+TEST(RemapNonFormIdSlots, InTableScalarsSurviveMasterReorder) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"DLC01.esm\0", 10});
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto scen_group = fo4::test::begin_group(out, "SCEN", 0);
+  const auto scen = fo4::test::begin_record(out, "SCEN", 0, 0x00012348);
+  fo4::test::ByteWriter width;
+  width.u32(350);
+  fo4::test::write_subrecord(out, "WNAM", width.bytes);
+  fo4::test::end_record(out, scen);
+  fo4::test::end_group(out, scen_group);
+  const auto acti_group = fo4::test::begin_group(out, "ACTI", 0);
+  const auto acti = fo4::test::begin_record(out, "ACTI", 0, 0x00012349);
+  fo4::test::ByteWriter color;
+  color.u32(0x00808080);
+  fo4::test::write_subrecord(out, "PNAM", color.bytes);
+  fo4::test::end_record(out, acti);
+  fo4::test::end_group(out, acti_group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin),
+                                     {fo4::PluginKey::from_filename("DLC01.esm"),
+                                      fo4::PluginKey::from_filename("Fallout4.esm")});
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* scen_record = fo4::find_record(reread, fo4::FormKey::parse("012348:Fallout4.esm"));
+  const auto* acti_record = fo4::find_record(reread, fo4::FormKey::parse("012349:Fallout4.esm"));
+  ASSERT_NE(scen_record, nullptr);
+  ASSERT_NE(acti_record, nullptr);
+  EXPECT_EQ(sub_u32(*scen_record, "WNAM"), 350u);
+  EXPECT_EQ(sub_u32(*acti_record, "PNAM"), 0x00808080u);
+}
