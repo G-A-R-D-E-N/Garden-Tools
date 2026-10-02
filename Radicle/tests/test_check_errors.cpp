@@ -211,15 +211,15 @@ TEST(CheckErrors, HardcodedEngineFormsAreNotUnresolved) {
   fo4::test::ByteWriter game;
   write_header(game, {});
   write_empty_record(game, "KYWD", 0x000800);
-  const auto master = fo4::read_plugin(game.bytes, "Game.esm");
+  const auto master = fo4::read_plugin(game.bytes, "Fallout4.esm");
   fo4::test::ByteWriter out;
-  write_header(out, "Game.esm");
+  write_header(out, "Fallout4.esm");
   write_misc_with_keywords(out, 0x01000801, {0x00000014, 0x00000900});
   const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
   const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
   const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
   ASSERT_EQ(unresolved.size(), 1u);
-  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000900:Game.esm"));
+  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000900:Fallout4.esm"));
 }
 
 TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
@@ -242,4 +242,38 @@ TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
                                                                           : fo4::CheckSeverity::warning)
         << finding.message;
   }
+}
+
+TEST(CheckErrors, NoneFormIdIsNotALink) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_misc_with_keywords(out, 0x000801, {0xFFFFFFFFu});
+  const auto group = fo4::test::begin_group(out, "EQUP", 0);
+  const auto record = fo4::test::begin_record(out, "EQUP", 0, 0x000802);
+  fo4::test::ByteWriter anam;
+  anam.u32(0xFFFFFFFFu);
+  fo4::test::write_subrecord(out, "ANAM", anam.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  for (const auto& finding : fo4::check_load_order(load_order)) {
+    EXPECT_NE(finding.code, fo4::CheckCode::unresolved_link) << finding.message;
+    EXPECT_NE(finding.code, fo4::CheckCode::invalid_master_index) << finding.message;
+  }
+}
+
+TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
+  fo4::test::ByteWriter game;
+  write_header(game, {});
+  write_empty_record(game, "KYWD", 0x000800);
+  const auto master = fo4::read_plugin(game.bytes, "CustomMaster.esm");
+  fo4::test::ByteWriter out;
+  write_header(out, "CustomMaster.esm");
+  write_misc_with_keywords(out, 0x01000801, {0x00000014});
+  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
+  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000014:CustomMaster.esm"));
 }

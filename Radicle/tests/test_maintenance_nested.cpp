@@ -40,7 +40,9 @@ fo4::Plugin make_nested(std::string_view name, bool with_master, const Nested& s
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Parent\0", 7});
   fo4::test::end_record(out, parent);
   const auto children = fo4::test::begin_group(out, spec.parent, spec.children_type);
+  out.patch_u32(children + 8, 0x800);
   const auto inner = spec.inner_type < 0 ? 0 : fo4::test::begin_group(out, spec.parent, spec.inner_type);
+  if (spec.inner_type >= 0) out.patch_u32(inner + 8, 0x800);
   const auto child = fo4::test::begin_record(out, spec.child, 0, 0x00000801);
   fo4::test::write_subrecord(out, "EDID", spec.child_edid);
   fo4::test::end_record(out, child);
@@ -103,4 +105,57 @@ TEST(MaintenanceNested, RemoveRecordsKeepsParentWhoseChildStays) {
   const auto reread = fo4::read_plugin(fo4::write_plugin(patch), "Patch.esp");
   EXPECT_NE(fo4::find_record(reread, fo4::FormKey::parse("000800:Base.esm")), nullptr);
   EXPECT_EQ(fo4::find_record(reread, fo4::FormKey::parse("000801:Base.esm")), nullptr);
+}
+
+namespace {
+
+fo4::Plugin two_parents(std::string_view name, bool with_master, std::string_view parent, std::int32_t children_type,
+                        std::string_view child, std::uint32_t child_parent) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(3);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  if (with_master) {
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Base.esm\0", 9});
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+  }
+  fo4::test::end_record(out, tes4);
+  const auto top = fo4::test::begin_group(out, parent, 0);
+  for (const std::uint32_t id : {0x800u, 0x802u}) {
+    const auto record = fo4::test::begin_record(out, parent, 0, id);
+    fo4::test::end_record(out, record);
+    if (id != child_parent) continue;
+    const auto children = fo4::test::begin_group(out, parent, children_type);
+    out.patch_u32(children + 8, id);
+    const auto record_child = fo4::test::begin_record(out, child, 0, 0x801);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Same\0", 5});
+    fo4::test::end_record(out, record_child);
+    fo4::test::end_group(out, children);
+  }
+  fo4::test::end_group(out, top);
+  return fo4::read_plugin(out.bytes, std::string(name));
+}
+
+}  // namespace
+
+TEST(MaintenanceNested, ReferenceMovedToAnotherCellIsNotItm) {
+  const auto base = two_parents("Base.esm", false, "CELL", 6, "REFR", 0x800);
+  const auto patch = two_parents("Patch.esp", true, "CELL", 6, "REFR", 0x802);
+  for (const auto& key : itm_keys(base, patch)) {
+    EXPECT_NE(key, fo4::FormKey::parse("000801:Base.esm"));
+  }
+}
+
+TEST(MaintenanceNested, InfoMovedToAnotherTopicIsNotItm) {
+  const auto base = two_parents("Base.esm", false, "DIAL", 7, "INFO", 0x800);
+  const auto patch = two_parents("Patch.esp", true, "DIAL", 7, "INFO", 0x802);
+  for (const auto& key : itm_keys(base, patch)) {
+    EXPECT_NE(key, fo4::FormKey::parse("000801:Base.esm"));
+  }
 }
