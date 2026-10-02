@@ -89,6 +89,12 @@ TEST(CApiMaintenance, ReportsItmDeletedAndUnusedMasters) {
   EXPECT_EQ(radicle_env_unused_masters(env, "Missing.esp", &strings, &count, &complete), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_env_deleted_counts(env, nullptr, &records, &references, &navmeshes),
             RADICLE_STATUS_INVALID_ARGUMENT);
+  size_t native = 0, out_of_range = 0, capacity = 0;
+  ASSERT_EQ(radicle_env_esl_eligibility(env, "Patch.esp", &native, &out_of_range, &capacity), RADICLE_STATUS_OK);
+  EXPECT_EQ(native, 1u);
+  EXPECT_EQ(out_of_range, 0u);
+  EXPECT_EQ(capacity, 0xFFEu);
+
   radicle_env_destroy(env);
   std::error_code ec;
   std::filesystem::remove_all(root, ec);

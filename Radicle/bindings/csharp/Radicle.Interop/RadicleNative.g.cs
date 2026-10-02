@@ -838,4 +838,7 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_unused_masters")]
     public static extern Status EnvUnusedMasters(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, IntPtr** out_strings, nuint* out_count, int* out_complete);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
+    public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
+
 }

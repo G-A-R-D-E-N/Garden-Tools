@@ -20,7 +20,7 @@ export default function RecordContextMenu({
   const {
     copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
     deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq,
-    checkCircularLeveled, checkForErrors, findUnreachable, lootReport, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
+    checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
   } = actions;
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
@@ -105,6 +105,7 @@ export default function RecordContextMenu({
       <button onClick={() => checkForErrors(menu.col)}><ListFilter size={13} /> Check for errors</button>
       <button onClick={() => findUnreachable(menu.col)}><ListFilter size={13} /> Build reachable info</button>
       <button onClick={() => lootReport(menu.col)}><ListFilter size={13} /> LOOT cleaning report</button>
+      <button onClick={() => updateOnam(menu.col)}><ListFilter size={13} /> Update ONAM</button>
       <button onClick={() => compareTo(menu.col)}><ListFilter size={13} /> Compare to...</button>
       <div className="rv-context-sep" />
       <button onClick={askImpact}><Brain size={13} /> Ask AI: what breaks?</button>

@@ -40,6 +40,7 @@ public:
     Result<void> discardCreatedPlugin(std::string_view name) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> updateOnam(const nlohmann::json& arguments) override;
     Result<nlohmann::json> copyAsDisabledOverride(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;

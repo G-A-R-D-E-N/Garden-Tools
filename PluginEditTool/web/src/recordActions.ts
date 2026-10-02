@@ -1,5 +1,6 @@
 import type { ConflictFieldRow, ConflictMatrix } from './backend';
 import { useDialogs } from './dialogs';
+import type { CompareRow } from './PluginCompareDialog';
 
 const errorText = (e: unknown) => (e as { message?: string } | null)?.message || String(e);
 
@@ -13,7 +14,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
   onReload: () => Promise<void>;
   onPluginsChanged?: () => void;
 }) {
-  const { confirm: askConfirm, prompt: askPrompt, pickPlugin: askForTarget } = useDialogs();
+  const { confirm: askConfirm, prompt: askPrompt, pickPlugin: askForTarget, compare: showCompare } = useDialogs();
 
   const copyAsOverrideInto = async (col: number) => {
     closeMenu();
@@ -343,15 +344,16 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
       validate: v => v.trim().length > 0 ? null : 'Enter a file path.',
     });
     if (!path) return;
+    const otherPath = path.trim();
     try {
-      const rows: { FormKey: string; Change: string; Subrecords: string[] }[] =
-        JSON.parse(await b.ComparePluginTo(plug, path.trim()));
+      const rows: CompareRow[] = JSON.parse(await b.ComparePluginTo(plug, otherPath));
       const count = (c: string) => rows.filter(r => r.Change === c).length;
-      const sample = rows.slice(0, 20).map(r =>
-        `${r.Change} ${r.FormKey}${r.Subrecords.length ? ' [' + r.Subrecords.join(', ') + ']' : ''}`);
-      setStatus(rows.length === 0 ? `${plug} matches ${path.trim()}.`
-        : `${count('changed')} changed, ${count('added')} added, ${count('removed')} removed vs ${path.trim()}:\n`
-          + sample.join('\n') + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
+      setStatus(rows.length === 0 ? `${plug} matches ${otherPath}.`
+        : `${count('changed')} changed, ${count('added')} added, ${count('removed')} removed vs ${otherPath}.`);
+      await showCompare({
+        plugin: plug, otherPath, rows,
+        loadRecord: async formKey => JSON.parse(await b.ComparePluginTo(plug, otherPath, formKey)),
+      });
     } catch (e) { setStatus('Compare failed: ' + errorText(e)); }
   };
 
@@ -387,6 +389,14 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
           + '\n' + report.Records.map(r => `${r.Signature} ${r.FormKey}`).join('\n')
           + (report.Total > report.Records.length ? `\n…and ${report.Total - report.Records.length} more` : ''));
     } catch (e) { setStatus('Reachable info failed: ' + errorText(e)); }
+  };
+
+  const updateOnam = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    try { setStatus(await b.UpdateOnam(matrix.Plugins[col])); await onReload(); }
+    catch (e) { setStatus('ONAM update failed: ' + errorText(e)); }
   };
 
   const lootReport = async (col: number) => {
@@ -469,6 +479,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     checkForErrors,
     findUnreachable,
     lootReport,
+    updateOnam,
     copyAsDisabledOverrideInto,
     copyText,
     elementAction,

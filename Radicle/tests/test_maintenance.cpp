@@ -21,11 +21,12 @@ struct RecordSpec {
 
 fo4::Plugin make_plugin(std::string_view name,
                         std::initializer_list<std::string_view> masters,
-                        std::initializer_list<RecordSpec> records) {
+                        const std::vector<RecordSpec>& records,
+                        float version = 1.0f) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
-  hedr.f32(1.0f);
+  hedr.f32(version);
   hedr.u32(static_cast<std::uint32_t>(records.size()));
   hedr.u32(0x900);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
@@ -95,4 +96,45 @@ TEST(Maintenance, CountsDeletedRecordsAndNavmeshes) {
   EXPECT_EQ(counts.records, 2u);
   EXPECT_EQ(counts.references, 1u);
   EXPECT_EQ(counts.navmeshes, 1u);
+}
+
+TEST(Maintenance, EslEligibilityCountsNativeRecordsOutsideTheLightRange) {
+  const auto plugin = make_plugin("Mod.esp", {"Base.esm"},
+                                  {{"KYWD", 0x00000800, std::string_view{"Override\0", 9}},
+                                   {"MISC", 0x01000900, std::string_view{"Small\0", 6}},
+                                   {"MISC", 0x01001000, std::string_view{"Large\0", 6}}});
+  const auto esl = fo4::esl_eligibility(plugin);
+  EXPECT_EQ(esl.native_records, 2u);
+  EXPECT_EQ(esl.out_of_range, 1u);
+  EXPECT_EQ(esl.capacity, 0xFFEu);
+  EXPECT_TRUE(esl.can_fit());
+  EXPECT_FALSE(esl.ids_fit_light_range());
+}
+
+TEST(Maintenance, EslEligibilityFollowsTheXEditRecordLimitAndIdCeiling) {
+  const auto native = [](std::uint32_t count, std::uint32_t first) {
+    std::vector<RecordSpec> records;
+    for (std::uint32_t i = 0; i < count; ++i) {
+      records.push_back({"MISC", 0x01000000u | (first + i), std::string_view{"M\0", 2}});
+    }
+    return fo4::esl_eligibility(make_plugin("Mod.esp", {"Base.esm"}, records));
+  };
+  EXPECT_TRUE(native(2049, 0x1000).can_fit());
+  EXPECT_TRUE(native(0xFFE, 0x1000).can_fit());
+  EXPECT_FALSE(native(0xFFF, 0x1000).can_fit());
+
+  const auto ceiling = native(1, 0xFFF);
+  EXPECT_EQ(ceiling.out_of_range, 0u);
+  EXPECT_TRUE(ceiling.ids_fit_light_range());
+  const auto past = native(1, 0x1000);
+  EXPECT_EQ(past.out_of_range, 1u);
+  EXPECT_FALSE(past.ids_fit_light_range());
+}
+
+TEST(Maintenance, EslEligibilityKeepsTheFullFloorWithoutHedrOneAndAMaster) {
+  const std::vector<RecordSpec> own{{"MISC", 0x00001000, std::string_view{"M\0", 2}}};
+  EXPECT_EQ(fo4::esl_eligibility(make_plugin("Mod.esp", {}, own)).capacity, 0x800u);
+  const std::vector<RecordSpec> mastered{{"MISC", 0x01001000, std::string_view{"M\0", 2}}};
+  EXPECT_EQ(fo4::esl_eligibility(make_plugin("Mod.esp", {"Base.esm"}, mastered, 0.95f)).capacity, 0x800u);
+  EXPECT_EQ(fo4::esl_eligibility(make_plugin("Mod.esp", {"Base.esm"}, mastered)).capacity, 0xFFEu);
 }

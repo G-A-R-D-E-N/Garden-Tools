@@ -102,4 +102,26 @@ radicle_status radicle_env_unused_masters(const radicle_env* env,
   });
 }
 
+radicle_status radicle_env_esl_eligibility(const radicle_env* env,
+                                           const char* plugin,
+                                           size_t* out_native_records,
+                                           size_t* out_out_of_range,
+                                           size_t* out_capacity) {
+  clear_error();
+  if (env == nullptr || plugin == nullptr || out_native_records == nullptr || out_out_of_range == nullptr ||
+      out_capacity == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, plugin and the three outputs are required");
+  }
+  *out_native_records = *out_out_of_range = *out_capacity = 0;
+  return guarded("unknown exception while checking ESL eligibility", [&] {
+    std::size_t index = 0;
+    if (const auto status = find_index(env, plugin, index); status != RADICLE_STATUS_OK) return status;
+    const auto esl = fo4::esl_eligibility(env->value.plugin(index));
+    *out_native_records = esl.native_records;
+    *out_out_of_range = esl.out_of_range;
+    *out_capacity = esl.capacity;
+    return RADICLE_STATUS_OK;
+  });
+}
+
 }  // extern "C"

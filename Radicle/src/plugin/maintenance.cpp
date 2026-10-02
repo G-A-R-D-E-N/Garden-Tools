@@ -1,5 +1,6 @@
 #include "fo4/plugin/maintenance.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/placement.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
@@ -168,6 +169,17 @@ DeletedRecordCounts count_deleted_records(const Plugin& plugin) {
     if (record.header.signature == k_sig_navm) ++counts.navmeshes;
   });
   return counts;
+}
+
+EslEligibility esl_eligibility(const Plugin& plugin) {
+  EslEligibility out;
+  if (!allows_hardcoded_range(plugin)) out.capacity = k_light_local_mask + 1 - k_first_full_local_id;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;
+    ++out.native_records;
+    if (record->form_key.local().value() > k_light_local_mask) ++out.out_of_range;
+  }
+  return out;
 }
 
 }  // namespace fo4

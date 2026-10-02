@@ -23,6 +23,11 @@ RADICLE_API radicle_status radicle_env_unused_masters(const radicle_env* env,
                                                       char*** out_strings,
                                                       size_t* out_count,
                                                       int32_t* out_complete);
+RADICLE_API radicle_status radicle_env_esl_eligibility(const radicle_env* env,
+                                                       const char* plugin,
+                                                       size_t* out_native_records,
+                                                       size_t* out_out_of_range,
+                                                       size_t* out_capacity);
 
 #ifdef __cplusplus
 }
