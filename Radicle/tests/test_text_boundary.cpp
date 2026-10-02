@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -213,4 +214,30 @@ TEST_F(TextBoundaryTest, StringTablesAndAssetsMatchNonAsciiCase) {
   write("Textures/\xC3\xA9.dds", {std::byte{1}});
   const auto resolver = fo4::archive::AssetResolver::open(root_, {});
   EXPECT_TRUE(resolver.locate("textures/\xC3\x89.dds").has_value());
+}
+
+TEST_F(TextBoundaryTest, ArchiveNamesAreWindows1252) {
+  fo4::archive::Ba2GeneralArchive archive;
+  const std::vector<std::byte> payload{std::byte{'v'}};
+  archive.entries.push_back({0, 0, 0, 0, "Sound\\Voice\\MarXa_F.fuz", {fo4::archive::make_stored_ba2_chunk(payload)}});
+  auto bytes = fo4::archive::write_ba2_general(archive);
+  const std::string_view placeholder = "MarXa_F";
+  const auto at = std::search(bytes.begin(), bytes.end(), placeholder.begin(), placeholder.end(),
+                              [](std::byte b, char c) { return b == static_cast<std::byte>(c); });
+  ASSERT_NE(at, bytes.end());
+  *(at + 3) = std::byte{0xED};
+  const auto path = write("Voices.ba2", bytes);
+  const std::string utf8 = "Sound\\Voice\\Mar\xC3\xAD" "a_F.fuz";
+
+  const auto reader = fo4::archive::Ba2Reader::open(path);
+  EXPECT_EQ(reader.entries().at(0).path, utf8);
+  EXPECT_TRUE(reader.find("sound\\voice\\mar\xC3\xAD" "a_f.fuz").has_value());
+
+  const auto full = fo4::archive::read_ba2_general(bytes);
+  EXPECT_EQ(full.entries.at(0).path, utf8);
+  EXPECT_EQ(fo4::archive::write_ba2_general(full), bytes);
+  ASSERT_NE(fo4::archive::find_ba2_general_entry(full, utf8), nullptr);
+
+  const std::vector<std::filesystem::path> archives{path};
+  EXPECT_TRUE(fo4::archive::AssetResolver::open({}, archives).locate_in_archives("Sound/Voice/Mar\xC3\xAD" "a_F.fuz").has_value());
 }

@@ -232,7 +232,7 @@ std::filesystem::path safeRelativePath(std::string_view innerPath) {
         if (invalidWindowsComponent(component)) {
             throw std::invalid_argument("unsafe archive entry path component: " + std::string(component));
         }
-        relative /= std::string(component);
+        relative /= std::filesystem::path(std::u8string(component.begin(), component.end()));
         if (end == std::string::npos) break;
         begin = end + 1;
     }
