@@ -1,10 +1,14 @@
+#include "fo4/graph/conflict_graph.hpp"
 #include "fo4/plugin/load_order.hpp"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <string_view>
@@ -296,4 +300,51 @@ TEST(RemapNonFormIdSlots, NoneSentinelAndUndecodedSlotsSurviveMasterReorder) {
   EXPECT_EQ(value("012350:Fallout4.esm", "ANAM"), 0xFFFFFFFFu);
   EXPECT_EQ(value("012351:Fallout4.esm", "NAM4"), 0x43E10000u);
   EXPECT_EQ(value("012352:Fallout4.esm", "PNAM"), 0x00000123u);
+}
+
+TEST(RemapNonFormIdSlots, NoneSentinelIsNotALinkWhenCopyingAnOverride) {
+  const auto plugin_bytes = [](bool with_record) {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(with_record ? 1 : 0);
+    hedr.u32(0x800);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, tes4);
+    if (with_record) {
+      fo4::test::ByteWriter anam;
+      anam.u32(0xFFFFFFFFu);
+      const auto group = fo4::test::begin_group(out, "EQUP", 0);
+      const auto record = fo4::test::begin_record(out, "EQUP", 0, 0x00012350);
+      fo4::test::write_subrecord(out, "ANAM", anam.bytes);
+      fo4::test::end_record(out, record);
+      fo4::test::end_group(out, group);
+    }
+    return out.bytes;
+  };
+  const auto source = fo4::read_plugin(plugin_bytes(true), "Source.esp");
+  const auto key = fo4::FormKey::parse("012350:Fallout4.esm");
+
+  const auto links = fo4::collect_form_links(source);
+  const auto anam = std::find_if(links.begin(), links.end(), [](const fo4::FormLinkHit& hit) {
+    return hit.subrecord.to_string() == "ANAM";
+  });
+  ASSERT_NE(anam, links.end());
+  EXPECT_EQ(anam->raw.value(), 0xFFFFFFFFu);
+  EXPECT_TRUE(anam->key.owner().empty());
+
+  const fo4::Plugin* order[] = {&source};
+  const auto graph = fo4::ConflictGraph::build(order);
+  EXPECT_TRUE(graph.references_from(key).empty());
+
+  auto patch = fo4::read_plugin(plugin_bytes(false), "Patch.esp");
+  ASSERT_EQ(fo4::copy_record_as_override(patch, source, key, false), fo4::RecordCopyStatus::inserted);
+  ASSERT_EQ(patch.header.masters.size(), 1u);
+  EXPECT_EQ(patch.header.masters[0].key, fo4::PluginKey::from_filename("Fallout4.esm"));
 }
