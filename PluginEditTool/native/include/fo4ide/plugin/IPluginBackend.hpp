@@ -67,6 +67,12 @@ public:
             "Native clean-masters is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> updateOnam(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "UpdateOnamUnavailable",
+            "Native ONAM update is unavailable for this backend"
+        });
+    }
     virtual Result<nlohmann::json> compactToEsl(const nlohmann::json&) {
         return std::unexpected(Error{
             "CompactToEslUnavailable",

@@ -425,6 +425,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "MoveElement") return backend_.moveElement(args);
         if (method == "ClearElement") return backend_.clearElement(args);
         if (method == "CleanUnusedMasters") return backend_.cleanUnusedMasters(args);
+        if (method == "UpdateOnam") return backend_.updateOnam(args);
         if (method == "CopyAsDisabledOverride") return backend_.copyAsDisabledOverride(args);
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
