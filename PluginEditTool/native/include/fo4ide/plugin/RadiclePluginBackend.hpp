@@ -99,7 +99,7 @@ private:
         const RadiclePluginBackend& backend;
         Mode mode;
         StateHold state{StateHold::None};
-        std::vector<std::mutex*> owners;
+        std::vector<std::unique_lock<std::mutex>> owners;
         OpLock* previous;
 
         static thread_local OpLock* current;

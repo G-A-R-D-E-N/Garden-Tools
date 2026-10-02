@@ -59,6 +59,7 @@ RadiclePluginBackend::OpLock::OpLock(const RadiclePluginBackend& backend, Mode m
     backend.lifecycleMutex_.lock_shared();
     try {
         if (mode == Mode::Write) {
+            std::vector<std::mutex*> ordered;
             {
                 std::shared_lock resolve(backend.stateMutex_);
                 std::vector<const LoadedPlugin*> targets;
@@ -72,12 +73,13 @@ RadiclePluginBackend::OpLock::OpLock(const RadiclePluginBackend& backend, Mode m
                               return std::less<const LoadedPlugin*>{}(a, b);
                           });
                 targets.erase(std::unique(targets.begin(), targets.end()), targets.end());
-                for (const auto* loaded : targets) owners.push_back(loaded->writeMutex.get());
+                for (const auto* loaded : targets) ordered.push_back(loaded->writeMutex.get());
             }
-            for (auto* owner : owners) owner->lock();
+            for (auto* owner : ordered) owners.emplace_back(*owner);
         }
         backend.stateMutex_.lock_shared();
     } catch (...) {
+        owners.clear();
         backend.lifecycleMutex_.unlock_shared();
         throw;
     }
@@ -96,7 +98,7 @@ RadiclePluginBackend::OpLock::~OpLock() {
     }
     if (state == StateHold::Shared) backend.stateMutex_.unlock_shared();
     if (state == StateHold::Exclusive) backend.stateMutex_.unlock();
-    for (auto it = owners.rbegin(); it != owners.rend(); ++it) (*it)->unlock();
+    owners.clear();
     backend.lifecycleMutex_.unlock_shared();
 }
 

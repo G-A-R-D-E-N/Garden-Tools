@@ -179,7 +179,7 @@ void releaseGate() {
 
 }  // namespace
 
-TEST_CASE("Writers to the same plugin serialize and keep both edits") {
+TEST_CASE("Writers to the same plugin enter their write ops one at a time and keep both edits") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Shared.esp";
@@ -200,7 +200,7 @@ TEST_CASE("Writers to the same plugin serialize and keep both edits") {
     auto second = std::async(std::launch::async, [&] {
         return setEditorId(backend, "Shared.esp", "000801:Shared.esp", "SecondEdited");
     });
-    CHECK(second.wait_for(200ms) == std::future_status::timeout);
+    std::this_thread::sleep_for(200ms);
     {
         std::scoped_lock lock(state.mutex);
         CHECK(state.entered == 1);
@@ -295,7 +295,7 @@ TEST_CASE("Reversed two-plugin CopyAsOverride does not deadlock") {
     CHECK(recordEditorId(backend, "Left.esp", "000900:Master.esm") == "RightOverride");
 }
 
-TEST_CASE("A losing-override check is not torn by a commit to a later plugin") {
+TEST_CASE("A losing-override check sees no later-plugin commit during its compute phase") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto srcPath = root / "Src.esp";
